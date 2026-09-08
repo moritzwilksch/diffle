@@ -21,6 +21,7 @@ diffle branch develop   # merge-base(develop, HEAD) vs HEAD
 diffle main...feat      # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle export           # print the open threads as a prompt, no server needed (--format json, --state all)
 diffle --skill          # print the agent-facing usage guide (feed it to your agent)
+diffle --version        # print the installed version
 diffle working --lsp    # plus go-to-definition, references and symbols via `pyrefly lsp`
 diffle --help           # all flags: -C, --port (default 4966, next free if taken), --host, --no-open, --no-watch, -U, --auto-viewed, --lsp, --comment, --as, --background
 ```

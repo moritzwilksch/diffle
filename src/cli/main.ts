@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { openSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import pkg from '../../package.json' with { type: 'json' };
 import { CommentStore, UnquotableError } from '../server/comments/CommentStore.js';
 import { formatPrompt } from '../server/comments/format.js';
 import { ImportError } from '../server/comments/import.js';
@@ -55,6 +56,7 @@ const IS_BACKGROUND_CHILD = process.env.DIFFLE_BACKGROUND === '1';
 const program = new Command()
   .name('diffle')
   .description('Review a git diff in the browser and export line comments as an agent prompt.')
+  .version(pkg.version, '-v, --version', 'print the version and exit')
   .option('-C <path>', 'run as if started in <path> (any directory inside a git worktree)')
   .option('-p, --port <port>', `port to listen on (default: ${DEFAULT_PORT}, or the next free one; 0 = random)`, parsePort)
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
