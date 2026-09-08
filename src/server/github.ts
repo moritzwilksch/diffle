@@ -1,0 +1,158 @@
+import { execFile } from 'node:child_process';
+import type { CommentMessage, CommentThread, GithubExportResponse, Snapshot } from '../shared/protocol.js';
+import { compareThreads } from './comments/anchor.js';
+import { authorLabel } from './comments/format.js';
+
+/** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
+export type GhRunner = (args: string[], opts: { cwd: string; input?: string }) => Promise<string>;
+
+/** A precondition the user can fix (no gh, no PR, wrong mode, unpushed head): the route answers 4xx. */
+export class GithubError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 409 | 502 = 409,
+  ) {
+    super(message);
+  }
+}
+
+/** One entry of the REST review payload's `comments[]`. */
+export interface ReviewComment {
+  path: string;
+  line: number;
+  side: 'LEFT' | 'RIGHT';
+  start_line?: number;
+  start_side?: 'LEFT' | 'RIGHT';
+  body: string;
+}
+
+export interface ReviewPayload {
+  commit_id: string;
+  event: 'COMMENT';
+  comments: ReviewComment[];
+}
+
+export interface BuiltReview {
+  review: ReviewPayload;
+  skipped: GithubExportResponse['skipped'];
+}
+
+/**
+ * Threads → one GitHub review with a comment per thread. Stale threads are skipped:
+ * their lines no longer sit in the diff, and GitHub would refuse them anyway. With
+ * `threadIds`, only those (resolved included, the user asked for them by hand);
+ * without, every unresolved thread.
+ */
+export function buildReview(threads: CommentThread[], commitId: string, threadIds?: string[]): BuiltReview {
+  const skipped: BuiltReview['skipped'] = [];
+  let chosen: CommentThread[];
+  if (threadIds) {
+    const byId = new Map(threads.map((t) => [t.id, t]));
+    chosen = [];
+    for (const id of threadIds) {
+      const t = byId.get(id);
+      if (t) chosen.push(t);
+      else skipped.push({ id, reason: 'unknown thread' });
+    }
+  } else {
+    chosen = threads.filter((t) => !t.resolved);
+  }
+  const comments: ReviewComment[] = [];
+  for (const t of [...chosen].sort(compareThreads)) {
+    if (t.stale) {
+      skipped.push({ id: t.id, reason: 'stale' });
+      continue;
+    }
+    comments.push(toReviewComment(t));
+  }
+  return { review: { commit_id: commitId, event: 'COMMENT', comments }, skipped };
+}
+
+function toReviewComment(t: CommentThread): ReviewComment {
+  const { anchor } = t;
+  const side = anchor.side === 'old' ? 'LEFT' : 'RIGHT';
+  const c: ReviewComment = { path: anchor.path, line: anchor.endLine, side, body: formatBody(t.messages) };
+  if (anchor.startLine !== anchor.endLine) {
+    c.start_line = anchor.startLine;
+    c.start_side = side;
+  }
+  return c;
+}
+
+/**
+ * Messages joined as markdown. GitHub renders ```suggestion fences itself, so bodies
+ * stay verbatim. The poster is the human, so only agent messages carry a label.
+ */
+export function formatBody(messages: CommentMessage[]): string {
+  return messages
+    .map((m) => {
+      const body = m.body.trim();
+      return m.author === 'agent' ? `**${authorLabel(m)}:**\n\n${body}` : body;
+    })
+    .join('\n\n---\n\n');
+}
+
+interface PrInfo {
+  number: number;
+  url: string;
+  headRefOid: string;
+}
+
+export interface ExportInput {
+  snap: Pick<Snapshot, 'root' | 'newSha' | 'headSha'>;
+  threads: CommentThread[];
+  threadIds?: string[];
+  run?: GhRunner;
+}
+
+/**
+ * Posts the threads as a pull-request review on the PR of the checked-out branch.
+ * Refuses when the new side is not the checked-out commit: GitHub anchors comments
+ * to a commit, and only HEAD is what the PR shows.
+ */
+export async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
+  if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)');
+  if (snap.headSha === '' || snap.newSha !== snap.headSha) throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
+  const { review, skipped } = buildReview(threads, snap.newSha, threadIds);
+  if (review.comments.length === 0) throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
+
+  const pr = parsePr(await run(['pr', 'view', '--json', 'number,url,headRefOid'], { cwd: snap.root }));
+  if (pr.headRefOid !== snap.newSha) {
+    throw new GithubError(`the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`);
+  }
+  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${pr.number}/reviews`, '--input', '-'], { cwd: snap.root, input: JSON.stringify(review) });
+  return { url: pr.url, posted: review.comments.length, skipped };
+}
+
+function describe(skipped: GithubExportResponse['skipped']): string {
+  const counts = new Map<string, number>();
+  for (const s of skipped) counts.set(s.reason, (counts.get(s.reason) ?? 0) + 1);
+  return [...counts].map(([reason, n]) => `${n} ${reason}`).join(', ');
+}
+
+function parsePr(out: string): PrInfo {
+  let pr: Partial<PrInfo>;
+  try {
+    pr = JSON.parse(out) as Partial<PrInfo>;
+  } catch {
+    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+  }
+  if (typeof pr.number !== 'number' || typeof pr.url !== 'string' || typeof pr.headRefOid !== 'string') {
+    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+  }
+  return pr as PrInfo;
+}
+
+/** Spawns the local `gh`. A missing binary or a failing command becomes a GithubError carrying gh's own message. */
+export const runGh: GhRunner = (args, { cwd, input }) =>
+  new Promise((resolve, reject) => {
+    const child = execFile('gh', args, { cwd, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (!err) return resolve(stdout);
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reject(new GithubError('gh is not installed; see https://cli.github.com'));
+      const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
+      // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
+      reject(new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409));
+    });
+    if (input != null) child.stdin?.end(input);
+    else child.stdin?.end();
+  });
