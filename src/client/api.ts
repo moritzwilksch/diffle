@@ -29,7 +29,7 @@ import type {
 async function json<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    headers: { 'content-type': 'application/json', ...init?.headers },
   });
   if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
   if (res.status === 204) return undefined as T;

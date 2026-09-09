@@ -78,7 +78,7 @@ async function serverUrl(opts: CommentOpts): Promise<string> {
 async function call<T>(base: string, path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
   let res: Response;
   try {
-    res = await fetch(new URL(path, base), { ...init, headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) } });
+    res = await fetch(new URL(path, base), { ...init, headers: { 'content-type': 'application/json', ...init?.headers } });
   } catch (e) {
     throw new CommentCliError(`cannot reach the diffle server at ${base}: ${(e as Error).message}`);
   }

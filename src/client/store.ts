@@ -1045,7 +1045,6 @@ export const useStore = create<ReviewState>((set, get) => {
     visualAnchor: null,
     editingId: null,
     setEditingId(id) {
-      const prev = get().editingId;
       set({ editingId: id });
     },
     replyTo: null,
