@@ -29,7 +29,7 @@ diffle --help           # list all commands and flags
 
 Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
 
-Generated files and files matching auto-viewed globs start collapsed. Configure the globs in settings or with `diffle config`.
+Generated files and files matching auto-viewed globs start collapsed. There are no globs by default; configure them in settings or with `diffle config`.
 
 ## Shortcuts
 

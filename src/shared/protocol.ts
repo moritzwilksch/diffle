@@ -193,7 +193,7 @@ export interface SearchResponse {
 }
 
 export interface UserConfig {
-  /** Globs (picomatch syntax) for files that start viewed + collapsed. */
+  /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: string[];
   /** Unchanged lines shown around each change (git -U). Default 5. */
   contextLines: number;
@@ -202,7 +202,7 @@ export interface UserConfig {
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
-  autoViewed: ['*.lock', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'uv.lock', 'Cargo.lock', 'poetry.lock'],
+  autoViewed: [],
   contextLines: 5,
   lspCommand: 'pyrefly lsp',
 };
