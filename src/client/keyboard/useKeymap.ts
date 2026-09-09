@@ -124,6 +124,13 @@ export function useKeymap(): void {
       const typed = count.current;
       count.current = '';
       const n = Number(typed);
+      // Let a ref field dismiss its suggestions before Escape closes the mode picker.
+      if (
+        e.key === 'Escape' &&
+        target?.getAttribute('role') === 'combobox' &&
+        target.getAttribute('aria-expanded') === 'true'
+      )
+        return;
       if (e.key === 'Escape') {
         if (isEditable(target)) {
           target!.blur();
@@ -242,7 +249,7 @@ export function useKeymap(): void {
     };
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setTimeout(focusReview, 0);
+      if (e.key === 'Escape' && realTarget(e)?.getAttribute('role') !== 'combobox') setTimeout(focusReview, 0);
     };
     // Capture phase: the tree stops propagation of keys it handles (arrows), and we
     // need ArrowRight to hand focus back. Editable targets are skipped early.

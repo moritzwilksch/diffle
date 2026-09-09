@@ -4,6 +4,7 @@ import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { lastCommitsRequest } from '../model.js';
 import { useStore } from '../store.js';
+import { RefInput } from './RefInput.js';
 
 /** Comparison modes with configuration in an adjacent pane. */
 export function ModePicker() {
@@ -22,6 +23,8 @@ export function ModePicker() {
   const [pr, setPr] = useState('');
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const targetRef = useRef<HTMLInputElement>(null);
+  const compareButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -107,18 +110,63 @@ export function ModePicker() {
                 if (pane === 'pr') choose(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
               }}
             >
-              {pane !== 'commits' && <div className="menu-title">{pane === 'refs' ? 'Two refs' : 'Pull request'}</div>}
+              {pane === 'pr' && <div className="menu-title">Pull request</div>}
               {pane === 'refs' && (
                 <>
-                  <RefSelect label="Old" value={a} onChange={setA} refs={refs} />
-                  <label className="ref-select">
-                    <span className="lbl">Comparison</span>
-                    <select value={dots} onChange={(e) => setDots(e.target.value as '..' | '...')}>
-                      <option value="..">Direct (..)</option>
-                      <option value="...">From merge base (...)</option>
-                    </select>
-                  </label>
-                  <RefSelect label="New" value={b} onChange={setB} refs={refs} allowWorktree />
+                  <div className="ref-range">
+                    <RefInput
+                      label="Base ref"
+                      value={a}
+                      onChange={setA}
+                      refs={refs}
+                      autoFocus
+                      onAccept={() => targetRef.current?.focus()}
+                    />
+                    <span>{dots}</span>
+                    <RefInput
+                      label="Target ref"
+                      value={b}
+                      onChange={setB}
+                      refs={refs}
+                      allowWorktree
+                      inputRef={targetRef}
+                      onAccept={() => requestAnimationFrame(() => compareButton.current?.focus())}
+                    />
+                  </div>
+                  <div
+                    className="toggle ref-comparison"
+                    role="group"
+                    aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key !== ' ') return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={dots === '..' ? 'on' : ''}
+                      tabIndex={-1}
+                      aria-pressed={dots === '..'}
+                      onClick={() => setDots('..')}
+                    >
+                      Direct
+                    </button>
+                    <button
+                      type="button"
+                      className={dots === '...' ? 'on' : ''}
+                      tabIndex={-1}
+                      aria-pressed={dots === '...'}
+                      onClick={() => setDots('...')}
+                    >
+                      Merge base
+                    </button>
+                  </div>
+                  <p className="mode-hint">
+                    {dots === '..' ? 'Compare these two revisions.' : 'Compare changes since their common ancestor.'}
+                  </p>
                 </>
               )}
               {pane === 'commits' && (
@@ -161,6 +209,7 @@ export function ModePicker() {
               )}
               <button
                 className="primary"
+                ref={compareButton}
                 type="submit"
                 disabled={pane === 'refs' ? !a.trim() || !b.trim() : pane === 'commits' && !validCount}
               >
@@ -171,104 +220,5 @@ export function ModePicker() {
         </div>
       )}
     </div>
-  );
-}
-
-const OTHER = '\u0000other';
-
-/** Grouped ref dropdown: branches, remotes, tags, recent commits, or free text. */
-function RefSelect({
-  label,
-  value,
-  onChange,
-  refs,
-  allowWorktree,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  refs: RefsResponse | null;
-  allowWorktree?: boolean;
-}) {
-  const known = new Set<string>([
-    'HEAD',
-    ...(allowWorktree ? ['worktree'] : []),
-    ...(refs?.branches ?? []),
-    ...(refs?.remoteBranches ?? []),
-    ...(refs?.tags ?? []),
-    ...(refs?.recent.map((c) => c.short) ?? []),
-  ]);
-  const [custom, setCustom] = useState(!known.has(value) && value !== '');
-  const selectValue = custom ? OTHER : value;
-  return (
-    <label className="ref-select">
-      <span className="lbl">{label}</span>
-      <select
-        value={selectValue}
-        onChange={(e) => {
-          if (e.target.value === OTHER) {
-            setCustom(true);
-            onChange('');
-          } else {
-            setCustom(false);
-            onChange(e.target.value);
-          }
-        }}
-      >
-        <option value="" disabled>
-          choose…
-        </option>
-        <optgroup label="Special">
-          <option value="HEAD">HEAD</option>
-          {allowWorktree && <option value="worktree">worktree (uncommitted)</option>}
-        </optgroup>
-        {refs && refs.branches.length > 0 && (
-          <optgroup label="Branches">
-            {refs.branches.map((r) => (
-              <option key={r} value={r}>
-                {r}
-                {r === refs.current ? ' (current)' : ''}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {refs && refs.remoteBranches.length > 0 && (
-          <optgroup label="Remote branches">
-            {refs.remoteBranches.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {refs && refs.tags.length > 0 && (
-          <optgroup label="Tags">
-            {refs.tags.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {refs && refs.recent.length > 0 && (
-          <optgroup label="Recent commits">
-            {refs.recent.map((c) => (
-              <option key={c.sha} value={c.short}>
-                {c.short} {c.subject.length > 60 ? c.subject.slice(0, 60) + '…' : c.subject}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        <option value={OTHER}>Other…</option>
-      </select>
-      {custom && (
-        <input
-          autoFocus
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="any revision, e.g. HEAD~3 or a sha"
-        />
-      )}
-    </label>
   );
 }
