@@ -142,6 +142,7 @@ function rowsOf(l: Loaded, revealed: LineRange[] | undefined, style: DiffStyle):
 
 export interface Cursor {
   itemIndex: number;
+  /** -1 represents a collapsed file's header. */
   rowIndex: number;
 }
 
@@ -168,34 +169,45 @@ export function cursorFromSelection(nav: NavItem[], sel: CodeViewLineSelection |
   return { itemIndex, rowIndex };
 }
 
-/** Flattened step over visible rows; skips collapsed items. */
+/** Flattened step over visible rows, stopping once on each collapsed file's header. */
 export function step(nav: NavItem[], cur: Cursor | null, delta: 1 | -1): Cursor | null {
   if (nav.length === 0) return null;
-  if (!cur) return firstRow(nav, delta === 1 ? 0 : nav.length - 1, delta);
+  if (!cur) return firstStop(nav, delta === 1 ? 0 : nav.length - 1, delta);
+  if (cur.rowIndex === -1) {
+    const item = nav[cur.itemIndex];
+    if (item && !item.collapsed && item.rows.length > 0)
+      return { itemIndex: cur.itemIndex, rowIndex: delta === 1 ? 0 : item.rows.length - 1 };
+    return firstStop(nav, cur.itemIndex + delta, delta) ?? cur;
+  }
   let { itemIndex, rowIndex } = cur;
   rowIndex += delta;
   while (rowIndex < 0 || rowIndex >= (nav[itemIndex]?.rows.length ?? 0)) {
     itemIndex += delta;
     if (itemIndex < 0 || itemIndex >= nav.length) return cur;
-    if (nav[itemIndex]!.collapsed || nav[itemIndex]!.rows.length === 0) continue;
-    rowIndex = delta === 1 ? 0 : nav[itemIndex]!.rows.length - 1;
+    const item = nav[itemIndex]!;
+    if (item.collapsed) return { itemIndex, rowIndex: -1 };
+    if (item.rows.length === 0) continue;
+    rowIndex = delta === 1 ? 0 : item.rows.length - 1;
   }
   return { itemIndex, rowIndex };
 }
 
-/** First navigable row at or after (delta=1) / before (delta=-1) itemIndex. */
-function firstRow(nav: NavItem[], itemIndex: number, delta: 1 | -1 = 1): Cursor | null {
+/** First line or collapsed header at or after/before `itemIndex`. */
+function firstStop(nav: NavItem[], itemIndex: number, delta: 1 | -1): Cursor | null {
   for (let i = itemIndex; i >= 0 && i < nav.length; i += delta) {
-    if (nav[i]!.rows.length > 0) return { itemIndex: i, rowIndex: 0 };
+    const item = nav[i]!;
+    if (item.collapsed) return { itemIndex: i, rowIndex: -1 };
+    if (item.rows.length > 0) return { itemIndex: i, rowIndex: delta === 1 ? 0 : item.rows.length - 1 };
   }
   return null;
 }
 
-/** Next/previous item, collapsed ones included: J / K land on a collapsed header so zo can open it. */
+/** Next/previous item; collapsed items are represented by their header. */
 export function stepFile(nav: NavItem[], cur: Cursor | null, delta: 1 | -1): Cursor | null {
   if (nav.length === 0) return null;
-  const from = cur ? cur.itemIndex + delta : delta === 1 ? 0 : nav.length - 1;
-  return { itemIndex: Math.max(0, Math.min(nav.length - 1, from)), rowIndex: 0 };
+  const itemIndex = cur ? cur.itemIndex + delta : delta === 1 ? 0 : nav.length - 1;
+  if (itemIndex < 0 || itemIndex >= nav.length) return cur;
+  return { itemIndex, rowIndex: nav[itemIndex]!.collapsed ? -1 : 0 };
 }
 
 /** Next/previous hunk start across items. */

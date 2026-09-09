@@ -98,6 +98,9 @@ export const api = {
     json<CommentThread[]>(`/api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`/api/threads/export?${q({ state: 'open' })}`),
+  /** One message, with its thread's location and quote, as an agent prompt. */
+  exportComment: (threadId: string, messageId: string) =>
+    text(`/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
   /** Posts threads as a review on the current branch's pull request; all unresolved ones without `threadIds`. */
   exportToGithub: (req: GithubExportRequest = {}) =>
     json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),

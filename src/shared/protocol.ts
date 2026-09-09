@@ -222,6 +222,11 @@ export interface LspPosition {
 export interface LspLocation extends LspPosition {
   /** The target line's text, for result lists. */
   text: string;
+  /**
+   * The file is not in the snapshot (stdlib, site-packages, an ignored venv) and `path` is absolute.
+   * `/api/file` serves it on the new side, read-only, for as long as the language server keeps naming it.
+   */
+  external?: true;
 }
 
 /** One language server process, as its bridge sees it. */
@@ -256,16 +261,9 @@ export interface LspStatus {
   missing: LspMissing[];
 }
 
+/** Results the server could place: snapshot paths, or files it read from disk on the language server's word. */
 export interface LspLocationsResponse {
   locations: LspLocation[];
-  /** Results outside the repository root (stdlib, site-packages, another worktree), dropped. */
-  external: number;
-  /** Absolute path of the first external result, so the UI can say where the server looked. */
-  externalPath?: string;
-  /** Results inside the root that the snapshot hides (ignored dirs such as a venv), dropped. */
-  hidden: number;
-  /** Repo-relative path of the first hidden result, so the UI can say where the server looked. */
-  hiddenPath?: string;
 }
 
 /** What the language server says about a position, for the hover tooltip. */

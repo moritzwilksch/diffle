@@ -94,6 +94,8 @@ Definitions, references, hover details, and symbol search come from a language s
 - `gA`: references
 - `gs` / `gS`: file or repository symbols
 
+A result outside the diff's files, such as the standard library, `site-packages`, or an ignored virtualenv, opens read-only: no comments, no further navigation.
+
 `diffle lsp` prints what each language would get, and what to install for the ones it cannot serve:
 
 ```
@@ -102,6 +104,8 @@ rust      not on PATH (tried rust-analyzer)
 ```
 
 Languages served out of the box: C/C++ (`clangd`), Go (`gopls`), Haskell, Java, JavaScript/TypeScript (`typescript-language-server`, `vtsls`), Lua, Nix, OCaml, PHP, Python (`pyrefly`, `ty`, `basedpyright`, `pyright`, `pylsp`, `jedi`), Ruby, Rust (`rust-analyzer`), shell, Swift, Terraform, Zig.
+
+A client-side Tree-sitter worker suppresses hover and symbol menus on reserved keywords and in comments and string text; identifiers, including keyword spellings used as property names, and interpolated expressions remain actionable. Grammars load on demand. Haskell, Nix, Terraform, files over one million UTF-16 code units, and parser failures fall back to language-server behavior.
 
 Override a command, or turn one language off with an empty command:
 

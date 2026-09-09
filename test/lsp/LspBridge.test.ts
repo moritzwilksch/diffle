@@ -59,17 +59,52 @@ afterEach(() => {
 });
 
 describe('LspBridge', () => {
-  it('maps definitions to snapshot paths and counts results outside the root', async () => {
+  it('maps definitions to snapshot paths and drops results it can read nowhere', async () => {
     const { bridge, statuses } = start();
     const res = await bridge.definition({ path: 'a.py', line: 3, col: 4 });
-    expect(res).toEqual({
-      locations: [{ path: 'a.py', line: 2, col: 4, text: 'def f():' }],
-      external: 1,
-      externalPath: '/usr/lib/python3/site.py',
-      hidden: 0,
-    });
+    // The fake also points at /usr/lib/python3/site.py, which is neither in the snapshot nor on disk.
+    expect(res).toEqual({ locations: [{ path: 'a.py', line: 2, col: 4, text: 'def f():' }] });
     expect(statuses.map((s) => s.state)).toEqual(['ready']);
     expect(bridge.status().state).toBe('ready');
+    await bridge.close();
+  });
+
+  it('serves a file outside the root from disk once a result named it, and nothing else', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'diffle-lsp-'));
+    tmpdirs.push(dir);
+    const site = join(dir, 'site.py');
+    const secret = join(dir, 'secret.py');
+    writeFileSync(site, 'import sys\n');
+    writeFileSync(secret, 'token = 1\n');
+    const { bridge } = start({ FAKE_LSP_EXTERNAL: site });
+    expect(await bridge.readExternal(site)).toBeNull();
+    const res = await bridge.definition({ path: 'a.py', line: 3, col: 4 });
+    expect(res.locations).toEqual([
+      { path: 'a.py', line: 2, col: 4, text: 'def f():' },
+      { path: site, line: 1, col: 0, text: 'import sys', external: true },
+    ]);
+    expect((await bridge.readExternal(site))?.toString()).toBe('import sys\n');
+    // A readable file the server never returned stays behind the snapshot allowlist.
+    expect(await bridge.readExternal(secret)).toBeNull();
+    rmSync(site);
+    expect(await bridge.readExternal(site)).toBeNull();
+    await bridge.close();
+  });
+
+  it('reads a file inside the root that the snapshot hides from disk and marks it external', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'diffle-lsp-')));
+    tmpdirs.push(root);
+    writeFileSync(join(root, 'ignored.py'), 'VENV = True\n');
+    const { bridge } = start({}, root);
+    const res = await bridge.references({ path: 'a.py', line: 1, col: 0 });
+    expect(res.locations.at(-1)).toEqual({
+      path: join(root, 'ignored.py'),
+      line: 1,
+      col: 0,
+      text: 'VENV = True',
+      external: true,
+    });
+    expect((await bridge.readExternal(join(root, 'ignored.py')))?.toString()).toBe('VENV = True\n');
     await bridge.close();
   });
 
@@ -126,10 +161,8 @@ describe('LspBridge', () => {
       ['a.py', 1, files['a.py']!.length],
       ['other.py', 3, 0],
     ]);
-    // ignored.py sits in the root but the snapshot does not expose it.
-    expect(first.external).toBe(0);
-    expect(first.hidden).toBe(1);
-    expect(first.hiddenPath).toBe('ignored.py');
+    // ignored.py sits in the root but the snapshot does not expose it, and /repo is not on disk.
+    expect(first.locations).toHaveLength(2);
     files['a.py'] = 'x\n';
     const second = await bridge.references({ path: 'a.py', line: 1, col: 0 });
     expect(second.locations[0]!.col).toBe(2);
