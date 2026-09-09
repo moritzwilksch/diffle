@@ -40,4 +40,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - Server tests use temporary real Git repositories. Client store tests mock `src/client/api.js` and exercise races with deferred promises.
 - Use `npm run dev -- working --no-open` for a local source run; restart after client changes because the server serves `dist/client`.
 - Comments explain why in one or two lines. Exported doc comments state contracts, not implementations.
-- Use conventional commits for commits and PR titles (e.g. `feat(cli): add pr command`, `fix(store): guard async commits`).
+
+## Conventional commits
+
+- Use conventional commits for commit messages and PR titles (e.g. `feat(cli): add pr command`, `fix(store): guard async commits`).
