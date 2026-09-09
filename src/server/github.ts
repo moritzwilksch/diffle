@@ -143,20 +143,18 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
 
   // A second export of the same threads must not stack duplicates on the line: an
   // identical comment is left alone, an edited one is rewritten where it already sits.
-  const existing = await pendingComments(run, snap.root, pr, pending.databaseId);
+  const existing = await pendingComments(run, snap.root, pr, pending.id);
   const add: ReviewComment[] = [];
   let updated = 0;
   for (const [i, c] of review.comments.entries()) {
     const id = ids[i]!;
-    const key = anchorKey(c);
-    const hit = existing.get(key);
+    // Each comment on the anchor is claimed once, in order, so two threads on the same
+    // lines take two comments instead of overwriting each other.
+    const hit = existing.get(anchorKey(c))?.shift();
     if (!hit) {
       add.push(c);
       continue;
     }
-    // One comment per anchor is claimed once, so two threads on the same lines
-    // become two comments instead of overwriting each other.
-    existing.delete(key);
     if (hit.body.trim() === c.body.trim()) {
       skipped.push({ id, reason: 'already in the review' });
       continue;
@@ -175,20 +173,14 @@ function anchorKey(c: Pick<ReviewComment, 'path' | 'side' | 'line' | 'start_line
 
 const PENDING_QUERY = `query($owner:String!,$repo:String!,$number:Int!){
   viewer{login}
-  repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:20,states:[PENDING]){nodes{id fullDatabaseId author{login}}}}}
+  repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:20,states:[PENDING]){nodes{id author{login}}}}}
 }`;
 
 interface PendingQueryData {
   viewer?: { login?: string };
   repository?: {
-    pullRequest?: { reviews?: { nodes?: ({ id?: string; fullDatabaseId?: string | number; author?: { login?: string } | null } | null)[] } };
+    pullRequest?: { reviews?: { nodes?: ({ id?: string; author?: { login?: string } | null } | null)[] } };
   };
-}
-
-/** The viewer's own pending review: `id` for the GraphQL mutations, `databaseId` for the REST comment list. */
-interface PendingReview {
-  id: string;
-  databaseId: string;
 }
 
 /**
@@ -196,12 +188,12 @@ interface PendingReview {
  * reviews, and the login check makes sure of it: appending to someone else's draft would
  * put our comments in their review.
  */
-async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<PendingReview | null> {
+async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<{ id: string } | null> {
   const { owner, repo } = repoOfPrUrl(pr.url);
   const data = await graphql<PendingQueryData>(run, cwd, PENDING_QUERY, { owner, repo, number: pr.number });
   const login = data.viewer?.login;
   for (const node of data.repository?.pullRequest?.reviews?.nodes ?? []) {
-    if (node?.id && node.author?.login === login) return { id: node.id, databaseId: String(node.fullDatabaseId ?? '') };
+    if (node?.id && node.author?.login === login) return { id: node.id };
   }
   return null;
 }
@@ -212,44 +204,61 @@ interface PendingComment {
   body: string;
 }
 
-interface RestReviewComment {
-  node_id?: string;
+const THREADS_QUERY = `query($owner:String!,$repo:String!,$number:Int!,$after:String){
+  repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$after){
+    pageInfo{hasNextPage endCursor}
+    nodes{path line startLine diffSide comments(first:1){nodes{id body pullRequestReview{id}}}}
+  }}}
+}`;
+
+interface ThreadNode {
   path?: string;
-  side?: string;
   line?: number | null;
-  original_line?: number | null;
-  start_line?: number | null;
-  body?: string;
+  startLine?: number | null;
+  diffSide?: string | null;
+  comments?: { nodes?: ({ id?: string; body?: string; pullRequestReview?: { id?: string } | null } | null)[] };
+}
+
+interface ThreadsQueryData {
+  repository?: {
+    pullRequest?: { reviewThreads?: { pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }; nodes?: (ThreadNode | null)[] } };
+  };
 }
 
 /**
- * The pending review's own comments, by anchor. REST is the only view that carries `side`
- * — the GraphQL comment type has no such field — and it lists a pending review's comments
- * for their author. An empty map (unreadable review, no databaseId) just means nothing
- * matches, so the export still adds its comments.
+ * The pending review's own comments, by anchor. It has to be `reviewThreads`: it is the only view
+ * that reports a *pending* comment's real position — REST's review-comment list leaves `line`,
+ * `side` and `start_line` null for one, and the GraphQL comment type has no side field at all.
+ * Failure returns an empty map, which just means nothing matches and the export adds its comments
+ * as before.
  */
-async function pendingComments(run: GhRunner, cwd: string, pr: PrInfo, databaseId: string): Promise<Map<string, PendingComment>> {
-  const by = new Map<string, PendingComment>();
-  if (!databaseId) return by;
+async function pendingComments(run: GhRunner, cwd: string, pr: PrInfo, reviewId: string): Promise<Map<string, PendingComment[]>> {
+  const by = new Map<string, PendingComment[]>();
   const { owner, repo } = repoOfPrUrl(pr.url);
-  let out: string;
+  let after: string | null = null;
   try {
-    out = await run(['api', '--paginate', `repos/${owner}/${repo}/pulls/${pr.number}/reviews/${databaseId}/comments?per_page=100`], { cwd });
+    // Bounded: a PR with more than 10 pages of threads gets a partial map, never a hang.
+    for (let page = 0; page < 10; page++) {
+      const data: ThreadsQueryData = await graphql<ThreadsQueryData>(run, cwd, THREADS_QUERY, { owner, repo, number: pr.number, after });
+      const threads = data.repository?.pullRequest?.reviewThreads;
+      for (const t of threads?.nodes ?? []) {
+        const c = t?.comments?.nodes?.[0];
+        // Only this pending review's own comments: a submitted comment must not be rewritten.
+        if (!t?.path || !c?.id || c.pullRequestReview?.id !== reviewId) continue;
+        const line = t.line;
+        if (line == null) continue;
+        const side = t.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT';
+        // A queue per anchor: the review may already hold several comments on the same lines.
+        const key = anchorKey({ path: t.path, side, line, start_line: t.startLine ?? undefined });
+        const at = by.get(key);
+        if (at) at.push({ nodeId: c.id, body: c.body ?? '' });
+        else by.set(key, [{ nodeId: c.id, body: c.body ?? '' }]);
+      }
+      if (!threads?.pageInfo?.hasNextPage || !threads.pageInfo.endCursor) break;
+      after = threads.pageInfo.endCursor;
+    }
   } catch {
     return by;
-  }
-  let list: RestReviewComment[];
-  try {
-    list = JSON.parse(out) as RestReviewComment[];
-  } catch {
-    return by;
-  }
-  if (!Array.isArray(list)) return by;
-  for (const c of list) {
-    const line = c.line ?? c.original_line;
-    if (!c.node_id || !c.path || line == null) continue;
-    const side = c.side === 'LEFT' ? 'LEFT' : 'RIGHT';
-    by.set(anchorKey({ path: c.path, side, line, start_line: c.start_line ?? undefined }), { nodeId: c.node_id, body: c.body ?? '' });
   }
   return by;
 }

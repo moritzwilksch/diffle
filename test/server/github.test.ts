@@ -64,8 +64,18 @@ describe('repoOfPrUrl', () => {
 
 describe('exportToGithub', () => {
   const calls: { args: string[]; input?: string }[] = [];
-  /** One comment as the REST review-comment list reports it. */
+  /** One comment already in the pending review, as a review thread reports it. */
   type Existing = { node_id: string; path: string; side: 'LEFT' | 'RIGHT'; line: number; start_line?: number; body: string };
+
+  /** `reviewThreads` shape: one thread per comment, all of them on the pending review. */
+  const threadNodes = (existing: Existing[], reviewId: string) =>
+    existing.map((c) => ({
+      path: c.path,
+      line: c.line,
+      startLine: c.start_line ?? c.line,
+      diffSide: c.side,
+      comments: { nodes: [{ id: c.node_id, body: c.body, pullRequestReview: { id: reviewId } }] },
+    }));
 
   /**
    * `pending`: the id of a pending review the viewer already has, or null for none.
@@ -75,10 +85,14 @@ describe('exportToGithub', () => {
     return async (args, { input }) => {
       calls.push({ args, input });
       if (args[0] === 'pr') return PR_VIEW;
-      if (args[1] !== 'graphql') return args.some((a) => a.includes('/comments')) ? JSON.stringify(existing) : '{}';
+      if (args[1] !== 'graphql') return '{}';
       const query = (JSON.parse(input!) as { query: string }).query;
+      if (query.includes('reviewThreads')) {
+        const reviewThreads = { pageInfo: { hasNextPage: false, endCursor: null }, nodes: threadNodes(existing, pending ?? '') };
+        return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads } } } });
+      }
       if (query.startsWith('query')) {
-        const nodes = pending ? [{ id: pending, fullDatabaseId: 42, author: { login: 'me' } }] : [];
+        const nodes = pending ? [{ id: pending, author: { login: 'me' } }] : [];
         return JSON.stringify({ data: { viewer: { login: 'me' }, repository: { pullRequest: { reviews: { nodes } } } } });
       }
       if (query.includes('updatePullRequestReviewComment')) return JSON.stringify({ data: { updatePullRequestReviewComment: { pullRequestReviewComment: { id: 'c' } } } });
@@ -115,8 +129,8 @@ describe('exportToGithub', () => {
     const res = await exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' })], run: runner('PRR_1') });
     expect(res).toEqual({ url: PR_URL, posted: 2, updated: 0, review: 'existing', skipped: [] });
     expect(calls.map((c) => c.args[0])).toEqual(['pr', 'api', 'api', 'api', 'api']);
-    // The list of what the pending review already holds comes before any write.
-    expect(calls[2]!.args).toEqual(['api', '--paginate', 'repos/o/r/pulls/7/reviews/42/comments?per_page=100']);
+    // The read of what the pending review already holds comes before any write.
+    expect((JSON.parse(calls[2]!.input!) as { query: string }).query).toContain('reviewThreads');
     // No reviews POST and no submit: the pending review is only extended.
     expect(calls.some((c) => c.args.includes('--method'))).toBe(false);
     const inputs = calls.slice(3).map((c) => (JSON.parse(c.input!) as { variables: { input: unknown } }).variables.input);
@@ -162,9 +176,22 @@ describe('exportToGithub', () => {
     expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [{ id: 'a', reason: 'already in the review' }] });
   });
 
+  it('never rewrites a comment of another review: only the pending review\'s own count', async () => {
+    const submitted: GhRunner = async (args, o) => {
+      if (args[1] === 'graphql' && (JSON.parse(o.input!) as { query: string }).query.includes('reviewThreads')) {
+        calls.push({ args, input: o.input });
+        const nodes = threadNodes([{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'hi' }], 'PRR_OLD');
+        return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes } } } } });
+      }
+      return runner('PRR_1')(args, o);
+    };
+    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: submitted });
+    expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [] });
+  });
+
   it('adds its comments anyway when the pending review\'s own comments cannot be read', async () => {
     const blind: GhRunner = async (args, o) => {
-      if (args.some((a) => a.includes('/comments'))) throw new GithubError('gh api failed: 404', 502);
+      if (args[1] === 'graphql' && (JSON.parse(o.input!) as { query: string }).query.includes('reviewThreads')) throw new GithubError('gh api graphql failed: 502', 502);
       return runner('PRR_1')(args, o);
     };
     const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: blind });
