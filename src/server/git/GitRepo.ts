@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { lstat, open, readFile, readlink } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { ChangedFile, ChangeStatus, RefsResponse } from '../../shared/protocol.js';
@@ -67,6 +67,19 @@ export class GitRepo {
   }
 
   private readonly catFile: CatFileBatch;
+  readonly reviewRefs = `refs/diffle/${randomUUID()}`;
+
+  /** Clone into an empty temporary directory; full history preserves merge bases. */
+  static async clone(url: string, dir: string): Promise<GitRepo> {
+    await execGit(dir, ['clone', '--quiet', '--no-tags', '--', url, '.'], { env: { GIT_TERMINAL_PROMPT: '0' } });
+    return GitRepo.open(dir);
+  }
+
+  /** Remove only refs owned by this review, never another running instance. */
+  async cleanReviewRefs(): Promise<void> {
+    const refs = (await this.text(['for-each-ref', '--format=%(refname)', `${this.reviewRefs}/`])).trim();
+    if (refs) await this.exec(['update-ref', '--stdin'], { input: refs.split('\n').map((ref) => `delete ${ref}\n`).join('') });
+  }
 
   /** How many `cat-file --batch` processes this repository has started. Diagnostics and tests. */
   get catFileSpawns(): number {
@@ -124,18 +137,18 @@ export class GitRepo {
 
   /** Configured remotes, in git's order, with their fetch URLs. */
   async remotes(): Promise<{ name: string; url: string }[]> {
-    const out = await this.text(['remote', '-v']);
+    // Read configured URLs before insteadOf rewriting, which can hide repository identity.
+    const out = await this.text(['config', '--null', '--get-regexp', '^remote\\..*\\.url$'], { okCodes: [1] });
     const seen = new Map<string, string>();
-    for (const line of out.split('\n')) {
-      const m = /^(\S+)\t(\S+) \(fetch\)$/.exec(line);
+    for (const record of out.split('\0')) {
+      const m = /^remote\.(.*)\.url\n([\s\S]*)$/.exec(record);
       if (m && !seen.has(m[1]!)) seen.set(m[1]!, m[2]!);
     }
     return [...seen].map(([name, url]) => ({ name, url }));
   }
 
   /**
-   * Fetches explicit refspecs from `remote` (a name or a URL). The only call that
-   * touches the network, and the only one that writes to the repository: the
+   * Fetches explicit refspecs from `remote` (a name or a URL). The
    * refspecs must stay inside `refs/diffle/`, so no ref the user owns moves, and
    * FETCH_HEAD is left alone. Terminal prompts are off: a repository that needs
    * credentials fails instead of hanging.

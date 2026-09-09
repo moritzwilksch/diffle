@@ -47,7 +47,7 @@ diffle working --lsp    # add Python symbol navigation through pyrefly
 diffle --help           # list all commands and flags
 ```
 
-`diffle pr` needs an authenticated [`gh`](https://cli.github.com/) and can review a pull request by number or URL, even when it is not checked out locally.
+`diffle pr` needs an authenticated [`gh`](https://cli.github.com/). Foreign PR URLs open in a temporary clone, leaving your local repository untouched.
 
 Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
 
