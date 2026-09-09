@@ -19,6 +19,15 @@ jobs:
         run: |
           npm ci
           npm test
+      # `npm ci` only checks the dependency tree, so drift in the lockfile's own
+      # metadata (name, version, bin, engines) passes it silently.
+      - name: Check package-lock.json is up to date
+        run: |
+          npm install --package-lock-only --no-audit --no-fund
+          git diff --exit-code -- package-lock.json || {
+            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result"
+            exit 1
+          }
 
   build:
     runs-on: ubuntu-latest
