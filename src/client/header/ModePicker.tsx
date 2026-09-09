@@ -138,7 +138,10 @@ export function ModePicker() {
                       required
                       value={countText}
                       style={{ width: `${Math.max(1, countText.length)}ch` }}
-                      onChange={(e) => setCountText(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^[0-9]*$/.test(value)) setCountText(value);
+                      }}
                     />
                     <span>..HEAD</span>
                   </div>
