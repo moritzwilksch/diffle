@@ -81,7 +81,13 @@ describe('viewPr', () => {
       ['feat', 'feat'],
     ] as const) {
       await viewPr(selector, local, gh);
-      expect(ghCalls.pop()).toEqual(['pr', 'view', expected, '--json', 'number,url,baseRefName,headRefName,headRefOid']);
+      expect(ghCalls.pop()).toEqual([
+        'pr',
+        'view',
+        expected,
+        '--json',
+        'number,url,baseRefName,headRefName,headRefOid',
+      ]);
     }
     await viewPr(undefined, local, gh);
     expect(ghCalls.pop()).toEqual(['pr', 'view', '--json', 'number,url,baseRefName,headRefName,headRefOid']);
@@ -131,7 +137,11 @@ describe("resolveMode({ kind: 'pr' })", () => {
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
     const refs = git(local, 'show-ref');
-    await expect(resolveMode({ kind: 'pr', pr: '7' }, repo, async () => PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' }))).rejects.toThrow(/foreign repository/);
+    await expect(
+      resolveMode({ kind: 'pr', pr: '7' }, repo, async () =>
+        PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' }),
+      ),
+    ).rejects.toThrow(/foreign repository/);
     expect(git(local, 'show-ref')).toBe(refs);
   });
 
@@ -168,10 +178,25 @@ describe('openReviewRepository', () => {
     await chmod(join(bin, 'gh'), 0o755);
     const config = join(tmp, 'cli-gitconfig');
     await writeFile(config, `[url "${origin}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
-    const child = spawn(process.execPath, [
-      join(process.cwd(), 'node_modules/tsx/dist/cli.mjs'), join(process.cwd(), 'src/cli/main.ts'),
-      '-C', local, 'pr', url, '--no-open', '--no-watch', '--port', '0',
-    ], { env: { ...env, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: config, NO_COLOR: '1' }, stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(
+      process.execPath,
+      [
+        join(process.cwd(), 'node_modules/tsx/dist/cli.mjs'),
+        join(process.cwd(), 'src/cli/main.ts'),
+        '-C',
+        local,
+        'pr',
+        url,
+        '--no-open',
+        '--no-watch',
+        '--port',
+        '0',
+      ],
+      {
+        env: { ...env, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: config, NO_COLOR: '1' },
+        stdio: ['ignore', 'ignore', 'pipe'],
+      },
+    );
     let stderr = '';
     const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
     try {
@@ -244,6 +269,8 @@ describe('openReviewRepository', () => {
 describe('GitRepo.fetch', () => {
   it('refuses a refspec that would move a ref the user owns', async () => {
     await expect(repo.fetch('origin', ['+refs/heads/main:refs/heads/main'])).rejects.toThrow(/refusing to fetch into/);
-    await expect(repo.fetch('origin', ['+refs/heads/main:refs/remotes/origin/main'])).rejects.toThrow(/refusing to fetch into/);
+    await expect(repo.fetch('origin', ['+refs/heads/main:refs/remotes/origin/main'])).rejects.toThrow(
+      /refusing to fetch into/,
+    );
   });
 });

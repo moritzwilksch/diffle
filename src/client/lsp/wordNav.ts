@@ -120,7 +120,10 @@ function newSideLine(path: string, line: number, onOldSide: boolean): number | n
 function rootOf(path: string): ShadowRoot | HTMLElement | null {
   const state = useStore.getState();
   const id = itemIdOf(state, path);
-  const rendered = viewer()?.getInstance()?.getRenderedItems().find((r) => r.id === id);
+  const rendered = viewer()
+    ?.getInstance()
+    ?.getRenderedItems()
+    .find((r) => r.id === id);
   return rendered?.element.shadowRoot ?? rendered?.element ?? null;
 }
 
@@ -129,5 +132,7 @@ function wordsOf(path: string, line: number): HTMLElement[] | null {
   const root = rootOf(path);
   const row = root && rowOf(root, line, 'new');
   if (!row) return null;
-  return [...row.querySelectorAll<HTMLElement>('span[data-char]')].filter((el) => /^[\p{L}_][\p{L}\p{N}_]*$/u.test(el.textContent ?? ''));
+  return [...row.querySelectorAll<HTMLElement>('span[data-char]')].filter((el) =>
+    /^[\p{L}_][\p{L}\p{N}_]*$/u.test(el.textContent ?? ''),
+  );
 }

@@ -9,7 +9,8 @@ describe('CLI numeric arguments', () => {
   });
 
   it('rejects non-integers and out-of-range values as usage errors', () => {
-    for (const bad of ['nope', '', '1.5', '-1', '65536']) expect(() => parsePort(bad)).toThrow(/integer between 0 and 65535/);
+    for (const bad of ['nope', '', '1.5', '-1', '65536'])
+      expect(() => parsePort(bad)).toThrow(/integer between 0 and 65535/);
     expect(() => parseContext('10001')).toThrow(/integer between 0 and 10000/);
   });
 });

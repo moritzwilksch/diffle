@@ -46,13 +46,25 @@ export function SymbolPicker() {
     }
   };
 
-  const placeholder = symbols.scope === 'document' ? `Symbols in ${symbols.path ?? 'file'}…` : 'Search symbols across the repository…';
-  const status = symbols.loading ? 'loading…' : symbols.items.length ? `${symbols.index + 1} / ${symbols.items.length}` : '';
+  const placeholder =
+    symbols.scope === 'document' ? `Symbols in ${symbols.path ?? 'file'}…` : 'Search symbols across the repository…';
+  const status = symbols.loading
+    ? 'loading…'
+    : symbols.items.length
+      ? `${symbols.index + 1} / ${symbols.items.length}`
+      : '';
   return (
     <div className="symbols" role="dialog" aria-label="Symbols">
       <div className="searchbar">
         <Hash size="0.875rem" />
-        <input ref={ref} value={q} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} spellCheck={false} />
+        <input
+          ref={ref}
+          value={q}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          spellCheck={false}
+        />
         <span className="status">{status}</span>
         <button type="button" className="ghost icon" onClick={closeSymbols} title="Close (Esc)">
           <X size="0.875rem" />

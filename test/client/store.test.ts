@@ -39,15 +39,35 @@ const api = {
 vi.mock('../../src/client/api.js', () => ({ api }));
 
 const { useStore, TOAST_MS, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('../../src/client/store.js');
-const { filterSymbols, viewedState, isCollapsed, itemIdOf, itemDeps, itemVersion, visibleThreads, OVERSIZED_LINES, PATCH_BATCH_LINES, PATCH_BATCH_FILES } = await import('../../src/client/model.js');
+const {
+  filterSymbols,
+  viewedState,
+  isCollapsed,
+  itemIdOf,
+  itemDeps,
+  itemVersion,
+  visibleThreads,
+  OVERSIZED_LINES,
+  PATCH_BATCH_LINES,
+  PATCH_BATCH_FILES,
+} = await import('../../src/client/model.js');
 /** A one-line patch per path, so a `patches` mock can answer any batch. */
-const patchesFor = (paths: string[]) => paths.map((p) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -1,1 +1,1 @@\n-x\n+y\n`).join('');
+const patchesFor = (paths: string[]) =>
+  paths.map((p) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -1,1 +1,1 @@\n-x\n+y\n`).join('');
 const { lspTarget } = await import('../../src/client/lsp/target.js');
 
 function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt']): Snapshot {
   return {
     root: '/r',
-    mode: { kind: 'working', request: { kind: 'working' }, old: { kind: 'rev', rev: 'HEAD' }, newRev: 'worktree', label: key, live: 'none', commentKey: key },
+    mode: {
+      kind: 'working',
+      request: { kind: 'working' },
+      old: { kind: 'rev', rev: 'HEAD' },
+      newRev: 'worktree',
+      label: key,
+      live: 'none',
+      commentKey: key,
+    },
     version,
     oldSha: 'x',
     newSha: 'worktree',
@@ -60,16 +80,42 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useStore.setState({ snapshot: null, loaded: {}, fileView: null, contents: {}, threads: [], viewed: [], error: null, showResolved: false, activePath: null, selection: null, draft: null, gens: {}, jumps: [], jumpIndex: 0, collapsed: {} });
+  useStore.setState({
+    snapshot: null,
+    loaded: {},
+    fileView: null,
+    contents: {},
+    threads: [],
+    viewed: [],
+    error: null,
+    showResolved: false,
+    activePath: null,
+    selection: null,
+    draft: null,
+    gens: {},
+    jumps: [],
+    jumpIndex: 0,
+    collapsed: {},
+  });
 });
 
 describe('client transitions', () => {
   it('J lands on a file whose patch has not arrived, instead of skipping it', async () => {
-    const txt = (path: string, blob: string) => ({ path, status: 'M' as const, additions: 1, deletions: 0, binary: false, blob, generated: false });
+    const txt = (path: string, blob: string) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob,
+      generated: false,
+    });
     const changed = [txt('a.txt', 'b1'), txt('b.txt', 'b2'), txt('c.txt', 'b3')];
     const pending = deferred<string>();
     api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
-    api.patch.mockImplementation((path: string) => (path === 'a.txt' ? Promise.resolve(patchesFor(['a.txt'])) : pending.promise));
+    api.patch.mockImplementation((path: string) =>
+      path === 'a.txt' ? Promise.resolve(patchesFor(['a.txt'])) : pending.promise,
+    );
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
     await useStore.getState().refreshSnapshot();
     useStore.getState().moveFile('first');
@@ -85,8 +131,20 @@ describe('client transitions', () => {
   });
 
   it('J / K walk past binary files, which have no rows and so no cursor', async () => {
-    const bin = (path: string) => ({ path, status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b0', generated: false });
-    const changed = [bin('a.gif'), bin('b.mp4'), { path: 'c.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+    const bin = (path: string) => ({
+      path,
+      status: 'M' as const,
+      additions: 0,
+      deletions: 0,
+      binary: true,
+      blob: 'b0',
+      generated: false,
+    });
+    const changed = [
+      bin('a.gif'),
+      bin('b.mp4'),
+      { path: 'c.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue(patchesFor(['c.txt']));
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.gif', 'b.mp4', 'c.txt']), changed });
     await useStore.getState().refreshSnapshot();
@@ -104,13 +162,20 @@ describe('client transitions', () => {
   });
 
   it('a watcher refresh keeps the open draft, cursor and search; a mode switch drops them', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
     await useStore.getState().refreshSnapshot();
     const id = itemIdOf(useStore.getState(), 'a.txt');
     const sel = { id, range: { start: 1, side: 'additions' as const, end: 1, endSide: 'additions' as const } };
-    useStore.setState({ selection: sel, draft: { path: 'a.txt', selection: sel }, jumps: [{ path: 'a.txt', side: 'new', line: 1 }], jumpIndex: 1 });
+    useStore.setState({
+      selection: sel,
+      draft: { path: 'a.txt', selection: sel },
+      jumps: [{ path: 'a.txt', side: 'new', line: 1 }],
+      jumpIndex: 1,
+    });
 
     api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working'), changed });
     await useStore.getState().refreshSnapshot();
@@ -128,12 +193,16 @@ describe('client transitions', () => {
   });
 
   it('a reloaded file moves the selection to its new item id', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
     await useStore.getState().refreshSnapshot();
     const before = itemIdOf(useStore.getState(), 'a.txt');
-    useStore.setState({ selection: { id: before, range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } } });
+    useStore.setState({
+      selection: { id: before, range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } },
+    });
     // Same path, new content: the patch is reloaded under a new generation.
     api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working'), changed: [{ ...changed[0]!, blob: 'b2' }] });
     await useStore.getState().refreshSnapshot();
@@ -143,7 +212,9 @@ describe('client transitions', () => {
   });
 
   it('the old side moving alone reloads every patch and refetches an unchanged file view', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.file.mockResolvedValue({ contents: 'one\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt']), changed });
@@ -170,8 +241,11 @@ describe('client transitions', () => {
   });
 
   it('a reloading file and file view stay on screen until the replacement lands', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
-    const patch = (minus: string) => `diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-${minus}\n+y\n`;
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
+    const patch = (minus: string) =>
+      `diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-${minus}\n+y\n`;
     api.patch.mockResolvedValue(patch('x'));
     api.file.mockResolvedValue({ contents: 'one\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt']), changed });
@@ -182,7 +256,10 @@ describe('client transitions', () => {
     // The saved file's patch is slow: the old card stays, and the cursor can still land on it.
     const slow = deferred<string>();
     api.patch.mockReturnValueOnce(slow.promise);
-    api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working', ['a.txt', 'b.txt']), changed: [{ ...changed[0]!, blob: 'b2' }] });
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(2, 'working', ['a.txt', 'b.txt']),
+      changed: [{ ...changed[0]!, blob: 'b2' }],
+    });
     const refresh = useStore.getState().refreshSnapshot();
     await new Promise((r) => setTimeout(r, 0));
     let s = useStore.getState();
@@ -204,7 +281,11 @@ describe('client transitions', () => {
     expect(item).toEqual(expect.objectContaining({ kind: 'file' }));
     const slowFile = deferred<{ contents: string; binary: boolean }>();
     api.file.mockReturnValueOnce(slowFile.promise);
-    api.snapshot.mockResolvedValueOnce({ ...snap(3, 'working', ['a.txt', 'b.txt']), oldSha: 'x2', changed: [{ ...changed[0]!, blob: 'b2' }] });
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(3, 'working', ['a.txt', 'b.txt']),
+      oldSha: 'x2',
+      changed: [{ ...changed[0]!, blob: 'b2' }],
+    });
     const refresh2 = useStore.getState().refreshSnapshot();
     await new Promise((r) => setTimeout(r, 0));
     expect(useStore.getState().fileView?.item).toBe(item);
@@ -214,7 +295,15 @@ describe('client transitions', () => {
   });
 
   it('hydrated diffs that land together commit as one store transaction', async () => {
-    const changed = ['a.txt', 'b.txt', 'c.txt'].map((path) => ({ path, status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false }));
+    const changed = ['a.txt', 'b.txt', 'c.txt'].map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 1,
+      binary: false,
+      blob: 'b1',
+      generated: false,
+    }));
     api.patches.mockImplementation(async (paths: string[]) => patchesFor(paths));
     api.file.mockResolvedValue({ contents: 'y\nrest\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
@@ -241,7 +330,15 @@ describe('client transitions', () => {
 
   it('a mode switch stops the hydration queue: no further file requests, and the batch in flight is aborted', async () => {
     const paths = Array.from({ length: 8 }, (_, i) => `f${i}.txt`);
-    const changed = paths.map((path) => ({ path, status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false }));
+    const changed = paths.map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 1,
+      binary: false,
+      blob: 'b1',
+      generated: false,
+    }));
     api.patches.mockImplementation(async (ps: string[]) => patchesFor(ps));
     const pending: Deferred<{ contents: string; binary: boolean }>[] = [];
     api.file.mockImplementation(() => {
@@ -270,7 +367,15 @@ describe('client transitions', () => {
 
   it('a refresh touching five of many files requests only those five', async () => {
     const paths = Array.from({ length: 30 }, (_, i) => `f${String(i).padStart(2, '0')}.txt`);
-    const file = (path: string, blob: string) => ({ path, status: 'M' as const, additions: 1, deletions: 1, binary: false, blob, generated: false });
+    const file = (path: string, blob: string) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 1,
+      binary: false,
+      blob,
+      generated: false,
+    });
     api.patches.mockImplementation(async (ps: string[]) => patchesFor(ps));
     api.file.mockResolvedValue({ contents: 'y\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', paths), changed: paths.map((p) => file(p, 'b1')) });
@@ -283,7 +388,10 @@ describe('client transitions', () => {
     api.patch.mockClear();
 
     const touched = ['f03.txt', 'f07.txt', 'f12.txt', 'f20.txt', 'f29.txt'];
-    api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working', paths), changed: paths.map((p) => file(p, touched.includes(p) ? 'b2' : 'b1')) });
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(2, 'working', paths),
+      changed: paths.map((p) => file(p, touched.includes(p) ? 'b2' : 'b1')),
+    });
     await useStore.getState().refreshSnapshot();
     expect(api.patch).not.toHaveBeenCalled();
     expect(api.patches).toHaveBeenCalledTimes(1);
@@ -292,8 +400,23 @@ describe('client transitions', () => {
   });
 
   it('a huge file rides its own batch behind the small ones; the active file goes first; an oversized diff waits to be asked for', async () => {
-    const file = (path: string, lines: number) => ({ path, status: 'M' as const, additions: lines, deletions: 0, binary: false, blob: 'b1', generated: false });
-    const changed = [file('a.txt', 1), file('big.txt', PATCH_BATCH_LINES + 1), file('c.txt', 1), file('d.txt', 1), file('huge.lock', OVERSIZED_LINES + 1), file('z.txt', 1)];
+    const file = (path: string, lines: number) => ({
+      path,
+      status: 'M' as const,
+      additions: lines,
+      deletions: 0,
+      binary: false,
+      blob: 'b1',
+      generated: false,
+    });
+    const changed = [
+      file('a.txt', 1),
+      file('big.txt', PATCH_BATCH_LINES + 1),
+      file('c.txt', 1),
+      file('d.txt', 1),
+      file('huge.lock', OVERSIZED_LINES + 1),
+      file('z.txt', 1),
+    ];
     const order: string[][] = [];
     api.patches.mockImplementation(async (ps: string[]) => {
       order.push(ps);
@@ -305,7 +428,14 @@ describe('client transitions', () => {
     });
     api.file.mockResolvedValue({ contents: 'y\n', binary: false });
     useStore.setState({ activePath: 'z.txt' });
-    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', changed.map((f) => f.path)), changed });
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(
+        1,
+        'working',
+        changed.map((f) => f.path),
+      ),
+      changed,
+    });
     await useStore.getState().refreshSnapshot();
     expect(order).toEqual([['z.txt', 'a.txt', 'c.txt', 'd.txt'], ['big.txt']]);
     const s = useStore.getState();
@@ -319,7 +449,14 @@ describe('client transitions', () => {
     expect(order.at(-1)).toEqual(['huge.lock']);
     expect(useStore.getState().loaded['huge.lock']).toEqual(expect.objectContaining({ kind: 'diff' }));
     order.length = 0;
-    api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working', changed.map((f) => f.path)), changed: changed.map((f) => (f.path === 'huge.lock' ? { ...f, blob: 'b2' } : f)) });
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(
+        2,
+        'working',
+        changed.map((f) => f.path),
+      ),
+      changed: changed.map((f) => (f.path === 'huge.lock' ? { ...f, blob: 'b2' } : f)),
+    });
     await useStore.getState().refreshSnapshot();
     expect(order).toEqual([['huge.lock']]);
     expect(useStore.getState().loaded['huge.lock']).toEqual(expect.objectContaining({ kind: 'diff' }));
@@ -328,7 +465,9 @@ describe('client transitions', () => {
   });
 
   it('hydration and the file view opening at once share one request per side; a failed load is retried by the next consumer', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     const pending: Deferred<{ contents: string; binary: boolean }>[] = [];
     api.file.mockImplementation(() => {
@@ -338,7 +477,10 @@ describe('client transitions', () => {
     });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
     await useStore.getState().refreshSnapshot();
-    expect(api.file.mock.calls.map((c) => [c[0], c[1]])).toEqual([['a.txt', 'old'], ['a.txt', 'new']]);
+    expect(api.file.mock.calls.map((c) => [c[0], c[1]])).toEqual([
+      ['a.txt', 'old'],
+      ['a.txt', 'new'],
+    ]);
     const open = useStore.getState().openFullFile('a.txt');
     const quote = useStore.getState().loadFile('a.txt', 'new');
     // Both joined the hydration's new-side request instead of issuing their own.
@@ -364,7 +506,9 @@ describe('client transitions', () => {
   });
 
   it('the file view shows one file in place of the diff list, survives a refresh of that file, and Ctrl+o returns', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.file.mockResolvedValue({ contents: 'y\nz\nw\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt']), changed });
@@ -385,7 +529,12 @@ describe('client transitions', () => {
     await new Promise((r) => setTimeout(r, 0));
     s = useStore.getState();
     expect(s.fileView).toBeNull();
-    expect(s.selection).toEqual(expect.objectContaining({ id: expect.stringMatching(/^diff:a\.txt@/), range: expect.objectContaining({ end: 1 }) }));
+    expect(s.selection).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^diff:a\.txt@/),
+        range: expect.objectContaining({ end: 1 }),
+      }),
+    );
     // Ctrl+i re-enters it.
     useStore.getState().jumpForward();
     await new Promise((r) => setTimeout(r, 0));
@@ -401,7 +550,10 @@ describe('client transitions', () => {
 
     // The file changed on disk: the view is refetched, not left stale.
     api.file.mockResolvedValue({ contents: 'q\n', binary: false });
-    api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working', ['a.txt', 'b.txt']), changed: [{ ...changed[0]!, blob: 'b2' }] });
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(2, 'working', ['a.txt', 'b.txt']),
+      changed: [{ ...changed[0]!, blob: 'b2' }],
+    });
     await useStore.getState().refreshSnapshot();
     expect((useStore.getState().fileView!.item as { file: { contents: string } }).file.contents).toBe('q\n');
 
@@ -419,7 +571,9 @@ describe('client transitions', () => {
   });
 
   it('an unchanged file opens in the file view, not in the diff list', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.file.mockResolvedValue({ contents: 'one\ntwo\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt']), changed });
@@ -433,7 +587,9 @@ describe('client transitions', () => {
     // Opening a changed file leaves the view for its diff.
     await useStore.getState().openFile('a.txt', 1, 'new');
     expect(useStore.getState().fileView).toBeNull();
-    expect(useStore.getState().scrollTarget).toEqual(expect.objectContaining({ id: expect.stringMatching(/^diff:a\.txt@/), line: 1 }));
+    expect(useStore.getState().scrollTarget).toEqual(
+      expect.objectContaining({ id: expect.stringMatching(/^diff:a\.txt@/), line: 1 }),
+    );
   });
 
   it('a slow first refresh never overwrites a faster second one', async () => {
@@ -451,7 +607,10 @@ describe('client transitions', () => {
   });
 
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
-    useStore.setState({ config: { autoViewed: [], contextLines: 5, lspCommand: 'pyrefly lsp' }, lsp: { state: 'off', command: '' } });
+    useStore.setState({
+      config: { autoViewed: [], contextLines: 5, lspCommand: 'pyrefly lsp' },
+      lsp: { state: 'off', command: '' },
+    });
     const slow = deferred<Snapshot>();
     api.snapshot.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(snap(2, 'working'));
     api.config.mockResolvedValueOnce({ autoViewed: ['*.lock'], contextLines: 9, lspCommand: 'pyrefly lsp' });
@@ -507,7 +666,7 @@ describe('client transitions', () => {
     expect(api.snapshot).toHaveBeenCalledTimes(2);
   });
 
-  it('a push during a resync against a restarted server is not deduped against the old lifetime\'s version', async () => {
+  it("a push during a resync against a restarted server is not deduped against the old lifetime's version", async () => {
     useStore.setState({ snapshot: snap(50, 'working') });
     const slow = deferred<Snapshot>();
     // The restarted server is at v1; its watcher pushes v2 while the boot is in flight.
@@ -522,7 +681,7 @@ describe('client transitions', () => {
     expect(useStore.getState().snapshot?.tree).toEqual(['c.txt']);
   });
 
-  it('a mode switch resolved by its push leaves the push\'s in-flight fetch owning the version', async () => {
+  it("a mode switch resolved by its push leaves the push's in-flight fetch owning the version", async () => {
     useStore.setState({ snapshot: snap(1, 'working') });
     const post = deferred<Snapshot>();
     api.switchMode.mockReturnValueOnce(post.promise);
@@ -541,7 +700,9 @@ describe('client transitions', () => {
   });
 
   it('a resync after a reconnect catches up snapshot, threads and viewed marks and keeps the draft', async () => {
-    const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+    ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
     await useStore.getState().boot();
@@ -567,7 +728,11 @@ describe('client transitions', () => {
     const file = deferred<{ path: string; contents: string; binary: boolean }>();
     api.file.mockReturnValueOnce(file.promise);
     const open = useStore.getState().openFile('a.txt');
-    expect(useStore.getState().fileView).toEqual({ path: 'a.txt', item: null, from: { position: null, activePath: null } });
+    expect(useStore.getState().fileView).toEqual({
+      path: 'a.txt',
+      item: null,
+      from: { position: null, activePath: null },
+    });
 
     api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
     await useStore.getState().switchMode({ kind: 'pr' });
@@ -729,7 +894,11 @@ describe('symbol navigation', () => {
     expect(useStore.getState().toast).toMatch(/No hover information for foo/);
     api.lspHover.mockResolvedValue({ contents: 'foo: int' });
     await useStore.getState().showHover();
-    expect(useStore.getState().hover).toEqual({ target, contents: 'foo: int', anchor: { left: 5, top: 7, bottom: 21 } });
+    expect(useStore.getState().hover).toEqual({
+      target,
+      contents: 'foo: int',
+      anchor: { left: 5, top: 7, bottom: 21 },
+    });
     // With the symbol menu open, gh closes it and shows the tooltip for its target.
     await useStore.getState().openSymbolMenu({ ...target, col: 9 }, 0, 0);
     await useStore.getState().showHover();
@@ -788,14 +957,23 @@ describe('symbol navigation', () => {
     api.lspDefinition.mockResolvedValue({ locations: [], external: 0, hidden: 1, hiddenPath: '.venv/lib/pkg/m.py' });
     await useStore.getState().goToDefinition(target);
     expect(useStore.getState().toast).toMatch(/\.venv\/lib\/pkg\/m\.py.*hides/);
-    api.lspDefinition.mockResolvedValue({ locations: [], external: 1, externalPath: '/elsewhere/main/m.py', hidden: 0 });
+    api.lspDefinition.mockResolvedValue({
+      locations: [],
+      external: 1,
+      externalPath: '/elsewhere/main/m.py',
+      hidden: 0,
+    });
     await useStore.getState().goToDefinition(target);
     expect(useStore.getState().toast).toMatch(/\/elsewhere\/main\/m\.py.*outside/);
   });
 
   it('go to definition opens the target file and records the jump', async () => {
     ready();
-    api.lspDefinition.mockResolvedValue({ locations: [{ path: 'b.py', line: 2, col: 0, text: 'y = 2' }], external: 0, hidden: 0 });
+    api.lspDefinition.mockResolvedValue({
+      locations: [{ path: 'b.py', line: 2, col: 0, text: 'y = 2' }],
+      external: 0,
+      hidden: 0,
+    });
     await useStore.getState().goToDefinition(target);
     expect(api.lspDefinition).toHaveBeenCalledWith({ path: 'a.py', line: 3, col: 4 });
     const s = useStore.getState();
@@ -804,7 +982,7 @@ describe('symbol navigation', () => {
     expect(s.selection?.range.end).toBe(2);
   });
 
-  it("a hover link lands like gd and closes the tooltip", async () => {
+  it('a hover link lands like gd and closes the tooltip', async () => {
     ready();
     api.lspHover.mockResolvedValue({ contents: 'Go to [f](diffle:b.py#L2)' });
     await useStore.getState().requestHover(target, { left: 0, top: 0, bottom: 0 });
@@ -818,7 +996,11 @@ describe('symbol navigation', () => {
 
   it('go to type definition asks the type-definition endpoint and jumps the same way', async () => {
     ready();
-    api.lspTypeDefinition.mockResolvedValue({ locations: [{ path: 'b.py', line: 1, col: 0, text: 'class T' }], external: 0, hidden: 0 });
+    api.lspTypeDefinition.mockResolvedValue({
+      locations: [{ path: 'b.py', line: 1, col: 0, text: 'class T' }],
+      external: 0,
+      hidden: 0,
+    });
     await useStore.getState().goToTypeDefinition(target);
     expect(api.lspTypeDefinition).toHaveBeenCalledWith({ path: 'a.py', line: 3, col: 4 });
     expect(api.lspDefinition).not.toHaveBeenCalled();
@@ -886,7 +1068,13 @@ describe('symbol navigation', () => {
 
   it('* / # search the focused word whole-word from the cursor, and n keeps their direction', async () => {
     ready();
-    useStore.setState({ fileView: { path: 'a.py', item: { kind: 'file', file: { name: 'a.py', contents: 'foo\nbar\nfoo\nfoo\n', cacheKey: 'a' } }, from: { position: null, activePath: null } } });
+    useStore.setState({
+      fileView: {
+        path: 'a.py',
+        item: { kind: 'file', file: { name: 'a.py', contents: 'foo\nbar\nfoo\nfoo\n', cacheKey: 'a' } },
+        from: { position: null, activePath: null },
+      },
+    });
     const id = itemIdOf(useStore.getState(), 'a.py');
     useStore.setState({ selection: { id, range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } } });
     lspTarget.focus(target);
@@ -965,7 +1153,18 @@ describe('symbol navigation', () => {
     try {
       const sym = { name: 'foo', kind: 12, path: 'a.py', line: 1, endLine: 1, col: 0 };
       api.lspSymbols.mockResolvedValue([sym]);
-      useStore.setState({ symbols: { open: true, scope: 'workspace', path: null, query: '', all: [], items: [], index: -1, loading: false } });
+      useStore.setState({
+        symbols: {
+          open: true,
+          scope: 'workspace',
+          path: null,
+          query: '',
+          all: [],
+          items: [],
+          index: -1,
+          loading: false,
+        },
+      });
       const first = useStore.getState().querySymbols('f');
       await vi.advanceTimersByTimeAsync(WORKSPACE_SYMBOL_DEBOUNCE_MS / 2);
       const second = useStore.getState().querySymbols('fo');
@@ -999,8 +1198,19 @@ describe('symbol navigation', () => {
   });
 });
 
-const file = (over: Partial<ChangedFile>): ChangedFile => ({ path: 'a.py', status: 'M', additions: 3, deletions: 1, binary: false, blob: 'b2', generated: false, ...over });
-const thread = (over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> }): CommentThread => ({
+const file = (over: Partial<ChangedFile>): ChangedFile => ({
+  path: 'a.py',
+  status: 'M',
+  additions: 3,
+  deletions: 1,
+  binary: false,
+  blob: 'b2',
+  generated: false,
+  ...over,
+});
+const thread = (
+  over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> },
+): CommentThread => ({
   id: over.id ?? 't',
   anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
   messages: [{ id: 'm', body: 'b', createdAt: 1, updatedAt: 1 }],
@@ -1011,7 +1221,11 @@ const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommand: '' };
 
 describe('request ownership', () => {
   type SearchResponse = { query: string; matches: { path: string; line: number; text: string }[]; truncated: boolean };
-  const hit = (path: string, line: number): SearchResponse => ({ query: 'q', matches: [{ path, line, text: 'q' }], truncated: false });
+  const hit = (path: string, line: number): SearchResponse => ({
+    query: 'q',
+    matches: [{ path, line, text: 'q' }],
+    truncated: false,
+  });
   const ready = () => {
     useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), lsp: { state: 'ready', command: 'x' } });
     api.file.mockResolvedValue({ path: 'b.py', contents: 'x = 1\ny = 2\n', binary: false });
@@ -1034,7 +1248,7 @@ describe('request ownership', () => {
     expect(s.fileView).toBeNull();
   });
 
-  it('two searches completing backwards keep the newer query\'s matches', async () => {
+  it("two searches completing backwards keep the newer query's matches", async () => {
     ready();
     const first = deferred<SearchResponse>();
     const second = deferred<SearchResponse>();
@@ -1076,7 +1290,11 @@ describe('request ownership', () => {
 
   it('a definition that arrives after a mode switch does not jump', async () => {
     ready();
-    const slow = deferred<{ locations: { path: string; line: number; col: number; text: string }[]; external: number; hidden: number }>();
+    const slow = deferred<{
+      locations: { path: string; line: number; col: number; text: string }[];
+      external: number;
+      hidden: number;
+    }>();
     api.lspDefinition.mockReturnValueOnce(slow.promise);
     const go = useStore.getState().goToDefinition({ path: 'a.py', side: 'new', line: 3, col: 4, text: 'foo' });
     api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
@@ -1102,7 +1320,7 @@ describe('request ownership', () => {
     expect(useStore.getState().references.open).toBe(false);
   });
 
-  it('a viewed mutation completing after a mode switch does not replace the new mode\'s marks', async () => {
+  it("a viewed mutation completing after a mode switch does not replace the new mode's marks", async () => {
     const changed = [file({ path: 'a.py', blob: 'b1' })];
     useStore.setState({ snapshot: { ...snap(1, 'working', ['a.py']), changed } });
     const slow = deferred<ViewedEntry[]>();
@@ -1182,7 +1400,7 @@ describe('request ownership', () => {
     expect(useStore.getState().viewed).toEqual([{ path: 'a.py', blob: 'b2', viewed: true }]);
   });
 
-  it('a snapshot refresh\'s lists lose to a list refresh that started later', async () => {
+  it("a snapshot refresh's lists lose to a list refresh that started later", async () => {
     useStore.setState({ snapshot: snap(1, 'working') });
     const early = deferred<CommentThread[]>();
     const late = deferred<CommentThread[]>();
@@ -1236,15 +1454,39 @@ describe('viewedState', () => {
     expect(viewedState({ viewed: [], config }, f)).toBe('unviewed');
     expect(viewedState({ viewed: [{ path: 'a.py', blob: 'b1', viewed: true }], config }, f)).toBe('restale');
     expect(viewedState({ viewed: [{ path: 'a.py', blob: 'b1', viewed: false }], config }, f)).toBe('unviewed');
-    expect(viewedState({ viewed: [{ path: 'a.py', blob: 'b1', viewed: true }, { path: 'a.py', blob: 'b2', viewed: false }], config }, f)).toBe('unviewed');
-    expect(viewedState({ viewed: [{ path: 'a.py', blob: 'b1', viewed: true }, { path: 'a.py', blob: 'b2', viewed: true }], config }, f)).toBe('viewed');
+    expect(
+      viewedState(
+        {
+          viewed: [
+            { path: 'a.py', blob: 'b1', viewed: true },
+            { path: 'a.py', blob: 'b2', viewed: false },
+          ],
+          config,
+        },
+        f,
+      ),
+    ).toBe('unviewed');
+    expect(
+      viewedState(
+        {
+          viewed: [
+            { path: 'a.py', blob: 'b1', viewed: true },
+            { path: 'a.py', blob: 'b2', viewed: true },
+          ],
+          config,
+        },
+        f,
+      ),
+    ).toBe('viewed');
     expect(viewedState({ viewed: [], config }, file({ path: 'x.lock' }))).toBe('viewed');
   });
 
   it('collapses generated files by default and a restale file stays open', () => {
     const s = { ...snap(1, 'working'), changed: [file({ path: 'gen.py', generated: true }), file({})] };
     expect(isCollapsed({ collapsed: {}, viewed: [], config, snapshot: s }, 'gen.py')).toBe(true);
-    expect(isCollapsed({ collapsed: {}, viewed: [{ path: 'a.py', blob: 'b1', viewed: true }], config, snapshot: s }, 'a.py')).toBe(false);
+    expect(
+      isCollapsed({ collapsed: {}, viewed: [{ path: 'a.py', blob: 'b1', viewed: true }], config, snapshot: s }, 'a.py'),
+    ).toBe(false);
     expect(isCollapsed({ collapsed: { 'gen.py': false }, viewed: [], config, snapshot: s }, 'gen.py')).toBe(false);
   });
 });
@@ -1257,11 +1499,16 @@ describe('threads', () => {
       selection: { id: 'diff:a.py@0', range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } },
     });
     api.setResolved.mockResolvedValue({});
-    api.threads.mockResolvedValueOnce([thread({ id: 'open', resolved: true }), thread({ id: 'done', resolved: true, anchor: { startLine: 5, endLine: 5 } })]);
+    api.threads.mockResolvedValueOnce([
+      thread({ id: 'open', resolved: true }),
+      thread({ id: 'done', resolved: true, anchor: { startLine: 5, endLine: 5 } }),
+    ]);
     await useStore.getState().toggleResolvedAtCursor();
     expect(api.setResolved).toHaveBeenCalledWith('open', true);
     expect(useStore.getState().threads.every((t) => t.resolved)).toBe(true);
-    useStore.setState({ selection: { id: 'diff:a.py@0', range: { start: 5, side: 'additions', end: 5, endSide: 'additions' } } });
+    useStore.setState({
+      selection: { id: 'diff:a.py@0', range: { start: 5, side: 'additions', end: 5, endSide: 'additions' } },
+    });
     await useStore.getState().toggleResolvedAtCursor();
     // Resolved threads are invisible, so nothing sits under the cursor.
     expect(api.setResolved).toHaveBeenCalledTimes(1);
@@ -1270,7 +1517,7 @@ describe('threads', () => {
     expect(api.setResolved).toHaveBeenLastCalledWith('done', false);
   });
 
-  it('a reply on one file leaves the other files\' threads and versions untouched', async () => {
+  it("a reply on one file leaves the other files' threads and versions untouched", async () => {
     const a = thread({ id: 'a', anchor: { path: 'a.py' } });
     const b = thread({ id: 'b', anchor: { path: 'b.py' } });
     useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), threads: [a, b] });
@@ -1296,9 +1543,13 @@ describe('threads', () => {
 
   it('closing a draft by changing the diff style or clearing the selection re-renders its file', () => {
     useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [] });
-    const version = (prev?: ReturnType<typeof itemVersion>) => itemVersion(prev, itemDeps(useStore.getState(), 'a.py', [], false));
+    const version = (prev?: ReturnType<typeof itemVersion>) =>
+      itemVersion(prev, itemDeps(useStore.getState(), 'a.py', [], false));
     const idle = version();
-    const sel = { id: 'diff:a.py@0', range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const } };
+    const sel = {
+      id: 'diff:a.py@0',
+      range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
+    };
     void useStore.getState().openDraft(sel);
     const open = version(idle);
     expect(open.version).toBe(idle.version + 1);
@@ -1316,22 +1567,30 @@ describe('threads', () => {
 
   it('opens one composer at a time: a reply closes the draft and vice versa', () => {
     useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [thread({ id: 't1' })] });
-    void useStore.getState().openDraft({ id: 'diff:a.py@0', range: { start: 2, side: 'additions', end: 2, endSide: 'additions' } });
+    void useStore
+      .getState()
+      .openDraft({ id: 'diff:a.py@0', range: { start: 2, side: 'additions', end: 2, endSide: 'additions' } });
     expect(useStore.getState().draft?.path).toBe('a.py');
     useStore.getState().openReply('t1');
     expect(useStore.getState().replyTo).toBe('t1');
     expect(useStore.getState().draft).toBeNull();
-    void useStore.getState().openDraft({ id: 'diff:a.py@0', range: { start: 2, side: 'additions', end: 2, endSide: 'additions' } });
+    void useStore
+      .getState()
+      .openDraft({ id: 'diff:a.py@0', range: { start: 2, side: 'additions', end: 2, endSide: 'additions' } });
     expect(useStore.getState().replyTo).toBeNull();
     useStore.getState().escape();
     expect(useStore.getState().draft).toBeNull();
   });
 });
 
-
 describe('scrollCursorTo', () => {
   it('zz pins the cursor line at eye level, the same alignment hunk jumps use, without moving the cursor or recording a jump', () => {
-    useStore.setState({ selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 5, endSide: 'additions' } }, jumps: [], jumpIndex: 0, scrollTarget: null });
+    useStore.setState({
+      selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 5, endSide: 'additions' } },
+      jumps: [],
+      jumpIndex: 0,
+      scrollTarget: null,
+    });
     useStore.getState().scrollCursorTo('eye');
     const s = useStore.getState();
     expect(s.scrollTarget).toEqual({ id: 'diff:a.py@1', line: 5, side: 'new', align: 'eye', nonce: 1 });
@@ -1347,7 +1606,10 @@ describe('scrollCursorTo', () => {
     expect(useStore.getState().toast).toBe('No line under the cursor');
   });
   it('switching split / unified keeps the cursor and re-pins its line', () => {
-    const selection = { id: 'diff:a.py@1', range: { start: 3, side: 'additions' as const, end: 3, endSide: 'additions' as const } };
+    const selection = {
+      id: 'diff:a.py@1',
+      range: { start: 3, side: 'additions' as const, end: 3, endSide: 'additions' as const },
+    };
     useStore.setState({ selection, scrollTarget: null, diffStyle: 'split' });
     useStore.getState().setDiffStyle('unified');
     const s = useStore.getState();
@@ -1359,17 +1621,42 @@ describe('scrollCursorTo', () => {
 
 describe('goToLine', () => {
   it('moves the cursor to that line of the active file and records the origin', async () => {
-    const file = (path: string) => ({ path, status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: `b-${path}`, generated: false });
-    api.patch.mockImplementation(async (path: string) => `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,3 @@\n x\n-y\n+foo\n z\n`);
-    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.py', 'b.py']), changed: [file('a.py'), file('b.py')] });
+    const file = (path: string) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b-${path}`,
+      generated: false,
+    });
+    api.patch.mockImplementation(
+      async (path: string) =>
+        `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,3 @@\n x\n-y\n+foo\n z\n`,
+    );
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(1, 'working', ['a.py', 'b.py']),
+      changed: [file('a.py'), file('b.py')],
+    });
     await useStore.getState().refreshSnapshot();
-    useStore.setState({ selection: { id: itemIdOf(useStore.getState(), 'b.py'), range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } }, activePath: 'b.py' });
+    useStore.setState({
+      selection: {
+        id: itemIdOf(useStore.getState(), 'b.py'),
+        range: { start: 1, side: 'additions', end: 1, endSide: 'additions' },
+      },
+      activePath: 'b.py',
+    });
 
     await useStore.getState().goToLine(3);
     await new Promise((r) => setTimeout(r, 0));
     const s = useStore.getState();
     expect(s.activePath).toBe('b.py');
-    expect(s.selection).toEqual(expect.objectContaining({ id: expect.stringMatching(/^diff:b\.py@/), range: expect.objectContaining({ end: 3 }) }));
+    expect(s.selection).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^diff:b\.py@/),
+        range: expect.objectContaining({ end: 3 }),
+      }),
+    );
     // No rows are rendered here, so the line is treated as folded context and revealed at eye level.
     expect(s.reveal).toEqual(expect.objectContaining({ path: 'b.py', line: 3 }));
     expect(s.jumps).toEqual([{ path: 'b.py', side: 'new', line: 1 }]);
@@ -1383,17 +1670,42 @@ describe('goToLine', () => {
 
 describe('jumplist', () => {
   it('a search jump records the origin once, so one Ctrl+o restores it', async () => {
-    const file = (path: string) => ({ path, status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: `b-${path}`, generated: false });
-    api.patch.mockImplementation(async (path: string) => `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,3 @@\n x\n-y\n+foo\n z\n`);
-    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.py', 'b.py']), changed: [file('a.py'), file('b.py')] });
+    const file = (path: string) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b-${path}`,
+      generated: false,
+    });
+    api.patch.mockImplementation(
+      async (path: string) =>
+        `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,3 @@\n x\n-y\n+foo\n z\n`,
+    );
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(1, 'working', ['a.py', 'b.py']),
+      changed: [file('a.py'), file('b.py')],
+    });
     await useStore.getState().refreshSnapshot();
-    useStore.setState({ selection: { id: itemIdOf(useStore.getState(), 'a.py'), range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } }, activePath: 'a.py' });
+    useStore.setState({
+      selection: {
+        id: itemIdOf(useStore.getState(), 'a.py'),
+        range: { start: 1, side: 'additions', end: 1, endSide: 'additions' },
+      },
+      activePath: 'a.py',
+    });
 
     api.search.mockResolvedValue({ query: 'foo', matches: [{ path: 'b.py', line: 2, text: 'foo' }], truncated: false });
     await useStore.getState().runSearch('foo');
     await new Promise((r) => setTimeout(r, 0));
     let s = useStore.getState();
-    expect(s.selection).toEqual(expect.objectContaining({ id: expect.stringMatching(/^diff:b\.py@/), range: expect.objectContaining({ end: 2 }) }));
+    expect(s.selection).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^diff:b\.py@/),
+        range: expect.objectContaining({ end: 2 }),
+      }),
+    );
     // Only the origin is remembered: opening b.py parked the cursor on its first hunk on the way, and that is not a place the reader saw.
     expect(s.jumps).toEqual([{ path: 'a.py', side: 'new', line: 1 }]);
     expect(s.jumpIndex).toBe(1);
@@ -1401,7 +1713,12 @@ describe('jumplist', () => {
     useStore.getState().jumpBack();
     await new Promise((r) => setTimeout(r, 0));
     s = useStore.getState();
-    expect(s.selection).toEqual(expect.objectContaining({ id: expect.stringMatching(/^diff:a\.py@/), range: expect.objectContaining({ end: 1 }) }));
+    expect(s.selection).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^diff:a\.py@/),
+        range: expect.objectContaining({ end: 1 }),
+      }),
+    );
     expect(s.activePath).toBe('a.py');
     api.patch.mockReset();
   });

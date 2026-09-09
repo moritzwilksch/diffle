@@ -69,48 +69,75 @@ export const api = {
   refs: () => json<RefsResponse>('/api/refs'),
   patch: (path: string) => text(`/api/patch?${q({ path })}`),
   /** Patches of several changed files in one response. */
-  patches: (paths: string[]) => text('/api/patch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paths } satisfies PatchRequest) }),
+  patches: (paths: string[]) =>
+    text('/api/patch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paths } satisfies PatchRequest),
+    }),
   /** One side's full contents; `signal` aborts the request when its consumer no longer wants it. */
-  file: (path: string, rev: Side, signal?: AbortSignal) => json<FileResponse>(`/api/file?${q({ path, rev })}`, { signal }),
+  file: (path: string, rev: Side, signal?: AbortSignal) =>
+    json<FileResponse>(`/api/file?${q({ path, rev })}`, { signal }),
   /** `path` names the file a `scope: 'file'` search is confined to. */
-  search: (query: string, opts: { word?: boolean; ignoreCase?: boolean; regex?: boolean; scope?: SearchScope; path?: string } = {}) =>
+  search: (
+    query: string,
+    opts: { word?: boolean; ignoreCase?: boolean; regex?: boolean; scope?: SearchScope; path?: string } = {},
+  ) =>
     json<SearchResponse>(
       `/api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, path: opts.path })}`,
     ),
-  threads: (query: ThreadQuery = {}) => json<CommentThread[]>(`/api/threads?${q({ state: query.state, path: query.path })}`),
+  threads: (query: ThreadQuery = {}) =>
+    json<CommentThread[]>(`/api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`/api/threads/export?${q({ state: 'open' })}`),
   /** Posts threads as a review on the current branch's pull request; all unresolved ones without `threadIds`. */
-  exportToGithub: (req: GithubExportRequest = {}) => json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),
+  exportToGithub: (req: GithubExportRequest = {}) =>
+    json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),
   addThread: (t: ThreadCreate) => json<CommentThread[]>('/api/threads', { method: 'POST', body: JSON.stringify(t) }),
-  reply: (id: string, r: ReplyCreate) => json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/replies`, { method: 'POST', body: JSON.stringify(r) }),
+  reply: (id: string, r: ReplyCreate) =>
+    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/replies`, { method: 'POST', body: JSON.stringify(r) }),
   editMessage: (id: string, mid: string, body: string) =>
-    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
+    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    }),
   deleteMessage: (id: string, mid: string) =>
-    json<CommentThread | void>(`/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, { method: 'DELETE' }),
+    json<CommentThread | void>(`/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, {
+      method: 'DELETE',
+    }),
   setResolved: (id: string, resolved: boolean) =>
-    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/resolved`, { method: 'PUT', body: JSON.stringify({ resolved }) }),
+    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/resolved`, {
+      method: 'PUT',
+      body: JSON.stringify({ resolved }),
+    }),
   deleteThread: (id: string) => json<void>(`/api/threads/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   clearThreads: () => json<void>('/api/threads', { method: 'DELETE' }),
   deleteStaleThreads: () => json<void>('/api/threads?stale=1', { method: 'DELETE' }),
   viewed: () => json<ViewedEntry[]>('/api/viewed'),
-  setViewedBulk: (entries: ViewedEntry[]) => json<ViewedEntry[]>('/api/viewed/bulk', { method: 'PUT', body: JSON.stringify({ entries }) }),
+  setViewedBulk: (entries: ViewedEntry[]) =>
+    json<ViewedEntry[]>('/api/viewed/bulk', { method: 'PUT', body: JSON.stringify({ entries }) }),
   setViewed: (path: string, blob: string, viewed: boolean) =>
     json<ViewedEntry[]>('/api/viewed', { method: 'PUT', body: JSON.stringify({ path, blob, viewed }) }),
   lspStatus: () => json<LspStatus>('/api/lsp/status'),
-  lspDefinition: (pos: LspPosition) => json<LspLocationsResponse>('/api/lsp/definition', { method: 'POST', body: JSON.stringify(pos) }),
-  lspTypeDefinition: (pos: LspPosition) => json<LspLocationsResponse>('/api/lsp/type-definition', { method: 'POST', body: JSON.stringify(pos) }),
+  lspDefinition: (pos: LspPosition) =>
+    json<LspLocationsResponse>('/api/lsp/definition', { method: 'POST', body: JSON.stringify(pos) }),
+  lspTypeDefinition: (pos: LspPosition) =>
+    json<LspLocationsResponse>('/api/lsp/type-definition', { method: 'POST', body: JSON.stringify(pos) }),
   /** What the server knows about the symbol at `pos`, as markdown. */
-  lspHover: (pos: LspPosition) => json<LspHoverResponse>('/api/lsp/hover', { method: 'POST', body: JSON.stringify(pos) }),
+  lspHover: (pos: LspPosition) =>
+    json<LspHoverResponse>('/api/lsp/hover', { method: 'POST', body: JSON.stringify(pos) }),
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
-  lspTokenKind: (pos: LspPosition) => json<LspTokenKindResponse>('/api/lsp/token-kind', { method: 'POST', body: JSON.stringify(pos) }),
-  lspReferences: (pos: LspPosition) => json<LspLocationsResponse>('/api/lsp/references', { method: 'POST', body: JSON.stringify(pos) }),
+  lspTokenKind: (pos: LspPosition) =>
+    json<LspTokenKindResponse>('/api/lsp/token-kind', { method: 'POST', body: JSON.stringify(pos) }),
+  lspReferences: (pos: LspPosition) =>
+    json<LspLocationsResponse>('/api/lsp/references', { method: 'POST', body: JSON.stringify(pos) }),
   /** Document symbols for a path, or workspace symbols matching a query. */
   lspSymbols: (query: { path: string } | { q: string }) => json<LspSymbol[]>(`/api/lsp/symbols?${q(query)}`),
   /** Changed declarations in a file with their call sites outside the diff. */
   config: () => json<UserConfig>('/api/config'),
   /** lspCommand is CLI-only; the server ignores it. */
-  saveConfig: (config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>) => json<UserConfig>('/api/config', { method: 'PUT', body: JSON.stringify(config) }),
+  saveConfig: (config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>) =>
+    json<UserConfig>('/api/config', { method: 'PUT', body: JSON.stringify(config) }),
 };
 
 /**

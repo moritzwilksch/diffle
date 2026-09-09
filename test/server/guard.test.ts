@@ -25,7 +25,7 @@ describe('requestGuard', () => {
     expect(open({ host: '192.168.1.2:4966', origin: 'http://evil.example' })).toBe(false);
   });
 
-  it('accepts IP literals, loopback and the machine\'s own names on a non-loopback bind', () => {
+  it("accepts IP literals, loopback and the machine's own names on a non-loopback bind", () => {
     expect(open({ host: '192.168.1.2:4966' })).toBe(true);
     expect(open({ host: '192.168.1.2:4966', origin: 'http://192.168.1.2:4966' })).toBe(true);
     expect(open({ host: '[fe80::1]:4966' })).toBe(true);

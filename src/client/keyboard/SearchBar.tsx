@@ -4,7 +4,11 @@ import type { SearchScope } from '../../shared/protocol.js';
 import { nextSearchScope } from '../model.js';
 import { useStore } from '../store.js';
 
-const SCOPE_LABEL: Record<SearchScope, string> = { file: 'the current file', diff: 'only the diff', repo: 'the full codebase' };
+const SCOPE_LABEL: Record<SearchScope, string> = {
+  file: 'the current file',
+  diff: 'only the diff',
+  repo: 'the full codebase',
+};
 const SCOPE_ICON: Record<SearchScope, typeof FileSearch> = { file: FileSearch, diff: FileDiff, repo: FolderSearch };
 
 /** Content search (/ in the current file, g/ across the diff or codebase), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
@@ -27,9 +31,16 @@ export function SearchBar() {
       <div className="searchbar">
         {search.kind === 'references' ? <Link2 size="0.875rem" /> : <WholeWord size="0.875rem" />}
         <span className="label">
-          {search.kind === 'references' ? 'references to' : search.direction === 1 ? 'occurrences of' : 'occurrences (upwards) of'} <code>{search.query}</code>
+          {search.kind === 'references'
+            ? 'references to'
+            : search.direction === 1
+              ? 'occurrences of'
+              : 'occurrences (upwards) of'}{' '}
+          <code>{search.query}</code>
         </span>
-        <span className="status">{search.loading ? 'searching…' : n ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}` : 'none'}</span>
+        <span className="status">
+          {search.loading ? 'searching…' : n ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}` : 'none'}
+        </span>
         <button type="button" className="ghost icon" onClick={closeSearch} title="Close (Esc)">
           <X size="0.875rem" />
         </button>
@@ -49,7 +60,17 @@ export function SearchBar() {
       }}
     >
       <Search size="0.875rem" />
-      <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} placeholder={search.scope === 'file' ? 'Search this file… (Enter, then n / N)' : 'Search file contents… (Enter, then n / N)'} spellCheck={false} />
+      <input
+        ref={ref}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={
+          search.scope === 'file'
+            ? 'Search this file… (Enter, then n / N)'
+            : 'Search file contents… (Enter, then n / N)'
+        }
+        spellCheck={false}
+      />
       <button
         type="button"
         className={`ghost opt ${search.ignoreCase ? '' : 'active'}`}
@@ -79,7 +100,17 @@ export function SearchBar() {
         <ScopeIcon size="0.75rem" />
       </button>
       <span className="status">
-        {search.loading ? 'searching…' : n === 0 && search.query ? (search.scope === 'file' ? 'none in file' : search.scope === 'diff' ? 'none in diff' : 'no matches') : n ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}` : ''}
+        {search.loading
+          ? 'searching…'
+          : n === 0 && search.query
+            ? search.scope === 'file'
+              ? 'none in file'
+              : search.scope === 'diff'
+                ? 'none in diff'
+                : 'no matches'
+            : n
+              ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}`
+              : ''}
       </span>
       <button type="button" className="ghost icon" onClick={closeSearch} title="Close (Esc)">
         <X size="0.875rem" />

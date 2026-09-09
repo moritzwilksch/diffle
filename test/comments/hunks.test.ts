@@ -19,8 +19,14 @@ const patch = [
 
 describe('shownRanges', () => {
   it('reads each hunk span per side, defaulting an omitted count to one', () => {
-    expect(shownRanges(patch, 'old')).toEqual([[1, 4], [20, 20]]);
-    expect(shownRanges(patch, 'new')).toEqual([[1, 5], [21, 22]]);
+    expect(shownRanges(patch, 'old')).toEqual([
+      [1, 4],
+      [20, 20],
+    ]);
+    expect(shownRanges(patch, 'new')).toEqual([
+      [1, 5],
+      [21, 22],
+    ]);
   });
 
   it('shows nothing for an empty side, a binary patch, or no patch', () => {

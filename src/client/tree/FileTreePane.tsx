@@ -48,7 +48,10 @@ export function FileTreePane() {
   const viewed = useStore((s) => s.viewed);
   const config = useStore((s) => s.config);
   // Memoised: a raw selector would rescan every changed file on each store update, including cursor moves.
-  const viewedCount = useMemo(() => (snapshot ? countViewed({ viewed, config }, snapshot.changed) : 0), [snapshot, viewed, config]);
+  const viewedCount = useMemo(
+    () => (snapshot ? countViewed({ viewed, config }, snapshot.changed) : 0),
+    [snapshot, viewed, config],
+  );
   const unview = useConfirm(() => void unviewAll());
 
   const paths = useMemo(() => {
@@ -101,7 +104,10 @@ export function FileTreePane() {
       const path = e.composedPath() as HTMLElement[];
       const lane = path.findIndex((n) => n instanceof HTMLElement && n.dataset.itemSection === 'decoration');
       if (lane <= 0) return null;
-      return path.find((n) => n instanceof HTMLElement && n.dataset.itemPath != null && n.dataset.itemType === 'file')?.dataset.itemPath ?? null;
+      return (
+        path.find((n) => n instanceof HTMLElement && n.dataset.itemPath != null && n.dataset.itemType === 'file')
+          ?.dataset.itemPath ?? null
+      );
     };
     const onPointerDown = (e: PointerEvent) => {
       if (e.button !== 0 || !pathOfDecorationClick(e)) return;
@@ -113,7 +119,9 @@ export function FileTreePane() {
       if (!path) {
         // Choosing a file is the start of reading it: the keys should drive the cursor, not the tree.
         // The tree focuses its row on click, so hand focus over a frame later.
-        const row = (e.composedPath() as HTMLElement[]).find((n) => n instanceof HTMLElement && n.dataset.itemType === 'file');
+        const row = (e.composedPath() as HTMLElement[]).find(
+          (n) => n instanceof HTMLElement && n.dataset.itemType === 'file',
+        );
         if (row) requestAnimationFrame(focusReview);
         return;
       }
@@ -193,7 +201,11 @@ export function FileTreePane() {
         <button
           className={`ghost ${unview.armed ? 'confirm' : 'icon'}`}
           disabled={viewedCount === 0}
-          title={unview.armed ? 'Click again to mark all files not viewed' : `Mark all ${viewedCount} viewed file(s) not viewed`}
+          title={
+            unview.armed
+              ? 'Click again to mark all files not viewed'
+              : `Mark all ${viewedCount} viewed file(s) not viewed`
+          }
           onClick={unview.fire}
         >
           <EyeOff size="0.875rem" />
@@ -201,7 +213,11 @@ export function FileTreePane() {
         </button>
       </div>
       <div className="tree-body" ref={bodyRef}>
-        <FileTree model={model} style={{ height: '100%' }} renderContextMenu={(item, ctx) => <TreeMenu path={item.path} kind={item.kind} close={ctx.close} />} />
+        <FileTree
+          model={model}
+          style={{ height: '100%' }}
+          renderContextMenu={(item, ctx) => <TreeMenu path={item.path} kind={item.kind} close={ctx.close} />}
+        />
       </div>
     </aside>
   );

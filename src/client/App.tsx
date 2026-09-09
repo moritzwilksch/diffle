@@ -32,7 +32,8 @@ export function App() {
       const startX = e.clientX;
       // Until the first drag the width is the stylesheet's; measure it so the pane does not jump.
       const pane = side === 'tree' ? e.currentTarget.previousElementSibling : e.currentTarget.nextElementSibling;
-      const start = (side === 'tree' ? layout.treeWidth : layout.panelWidth) ?? pane?.getBoundingClientRect().width ?? 0;
+      const start =
+        (side === 'tree' ? layout.treeWidth : layout.panelWidth) ?? pane?.getBoundingClientRect().width ?? 0;
       const onMove = (ev: PointerEvent) => {
         const delta = side === 'tree' ? ev.clientX - startX : startX - ev.clientX;
         const width = Math.max(180, Math.min(800, start + delta));

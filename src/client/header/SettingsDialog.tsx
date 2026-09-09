@@ -11,7 +11,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const save = async () => {
     setSaving(true);
     await saveConfig({
-      autoViewed: text.split('\n').map((l) => l.trim()).filter(Boolean),
+      autoViewed: text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean),
       contextLines: Math.max(0, Number.parseInt(context, 10) || 0),
     });
     setSaving(false);
@@ -54,14 +57,22 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} autoFocus />
         <h3 style={{ marginTop: 14 }}>Context lines</h3>
         <p>
-          Unchanged lines shown around each change (<code>git diff -U&lt;n&gt;</code>). Same as <code>--context</code> or{' '}
-          <code>diffle config set-context</code>.
+          Unchanged lines shown around each change (<code>git diff -U&lt;n&gt;</code>). Same as <code>--context</code>{' '}
+          or <code>diffle config set-context</code>.
         </p>
-        <input type="number" min={0} max={10000} value={context} onChange={(e) => setContext(e.target.value)} style={{ width: 100 }} />
+        <input
+          type="number"
+          min={0}
+          max={10000}
+          value={context}
+          onChange={(e) => setContext(e.target.value)}
+          style={{ width: 100 }}
+        />
         <h3 style={{ marginTop: 14 }}>Language server</h3>
         <p>
-          Command started by <code>--lsp</code> for go-to-definition, references and symbols: <code>{config.lspCommand}</code>.
-          Change it with <code>diffle config set-lsp &lt;command&gt;</code>; it is not editable here.
+          Command started by <code>--lsp</code> for go-to-definition, references and symbols:{' '}
+          <code>{config.lspCommand}</code>. Change it with <code>diffle config set-lsp &lt;command&gt;</code>; it is not
+          editable here.
         </p>
         <div className="row">
           <button onClick={onClose}>Cancel</button>

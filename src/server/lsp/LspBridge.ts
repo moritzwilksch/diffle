@@ -3,7 +3,16 @@ import { realpathSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { isPython, type LspHoverResponse, type LspLocation, type LspLocationsResponse, type LspPosition, type LspStatus, type LspSymbol, type LspTokenKindResponse } from '../../shared/protocol.js';
+import {
+  isPython,
+  type LspHoverResponse,
+  type LspLocation,
+  type LspLocationsResponse,
+  type LspPosition,
+  type LspStatus,
+  type LspSymbol,
+  type LspTokenKindResponse,
+} from '../../shared/protocol.js';
 import { mapLimit } from '../concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcConnection } from './JsonRpc.js';
@@ -65,8 +74,29 @@ interface SymbolInformation {
  * provider and numbers its tokens this way.
  */
 const DEFAULT_TOKEN_TYPES = [
-  'namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember',
-  'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator',
+  'namespace',
+  'type',
+  'class',
+  'enum',
+  'interface',
+  'struct',
+  'typeParameter',
+  'parameter',
+  'variable',
+  'property',
+  'enumMember',
+  'event',
+  'function',
+  'method',
+  'macro',
+  'keyword',
+  'modifier',
+  'comment',
+  'string',
+  'number',
+  'regexp',
+  'operator',
+  'decorator',
 ];
 
 const STDERR_TAIL = 2000;
@@ -256,7 +286,15 @@ export class LspBridge {
         for (const s of syms) {
           const start = (s.selectionRange ?? s.range).start;
           const endLine = Math.max(start.line, (s.range ?? s.selectionRange).end.line) + 1;
-          out.push({ name: s.name, kind: s.kind, container, path, line: start.line + 1, endLine, col: start.character });
+          out.push({
+            name: s.name,
+            kind: s.kind,
+            container,
+            path,
+            line: start.line + 1,
+            endLine,
+            col: start.character,
+          });
           if (s.children?.length) walk(s.children, s.name);
         }
       };
@@ -266,7 +304,15 @@ export class LspBridge {
     for (const s of result) {
       const start = 'range' in s.location ? s.location.range.start : { line: 0, character: 0 };
       const end = 'range' in s.location ? s.location.range.end : start;
-      out.push({ name: s.name, kind: s.kind, container: s.containerName || undefined, path, line: start.line + 1, endLine: Math.max(start.line, end.line) + 1, col: start.character });
+      out.push({
+        name: s.name,
+        kind: s.kind,
+        container: s.containerName || undefined,
+        path,
+        line: start.line + 1,
+        endLine: Math.max(start.line, end.line) + 1,
+        col: start.character,
+      });
     }
     return out;
   }
@@ -293,7 +339,15 @@ export class LspBridge {
       if (seen.has(key)) return;
       seen.add(key);
       const end = 'range' in s.location ? s.location.range.end : start;
-      out.push({ name: s.name, kind: s.kind, container: s.containerName || undefined, path, line: start.line + 1, endLine: Math.max(start.line, end.line) + 1, col: start.character });
+      out.push({
+        name: s.name,
+        kind: s.kind,
+        container: s.containerName || undefined,
+        path,
+        line: start.line + 1,
+        endLine: Math.max(start.line, end.line) + 1,
+        col: start.character,
+      });
     });
     return out;
   }
@@ -353,7 +407,12 @@ export class LspBridge {
     try {
       child = this.opts.spawnProcess
         ? this.opts.spawnProcess(this.opts.command, this.opts.root)
-        : spawn(this.opts.command, { cwd: this.opts.root, shell: true, stdio: ['pipe', 'pipe', 'pipe'], detached: DETACH });
+        : spawn(this.opts.command, {
+            cwd: this.opts.root,
+            shell: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            detached: DETACH,
+          });
       this.ownsGroup = !this.opts.spawnProcess && DETACH;
     } catch (e) {
       this.fail(`cannot start "${this.opts.command}": ${(e as Error).message}`);
@@ -368,7 +427,9 @@ export class LspBridge {
     child.on('error', (e) => this.fail(`cannot start "${this.opts.command}": ${e.message}`));
     child.on('exit', (code, signal) => {
       if (this.closing) return;
-      this.fail(`"${this.opts.command}" exited (${signal ?? code})${this.stderr.trim() ? `: ${lastLine(this.stderr)}` : ''}`);
+      this.fail(
+        `"${this.opts.command}" exited (${signal ?? code})${this.stderr.trim() ? `: ${lastLine(this.stderr)}` : ''}`,
+      );
     });
     if (!child.stdin || !child.stdout) {
       this.fail(`cannot start "${this.opts.command}": no stdio`);
@@ -378,7 +439,9 @@ export class LspBridge {
     this.rpc = rpc;
     const rootUri = pathToFileURL(this.opts.root).href;
     try {
-      const init = await rpc.request<{ capabilities?: { semanticTokensProvider?: { legend?: { tokenTypes?: string[] } } } }>(
+      const init = await rpc.request<{
+        capabilities?: { semanticTokensProvider?: { legend?: { tokenTypes?: string[] } } };
+      }>(
         'initialize',
         {
           processId: process.pid,
@@ -394,7 +457,12 @@ export class LspBridge {
               references: {},
               hover: { contentFormat: ['markdown', 'plaintext'] },
               documentSymbol: { hierarchicalDocumentSymbolSupport: true },
-              semanticTokens: { requests: { range: true }, tokenTypes: DEFAULT_TOKEN_TYPES, tokenModifiers: [], formats: ['relative'] },
+              semanticTokens: {
+                requests: { range: true },
+                tokenTypes: DEFAULT_TOKEN_TYPES,
+                tokenModifiers: [],
+                formats: ['relative'],
+              },
             },
             workspace: { symbol: {}, workspaceFolders: true },
           },
@@ -439,7 +507,8 @@ export class LspBridge {
     } catch {
       throw new LspUnavailableError(this.current.message ?? 'language server unavailable');
     }
-    if (this.current.state !== 'ready' || !this.rpc) throw new LspUnavailableError(this.current.message ?? 'language server unavailable');
+    if (this.current.state !== 'ready' || !this.rpc)
+      throw new LspUnavailableError(this.current.message ?? 'language server unavailable');
     return this.rpc;
   }
 
@@ -467,7 +536,9 @@ export class LspBridge {
     const doc = this.open.get(path);
     if (!doc) {
       this.open.set(path, { version: 1, text });
-      rpc.notify('textDocument/didOpen', { textDocument: { uri, languageId: isPython(path) ? 'python' : 'plaintext', version: 1, text } });
+      rpc.notify('textDocument/didOpen', {
+        textDocument: { uri, languageId: isPython(path) ? 'python' : 'plaintext', version: 1, text },
+      });
     } else {
       // Re-insert to mark it most recently used.
       this.open.delete(path);
@@ -475,7 +546,10 @@ export class LspBridge {
       if (doc.text !== text) {
         doc.version += 1;
         doc.text = text;
-        rpc.notify('textDocument/didChange', { textDocument: { uri, version: doc.version }, contentChanges: [{ text }] });
+        rpc.notify('textDocument/didChange', {
+          textDocument: { uri, version: doc.version },
+          contentChanges: [{ text }],
+        });
       }
     }
     this.evict(rpc);
@@ -547,7 +621,11 @@ export class LspBridge {
   private async toLocations(locs: { uri: string; range: Range }[]): Promise<LspLocationsResponse> {
     const paths = await Promise.all(locs.map((l) => this.pathOf(l.uri)));
     const distinct = [...new Set(paths.filter((p): p is string => p != null))];
-    const bodies = await mapLimit(distinct, READ_CONCURRENCY, async (p) => this.open.get(p)?.text ?? (await this.opts.read(p)));
+    const bodies = await mapLimit(
+      distinct,
+      READ_CONCURRENCY,
+      async (p) => this.open.get(p)?.text ?? (await this.opts.read(p)),
+    );
     const texts = new Map(distinct.map((p, i) => [p, bodies[i]!]));
     const out: LspLocation[] = [];
     let external = 0;

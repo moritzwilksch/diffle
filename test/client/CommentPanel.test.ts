@@ -59,7 +59,9 @@ describe('CommentPanel rows', () => {
     await act(() => root.render(createElement(CommentPanel)));
     rendered.length = 0;
     const [a, b, c] = threads;
-    await act(() => useStore.setState({ threads: [a!, { ...b!, messages: [{ ...b!.messages[0]!, body: 'body b2' }] }, c!] }));
+    await act(() =>
+      useStore.setState({ threads: [a!, { ...b!, messages: [{ ...b!.messages[0]!, body: 'body b2' }] }, c!] }),
+    );
     expect(rendered).toEqual(['body b2']);
   });
 

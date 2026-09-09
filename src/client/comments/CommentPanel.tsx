@@ -72,12 +72,27 @@ export function CommentPanel() {
           <MessageSquare size="0.9375rem" /> Threads
           {open.length > 0 && <span className="count">{open.length}</span>}
         </span>
-        <CopyButton label="All" icon={<ClipboardCopy size="0.875rem" />} primary disabled={open.length === 0} title="Copy all open threads as a prompt (yy)" onCopy={() => copy()} />
+        <CopyButton
+          label="All"
+          icon={<ClipboardCopy size="0.875rem" />}
+          primary
+          disabled={open.length === 0}
+          title="Copy all open threads as a prompt (yy)"
+          onCopy={() => copy()}
+        />
         <button
           className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
           disabled={posting || (open.length === 0 && !posted)}
-          title={post.armed ? 'Click again to add all open threads to the pending review' : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'}
-          aria-label={post.armed ? 'Add all open threads to the pending review? Click again to confirm' : 'Add all open threads to a pending review on the GitHub pull request'}
+          title={
+            post.armed
+              ? 'Click again to add all open threads to the pending review'
+              : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'
+          }
+          aria-label={
+            post.armed
+              ? 'Add all open threads to the pending review? Click again to confirm'
+              : 'Add all open threads to a pending review on the GitHub pull request'
+          }
           onClick={post.fire}
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
@@ -94,7 +109,10 @@ export function CommentPanel() {
         </button>
       </div>
       {staleCount > 0 && (
-        <div className="panel-filter stale-row" title="Stale threads no longer point into the diff: their text changed or left the changed lines">
+        <div
+          className="panel-filter stale-row"
+          title="Stale threads no longer point into the diff: their text changed or left the changed lines"
+        >
           <AlertTriangle size="0.75rem" />
           {staleCount} stale
           <button className={`ghost danger ${stale.armed ? 'confirm' : ''}`} onClick={stale.fire}>
@@ -122,7 +140,13 @@ export function CommentPanel() {
               <FilePath path={path} />
             </h4>
             {list.map((t) => (
-              <ThreadRow key={t.id} thread={t} openFile={openFile} focusThread={focusThread} deleteThread={deleteThread} />
+              <ThreadRow
+                key={t.id}
+                thread={t}
+                openFile={openFile}
+                focusThread={focusThread}
+                deleteThread={deleteThread}
+              />
             ))}
           </section>
         ))}
@@ -186,7 +210,11 @@ const ThreadRow = memo(function ThreadRow({
           {t.anchor.side === 'old' ? 'removed ' : ''}L{t.anchor.startLine}
           {t.anchor.endLine !== t.anchor.startLine ? `–${t.anchor.endLine}` : ''}
         </span>
-        {t.messages.length > 1 && <span className="replies">{t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}</span>}
+        {t.messages.length > 1 && (
+          <span className="replies">
+            {t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}
+          </span>
+        )}
         {t.stale && (
           <span className="stale">
             <AlertTriangle size="0.6875rem" /> stale

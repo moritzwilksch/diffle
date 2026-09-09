@@ -43,7 +43,8 @@ export class Server {
     const app = new Hono();
     const guard = requestGuard(this.opts.host);
     app.use('/api/*', async (c, next) => {
-      if (!guard({ host: c.req.header('host'), origin: c.req.header('origin') })) return c.json({ error: 'forbidden origin' }, 403);
+      if (!guard({ host: c.req.header('host'), origin: c.req.header('origin') }))
+        return c.json({ error: 'forbidden origin' }, 403);
       await next();
     });
     app.use('/api/*', async (c, next) => {
@@ -141,7 +142,15 @@ export class Server {
       configFile: join(projectRoot(), 'vite.config.ts'),
       server: { middlewareMode: true, ws: { server: this.http! } },
       appType: 'spa',
-      customLogger: { info: log, warn: log, warnOnce: log, error: log, clearScreen() {}, hasErrorLogged: () => false, hasWarned: false },
+      customLogger: {
+        info: log,
+        warn: log,
+        warnOnce: log,
+        error: log,
+        clearScreen() {},
+        hasErrorLogged: () => false,
+        hasWarned: false,
+      },
     });
     this.vite = vite;
   }

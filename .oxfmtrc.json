@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  // The repo was written with single quotes and lines up to ~120 columns; both keep the
+  // one-time reformat to real changes instead of restyling every file.
+  "singleQuote": true,
+  "printWidth": 120,
+  // The workflows are hand-maintained, with pinned action SHAs and comments; the
+  // formatter only wants to reflow their quotes, so it stays out of them.
+  "ignorePatterns": ["**/*.yml", "**/*.yaml"]
+}

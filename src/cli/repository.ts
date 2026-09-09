@@ -7,7 +7,11 @@ import { remoteSlug } from '../server/mode.js';
 import type { ModeRequest } from '../shared/protocol.js';
 
 /** Foreign PRs live in a disposable clone, never in the caller's object database. */
-export async function openReviewRepository(req: ModeRequest, cwd: string, gh: GhRunner = runGh): Promise<{
+export async function openReviewRepository(
+  req: ModeRequest,
+  cwd: string,
+  gh: GhRunner = runGh,
+): Promise<{
   repo: GitRepo;
   close: () => Promise<void>;
 }> {

@@ -1,4 +1,17 @@
-import { Columns2, Compass, GitCompareArrows, Keyboard, LoaderCircle, Monitor, Moon, PanelLeft, PanelRight, Rows3, Settings, Sun } from 'lucide-react';
+import {
+  Columns2,
+  Compass,
+  GitCompareArrows,
+  Keyboard,
+  LoaderCircle,
+  Monitor,
+  Moon,
+  PanelLeft,
+  PanelRight,
+  Rows3,
+  Settings,
+  Sun,
+} from 'lucide-react';
 import { useState } from 'react';
 import type { LspStatus } from '../../shared/protocol.js';
 import { useStore } from '../store.js';
@@ -33,11 +46,12 @@ export function Header() {
         <GitCompareArrows size="1rem" /> diffle
       </span>
       <span className="root" title={snapshot?.mode.repository ?? snapshot?.root}>
-        {snapshot ? snapshot.mode.repository ?? basename(snapshot.root) : ''}
+        {snapshot ? (snapshot.mode.repository ?? basename(snapshot.root)) : ''}
       </span>
       <ModePicker />
       <span className="stat">
-        {changed} files · <span style={{ color: 'var(--add)' }}>+{adds}</span> <span style={{ color: 'var(--del)' }}>−{dels}</span>
+        {changed} files · <span style={{ color: 'var(--add)' }}>+{adds}</span>{' '}
+        <span style={{ color: 'var(--del)' }}>−{dels}</span>
       </span>
       <span className="spacer" />
       {lsp.state !== 'off' && <LspIndicator lsp={lsp} />}
@@ -52,7 +66,11 @@ export function Header() {
       <button className="ghost icon" onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
       </button>
-      <button className="ghost icon" onClick={() => useStore.getState().setHelpOpen(true)} title="Keyboard shortcuts (?)">
+      <button
+        className="ghost icon"
+        onClick={() => useStore.getState().setHelpOpen(true)}
+        title="Keyboard shortcuts (?)"
+      >
         <Keyboard size="1rem" />
       </button>
       <button className="ghost" onClick={() => setSettingsOpen(true)} title="Settings">
@@ -73,7 +91,14 @@ export function Header() {
 /** Language server state at a glance; the spinner runs while it starts or indexes the workspace. */
 function LspIndicator({ lsp }: { lsp: LspStatus }) {
   const busy = lsp.state === 'starting' || lsp.indexing === true;
-  const label = lsp.state === 'starting' ? 'starting' : lsp.indexing ? 'indexing' : lsp.state === 'unavailable' ? 'unavailable' : '';
+  const label =
+    lsp.state === 'starting'
+      ? 'starting'
+      : lsp.indexing
+        ? 'indexing'
+        : lsp.state === 'unavailable'
+          ? 'unavailable'
+          : '';
   const title =
     lsp.state === 'unavailable'
       ? `Language server unavailable: ${lsp.message ?? 'unknown error'}`

@@ -2,9 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { formatPrompt, parseSuggestions } from '../../src/server/comments/format.js';
 import type { CommentMessage, CommentThread } from '../../src/shared/protocol.js';
 
-const msg = (body: string, over: Partial<CommentMessage> = {}): CommentMessage => ({ id: 'm', body, createdAt: 1, updatedAt: 1, ...over });
+const msg = (body: string, over: Partial<CommentMessage> = {}): CommentMessage => ({
+  id: 'm',
+  body,
+  createdAt: 1,
+  updatedAt: 1,
+  ...over,
+});
 
-const t = (over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> }): CommentThread => ({
+const t = (
+  over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> },
+): CommentThread => ({
   id: 'x',
   messages: [msg('Rename this.')],
   resolved: false,
@@ -39,9 +47,11 @@ describe('formatPrompt', () => {
     expect(out.indexOf('second')).toBeLessThan(out.indexOf('third'));
   });
 
-  it('joins a thread\'s messages with a blank line, unlabelled', () => {
+  it("joins a thread's messages with a blank line, unlabelled", () => {
     const threaded = t({ messages: [msg('Is this safe?'), msg('Never mind, the lock covers it.')] });
-    expect(formatPrompt([threaded])).toBe('src/a.py:3\n\n> def foo():\n\nIs this safe?\n\nNever mind, the lock covers it.\n\n---\n');
+    expect(formatPrompt([threaded])).toBe(
+      'src/a.py:3\n\n> def foo():\n\nIs this safe?\n\nNever mind, the lock covers it.\n\n---\n',
+    );
   });
 
   it('expands suggestion fences to ORIGINAL / SUGGESTED blocks', () => {

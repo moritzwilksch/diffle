@@ -115,7 +115,8 @@ export function useKeymap(): void {
     };
     const dispatch = (e: KeyboardEvent) => {
       // Modifier presses (e.g. Shift before `M` in `zM`) must not consume a pending chord.
-      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta' || e.key === 'CapsLock') return;
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta' || e.key === 'CapsLock')
+        return;
       const s = useStore.getState();
       const target = realTarget(e);
       // The count belongs to this press: every path below either uses it or, by
@@ -262,10 +263,13 @@ function focusTree(): void {
   const model = s.treeModel;
   const host = document.querySelector<HTMLElement>('file-tree-container');
   requestAnimationFrame(() => {
-    const path = s.activePath && model?.getItem(s.activePath) ? s.activePath : model?.focusNearestPath(s.activePath ?? null);
+    const path =
+      s.activePath && model?.getItem(s.activePath) ? s.activePath : model?.focusNearestPath(s.activePath ?? null);
     if (path && model) model.focusPath(path);
     // The tree keeps one focusable row (tabindex=0); DOM focus must land on it for its arrow keys to work.
-    const row = host?.shadowRoot?.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]') ?? host?.shadowRoot?.querySelector<HTMLElement>('[role="tree"]');
+    const row =
+      host?.shadowRoot?.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]') ??
+      host?.shadowRoot?.querySelector<HTMLElement>('[role="tree"]');
     (row ?? host)?.focus();
   });
 }

@@ -6,7 +6,12 @@ describe('parseImports', () => {
   it('accepts one object or an array, as JSON text or a parsed value, and keeps only known fields', () => {
     const one = { path: 'a.py', startLine: 3, body: 'x', extra: 1 };
     expect(parseImports(JSON.stringify(one))).toEqual([{ path: 'a.py', startLine: 3, body: 'x' }]);
-    expect(parseImports([one, { path: 'b.py', side: 'old', startLine: 1, endLine: 2, body: 'y', author: 'agent', quoted: 'q' }])).toEqual([
+    expect(
+      parseImports([
+        one,
+        { path: 'b.py', side: 'old', startLine: 1, endLine: 2, body: 'y', author: 'agent', quoted: 'q' },
+      ]),
+    ).toEqual([
       { path: 'a.py', startLine: 3, body: 'x' },
       { path: 'b.py', side: 'old', startLine: 1, endLine: 2, body: 'y', quoted: 'q' },
     ]);
@@ -14,7 +19,12 @@ describe('parseImports', () => {
 
   it('rejects malformed payloads with the offending index', () => {
     expect(() => parseImports('{not json')).toThrow(ImportError);
-    expect(() => parseImports([{ path: 'a.py', startLine: 1, body: 'ok' }, { path: 'a.py', startLine: 0, body: 'x' }])).toThrow(/\[1\].*startLine/);
+    expect(() =>
+      parseImports([
+        { path: 'a.py', startLine: 1, body: 'ok' },
+        { path: 'a.py', startLine: 0, body: 'x' },
+      ]),
+    ).toThrow(/\[1\].*startLine/);
     expect(() => parseImports({ path: 'a.py', startLine: 2, endLine: 1, body: 'x' })).toThrow(/endLine/);
     expect(() => parseImports({ path: 'a.py', startLine: 1, body: '  ' })).toThrow(/body/);
     expect(() => parseImports({ path: 'a.py', startLine: 1, body: 'x', side: 'left' })).toThrow(/side/);
@@ -44,7 +54,9 @@ describe('isDuplicate', () => {
     expect(isDuplicate(existing, { path: 'a.py', startLine: 3, endLine: 4, body: 'Same finding' })).toBe(true);
     expect(isDuplicate(existing, { path: 'a.py', startLine: 3, endLine: 4, body: 'Other finding' })).toBe(false);
     expect(isDuplicate(existing, { path: 'a.py', startLine: 3, body: 'Same finding' })).toBe(false);
-    expect(isDuplicate(existing, { path: 'a.py', side: 'old', startLine: 3, endLine: 4, body: 'Same finding' })).toBe(false);
+    expect(isDuplicate(existing, { path: 'a.py', side: 'old', startLine: 3, endLine: 4, body: 'Same finding' })).toBe(
+      false,
+    );
     expect(isDuplicate(existing, { path: 'a.py', startLine: 8, body: 'Resolved finding' })).toBe(false);
   });
 });

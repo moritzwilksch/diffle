@@ -3,7 +3,10 @@ import type { Readable, Writable } from 'node:stream';
 /** JSON-RPC 2.0 over a byte stream with `Content-Length` framing (the LSP base protocol). No LSP semantics. */
 export class JsonRpcConnection {
   private nextId = 1;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> | null }>();
+  private pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> | null }
+  >();
   private handlers = new Set<(method: string, params: unknown) => void>();
   private buffer: Buffer = Buffer.alloc(0);
   private disposed: Error | null = null;
@@ -23,10 +26,13 @@ export class JsonRpcConnection {
     if (this.disposed) return Promise.reject(this.disposed);
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      const timer = timeoutMs > 0 ? setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`${method} timed out after ${timeoutMs} ms`));
-      }, timeoutMs) : null;
+      const timer =
+        timeoutMs > 0
+          ? setTimeout(() => {
+              this.pending.delete(id);
+              reject(new Error(`${method} timed out after ${timeoutMs} ms`));
+            }, timeoutMs)
+          : null;
       this.pending.set(id, { resolve: (v) => resolve(v as T), reject, timer });
       this.send({ jsonrpc: '2.0', id, method, params });
     });
@@ -82,7 +88,13 @@ export class JsonRpcConnection {
   }
 
   private onMessage(body: string): void {
-    let msg: { id?: number | string | null; method?: string; params?: unknown; result?: unknown; error?: { code: number; message: string } };
+    let msg: {
+      id?: number | string | null;
+      method?: string;
+      params?: unknown;
+      result?: unknown;
+      error?: { code: number; message: string };
+    };
     try {
       msg = JSON.parse(body);
     } catch {

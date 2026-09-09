@@ -46,7 +46,11 @@ export function diffRows(fileDiff: FileDiffMetadata, revealed: LineRange[] = [],
         o += block.lines;
         n += block.lines;
       } else {
-        const deletion = (i: number): Row => ({ side: 'deletions', line: o + i, hunkStart: i === 0 && block.additions === 0 });
+        const deletion = (i: number): Row => ({
+          side: 'deletions',
+          line: o + i,
+          hunkStart: i === 0 && block.additions === 0,
+        });
         const addition = (i: number): Row => ({ side: 'additions', line: n + i, hunkStart: i === 0 });
         if (style === 'split') {
           for (let i = 0; i < block.additions; i++) rows.push(addition(i));
@@ -128,7 +132,10 @@ function rowsOf(l: Loaded, revealed: LineRange[] | undefined, style: DiffStyle):
   if (!key) return [];
   const hit = rowCache.get(key);
   if (hit && hit.revealed === revealed && hit.style === style) return hit.rows;
-  const rows = l.kind === 'diff' ? diffRows(l.fileDiff, revealed, style) : fileRows((l as Extract<Loaded, { kind: 'file' }>).file.contents);
+  const rows =
+    l.kind === 'diff'
+      ? diffRows(l.fileDiff, revealed, style)
+      : fileRows((l as Extract<Loaded, { kind: 'file' }>).file.contents);
   rowCache.set(key, { revealed, style, rows });
   return rows;
 }

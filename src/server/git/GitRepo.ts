@@ -23,8 +23,18 @@ export const BIG_FILE_THRESHOLD = 512 * 1024 * 1024;
  * those are pinned too.
  */
 const CONFIG_ARGS = [
-  '-c', 'color.ui=never', '-c', 'color.diff=never', '-c', 'color.grep=never',
-  '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false', '-c', 'core.quotePath=false',
+  '-c',
+  'color.ui=never',
+  '-c',
+  'color.diff=never',
+  '-c',
+  'color.grep=never',
+  '-c',
+  'diff.noprefix=false',
+  '-c',
+  'diff.mnemonicPrefix=false',
+  '-c',
+  'core.quotePath=false',
 ];
 /** Fixed header prefixes and no `diff.external`, so a patch is always a unified diff. */
 const PATCH_ARGS = ['--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/'];
@@ -78,7 +88,13 @@ export class GitRepo {
   /** Remove only refs owned by this review, never another running instance. */
   async cleanReviewRefs(): Promise<void> {
     const refs = (await this.text(['for-each-ref', '--format=%(refname)', `${this.reviewRefs}/`])).trim();
-    if (refs) await this.exec(['update-ref', '--stdin'], { input: refs.split('\n').map((ref) => `delete ${ref}\n`).join('') });
+    if (refs)
+      await this.exec(['update-ref', '--stdin'], {
+        input: refs
+          .split('\n')
+          .map((ref) => `delete ${ref}\n`)
+          .join(''),
+      });
   }
 
   /** How many `cat-file --batch` processes this repository has started. Diagnostics and tests. */
@@ -158,9 +174,12 @@ export class GitRepo {
       const dst = spec.slice(spec.indexOf(':') + 1);
       if (!dst.startsWith('refs/diffle/')) throw new GitError(`refusing to fetch into ${dst}`, ['fetch'], null, '');
     }
-    await this.exec(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--end-of-options', remote, ...refspecs], {
-      env: { GIT_TERMINAL_PROMPT: '0' },
-    });
+    await this.exec(
+      ['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--end-of-options', remote, ...refspecs],
+      {
+        env: { GIT_TERMINAL_PROMPT: '0' },
+      },
+    );
   }
 
   async lsFiles(): Promise<string[]> {
@@ -190,16 +209,28 @@ export class GitRepo {
     const files = parseRawNumstat(diff);
     const known = new Set(files.map((f) => f.path));
     // `ls-files --others` lists a nested repository as `dir/`; git has no diff for it.
-    const extra = await mapLimit(untracked.filter((p) => !known.has(p) && !p.endsWith('/')), READ_CONCURRENCY, async (path): Promise<ChangedFile> => {
-      const file: ChangedFile = { path, status: 'A', additions: 0, deletions: 0, binary: false, blob: '', generated: false };
-      const st = await lstat(resolve(this.root, path)).catch(() => null);
-      if (st?.isFile() && st.size >= BIG_FILE_THRESHOLD) return { ...file, binary: true };
-      // Unreadable (permissions) counts as empty: one bad path must not fail the snapshot.
-      const buf = (await this.readWorktree(path).catch(() => null)) ?? Buffer.alloc(0);
-      file.binary = isBinary(buf);
-      if (!file.binary) file.additions = countLines(buf);
-      return file;
-    });
+    const extra = await mapLimit(
+      untracked.filter((p) => !known.has(p) && !p.endsWith('/')),
+      READ_CONCURRENCY,
+      async (path): Promise<ChangedFile> => {
+        const file: ChangedFile = {
+          path,
+          status: 'A',
+          additions: 0,
+          deletions: 0,
+          binary: false,
+          blob: '',
+          generated: false,
+        };
+        const st = await lstat(resolve(this.root, path)).catch(() => null);
+        if (st?.isFile() && st.size >= BIG_FILE_THRESHOLD) return { ...file, binary: true };
+        // Unreadable (permissions) counts as empty: one bad path must not fail the snapshot.
+        const buf = (await this.readWorktree(path).catch(() => null)) ?? Buffer.alloc(0);
+        file.binary = isBinary(buf);
+        if (!file.binary) file.additions = countLines(buf);
+        return file;
+      },
+    );
     const all = [...files, ...extra].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     if (newRev === 'worktree') await this.hashWorktree(all.filter((f) => f.status !== 'D'));
     return all;
@@ -229,7 +260,9 @@ export class GitRepo {
     const single = regular.filter((f) => f.path.includes('\n'));
     if (batch.length) {
       try {
-        const out = await this.text(['hash-object', '--stdin-paths'], { input: batch.map((f) => f.path).join('\n') + '\n' });
+        const out = await this.text(['hash-object', '--stdin-paths'], {
+          input: batch.map((f) => f.path).join('\n') + '\n',
+        });
         const shas = out.trim().split('\n');
         batch.forEach((f, i) => (f.blob = shas[i] ?? ''));
       } catch {
@@ -238,14 +271,18 @@ export class GitRepo {
       }
     }
     await mapLimit(single, READ_CONCURRENCY, async (f) => {
-      f.blob = await this.text(['hash-object', '--', f.path]).then((s) => s.trim()).catch(() => '');
+      f.blob = await this.text(['hash-object', '--', f.path])
+        .then((s) => s.trim())
+        .catch(() => '');
     });
   }
 
   /** The commit a checked-out submodule is at, or '' if it is not a repository. */
   private async submoduleHead(path: string): Promise<string> {
     try {
-      return (await execGit(resolve(this.root, path), ['rev-parse', '--verify', '--quiet', 'HEAD'])).toString('utf8').trim();
+      return (await execGit(resolve(this.root, path), ['rev-parse', '--verify', '--quiet', 'HEAD']))
+        .toString('utf8')
+        .trim();
     } catch {
       return '';
     }
@@ -259,7 +296,9 @@ export class GitRepo {
       this.text(['for-each-ref', '--format=%(refname:short)', '--sort=-creatordate', 'refs/tags']),
       // An unborn branch has no log; the picker still needs the refs.
       this.text(['log', '-n', '30', '--format=%H%x00%h%x00%s']).catch(() => ''),
-      this.text(['rev-parse', '--abbrev-ref', 'HEAD']).then((s) => s.trim()).catch(() => null),
+      this.text(['rev-parse', '--abbrev-ref', 'HEAD'])
+        .then((s) => s.trim())
+        .catch(() => null),
       this.defaultBranch().catch(() => null),
     ]);
     const lines = (s: string) => s.split('\n').filter(Boolean);
@@ -323,12 +362,23 @@ export class GitRepo {
    * Raw `git diff` for one file. Untracked files diff against /dev/null; pass
    * `untracked` when the caller already knows, else an added file is probed.
    */
-  async patch(oldRev: string, newRev: string | 'worktree', file: ChangedFile, context = 3, untracked?: boolean): Promise<string> {
+  async patch(
+    oldRev: string,
+    newRev: string | 'worktree',
+    file: ChangedFile,
+    context = 3,
+    untracked?: boolean,
+  ): Promise<string> {
     if (newRev === 'worktree' && file.status === 'A' && (untracked ?? !(await this.isTracked(file.path)))) {
-      const out = await this.text(['diff', '--no-index', ...PATCH_ARGS, `-U${context}`, '--', '/dev/null', file.path], { okCodes: [0, 1] });
+      const out = await this.text(['diff', '--no-index', ...PATCH_ARGS, `-U${context}`, '--', '/dev/null', file.path], {
+        okCodes: [0, 1],
+      });
       // Normalize the a/ side so parsers see a conventional added-file header. Git
       // quotes each side on its own, so mirror the b/ side's quoting rather than assume none.
-      return out.replace(/^diff --git "?a\/dev\/null"? ("?)b\/(.*)$/m, (_m, q: string, rest: string) => `diff --git ${q}a/${rest} ${q}b/${rest}`);
+      return out.replace(
+        /^diff --git "?a\/dev\/null"? ("?)b\/(.*)$/m,
+        (_m, q: string, rest: string) => `diff --git ${q}a/${rest} ${q}b/${rest}`,
+      );
     }
     const range = newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
     const paths = file.oldPath ? [file.oldPath, file.path] : [file.path];
@@ -361,7 +411,9 @@ export class GitRepo {
     const batched = files.filter((f) => !single.includes(f));
     const range = newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
     const paths = batched.flatMap((f) => (f.oldPath ? [f.oldPath, f.path] : [f.path]));
-    const tracked = batched.length ? this.text(['diff', '-M', ...PATCH_ARGS, `-U${context}`, ...range, '--', ...paths]) : Promise.resolve('');
+    const tracked = batched.length
+      ? this.text(['diff', '-M', ...PATCH_ARGS, `-U${context}`, ...range, '--', ...paths])
+      : Promise.resolve('');
     const extras = await mapLimit(single, READ_CONCURRENCY, (f) => this.patch(oldRev, newRev, f, context));
     return [await tracked, ...extras].join('');
   }
@@ -480,7 +532,14 @@ class CatFileBatch {
   private queue: CatFileRequest[] = [];
   private idle: NodeJS.Timeout | null = null;
   private header: Buffer[] = [];
-  private cur: { req: CatFileRequest; type: string; size: number; remaining: number; kept: number; chunks: Buffer[] } | null = null;
+  private cur: {
+    req: CatFileRequest;
+    type: string;
+    size: number;
+    remaining: number;
+    kept: number;
+    chunks: Buffer[];
+  } | null = null;
   spawns = 0;
 
   constructor(private readonly cwd: string) {}
@@ -510,14 +569,20 @@ class CatFileBatch {
   private ensure(): ChildProcess {
     if (this.child) return this.child;
     const args = ['cat-file', '--batch'];
-    const child = spawn('git', [...CONFIG_ARGS, ...args], { cwd: this.cwd, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
+    const child = spawn('git', [...CONFIG_ARGS, ...args], {
+      cwd: this.cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+    });
     this.spawns++;
     const err: Buffer[] = [];
     child.stdout!.on('data', (c: Buffer) => this.onData(child, c));
     child.stderr!.on('data', (c: Buffer) => err.push(c));
     // EPIPE on a write after the child died surfaces through `close`, not here.
     child.stdin!.on('error', () => {});
-    child.on('error', (e) => this.reset(child, new GitError(`git ${args.join(' ')} failed: ${e.message}`, args, null, '')));
+    child.on('error', (e) =>
+      this.reset(child, new GitError(`git ${args.join(' ')} failed: ${e.message}`, args, null, '')),
+    );
     child.on('close', (code) => {
       const stderr = Buffer.concat(err).toString('utf8');
       this.reset(child, new GitError(`git ${args.join(' ')} exited (${code}): ${stderr.trim()}`, args, code, stderr));
@@ -610,7 +675,10 @@ class CatFileBatch {
     if (this.idle) clearTimeout(this.idle);
     this.idle = null;
     // Pipes are net.Sockets and hold the loop like the child handle does.
-    for (const h of [child, child.stdin, child.stdout, child.stderr] as ({ ref(): unknown; unref(): unknown } | null)[]) {
+    for (const h of [child, child.stdin, child.stdout, child.stderr] as ({
+      ref(): unknown;
+      unref(): unknown;
+    } | null)[]) {
       if (on) h?.ref();
       else h?.unref();
     }
@@ -721,7 +789,15 @@ function parseRawNumstat(buf: Buffer): ChangedFile[] {
     const status = code[0] as ChangeStatus;
     const oldPath = status === 'R' || status === 'C' ? parts[++i]! : undefined;
     const path = parts[++i]!;
-    const file: ChangedFile = { path, status, additions: 0, deletions: 0, binary: false, blob: /^0+$/.test(dstSha) ? '' : dstSha, generated: false };
+    const file: ChangedFile = {
+      path,
+      status,
+      additions: 0,
+      deletions: 0,
+      binary: false,
+      blob: /^0+$/.test(dstSha) ? '' : dstSha,
+      generated: false,
+    };
     if (oldPath != null) file.oldPath = oldPath;
     if (dstMode === '160000' || (status === 'D' && srcMode.slice(1) === '160000')) file.submodule = true;
     byPath.set(path, file);
