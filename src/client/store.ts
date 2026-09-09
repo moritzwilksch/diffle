@@ -43,7 +43,6 @@ import {
   isCollapsed,
   isViewed,
   itemIdOf,
-  lastCommitsRequest,
   linesOf,
   OVERSIZED_LINES,
   patchBatches,
@@ -210,12 +209,7 @@ export interface ReviewState {
   closeReply(): void;
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
-  /** Set by `m 5`: the picker should expand its two-refs form. */
-  twoRefsOpen: boolean;
-  setTwoRefsOpen(open: boolean): void;
-  /** N for the "Last N commits" entry (HEAD~N..HEAD); shortcut 4 reuses it. */
-  lastCommits: number;
-  setLastCommits(n: number): void;
+  modePane: 'refs' | 'commits' | 'pr' | null;
   pickModeEntry(n: number): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
@@ -341,7 +335,7 @@ export interface ReviewState {
   refreshThreads(): Promise<void>;
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
-  switchMode(req: ModeRequest): Promise<void>;
+  switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
@@ -1211,41 +1205,17 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().replyTo) set({ replyTo: null });
     },
     modeMenuOpen: false,
+    modePane: null,
     setModeMenuOpen(open) {
-      set({ modeMenuOpen: open });
+      set({ modeMenuOpen: open, modePane: null });
     },
     pickModeEntry(n) {
-      set({ modeMenuOpen: false });
-      // Only the server knows the default branch, so the branch entry asks before it compares.
-      if (n === 2) {
-        void api
-          .refs()
-          .then((r) => {
-            const base = r.defaultBranch || r.branches[0];
-            if (base) return get().switchMode({ kind: 'revspec', args: [`${base}...HEAD`] });
-            set({ modeMenuOpen: true });
-          })
-          .catch((e) => report('Branch vs base', e));
-        return;
+      if (n === 1) {
+        set({ modeMenuOpen: false, modePane: null });
+        void get().switchMode({ kind: 'working' });
+      } else if (n >= 2 && n <= 4) {
+        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr' });
       }
-      const req: ModeRequest | null =
-        n === 1
-          ? { kind: 'pr' }
-          : n === 3
-            ? { kind: 'working' }
-            : n === 4
-              ? lastCommitsRequest(get().lastCommits)
-              : null;
-      if (req) void get().switchMode(req);
-      else set({ modeMenuOpen: true, twoRefsOpen: true });
-    },
-    twoRefsOpen: false,
-    setTwoRefsOpen(open) {
-      set({ twoRefsOpen: open });
-    },
-    lastCommits: 1,
-    setLastCommits(n) {
-      set({ lastCommits: Math.max(1, Math.floor(n)) });
     },
     helpOpen: false,
     setHelpOpen(open) {
@@ -1875,12 +1845,17 @@ export const useStore = create<ReviewState>((set, get) => {
       try {
         snap = await api.switchMode(req);
         // The pushed refresh normally owns this version already; only a client without a socket gets here.
-        if (accounted(snap.version) || !current(g)) return;
+        if (!current(g)) return 'superseded';
+        if (accounted(snap.version)) return 'applied';
         fetching = snap.version;
         owned = true;
         await commitSnapshot(snap, g, await fetchLists());
+        return current(g) ? 'applied' : 'superseded';
       } catch (e) {
-        if (current(g)) set({ error: errorMessage(e) });
+        if (!current(g)) return 'superseded';
+        const error = errorMessage(e);
+        set({ error });
+        return { error };
       } finally {
         if (owned && snap && fetching === snap.version) fetching = 0;
       }

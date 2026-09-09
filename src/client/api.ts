@@ -1,5 +1,6 @@
 import type {
   CommentThread,
+  LastCommitsPreview,
   FileResponse,
   GithubExportRequest,
   GithubExportResponse,
@@ -67,6 +68,11 @@ export const api = {
   snapshot: () => json<Snapshot>('/api/snapshot'),
   switchMode: (req: ModeRequest) => json<Snapshot>('/api/mode', { method: 'POST', body: JSON.stringify(req) }),
   refs: () => json<RefsResponse>('/api/refs'),
+  lastCommitsPreview: (oldOffset: number, newOffset: number, signal?: AbortSignal) =>
+    json<LastCommitsPreview>(
+      `/api/last-commits-preview?${q({ oldOffset: String(oldOffset), newOffset: String(newOffset) })}`,
+      { signal },
+    ),
   patch: (path: string) => text(`/api/patch?${q({ path })}`),
   /** Patches of several changed files in one response. */
   patches: (paths: string[]) =>

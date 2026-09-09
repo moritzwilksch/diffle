@@ -155,6 +155,18 @@ export interface ViewedEntry {
   viewed: boolean;
 }
 
+export interface CommitInfo {
+  sha: string;
+  short: string;
+  message: string;
+}
+
+/** Endpoints of HEAD~oldOffset..HEAD~newOffset, resolved against the same HEAD. Null means the commit does not exist. */
+export interface LastCommitsPreview {
+  old: CommitInfo | null;
+  new: CommitInfo | null;
+}
+
 export interface RefsResponse {
   defaultBranch: string | null;
   current: string | null;

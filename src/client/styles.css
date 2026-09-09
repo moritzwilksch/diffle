@@ -758,63 +758,245 @@ button.off {
   justify-self: end;
   color: var(--fg-2);
 }
-.menu .entry.static {
-  cursor: default;
+.mode-menu {
+  display: flex;
+  min-width: 15rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
 }
-.menu .entry .control {
-  display: inline-flex;
+.mode-entries {
+  width: 15rem;
+  flex-shrink: 0;
+}
+.mode-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 19rem;
+  min-width: 0;
+  padding: 0 0.75rem 0.5rem;
+  margin-left: 0.375rem;
+  border-left: 1px solid var(--border);
+}
+.mode-config .ref-select {
+  display: flex;
+  flex-direction: column;
   gap: 0.375rem;
-  align-items: center;
-  justify-self: end;
+  min-width: 0;
 }
-.menu .sep {
-  height: 1px;
-  background: var(--border);
-  margin: 0.375rem 0.25rem;
+.mode-config .lbl,
+.mode-hint {
+  font-size: 0.75rem;
+  color: var(--fg-2);
 }
-.menu select,
-.menu input {
+.mode-hint {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  white-space: normal;
+}
+.mode-error {
+  margin: 0;
+  color: var(--del);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.mode-config .mode-hint {
+  padding: 0;
+}
+.mode-config select,
+.mode-config input {
+  width: 100%;
+  min-width: 0;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 0.375rem;
-  padding: 0.1875rem 0.5rem;
-  min-width: 0;
+  padding: 0.375rem 0.5rem;
   font: 0.75rem var(--mono);
   color: var(--fg);
 }
-.menu .control select {
-  max-width: 13.75rem;
-}
-.menu .control input.count {
-  width: 3.5rem;
-  text-align: right;
-}
-.menu .two-refs {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
-  gap: 0.5rem;
-  padding: 0.5rem 0.625rem 0.375rem;
-  align-items: end;
-}
-.menu .two-refs .ref-select {
+.ref-range {
   display: flex;
-  flex-direction: column;
-  gap: 0.1875rem;
+  align-items: center;
+  gap: 0.375rem;
+  padding-top: 0.375rem;
+  font: 0.8125rem/1.5 var(--mono);
+}
+.ref-input {
+  position: relative;
+  flex: 1;
   min-width: 0;
 }
-.menu .two-refs .ref-select .lbl {
-  font-size: 0.6875rem;
+.ref-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.ref-actions .swap-refs {
+  border: 0;
+  padding: 0.125rem;
+  background: transparent;
   color: var(--fg-2);
 }
-.menu .two-refs select {
-  width: 100%;
-  max-width: 100%;
+.ref-actions .swap-refs:hover {
+  background: var(--bg-3);
+  color: var(--fg);
 }
-.menu .two-refs input {
-  width: 100%;
+.mode-config .ref-input input {
+  font: inherit;
+  padding: 0.25rem 0.375rem;
+  border-color: transparent;
 }
-.menu:has(.two-refs) {
-  min-width: 40rem;
+.mode-config .ref-input input:focus {
+  outline: none;
+  background: var(--bg-3);
+}
+.ref-comparison {
+  align-self: flex-start;
+}
+.ref-comparison:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ref-suggestions {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  width: 17rem;
+  max-width: calc(100vw - 2rem);
+  max-height: 30rem;
+  overflow: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg);
+  box-shadow: 0 0.375rem 1rem rgba(0, 0, 0, 0.18);
+  z-index: 1;
+}
+.ref-input:last-child .ref-suggestions {
+  left: auto;
+  right: 0;
+}
+.ref-section-divider {
+  border-top: 1px solid var(--border);
+  margin: 0.25rem 0.5rem;
+}
+.ref-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.ref-suggestion:hover,
+.ref-suggestion[aria-selected='true'] {
+  background: var(--bg-3);
+}
+.ref-name,
+.ref-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-detail,
+.ref-empty {
+  color: var(--fg-2);
+  font: 0.6875rem/1.4 var(--sans);
+}
+.ref-empty {
+  padding: 0.5rem;
+}
+.commit-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.375rem;
+}
+.commit-range {
+  display: flex;
+  align-items: baseline;
+  font: 0.8125rem/1.5 var(--mono);
+}
+.commit-preview-area {
+  min-height: 5.5rem;
+}
+.commit-previews {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+.commit-preview-ref {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--fg-2);
+  font: 0.6875rem/1.5 var(--mono);
+}
+.commit-preview p {
+  margin: 0.125rem 0 0;
+  font: 0.75rem/1.5 var(--sans);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 6rem;
+  overflow: auto;
+}
+.commit-count {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 0 0.125rem;
+  border-radius: 0.375rem;
+  background: var(--bg-2);
+  overflow: hidden;
+}
+.commit-count:focus-within {
+  background: var(--bg-3);
+}
+.mode-config .commit-count input {
+  box-sizing: content-box;
+  flex: 0 1 auto;
+  min-width: 1ch;
+  max-width: 8ch;
+  margin: 0;
+  padding: 0.125rem 0.375rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: center;
+}
+.mode-config .commit-count input:focus {
+  outline: none;
+}
+.commit-count-buttons {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.commit-count-buttons button {
+  border: 0;
+  border-radius: 0;
+  padding: 0 0.1875rem;
+  background: transparent;
+  color: var(--fg-2);
+  line-height: 1;
+}
+.commit-count-buttons button:hover {
+  background: var(--bg-2);
+  color: var(--fg);
+}
+.mode-config > button {
+  align-self: flex-end;
+  margin-top: auto;
+}
+@media (max-width: 640px) {
+  .mode-menu {
+    position: fixed;
+    top: 3rem;
+    left: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+  .mode-entries {
+    width: 11rem;
+  }
 }
 
 .dialog-backdrop {

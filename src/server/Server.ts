@@ -80,6 +80,9 @@ export class Server {
     });
     app.use('/api/*', compress());
     app.route('/', createApi(this.deps));
+    app.all('/api/*', (c) =>
+      c.json({ error: 'API endpoint not found. Restart diffle to load the latest server.' }, 404),
+    );
 
     if (!this.opts.dev) {
       const clientDir = resolveClientDir();

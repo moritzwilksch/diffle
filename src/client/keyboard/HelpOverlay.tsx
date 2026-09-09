@@ -76,7 +76,7 @@ export const COLUMNS: HelpSection[][] = [
         ['s', 'toggle split / unified'],
         ['t', 'cycle theme'],
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
-        ['m, then 1–5', 'open the mode picker and choose an entry'],
+        ['m, then 1–4', 'open the mode picker and choose an entry'],
       ],
     },
     {
