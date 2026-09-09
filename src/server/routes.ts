@@ -149,6 +149,14 @@ export function createApi(deps: ApiDeps): Hono {
     return c.text(formatPrompt(session.comments.threads(q)));
   });
 
+  app.get('/api/threads/:id/messages/:mid/export', (c) => {
+    const thread = session.comments.get(c.req.param('id'));
+    if (!thread) throw new NotFoundError(c.req.param('id'));
+    const message = thread.messages.find((m) => m.id === c.req.param('mid'));
+    if (!message) throw new NotFoundError(c.req.param('mid'));
+    return c.text(formatPrompt([{ ...thread, messages: [message] }]));
+  });
+
   // One object or an array. Returns what was created; open duplicates are skipped.
   app.post('/api/threads', async (c) => {
     const imports = parseImports(await c.req.json());

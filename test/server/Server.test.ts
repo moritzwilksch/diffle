@@ -88,6 +88,21 @@ describe('Server', () => {
     expect(JSON.parse(r.body).mode.kind).toBe('working');
   });
 
+  it('exports one message with its thread context', async () => {
+    const thread = await session.comments.addThread(
+      { path: 'a.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'a' },
+      { body: 'Check this.' },
+    );
+    try {
+      const message = thread.messages[0]!;
+      const r = await send('GET', `/api/threads/${thread.id}/messages/${message.id}/export`);
+      expect(r).toEqual({ status: 200, body: 'a.txt:1\n\n> a\n\nCheck this.\n\n---\n' });
+      expect((await send('GET', `/api/threads/${thread.id}/messages/missing/export`)).status).toBe(404);
+    } finally {
+      await session.comments.removeThread(thread.id);
+    }
+  });
+
   it('rejects foreign Host and mismatched Origin with 403', async () => {
     expect((await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } })).status).toBe(403);

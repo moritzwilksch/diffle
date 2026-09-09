@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
+import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
 import { exportLabel, type ExportOutcome } from '../model.js';
@@ -70,7 +71,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           </span>
         )}
         <span className="spacer" />
-        {solo && <CopyMessageButton text={solo.body} size="0.875rem" />}
+        {solo && <CopyMessageButton threadId={thread.id} messageId={solo.id} size="0.875rem" />}
         {solo && (
           <button
             className="ghost icon"
@@ -146,7 +147,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
       {threaded && (
         <div className="who">
           <span className="spacer" />
-          <CopyMessageButton text={message.body} size="0.75rem" />
+          <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
           <button
             className="ghost icon"
             onClick={() => setEditingId(editing ? null : message.id)}
@@ -190,17 +191,25 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
   );
 }
 
-/** Copies one message's markdown body; the icon morphs into a check mark after a successful copy. */
-function CopyMessageButton({ text, size }: { text: string; size: string }) {
+/** Copies one message in agent-prompt format; the icon morphs into a check mark after success. */
+function CopyMessageButton({ threadId, messageId, size }: { threadId: string; messageId: string; size: string }) {
   const flash = useStore((s) => s.flash);
+  const report = useStore((s) => s.report);
   const [done, setDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
   return (
     <button
       className={`ghost icon copy-btn ${done ? 'done' : ''}`}
-      title="Copy this comment"
+      title="Copy this comment as a prompt"
       onClick={async () => {
+        let text: string;
+        try {
+          text = await api.exportComment(threadId, messageId);
+        } catch (e) {
+          report('Copying comment', e);
+          return;
+        }
         if (!(await copyText(text))) return flash('The browser blocked clipboard access');
         setDone(true);
         if (timer.current) clearTimeout(timer.current);
