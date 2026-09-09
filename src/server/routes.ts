@@ -20,7 +20,7 @@ import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
-import { exportToGithub, GithubError } from './github.js';
+import { GithubExporter, GithubError } from './github.js';
 import { LspUnavailableError, type LspBridge } from './lsp/LspBridge.js';
 import { RevspecError } from './revspec.js';
 import type { Session } from './Session.js';
@@ -43,6 +43,7 @@ export interface ApiDeps {
 export function createApi(deps: ApiDeps): Hono {
   const { session, hub } = deps;
   const app = new Hono();
+  const github = new GithubExporter();
 
   app.onError((err, c) => {
     if (err instanceof NotFoundError) return c.json({ error: 'not found' }, 404);
@@ -189,13 +190,13 @@ export function createApi(deps: ApiDeps): Hono {
     return c.body(null, 204);
   });
 
-  // Posts threads as a review on the checked-out branch's pull request through the local `gh`.
+  // Adds threads to a pending review on the checked-out branch's pull request through the local `gh`; the human submits it on GitHub.
   app.post('/api/github/export', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Partial<GithubExportRequest>;
     const ids = body.threadIds;
     if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string'))) return c.json({ error: 'threadIds must be a string list' }, 400);
     const snap = await session.snapshotter.current();
-    return c.json(await exportToGithub({ snap, threads: session.comments.threads({ state: 'all' }), threadIds: ids }));
+    return c.json(await github.export({ snap, threads: session.comments.threads({ state: 'all' }), threadIds: ids }));
   });
 
   app.get('/api/viewed', (c) => c.json(session.comments.viewed()));

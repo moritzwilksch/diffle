@@ -254,3 +254,11 @@ function isSubsequence(needle: string, hay: string): boolean {
 export function lastCommitsRequest(n: number): ModeRequest {
   return { kind: 'revspec', args: [`HEAD~${Math.max(1, Math.floor(n))}..HEAD`] };
 }
+
+/** What an export did to the pending review: new comments, bodies rewritten in place, or nothing left to do. */
+export type ExportOutcome = 'added' | 'updated' | 'unchanged';
+
+/** The green suffix the export button shows afterwards. */
+export function exportLabel(outcome: ExportOutcome): string {
+  return outcome === 'updated' ? 'Updated' : outcome === 'unchanged' ? 'Already added' : 'Added';
+}

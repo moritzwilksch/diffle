@@ -70,9 +70,15 @@ Press `?` in the app for the full list.
 
 ## GitHub reviews
 
-Use the pull request icon to post one thread or all open threads as a GitHub review. This requires a local, authenticated [`gh`](https://cli.github.com/).
+Use the pull request icon to add one thread or all open threads to a pending GitHub review — a new one, or the pending review already waiting on the pull request. This requires a local, authenticated [`gh`](https://cli.github.com/).
+
+Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
 
 Posting works for pushed branches in `pr`, `branch`, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
+
+Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
+
+If the pending review cannot be read completely, export stops before changing it. Reviews with more than 1,000 threads exceed the lookup limit.
 
 ## Language server
 

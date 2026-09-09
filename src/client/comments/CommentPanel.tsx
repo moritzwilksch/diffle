@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
-import { visibleThreads } from '../model.js';
+import { exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
@@ -23,10 +23,10 @@ export function CommentPanel() {
   const exportToGithub = useStore((s) => s.exportToGithub);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
-  const [posted, setPosted] = useState(false);
+  const [posted, setPosted] = useState<ExportOutcome | null>(null);
   useEffect(() => {
     if (!posted) return;
-    const t = setTimeout(() => setPosted(false), 2000);
+    const t = setTimeout(() => setPosted(null), 2000);
     return () => clearTimeout(t);
   }, [posted]);
   const post = useConfirm(() => {
@@ -86,12 +86,12 @@ export function CommentPanel() {
         <button
           className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
           disabled={posting || (open.length === 0 && !posted)}
-          title={post.armed ? 'Click again to post all open threads to the pull request' : 'Post all open threads to the GitHub pull request'}
-          aria-label={post.armed ? 'Post all open threads to the pull request? Click again to confirm' : 'Post all open threads to the GitHub pull request'}
+          title={post.armed ? 'Click again to add all open threads to the pending review' : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'}
+          aria-label={post.armed ? 'Add all open threads to the pending review? Click again to confirm' : 'Add all open threads to a pending review on the GitHub pull request'}
           onClick={post.fire}
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Post all?' : posted ? 'Posted' : null}
+          {post.armed ? 'Add all?' : posted ? exportLabel(posted) : null}
         </button>
         <button
           className={`ghost danger ${clear.armed ? 'confirm' : 'icon'}`}

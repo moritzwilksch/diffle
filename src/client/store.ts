@@ -25,6 +25,7 @@ import { api } from './api.js';
 import { anchorFromRange, resolveRange, sideOf } from './comments/anchor.js';
 import { buildNav, cursorFromSelection, selectionFor, step, stepFile, stepHunk, type Cursor, type LineRange, type NavItem } from './keyboard/nav.js';
 import { lspTarget, type TokenTarget } from './lsp/target.js';
+import type { ExportOutcome } from './model.js';
 import { currentPath, filterSymbols, isCollapsed, isViewed, itemIdOf, lastCommitsRequest, linesOf, OVERSIZED_LINES, patchBatches, pathFromItemId, reuseThreads, visibleThreads } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 
@@ -327,9 +328,9 @@ export interface ReviewState {
   deleteThread(id: string): Promise<void>;
   clearThreads(): Promise<void>;
   deleteStaleThreads(): Promise<void>;
-  /** Posts threads to the branch's GitHub pull request; the toast says where they went or why not. */
-  /** Post open threads (or the given ones) to the PR; resolves true when the post went through. */
-  exportToGithub(threadIds?: string[]): Promise<boolean>;
+  /** Adds threads to a pending review on the branch's GitHub pull request; the human submits the review on GitHub. A toast appears only when threads are skipped or the post fails. */
+  /** Post open threads (or the given ones) to the PR; resolves to what happened, or null when the post failed. */
+  exportToGithub(threadIds?: string[]): Promise<ExportOutcome | null>;
   setViewed(path: string, viewed: boolean): Promise<void>;
   /** Mark every changed file not viewed (explicit marks override auto-viewed globs) and expand them. */
   unviewAll(): Promise<void>;
@@ -1740,12 +1741,17 @@ export const useStore = create<ReviewState>((set, get) => {
       try {
         res = await api.exportToGithub(threadIds ? { threadIds } : {});
       } catch (e) {
-        report('Posting to GitHub', e);
-        return false;
+        report('Adding to the GitHub review', e);
+        return null;
       }
-      const skipped = res.skipped.length ? `; skipped ${res.skipped.length} (${res.skipped.map((s) => s.reason).join(', ')})` : '';
-      get().flash(`Posted ${res.posted} comment${res.posted === 1 ? '' : 's'} to ${res.url}${skipped}`);
-      return true;
+      // Success is shown by the button's own state; only skipped threads need a toast, and
+      // an unchanged duplicate is the expected answer to re-exporting, not a warning.
+      const worrying = res.skipped.filter((s) => s.reason !== 'already in the review');
+      if (worrying.length) {
+        const total = res.posted + res.updated + res.skipped.length;
+        get().flash(`Skipped ${worrying.length} of ${total} (${worrying.map((s) => s.reason).join(', ')})`);
+      }
+      return res.posted > 0 ? 'added' : res.updated > 0 ? 'updated' : 'unchanged';
     },
 
     async setViewed(path, viewed) {

@@ -34,6 +34,7 @@ const api = {
   setViewed: vi.fn(),
   setViewedBulk: vi.fn(),
   saveConfig: vi.fn(),
+  exportToGithub: vi.fn(),
 };
 vi.mock('../../src/client/api.js', () => ({ api }));
 
@@ -589,6 +590,32 @@ describe('client transitions', () => {
     stale.resolve([thread({ id: 'old-mode' })]);
     await refresh;
     expect(useStore.getState().threads).toEqual([]);
+  });
+
+  it('a github export reports what it did and only toasts what went wrong', async () => {
+    const res = (over: Partial<{ posted: number; updated: number; skipped: { id: string; reason: string }[] }>) => ({
+      url: 'https://github.com/o/r/pull/7',
+      posted: 0,
+      updated: 0,
+      review: 'existing' as const,
+      skipped: [],
+      ...over,
+    });
+    useStore.setState({ toast: null });
+    api.exportToGithub.mockResolvedValueOnce(res({ posted: 2 }));
+    expect(await useStore.getState().exportToGithub()).toBe('added');
+    api.exportToGithub.mockResolvedValueOnce(res({ updated: 1 }));
+    expect(await useStore.getState().exportToGithub()).toBe('updated');
+    // Re-exporting an unchanged thread is the expected answer, not a warning.
+    api.exportToGithub.mockResolvedValueOnce(res({ skipped: [{ id: 't', reason: 'already in the review' }] }));
+    expect(await useStore.getState().exportToGithub(['t'])).toBe('unchanged');
+    expect(useStore.getState().toast).toBeNull();
+    api.exportToGithub.mockResolvedValueOnce(res({ posted: 1, skipped: [{ id: 's', reason: 'stale' }] }));
+    expect(await useStore.getState().exportToGithub()).toBe('added');
+    expect(useStore.getState().toast).toMatch(/Skipped 1 of 2 \(stale\)/);
+    api.exportToGithub.mockRejectedValueOnce(new Error('nope'));
+    expect(await useStore.getState().exportToGithub()).toBeNull();
+    expect(useStore.getState().toast).toMatch(/nope/);
   });
 
   it('a failed mutation becomes a toast, not an unhandled rejection', async () => {
