@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CommentThread } from '../../src/shared/protocol.js';
-import { buildReview, exportToGithub, formatBody, GithubError, repoOfPrUrl, type GhRunner } from '../../src/server/github.js';
+import { buildReview, GithubExporter, formatBody, GithubError, repoOfPrUrl, type GhRunner } from '../../src/server/github.js';
 
 const PR_URL = 'https://github.com/o/r/pull/7';
 const PR_VIEW = JSON.stringify({ number: 7, url: PR_URL, headRefOid: 'a'.repeat(40) });
@@ -62,7 +62,9 @@ describe('repoOfPrUrl', () => {
   });
 });
 
-describe('exportToGithub', () => {
+describe('GithubExporter', () => {
+  let exporter: GithubExporter;
+  const exportToGithub = (input: Parameters<GithubExporter['export']>[0]) => exporter.export(input);
   const calls: { args: string[]; input?: string }[] = [];
   /** One comment already in the pending review, as a review thread reports it. */
   type Existing = { node_id: string; path: string; side: 'LEFT' | 'RIGHT'; line: number; start_line?: number; body: string };
@@ -104,6 +106,7 @@ describe('exportToGithub', () => {
 
   beforeEach(() => {
     calls.length = 0;
+    exporter = new GithubExporter();
   });
 
   it('refuses the worktree and a new side that is not HEAD', async () => {
@@ -280,7 +283,69 @@ describe('exportToGithub', () => {
       }
       return runner('PRR_1')(args, o);
     };
-    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'k2', line: 9 })], run: flaky })).rejects.toThrow(/added 1 of 2 comments/);
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'k2', line: 9 })], run: flaky })).rejects.toThrow(/updated 0 and added 1 comments/);
+  });
+
+  it('overlapping exports add the same thread only once', async () => {
+    const existing: Existing[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const adding = new Promise<void>((resolve) => { entered = resolve; });
+    const run: GhRunner = async (args, opts) => {
+      if (args[1] === 'graphql' && JSON.parse(opts.input!).query.includes('addPullRequestReviewThread')) {
+        entered();
+        await held;
+        existing.push({ node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'hi\n\n<!-- diffle-thread:k -->' });
+      }
+      return runner('PRR_1', existing)(args, opts);
+    };
+    const input = { snap, threads: [thread({ id: 'k' })], run };
+    const first = exportToGithub(input);
+    await adding;
+    const second = exportToGithub(input);
+    // Let the second request reach the held write if exports are no longer serialized.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    release();
+    expect(await first).toMatchObject({ posted: 1 });
+    expect(await second).toMatchObject({ posted: 0, skipped: [{ id: 'k', reason: 'already in the review' }] });
+    expect(existing).toHaveLength(1);
+  });
+
+  it('a failed export does not block the next export', async () => {
+    const failed = exportToGithub({ snap, threads: [thread({ id: 's', stale: true })], run: gh });
+    const next = exportToGithub({ snap, threads: [thread({ id: 'k' })], run: gh });
+    await expect(failed).rejects.toThrow('nothing to post');
+    await expect(next).resolves.toMatchObject({ posted: 1 });
+  });
+
+  it.each([0, 1])('reports completed updates when an append fails after %i additions', async (additions) => {
+    const existing: Existing[] = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'old\n\n<!-- diffle-thread:k -->' }];
+    let added = 0;
+    const run: GhRunner = async (args, opts) => {
+      if (args[1] === 'graphql' && JSON.parse(opts.input!).query.includes('addPullRequestReviewThread') && added++ === additions) {
+        throw new GithubError('line outside the diff', 502);
+      }
+      return runner('PRR_1', existing)(args, opts);
+    };
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'a', line: 8 }), thread({ id: 'b', line: 9 })], run }))
+      .rejects.toMatchObject({ status: 502, message: `updated 1 and added ${additions} comments in the pending review, then line outside the diff` });
+  });
+
+  it('reports completed updates when a later update fails', async () => {
+    const existing: Existing[] = [
+      { node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'old\n\n<!-- diffle-thread:k -->' },
+      { node_id: 'C_2', path: 'a.txt', side: 'RIGHT', line: 8, body: 'old\n\n<!-- diffle-thread:a -->' },
+    ];
+    let updated = 0;
+    const run: GhRunner = async (args, opts) => {
+      if (args[1] === 'graphql' && JSON.parse(opts.input!).query.includes('updatePullRequestReviewComment') && updated++ === 1) {
+        throw new GithubError('update failed', 502);
+      }
+      return runner('PRR_1', existing)(args, opts);
+    };
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'a', line: 8 })], run }))
+      .rejects.toMatchObject({ status: 502, message: 'updated 1 and added 0 comments in the pending review, then update failed' });
   });
 
   it('refuses when the PR head is not the local HEAD, before posting', async () => {

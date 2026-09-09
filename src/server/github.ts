@@ -113,6 +113,17 @@ export interface ExportInput {
   run?: GhRunner;
 }
 
+/** Owns one server's export queue so overlapping requests cannot add the same thread twice. */
+export class GithubExporter {
+  private queue: Promise<unknown> = Promise.resolve();
+
+  export(input: ExportInput): Promise<GithubExportResponse> {
+    const result = this.queue.then(() => exportToGithub(input));
+    this.queue = result.catch(() => {});
+    return result;
+  }
+}
+
 /**
  * Adds the threads to a *pending* review on the PR of the checked-out branch, creating
  * the pending review when there is none. The review is never submitted: the human opens
@@ -124,7 +135,7 @@ export interface ExportInput {
  * editing a thread and exporting again does not stack a second comment on the line. Comments
  * of an already-submitted review are out of reach — those would have to be replied to.
  */
-export async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
+async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)');
   if (snap.headSha === '' || snap.newSha !== snap.headSha) throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
   const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
@@ -149,25 +160,35 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
   const existing = await pendingComments(run, snap.root, pr, pending.id);
   const add: ReviewComment[] = [];
   let updated = 0;
-  for (const [i, c] of review.comments.entries()) {
-    const id = ids[i]!;
-    // An anchor alone cannot distinguish our thread from another draft on the same lines.
-    const at = existing.get(anchorKey(c));
-    const index = at?.findIndex((comment) => comment.body.trimEnd().endsWith(threadMarker(id))) ?? -1;
-    const hit = index < 0 ? undefined : at!.splice(index, 1)[0];
-    if (!hit) {
-      add.push(c);
-      continue;
+  let posted = 0;
+  try {
+    for (const [i, c] of review.comments.entries()) {
+      const id = ids[i]!;
+      // An anchor alone cannot distinguish our thread from another draft on the same lines.
+      const at = existing.get(anchorKey(c));
+      const index = at?.findIndex((comment) => comment.body.trimEnd().endsWith(threadMarker(id))) ?? -1;
+      const hit = index < 0 ? undefined : at!.splice(index, 1)[0];
+      if (!hit) {
+        add.push(c);
+        continue;
+      }
+      if (hit.body.trim() === c.body.trim()) {
+        skipped.push({ id, reason: 'already in the review' });
+        continue;
+      }
+      await graphql(run, snap.root, UPDATE_COMMENT, { input: { pullRequestReviewCommentId: hit.nodeId, body: c.body } });
+      updated++;
     }
-    if (hit.body.trim() === c.body.trim()) {
-      skipped.push({ id, reason: 'already in the review' });
-      continue;
+    for (const c of add) {
+      await addToPendingReview(run, snap.root, pending.id, c);
+      posted++;
     }
-    await updateComment(run, snap.root, hit.nodeId, c.body, updated, review.comments.length);
-    updated++;
+  } catch (e) {
+    if (updated === 0 && posted === 0) throw e;
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new GithubError(`updated ${updated} and added ${posted} comments in the pending review, then ${detail}`, 502);
   }
-  await addToPendingReview(run, snap.root, pending.id, add);
-  return { url: pr.url, posted: add.length, updated, review: 'existing', skipped };
+  return { url: pr.url, posted, updated, review: 'existing', skipped };
 }
 
 function threadMarker(id: string): string {
@@ -273,17 +294,6 @@ async function pendingComments(run: GhRunner, cwd: string, pr: PrInfo, reviewId:
 
 const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){updatePullRequestReviewComment(input:$input){pullRequestReviewComment{id}}}`;
 
-/** Rewrites one pending comment's body in place. `done` is how many changes already landed, for the partial-failure message. */
-async function updateComment(run: GhRunner, cwd: string, nodeId: string, body: string, done: number, total: number): Promise<void> {
-  try {
-    await graphql(run, cwd, UPDATE_COMMENT, { input: { pullRequestReviewCommentId: nodeId, body } });
-  } catch (e) {
-    if (done === 0) throw e;
-    const detail = e instanceof Error ? e.message : String(e);
-    throw new GithubError(`changed ${done} of ${total} comments in the pending review, then ${detail}`, 502);
-  }
-}
-
 /** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */
 async function createPendingReview(run: GhRunner, cwd: string, number: number, review: ReviewPayload): Promise<void> {
   await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--input', '-'], { cwd, input: JSON.stringify(review) });
@@ -291,26 +301,14 @@ async function createPendingReview(run: GhRunner, cwd: string, number: number, r
 
 const ADD_THREAD = `mutation($input:AddPullRequestReviewThreadInput!){addPullRequestReviewThread(input:$input){thread{id}}}`;
 
-/**
- * One thread per comment on an existing pending review: REST can only create a pending
- * review, not extend one. Comments land one request at a time, so a failure part-way
- * says how many are already in the review.
- */
-async function addToPendingReview(run: GhRunner, cwd: string, reviewId: string, comments: ReviewComment[]): Promise<void> {
-  for (const [i, c] of comments.entries()) {
-    const input: Record<string, unknown> = { pullRequestReviewId: reviewId, path: c.path, line: c.line, side: c.side, body: c.body };
-    if (c.start_line != null) {
-      input.startLine = c.start_line;
-      input.startSide = c.start_side;
-    }
-    try {
-      await graphql(run, cwd, ADD_THREAD, { input });
-    } catch (e) {
-      if (i === 0) throw e;
-      const detail = e instanceof Error ? e.message : String(e);
-      throw new GithubError(`added ${i} of ${comments.length} comments to the pending review, then ${detail}`, 502);
-    }
+/** Appends one thread through GraphQL; REST cannot extend a pending review. */
+async function addToPendingReview(run: GhRunner, cwd: string, reviewId: string, c: ReviewComment): Promise<void> {
+  const input: Record<string, unknown> = { pullRequestReviewId: reviewId, path: c.path, line: c.line, side: c.side, body: c.body };
+  if (c.start_line != null) {
+    input.startLine = c.start_line;
+    input.startSide = c.start_side;
   }
+  await graphql(run, cwd, ADD_THREAD, { input });
 }
 
 /** Runs a GraphQL document through `gh api graphql` and returns its `data`. */
