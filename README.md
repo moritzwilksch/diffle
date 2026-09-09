@@ -43,7 +43,7 @@ diffle branch           # merge-base(default branch, HEAD) vs HEAD
 diffle branch develop   # merge-base(develop, HEAD) vs HEAD
 diffle pr 27            # GitHub PR 27, or its url; without a number, this branch's PR
 diffle main...feat      # any git-diff revspec: <rev> | a..b | a...b | a b
-diffle working --lsp    # add Python symbol navigation through pyrefly
+diffle working --no-lsp # skip the language servers for this run
 diffle --help           # list all commands and flags
 ```
 
@@ -83,21 +83,40 @@ Exported comments carry a hidden thread ID. Adding the same thread again at the 
 
 If the pending review cannot be read completely, export stops before changing it. Reviews with more than 1,000 threads exceed the lookup limit.
 
-## Language server
+## Language servers
 
-Run `diffle working --lsp` to add Python definitions, references, hover details, and symbol search through `pyrefly lsp`.
+Definitions, references, hover details, and symbol search come from a language server. diffle looks for one on `PATH` for every language in the diff and starts it for the run:
 
 - `gd` or Command/Ctrl+click: definition
 - `gy`: type definition
 - `gA`: references
 - `gs` / `gS`: file or repository symbols
 
-Set another command with `--lsp <command>` or `diffle config set-lsp <command>`.
+`diffle lsp` prints what each language would get, and what to install for the ones it cannot serve:
+
+```
+python    pyrefly lsp
+rust      not on PATH (tried rust-analyzer)
+```
+
+Languages served out of the box: C/C++ (`clangd`), Go (`gopls`), Haskell, Java, JavaScript/TypeScript (`typescript-language-server`, `vtsls`), Lua, Nix, OCaml, PHP, Python (`pyrefly`, `ty`, `basedpyright`, `pyright`, `pylsp`, `jedi`), Ruby, Rust (`rust-analyzer`), shell, Swift, Terraform, Zig.
+
+Override a command, or turn one language off with an empty command:
+
+```bash
+diffle config set-lsp rust "rust-analyzer"       # persistent
+diffle config set-lsp java ""                    # never start one for java
+diffle config unset-lsp rust                     # back to PATH
+diffle working --lsp python="pyrefly lsp"        # this run only, repeatable
+diffle working --no-lsp                          # no language server at all
+```
+
+Only the languages diffle finds in the changed files get a server; a language named by `--lsp` starts whether the diff holds it or not.
 
 For large repositories, raise pyrefly's indexing limit:
 
 ```bash
-diffle config set-lsp "pyrefly lsp --indexing-mode lazy-blocking --workspace-indexing-limit 20000"
+diffle config set-lsp python "pyrefly lsp --indexing-mode lazy-blocking --workspace-indexing-limit 20000"
 ```
 
 For an `src/` layout, add this to `pyproject.toml`:
@@ -109,7 +128,7 @@ search-path = ["src"]
 
 ## Security
 
-The configured language-server command runs through a shell inside the repository and can read anything available to your user.
+Every language-server command runs through a shell inside the repository and can read anything available to your user — the ones found on `PATH` as much as the ones you configure. `--no-lsp` starts none.
 
 ## Development
 

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { DEFAULT_USER_CONFIG, type UserConfig } from '../shared/protocol.js';
+import { DEFAULT_USER_CONFIG, LANGUAGE_IDS, type LanguageId, type UserConfig } from '../shared/protocol.js';
 import { writeFileAtomic } from './persist.js';
 
 /** Owns `$XDG_CONFIG_HOME/diffle/config.json`. Machine-wide, not per repo. Writes are serialized. */
@@ -59,7 +59,22 @@ function normalize(c: Partial<UserConfig>): UserConfig {
     typeof c.contextLines === 'number' && Number.isFinite(c.contextLines)
       ? Math.max(0, Math.min(10_000, Math.floor(c.contextLines)))
       : DEFAULT_USER_CONFIG.contextLines;
-  const lspCommand =
-    typeof c.lspCommand === 'string' && c.lspCommand.trim() ? c.lspCommand.trim() : DEFAULT_USER_CONFIG.lspCommand;
-  return { autoViewed, contextLines, lspCommand };
+  return { autoViewed, contextLines, lspCommands: lspCommands(c) };
+}
+
+/**
+ * Per-language commands, keeping only languages diffle knows: a typo in the file would
+ * otherwise sit there looking effective. An empty value is kept, it turns the language
+ * off. `lspCommand`, the single Python-only command older versions wrote, becomes the
+ * python entry.
+ */
+function lspCommands(c: Partial<UserConfig> & { lspCommand?: unknown }): Partial<Record<LanguageId, string>> {
+  const out: Partial<Record<LanguageId, string>> = {};
+  if (typeof c.lspCommand === 'string' && c.lspCommand.trim()) out.python = c.lspCommand.trim();
+  for (const [language, command] of Object.entries(c.lspCommands ?? {})) {
+    if (typeof command !== 'string') continue;
+    if ((LANGUAGE_IDS as string[]).includes(language)) out[language as LanguageId] = command.trim();
+    else console.error(`[diffle] ignoring config lspCommands.${language}: not a language diffle knows`);
+  }
+  return out;
 }

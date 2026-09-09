@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -15,13 +15,27 @@ describe('UserConfigStore', () => {
     const store = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
     const results = await Promise.all([
       store.set({ contextLines: 1 }),
-      store.set({ lspCommand: 'x' }),
+      store.set({ lspCommands: { python: 'x' } }),
       store.set({ contextLines: 9 }),
     ]);
     expect(results.map((r) => r.contextLines)).toEqual([1, 1, 9]);
-    expect(store.get()).toMatchObject({ contextLines: 9, lspCommand: 'x' });
-    expect(JSON.parse(await readFile(store.file, 'utf8'))).toMatchObject({ contextLines: 9, lspCommand: 'x' });
+    const expected = { contextLines: 9, lspCommands: { python: 'x' } };
+    expect(store.get()).toMatchObject(expected);
+    expect(JSON.parse(await readFile(store.file, 'utf8'))).toMatchObject(expected);
     expect(await readdir(join(dir, 'cfg'))).toEqual(['config.json']);
-    expect((await UserConfigStore.open(store.file)).get()).toMatchObject({ contextLines: 9, lspCommand: 'x' });
+    expect((await UserConfigStore.open(store.file)).get()).toMatchObject(expected);
+  });
+
+  it('keeps known languages, drops the rest, and adopts a legacy lspCommand as python', async () => {
+    const file = join(dir, 'config.json');
+    await writeFile(
+      file,
+      JSON.stringify({ lspCommand: 'pyrefly lsp', lspCommands: { go: ' gopls ', rust: '', nope: 'x' } }),
+    );
+    expect((await UserConfigStore.open(file)).get().lspCommands).toEqual({
+      python: 'pyrefly lsp',
+      go: 'gopls',
+      rust: '',
+    });
   });
 });

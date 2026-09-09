@@ -15,13 +15,14 @@ import type {
   UserConfig,
   ViewedEntry,
 } from '../shared/protocol.js';
-import { followsCheckout } from '../shared/protocol.js';
+import { followsCheckout, lspBlocker } from '../shared/protocol.js';
 import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
 import { GithubExporter, GithubError } from './github.js';
-import { LspUnavailableError, type LspBridge } from './lsp/LspBridge.js';
+import { LspUnavailableError } from './lsp/LspBridge.js';
+import type { LspPool } from './lsp/LspPool.js';
 import { RevspecError } from './revspec.js';
 import type { Session } from './Session.js';
 import type { UserConfigStore } from './UserConfig.js';
@@ -36,8 +37,8 @@ export interface ApiDeps {
   /** Session-only additions from `--auto-viewed`. */
   extraAutoViewed: string[];
   hub: WsHub;
-  /** Language server, when started with `--lsp`. */
-  lsp: LspBridge | null;
+  /** The language servers, unless the run disabled them with `--no-lsp`. */
+  lsp: LspPool | null;
 }
 
 export function createApi(deps: ApiDeps): Hono {
@@ -233,12 +234,13 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.get('/api/lsp/status', (c) => c.json(lspStatus(deps)));
 
-  /** The bridge, or a 409 reason: the language server reads the checkout, so the new side must be it. */
-  const lspFor = async (path?: string): Promise<{ lsp: LspBridge } | { error: string }> => {
-    if (!deps.lsp) return { error: 'language server not started; run diffle with --lsp' };
+  /** The pool, or a 409 reason: the language server reads the checkout, so the new side must be it. */
+  const lspFor = async (path?: string): Promise<{ lsp: LspPool } | { error: string }> => {
+    // Servers off for the run; a language with no server of its own is the pool's own answer.
+    if (!deps.lsp) return { error: lspBlocker(lspStatus(deps)) ?? 'language servers are off' };
     const snap = await session.snapshotter.current();
     if (!followsCheckout(snap))
-      return { error: 'symbol navigation needs the new side to be the worktree or the checked-out commit' };
+      return { error: 'Symbol navigation needs the new side to be the worktree or the checked-out commit' };
     if (path != null && !snap.tree.includes(path)) return { error: `${path} is not in the snapshot` };
     return { lsp: deps.lsp };
   };
@@ -300,8 +302,8 @@ export function createApi(deps: ApiDeps): Hono {
       return c.json({ error: 'autoViewed must be a list' }, 400);
     if (body.contextLines != null && typeof body.contextLines !== 'number')
       return c.json({ error: 'contextLines must be a number' }, 400);
-    // lspCommand is a shell command; only the CLI may write it (`diffle config set-lsp`).
-    const { lspCommand: _ignored, ...writable } = body;
+    // lspCommands hold shell commands; only the CLI may write them (`diffle config set-lsp`).
+    const { lspCommands: _ignored, ...writable } = body;
     await deps.config.set(writable);
     hub.broadcast({ type: 'config' });
     // The session keeps its own context (`--context` or the config at startup); only an explicit change moves it.
@@ -323,7 +325,7 @@ function effectiveConfig(deps: ApiDeps): UserConfig {
 }
 
 function lspStatus(deps: ApiDeps): LspStatus {
-  return deps.lsp?.status() ?? { state: 'off', command: effectiveConfig(deps).lspCommand };
+  return deps.lsp?.status() ?? { enabled: false, servers: [], missing: [] };
 }
 
 function isLspPosition(p: unknown): p is LspPosition {

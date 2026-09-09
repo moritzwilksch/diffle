@@ -7,6 +7,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState(config.autoViewed.join('\n'));
   const [context, setContext] = useState(String(config.contextLines));
   const [saving, setSaving] = useState(false);
+  const overrides = Object.entries(config.lspCommands).sort(([a], [b]) => a.localeCompare(b));
 
   const save = async () => {
     setSaving(true);
@@ -68,12 +69,24 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           onChange={(e) => setContext(e.target.value)}
           style={{ width: 100 }}
         />
-        <h3 style={{ marginTop: 14 }}>Language server</h3>
+        <h3 style={{ marginTop: 14 }}>Language servers</h3>
         <p>
-          Command started by <code>--lsp</code> for go-to-definition, references and symbols:{' '}
-          <code>{config.lspCommand}</code>. Change it with <code>diffle config set-lsp &lt;command&gt;</code>; it is not
-          editable here.
+          Go-to-definition, references and symbols come from a language server per language, found on <code>PATH</code>.{' '}
+          <code>diffle lsp</code> lists what each language would get,{' '}
+          <code>diffle config set-lsp &lt;language&gt; &lt;command&gt;</code> overrides one, and <code>--no-lsp</code>{' '}
+          turns them off for a run. Commands are not editable here.
         </p>
+        {overrides.length > 0 && (
+          <p>
+            Overridden in your config:{' '}
+            {overrides.map(([language, command], i) => (
+              <span key={language}>
+                {i > 0 && ', '}
+                {language} <code>{command || '(off)'}</code>
+              </span>
+            ))}
+          </p>
+        )}
         <div className="row">
           <button onClick={onClose}>Cancel</button>
           <button className="primary" onClick={save} disabled={saving}>

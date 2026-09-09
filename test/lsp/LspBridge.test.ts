@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
-import type { LspStatus } from '../../src/shared/protocol.js';
+import type { LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -18,7 +18,7 @@ const files: Record<string, string> = {
 };
 
 function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) {
-  const statuses: LspStatus[] = [];
+  const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
   /** Paths `read` was asked for, and the most reads in flight at once. */

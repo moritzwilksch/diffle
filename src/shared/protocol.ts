@@ -189,14 +189,17 @@ export interface UserConfig {
   autoViewed: string[];
   /** Unchanged lines shown around each change (git -U). Default 5. */
   contextLines: number;
-  /** Command that starts the language server; used by `--lsp` without a value. Read-only over HTTP; set with `diffle config set-lsp`. */
-  lspCommand: string;
+  /**
+   * Language server command per language, replacing the built-in candidate for it; an empty
+   * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
+   */
+  lspCommands: Partial<Record<LanguageId, string>>;
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   autoViewed: [],
   contextLines: 5,
-  lspCommand: 'pyrefly lsp',
+  lspCommands: {},
 };
 
 /** A point in a new-side file. LSP semantics: the column counts UTF-16 units, like a JS string index. */
@@ -213,12 +216,36 @@ export interface LspLocation extends LspPosition {
   text: string;
 }
 
-export interface LspStatus {
-  state: 'off' | 'starting' | 'ready' | 'unavailable';
+/** One language server process, as its bridge sees it. */
+export interface LspProcessStatus {
+  /** Program name, for messages: the basename of the command's first word, e.g. `pyrefly`. */
+  name: string;
+  /** The command line it was started from. */
   command: string;
+  state: 'starting' | 'ready' | 'unavailable';
   message?: string;
   /** The server is building its workspace index; references in unopened files are incomplete until it finishes. Unset when the server does not say. */
   indexing?: boolean;
+}
+
+/** A process plus the languages the pool routes to it. */
+export interface LspServerStatus extends LspProcessStatus {
+  languages: LanguageId[];
+}
+
+/** A language in the diff with no server behind it. */
+export interface LspMissing {
+  language: LanguageId;
+  /** Programs looked for on PATH, so the UI can name what to install. Empty when config turned the language off. */
+  tried: string[];
+}
+
+export interface LspStatus {
+  /** False with `--no-lsp`: no server will start for this run. */
+  enabled: boolean;
+  /** One entry per started server. Empty until a snapshot names a language with a server on PATH. */
+  servers: LspServerStatus[];
+  missing: LspMissing[];
 }
 
 export interface LspLocationsResponse {
@@ -275,7 +302,113 @@ export function followsCheckout(snap: Pick<Snapshot, 'newSha' | 'headSha'>): boo
   return snap.newSha === 'worktree' || (snap.headSha !== '' && snap.newSha === snap.headSha);
 }
 
-/** The language server integration is Python-only: `pyrefly`/`pyright` see `.py` and `.pyi`. */
-export function isPython(path: string): boolean {
-  return /\.pyi?$/.test(path);
+/**
+ * A language diffle can start a server for. The value is the LSP `languageId` the
+ * server is told in `didOpen`, so it must be the spec's spelling, not ours.
+ */
+export type LanguageId =
+  | 'c'
+  | 'cpp'
+  | 'go'
+  | 'haskell'
+  | 'java'
+  | 'javascript'
+  | 'javascriptreact'
+  | 'lua'
+  | 'nix'
+  | 'ocaml'
+  | 'php'
+  | 'python'
+  | 'ruby'
+  | 'rust'
+  | 'shellscript'
+  | 'swift'
+  | 'terraform'
+  | 'typescript'
+  | 'typescriptreact'
+  | 'zig';
+
+/** Extension (no dot, lowercase) → language. `.h` goes to c because clangd serves both. */
+const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
+  bash: 'shellscript',
+  c: 'c',
+  cc: 'cpp',
+  cjs: 'javascript',
+  cpp: 'cpp',
+  cts: 'typescript',
+  cxx: 'cpp',
+  go: 'go',
+  h: 'c',
+  hh: 'cpp',
+  hpp: 'cpp',
+  hs: 'haskell',
+  hxx: 'cpp',
+  java: 'java',
+  js: 'javascript',
+  jsx: 'javascriptreact',
+  lua: 'lua',
+  mjs: 'javascript',
+  ml: 'ocaml',
+  mli: 'ocaml',
+  mts: 'typescript',
+  nix: 'nix',
+  php: 'php',
+  py: 'python',
+  pyi: 'python',
+  rb: 'ruby',
+  rs: 'rust',
+  sh: 'shellscript',
+  swift: 'swift',
+  tf: 'terraform',
+  tfvars: 'terraform',
+  ts: 'typescript',
+  tsx: 'typescriptreact',
+  zig: 'zig',
+};
+
+/** Every language diffle knows, sorted, for CLI validation and help. */
+export const LANGUAGE_IDS: LanguageId[] = [...new Set(Object.values(LANGUAGE_BY_EXT))].sort();
+
+/** The language of a path by extension, or null when diffle has no server for it. */
+export function languageOf(path: string): LanguageId | null {
+  const ext = /\.([^./\\]+)$/.exec(path)?.[1]?.toLowerCase();
+  return (ext && LANGUAGE_BY_EXT[ext]) || null;
+}
+
+/**
+ * Why the language server cannot answer for `path` — or, with no path, for a
+ * repository-wide request — and null when it can. Shared so the client's flash and the
+ * API's 409 say the same thing. The caller checks `followsCheckout` itself.
+ */
+export function lspBlocker(lsp: LspStatus, path?: string): string | null {
+  if (!lsp.enabled) return 'Language servers are off for this run (--no-lsp)';
+  if (path == null) {
+    if (!lsp.servers.length) return noServer(lsp);
+    return lsp.servers.some((s) => s.state === 'ready') ? null : notReady(lsp.servers[0]!);
+  }
+  const language = languageOf(path);
+  if (!language) return `No language server for ${/(\.[^./\\]+)$/.exec(path)?.[1] ?? 'these'} files`;
+  const server = lsp.servers.find((s) => s.languages.includes(language));
+  if (!server) return noServer(lsp, language);
+  return server.state === 'ready' ? null : notReady(server);
+}
+
+function notReady(s: LspServerStatus): string {
+  return s.state === 'starting'
+    ? `${s.name} is starting…`
+    : `${s.name} is unavailable: ${s.message ?? 'unknown error'}`;
+}
+
+/** No server serves `language` (or nothing runs at all): say what the reader can do about it. */
+function noServer(lsp: LspStatus, language?: LanguageId): string {
+  const missing = language == null ? lsp.missing : lsp.missing.filter((m) => m.language === language);
+  const absent = missing.filter((m) => m.tried.length > 0);
+  const off = missing.filter((m) => m.tried.length === 0).map((m) => m.language);
+  if (absent.length) {
+    const langs = [...new Set(absent.map((m) => m.language))].join(', ');
+    const programs = [...new Set(absent.flatMap((m) => m.tried))].join(', ');
+    return `No language server for ${langs} on PATH: install one of ${programs}`;
+  }
+  if (off.length) return `The language server for ${off.join(', ')} is off in your diffle config`;
+  return language == null ? 'No language server runs for this diff' : `No language server runs for ${language}`;
 }

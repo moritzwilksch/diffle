@@ -177,7 +177,7 @@ describe('countViewed', () => {
     blob,
     generated: false,
   });
-  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommand: '' };
+  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
 
   it('counts explicit marks at the current blob and auto-viewed files; a stale mark is not viewed', () => {
     const changed = [file('a.ts'), file('b.ts'), file('c.ts', 'new'), file('yarn.lock')];

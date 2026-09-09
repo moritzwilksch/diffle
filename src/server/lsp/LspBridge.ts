@@ -4,18 +4,19 @@ import { realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  isPython,
+  languageOf,
   type LspHoverResponse,
   type LspLocation,
   type LspLocationsResponse,
   type LspPosition,
-  type LspStatus,
+  type LspProcessStatus,
   type LspSymbol,
   type LspTokenKindResponse,
 } from '../../shared/protocol.js';
 import { mapLimit } from '../concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcConnection } from './JsonRpc.js';
+import { argv0 } from './which.js';
 
 export interface LspBridgeOptions {
   /** Shell command line that starts a stdio language server, e.g. `pyrefly lsp`. */
@@ -26,7 +27,7 @@ export interface LspBridgeOptions {
   read: (path: string) => Promise<string | null>;
   /** Whether the snapshot exposes a path on its new side. Membership only: no content is read. */
   has: (path: string) => Promise<boolean>;
-  onStatus: (status: LspStatus) => void;
+  onStatus: (status: LspProcessStatus) => void;
   /** Test seam: replaces `spawn(command, { shell: true })`. */
   spawnProcess?: (command: string, cwd: string) => ChildProcess;
   /** Most documents kept open beyond the tracked set; the least recently used is closed first. Default MAX_UNTRACKED_OPEN. */
@@ -129,7 +130,7 @@ const SIGKILL_AFTER_MS = 500;
 export class LspBridge {
   private child: ChildProcess | null = null;
   private rpc: JsonRpcConnection | null = null;
-  private current: LspStatus;
+  private current: LspProcessStatus;
   private ready: Promise<void>;
   private stderr = '';
   /** Partial last stderr line, so a log phrase split across chunks still matches. */
@@ -150,7 +151,7 @@ export class LspBridge {
 
   private constructor(private readonly opts: LspBridgeOptions) {
     this.realRoot = safeRealpathSync(opts.root);
-    this.current = { state: 'starting', command: opts.command };
+    this.current = { name: programName(opts.command), command: opts.command, state: 'starting' };
     this.ready = this.launch();
     this.ready.catch(() => {});
   }
@@ -159,7 +160,7 @@ export class LspBridge {
     return new LspBridge(opts);
   }
 
-  status(): LspStatus {
+  status(): LspProcessStatus {
     return this.current;
   }
 
@@ -476,7 +477,7 @@ export class LspBridge {
       this.fail(`initialize failed: ${(e as Error).message}`);
       throw e;
     }
-    if (this.current.state === 'starting') this.set({ state: 'ready', command: this.opts.command });
+    if (this.current.state === 'starting') this.set({ ...this.current, state: 'ready' });
   }
 
   private noteIndexing(chunk: string): void {
@@ -491,11 +492,11 @@ export class LspBridge {
 
   private fail(message: string): void {
     if (this.current.state === 'unavailable') return;
-    this.set({ state: 'unavailable', command: this.opts.command, message });
+    this.set({ name: this.current.name, command: this.opts.command, state: 'unavailable', message });
     this.rpc?.dispose(new LspUnavailableError(message));
   }
 
-  private set(status: LspStatus): void {
+  private set(status: LspProcessStatus): void {
     this.current = status;
     this.opts.onStatus(status);
   }
@@ -537,7 +538,7 @@ export class LspBridge {
     if (!doc) {
       this.open.set(path, { version: 1, text });
       rpc.notify('textDocument/didOpen', {
-        textDocument: { uri, languageId: isPython(path) ? 'python' : 'plaintext', version: 1, text },
+        textDocument: { uri, languageId: languageOf(path) ?? 'plaintext', version: 1, text },
       });
     } else {
       // Re-insert to mark it most recently used.
@@ -668,6 +669,12 @@ function safeFileURLToPath(uri: string): string {
   } catch {
     return uri;
   }
+}
+
+/** How status messages name a server: `basedpyright-langserver --stdio` → `basedpyright-langserver`. */
+function programName(command: string): string {
+  const prog = argv0(command);
+  return prog.split(/[\\/]/).pop() || prog;
 }
 
 function safeRealpathSync(p: string): string {
