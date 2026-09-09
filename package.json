@@ -55,6 +55,7 @@
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "web-tree-sitter": "^0.25.10",
     "ws": "^8.21.3",
     "zustand": "^5.0.15"
   },
@@ -68,6 +69,7 @@
     "jsdom": "^30.0.1",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
+    "tree-sitter-wasms": "^0.1.13",
     "tsdown": "^0.22.14",
     "tsx": "^4",
     "typescript": "^5.9",

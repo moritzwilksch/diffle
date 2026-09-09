@@ -35,6 +35,7 @@ import {
   type NavItem,
 } from './keyboard/nav.js';
 import { lspTarget, type TokenTarget } from './lsp/target.js';
+import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome } from './model.js';
 import {
   currentPath,
@@ -1386,6 +1387,15 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!get().lsp.enabled) return;
       get().closeHover();
       const t = ++menuSeq;
+      const generationAtClick = generation;
+      const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
+        ensureContents(target.path, target.side),
+      );
+      if (!current(generationAtClick) || t !== menuSeq) return;
+      if (blocked) {
+        set({ symbolMenu: null });
+        return;
+      }
       // Only the server can answer on the new side; elsewhere the menu's actions flash their own reason.
       if (target.side === 'new' && !blocker(target.path)) {
         const g = generation;
@@ -1411,6 +1421,14 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().symbolMenu || target.side === 'old' || blocker(target.path)) return;
       const g = generation;
       try {
+        const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
+          ensureContents(target.path, target.side),
+        );
+        if (!current(g) || t !== hoverSeq || get().symbolMenu) return;
+        if (blocked) {
+          set({ hover: null });
+          return;
+        }
         const res = await api.lspHover({ path: target.path, line: target.line, col: target.col });
         if (!current(g) || t !== hoverSeq || get().symbolMenu) return;
         set({ hover: res.contents ? { target, contents: res.contents, anchor } : null });
