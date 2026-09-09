@@ -11,8 +11,8 @@ import { wordsIn } from './words.js';
  * Keyboard word focus (vim w / b): walk the identifier tokens of the cursor line
  * on the new side only (the text on disk, which is what the language server
  * sees), crossing to the next or previous line at the ends and skipping deleted
- * lines. Works on the rendered DOM, since tokens exist only there; the focused
- * span gets the `lsp-focus` class.
+ * lines. Works on the rendered DOM, since tokens exist only there; a CSS
+ * highlight marks the focused word without changing the viewer's DOM.
  */
 let viewer: () => CodeViewHandle<unknown> | null = () => null;
 let focusedEl: HTMLElement | null = null;
@@ -31,7 +31,7 @@ export function setViewer(get: () => CodeViewHandle<unknown> | null): void {
 }
 
 export function clearWordFocus(): void {
-  focusedEl?.classList.remove('lsp-focus');
+  if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.delete('diffle-word-focus');
   focusedEl = null;
   focusedCol = null;
   lspTarget.focus(null);
@@ -106,10 +106,22 @@ function sameRow(a: CodeViewLineSelection, b: CodeViewLineSelection): boolean {
 }
 
 function focusWord({ el, col, text }: Word, path: string, line: number): void {
-  focusedEl?.classList.remove('lsp-focus');
+  clearWordFocus();
   focusedEl = el;
   focusedCol = col;
-  el.classList.add('lsp-focus');
+  const node = el.firstChild;
+  if (
+    node?.nodeType === Node.TEXT_NODE &&
+    typeof CSS !== 'undefined' &&
+    'highlights' in CSS &&
+    typeof Highlight !== 'undefined'
+  ) {
+    const start = col - Number(el.dataset.char);
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, start + text.length);
+    CSS.highlights.set('diffle-word-focus', new Highlight(range));
+  }
   lspTarget.focus({ path, side: 'new', line, col, text }, el);
 }
 

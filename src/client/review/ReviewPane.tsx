@@ -87,7 +87,11 @@ const HEADER_CSS = `
 }
 [data-diffs-header][data-sticky] { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
 .lsp-hover { text-decoration: underline; cursor: pointer; }
-.lsp-focus { outline: 1px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+::highlight(diffle-word-focus) {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+}
 /* Word-level changes: the library's default tint sits too close to the line tint to pick out. */
 :host {
   /* Pin the code canvas to our ground. Our palette is the same GitHub high-contrast theme, so this only
