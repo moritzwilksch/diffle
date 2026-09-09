@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type Ref } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type Ref } from 'react';
 import type { RefsResponse } from '../../shared/protocol.js';
 
 /** Editable revision with suggestions; arbitrary Git revisions remain valid input. */
@@ -27,15 +27,16 @@ export function RefInput({
   const [active, setActive] = useState(-1);
   const list = useRef<HTMLDivElement>(null);
   const options = [
-    { value: 'HEAD', detail: 'Current commit' },
-    ...(allowWorktree ? [{ value: 'worktree', detail: 'Uncommitted changes' }] : []),
+    { value: 'HEAD', detail: 'Current commit', section: 'special' },
+    ...(allowWorktree ? [{ value: 'worktree', detail: 'Uncommitted changes', section: 'special' }] : []),
     ...(refs?.branches ?? []).map((value) => ({
       value,
       detail: value === refs?.current ? 'Current branch' : 'Branch',
+      section: 'branches',
     })),
-    ...(refs?.remoteBranches ?? []).map((value) => ({ value, detail: 'Remote branch' })),
-    ...(refs?.tags ?? []).map((value) => ({ value, detail: 'Tag' })),
-    ...(refs?.recent ?? []).map((commit) => ({ value: commit.short, detail: commit.subject })),
+    ...(refs?.remoteBranches ?? []).map((value) => ({ value, detail: 'Remote branch', section: 'remotes' })),
+    ...(refs?.tags ?? []).map((value) => ({ value, detail: 'Tag', section: 'tags' })),
+    ...(refs?.recent ?? []).map((commit) => ({ value: commit.short, detail: commit.subject, section: 'commits' })),
   ]
     .filter((option, i, all) => all.findIndex((other) => other.value === option.value) === i)
     .filter((option) => `${option.value} ${option.detail}`.toLowerCase().includes(query.toLowerCase()));
@@ -115,18 +116,22 @@ export function RefInput({
           ref={list}
         >
           {options.map((option, i) => (
-            <div
-              key={option.value}
-              id={`${id}-${i}`}
-              role="option"
-              aria-selected={i === active}
-              className="ref-suggestion"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => choose(option.value)}
-            >
-              <span className="ref-name">{option.value}</span>
-              <span className="ref-detail">{option.detail}</span>
-            </div>
+            <Fragment key={option.value}>
+              {i > 0 && options[i - 1]!.section !== option.section && (
+                <div className="ref-section-divider" aria-hidden="true" />
+              )}
+              <div
+                id={`${id}-${i}`}
+                role="option"
+                aria-selected={i === active}
+                className="ref-suggestion"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose(option.value)}
+              >
+                <span className="ref-name">{option.value}</span>
+                <span className="ref-detail">{option.detail}</span>
+              </div>
+            </Fragment>
           ))}
           {!options.length && <div className="ref-empty">Use this revision as typed.</div>}
         </div>

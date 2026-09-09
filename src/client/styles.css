@@ -876,6 +876,10 @@ button.off {
   left: auto;
   right: 0;
 }
+.ref-section-divider {
+  border-top: 1px solid var(--border);
+  margin: 0.25rem 0.5rem;
+}
 .ref-suggestion {
   display: flex;
   flex-direction: column;
