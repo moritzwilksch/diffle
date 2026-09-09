@@ -80,8 +80,8 @@ const INDEX_DONE = /Populated all files in the workspace/;
 const INIT_TIMEOUT_MS = 60_000;
 /**
  * Navigation opens whatever file a query lands in. Without a cap every path
- * visited in a long `--background` session stays open in the server, growing
- * its memory and per-save recheck cost.
+ * visited in a long review stays open in the server, growing its memory and
+ * per-save recheck cost.
  */
 const MAX_UNTRACKED_OPEN = 64;
 /** Concurrent snapshot reads while mapping a result set back to paths. */

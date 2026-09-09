@@ -77,7 +77,7 @@ export const api = {
     json<SearchResponse>(
       `/api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, path: opts.path })}`,
     ),
-  threads: (query: ThreadQuery = {}) => json<CommentThread[]>(`/api/threads?${q({ state: query.state, author: query.author, path: query.path })}`),
+  threads: (query: ThreadQuery = {}) => json<CommentThread[]>(`/api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt, optionally for one file. */
   exportComments: (path?: string) => text(`/api/threads/export?${q({ state: 'open', path })}`),
   /** Posts threads as a review on the current branch's pull request; all unresolved ones without `threadIds`. */

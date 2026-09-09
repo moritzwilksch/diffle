@@ -80,7 +80,7 @@ describe('Session', () => {
     expect(await session.readSide(snap, 'old.txt', 'new')).toBeNull();
 
     await session.comments.clear();
-    const c = await session.comments.addThread({ path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' }, { author: 'human', body: 'old-side note' });
+    const c = await session.comments.addThread({ path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' }, { body: 'old-side note' });
     await session.refresh();
     expect(session.comments.get(c.id)?.stale).toBe(false);
     await session.close();
@@ -91,11 +91,11 @@ describe('Session', () => {
     await session.start({ kind: 'revspec', args: ['main..feat'] });
     await session.comments.clear();
     // Context 0 shows only `delta`; `alpha` exists on both sides but is outside every hunk.
-    const outside = await session.comments.addThread({ path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' }, { author: 'human', body: 'context line' });
-    const inside = await session.comments.addThread({ path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' }, { author: 'human', body: 'added line' });
+    const outside = await session.comments.addThread({ path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' }, { body: 'context line' });
+    const inside = await session.comments.addThread({ path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' }, { body: 'added line' });
     // `same.txt` is not part of the diff: nothing can display an old-side thread on it, the file view shows a new-side one.
-    const unchangedOld = await session.comments.addThread({ path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' }, { author: 'human', body: 'x' });
-    const unchangedNew = await session.comments.addThread({ path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' }, { author: 'human', body: 'y' });
+    const unchangedOld = await session.comments.addThread({ path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' }, { body: 'x' });
+    const unchangedNew = await session.comments.addThread({ path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' }, { body: 'y' });
     await session.refresh();
     const stale = () => [outside, inside, unchangedOld, unchangedNew].map((t) => session.comments.get(t.id)?.stale);
     expect(stale()).toEqual([true, false, true, false]);

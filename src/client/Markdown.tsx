@@ -10,10 +10,10 @@ import { SHIKI_THEMES } from './theme.js';
 
 /**
  * Comment body as GitHub-flavored markdown. Raw HTML stays literal and images
- * are dropped: an agent-written body derives from repository content, which
- * must not make the reviewer's browser fetch a URL. A ```suggestion fence
- * becomes a labelled block, since agents and humans use it to propose
- * replacements for the quoted lines; `path` is the commented file, whose
+ * are dropped: a body quotes repository content, which must not make the
+ * reviewer's browser fetch a URL. A ```suggestion fence becomes a labelled
+ * block, the way a replacement for the quoted lines is proposed; `path` is the
+ * commented file, whose
  * extension picks the language the suggestion is highlighted in. With
  * `highlight`, every other fence is highlighted as its info string says (the
  * file's language when it says nothing), for language-server hover text.

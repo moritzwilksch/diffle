@@ -2,7 +2,7 @@
 
 Local git diff reviewer: Node server wraps git, React client renders diffs with `@pierre/diffs`, line comments export as an agent prompt. `README.md` has usage.
 
-Asked to read or answer the human's review comments, or to get your own diff reviewed: run `diffle --skill` (`npx . --skill` in this checkout) and follow it. It covers the CLI end to end; the HTTP routes are a fallback, not the interface.
+Asked to read the human's review comments, or to get your own diff reviewed: run `diffle --skill` (`npx . --skill` in this checkout) and follow it. It covers the CLI end to end; the HTTP routes are a fallback, not the interface.
 
 ## Layout and boundaries
 
@@ -34,7 +34,7 @@ Done means all four pass. Tests for server behavior build a throwaway repo with 
 
 ## The agent skill
 
-`diffle --skill` prints `SKILL` from `src/cli/skill.ts`: the guide an agent reads to drive a review (seed findings, read feedback, reply, resolve). It is a cache of the CLI surface, so it goes stale silently. Any change to `diffle comment`, to `--comment`/`--as`/`--background`, to the findings payload, or to the prompt format lands in `skill.ts` in the same commit; `test/cli/skill.test.ts` pins the names it mentions.
+`diffle --skill` prints `SKILL` from `src/cli/skill.ts`: the guide an agent reads to get a review and read the human's comments back. Comments only flow human → agent; there is no way for an agent to post one, and nothing in `skill.ts` may suggest otherwise. It is a cache of the CLI surface, so it goes stale silently. Any change to the modes, to the review commands, or to the prompt format lands in `skill.ts` in the same commit; `test/cli/skill.test.ts` pins the names it mentions and the ones it must not.
 
 ## Style
 

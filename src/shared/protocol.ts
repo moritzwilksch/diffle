@@ -85,13 +85,8 @@ export interface CommentAnchor {
   quoted: string;
 }
 
-export type CommentAuthor = 'human' | 'agent';
-
 export interface CommentMessage {
   id: string;
-  author: CommentAuthor;
-  /** Free label, e.g. "claude", from `--as` or the payload. Unset for humans. */
-  authorName?: string;
   body: string;
   createdAt: number;
   updatedAt: number;
@@ -120,16 +115,11 @@ export interface ThreadCreate {
   /** Default startLine. */
   endLine?: number;
   body: string;
-  /** Default 'human'. */
-  author?: CommentAuthor;
-  authorName?: string;
   quoted?: string;
 }
 
 export interface ReplyCreate {
   body: string;
-  author?: CommentAuthor;
-  authorName?: string;
 }
 
 export type ThreadState = 'open' | 'resolved' | 'all';
@@ -151,8 +141,6 @@ export interface GithubExportResponse {
 export interface ThreadQuery {
   /** Default 'open' for export, 'all' for list. */
   state?: ThreadState;
-  /** Author of the message that opened the thread. */
-  author?: CommentAuthor;
   path?: string;
 }
 

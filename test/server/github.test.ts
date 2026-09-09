@@ -8,7 +8,7 @@ function thread(over: Partial<CommentThread> & { id: string; path?: string; line
   const { path = 'a.txt', line = 3, endLine = line, side = 'new', body = 'hi', ...rest } = over;
   return {
     anchor: { path, side, startLine: line, endLine, quoted: 'x' },
-    messages: [{ id: `${rest.id}-m`, author: 'human', body, createdAt: 1, updatedAt: 1 }],
+    messages: [{ id: `${rest.id}-m`, body, createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
     ...rest,
@@ -41,12 +41,12 @@ describe('buildReview', () => {
 });
 
 describe('formatBody', () => {
-  it('labels agent messages and keeps suggestion fences verbatim', () => {
+  it('joins messages and keeps suggestion fences verbatim', () => {
     const body = formatBody([
-      { id: '1', author: 'agent', authorName: 'claude', body: 'Batch this.', createdAt: 1, updatedAt: 1 },
-      { id: '2', author: 'human', body: '```suggestion\nfoo()\n```', createdAt: 2, updatedAt: 2 },
+      { id: '1', body: 'Batch this.', createdAt: 1, updatedAt: 1 },
+      { id: '2', body: '```suggestion\nfoo()\n```', createdAt: 2, updatedAt: 2 },
     ]);
-    expect(body).toBe('**agent (claude):**\n\nBatch this.\n\n---\n\n```suggestion\nfoo()\n```');
+    expect(body).toBe('Batch this.\n\n---\n\n```suggestion\nfoo()\n```');
   });
 });
 

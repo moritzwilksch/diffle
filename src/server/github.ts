@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { CommentMessage, CommentThread, GithubExportResponse, Snapshot } from '../shared/protocol.js';
 import { compareThreads } from './comments/anchor.js';
-import { authorLabel } from './comments/format.js';
 
 /** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
 export type GhRunner = (args: string[], opts: { cwd: string; input?: string }) => Promise<string>;
@@ -81,15 +80,10 @@ function toReviewComment(t: CommentThread): ReviewComment {
 
 /**
  * Messages joined as markdown. GitHub renders ```suggestion fences itself, so bodies
- * stay verbatim. The poster is the human, so only agent messages carry a label.
+ * stay verbatim.
  */
 export function formatBody(messages: CommentMessage[]): string {
-  return messages
-    .map((m) => {
-      const body = m.body.trim();
-      return m.author === 'agent' ? `**${authorLabel(m)}:**\n\n${body}` : body;
-    })
-    .join('\n\n---\n\n');
+  return messages.map((m) => m.body.trim()).join('\n\n---\n\n');
 }
 
 interface PrInfo {

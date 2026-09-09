@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type {
-  CommentAuthor,
   FileResponse,
   GithubExportRequest,
   LspPosition,
@@ -120,10 +119,7 @@ export function createApi(deps: ApiDeps): Hono {
   const threadQuery = (c: { req: { query(k: string): string | undefined } }, defaultState: ThreadState): ThreadQuery | { error: string } => {
     const state = c.req.query('state') ?? defaultState;
     if (state !== 'open' && state !== 'resolved' && state !== 'all') return { error: 'state must be open, resolved or all' };
-    const author = c.req.query('author');
-    if (author != null && author !== 'human' && author !== 'agent') return { error: 'author must be human or agent' };
     const q: ThreadQuery = { state };
-    if (author) q.author = author as CommentAuthor;
     const path = c.req.query('path');
     if (path) q.path = path;
     return q;
@@ -141,8 +137,7 @@ export function createApi(deps: ApiDeps): Hono {
     return c.text(formatPrompt(session.comments.threads(q)));
   });
 
-  // One object or an array: an agent seeds a whole review in one request. Returns
-  // what was created; open duplicates are skipped.
+  // One object or an array. Returns what was created; open duplicates are skipped.
   app.post('/api/threads', async (c) => {
     const imports = parseImports(await c.req.json());
     const { added } = await session.comments.importThreads(imports, session.quoter());
@@ -153,9 +148,7 @@ export function createApi(deps: ApiDeps): Hono {
   app.post('/api/threads/:id/replies', async (c) => {
     const body = (await c.req.json()) as ReplyCreate;
     if (typeof body?.body !== 'string' || !body.body.trim()) return c.json({ error: 'body required' }, 400);
-    if (body.author != null && body.author !== 'human' && body.author !== 'agent') return c.json({ error: 'author must be human or agent' }, 400);
-    if (body.authorName != null && typeof body.authorName !== 'string') return c.json({ error: 'authorName must be a string' }, 400);
-    const t = await session.comments.reply(c.req.param('id'), { body: body.body, author: body.author, authorName: body.authorName });
+    const t = await session.comments.reply(c.req.param('id'), { body: body.body });
     hub.broadcast({ type: 'threads' });
     return c.json(t, 201);
   });

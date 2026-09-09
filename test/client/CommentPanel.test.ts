@@ -22,7 +22,7 @@ function thread(id: string, path: string, body: string): CommentThread {
   return {
     id,
     anchor: { path, side: 'new', startLine: 1, endLine: 1, quoted: 'q' },
-    messages: [{ id: `${id}-m`, author: 'human', body, createdAt: 1, updatedAt: 1 }],
+    messages: [{ id: `${id}-m`, body, createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
   };

@@ -4,7 +4,16 @@ import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isAlive } from '../../src/server/RunFile.js';
+
+/** True while the pid names a live process; EPERM means it exists but is someone else's. */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
 
 const TSX = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const MAIN = join(process.cwd(), 'src', 'cli', 'main.ts');

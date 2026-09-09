@@ -1,4 +1,4 @@
-import { AlertTriangle, Bot, Check, ClipboardCopy, Copy, GitPullRequestArrow, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardCopy, Copy, GitPullRequestArrow, MessageSquare, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
@@ -227,13 +227,6 @@ const ThreadRow = memo(function ThreadRow({
           {t.anchor.side === 'old' ? 'removed ' : ''}L{t.anchor.startLine}
           {t.anchor.endLine !== t.anchor.startLine ? `–${t.anchor.endLine}` : ''}
         </span>
-        {first?.author === 'agent' ? (
-          <span className="author agent" title="Opened by the agent">
-            <Bot size="0.6875rem" /> {first.authorName ?? 'agent'}
-          </span>
-        ) : (
-          <span className="author">you</span>
-        )}
         {t.messages.length > 1 && <span className="replies">{t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}</span>}
         {t.stale && (
           <span className="stale">

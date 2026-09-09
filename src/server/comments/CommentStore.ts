@@ -93,7 +93,6 @@ export class CommentStore {
       .filter((t) => {
         if (state === 'open' && t.resolved) return false;
         if (state === 'resolved' && !t.resolved) return false;
-        if (q.author && t.messages[0]?.author !== q.author) return false;
         if (q.path != null && t.anchor.path !== q.path) return false;
         return true;
       })
@@ -115,7 +114,7 @@ export class CommentStore {
   reply(threadId: string, msg: ReplyCreate): Promise<CommentThread> {
     return this.mutate((set) => {
       const t = findThread(set, threadId);
-      t.messages.push(newMessage({ author: msg.author ?? 'human', authorName: msg.authorName, body: msg.body }));
+      t.messages.push(newMessage({ body: msg.body }));
       return t;
     });
   }
@@ -188,13 +187,13 @@ export class CommentStore {
           const anchor: CommentAnchor = { path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
           pending.push({ anchor, t });
           // Later imports in the same batch may duplicate this one.
-          existing.push({ id: '', anchor, messages: [{ id: '', author: t.author ?? 'human', body: t.body, createdAt: 0, updatedAt: 0 }], resolved: false, stale: false });
+          existing.push({ id: '', anchor, messages: [{ id: '', body: t.body, createdAt: 0, updatedAt: 0 }], resolved: false, stale: false });
         }
         for (const { anchor, t } of pending) {
           const thread: CommentThread = {
             id: randomUUID(),
             anchor,
-            messages: [newMessage({ author: t.author ?? 'human', authorName: t.authorName, body: t.body })],
+            messages: [newMessage({ body: t.body })],
             resolved: false,
             stale: false,
           };
@@ -366,12 +365,10 @@ function writeStoreFile(file: string, data: StoreFile): Promise<void> {
 
 function newMessage(msg: Omit<CommentMessage, 'id' | 'createdAt' | 'updatedAt'>): CommentMessage {
   const now = Date.now();
-  const m: CommentMessage = { id: randomUUID(), author: msg.author, body: msg.body, createdAt: now, updatedAt: now };
-  if (msg.authorName) m.authorName = msg.authorName;
-  return m;
+  return { id: randomUUID(), body: msg.body, createdAt: now, updatedAt: now };
 }
 
-/** Each v1 comment becomes a single-message, unresolved human thread. */
+/** Each v1 comment becomes a single-message, unresolved thread. */
 function migrateV1(v1: V1File): StoreFile {
   const sets: StoreFile['sets'] = {};
   for (const [key, set] of Object.entries(v1.sets)) {
@@ -379,7 +376,7 @@ function migrateV1(v1: V1File): StoreFile {
       threads: (set.comments ?? []).map((c) => ({
         id: c.id,
         anchor: c.anchor,
-        messages: [{ id: randomUUID(), author: 'human', body: c.body, createdAt: c.createdAt, updatedAt: c.updatedAt }],
+        messages: [{ id: randomUUID(), body: c.body, createdAt: c.createdAt, updatedAt: c.updatedAt }],
         resolved: false,
         stale: c.stale,
         ...(c.staleFromLine != null ? { staleFromLine: c.staleFromLine } : {}),
