@@ -941,6 +941,27 @@ describe('symbol navigation', () => {
     expect(useStore.getState().hover).toBeNull();
   });
 
+  it('lets the language server decide whether comment text has hover information', async () => {
+    ready();
+    useStore.setState({ toast: null, symbolMenu: null });
+    const anchor = { left: 10, top: 20, bottom: 36 };
+    const comment = { ...target, line: 2, col: 3, text: 'comment' };
+    api.lspHover.mockResolvedValueOnce({ contents: 'foo: int' });
+    await useStore.getState().requestHover(target, anchor);
+    expect(useStore.getState().hover).not.toBeNull();
+
+    api.lspHover.mockResolvedValueOnce({ contents: null });
+    await useStore.getState().requestHover(comment, anchor);
+    expect(api.lspHover).toHaveBeenLastCalledWith({ path: comment.path, line: comment.line, col: comment.col });
+    expect(useStore.getState().hover).toBeNull();
+    expect(useStore.getState().toast).toBeNull();
+
+    // Some servers resolve documentation references inside comments.
+    api.lspHover.mockResolvedValueOnce({ contents: 'Referenced symbol' });
+    await useStore.getState().requestHover(comment, anchor);
+    expect(useStore.getState().hover).toEqual({ target: comment, contents: 'Referenced symbol', anchor });
+  });
+
   it('gh: opens the tooltip at the focused word, flashes when nothing is focused or known', async () => {
     ready();
     useStore.setState({ toast: null, symbolMenu: null });
