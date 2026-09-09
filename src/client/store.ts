@@ -752,7 +752,14 @@ export const useStore = create<ReviewState>((set, get) => {
         reload.includes(prevView.path));
     // Its item, like a stale diff, stays up until the refetch commits.
     if (fileView && viewMoved) delete contents[fileView.path];
-    const collapsed = modeChanged ? {} : { ...get().collapsed };
+    // A fold or unfold answers one version of a file. Once its blob moves, the default rules again:
+    // a file marked viewed and then edited ('restale') must reopen for re-review.
+    const collapsed: Record<string, boolean> = {};
+    if (!modeChanged) {
+      for (const [path, folded] of Object.entries(get().collapsed)) {
+        if (prevChanged.get(path)?.blob === nextChanged.get(path)?.blob) collapsed[path] = folded;
+      }
+    }
     // A watcher refresh must not take the comment being typed with it; only a new mode or a vanished file does.
     const draft = get().draft;
     const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
