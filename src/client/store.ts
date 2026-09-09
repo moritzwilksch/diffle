@@ -47,6 +47,8 @@ export type DiffStyle = 'split' | 'unified';
 const DIFF_STYLE_KEY = 'diffle:diffStyle';
 /** Typing pause before a workspace symbol query goes to the server. */
 export const WORKSPACE_SYMBOL_DEBOUNCE_MS = 150;
+/** How long every toast stays visible: long enough to read a full sentence, since errors are the main thing shown. */
+export const TOAST_MS = 3500;
 function readDiffStyle(): DiffStyle {
   try {
     return localStorage.getItem(DIFF_STYLE_KEY) === 'unified' ? 'unified' : 'split';
@@ -1092,8 +1094,7 @@ export const useStore = create<ReviewState>((set, get) => {
     flash(message) {
       set({ toast: message });
       if (toastTimer) clearTimeout(toastTimer);
-      // Long enough to read a full sentence; errors are the main thing shown here.
-      toastTimer = setTimeout(() => set({ toast: null }), 3500);
+      toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
     },
     search: { open: false, kind: 'text', direction: 1, ignoreCase: true, regex: false, scope: 'diff', path: null, focusNonce: 0, query: '', matches: [], index: -1, loading: false, truncated: false },
     openSearch(scope) {
