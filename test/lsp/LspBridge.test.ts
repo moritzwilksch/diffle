@@ -221,6 +221,22 @@ describe('LspBridge', () => {
     await bridge.close();
   });
 
+  it('re-asks a request the server refuses as stale, and reports an outage when it keeps refusing', async () => {
+    // Two refusals, then the answer: a document change racing a query must not surface as a failure.
+    const one = start({ FAKE_LSP_MODIFIED: '2' });
+    const res = await one.bridge.definition({ path: 'a.py', line: 3, col: 4 });
+    expect(res.locations).toEqual([{ path: 'a.py', line: 2, col: 4, text: 'def f():' }]);
+    expect(one.events.filter((e) => e.startsWith('refused'))).toHaveLength(2);
+    await one.bridge.close();
+
+    const many = start({ FAKE_LSP_MODIFIED: '99' });
+    await expect(many.bridge.references({ path: 'a.py', line: 1, col: 0 })).rejects.toThrow(/kept changing; try again/);
+    // Three attempts, then it stops asking; the server is still up for the next query.
+    expect(many.events.filter((e) => e.startsWith('refused'))).toHaveLength(3);
+    expect(many.bridge.status().state).toBe('ready');
+    await many.bridge.close();
+  });
+
   it('reports unavailable when the server dies during initialize', async () => {
     const { bridge, statuses } = start({ FAKE_LSP_DIE: '1' });
     await expect(bridge.definition({ path: 'a.py', line: 1, col: 0 })).rejects.toBeInstanceOf(LspUnavailableError);

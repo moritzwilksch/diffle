@@ -15,7 +15,7 @@ import {
 } from '../../shared/protocol.js';
 import { mapLimit } from '../concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
-import { JsonRpcConnection } from './JsonRpc.js';
+import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
 import { argv0 } from './which.js';
 
 export interface LspBridgeOptions {
@@ -120,6 +120,10 @@ const READ_CONCURRENCY = 8;
 /** Graceful shutdown budget. Both together stay under the CLI's hard exit deadline (main.ts). */
 const SHUTDOWN_RPC_MS = 500;
 const SIGKILL_AFTER_MS = 500;
+/** LSP `ContentModified`: the document moved under the request, so the answer would be stale. */
+const CONTENT_MODIFIED = -32801;
+/** Waits before re-asking a request the server refused as stale, one per attempt. */
+const CONTENT_MODIFIED_BACKOFF_MS = [40, 120];
 
 /**
  * Owns one language server process: the only module that spawns one. Speaks
@@ -165,29 +169,38 @@ export class LspBridge {
   }
 
   async definition(pos: LspPosition): Promise<LspLocationsResponse> {
-    const rpc = await this.sync(pos.path);
-    const result = await rpc.request<null | Location | Location[] | LocationLink[]>('textDocument/definition', {
-      textDocument: { uri: this.uri(pos.path) },
-      position: toLsp(pos),
-    });
+    const result = await this.query<null | Location | Location[] | LocationLink[]>(
+      'textDocument/definition',
+      {
+        textDocument: { uri: this.uri(pos.path) },
+        position: toLsp(pos),
+      },
+      pos.path,
+    );
     return this.toLocations(normalizeLocations(result));
   }
 
   async typeDefinition(pos: LspPosition): Promise<LspLocationsResponse> {
-    const rpc = await this.sync(pos.path);
-    const result = await rpc.request<null | Location | Location[] | LocationLink[]>('textDocument/typeDefinition', {
-      textDocument: { uri: this.uri(pos.path) },
-      position: toLsp(pos),
-    });
+    const result = await this.query<null | Location | Location[] | LocationLink[]>(
+      'textDocument/typeDefinition',
+      {
+        textDocument: { uri: this.uri(pos.path) },
+        position: toLsp(pos),
+      },
+      pos.path,
+    );
     return this.toLocations(normalizeLocations(result));
   }
 
   async hover(pos: LspPosition): Promise<LspHoverResponse> {
-    const rpc = await this.sync(pos.path);
-    const result = await rpc.request<null | { contents: HoverContents; range?: Range }>('textDocument/hover', {
-      textDocument: { uri: this.uri(pos.path) },
-      position: toLsp(pos),
-    });
+    const result = await this.query<null | { contents: HoverContents; range?: Range }>(
+      'textDocument/hover',
+      {
+        textDocument: { uri: this.uri(pos.path) },
+        position: toLsp(pos),
+      },
+      pos.path,
+    );
     const md = result ? hoverMarkdown(result.contents) : null;
     const res: LspHoverResponse = { contents: md == null ? null : localizeFileLinks(md, await this.resolveLinks(md)) };
     if (result?.range) {
@@ -203,14 +216,17 @@ export class LspBridge {
    * tokens, yields null, so callers treat null as "no opinion".
    */
   async tokenKind(pos: LspPosition): Promise<LspTokenKindResponse> {
-    const rpc = await this.sync(pos.path);
     const line = Math.max(0, pos.line - 1);
     let data: number[];
     try {
-      const result = await rpc.request<null | { data: number[] }>('textDocument/semanticTokens/range', {
-        textDocument: { uri: this.uri(pos.path) },
-        range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } },
-      });
+      const result = await this.query<null | { data: number[] }>(
+        'textDocument/semanticTokens/range',
+        {
+          textDocument: { uri: this.uri(pos.path) },
+          range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } },
+        },
+        pos.path,
+      );
       data = result?.data ?? [];
     } catch (e) {
       if (e instanceof LspUnavailableError) throw e;
@@ -231,12 +247,15 @@ export class LspBridge {
   }
 
   async references(pos: LspPosition, opts: { includeDeclaration?: boolean } = {}): Promise<LspLocationsResponse> {
-    const rpc = await this.sync(pos.path);
-    const result = await rpc.request<Location[] | null>('textDocument/references', {
-      textDocument: { uri: this.uri(pos.path) },
-      position: toLsp(pos),
-      context: { includeDeclaration: opts.includeDeclaration ?? true },
-    });
+    const result = await this.query<Location[] | null>(
+      'textDocument/references',
+      {
+        textDocument: { uri: this.uri(pos.path) },
+        position: toLsp(pos),
+        context: { includeDeclaration: opts.includeDeclaration ?? true },
+      },
+      pos.path,
+    );
     return this.toLocations(normalizeLocations(result));
   }
 
@@ -276,10 +295,13 @@ export class LspBridge {
   }
 
   async documentSymbols(path: string): Promise<LspSymbol[]> {
-    const rpc = await this.sync(path);
-    const result = await rpc.request<DocumentSymbol[] | SymbolInformation[] | null>('textDocument/documentSymbol', {
-      textDocument: { uri: this.uri(path) },
-    });
+    const result = await this.query<DocumentSymbol[] | SymbolInformation[] | null>(
+      'textDocument/documentSymbol',
+      {
+        textDocument: { uri: this.uri(path) },
+      },
+      path,
+    );
     if (!result) return [];
     const out: LspSymbol[] = [];
     if (isDocumentSymbols(result)) {
@@ -324,8 +346,7 @@ export class LspBridge {
    * per-keystroke search must not read every hit's text.
    */
   async workspaceSymbols(query: string, limit = 200): Promise<LspSymbol[]> {
-    const rpc = await this.ensureReady();
-    const result = await rpc.request<SymbolInformation[] | null>('workspace/symbol', { query });
+    const result = await this.query<SymbolInformation[] | null>('workspace/symbol', { query });
     if (!result) return [];
     const paths = await Promise.all(result.map((s) => this.pathOf(s.location.uri)));
     const inside = await this.membership(paths);
@@ -511,6 +532,30 @@ export class LspBridge {
     if (this.current.state !== 'ready' || !this.rpc)
       throw new LspUnavailableError(this.current.message ?? 'language server unavailable');
     return this.rpc;
+  }
+
+  /**
+   * One request against a synced document, re-asked while the server answers
+   * `ContentModified`: something moved the document under it — a watcher refresh, or a
+   * `track` pass opening the diff — so it refuses to answer from text it no longer holds.
+   * Re-syncing and asking again is what an editor does. Giving up reads as an outage, the
+   * one thing the reader can act on, rather than as a failed route.
+   */
+  private async query<T>(method: string, params: object, path?: string): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      const rpc = path == null ? await this.ensureReady() : await this.sync(path);
+      try {
+        return await rpc.request<T>(method, params);
+      } catch (e) {
+        if (!(e instanceof JsonRpcError) || e.code !== CONTENT_MODIFIED) throw e;
+        const backoff = CONTENT_MODIFIED_BACKOFF_MS[attempt];
+        if (backoff == null)
+          throw new LspUnavailableError(
+            `${this.current.name} could not answer while ${path ?? 'the repository'} kept changing; try again`,
+          );
+        await new Promise((r) => setTimeout(r, backoff));
+      }
+    }
   }
 
   /**
