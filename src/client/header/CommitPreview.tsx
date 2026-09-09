@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LastCommitsPreview } from '../../shared/protocol.js';
 import { api } from '../api.js';
 
@@ -10,6 +10,16 @@ export function CommitPreview({ count, version }: { count: number | null; versio
     result?: LastCommitsPreview;
     error?: string;
   } | null>(null);
+  const area = useRef<HTMLDivElement>(null);
+  const height = useRef(0);
+
+  // Preserve space already used by messages while loading, clearing, or correcting the count.
+  useLayoutEffect(() => {
+    const element = area.current;
+    if (!element) return;
+    height.current = Math.max(height.current, element.getBoundingClientRect().height);
+    element.style.minHeight = `${height.current}px`;
+  });
 
   useEffect(() => {
     if (count === null) return;
@@ -31,37 +41,37 @@ export function CommitPreview({ count, version }: { count: number | null; versio
     };
   }, [count, version]);
 
-  if (count === null) return <p className="mode-hint">Enter a positive whole number to preview commits.</p>;
   const current = state?.count === count && state.version === version ? state : null;
-  if (!current)
-    return (
-      <p className="mode-hint" role="status">
-        Loading commit messages…
-      </p>
-    );
-  if (current.error)
-    return (
-      <p className="mode-error" role="status">
-        {current.error}
-      </p>
-    );
-  const result = current.result!;
+  const loading = count !== null && !current;
+  const status =
+    count === null
+      ? 'Enter a positive whole number to preview commits.'
+      : (current?.error ?? (loading ? 'Loading commit messages…' : null));
+  const result = current?.result;
   return (
-    <div className="commit-previews" aria-live="polite">
-      {(
-        [
-          [`HEAD~${count}`, result.old, result.head ? 'Not enough history for this count.' : 'No commits yet.'],
-          ['HEAD', result.head, 'No commits yet.'],
-        ] as const
-      ).map(([ref, commit, missing]) => (
-        <div className="commit-preview" key={ref}>
-          <div className="commit-preview-ref">
-            <span>{ref}</span>
-            {commit && <span title={commit.sha}>{commit.short}</span>}
-          </div>
-          <p>{commit ? commit.message || '(Empty commit message)' : missing}</p>
+    <div className="commit-preview-area" ref={area} aria-busy={loading}>
+      {status !== null ? (
+        <p className={current?.error ? 'mode-error' : 'mode-hint'} role="status">
+          {status}
+        </p>
+      ) : result ? (
+        <div className="commit-previews" aria-live="polite">
+          {(
+            [
+              [`HEAD~${count}`, result.old, result.head ? 'Not enough history for this count.' : 'No commits yet.'],
+              ['HEAD', result.head, 'No commits yet.'],
+            ] as const
+          ).map(([ref, commit, missing]) => (
+            <div className="commit-preview" key={ref}>
+              <div className="commit-preview-ref">
+                <span>{ref}</span>
+                {commit && <span title={commit.sha}>{commit.short}</span>}
+              </div>
+              <p>{commit ? commit.message || '(Empty commit message)' : missing}</p>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }

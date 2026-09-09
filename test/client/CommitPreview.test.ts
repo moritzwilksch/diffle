@@ -52,3 +52,25 @@ it('handles missing history and clears previews for invalid input', async () => 
   expect(host.textContent).not.toContain('Latest commit');
   expect(api.lastCommitsPreview).toHaveBeenCalledTimes(1);
 });
+
+it('preserves the measured preview height through loading and empty input', async () => {
+  let measuredHeight = 88;
+  const measure = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(() => ({ height: measuredHeight }) as DOMRect);
+  try {
+    await render(1);
+    measuredHeight = 180;
+    await act(() => requests[0]!.resolve({ old: commit('Long message'), head: commit('Latest commit') }));
+    const area = host.querySelector<HTMLElement>('.commit-preview-area')!;
+    expect(area.style.minHeight).toBe('180px');
+    measuredHeight = 24;
+    await render(2);
+    expect(area.getAttribute('aria-busy')).toBe('true');
+    expect(area.style.minHeight).toBe('180px');
+    await render(null);
+    expect(area.style.minHeight).toBe('180px');
+  } finally {
+    measure.mockRestore();
+  }
+});

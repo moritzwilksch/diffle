@@ -898,6 +898,9 @@ button.off {
   align-items: baseline;
   font: 0.8125rem/1.5 var(--mono);
 }
+.commit-preview-area {
+  min-height: 5.5rem;
+}
 .commit-previews {
   display: grid;
   gap: 0.75rem;
