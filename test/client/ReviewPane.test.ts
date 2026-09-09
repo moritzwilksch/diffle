@@ -4,6 +4,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
+import type { CodeViewOptions } from '@pierre/diffs';
+import { reviewGeometry } from '../../src/client/review/geometry.js';
 
 const api = {
   snapshot: vi.fn(),
@@ -22,16 +24,19 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 // rows is enough to see which element the pane's effects bound to.
 type Rendered = { id: string; element: HTMLElement; type: 'diff' };
 let rendered: Rendered[] = [];
+const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 vi.mock('@pierre/diffs/react', () => ({
   CodeView: forwardRef(function CodeView(
     props: {
       containerRef: (el: HTMLDivElement | null) => void;
       className: string;
       items: { id: string }[];
+      options: CodeViewOptions<unknown>;
       renderHeaderMetadata: (item: { id: string }) => unknown;
     },
     ref,
   ) {
+    captureOptions(props.options);
     useImperativeHandle(ref, () => ({
       getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
@@ -110,6 +115,7 @@ beforeEach(() => {
     error: null,
     activePath: null,
     selection: null,
+    scrollTarget: null,
     gens: {},
   });
   host = document.createElement('div');
@@ -119,9 +125,36 @@ beforeEach(() => {
 afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
+  document.documentElement.style.removeProperty('font-size');
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('uses the rendered header height for navigation and the same geometry for CSS and virtualization', async () => {
+    document.documentElement.style.fontSize = '14.4px';
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(changed) }));
+    const geometry = reviewGeometry(14.4);
+    const viewerOptions = captureOptions.mock.calls.at(-1)![0];
+    expect(viewerOptions.itemMetrics).toEqual(geometry.itemMetrics);
+    expect(viewerOptions.layout).toEqual(geometry.layout);
+    expect(viewerOptions.unsafeCSS).toContain(geometry.css);
+    expect(viewerOptions.hunkSeparators).toBe('line-info');
+
+    const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
+    box(scroller, 0, 800);
+    scroller.scrollTop = 500;
+    const card = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.line = '62';
+    box(row, 36, 54);
+    card.appendChild(row);
+    rendered = [{ id: 'diff:a.txt@0', element: card, type: 'diff' }];
+    await act(() =>
+      useStore.setState({ scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 1 } }),
+    );
+    expect(scroller.scrollTop).toBe(497);
+  });
+
   it('bind to the viewer that mounts after the empty-changes branch, and again after a theme remount', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     await act(() => useStore.setState({ snapshot: snap([]) }));
