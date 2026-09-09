@@ -121,6 +121,13 @@ npm test && npm run typecheck && npm run build
 
 `npm run dev` builds the client, then starts the server from source. Restart it after client changes; the server always serves `dist/client`.
 
+Browser layout regressions run against Chromium and Firefox:
+
+```bash
+npx playwright install chromium firefox
+npm run test:browser
+```
+
 See [AGENTS.md](AGENTS.md) for repository notes.
 
 ## Acknowledgements

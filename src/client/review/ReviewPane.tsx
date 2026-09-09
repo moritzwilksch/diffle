@@ -588,6 +588,9 @@ export function ReviewPane() {
     () => ({
       ...codeViewOptions,
       layout: cardLayout(),
+      // A larger estimate than the CSS row height can leave EOF outside the virtual range
+      // while the next file is already visible. Keep the row budget in the same units as the code.
+      itemMetrics: { lineHeight: ROW_REM * remPx() },
       themeType: theme,
       diffStyle,
       onLineSelectionEnd: () => {
