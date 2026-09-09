@@ -12,10 +12,15 @@ const PREFIXES = new Set(['g', 'd', 'y', 'z']);
 
 type Action = (s: ReviewState) => unknown;
 
-/** Chords that take a vim-style count typed before them: `123gg` / `123G` jump to line 123 of the current file. */
+/**
+ * Chords that take a vim-style count typed before them: `123gg` / `123G` jump to
+ * line 123 of the current file, `10j` / `10k` walk ten lines down / up.
+ */
 const COUNTED: Record<string, (s: ReviewState, count: number) => unknown> = {
   gg: (s, n) => void s.goToLine(n),
   G: (s, n) => void s.goToLine(n),
+  j: (s, n) => s.moveCursorBy(n),
+  k: (s, n) => s.moveCursorBy(-n),
 };
 
 /** Single keys and two-key chords, by the key string(s) of the keydown events. */
@@ -113,6 +118,11 @@ export function useKeymap(): void {
       if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta' || e.key === 'CapsLock') return;
       const s = useStore.getState();
       const target = realTarget(e);
+      // The count belongs to this press: every path below either uses it or, by
+      // leaving it taken, drops it as vim does on a key that takes no count.
+      const typed = count.current;
+      count.current = '';
+      const n = Number(typed);
       if (e.key === 'Escape') {
         if (isEditable(target)) {
           target!.blur();
@@ -179,7 +189,9 @@ export function useKeymap(): void {
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        s.moveCursor(e.key === 'ArrowDown' ? 1 : -1);
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        if (n > 0) s.moveCursorBy(dir * n);
+        else s.moveCursor(dir);
         return;
       }
       if (e.key === 'ArrowLeft') {
@@ -200,19 +212,18 @@ export function useKeymap(): void {
       const prefix = pending.current?.key;
       clearPending();
       // A count starts with 1-9 (`0` alone is a motion) and grows with any digit.
-      if (!prefix && /^[0-9]$/.test(e.key) && (count.current || e.key !== '0')) {
+      if (!prefix && /^[0-9]$/.test(e.key) && (typed || e.key !== '0')) {
         e.preventDefault();
-        count.current += e.key;
+        count.current = typed + e.key;
         return;
       }
       if (!prefix && PREFIXES.has(e.key)) {
-        // `g` alone also has no action; wait for the second key.
+        // `g` alone also has no action; wait for the second key, which the count outlives (`10gg`).
+        count.current = typed;
         pending.current = { key: e.key, timer: setTimeout(clearPending, CHORD_MS) };
         return;
       }
       const chord = prefix ? prefix + e.key : e.key;
-      const n = Number(count.current);
-      count.current = '';
       const counted = n > 0 ? COUNTED[chord] : undefined;
       const action = KEYMAP[chord];
       // Unknown keys keep their browser behavior (Tab, Space, PageDown, F5, ...).
