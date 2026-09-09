@@ -1,5 +1,13 @@
-import { ChevronDown, ChevronRight, GitCommitHorizontal, GitPullRequest, History, PencilRuler } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  GitCommitHorizontal,
+  GitPullRequest,
+  History,
+  PencilRuler,
+} from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { lastCommitsRequest } from '../model.js';
@@ -21,6 +29,14 @@ export function ModePicker() {
   const [b, setB] = useState('HEAD');
   const [dots, setDots] = useState<'..' | '...'>('..');
   const [countText, setCountText] = useState(String(lastCommits));
+  const countInput = useRef<HTMLInputElement>(null);
+  const selectCount = useRef(false);
+  useLayoutEffect(() => {
+    if (!selectCount.current) return;
+    countInput.current?.focus();
+    countInput.current?.select();
+    selectCount.current = false;
+  }, [countText]);
   const [pr, setPr] = useState('');
   const [prPending, setPrPending] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -91,6 +107,13 @@ export function ModePicker() {
   };
   const count = Number(countText);
   const validCount = /^[0-9]+$/.test(countText) && Number.isSafeInteger(count) && count >= 1;
+  const stepCount = (delta: number) => {
+    const next = String(Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, (validCount ? count : 0) + delta)));
+    selectCount.current = next !== countText;
+    setCountText(next);
+    countInput.current?.focus();
+    countInput.current?.select();
+  };
   const entries = [
     { label: 'Working', icon: PencilRuler, pane: null },
     { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
@@ -215,29 +238,54 @@ export function ModePicker() {
                 <div className="commit-config">
                   <div className="commit-range">
                     <span>HEAD~</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]+"
-                      aria-label="Number of commits"
-                      aria-describedby="commit-count-hint"
-                      aria-invalid={!validCount}
-                      title="Number of commits (at least 1)"
-                      autoFocus
-                      onFocus={(e) => e.currentTarget.select()}
-                      required
-                      value={countText}
-                      style={{ width: `${Math.max(1, countText.length)}ch` }}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (/^[0-9]*$/.test(value)) setCountText(value);
-                      }}
-                    />
+                    <div className="commit-count">
+                      <input
+                        ref={countInput}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]+"
+                        aria-label="Number of commits"
+                        aria-invalid={!validCount}
+                        title="Number of commits (at least 1)"
+                        autoFocus
+                        onFocus={(e) => e.currentTarget.select()}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          stepCount(e.key === 'ArrowUp' ? 1 : -1);
+                        }}
+                        required
+                        value={countText}
+                        style={{ width: `${Math.max(1, countText.length)}ch` }}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (/^[0-9]*$/.test(value)) setCountText(value);
+                        }}
+                      />
+                      <div className="commit-count-buttons">
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          aria-label="Increase number of commits"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => stepCount(1)}
+                        >
+                          <ChevronUp size="0.625rem" />
+                        </button>
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          aria-label="Decrease number of commits"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => stepCount(-1)}
+                        >
+                          <ChevronDown size="0.625rem" />
+                        </button>
+                      </div>
+                    </div>
                     <span>..HEAD</span>
                   </div>
-                  <p className="mode-hint" id="commit-count-hint">
-                    Choose how many recent commits to compare.
-                  </p>
                   <CommitPreview count={validCount ? count : null} version={snapshot?.version ?? 0} />
                 </div>
               )}

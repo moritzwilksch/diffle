@@ -921,22 +921,48 @@ button.off {
   max-height: 6rem;
   overflow: auto;
 }
-.mode-config .commit-range input {
+.commit-count {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 0 0.125rem;
+  border-radius: 0.375rem;
+  background: var(--bg-2);
+  overflow: hidden;
+}
+.commit-count:focus-within {
+  background: var(--bg-3);
+}
+.mode-config .commit-count input {
   box-sizing: content-box;
   flex: 0 1 auto;
   min-width: 1ch;
   max-width: 8ch;
-  margin: 0 0.125rem;
+  margin: 0;
   padding: 0.125rem 0.375rem;
   border-color: transparent;
-  background: var(--bg-2);
+  background: transparent;
   color: var(--fg);
   font: inherit;
   text-align: center;
 }
-.mode-config .commit-range input:focus {
+.mode-config .commit-count input:focus {
   outline: none;
-  background: var(--bg-3);
+}
+.commit-count-buttons {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.commit-count-buttons button {
+  border: 0;
+  border-radius: 0;
+  padding: 0 0.1875rem;
+  background: transparent;
+  color: var(--fg-2);
+  line-height: 1;
+}
+.commit-count-buttons button:hover {
+  background: var(--bg-2);
+  color: var(--fg);
 }
 .mode-config > button {
   align-self: flex-end;

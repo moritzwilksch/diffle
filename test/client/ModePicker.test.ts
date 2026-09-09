@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/client/api.js', () => ({
   api: {
+    lastCommitsPreview: vi.fn(async () => ({ old: null, head: null })),
     refs: vi.fn(async () => ({
       defaultBranch: 'main',
       branches: ['main'],
@@ -91,4 +92,30 @@ it('does not close another pane when an older PR request completes', async () =>
   await act(() => finish('applied'));
   expect(useStore.getState().modeMenuOpen).toBe(true);
   expect(useStore.getState().modePane).toBe('commits');
+});
+
+it('steps the commit count with arrows and buttons and selects the entire updated value', async () => {
+  await act(() => useStore.getState().pickModeEntry(3));
+  await type('9');
+  const input = host.querySelector<HTMLInputElement>('input[aria-label="Number of commits"]')!;
+  const up = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+  await act(() => input.dispatchEvent(up));
+  expect(up.defaultPrevented).toBe(true);
+  expect(input.value).toBe('10');
+  expect(input.selectionStart).toBe(0);
+  expect(input.selectionEnd).toBe(2);
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Decrease number of commits"]')!.click());
+  expect(input.value).toBe('9');
+  expect(document.activeElement).toBe(input);
+  expect(input.selectionStart).toBe(0);
+  expect(input.selectionEnd).toBe(1);
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase number of commits"]')!.click());
+  expect(input.value).toBe('10');
+  expect(input.selectionEnd).toBe(2);
+  await type('1');
+  await act(() => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+  expect(input.value).toBe('1');
+  expect(input.selectionStart).toBe(0);
+  expect(input.selectionEnd).toBe(1);
+  expect(switchMode).not.toHaveBeenCalled();
 });
