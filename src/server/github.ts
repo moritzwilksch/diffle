@@ -25,9 +25,12 @@ export interface ReviewComment {
   body: string;
 }
 
+/**
+ * The REST review payload. `event` is deliberately absent: a review created without
+ * one stays PENDING, which is the whole point — the human submits it on github.com.
+ */
 export interface ReviewPayload {
   commit_id: string;
-  event: 'COMMENT';
   comments: ReviewComment[];
 }
 
@@ -37,7 +40,7 @@ export interface BuiltReview {
 }
 
 /**
- * Threads → one GitHub review with a comment per thread. Stale threads are skipped:
+ * Threads → the comments of one pending GitHub review, one per thread. Stale threads are skipped:
  * their lines no longer sit in the diff, and GitHub would refuse them anyway. With
  * `threadIds`, only those (resolved included, the user asked for them by hand);
  * without, every unresolved thread.
@@ -64,7 +67,7 @@ export function buildReview(threads: CommentThread[], commitId: string, threadId
     }
     comments.push(toReviewComment(t));
   }
-  return { review: { commit_id: commitId, event: 'COMMENT', comments }, skipped };
+  return { review: { commit_id: commitId, comments }, skipped };
 }
 
 function toReviewComment(t: CommentThread): ReviewComment {
@@ -92,6 +95,13 @@ interface PrInfo {
   headRefOid: string;
 }
 
+/** The base repository the pull request lives in, taken from its url (a fork's own remote is not it). */
+export function repoOfPrUrl(url: string): { owner: string; repo: string } {
+  const m = /^\/([^/]+)\/([^/]+)\/pull\/\d+/.exec(new URL(url).pathname);
+  if (!m) throw new GithubError(`cannot read owner/repo from the pull request url: ${url}`, 502);
+  return { owner: m[1]!, repo: m[2]! };
+}
+
 export interface ExportInput {
   snap: Pick<Snapshot, 'root' | 'newSha' | 'headSha'>;
   threads: CommentThread[];
@@ -100,9 +110,10 @@ export interface ExportInput {
 }
 
 /**
- * Posts the threads as a pull-request review on the PR of the checked-out branch.
- * Refuses when the new side is not the checked-out commit: GitHub anchors comments
- * to a commit, and only HEAD is what the PR shows.
+ * Adds the threads to a *pending* review on the PR of the checked-out branch, creating
+ * the pending review when there is none. The review is never submitted: the human opens
+ * the PR and submits it themselves. Refuses when the new side is not the checked-out
+ * commit: GitHub anchors comments to a commit, and only HEAD is what the PR shows.
  */
 export async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)');
@@ -114,8 +125,78 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
   if (pr.headRefOid !== snap.newSha) {
     throw new GithubError(`the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`);
   }
-  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${pr.number}/reviews`, '--input', '-'], { cwd: snap.root, input: JSON.stringify(review) });
-  return { url: pr.url, posted: review.comments.length, skipped };
+
+  const pending = await findPendingReview(run, snap.root, pr);
+  if (pending) await addToPendingReview(run, snap.root, pending, review.comments);
+  else await createPendingReview(run, snap.root, pr.number, review);
+  return { url: pr.url, posted: review.comments.length, review: pending ? 'existing' : 'created', skipped };
+}
+
+const PENDING_QUERY = `query($owner:String!,$repo:String!,$number:Int!){
+  viewer{login}
+  repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:20,states:[PENDING]){nodes{id author{login}}}}}
+}`;
+
+interface PendingQueryData {
+  viewer?: { login?: string };
+  repository?: { pullRequest?: { reviews?: { nodes?: ({ id?: string; author?: { login?: string } | null } | null)[] } } };
+}
+
+/**
+ * The node id of the viewer's own pending review on the PR, or null. GitHub hides other
+ * people's pending reviews, and the login check makes sure of it: appending to someone
+ * else's draft would put our comments in their review.
+ */
+async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<string | null> {
+  const { owner, repo } = repoOfPrUrl(pr.url);
+  const data = await graphql<PendingQueryData>(run, cwd, PENDING_QUERY, { owner, repo, number: pr.number });
+  const login = data.viewer?.login;
+  for (const node of data.repository?.pullRequest?.reviews?.nodes ?? []) {
+    if (node?.id && node.author?.login === login) return node.id;
+  }
+  return null;
+}
+
+/** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */
+async function createPendingReview(run: GhRunner, cwd: string, number: number, review: ReviewPayload): Promise<void> {
+  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--input', '-'], { cwd, input: JSON.stringify(review) });
+}
+
+const ADD_THREAD = `mutation($input:AddPullRequestReviewThreadInput!){addPullRequestReviewThread(input:$input){thread{id}}}`;
+
+/**
+ * One thread per comment on an existing pending review: REST can only create a pending
+ * review, not extend one. Comments land one request at a time, so a failure part-way
+ * says how many are already in the review.
+ */
+async function addToPendingReview(run: GhRunner, cwd: string, reviewId: string, comments: ReviewComment[]): Promise<void> {
+  for (const [i, c] of comments.entries()) {
+    const input: Record<string, unknown> = { pullRequestReviewId: reviewId, path: c.path, line: c.line, side: c.side, body: c.body };
+    if (c.start_line != null) {
+      input.startLine = c.start_line;
+      input.startSide = c.start_side;
+    }
+    try {
+      await graphql(run, cwd, ADD_THREAD, { input });
+    } catch (e) {
+      if (i === 0) throw e;
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new GithubError(`added ${i} of ${comments.length} comments to the pending review, then ${detail}`, 502);
+    }
+  }
+}
+
+/** Runs a GraphQL document through `gh api graphql` and returns its `data`. */
+async function graphql<T>(run: GhRunner, cwd: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  const out = await run(['api', 'graphql', '--input', '-'], { cwd, input: JSON.stringify({ query, variables }) });
+  let body: { data?: T };
+  try {
+    body = JSON.parse(out) as { data?: T };
+  } catch {
+    throw new GithubError(`unexpected output from gh api graphql: ${out.slice(0, 200)}`, 502);
+  }
+  if (body.data == null) throw new GithubError(`unexpected output from gh api graphql: ${out.slice(0, 200)}`, 502);
+  return body.data;
 }
 
 function describe(skipped: GithubExportResponse['skipped']): string {

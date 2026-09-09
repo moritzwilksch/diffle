@@ -86,12 +86,12 @@ export function CommentPanel() {
         <button
           className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
           disabled={posting || (open.length === 0 && !posted)}
-          title={post.armed ? 'Click again to post all open threads to the pull request' : 'Post all open threads to the GitHub pull request'}
-          aria-label={post.armed ? 'Post all open threads to the pull request? Click again to confirm' : 'Post all open threads to the GitHub pull request'}
+          title={post.armed ? 'Click again to add all open threads to the pending review' : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'}
+          aria-label={post.armed ? 'Add all open threads to the pending review? Click again to confirm' : 'Add all open threads to a pending review on the GitHub pull request'}
           onClick={post.fire}
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Post all?' : posted ? 'Posted' : null}
+          {post.armed ? 'Add all?' : posted ? 'Added' : null}
         </button>
         <button
           className={`ghost danger ${clear.armed ? 'confirm' : 'icon'}`}

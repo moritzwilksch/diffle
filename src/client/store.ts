@@ -327,7 +327,7 @@ export interface ReviewState {
   deleteThread(id: string): Promise<void>;
   clearThreads(): Promise<void>;
   deleteStaleThreads(): Promise<void>;
-  /** Posts threads to the branch's GitHub pull request; the toast says where they went or why not. */
+  /** Adds threads to a pending review on the branch's GitHub pull request; the toast says where they went or why not. The human submits the review on GitHub. */
   /** Post open threads (or the given ones) to the PR; resolves true when the post went through. */
   exportToGithub(threadIds?: string[]): Promise<boolean>;
   setViewed(path: string, viewed: boolean): Promise<void>;
@@ -1740,11 +1740,12 @@ export const useStore = create<ReviewState>((set, get) => {
       try {
         res = await api.exportToGithub(threadIds ? { threadIds } : {});
       } catch (e) {
-        report('Posting to GitHub', e);
+        report('Adding to the GitHub review', e);
         return false;
       }
       const skipped = res.skipped.length ? `; skipped ${res.skipped.length} (${res.skipped.map((s) => s.reason).join(', ')})` : '';
-      get().flash(`Posted ${res.posted} comment${res.posted === 1 ? '' : 's'} to ${res.url}${skipped}`);
+      const where = res.review === 'created' ? 'a new pending review' : 'your pending review';
+      get().flash(`Added ${res.posted} comment${res.posted === 1 ? '' : 's'} to ${where} on ${res.url}${skipped} — submit it on GitHub`);
       return true;
     },
 

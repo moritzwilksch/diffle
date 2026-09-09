@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { CommentThread } from '../../src/shared/protocol.js';
-import { buildReview, exportToGithub, formatBody, GithubError, type GhRunner } from '../../src/server/github.js';
+import { buildReview, exportToGithub, formatBody, GithubError, repoOfPrUrl, type GhRunner } from '../../src/server/github.js';
+
+const PR_URL = 'https://github.com/o/r/pull/7';
+const PR_VIEW = JSON.stringify({ number: 7, url: PR_URL, headRefOid: 'a'.repeat(40) });
 
 const HEAD = 'a'.repeat(40);
 
@@ -20,7 +23,8 @@ describe('buildReview', () => {
     const { review, skipped } = buildReview([thread({ id: 'n', line: 3 }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' })], HEAD);
     expect(skipped).toEqual([]);
     expect(review.commit_id).toBe(HEAD);
-    expect(review.event).toBe('COMMENT');
+    // No `event`: the review GitHub creates from this stays pending.
+    expect(review).not.toHaveProperty('event');
     expect(review.comments).toEqual([
       { path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' },
       { path: 'a.txt', line: 8, side: 'LEFT', start_line: 5, start_side: 'LEFT', body: 'gone' },
@@ -50,13 +54,36 @@ describe('formatBody', () => {
   });
 });
 
+describe('repoOfPrUrl', () => {
+  it('takes the base repo from the pull request url, on github.com and elsewhere', () => {
+    expect(repoOfPrUrl(PR_URL)).toEqual({ owner: 'o', repo: 'r' });
+    expect(repoOfPrUrl('https://ghe.example.com/acme/app/pull/12')).toEqual({ owner: 'acme', repo: 'app' });
+    expect(() => repoOfPrUrl('https://github.com/o/r/issues/7')).toThrow(GithubError);
+  });
+});
+
 describe('exportToGithub', () => {
   const calls: { args: string[]; input?: string }[] = [];
-  const gh: GhRunner = async (args, { input }) => {
-    calls.push({ args, input });
-    if (args[0] === 'pr') return JSON.stringify({ number: 7, url: 'https://github.com/o/r/pull/7', headRefOid: HEAD });
-    return '{}';
-  };
+  /** `pending`: the id of a pending review the viewer already has, or null for none. */
+  function runner(pending: string | null = null): GhRunner {
+    return async (args, { input }) => {
+      calls.push({ args, input });
+      if (args[0] === 'pr') return PR_VIEW;
+      if (args[1] !== 'graphql') return '{}';
+      const query = (JSON.parse(input!) as { query: string }).query;
+      if (query.startsWith('query')) {
+        const nodes = pending ? [{ id: pending, author: { login: 'me' } }] : [];
+        return JSON.stringify({ data: { viewer: { login: 'me' }, repository: { pullRequest: { reviews: { nodes } } } } });
+      }
+      return JSON.stringify({ data: { addPullRequestReviewThread: { thread: { id: 't' } } } });
+    };
+  }
+  const gh = runner();
+  const snap = { root: '/r', newSha: HEAD, headSha: HEAD };
+
+  beforeEach(() => {
+    calls.length = 0;
+  });
 
   it('refuses the worktree and a new side that is not HEAD', async () => {
     const threads = [thread({ id: 'k' })];
@@ -65,23 +92,62 @@ describe('exportToGithub', () => {
     expect(calls).toEqual([]);
   });
 
-  it('posts one review through gh api from the repo root', async () => {
-    calls.length = 0;
-    const res = await exportToGithub({ snap: { root: '/r', newSha: HEAD, headSha: HEAD }, threads: [thread({ id: 'k' }), thread({ id: 's', stale: true })], run: gh });
-    expect(res).toEqual({ url: 'https://github.com/o/r/pull/7', posted: 1, skipped: [{ id: 's', reason: 'stale' }] });
-    expect(calls[0]!.args).toEqual(['pr', 'view', '--json', 'number,url,headRefOid']);
-    expect(calls[1]!.args).toEqual(['api', '--method', 'POST', 'repos/{owner}/{repo}/pulls/7/reviews', '--input', '-']);
-    expect(JSON.parse(calls[1]!.input!)).toMatchObject({ commit_id: HEAD, event: 'COMMENT', comments: [{ path: 'a.txt', line: 3, side: 'RIGHT' }] });
+  it('creates a pending review, without an event, when the viewer has none', async () => {
+    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 's', stale: true })], run: gh });
+    expect(res).toEqual({ url: PR_URL, posted: 1, review: 'created', skipped: [{ id: 's', reason: 'stale' }] });
+    expect(calls.map((c) => c.args)).toEqual([
+      ['pr', 'view', '--json', 'number,url,headRefOid'],
+      ['api', 'graphql', '--input', '-'],
+      ['api', '--method', 'POST', 'repos/{owner}/{repo}/pulls/7/reviews', '--input', '-'],
+    ]);
+    const body = JSON.parse(calls[2]!.input!) as Record<string, unknown>;
+    expect(body).toEqual({ commit_id: HEAD, comments: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' }] });
+  });
+
+  it('adds a thread per comment to the pending review the viewer already has', async () => {
+    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' })], run: runner('PRR_1') });
+    expect(res).toEqual({ url: PR_URL, posted: 2, review: 'existing', skipped: [] });
+    expect(calls.map((c) => c.args[0])).toEqual(['pr', 'api', 'api', 'api']);
+    // No reviews POST and no submit: the pending review is only extended.
+    expect(calls.every((c) => c.args[0] === 'pr' || c.args[1] === 'graphql')).toBe(true);
+    const inputs = calls.slice(2).map((c) => (JSON.parse(c.input!) as { variables: { input: unknown } }).variables.input);
+    expect(inputs).toEqual([
+      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' },
+      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 8, side: 'LEFT', body: 'gone', startLine: 5, startSide: 'LEFT' },
+    ]);
+  });
+
+  it('ignores a pending review that is not the viewer\'s own', async () => {
+    const others: GhRunner = async (args, o) => {
+      if (args[1] === 'graphql' && (JSON.parse(o.input!) as { query: string }).query.startsWith('query')) {
+        calls.push({ args, input: o.input });
+        return JSON.stringify({ data: { viewer: { login: 'me' }, repository: { pullRequest: { reviews: { nodes: [{ id: 'PRR_2', author: { login: 'someone' } }] } } } } });
+      }
+      return gh(args, o);
+    };
+    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: others });
+    expect(res.review).toBe('created');
+  });
+
+  it('says how many comments already landed when one of the appends fails', async () => {
+    let seen = 0;
+    const flaky: GhRunner = async (args, o) => {
+      if (args[1] === 'graphql' && !(JSON.parse(o.input!) as { query: string }).query.startsWith('query') && seen++ === 1) {
+        throw new GithubError('gh api graphql failed: line outside the diff', 502);
+      }
+      return runner('PRR_1')(args, o);
+    };
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' }), thread({ id: 'k2', line: 9 })], run: flaky })).rejects.toThrow(/added 1 of 2 comments/);
   });
 
   it('refuses when the PR head is not the local HEAD, before posting', async () => {
-    calls.length = 0;
-    const behind: GhRunner = async (args, o) => (args[0] === 'pr' ? JSON.stringify({ number: 7, url: 'u', headRefOid: 'c'.repeat(40) }) : gh(args, o));
-    await expect(exportToGithub({ snap: { root: '/r', newSha: HEAD, headSha: HEAD }, threads: [thread({ id: 'k' })], run: behind })).rejects.toThrow(/push first/);
-    expect(calls).toEqual([]);
+    const behind: GhRunner = async (args, o) => (args[0] === 'pr' ? JSON.stringify({ number: 7, url: PR_URL, headRefOid: 'c'.repeat(40) }) : gh(args, o));
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' })], run: behind })).rejects.toThrow(/push first/);
+    expect(calls).toEqual([]); // `behind` answers `pr view` itself, so nothing reached the api
+
   });
 
   it('answers 400 when every thread is skipped', async () => {
-    await expect(exportToGithub({ snap: { root: '/r', newSha: HEAD, headSha: HEAD }, threads: [thread({ id: 's', stale: true })], run: gh })).rejects.toMatchObject({ status: 400, message: /1 stale/ });
+    await expect(exportToGithub({ snap, threads: [thread({ id: 's', stale: true })], run: gh })).rejects.toMatchObject({ status: 400, message: /1 stale/ });
   });
 });

@@ -130,10 +130,12 @@ export interface GithubExportRequest {
 }
 
 export interface GithubExportResponse {
-  /** The pull request the review was posted to. */
+  /** The pull request whose pending review the comments joined; the human submits the review there. */
   url: string;
-  /** Review comments created. */
+  /** Review comments added to the pending review. */
   posted: number;
+  /** Whether this call opened the pending review or added to one that was already waiting. */
+  review: 'created' | 'existing';
   /** Threads left out, with why (stale, resolved, unknown id). */
   skipped: { id: string; reason: string }[];
 }

@@ -66,10 +66,16 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
           disabled={posting || thread.stale}
           onClick={post.fire}
-          title={thread.stale ? 'Stale threads cannot be posted to GitHub' : post.armed ? 'Click again to post this thread to the pull request' : 'Post this thread to the GitHub pull request'}
+          title={
+            thread.stale
+              ? 'Stale threads cannot be added to a GitHub review'
+              : post.armed
+                ? 'Click again to add this thread to the pending review'
+                : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
+          }
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Post?' : posted ? 'Posted' : null}
+          {post.armed ? 'Add?' : posted ? 'Added' : null}
         </button>
         <button className="ghost icon" onClick={() => (replying ? closeReply() : openReply(thread.id))} title={replying ? 'Cancel reply' : 'Reply'}>
           {replying ? <X size="0.875rem" /> : <Reply size="0.875rem" />}

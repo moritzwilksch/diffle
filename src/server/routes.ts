@@ -189,7 +189,7 @@ export function createApi(deps: ApiDeps): Hono {
     return c.body(null, 204);
   });
 
-  // Posts threads as a review on the checked-out branch's pull request through the local `gh`.
+  // Adds threads to a pending review on the checked-out branch's pull request through the local `gh`; the human submits it on GitHub.
   app.post('/api/github/export', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Partial<GithubExportRequest>;
     const ids = body.threadIds;
