@@ -38,7 +38,7 @@ import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
 import { rowOf } from './rows.js';
 import { reviewGeometry } from './geometry.js';
-import { onSelectionChanged, setViewer } from '../lsp/wordNav.js';
+import { onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installThreadHighlights } from './threadHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -86,7 +86,11 @@ const HEADER_CSS = `
 }
 [data-diffs-header][data-sticky] { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
 .lsp-hover { text-decoration: underline; cursor: pointer; }
-.lsp-focus { outline: 1px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+::highlight(diffle-word-focus) {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+}
 /* Word-level changes: the library's default tint sits too close to the line tint to pick out. */
 :host {
   /* Pin the code canvas to our ground. Our palette is the same GitHub high-contrast theme, so this only
@@ -166,8 +170,6 @@ function served(path: string): boolean {
   return language != null && lsp.enabled && lsp.servers.some((s) => s.languages.includes(language));
 }
 
-const WORD_CHAR = /[\p{L}\p{N}_]/u;
-
 /** The identifier under `clientX` inside a token span: its text and its offset within the token, or null on punctuation or space. */
 function wordAtPoint(el: HTMLElement, clientX: number): { start: number; text: string } | null {
   const node = el.firstChild;
@@ -184,12 +186,7 @@ function wordAtPoint(el: HTMLElement, clientX: number): { start: number; text: s
       break;
     }
   }
-  if (at === -1 || !WORD_CHAR.test(text[at]!)) return null;
-  let start = at;
-  while (start > 0 && WORD_CHAR.test(text[start - 1]!)) start--;
-  let end = at + 1;
-  while (end < text.length && WORD_CHAR.test(text[end]!)) end++;
-  return { start, text: text.slice(start, end) };
+  return wordsIn(text).find((word) => at >= word.start && at < word.start + word.text.length) ?? null;
 }
 
 /** Underline the hovered symbol while a modifier is held, like an editor's ctrl-hover. */
@@ -723,6 +720,7 @@ export function ReviewPane() {
 /** The file view's header: the way back to the diff list. */
 function FileViewBar({ path }: { path: string }) {
   const closeFullFile = useStore((s) => s.closeFullFile);
+  const external = useStore((s) => s.fileView?.external ?? false);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
     <div className="fileview-bar">
@@ -738,6 +736,7 @@ function FileViewBar({ path }: { path: string }) {
           {file.deletions > 0 && <span className="del">−{file.deletions}</span>}
         </span>
       )}
+      {external && <span className="file-meta">outside the repository, read-only</span>}
       <kbd>Ctrl+o</kbd>
     </div>
   );

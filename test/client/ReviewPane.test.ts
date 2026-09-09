@@ -330,7 +330,9 @@ describe('ReviewPane scroller effects', () => {
     expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(0);
 
     await act(() =>
-      useStore.setState({ fileView: { path: 'a.txt', item: file, from: { position: null, activePath: null } } }),
+      useStore.setState({
+        fileView: { path: 'a.txt', external: false, item: file, from: { position: null, activePath: null } },
+      }),
     );
     expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(1);
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(0);

@@ -94,6 +94,8 @@ Definitions, references, hover details, and symbol search come from a language s
 - `gA`: references
 - `gs` / `gS`: file or repository symbols
 
+A result outside the diff's files, such as the standard library, `site-packages`, or an ignored virtualenv, opens read-only: no comments, no further navigation.
+
 `diffle lsp` prints what each language would get, and what to install for the ones it cannot serve:
 
 ```

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
+import { LspPool } from '../../src/server/lsp/LspPool.js';
+import type { ApiDeps } from '../../src/server/routes.js';
 import { Session } from '../../src/server/Session.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
 import { WsHub } from '../../src/server/ws.js';
@@ -18,6 +20,7 @@ let session: Session;
 let base: URL;
 let config: UserConfigStore;
 let hub: WsHub;
+let deps: ApiDeps;
 const env = {
   ...process.env,
   GIT_AUTHOR_NAME: 't',
@@ -69,10 +72,8 @@ beforeAll(async () => {
   hub = new WsHub();
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3 });
-  server = new Server(
-    { session, config, extraAutoViewed: [], hub, lsp: null },
-    { port: 0, host: '127.0.0.1', dev: false },
-  );
+  deps = { session, config, extraAutoViewed: [], hub, lsp: null };
+  server = new Server(deps, { port: 0, host: '127.0.0.1', dev: false });
   base = await server.listen();
   await session.start({ kind: 'working' });
 });
@@ -200,6 +201,55 @@ describe('Server', () => {
     expect(JSON.parse(r.body)).toEqual({ error: 'request body too large' });
     expect(config.get()).toEqual(before);
     expect((await send('GET', '/api/snapshot')).status).toBe(200);
+  });
+
+  it('GET /api/file serves a file outside the snapshot only after the language server named it', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'diffle-site-'));
+    const site = join(outside, 'site.py');
+    const secret = join(outside, 'secret.py');
+    await writeFile(site, 'import sys\n');
+    await writeFile(secret, 'token = 1\n');
+    const file = (path: string, rev = 'new') => send('GET', `/api/file?path=${encodeURIComponent(path)}&rev=${rev}`);
+    try {
+      await writeFile(join(dir, 'source.py'), 'import sys\n');
+      await session.refresh();
+      deps.lsp = new LspPool({
+        overrides: { python: 'fake' },
+        preload: ['python'],
+        lookup: (command) => command,
+        root: dir,
+        read: async (p) => (await session.readSide(await session.snapshotter.current(), p, 'new'))?.toString() ?? null,
+        has: async (p) => session.hasSide(await session.snapshotter.current(), p, 'new'),
+        onStatus: () => {},
+        spawnProcess: () =>
+          spawn(process.execPath, [join(import.meta.dirname, '..', 'lsp', 'fake-lsp.mjs')], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, FAKE_LSP_ROOT: dir, FAKE_LSP_EXTERNAL: site },
+          }),
+      });
+      expect((await file(site)).status).toBe(404);
+      const def = await send('POST', '/api/lsp/definition', {
+        body: JSON.stringify({ path: 'source.py', line: 1, col: 0 }),
+      });
+      expect(def.status).toBe(200);
+      expect(JSON.parse(def.body).locations).toContainEqual({
+        path: site,
+        line: 1,
+        col: 0,
+        text: 'import sys',
+        external: true,
+      });
+      const served = await file(site);
+      expect(served.status).toBe(200);
+      expect(JSON.parse(served.body)).toEqual({ path: site, contents: 'import sys\n', binary: false });
+      // Only the new side, and only paths the server returned: a neighbour file stays unreadable.
+      expect((await file(site, 'old')).status).toBe(404);
+      expect((await file(secret)).status).toBe(404);
+    } finally {
+      await deps.lsp?.close();
+      deps.lsp = null;
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it('ignores lspCommands on PUT /api/config and writes the file owner-only', async () => {

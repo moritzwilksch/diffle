@@ -852,6 +852,7 @@ describe('client transitions', () => {
     const open = useStore.getState().openFile('a.txt');
     expect(useStore.getState().fileView).toEqual({
       path: 'a.txt',
+      external: false,
       item: null,
       from: { position: null, activePath: null },
     });
@@ -1149,27 +1150,57 @@ describe('symbol navigation', () => {
     expect(useStore.getState().symbolMenu).not.toBeNull();
   });
 
-  it('names where a dropped definition pointed', async () => {
+  it('an external definition opens the file read-only and keeps it open across a refresh', async () => {
     ready();
-    api.lspDefinition.mockResolvedValue({ locations: [], external: 0, hidden: 1, hiddenPath: '.venv/lib/pkg/m.py' });
-    await useStore.getState().goToDefinition(target);
-    expect(useStore.getState().toast).toMatch(/\.venv\/lib\/pkg\/m\.py.*hides/);
+    const site = '/usr/lib/python3/os.py';
+    api.file.mockResolvedValue({ path: site, contents: 'import sys\nsep = "/"\n', binary: false });
     api.lspDefinition.mockResolvedValue({
-      locations: [],
-      external: 1,
-      externalPath: '/elsewhere/main/m.py',
-      hidden: 0,
+      locations: [{ path: site, line: 2, col: 0, text: 'sep = "/"', external: true }],
     });
     await useStore.getState().goToDefinition(target);
-    expect(useStore.getState().toast).toMatch(/\/elsewhere\/main\/m\.py.*outside/);
+    let s = useStore.getState();
+    expect(api.file).toHaveBeenCalledWith(site, 'new', expect.anything());
+    expect(s.fileView).toMatchObject({ path: site, external: true, item: { kind: 'file' } });
+    expect(s.activePath).toBe(site);
+    expect(s.selection?.range.end).toBe(2);
+    // No comments on it, and no navigation from it: the server knows only snapshot files.
+    await useStore.getState().openDraft(s.selection!);
+    expect(useStore.getState().draft).toBeNull();
+    expect(useStore.getState().toast).toMatch(/repository files only/);
+    api.lspDefinition.mockClear();
+    await useStore.getState().goToDefinition({ ...target, path: site });
+    expect(api.lspDefinition).not.toHaveBeenCalled();
+    expect(useStore.getState().toast).toMatch(/starts from a repository file/);
+    useStore.setState({ toast: null });
+    await useStore.getState().openSymbols('document');
+    expect(api.lspSymbols).not.toHaveBeenCalled();
+    expect(useStore.getState().symbols.open).toBe(false);
+    expect(useStore.getState().toast).toMatch(/starts from a repository file/);
+    // Jumps inside the view (G, 123gg) reopen the same path; that must not read as the file vanishing.
+    useStore.setState({ toast: null });
+    await useStore.getState().goToLine(1);
+    expect(useStore.getState().toast).toBeNull();
+    expect(useStore.getState().fileView).toMatchObject({ path: site, external: true });
+    expect(useStore.getState().selection?.range.end).toBe(1);
+    // The tree never lists it; a refresh must not mistake that for the file vanishing.
+    api.snapshot.mockResolvedValueOnce(snap(2, 'working', ['a.py', 'b.py']));
+    await useStore.getState().refreshSnapshot();
+    s = useStore.getState();
+    expect(s.fileView?.path).toBe(site);
+    expect(api.file).toHaveBeenCalledTimes(1);
+    // Ctrl+o leaves it; the jumplist entry it leaves behind re-enters the external file instead of a tree lookup.
+    useStore.getState().jumpBack();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(useStore.getState().fileView).toBeNull();
+    useStore.getState().jumpBack();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(useStore.getState().fileView).toMatchObject({ path: site, external: true });
   });
 
   it('go to definition opens the target file and records the jump', async () => {
     ready();
     api.lspDefinition.mockResolvedValue({
       locations: [{ path: 'b.py', line: 2, col: 0, text: 'y = 2' }],
-      external: 0,
-      hidden: 0,
     });
     await useStore.getState().goToDefinition(target);
     expect(api.lspDefinition).toHaveBeenCalledWith({ path: 'a.py', line: 3, col: 4 });
@@ -1195,15 +1226,13 @@ describe('symbol navigation', () => {
     ready();
     api.lspTypeDefinition.mockResolvedValue({
       locations: [{ path: 'b.py', line: 1, col: 0, text: 'class T' }],
-      external: 0,
-      hidden: 0,
     });
     await useStore.getState().goToTypeDefinition(target);
     expect(api.lspTypeDefinition).toHaveBeenCalledWith({ path: 'a.py', line: 3, col: 4 });
     expect(api.lspDefinition).not.toHaveBeenCalled();
     expect(useStore.getState().activePath).toBe('b.py');
     expect(useStore.getState().selection?.range.end).toBe(1);
-    api.lspTypeDefinition.mockResolvedValue({ locations: [], external: 0, hidden: 0 });
+    api.lspTypeDefinition.mockResolvedValue({ locations: [] });
     await useStore.getState().goToTypeDefinition(target);
     expect(useStore.getState().toast).toMatch(/No type definition found for foo/);
   });
@@ -1216,8 +1245,6 @@ describe('symbol navigation', () => {
         { path: 'b.py', line: 1, col: 0, text: 'class Param' },
         { path: 'b.py', line: 2, col: 0, text: 'class Ret' },
       ],
-      external: 1,
-      hidden: 0,
     });
     await useStore.getState().goToTypeDefinition(target);
     const s = useStore.getState();
@@ -1238,8 +1265,6 @@ describe('symbol navigation', () => {
         { path: 'b.py', line: 1, col: 0, text: 'x = 1' },
         { path: 'b.py', line: 2, col: 0, text: 'y = 2' },
       ],
-      external: 0,
-      hidden: 0,
     });
     await useStore.getState().findReferences(target);
     let s = useStore.getState();
@@ -1268,6 +1293,7 @@ describe('symbol navigation', () => {
     useStore.setState({
       fileView: {
         path: 'a.py',
+        external: false,
         item: { kind: 'file', file: { name: 'a.py', contents: 'foo\nbar\nfoo\nfoo\n', cacheKey: 'a' } },
         from: { position: null, activePath: null },
       },
@@ -1489,14 +1515,12 @@ describe('request ownership', () => {
     ready();
     const slow = deferred<{
       locations: { path: string; line: number; col: number; text: string }[];
-      external: number;
-      hidden: number;
     }>();
     api.lspDefinition.mockReturnValueOnce(slow.promise);
     const go = useStore.getState().goToDefinition({ path: 'a.py', side: 'new', line: 3, col: 4, text: 'foo' });
     api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
     await useStore.getState().switchMode({ kind: 'pr' });
-    slow.resolve({ locations: [{ path: 'b.py', line: 2, col: 0, text: 'y = 2' }], external: 0, hidden: 0 });
+    slow.resolve({ locations: [{ path: 'b.py', line: 2, col: 0, text: 'y = 2' }] });
     await go;
     await new Promise((r) => setTimeout(r, 0));
     const s = useStore.getState();

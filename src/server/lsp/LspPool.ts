@@ -69,6 +69,15 @@ export class LspPool {
     };
   }
 
+  /** Reads an external file only if a running server named it. */
+  async readExternal(path: string): Promise<Buffer | null> {
+    for (const { bridge } of this.entries.values()) {
+      const contents = await bridge.readExternal(path);
+      if (contents !== null) return contents;
+    }
+    return null;
+  }
+
   // Every query is async, so a missing server reads as a rejection like any other LSP failure.
   async definition(pos: LspPosition): Promise<LspLocationsResponse> {
     return this.bridgeFor(pos.path).definition(pos);

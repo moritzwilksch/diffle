@@ -9,7 +9,7 @@ import {
   type ChangedFile,
   type CommentThread,
   type FileResponse,
-  type LspLocationsResponse,
+  type LspLocation,
   type LspPosition,
   type LspStatus,
   type LspSymbol,
@@ -98,7 +98,7 @@ export interface SearchState {
   /** Bumped by `g/` so the box takes focus again after `n` / `N` blurred it. */
   focusNonce: number;
   query: string;
-  matches: SearchMatch[];
+  matches: Match[];
   index: number;
   loading: boolean;
   truncated: boolean;
@@ -139,13 +139,16 @@ export interface HoverState {
   anchor: { left: number; top: number; bottom: number };
 }
 
+/** A line a result list jumps to: a search hit, or a language-server location that may be external. */
+export type Match = SearchMatch & Pick<LspLocation, 'external'>;
+
 /** Full-screen list of a symbol's references; Enter jumps to the highlighted one. */
 export interface ReferencesState {
   open: boolean;
   /** References of `symbol`, or the candidate types a type-definition query returned for it. */
   kind: 'references' | 'types';
   symbol: string;
-  items: SearchMatch[];
+  items: Match[];
   index: number;
 }
 
@@ -168,6 +171,8 @@ export interface JumpPosition {
   line: number;
   /** The position sits in the file view of `path`, not in the diff list. */
   full?: boolean;
+  /** That file view shows a file outside the snapshot (see FileView.external). */
+  external?: boolean;
 }
 
 /**
@@ -176,6 +181,8 @@ export interface JumpPosition {
  */
 export interface FileView {
   path: string;
+  /** A file outside the snapshot that the language server named (stdlib, site-packages): absolute path, read-only, no comments. */
+  external: boolean;
   item: Loaded | null;
   from: { position: JumpPosition | null; activePath: string | null };
 }
@@ -341,8 +348,11 @@ export interface ReviewState {
   loadFile(path: string, side: Side): Promise<FileResponse>;
   /** Fetch the diff of a file that loaded as oversized. No-op for anything else. */
   loadPatch(path: string): Promise<void>;
-  /** Show a path's whole new side in the file view, with the cursor on `line` or the top. No-op for deleted files. */
-  openFullFile(path: string, line?: number): Promise<void>;
+  /**
+   * Show a path's whole new side in the file view, with the cursor on `line` or the top. No-op for
+   * deleted files. `external` opens a file the language server named outside the snapshot instead.
+   */
+  openFullFile(path: string, line?: number, external?: boolean): Promise<void>;
   /** Back to the diff list, at the position the file view was entered from. */
   closeFullFile(): void;
   setSelection(sel: CodeViewLineSelection | null): void;
@@ -744,10 +754,13 @@ export const useStore = create<ReviewState>((set, get) => {
     // The file view closes with its mode or its file; it refetches when the file's change moved
     // (its new side differs), when it entered or left the changed set (its cached contents were
     // dropped), or when a side moved: an unchanged file's content follows the commit it is read from.
+    // An external file is not in the tree and follows no side.
     const prevView = get().fileView;
-    let fileView = modeChanged || prevView == null || !next.tree.includes(prevView.path) ? null : prevView;
+    let fileView =
+      modeChanged || prevView == null || (!prevView.external && !next.tree.includes(prevView.path)) ? null : prevView;
     const viewMoved =
       prevView != null &&
+      !prevView.external &&
       (sidesMoved ||
         prevChanged.has(prevView.path) !== nextChanged.has(prevView.path) ||
         reload.includes(prevView.path));
@@ -783,7 +796,7 @@ export const useStore = create<ReviewState>((set, get) => {
     }
     await Promise.all([
       loadPatches(next, reload, g),
-      ...(fileView && (viewMoved || !fileView.item) ? [loadFileView(fileView.path, g, true)] : []),
+      ...(fileView && (viewMoved || !fileView.item) ? [loadFileView(fileView.path, fileView.external, g, true)] : []),
     ]);
   };
 
@@ -793,12 +806,12 @@ export const useStore = create<ReviewState>((set, get) => {
    * `refresh` refetches the view already open on `path`, keeping its item and cursor until the
    * response commits.
    */
-  const loadFileView = async (path: string, g: number, refresh = false) => {
+  const loadFileView = async (path: string, external: boolean, g: number, refresh = false) => {
     // Moving between files inside the view keeps the original way back to the diff.
     const from = get().fileView?.from ?? { position: currentPosition(), activePath: get().activePath };
     if (!refresh)
       set({
-        fileView: { path, item: null, from },
+        fileView: { path, external, item: null, from },
         selection: null,
         visualAnchor: null,
         draft: null,
@@ -817,7 +830,7 @@ export const useStore = create<ReviewState>((set, get) => {
     }
     if (!current(g) || get().fileView?.path !== path) return;
     set((s) => ({
-      fileView: { path, item, from: s.fileView?.from ?? from },
+      fileView: { path, external, item, from: s.fileView?.from ?? from },
       ...regen(s, [path]),
       contents: contents == null ? s.contents : { ...s.contents, [path]: { ...s.contents[path], new: contents } },
     }));
@@ -839,7 +852,9 @@ export const useStore = create<ReviewState>((set, get) => {
     const sel = get().selection;
     if (!sel) return null;
     const path = pathFromItemId(sel.id);
-    return { path, side: sideOf(sel), line: sel.range.end, ...(get().fileView?.path === path ? { full: true } : {}) };
+    const view = get().fileView;
+    if (view?.path !== path) return { path, side: sideOf(sel), line: sel.range.end };
+    return { path, side: sideOf(sel), line: sel.range.end, full: true, ...(view.external ? { external: true } : {}) };
   };
 
   /** Remember where we are before a jump (vim jumplist semantics). */
@@ -893,7 +908,7 @@ export const useStore = create<ReviewState>((set, get) => {
     // Switching views first, outside the silent window: the load records no jump of its own.
     if (pos.full && get().fileView?.path !== pos.path) {
       const g = generation;
-      await loadFileView(pos.path, g);
+      await loadFileView(pos.path, pos.external ?? false, g);
       if (!current(g) || get().fileView?.path !== pos.path) return;
     } else if (!pos.full && get().fileView) {
       set({ fileView: null, selection: null, visualAnchor: null, draft: null, focusedThread: null });
@@ -991,11 +1006,11 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   /** Open `path` and put the cursor on its new-side `line` at eye level, expanding collapsed context if needed. */
-  const jumpToLine = async (path: string, line: number) => {
+  const jumpToLine = async (path: string, line: number, external = false) => {
     // One jumplist entry per jump, taken at the origin. Opening the file parks the cursor on its
     // first hunk on the way; recording that would make Ctrl+o land somewhere the reader never was.
     recordJump();
-    await quietly(() => get().openFile(path));
+    await quietly(() => (external ? get().openFullFile(path, undefined, true) : get().openFile(path)));
     ensureExpanded(path);
     const items = nav();
     const itemIndex = items.findIndex((i) => i.path === path);
@@ -1027,30 +1042,23 @@ export const useStore = create<ReviewState>((set, get) => {
     return lspBlocker(lsp, path);
   };
 
+  /** Why the server cannot be asked about `target`, or null. Only snapshot files on the new side are open in it. */
+  const targetBlocker = (target: Pick<TokenTarget, 'path' | 'side'>): string | null =>
+    blocker(target.path) ??
+    (target.side === 'old'
+      ? 'Symbol navigation works on the new side only'
+      : get().fileView?.external
+        ? 'Symbol navigation starts from a repository file'
+        : null);
+
   /** The LSP position for a hovered token, or null after flashing why not. */
   const lspPosition = (target: TokenTarget | null | undefined): LspPosition | null => {
-    const reason =
-      blocker() ??
-      (!target
-        ? 'Hover a symbol first'
-        : target.side === 'old'
-          ? 'Symbol navigation works on the new side only'
-          : blocker(target.path));
+    const reason = !target ? (blocker() ?? 'Hover a symbol first') : targetBlocker(target);
     if (reason) {
       get().flash(reason);
       return null;
     }
     return { path: target!.path, line: target!.line, col: target!.col };
-  };
-
-  // Every dropped result has a reason the user can act on: an ignored dir needs a
-  // .gitignore or venv change, another worktree means the server's search path
-  // points at the wrong checkout.
-  const noDefinitionMessage = (symbol: string, res: LspLocationsResponse, what = 'definition') => {
-    if (res.hiddenPath) return `${symbol} resolves to ${res.hiddenPath}, which the diff hides (ignored or untracked)`;
-    if (res.externalPath) return `${symbol} resolves to ${res.externalPath}, outside the repository`;
-    if (res.external) return `${symbol} is defined outside the repository`;
-    return `No ${what} found for ${symbol}`;
   };
 
   /**
@@ -1074,15 +1082,14 @@ export const useStore = create<ReviewState>((set, get) => {
       const res = await (kind === 'definition' ? api.lspDefinition(pos) : api.lspTypeDefinition(pos));
       if (!current(g)) return;
       const loc = res.locations[0];
-      if (!loc) return get().flash(noDefinitionMessage(target!.text, res, kind));
+      if (!loc) return get().flash(`No ${kind} found for ${target!.text}`);
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
-        const items = res.locations.map((l) => ({ path: l.path, line: l.line, text: l.text }));
-        set({ references: { open: true, kind: 'types', symbol: target!.text, items, index: 0 } });
+        set({ references: { open: true, kind: 'types', symbol: target!.text, items: res.locations, index: 0 } });
         return;
       }
-      await jumpToLine(loc.path, loc.line);
+      await jumpToLine(loc.path, loc.line, loc.external);
     } catch (e) {
       if (current(g)) report(kind === 'definition' ? 'Go to definition' : 'Go to type definition', e);
     }
@@ -1334,7 +1341,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const index = ((search.index < 0 ? (d === 1 ? -1 : 0) : search.index) + d + n) % n;
       const m = search.matches[index]!;
       set({ search: { ...search, index } });
-      void jumpToLine(m.path, m.line);
+      void jumpToLine(m.path, m.line, m.external);
     },
     async searchWord(delta) {
       const word = lspTarget.get()?.text;
@@ -1397,7 +1404,7 @@ export const useStore = create<ReviewState>((set, get) => {
         return;
       }
       // Only the server can answer on the new side; elsewhere the menu's actions flash their own reason.
-      if (target.side === 'new' && !blocker(target.path)) {
+      if (!targetBlocker(target)) {
         const g = generation;
         let kind: string | null = null;
         try {
@@ -1418,7 +1425,7 @@ export const useStore = create<ReviewState>((set, get) => {
     hover: null,
     async requestHover(target, anchor) {
       const t = ++hoverSeq;
-      if (get().symbolMenu || target.side === 'old' || blocker(target.path)) return;
+      if (get().symbolMenu || targetBlocker(target)) return;
       const g = generation;
       try {
         const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
@@ -1473,7 +1480,7 @@ export const useStore = create<ReviewState>((set, get) => {
       try {
         const res = await api.lspReferences(pos);
         if (!current(g)) return;
-        const items = res.locations.map((l) => ({ path: l.path, line: l.line, text: l.text }));
+        const items = res.locations;
         if (items.length === 0) return get().flash(`No references to ${target!.text}`);
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
@@ -1511,7 +1518,7 @@ export const useStore = create<ReviewState>((set, get) => {
           },
         }));
       }
-      void jumpToLine(m.path, m.line);
+      void jumpToLine(m.path, m.line, m.external);
     },
     closeReferences() {
       set((s) => ({ references: { ...s.references, open: false } }));
@@ -1520,7 +1527,7 @@ export const useStore = create<ReviewState>((set, get) => {
     async openSymbols(scope) {
       const path = scope === 'document' ? get().activePath : null;
       if (scope === 'document' && !path) return get().flash('Move to a file first');
-      const reason = blocker(path ?? undefined);
+      const reason = path ? targetBlocker({ path, side: 'new' }) : blocker();
       if (reason) return get().flash(reason);
       set({
         symbols: {
@@ -1904,17 +1911,20 @@ export const useStore = create<ReviewState>((set, get) => {
       await loadBatch(snap, [path], generation);
     },
 
-    async openFullFile(path, line) {
+    async openFullFile(path, line, external = false) {
       const snap = get().snapshot;
       if (!snap) return;
-      if (!snap.tree.includes(path)) {
+      // An external file is never in the tree; a jump inside its open view must not read that as vanished.
+      const view = get().fileView;
+      const isExternal = external || (view?.path === path && view.external);
+      if (!isExternal && !snap.tree.includes(path)) {
         get().flash(`${path} no longer exists on this side`);
         return;
       }
       const g = generation;
-      if (get().fileView?.path !== path) {
+      if (view?.path !== path) {
         recordJump();
-        await loadFileView(path, g);
+        await loadFileView(path, isExternal, g);
         if (!current(g) || get().fileView?.path !== path) return;
       }
       const item = get().fileView?.item;
@@ -1958,6 +1968,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     async openDraft(sel) {
+      if (get().fileView?.external) return get().flash('Comments go on repository files only');
       const path = pathFromItemId(sel.id);
       set({ draft: { path, selection: sel }, selection: sel, activePath: path, replyTo: null });
     },
