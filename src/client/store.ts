@@ -327,7 +327,7 @@ export interface ReviewState {
   deleteThread(id: string): Promise<void>;
   clearThreads(): Promise<void>;
   deleteStaleThreads(): Promise<void>;
-  /** Adds threads to a pending review on the branch's GitHub pull request; the toast says where they went or why not. The human submits the review on GitHub. */
+  /** Adds threads to a pending review on the branch's GitHub pull request; the human submits the review on GitHub. A toast appears only when threads are skipped or the post fails. */
   /** Post open threads (or the given ones) to the PR; resolves true when the post went through. */
   exportToGithub(threadIds?: string[]): Promise<boolean>;
   setViewed(path: string, viewed: boolean): Promise<void>;
@@ -1743,9 +1743,10 @@ export const useStore = create<ReviewState>((set, get) => {
         report('Adding to the GitHub review', e);
         return false;
       }
-      const skipped = res.skipped.length ? `; skipped ${res.skipped.length} (${res.skipped.map((s) => s.reason).join(', ')})` : '';
-      const where = res.review === 'created' ? 'a new pending review' : 'your pending review';
-      get().flash(`Added ${res.posted} comment${res.posted === 1 ? '' : 's'} to ${where} on ${res.url}${skipped} — submit it on GitHub`);
+      // Success is shown by the button's "Added" state; only skipped threads need a toast.
+      if (res.skipped.length) {
+        get().flash(`Skipped ${res.skipped.length} of ${res.posted + res.skipped.length} (${res.skipped.map((s) => s.reason).join(', ')})`);
+      }
       return true;
     },
 
