@@ -14,15 +14,6 @@ comments as a prompt for an agent.
   <img alt="diffle reviewing a git diff" src=".github/assets/diffle-light.png">
 </picture>
 
-```text
-src/app.py:42-44
-
-> for x in items:
->     process(x)
-
-Batch this instead of looping.
-```
-
 ## Usage
 
 ```bash
