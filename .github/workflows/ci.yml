@@ -33,6 +33,8 @@ jobs:
         run: |
           npm ci
           npm run lint
+      - name: Check formatting
+        run: npm run format:check
 
   build:
     runs-on: ubuntu-latest
