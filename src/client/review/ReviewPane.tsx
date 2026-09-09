@@ -24,6 +24,7 @@ import { SymbolPicker } from '../lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '../lsp/target.js';
 import { isCollapsed, itemDeps, itemId, itemVersion, orderedPaths, pathFromItemId, viewedState, visibleThreads, type ItemVersion } from '../model.js';
 import { remPx } from '../scale.js';
+import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
 import { rowOf } from './rows.js';
 import { onSelectionChanged, setViewer } from '../lsp/wordNav.js';
@@ -82,7 +83,8 @@ const HEADER_CSS = `
 .lsp-focus { outline: 1px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
 /* Word-level changes: the library's default tint sits too close to the line tint to pick out. */
 :host {
-  /* The shiki theme's own canvas colour would leave the code area a different shade from the panes around it. */
+  /* Pin the code canvas to our ground. Our palette is the same GitHub high-contrast theme, so this only
+     guarantees the match for the dark panes, which share --bg where the theme would tint them. */
   --diffs-dark-bg: var(--bg);
   --diffs-light-bg: var(--bg);
   /* Dark keeps context rows on the same ground as the panes; light keeps the library's faint grey tint. */
@@ -169,6 +171,7 @@ function markHover(el: HTMLElement, on: boolean): void {
 
 const codeViewOptions = {
   unsafeCSS: HEADER_CSS,
+  theme: SHIKI_THEMES,
   loadDiffFiles,
   stickyHeaders: true,
   enableLineSelection: true,

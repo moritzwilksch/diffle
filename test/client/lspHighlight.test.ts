@@ -17,13 +17,15 @@ vi.mock('@pierre/diffs', () => ({
     return {
       codeToTokensBase: (line: string, opts: { theme: string }) => {
         tokenized.push(line);
-        return [[{ content: line, color: opts.theme === 'pierre-dark' ? '#abc' : '#def' }]];
+        // The literal is pinned to SHIKI_THEMES.dark by a test below; a vi.mock factory cannot read an import.
+        return [[{ content: line, color: opts.theme === 'github-dark-high-contrast' ? '#abc' : '#def' }]];
       },
     };
   },
 }));
 
 const { CodeLine, useHighlighted } = await import('../../src/client/lsp/highlight.js');
+const { SHIKI_THEMES } = await import('../../src/client/theme.js');
 
 const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
 const items = files.flatMap((path) => [0, 1, 2].map((n) => ({ path, text: `${path}:${n}` })));
@@ -133,5 +135,12 @@ describe('useHighlighted', () => {
     expect(host.querySelector('.hl span')).toHaveProperty('style.color', 'rgb(221, 238, 255)');
     await act(() => root.render(createElement(List, { near: 0, theme: 'light', rows: items.slice(0, 3) })));
     expect(host.querySelectorAll('.plain')).toHaveLength(3);
+  });
+});
+
+describe('theme names', () => {
+  // The mock above matches on these literals; a rename here must reach it.
+  it('are the ones the mocked highlighter keys on', () => {
+    expect(SHIKI_THEMES).toEqual({ light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' });
   });
 });

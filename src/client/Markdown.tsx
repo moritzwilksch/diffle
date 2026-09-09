@@ -6,6 +6,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { HighlightedCode } from './lsp/highlight.js';
 import { useStore } from './store.js';
+import { SHIKI_THEMES } from './theme.js';
 
 /**
  * Comment body as GitHub-flavored markdown. Raw HTML stays literal and images
@@ -76,7 +77,7 @@ function Highlighted({ path, source }: { path: string; source: string }) {
   const pool = useWorkerPool();
   const [primed, setPrimed] = useState(0);
   const file = useMemo(() => ({ name: path, contents: source, cacheKey: `suggestion:${path}:${source}` }), [path, source]);
-  const options = useMemo(() => ({ themeType: theme, disableFileHeader: true, disableLineNumbers: true, overflow: 'wrap' as const }), [theme]);
+  const options = useMemo(() => ({ theme: SHIKI_THEMES, themeType: theme, disableFileHeader: true, disableLineNumbers: true, overflow: 'wrap' as const }), [theme]);
   // The File component paints nothing until a highlight exists, so fill the pool's cache first and re-render on it.
   useEffect(() => {
     let live = true;

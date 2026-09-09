@@ -106,7 +106,9 @@ try {
     await thread.click();
     await page.locator('.comment-card.focused').waitFor();
     await page.waitForTimeout(750);
-    await page.getByText('VersionDataLoader', { exact: true }).first().click();
+    // Shiki merges adjacent tokens that share a colour, so the symbol may sit in a span with its
+    // trailing punctuation. Match the start of the token; the click still lands inside the word.
+    await page.locator('span[data-char]', { hasText: /^VersionDataLoader\b/ }).first().click();
     await page.locator('.symbol-menu').waitFor();
     await page.waitForTimeout(750);
     await page.screenshot({

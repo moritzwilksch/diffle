@@ -1,75 +1,76 @@
 :root {
   color-scheme: light dark;
-  /* Light: Primer-derived scale. One blue (accent = callable), one red (danger = del), one amber (warn = value);
-     every text colour clears 4.5:1 on --bg-2. Dark below mirrors the same roles. */
+  /* Both palettes are read off the Shiki themes the code is highlighted with (see `SHIKI_THEMES` in theme.ts):
+     github-light-high-contrast here, github-dark-high-contrast below. --bg is the theme's editor canvas, the
+     kind-* colours are its function/constant/variable token colours, so chrome and code never disagree. */
   --bg: #ffffff;
-  --bg-2: #f6f8fa;
-  --bg-3: #e6eaef;
-  --fg: #1f2328;
-  --fg-2: #4c5560;
-  --border: #d0d7de;
-  --accent: #0969da;
+  --bg-2: #f0f3f6;
+  --bg-3: #e7ecf0;
+  --fg: #0e1116;
+  --fg-2: #66707b;
+  --border: #acb6c0;
+  --accent: #0349b4;
   --accent-fg: #ffffff;
-  --danger: #cf222e;
-  --warn: #9a6700;
-  --add: #1a7f37;
-  --del: #cf222e;
-  --kind-type: #8250df;
-  --kind-callable: #0969da;
-  --kind-value: #9a6700;
-  --search-match: #fff1a8;
-  --search-current: #f2b705;
-  --search-current-fg: #1f2328;
+  --danger: #a0111f;
+  --warn: #744500;
+  --add: #055d20;
+  --del: #a0111f;
+  --kind-type: #023b95;
+  --kind-callable: #622cbc;
+  --kind-value: #702c00;
+  --search-match: #f0ce5380;
+  --search-current: #e09b13;
+  --search-current-fg: #0e1116;
   --bg-card: #ffffff;
-  --shadow-card: 0 1px 2px rgba(31, 35, 40, 0.08), 0 0.1875rem 0.625rem rgba(31, 35, 40, 0.1);
+  --shadow-card: 0 1px 2px rgba(14, 17, 22, 0.08), 0 0.1875rem 0.625rem rgba(14, 17, 22, 0.1);
   --mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
-/* Dark: one near-black ground everywhere, Zed One Dark accents. Sidebars share --bg so only borders divide panes. */
+/* Dark: the theme's own near-black canvas everywhere, its token colours for our roles. Sidebars share --bg so only borders divide panes. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #050505;
-    --bg-2: #050505;
-    --bg-3: #25282f;
-    --fg: #e6e8eb;
-    --fg-2: #a6acb5;
-    --border: #262a30;
-    --accent: #61afef;
-    --accent-fg: #050505;
-    --danger: #ef6b73;
-    --warn: #e5c07b;
-    --add: #98c379;
-    --del: #ef6b73;
-    --kind-type: #d55fde;
-    --kind-callable: #61afef;
-    --kind-value: #f19640;
-    --search-match: #5a4a06;
-    --search-current: #e5c07b;
-    --search-current-fg: #050505;
-    --bg-card: #12151a;
+    --bg: #0a0c10;
+    --bg-2: #0a0c10;
+    --bg-3: #272b33;
+    --fg: #f0f3f6;
+    --fg-2: #bdc4cc;
+    --border: #2f353d;
+    --accent: #71b7ff;
+    --accent-fg: #0a0c10;
+    --danger: #ff6a69;
+    --warn: #f0ce53;
+    --add: #26cd4d;
+    --del: #ff6a69;
+    --kind-type: #91cbff;
+    --kind-callable: #dbb7ff;
+    --kind-value: #ffb757;
+    --search-match: #fbd66940;
+    --search-current: #e09b13;
+    --search-current-fg: #0a0c10;
+    --bg-card: #14181f;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0.1875rem 0.625rem rgba(0, 0, 0, 0.6);
   }
 }
 :root[data-theme='dark'] {
-  --bg: #050505;
-  --bg-2: #050505;
-  --bg-3: #25282f;
-  --fg: #e6e8eb;
-  --fg-2: #a6acb5;
-  --border: #262a30;
-  --accent: #61afef;
-  --accent-fg: #050505;
-  --danger: #ef6b73;
-  --warn: #e5c07b;
-  --add: #98c379;
-  --del: #ef6b73;
-  --kind-type: #d55fde;
-  --kind-callable: #61afef;
-  --kind-value: #f19640;
-  --search-match: #5a4a06;
-  --search-current: #e5c07b;
-  --search-current-fg: #050505;
-  --bg-card: #12151a;
+  --bg: #0a0c10;
+  --bg-2: #0a0c10;
+  --bg-3: #272b33;
+  --fg: #f0f3f6;
+  --fg-2: #bdc4cc;
+  --border: #2f353d;
+  --accent: #71b7ff;
+  --accent-fg: #0a0c10;
+  --danger: #ff6a69;
+  --warn: #f0ce53;
+  --add: #26cd4d;
+  --del: #ff6a69;
+  --kind-type: #91cbff;
+  --kind-callable: #dbb7ff;
+  --kind-value: #ffb757;
+  --search-match: #fbd66940;
+  --search-current: #e09b13;
+  --search-current-fg: #0a0c10;
+  --bg-card: #14181f;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0.1875rem 0.625rem rgba(0, 0, 0, 0.6);
 }
 

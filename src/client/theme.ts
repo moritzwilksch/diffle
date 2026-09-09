@@ -1,4 +1,12 @@
+import type { ThemesType } from '@pierre/diffs';
+
 export type ThemeChoice = 'system' | 'light' | 'dark';
+
+/**
+ * The Shiki themes the viewer, the markdown renderer and our own tokenizers all highlight with.
+ * The app palette in `styles.css` is derived from these two, so code and chrome share one look.
+ */
+export const SHIKI_THEMES: ThemesType = { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' };
 const KEY = 'diffle:theme';
 
 export function readTheme(): ThemeChoice {
