@@ -24,7 +24,7 @@ export function ModePicker() {
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const targetRef = useRef<HTMLInputElement>(null);
-  const compareButton = useRef<HTMLButtonElement>(null);
+  const comparisonToggle = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -130,15 +130,22 @@ export function ModePicker() {
                       refs={refs}
                       allowWorktree
                       inputRef={targetRef}
-                      onAccept={() => requestAnimationFrame(() => compareButton.current?.focus())}
+                      onAccept={() => comparisonToggle.current?.focus()}
                     />
                   </div>
                   <div
                     className="toggle ref-comparison"
+                    ref={comparisonToggle}
                     role="group"
                     aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
                     tabIndex={0}
                     onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!e.repeat) e.currentTarget.closest('form')?.requestSubmit();
+                        return;
+                      }
                       if (e.key !== ' ') return;
                       e.preventDefault();
                       e.stopPropagation();
@@ -209,7 +216,6 @@ export function ModePicker() {
               )}
               <button
                 className="primary"
-                ref={compareButton}
                 type="submit"
                 disabled={pane === 'refs' ? !a.trim() || !b.trim() : pane === 'commits' && !validCount}
               >
