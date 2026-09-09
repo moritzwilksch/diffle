@@ -334,7 +334,7 @@ export interface ReviewState {
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
   switchMode(req: ModeRequest): Promise<void>;
-  /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
+  /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. Expands the file if collapsed. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
   loadFile(path: string, side: Side): Promise<FileResponse>;
@@ -856,7 +856,7 @@ export const useStore = create<ReviewState>((set, get) => {
     set({ jumps: next, jumpIndex: next.length });
   };
 
-  /** Expand a collapsed file so a jump into it has something to land on. */
+  /** Expand a collapsed file so a jump to it has something to land on. */
   const ensureExpanded = (path: string) => {
     if (!isCollapsed(get(), path)) return;
     set((s) => ({ collapsed: { ...s.collapsed, [path]: false } }));
@@ -2023,14 +2023,15 @@ export const useStore = create<ReviewState>((set, get) => {
 
     jumpTo(path, line, side) {
       recordJump();
-      if (line != null) ensureExpanded(path);
+      // Every jump is an explicit request to read the file: a collapsed one (viewed, generated, zc) opens.
+      ensureExpanded(path);
       const id = itemIdOf(get(), path);
       if (line == null) {
         // Opening a file: the cursor lands on its first hunk so ] / [ / n / N continue from there.
         const items = nav();
         const itemIndex = items.findIndex((i) => i.id === id);
         const item = items[itemIndex];
-        if (item && !item.collapsed && item.rows.length) {
+        if (item && item.rows.length) {
           const rowIndex = Math.max(
             0,
             item.rows.findIndex((r) => r.hunkStart),

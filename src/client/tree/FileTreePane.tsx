@@ -117,12 +117,17 @@ export function FileTreePane() {
     const onClick = (e: MouseEvent) => {
       const path = pathOfDecorationClick(e);
       if (!path) {
-        // Choosing a file is the start of reading it: the keys should drive the cursor, not the tree.
-        // The tree focuses its row on click, so hand focus over a frame later.
         const row = (e.composedPath() as HTMLElement[]).find(
           (n) => n instanceof HTMLElement && n.dataset.itemType === 'file',
         );
-        if (row) requestAnimationFrame(focusReview);
+        if (!row) return;
+        // Choosing a file is the start of reading it: the keys should drive the cursor, not the tree.
+        // The tree focuses its row on click, so hand focus over a frame later.
+        requestAnimationFrame(focusReview);
+        // Re-clicking the active file changes no selection, so `onSelectionChange` stays silent;
+        // the click still asks to read it, which matters when it was collapsed (zc, zC, viewed).
+        const s = useStore.getState();
+        if (row.dataset.itemPath === s.activePath) void s.openFile(s.activePath);
         return;
       }
       e.preventDefault();

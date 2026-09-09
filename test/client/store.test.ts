@@ -592,6 +592,31 @@ describe('client transitions', () => {
     );
   });
 
+  it('opening a collapsed file expands it and parks the cursor on its first hunk', async () => {
+    const changed = [
+      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      { path: 'gen.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true },
+    ];
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'gen.txt']));
+    api.viewed.mockResolvedValueOnce([{ path: 'a.txt', blob: 'b1', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'gen.txt']), changed });
+    await useStore.getState().boot();
+    expect(isCollapsed(useStore.getState(), 'a.txt')).toBe(true);
+    expect(isCollapsed(useStore.getState(), 'gen.txt')).toBe(true);
+    // A viewed file, as the tree click on it requests.
+    await useStore.getState().openFile('a.txt');
+    let s = useStore.getState();
+    expect(isCollapsed(s, 'a.txt')).toBe(false);
+    expect(s.activePath).toBe('a.txt');
+    expect(s.selection?.id).toMatch(/^diff:a\.txt@/);
+    // A generated one likewise; the other file's state is untouched.
+    await useStore.getState().openFile('gen.txt');
+    s = useStore.getState();
+    expect(isCollapsed(s, 'gen.txt')).toBe(false);
+    expect(s.selection?.id).toMatch(/^diff:gen\.txt@/);
+    expect(s.collapsed).toEqual({ 'a.txt': false, 'gen.txt': false });
+  });
+
   it('a slow first refresh never overwrites a faster second one', async () => {
     const slow = deferred<Snapshot>();
     const fast = deferred<Snapshot>();
