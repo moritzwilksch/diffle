@@ -50,7 +50,7 @@ beforeAll(async () => {
   const hub = new WsHub();
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3 });
-  server = new Server({ session, config, extraAutoViewed: [], hub, lsp: null }, { port: 0, host: '127.0.0.1', dev: false });
+  server = new Server({ session, config, extraAutoViewed: [], hub, lsp: null }, { port: 0, host: '127.0.0.1' });
   base = await server.listen();
   await session.start({ kind: 'working' });
 });

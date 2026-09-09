@@ -21,11 +21,11 @@ Local git diff reviewer: Node server wraps git, React client renders diffs with 
 ## Commands
 
 ```bash
-npm run dev -- working --no-open   # tsx + Vite middleware; the `--` is required before flags
+npm run dev -- working --no-open   # build client + tsx; the `--` is required before flags
 npm test                           # vitest, real temp git repos, no mocks for git
 npm run typecheck                  # two tsconfigs: server/node and client/DOM (test/client is client-side)
 npm run lint                       # oxlint, correctness rules only; `.oxlintrc.json` records why each rule is off
-npm run build                      # dist/client + dist/server; the server serves dist/client when present
+npm run build                      # dist/client + dist/server; the server always serves dist/client
 ```
 
 Done means all four pass. Tests for server behavior build a throwaway repo with `git init` in a tmpdir (see `test/server/Session.test.ts`); client store tests `vi.mock` `src/client/api.js` and race deferred promises.

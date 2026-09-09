@@ -1,5 +1,4 @@
-import { existsSync } from 'node:fs';
-import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
@@ -14,7 +13,6 @@ export interface ServerOptions {
   /** When the port is taken, try the following ones (up to PROBE_PORTS) instead of failing. */
   probe?: boolean;
   host: string;
-  dev: boolean;
 }
 
 /** Default port, chosen to be unassigned and memorable; `--port` overrides it. */
@@ -23,16 +21,9 @@ const PROBE_PORTS = 100;
 /** JSON bodies are small (comments, viewed marks, config); anything bigger is not a client. */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-interface ViteLike {
-  middlewares: (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
-  close(): Promise<void>;
-}
-
-/** Owns the HTTP server, API mounting, static/Vite serving, and the WS upgrade. */
+/** Owns the HTTP server, API mounting, static serving, and the WS upgrade. */
 export class Server {
   private http: HttpServer | null = null;
-  private vite: ViteLike | null = null;
-  private viteReady: Promise<void> | null = null;
 
   constructor(
     private readonly deps: ApiDeps,
@@ -80,27 +71,13 @@ export class Server {
     app.use('/api/*', compress());
     app.route('/', createApi(this.deps));
 
-    if (!this.opts.dev) {
-      const clientDir = resolveClientDir();
-      app.use('*', serveStatic({ root: clientDir }));
-      app.get('*', serveStatic({ root: clientDir, path: 'index.html' }));
-    }
+    const clientDir = resolveClientDir();
+    app.use('*', serveStatic({ root: clientDir }));
+    app.get('*', serveStatic({ root: clientDir, path: 'index.html' }));
 
-    const hono = getRequestListener(app.fetch);
-    this.http = createServer((req, res) => {
-      const url = req.url ?? '/';
-      if (this.opts.dev && !url.startsWith('/api/')) {
-        void this.viteReady?.then(() => this.vite!.middlewares(req, res, () => hono(req, res)));
-        return;
-      }
-      hono(req, res);
-    });
+    this.http = createServer(getRequestListener(app.fetch));
     this.deps.hub.attach(this.http, guard);
-
-    const url = await this.bind();
-
-    if (this.opts.dev) this.viteReady = this.startVite();
-    return url;
+    return this.bind();
   }
 
   /** Listen on the configured port, or with `probe` on the first free port at or above it. */
@@ -132,23 +109,8 @@ export class Server {
     });
   }
 
-  /** Dev only: Vite in middleware mode, imported lazily so prod never pays for it. */
-  private async startVite(): Promise<void> {
-    const { createServer: createVite } = await import('vite');
-    // Vite logs to stdout by default; stdout belongs to the agent prompt (see main.ts).
-    const log = (msg: string) => console.error(msg);
-    const vite = await createVite({
-      configFile: join(projectRoot(), 'vite.config.ts'),
-      server: { middlewareMode: true, ws: { server: this.http! } },
-      appType: 'spa',
-      customLogger: { info: log, warn: log, warnOnce: log, error: log, clearScreen() {}, hasErrorLogged: () => false, hasWarned: false },
-    });
-    this.vite = vite;
-  }
-
   async close(): Promise<void> {
     await this.deps.hub.close();
-    await this.vite?.close().catch(() => {});
     await new Promise<void>((res) => {
       if (!this.http) return res();
       this.http.close(() => res());
@@ -164,8 +126,4 @@ function projectRoot(): string {
 
 function resolveClientDir(): string {
   return join(projectRoot(), 'dist', 'client');
-}
-
-export function hasClientBuild(): boolean {
-  return existsSync(join(resolveClientDir(), 'index.html'));
 }
