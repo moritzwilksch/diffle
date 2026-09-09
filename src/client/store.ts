@@ -330,7 +330,7 @@ export interface ReviewState {
   refreshThreads(): Promise<void>;
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
-  switchMode(req: ModeRequest): Promise<void>;
+  switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
@@ -1799,12 +1799,17 @@ export const useStore = create<ReviewState>((set, get) => {
       try {
         snap = await api.switchMode(req);
         // The pushed refresh normally owns this version already; only a client without a socket gets here.
-        if (accounted(snap.version) || !current(g)) return;
+        if (!current(g)) return 'superseded';
+        if (accounted(snap.version)) return 'applied';
         fetching = snap.version;
         owned = true;
         await commitSnapshot(snap, g, await fetchLists());
+        return current(g) ? 'applied' : 'superseded';
       } catch (e) {
-        if (current(g)) set({ error: errorMessage(e) });
+        if (!current(g)) return 'superseded';
+        const error = errorMessage(e);
+        set({ error });
+        return { error };
       } finally {
         if (owned && snap && fetching === snap.version) fetching = 0;
       }

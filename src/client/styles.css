@@ -794,6 +794,12 @@ button.off {
   padding: 0.5rem 0.625rem;
   white-space: normal;
 }
+.mode-error {
+  margin: 0;
+  color: var(--del);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
 .mode-config .mode-hint {
   padding: 0;
 }

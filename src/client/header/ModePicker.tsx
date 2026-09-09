@@ -21,6 +21,19 @@ export function ModePicker() {
   const [dots, setDots] = useState<'..' | '...'>('..');
   const [countText, setCountText] = useState(String(lastCommits));
   const [pr, setPr] = useState('');
+  const [prPending, setPrPending] = useState(false);
+  const [prError, setPrError] = useState<string | null>(null);
+  const prInFlight = useRef(false);
+  const prView = useRef(0);
+  const prInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const view = ++prView.current;
+    return () => {
+      prView.current = view + 1;
+    };
+  }, [open, pane]);
+
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const targetRef = useRef<HTMLInputElement>(null);
@@ -53,6 +66,27 @@ export function ModePicker() {
     setOpen(false);
     trigger.current?.focus();
     void switchMode(req);
+  };
+  const openPr = async () => {
+    if (prInFlight.current) return;
+    prInFlight.current = true;
+    setPrPending(true);
+    setPrError(null);
+    const view = prView.current;
+    try {
+      const result = await switchMode(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
+      if (view !== prView.current) return;
+      if (result === 'applied') {
+        setOpen(false);
+        trigger.current?.focus();
+      } else if (typeof result === 'object') {
+        setPrError(result.error);
+        prInput.current?.focus();
+      }
+    } finally {
+      prInFlight.current = false;
+      setPrPending(false);
+    }
   };
   const count = Number(countText);
   const validCount = /^[0-9]+$/.test(countText) && Number.isSafeInteger(count) && count >= 1;
@@ -107,7 +141,7 @@ export function ModePicker() {
                   useStore.getState().setLastCommits(count);
                   choose(lastCommitsRequest(count));
                 }
-                if (pane === 'pr') choose(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
+                if (pane === 'pr') void openPr();
               }}
             >
               {pane === 'pr' && <div className="menu-title">Pull request</div>}
@@ -209,17 +243,40 @@ export function ModePicker() {
                 <>
                   <label className="ref-select">
                     <span className="lbl">PR number or URL</span>
-                    <input value={pr} onChange={(e) => setPr(e.target.value)} placeholder="Current branch’s PR" />
+                    <input
+                      ref={prInput}
+                      autoFocus
+                      autoComplete="off"
+                      spellCheck={false}
+                      readOnly={prPending}
+                      aria-describedby={prError ? 'pr-hint pr-error' : 'pr-hint'}
+                      aria-invalid={prError ? true : undefined}
+                      value={pr}
+                      onChange={(e) => {
+                        setPr(e.target.value);
+                        setPrError(null);
+                      }}
+                      placeholder="Current branch’s PR"
+                    />
                   </label>
-                  <p className="mode-hint">Leave blank to review this branch’s pull request.</p>
+                  <p className="mode-hint" id="pr-hint">
+                    Enter a PR number or URL, or leave blank for this branch.
+                  </p>
+                  {prError && (
+                    <p className="mode-error" id="pr-error" role="alert">
+                      {prError}
+                    </p>
+                  )}
                 </>
               )}
               <button
                 className="primary"
                 type="submit"
-                disabled={pane === 'refs' ? !a.trim() || !b.trim() : pane === 'commits' && !validCount}
+                aria-live={pane === 'pr' ? 'polite' : undefined}
+                aria-busy={pane === 'pr' && prPending}
+                disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validCount}
               >
-                Compare
+                {pane === 'pr' ? (prPending ? 'Opening PR…' : 'Open PR') : 'Compare'}
               </button>
             </form>
           )}
