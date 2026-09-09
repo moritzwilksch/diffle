@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { access, chmod, mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readdir, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -265,7 +265,10 @@ describe('openReviewRepository', () => {
         const review = await openReviewRepository(req, cwd, foreign);
         try {
           expect(review.repo.root).not.toBe(local);
-          expect(review.repo.root.startsWith(join(TMP_ROOT, 'diffle-pr-'))).toBe(true);
+          // The clone is made under the raw `os.tmpdir()`, so canonicalize both sides: a
+          // Windows 8.3 short name or a macOS symlink would otherwise skew the prefix.
+          const root = await realpath(review.repo.root);
+          expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
           const mode = await resolveMode(req, review.repo, foreign);
           expect(mode.newRev).toBe(headSha);
           expect(mode.repository).toBe('foreign/repo');
