@@ -35,6 +35,7 @@ interface GlobalOpts {
   port?: number;
   host: string;
   open: boolean;
+  keepAlive: boolean;
   watch: boolean;
   timing: boolean;
   dev?: boolean;
@@ -56,6 +57,7 @@ const program = new Command()
   )
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
   .option('--no-open', 'do not open a browser')
+  .option('--keep-alive', 'keep the server running after all browser tabs close')
   .option('--no-watch', 'do not watch for changes')
   .addOption(
     new Option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)')
@@ -84,8 +86,9 @@ Revisions follow git diff:
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
 
-Status goes to stderr, so stdout carries only the review: closing the last auto-opened
-browser tab (or pressing Ctrl+C) stops diffle and prints the open comments as a prompt for an agent.`,
+Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
+closing the last auto-opened browser tab stops diffle and prints the open comments as a prompt for an agent.
+Ctrl+C always stops it.`,
   )
   .action(async (revs: string[], _o, cmd: Command) => {
     if (revs.length === 0) cmd.help();
@@ -243,7 +246,7 @@ async function serve(
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  stopBrowserWatch = watchBrowserLifetime(hub, opts.open, shutdown);
+  stopBrowserWatch = watchBrowserLifetime(hub, opts.open && !opts.keepAlive, shutdown);
 
   try {
     // Bind and open the browser before any further git work.
