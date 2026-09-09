@@ -11,6 +11,7 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async () => []),
   viewed: vi.fn(async () => []),
+  setViewed: vi.fn(async (path: string, blob: string, viewed: boolean) => [{ path, blob, viewed }]),
   config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, lspCommands: {} })),
   lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   file: vi.fn(),
@@ -47,7 +48,12 @@ vi.mock('@pierre/diffs/react', () => ({
       'div',
       { ref: props.containerRef, className: props.className },
       props.items.map((it) =>
-        createElement('div', { key: it.id, className: 'header' }, props.renderHeaderMetadata(it) as never),
+        createElement(
+          'div',
+          { key: it.id, className: 'header', 'data-diffs-header': 'default' },
+          createElement('span', { className: 'filename' }, it.id),
+          props.renderHeaderMetadata(it) as never,
+        ),
       ),
     );
   }),
@@ -117,6 +123,8 @@ beforeEach(() => {
     selection: null,
     scrollTarget: null,
     gens: {},
+    collapsed: {},
+    viewed: [],
   });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -290,6 +298,21 @@ describe('ReviewPane scroller effects', () => {
     await act(() => useStore.setState({ error: null }));
     expect(installSearchHighlights).toHaveBeenCalledTimes(1);
     expect(installSearchHighlights.mock.calls[0]![1]).toBe(host.querySelector('.codeview'));
+  });
+
+  it('toggles collapse from the file header while only the checkbox changes viewed state', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };
+    await act(() => useStore.setState({ snapshot: snap(changed), loaded: { 'a.txt': file } }));
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+
+    await act(() => header.querySelector<HTMLElement>('.filename')!.click());
+    expect(useStore.getState().collapsed['a.txt']).toBe(true);
+    expect(useStore.getState().viewed).toEqual([]);
+
+    await act(() => header.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    expect(useStore.getState().collapsed['a.txt']).toBe(true);
+    expect(useStore.getState().viewed).toMatchObject([{ path: 'a.txt', blob: 'b1', viewed: true }]);
   });
 
   it('shows the viewed shortcut in the file header tooltip', async () => {

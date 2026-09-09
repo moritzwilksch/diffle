@@ -48,7 +48,7 @@ beforeEach(() => {
     activePath: 'a.txt',
     collapsed: { 'a.txt': true, 'b.txt': true },
     viewed: [],
-    config: { autoViewed: [], contextLines: 5, lspCommand: '' },
+    config: { autoViewed: [], contextLines: 5, lspCommands: {} },
     loaded: {},
     openFile,
   });
