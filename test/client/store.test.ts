@@ -150,6 +150,62 @@ describe('client transitions', () => {
     pending.resolve(patchesFor(['b.txt']));
   });
 
+  it('j / k treat a collapsed header as one unit and enter it at the correct edge when opened', async () => {
+    const txt = (path: string, blob: string) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 1,
+      binary: false,
+      blob,
+      generated: false,
+    });
+    const changed = [txt('a.txt', 'b1'), txt('b.txt', 'b2'), txt('c.txt', 'b3')];
+    const middle = `diff --git a/b.txt b/b.txt
+--- a/b.txt
++++ b/b.txt
+@@ -10,3 +10,3 @@
+ ten
+-eleven
++ELEVEN
+ twelve
+`;
+    api.patches.mockResolvedValue(patchesFor(['a.txt']) + middle + patchesFor(['c.txt']));
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
+    await useStore.getState().refreshSnapshot();
+    useStore.setState({ collapsed: { 'b.txt': true } });
+
+    useStore.getState().moveFile('first');
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState()).toMatchObject({ activePath: 'b.txt', selection: null });
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:c\.txt@/);
+
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState()).toMatchObject({ activePath: 'b.txt', selection: null });
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:a\.txt@/);
+
+    useStore.getState().moveFile(1);
+    useStore.getState().toggleCollapsed('b.txt');
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState().selection).toMatchObject({
+      id: expect.stringMatching(/^diff:b\.txt@/),
+      range: { end: 10, endSide: 'additions' },
+    });
+
+    useStore.getState().moveFile(1);
+    useStore.setState((s) => ({ collapsed: { ...s.collapsed, 'b.txt': true } }));
+    useStore.getState().moveFile(-1);
+    expect(useStore.getState()).toMatchObject({ activePath: 'b.txt', selection: null });
+    useStore.getState().toggleCollapsed('b.txt');
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState().selection).toMatchObject({
+      id: expect.stringMatching(/^diff:b\.txt@/),
+      range: { end: 12, endSide: 'additions' },
+    });
+  });
+
   it('J / K walk past binary files, which have no rows and so no cursor', async () => {
     const bin = (path: string) => ({
       path,

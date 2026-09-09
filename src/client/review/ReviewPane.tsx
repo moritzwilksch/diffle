@@ -75,6 +75,7 @@ const HEADER_CSS = `
   --diffs-header-font-family: var(--mono);
   font-size: 0.75rem;
   background: var(--bg-2);
+  cursor: pointer;
   /* The card's border carries the sides and top; the header only needs to separate itself from the code. */
   border-bottom: 1px solid var(--border);
   font-weight: 600;
@@ -821,9 +822,24 @@ function FileHeaderMeta({ path }: { path: string }) {
     host.toggleAttribute('data-active', active);
     return () => host.removeAttribute('data-active');
   }, [active]);
+  const toggleCollapsed = useStore((s) => s.toggleCollapsed);
+  useEffect(() => {
+    const metadata = ref.current;
+    const host = metadata && hostOf(metadata);
+    const header =
+      host?.shadowRoot?.querySelector<HTMLElement>('[data-diffs-header]') ??
+      metadata?.closest<HTMLElement>('[data-diffs-header]');
+    if (!header) return;
+    const toggle = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('button, input, label, a, [role="button"]')) return;
+      toggleCollapsed(path);
+    };
+    header.addEventListener('click', toggle);
+    return () => header.removeEventListener('click', toggle);
+  }, [path, toggleCollapsed]);
   const vs = useStore((s) => (file ? viewedState(s, file) : 'unviewed'));
   const setViewed = useStore((s) => s.setViewed);
-  const toggleCollapsed = useStore((s) => s.toggleCollapsed);
   const count = useStore((s) => s.threads.filter((t) => t.anchor.path === path && !t.resolved).length);
   const collapsedNow = useStore((s) => isCollapsed(s, path));
   const full = useStore((s) => s.fileView?.path === path);
@@ -831,7 +847,7 @@ function FileHeaderMeta({ path }: { path: string }) {
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');
   const loadPatch = useStore((s) => s.loadPatch);
   return (
-    <span ref={ref} className="file-meta" onClick={(e) => e.stopPropagation()}>
+    <span ref={ref} className="file-meta">
       {count > 0 && (
         <span className="badge">
           <MessageSquare size="0.75rem" /> {count}
