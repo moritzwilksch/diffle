@@ -1,4 +1,12 @@
-import { ChevronDown, ChevronRight, GitCommitHorizontal, GitPullRequest, History, PencilRuler } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  ChevronRight,
+  GitCommitHorizontal,
+  GitPullRequest,
+  History,
+  PencilRuler,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
@@ -93,6 +101,10 @@ export function ModePicker() {
   const oldOffset = parseOffset(oldOffsetText);
   const newOffset = parseOffset(newOffsetText);
   const validOffsets = oldOffset !== null && newOffset !== null;
+  const swapRefs = () => {
+    setA(b);
+    setB(a);
+  };
   const entries = [
     { label: 'Working', icon: PencilRuler, pane: null },
     { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
@@ -136,6 +148,13 @@ export function ModePicker() {
               className="mode-config"
               id="mode-config"
               aria-label={entries.find((e) => e.pane === pane)?.label}
+              onKeyDown={(e) => {
+                if (pane !== 'refs' || e.key !== 'x' || e.ctrlKey || e.metaKey || e.altKey) return;
+                if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (!e.repeat) swapRefs();
+              }}
               onSubmit={(e) => {
                 e.preventDefault();
                 if (pane === 'refs' && a.trim() && b.trim())
@@ -169,42 +188,56 @@ export function ModePicker() {
                       onAccept={() => comparisonToggle.current?.focus()}
                     />
                   </div>
-                  <div
-                    className="toggle ref-comparison"
-                    ref={comparisonToggle}
-                    role="group"
-                    aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                  <div className="ref-actions">
+                    <div
+                      className="toggle ref-comparison"
+                      ref={comparisonToggle}
+                      role="group"
+                      aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!e.repeat) e.currentTarget.closest('form')?.requestSubmit();
+                          return;
+                        }
+                        if (e.key !== ' ') return;
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!e.repeat) e.currentTarget.closest('form')?.requestSubmit();
-                        return;
-                      }
-                      if (e.key !== ' ') return;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className={dots === '..' ? 'on' : ''}
-                      tabIndex={-1}
-                      aria-pressed={dots === '..'}
-                      onClick={() => setDots('..')}
+                        if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
+                      }}
                     >
-                      Direct
-                    </button>
+                      <button
+                        type="button"
+                        className={dots === '..' ? 'on' : ''}
+                        tabIndex={-1}
+                        aria-pressed={dots === '..'}
+                        onClick={() => setDots('..')}
+                      >
+                        Direct
+                      </button>
+                      <button
+                        type="button"
+                        className={dots === '...' ? 'on' : ''}
+                        tabIndex={-1}
+                        aria-pressed={dots === '...'}
+                        onClick={() => setDots('...')}
+                      >
+                        Merge base
+                      </button>
+                    </div>
                     <button
+                      id="swap-refs"
+                      className="swap-refs"
                       type="button"
-                      className={dots === '...' ? 'on' : ''}
                       tabIndex={-1}
-                      aria-pressed={dots === '...'}
-                      onClick={() => setDots('...')}
+                      aria-label="Swap refs"
+                      aria-keyshortcuts="x"
+                      title="Swap refs (x)"
+                      onClick={swapRefs}
                     >
-                      Merge base
+                      <ArrowLeftRight size="0.75rem" />
                     </button>
                   </div>
                   <p className="mode-hint">

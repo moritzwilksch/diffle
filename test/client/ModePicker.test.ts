@@ -138,3 +138,30 @@ it('defaults to HEAD~1..HEAD~0 and applies both editable offsets', async () => {
   await submit();
   expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~5..HEAD~2'] });
 });
+
+it('swaps refs by button and x without submitting or consuming typed x', async () => {
+  await act(() => useStore.getState().pickModeEntry(2));
+  const base = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
+  const target = host.querySelector<HTMLInputElement>('[aria-label="Target ref"]')!;
+  const swap = host.querySelector<HTMLButtonElement>('[aria-label="Swap refs"]')!;
+  await act(() => swap.click());
+  expect(base.value).toBe('HEAD');
+  expect(target.value).toBe('main');
+  const toggle = host.querySelector<HTMLElement>('.ref-comparison')!;
+  const key = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true });
+  await act(() => {
+    toggle.focus();
+    toggle.dispatchEvent(key);
+  });
+  expect(key.defaultPrevented).toBe(true);
+  expect(base.value).toBe('main');
+  expect(target.value).toBe('HEAD');
+  const typed = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true });
+  await act(() => {
+    base.focus();
+    base.dispatchEvent(typed);
+  });
+  expect(typed.defaultPrevented).toBe(false);
+  expect(base.value).toBe('main');
+  expect(switchMode).not.toHaveBeenCalled();
+});
