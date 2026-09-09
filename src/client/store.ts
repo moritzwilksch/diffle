@@ -1089,13 +1089,13 @@ export const useStore = create<ReviewState>((set, get) => {
 
   const currentCursor = () => cursorFromSelection(nav(), get().selection);
 
-  /** Line/file motions treat the active collapsed header as a cursor stop. */
+  /** Line/file motions treat the active header as a cursor stop, including after it expands. */
   const currentNavCursor = (): Cursor | null => {
     const selected = currentCursor();
     if (selected) return selected;
     const items = nav();
     const itemIndex = items.findIndex((item) => item.path === get().activePath);
-    return itemIndex !== -1 && items[itemIndex]!.collapsed ? { itemIndex, rowIndex: -1 } : null;
+    return itemIndex === -1 ? null : { itemIndex, rowIndex: -1 };
   };
 
   /** Place a line cursor, or focus a collapsed file's header without inventing a hidden line selection. */

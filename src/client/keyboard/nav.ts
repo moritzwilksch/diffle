@@ -173,7 +173,12 @@ export function cursorFromSelection(nav: NavItem[], sel: CodeViewLineSelection |
 export function step(nav: NavItem[], cur: Cursor | null, delta: 1 | -1): Cursor | null {
   if (nav.length === 0) return null;
   if (!cur) return firstStop(nav, delta === 1 ? 0 : nav.length - 1, delta);
-  if (cur.rowIndex === -1) return firstStop(nav, cur.itemIndex + delta, delta) ?? cur;
+  if (cur.rowIndex === -1) {
+    const item = nav[cur.itemIndex];
+    if (item && !item.collapsed && item.rows.length > 0)
+      return { itemIndex: cur.itemIndex, rowIndex: delta === 1 ? 0 : item.rows.length - 1 };
+    return firstStop(nav, cur.itemIndex + delta, delta) ?? cur;
+  }
   let { itemIndex, rowIndex } = cur;
   rowIndex += delta;
   while (rowIndex < 0 || rowIndex >= (nav[itemIndex]?.rows.length ?? 0)) {
