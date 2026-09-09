@@ -106,7 +106,14 @@ export function RefInput({
         }}
       />
       {open && (
-        <div className="ref-suggestions" id={id} role="listbox" aria-label={`${label} suggestions`} ref={list}>
+        <div
+          className="ref-suggestions"
+          id={id}
+          role="listbox"
+          tabIndex={-1}
+          aria-label={`${label} suggestions`}
+          ref={list}
+        >
           {options.map((option, i) => (
             <div
               key={option.value}
