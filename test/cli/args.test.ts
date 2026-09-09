@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectLspOverride, parseContext, parsePort } from '../../src/cli/args.js';
+import { collectLanguage, collectLspOverride, parseContext, parsePort } from '../../src/cli/args.js';
 
 describe('CLI numeric arguments', () => {
   it('accepts integers in range', () => {
@@ -12,6 +12,17 @@ describe('CLI numeric arguments', () => {
     for (const bad of ['nope', '', '1.5', '-1', '65536'])
       expect(() => parsePort(bad)).toThrow(/integer between 0 and 65535/);
     expect(() => parseContext('10001')).toThrow(/integer between 0 and 10000/);
+  });
+});
+
+describe('variadic <language...>', () => {
+  it('appends every value, so a command sees all of them', () => {
+    expect(collectLanguage('go', collectLanguage('python'))).toEqual(['python', 'go']);
+  });
+
+  it('rejects a language diffle does not know', () => {
+    expect(() => collectLanguage('nope')).toThrow(/unknown language "nope"/);
+    expect(() => collectLanguage('nope', ['go'])).toThrow(/unknown language "nope"/);
   });
 });
 

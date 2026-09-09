@@ -22,6 +22,14 @@ export function parseLanguage(raw: string): LanguageId {
   return language as LanguageId;
 }
 
+/**
+ * Commander parser for a variadic `<language...>`. It folds the parser over the values, so
+ * this appends: handed `parseLanguage` itself, the command would receive only the last one.
+ */
+export function collectLanguage(raw: string, prev: LanguageId[] = []): LanguageId[] {
+  return [...prev, parseLanguage(raw)];
+}
+
 /** A `--lsp` value: which language to serve with which command. */
 export interface LspOverride {
   language: LanguageId;

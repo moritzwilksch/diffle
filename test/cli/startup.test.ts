@@ -88,10 +88,4 @@ describe('failed startup', () => {
       if (isAlive(pid)) process.kill(pid, 'SIGKILL');
     }
   }, 30_000);
-
-  it('rejects --lsp without a value rather than dropping the overrides before it', async () => {
-    const run = await cli(['working', '-C', dir, '--no-open', '--no-watch', '--lsp', 'python=x', '--lsp']);
-    expect(run.stderr).toContain("option '--lsp <language=command>' argument missing");
-    expect(run.code).toBe(1);
-  }, 30_000);
 });

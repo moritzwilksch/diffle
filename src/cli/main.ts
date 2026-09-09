@@ -19,7 +19,14 @@ import {
   type ModeRequest,
   type UserConfig,
 } from '../shared/protocol.js';
-import { collectLspOverride, type LspOverride, parseContext, parseLanguage, parsePort } from './args.js';
+import {
+  collectLanguage,
+  collectLspOverride,
+  type LspOverride,
+  parseContext,
+  parseLanguage,
+  parsePort,
+} from './args.js';
 import { watchBrowserLifetime } from './browserLifetime.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
@@ -176,10 +183,10 @@ config
 config
   .command('unset-lsp')
   .description('forget a language-server override, back to PATH')
-  .argument('<language...>', `one or more of: ${LANGUAGE_IDS.join(', ')}`)
-  .action(async (languages: string[]) => {
+  .argument('<language...>', `one or more of: ${LANGUAGE_IDS.join(', ')}`, collectLanguage)
+  .action(async (languages: LanguageId[]) => {
     const store = await UserConfigStore.open();
-    const drop = new Set(languages.map(parseLanguage));
+    const drop = new Set(languages);
     await store.set({
       lspCommands: Object.fromEntries(
         Object.entries(store.get().lspCommands).filter(([l]) => !drop.has(l as LanguageId)),
