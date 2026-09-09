@@ -53,7 +53,6 @@ const KEYMAP: Record<string, Action> = {
   t: (s) => s.setTheme(nextTheme(s.theme)),
   yy: () => void copyComments(),
   Y: () => void copyComments(),
-  yf: (s) => void copyComments(s.activePath ?? undefined),
   '/': (s) => s.openSearch('file'),
   'g/': (s) => s.openSearch(widenSearchScope(s.search.scope)),
   gf: (s) => s.treeModel?.openSearch(),
@@ -266,15 +265,15 @@ export function focusReview(): void {
   document.querySelector<HTMLElement>('main.review')?.focus({ preventScroll: true });
 }
 
-async function copyComments(path?: string): Promise<void> {
+async function copyComments(): Promise<void> {
   const s = useStore.getState();
   let text: string;
   try {
-    text = await api.exportComments(path);
+    text = await api.exportComments();
   } catch (e) {
     // A silent failure leaves the previous clipboard to be pasted into the agent.
-    return s.report(path ? `Copying comments for ${path}` : 'Copying comments', e);
+    return s.report('Copying comments', e);
   }
   const ok = await copyText(text);
-  s.flash(ok ? (path ? `Copied comments for ${path}` : 'Copied all comments') : 'Clipboard blocked; use the panel buttons');
+  s.flash(ok ? 'Copied all comments' : 'Clipboard blocked; use the panel buttons');
 }

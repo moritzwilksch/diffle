@@ -78,8 +78,8 @@ export const api = {
       `/api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, path: opts.path })}`,
     ),
   threads: (query: ThreadQuery = {}) => json<CommentThread[]>(`/api/threads?${q({ state: query.state, path: query.path })}`),
-  /** Open threads as the agent prompt, optionally for one file. */
-  exportComments: (path?: string) => text(`/api/threads/export?${q({ state: 'open', path })}`),
+  /** Open threads as the agent prompt. */
+  exportComments: () => text(`/api/threads/export?${q({ state: 'open' })}`),
   /** Posts threads as a review on the current branch's pull request; all unresolved ones without `threadIds`. */
   exportToGithub: (req: GithubExportRequest = {}) => json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),
   addThread: (t: ThreadCreate) => json<CommentThread[]>('/api/threads', { method: 'POST', body: JSON.stringify(t) }),
