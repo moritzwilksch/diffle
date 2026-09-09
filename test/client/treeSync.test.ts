@@ -5,7 +5,14 @@ import type { ReviewState } from '../../src/client/store.js';
 import type { ChangedFile } from '../../src/shared/protocol.js';
 import { DEFAULT_USER_CONFIG } from '../../src/shared/protocol.js';
 import type { SyncKeys } from '../../src/client/tree/sync.js';
-import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from '../../src/client/tree/sync.js';
+import {
+  decorationKey,
+  directoriesOf,
+  expandedAfterReset,
+  statusKey,
+  syncStep,
+  toGitStatus,
+} from '../../src/client/tree/sync.js';
 
 function file(path: string, extra: Partial<ChangedFile> = {}): ChangedFile {
   return {
@@ -59,7 +66,14 @@ describe('expandedAfterReset', () => {
     expect(dir(t, 'a/b').isExpanded()).toBe(false);
     expect(dir(t, 'e').isExpanded()).toBe(false);
     expect(dir(t, 'n').isExpanded()).toBe(true);
-    expect(t.getVisibleRows(0, t.getVisibleCount()).map((r) => r.path)).toEqual(['a/', 'a/b/', 'a/d.ts', 'e/', 'n/', 'n/m.ts']);
+    expect(t.getVisibleRows(0, t.getVisibleCount()).map((r) => r.path)).toEqual([
+      'a/',
+      'a/b/',
+      'a/d.ts',
+      'e/',
+      'n/',
+      'n/m.ts',
+    ]);
   });
 
   it('remembers folders hidden under a collapsed parent', () => {
@@ -118,7 +132,9 @@ describe('row keys', () => {
     const changed = [file('x.ts'), file('y.lock')];
     const base = decorationKey(state, changed);
     expect(decorationKey({ ...state, viewed: [{ path: 'x.ts', blob: 'b1', viewed: true }] }, changed)).not.toBe(base);
-    expect(decorationKey({ ...state, config: { ...DEFAULT_USER_CONFIG, autoViewed: ['*.lock'] } }, changed)).not.toBe(base);
+    expect(decorationKey({ ...state, config: { ...DEFAULT_USER_CONFIG, autoViewed: ['*.lock'] } }, changed)).not.toBe(
+      base,
+    );
     expect(decorationKey(state, [file('x.ts', { deletions: 3 }), file('y.lock')])).not.toBe(base);
   });
 });
@@ -153,7 +169,11 @@ describe('syncStep', () => {
   it('redraws decorations on a viewed mark and stays quiet on unrelated config', () => {
     const changed = [file('x.ts')];
     const a = keysOf(changed);
-    expect(syncStep(a, keysOf(changed, { ...state, viewed: [{ path: 'x.ts', blob: 'b1', viewed: true }] }))).toBe('decoration');
-    expect(syncStep(a, keysOf(changed, { ...state, config: { ...DEFAULT_USER_CONFIG, contextLines: 42 } }))).toBe('none');
+    expect(syncStep(a, keysOf(changed, { ...state, viewed: [{ path: 'x.ts', blob: 'b1', viewed: true }] }))).toBe(
+      'decoration',
+    );
+    expect(syncStep(a, keysOf(changed, { ...state, config: { ...DEFAULT_USER_CONFIG, contextLines: 42 } }))).toBe(
+      'none',
+    );
   });
 });

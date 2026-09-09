@@ -27,7 +27,10 @@ const log = (line) => process.stderr.write(line + '\n');
 const base = (uri) => uri.replace(/^.*\//, '');
 const reply = (id, result) => send({ jsonrpc: '2.0', id, result });
 const range = (line, ch = 0) => ({ start: { line, character: ch }, end: { line, character: ch + 1 } });
-const span = (startLine, endLine, ch = 0) => ({ start: { line: startLine, character: ch }, end: { line: endLine, character: 0 } });
+const span = (startLine, endLine, ch = 0) => ({
+  start: { line: startLine, character: ch },
+  end: { line: endLine, character: 0 },
+});
 
 function handle(msg) {
   switch (msg.method) {
@@ -53,7 +56,10 @@ function handle(msg) {
     case 'textDocument/definition': {
       // FAKE_LSP_REAL_ROOT mimics a server that canonicalizes symlinked roots.
       const uri = process.env.FAKE_LSP_REAL_ROOT
-        ? msg.params.textDocument.uri.replace(pathToFileURL(process.env.FAKE_LSP_ROOT).href, pathToFileURL(process.env.FAKE_LSP_REAL_ROOT).href)
+        ? msg.params.textDocument.uri.replace(
+            pathToFileURL(process.env.FAKE_LSP_ROOT).href,
+            pathToFileURL(process.env.FAKE_LSP_REAL_ROOT).href,
+          )
         : msg.params.textDocument.uri;
       return reply(msg.id, [
         { uri, range: range(1, 4) },
@@ -85,7 +91,8 @@ function handle(msg) {
       });
     case 'textDocument/semanticTokens/range': {
       // FAKE_LSP_NO_TOKENS mimics a server without semantic tokens (open-source pyright).
-      if (process.env.FAKE_LSP_NO_TOKENS === '1') return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'method not found' } });
+      if (process.env.FAKE_LSP_NO_TOKENS === '1')
+        return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'method not found' } });
       // Every word of the requested line, relative-encoded; `if`/`else`/`import`/`pass` are keywords (15), the rest variables (8).
       const text = docs.get(msg.params.textDocument.uri) ?? '';
       const lineNo = msg.params.range.start.line;
@@ -94,7 +101,13 @@ function handle(msg) {
       let prevLine = 0;
       let prevStart = 0;
       for (const m of line.matchAll(/\w+/g)) {
-        data.push(lineNo - prevLine, prevLine === lineNo ? m.index - prevStart : m.index, m[0].length, /^(if|else|import|pass)$/.test(m[0]) ? 15 : 8, 0);
+        data.push(
+          lineNo - prevLine,
+          prevLine === lineNo ? m.index - prevStart : m.index,
+          m[0].length,
+          /^(if|else|import|pass)$/.test(m[0]) ? 15 : 8,
+          0,
+        );
         prevLine = lineNo;
         prevStart = m.index;
       }
@@ -102,12 +115,26 @@ function handle(msg) {
     }
     case 'textDocument/documentSymbol':
       return reply(msg.id, [
-        { name: 'Foo', kind: 5, range: span(0, 3), selectionRange: range(0, 6), children: [{ name: 'bar', kind: 6, range: span(1, 2), selectionRange: range(1, 8) }] },
+        {
+          name: 'Foo',
+          kind: 5,
+          range: span(0, 3),
+          selectionRange: range(0, 6),
+          children: [{ name: 'bar', kind: 6, range: span(1, 2), selectionRange: range(1, 8) }],
+        },
         { name: 'baz', kind: 12, range: span(5, 6), selectionRange: range(5, 4) },
       ]);
     case 'workspace/symbol':
       return reply(msg.id, [
-        { name: msg.params.query + '_sym', kind: 12, containerName: 'mod', location: { uri: pathToFileURL((process.env.FAKE_LSP_ROOT ?? process.cwd()) + '/other.py').href, range: range(4, 2) } },
+        {
+          name: msg.params.query + '_sym',
+          kind: 12,
+          containerName: 'mod',
+          location: {
+            uri: pathToFileURL((process.env.FAKE_LSP_ROOT ?? process.cwd()) + '/other.py').href,
+            range: range(4, 2),
+          },
+        },
         { name: 'outside', kind: 12, location: { uri: pathToFileURL('/elsewhere/x.py').href, range: range(0) } },
       ]);
     case 'shutdown':

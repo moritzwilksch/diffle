@@ -18,7 +18,12 @@ export function SymbolMenu() {
   useEffect(() => {
     if (!menu) return;
     const onPointerDown = (e: PointerEvent) => {
-      if (!(e.composedPath() as HTMLElement[]).some((n) => n instanceof HTMLElement && n.classList?.contains('symbol-menu'))) close();
+      if (
+        !(e.composedPath() as HTMLElement[]).some(
+          (n) => n instanceof HTMLElement && n.classList?.contains('symbol-menu'),
+        )
+      )
+        close();
     };
     document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('scroll', close, true);

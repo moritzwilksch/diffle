@@ -22,7 +22,17 @@ import { ReferencesList } from '../lsp/ReferencesList.js';
 import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '../lsp/target.js';
-import { isCollapsed, itemDeps, itemId, itemVersion, orderedPaths, pathFromItemId, viewedState, visibleThreads, type ItemVersion } from '../model.js';
+import {
+  isCollapsed,
+  itemDeps,
+  itemId,
+  itemVersion,
+  orderedPaths,
+  pathFromItemId,
+  viewedState,
+  visibleThreads,
+  type ItemVersion,
+} from '../model.js';
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
@@ -119,7 +129,11 @@ const HEADER_CSS = `
  * Token under the pointer → LSP target. Diff tokens carry a side; file items are new-side only.
  * A context line is the same text on both sides, so its old-side column resolves to the new-side line.
  */
-function targetOf(props: TokenEventBase | DiffTokenEventBaseProps, itemId: string, clientX?: number): TokenTarget | null {
+function targetOf(
+  props: TokenEventBase | DiffTokenEventBaseProps,
+  itemId: string,
+  clientX?: number,
+): TokenTarget | null {
   const path = pathFromItemId(itemId);
   if (!isPython(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
@@ -135,7 +149,9 @@ function targetOf(props: TokenEventBase | DiffTokenEventBaseProps, itemId: strin
       line = alt;
     }
   }
-  return word ? { path, side, line, col: props.lineCharStart + word.start, text: word.text } : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+  return word
+    ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
+    : { path, side, line, col: props.lineCharStart, text: props.tokenText };
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -230,14 +246,18 @@ export function ReviewPane() {
       else threadsByPath.set(t.anchor.path, [t]);
     }
     const versionOf = (path: string, mine: CommentThread[], isCollapsed: boolean) => {
-      const v = itemVersion(versions.current.get(path), itemDeps({ draft, replyTo, editingId }, path, mine, isCollapsed));
+      const v = itemVersion(
+        versions.current.get(path),
+        itemDeps({ draft, replyTo, editingId }, path, mine, isCollapsed),
+      );
       versions.current.set(path, v);
       return v.version;
     };
     if (fileView) {
       const { path, item } = fileView;
       const mine = threadsByPath.get(path) ?? [];
-      const one = item && toItem(path, item, undefined, mine, draft, versionOf(path, mine, false), gens[path] ?? 0, false);
+      const one =
+        item && toItem(path, item, undefined, mine, draft, versionOf(path, mine, false), gens[path] ?? 0, false);
       return one ? [one] : [];
     }
     const out: CodeViewItem<Annot>[] = [];
@@ -247,7 +267,16 @@ export function ReviewPane() {
       const l = loaded[path] ?? LOADING;
       const mine = threadsByPath.get(path) ?? [];
       const folded = isCollapsed(state, path);
-      const item = toItem(path, l, byPath.get(path), mine, draft, versionOf(path, mine, folded), gens[path] ?? 0, folded);
+      const item = toItem(
+        path,
+        l,
+        byPath.get(path),
+        mine,
+        draft,
+        versionOf(path, mine, folded),
+        gens[path] ?? 0,
+        folded,
+      );
       if (item) out.push(item);
     }
     return out;
@@ -339,7 +368,10 @@ export function ReviewPane() {
     let cancelled = false;
     const attempt = () => {
       if (cancelled) return;
-      const rendered = handle.getInstance()?.getRenderedItems().find((r) => r.id === reveal.id);
+      const rendered = handle
+        .getInstance()
+        ?.getRenderedItems()
+        .find((r) => r.id === reveal.id);
       if (rendered?.type === 'diff') {
         rendered.instance.revealLine(reveal.line);
         // Tell the cursor model which lines are now on screen, so j / k walk them instead of skipping to the next hunk.
@@ -353,7 +385,13 @@ export function ReviewPane() {
         setTimeout(() => {
           if (cancelled) return;
           useStore.setState((s) => ({
-            scrollTarget: { id: reveal.id, line: reveal.line, side: 'new', align: 'eye', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+            scrollTarget: {
+              id: reveal.id,
+              line: reveal.line,
+              side: 'new',
+              align: 'eye',
+              nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+            },
           }));
         }, 30);
         return;
@@ -375,10 +413,13 @@ export function ReviewPane() {
     const header = Math.round(STICKY_HEADER_REM * rem);
     const edge = Math.round(EDGE_ROWS_REM * rem);
     const offset =
-      requested === 'eye' ? Math.round(height * EYE_FRACTION) - header
-      : requested === 'top' ? edge
-      : requested === 'bottom' ? Math.max(edge, height - header - edge - Math.round(ROW_REM * rem))
-      : 0;
+      requested === 'eye'
+        ? Math.round(height * EYE_FRACTION) - header
+        : requested === 'top'
+          ? edge
+          : requested === 'bottom'
+            ? Math.max(edge, height - header - edge - Math.round(ROW_REM * rem))
+            : 0;
     const align = eye ? 'start' : requested;
     const target = scrollTarget.line
       ? {
@@ -395,7 +436,10 @@ export function ReviewPane() {
     return { eye, offset, header, target };
   };
   const renderedRow = (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
-    const rendered = viewerRef.current?.getInstance()?.getRenderedItems().find((r) => r.id === scrollTarget.id);
+    const rendered = viewerRef.current
+      ?.getInstance()
+      ?.getRenderedItems()
+      .find((r) => r.id === scrollTarget.id);
     const root = rendered?.element.shadowRoot ?? rendered?.element;
     return root && scrollTarget.line ? rowOf(root, scrollTarget.line, scrollTarget.side ?? 'new') : null;
   };
@@ -446,7 +490,10 @@ export function ReviewPane() {
       if (!scroller) return NaN;
       const base = scroller.getBoundingClientRect().top;
       if (target.type === 'item') {
-        const card = viewerRef.current?.getInstance()?.getRenderedItems().find((r) => r.id === scrollTarget.id)?.element;
+        const card = viewerRef.current
+          ?.getInstance()
+          ?.getRenderedItems()
+          .find((r) => r.id === scrollTarget.id)?.element;
         return card ? card.getBoundingClientRect().top - (base + cardLayout().paddingTop) : NaN;
       }
       const top = renderedRow(scrollTarget)?.getBoundingClientRect().top ?? NaN;
@@ -528,7 +575,6 @@ export function ReviewPane() {
     };
   }, [scrollTarget]);
 
-
   const onSelectedLinesChange = useCallback(
     (sel: CodeViewLineSelection | null) => {
       if (sel == null && swapping.current) return;
@@ -548,7 +594,11 @@ export function ReviewPane() {
         const sel = viewerRef.current?.getSelectedLines();
         if (sel) void openDraft(sel);
       },
-      onTokenEnter: (props: TokenEventBase | DiffTokenEventBaseProps, event: PointerEvent, ctx: { item: { id: string } }) => {
+      onTokenEnter: (
+        props: TokenEventBase | DiffTokenEventBaseProps,
+        event: PointerEvent,
+        ctx: { item: { id: string } },
+      ) => {
         // The word under the pointer when it entered; the whole token if the pointer sits on punctuation.
         const t = targetOf(props, ctx.item.id, event.clientX) ?? targetOf(props, ctx.item.id);
         lspTarget.set(t, props.tokenElement);
@@ -571,7 +621,11 @@ export function ReviewPane() {
         setActivePath(pathFromItemId(ctx.item.id));
       },
       // A plain click on a symbol opens the action popover; ⌘/Ctrl+click jumps straight to the definition.
-      onTokenClick: (props: TokenEventBase | DiffTokenEventBaseProps, event: MouseEvent, ctx: { item: { id: string } }) => {
+      onTokenClick: (
+        props: TokenEventBase | DiffTokenEventBaseProps,
+        event: MouseEvent,
+        ctx: { item: { id: string } },
+      ) => {
         const target = targetOf(props, ctx.item.id, event.clientX);
         if (!target) return;
         markHover(props.tokenElement, false);
@@ -601,8 +655,18 @@ export function ReviewPane() {
     [],
   );
 
-  if (error) return <main className="review"><div className="banner error">{error}</div></main>;
-  if (!snapshot) return <main className="review"><div className="empty">Loading snapshot…</div></main>;
+  if (error)
+    return (
+      <main className="review">
+        <div className="banner error">{error}</div>
+      </main>
+    );
+  if (!snapshot)
+    return (
+      <main className="review">
+        <div className="empty">Loading snapshot…</div>
+      </main>
+    );
   if (snapshot.changed.length === 0 && !fileView) {
     return (
       <main className="review">
@@ -621,7 +685,9 @@ export function ReviewPane() {
       <HoverTooltip />
       <ReferencesList />
       {fileView && <FileViewBar path={fileView.path} />}
-      {fileView ? !fileView.item && <div className="banner">Loading {fileView.path}…</div> : snapshot.changed.some((f) => !loaded[f.path]) && <div className="banner">Loading diffs…</div>}
+      {fileView
+        ? !fileView.item && <div className="banner">Loading {fileView.path}…</div>
+        : snapshot.changed.some((f) => !loaded[f.path]) && <div className="banner">Loading diffs…</div>}
       <CodeView<Annot>
         key={theme}
         ref={viewerRef}
@@ -686,11 +752,20 @@ function toItem(
     if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
     // Binary, oversized or failed: header-only placeholder via an empty file item under the diff id.
     const note =
-      loaded.kind === 'oversized' ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
-      : loaded.kind === 'error' ? `// ${loaded.message}`
-      : loaded.kind === 'loading' ? '// loading…'
-      : '';
-    return { id, type: 'file', file: { name: path, contents: note }, version, collapsed: loaded.kind === 'binary' || collapsed };
+      loaded.kind === 'oversized'
+        ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
+        : loaded.kind === 'error'
+          ? `// ${loaded.message}`
+          : loaded.kind === 'loading'
+            ? '// loading…'
+            : '';
+    return {
+      id,
+      type: 'file',
+      file: { name: path, contents: note },
+      version,
+      collapsed: loaded.kind === 'binary' || collapsed,
+    };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   if (loaded.kind !== 'file') {
@@ -775,7 +850,9 @@ function FileHeaderMeta({ path }: { path: string }) {
       )}
       {file && !full && (
         <>
-          <label title={vs === 'restale' ? 'Mark viewed again (collapses the file)' : 'Mark as viewed (collapses the file)'}>
+          <label
+            title={vs === 'restale' ? 'Mark viewed again (collapses the file)' : 'Mark as viewed (collapses the file)'}
+          >
             <input type="checkbox" checked={vs === 'viewed'} onChange={(e) => void setViewed(path, e.target.checked)} />
             Viewed
           </label>

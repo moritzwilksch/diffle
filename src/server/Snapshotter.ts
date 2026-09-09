@@ -80,7 +80,12 @@ export class Snapshotter {
       else rest.push(f);
     }
     // One file goes through the per-file cache, so a later single request finds it.
-    const batch = rest.length === 1 ? this.patchFor(snap, rest[0]!) : rest.length ? this.repo.patchMany(snap.oldSha, snap.newSha, rest, this.context) : Promise.resolve('');
+    const batch =
+      rest.length === 1
+        ? this.patchFor(snap, rest[0]!)
+        : rest.length
+          ? this.repo.patchMany(snap.oldSha, snap.newSha, rest, this.context)
+          : Promise.resolve('');
     return [...(await Promise.all(cached)), await batch].join('');
   }
 
@@ -95,7 +100,11 @@ export class Snapshotter {
   }
 
   private async compute(version: number): Promise<Snapshot> {
-    const [oldSha, newSha, headSha] = await Promise.all([this.resolveOld(), this.resolveNew(), this.repo.resolve('HEAD').catch(() => '')]);
+    const [oldSha, newSha, headSha] = await Promise.all([
+      this.resolveOld(),
+      this.resolveNew(),
+      this.repo.resolve('HEAD').catch(() => ''),
+    ]);
     // The tree belongs to the selected new side: a commit's own listing, or the
     // index plus untracked files (added below via `changed`) for the worktree.
     const [tracked, changed] = await Promise.all([
@@ -141,11 +150,15 @@ export class Snapshotter {
       else unknown.push(f);
     }
     if (newSha === 'worktree') {
-      await mapLimit(unknown, SNIFF_CONCURRENCY, async (f) => this.classify(f, await this.repo.head('worktree', f.path, SNIFF_BYTES).catch(() => null)));
+      await mapLimit(unknown, SNIFF_CONCURRENCY, async (f) =>
+        this.classify(f, await this.repo.head('worktree', f.path, SNIFF_BYTES).catch(() => null)),
+      );
       return;
     }
     // A missing blob (the sniff cannot fail the snapshot) reads as not generated.
-    const heads = await this.repo.blobHeads(unknown.map((f) => f.blob).filter(Boolean), SNIFF_BYTES).catch(() => new Map<string, Buffer>());
+    const heads = await this.repo
+      .blobHeads(unknown.map((f) => f.blob).filter(Boolean), SNIFF_BYTES)
+      .catch(() => new Map<string, Buffer>());
     for (const f of unknown) this.classify(f, heads.get(f.blob) ?? null);
   }
 

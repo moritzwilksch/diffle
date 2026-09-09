@@ -107,19 +107,29 @@ export function createApi(deps: ApiDeps): Hono {
     // Default scope is the diff's new side; `scope=repo` widens to the whole tree, `scope=file`
     // narrows to `path`, which must be on the new side (an unknown path matches nothing).
     const scope = c.req.query('scope');
-    const paths = scope === 'repo'
-      ? undefined
-      : scope === 'file'
-        ? snap.tree.filter((p) => p === c.req.query('path'))
-        : snap.changed.filter((f) => f.status !== 'D').map((f) => f.path);
-    const { matches, truncated } = await session.repo.grep(q, snap.newSha, 500, { word: flag('word'), ignoreCase: flag('i'), regex: flag('re'), paths });
+    const paths =
+      scope === 'repo'
+        ? undefined
+        : scope === 'file'
+          ? snap.tree.filter((p) => p === c.req.query('path'))
+          : snap.changed.filter((f) => f.status !== 'D').map((f) => f.path);
+    const { matches, truncated } = await session.repo.grep(q, snap.newSha, 500, {
+      word: flag('word'),
+      ignoreCase: flag('i'),
+      regex: flag('re'),
+      paths,
+    });
     const body: SearchResponse = { query: q, matches, truncated };
     return c.json(body);
   });
 
-  const threadQuery = (c: { req: { query(k: string): string | undefined } }, defaultState: ThreadState): ThreadQuery | { error: string } => {
+  const threadQuery = (
+    c: { req: { query(k: string): string | undefined } },
+    defaultState: ThreadState,
+  ): ThreadQuery | { error: string } => {
     const state = c.req.query('state') ?? defaultState;
-    if (state !== 'open' && state !== 'resolved' && state !== 'all') return { error: 'state must be open, resolved or all' };
+    if (state !== 'open' && state !== 'resolved' && state !== 'all')
+      return { error: 'state must be open, resolved or all' };
     const q: ThreadQuery = { state };
     const path = c.req.query('path');
     if (path) q.path = path;
@@ -194,7 +204,8 @@ export function createApi(deps: ApiDeps): Hono {
   app.post('/api/github/export', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Partial<GithubExportRequest>;
     const ids = body.threadIds;
-    if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string'))) return c.json({ error: 'threadIds must be a string list' }, 400);
+    if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
+      return c.json({ error: 'threadIds must be a string list' }, 400);
     const snap = await session.snapshotter.current();
     return c.json(await github.export({ snap, threads: session.comments.threads({ state: 'all' }), threadIds: ids }));
   });
@@ -226,7 +237,8 @@ export function createApi(deps: ApiDeps): Hono {
   const lspFor = async (path?: string): Promise<{ lsp: LspBridge } | { error: string }> => {
     if (!deps.lsp) return { error: 'language server not started; run diffle with --lsp' };
     const snap = await session.snapshotter.current();
-    if (!followsCheckout(snap)) return { error: 'symbol navigation needs the new side to be the worktree or the checked-out commit' };
+    if (!followsCheckout(snap))
+      return { error: 'symbol navigation needs the new side to be the worktree or the checked-out commit' };
     if (path != null && !snap.tree.includes(path)) return { error: `${path} is not in the snapshot` };
     return { lsp: deps.lsp };
   };
@@ -284,8 +296,10 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.put('/api/config', async (c) => {
     const body = (await c.req.json()) as Partial<UserConfig>;
-    if (body.autoViewed != null && !Array.isArray(body.autoViewed)) return c.json({ error: 'autoViewed must be a list' }, 400);
-    if (body.contextLines != null && typeof body.contextLines !== 'number') return c.json({ error: 'contextLines must be a number' }, 400);
+    if (body.autoViewed != null && !Array.isArray(body.autoViewed))
+      return c.json({ error: 'autoViewed must be a list' }, 400);
+    if (body.contextLines != null && typeof body.contextLines !== 'number')
+      return c.json({ error: 'contextLines must be a number' }, 400);
     // lspCommand is a shell command; only the CLI may write it (`diffle config set-lsp`).
     const { lspCommand: _ignored, ...writable } = body;
     await deps.config.set(writable);
@@ -315,7 +329,9 @@ function lspStatus(deps: ApiDeps): LspStatus {
 function isLspPosition(p: unknown): p is LspPosition {
   if (typeof p !== 'object' || p == null) return false;
   const x = p as Record<string, unknown>;
-  return typeof x.path === 'string' && typeof x.line === 'number' && x.line >= 1 && typeof x.col === 'number' && x.col >= 0;
+  return (
+    typeof x.path === 'string' && typeof x.line === 'number' && x.line >= 1 && typeof x.col === 'number' && x.col >= 0
+  );
 }
 
 function isViewedEntry(e: unknown): e is ViewedEntry {

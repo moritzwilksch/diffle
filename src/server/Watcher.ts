@@ -43,7 +43,8 @@ export class Watcher extends EventEmitter<{ dirty: [] }> {
           const rel = relative(t.root, abs);
           if (rel === '') return false;
           if (rel === '.git' || rel.startsWith(`.git${sep}`)) return true;
-          if (gitDirRel && !gitDirRel.startsWith('..') && (rel === gitDirRel || rel.startsWith(gitDirRel + sep))) return true;
+          if (gitDirRel && !gitDirRel.startsWith('..') && (rel === gitDirRel || rel.startsWith(gitDirRel + sep)))
+            return true;
           const posix = rel.split(sep).join('/');
           const ignored = t.ignored();
           if (ignored.has(posix) || ignored.has(posix + '/')) return true;
@@ -60,7 +61,12 @@ export class Watcher extends EventEmitter<{ dirty: [] }> {
       this.watcher.on('error', (err) => console.error('[diffle] watcher error:', err));
     }
     // Git atomically replaces metadata files; native file watches can lose those events.
-    this.meta = watch(metaPaths(t), { ignoreInitial: true, ignorePermissionErrors: true, usePolling: true, interval: 100 });
+    this.meta = watch(metaPaths(t), {
+      ignoreInitial: true,
+      ignorePermissionErrors: true,
+      usePolling: true,
+      interval: 100,
+    });
     this.meta.on('all', (_event, path) => this.schedule(path));
     this.meta.on('error', (err) => console.error('[diffle] watcher error:', err));
     // A handful of paths: waiting for the scan makes "started" mean "observing".
@@ -104,5 +110,12 @@ function metaPaths(t: WatchTarget): string[] {
 }
 
 function refPaths(gitDir: string, commonDir: string): string[] {
-  return [...new Set([join(gitDir, 'HEAD'), join(commonDir, 'HEAD'), join(commonDir, 'refs'), join(commonDir, 'packed-refs')])];
+  return [
+    ...new Set([
+      join(gitDir, 'HEAD'),
+      join(commonDir, 'HEAD'),
+      join(commonDir, 'refs'),
+      join(commonDir, 'packed-refs'),
+    ]),
+  ];
 }

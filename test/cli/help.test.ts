@@ -17,7 +17,8 @@ describe('diffle --help', () => {
   const commands = out.slice(out.indexOf('\nCommands:')).split('\nShorthands')[0]!;
 
   it('keeps the shorthands out of the command list, in a section of their own', () => {
-    for (const shorthand of ['working', 'branch', 'pr']) expect(commands).not.toMatch(new RegExp(`^ +${shorthand}\\b`, 'm'));
+    for (const shorthand of ['working', 'branch', 'pr'])
+      expect(commands).not.toMatch(new RegExp(`^ +${shorthand}\\b`, 'm'));
     const shorthands = out.slice(out.indexOf('Shorthands'));
     for (const shorthand of ['working', 'branch [base]', 'pr [number|url]']) expect(shorthands).toContain(shorthand);
   });

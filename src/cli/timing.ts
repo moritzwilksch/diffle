@@ -14,7 +14,9 @@ export class Timing {
     const width = Math.max(...this.marks.map(([n]) => n.length));
     let prev = 0;
     for (const [name, ms] of this.marks) {
-      console.error(`[timing] ${name.padEnd(width)}  +${(ms - prev).toFixed(1).padStart(7)} ms  @${ms.toFixed(1).padStart(7)} ms`);
+      console.error(
+        `[timing] ${name.padEnd(width)}  +${(ms - prev).toFixed(1).padStart(7)} ms  @${ms.toFixed(1).padStart(7)} ms`,
+      );
       prev = ms;
     }
   }

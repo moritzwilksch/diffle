@@ -28,11 +28,31 @@ describe('diffRows with revealed context', () => {
       [5, 12],
       [20, 22],
     ]);
-    expect(rows.map((r) => `${r.side[0]}${r.line}`)).toEqual(['a5', 'a6', 'a7', 'a8', 'a9', 'a10', 'd11', 'a11', 'a12', 'a20', 'a21', 'a22', 'a30', 'd31', 'a31', 'a32']);
+    expect(rows.map((r) => `${r.side[0]}${r.line}`)).toEqual([
+      'a5',
+      'a6',
+      'a7',
+      'a8',
+      'a9',
+      'a10',
+      'd11',
+      'a11',
+      'a12',
+      'a20',
+      'a21',
+      'a22',
+      'a30',
+      'd31',
+      'a31',
+      'a32',
+    ]);
     expect(rows.filter((r) => r.hunkStart).map((r) => r.line)).toEqual([11, 31]);
 
     const nav: NavItem[] = [{ id: 'diff:f.txt@0', path: 'f.txt', collapsed: false, rows }];
-    const cur = cursorFromSelection(nav, { id: nav[0]!.id, range: { start: 21, side: 'additions', end: 21, endSide: 'additions' } })!;
+    const cur = cursorFromSelection(nav, {
+      id: nav[0]!.id,
+      range: { start: 21, side: 'additions', end: 21, endSide: 'additions' },
+    })!;
     expect(rows[cur.rowIndex]!.line).toBe(21);
     expect(rows[step(nav, cur, 1)!.rowIndex]!.line).toBe(22);
     expect(rows[step(nav, cur, -1)!.rowIndex]!.line).toBe(20);

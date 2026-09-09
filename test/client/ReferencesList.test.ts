@@ -19,7 +19,9 @@ vi.mock('../../src/client/lsp/highlight.js', () => ({
 const { useStore } = await import('../../src/client/store.js');
 const { ReferencesList } = await import('../../src/client/lsp/ReferencesList.js');
 
-const items = ['a.ts', 'b.ts'].flatMap((path) => [1, 2, 3].map((line) => ({ path, line, text: `  ${path}:${line}  ` })));
+const items = ['a.ts', 'b.ts'].flatMap((path) =>
+  [1, 2, 3].map((line) => ({ path, line, text: `  ${path}:${line}  ` })),
+);
 
 let root: Root;
 let host: HTMLDivElement;

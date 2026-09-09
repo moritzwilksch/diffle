@@ -24,7 +24,8 @@ export class UserConfigStore {
       const parsed = JSON.parse(await readFile(file, 'utf8')) as Partial<UserConfig>;
       config = normalize(parsed);
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`[diffle] ignoring unreadable config ${file}:`, e);
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT')
+        console.error(`[diffle] ignoring unreadable config ${file}:`, e);
     }
     return new UserConfigStore(file, config);
   }
@@ -49,12 +50,16 @@ export class UserConfigStore {
 
 function normalize(c: Partial<UserConfig>): UserConfig {
   const autoViewed = Array.isArray(c.autoViewed)
-    ? c.autoViewed.filter((p): p is string => typeof p === 'string').map((p) => p.trim()).filter(Boolean)
+    ? c.autoViewed
+        .filter((p): p is string => typeof p === 'string')
+        .map((p) => p.trim())
+        .filter(Boolean)
     : DEFAULT_USER_CONFIG.autoViewed;
   const contextLines =
     typeof c.contextLines === 'number' && Number.isFinite(c.contextLines)
       ? Math.max(0, Math.min(10_000, Math.floor(c.contextLines)))
       : DEFAULT_USER_CONFIG.contextLines;
-  const lspCommand = typeof c.lspCommand === 'string' && c.lspCommand.trim() ? c.lspCommand.trim() : DEFAULT_USER_CONFIG.lspCommand;
+  const lspCommand =
+    typeof c.lspCommand === 'string' && c.lspCommand.trim() ? c.lspCommand.trim() : DEFAULT_USER_CONFIG.lspCommand;
   return { autoViewed, contextLines, lspCommand };
 }

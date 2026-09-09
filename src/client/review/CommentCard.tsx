@@ -1,4 +1,15 @@
-import { AlertTriangle, Check, Copy, GitPullRequestArrow, MessageSquare, Pencil, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Copy,
+  GitPullRequestArrow,
+  MessageSquare,
+  Pencil,
+  Reply,
+  RotateCcw,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { copyText } from '../clipboard.js';
@@ -40,7 +51,9 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const range = a.startLine === a.endLine ? `${a.startLine}` : `${a.startLine}–${a.endLine}`;
 
   return (
-    <div className={`annotation comment-card ${thread.stale ? 'stale' : ''} ${thread.resolved ? 'resolved' : ''} ${focused ? 'focused' : ''}`}>
+    <div
+      className={`annotation comment-card ${thread.stale ? 'stale' : ''} ${thread.resolved ? 'resolved' : ''} ${focused ? 'focused' : ''}`}
+    >
       <div className="meta">
         <MessageSquare size="0.8125rem" />
         <span className="loc">
@@ -59,7 +72,11 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
         <span className="spacer" />
         {solo && <CopyMessageButton text={solo.body} size="0.875rem" />}
         {solo && (
-          <button className="ghost icon" onClick={() => setEditingId(editingSolo ? null : solo.id)} title={editingSolo ? 'Cancel' : 'Edit (e)'}>
+          <button
+            className="ghost icon"
+            onClick={() => setEditingId(editingSolo ? null : solo.id)}
+            title={editingSolo ? 'Cancel' : 'Edit (e)'}
+          >
             {editingSolo ? <X size="0.875rem" /> : <Pencil size="0.875rem" />}
           </button>
         )}
@@ -78,7 +95,11 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
           {post.armed ? 'Add?' : posted ? exportLabel(posted) : null}
         </button>
-        <button className="ghost icon" onClick={() => (replying ? closeReply() : openReply(thread.id))} title={replying ? 'Cancel reply' : 'Reply'}>
+        <button
+          className="ghost icon"
+          onClick={() => (replying ? closeReply() : openReply(thread.id))}
+          title={replying ? 'Cancel reply' : 'Reply'}
+        >
           {replying ? <X size="0.875rem" /> : <Reply size="0.875rem" />}
         </button>
         <button
@@ -88,7 +109,11 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
         >
           {thread.resolved ? <RotateCcw size="0.875rem" /> : <Check size="0.875rem" />}
         </button>
-        <button className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`} onClick={del.fire} title={del.armed ? 'Click again to delete this thread' : 'Delete thread (dd)'}>
+        <button
+          className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`}
+          onClick={del.fire}
+          title={del.armed ? 'Click again to delete this thread' : 'Delete thread (dd)'}
+        >
           <Trash2 size="0.875rem" />
           {del.armed && 'Delete?'}
         </button>
@@ -122,11 +147,19 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
         <div className="who">
           <span className="spacer" />
           <CopyMessageButton text={message.body} size="0.75rem" />
-          <button className="ghost icon" onClick={() => setEditingId(editing ? null : message.id)} title={editing ? 'Cancel' : 'Edit (e)'}>
+          <button
+            className="ghost icon"
+            onClick={() => setEditingId(editing ? null : message.id)}
+            title={editing ? 'Cancel' : 'Edit (e)'}
+          >
             {editing ? <X size="0.75rem" /> : <Pencil size="0.75rem" />}
           </button>
           {!first && (
-            <button className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`} onClick={del.fire} title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}>
+            <button
+              className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`}
+              onClick={del.fire}
+              title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}
+            >
               <Trash2 size="0.75rem" />
               {del.armed && 'Delete?'}
             </button>

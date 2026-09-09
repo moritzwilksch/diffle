@@ -49,7 +49,11 @@ export function CommentComposer({ lines }: { lines: string }) {
         <span className="hint">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
         </span>
-        <button className="ghost" onClick={() => void suggest()} title="Insert the selected lines as a suggestion block to edit">
+        <button
+          className="ghost"
+          onClick={() => void suggest()}
+          title="Insert the selected lines as a suggestion block to edit"
+        >
           <FileDiff size="0.8125rem" /> Suggest change
         </button>
         <button onClick={closeDraft}>Cancel</button>

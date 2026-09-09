@@ -3,9 +3,7 @@
 export type Side = 'old' | 'new';
 
 /** How the old side is resolved. Kept symbolic so live modes can re-resolve. */
-export type OldSpec =
-  | { kind: 'rev'; rev: string }
-  | { kind: 'merge-base'; a: string; b: string };
+export type OldSpec = { kind: 'rev'; rev: string } | { kind: 'merge-base'; a: string; b: string };
 
 /** What the user asks for. Resolved by the server into a ModeSpec. */
 export type ModeRequest =

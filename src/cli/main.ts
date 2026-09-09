@@ -19,7 +19,14 @@ import { Timing } from './timing.js';
 /** Minimal ANSI colors; off when stderr is not a TTY or NO_COLOR is set. */
 const useColor = process.stderr.isTTY && !process.env.NO_COLOR;
 const paint = (code: string) => (s: string) => (useColor ? `\u001b[${code}m${s}\u001b[0m` : s);
-const c = { red: paint('31'), green: paint('32'), yellow: paint('33'), cyan: paint('36'), bold: paint('1'), dim: paint('2') };
+const c = {
+  red: paint('31'),
+  green: paint('32'),
+  yellow: paint('33'),
+  cyan: paint('36'),
+  bold: paint('1'),
+  dim: paint('2'),
+};
 
 interface GlobalOpts {
   C?: string;
@@ -41,13 +48,24 @@ const program = new Command()
   .description('Review a git diff in the browser and export line comments as an agent prompt.')
   .version(pkg.version, '-v, --version', 'print the version and exit')
   .option('-C <path>', 'run as if started in <path> (any directory inside a git worktree)')
-  .option('-p, --port <port>', `port to listen on (default: ${DEFAULT_PORT}, or the next free one; 0 = random)`, parsePort)
+  .option(
+    '-p, --port <port>',
+    `port to listen on (default: ${DEFAULT_PORT}, or the next free one; 0 = random)`,
+    parsePort,
+  )
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
   .option('--no-open', 'do not open a browser')
   .option('--no-watch', 'do not watch for changes')
-  .addOption(new Option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)').argParser(collect).default([], 'none'))
+  .addOption(
+    new Option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)')
+      .argParser(collect)
+      .default([], 'none'),
+  )
   .option('-U, --context <n>', 'context lines around changes for this session (default: config, 5)', parseContext)
-  .option('--lsp [command]', 'start a language server for go-to-definition, references and symbols (default command: config lspCommand, "pyrefly lsp")')
+  .option(
+    '--lsp [command]',
+    'start a language server for go-to-definition, references and symbols (default command: config lspCommand, "pyrefly lsp")',
+  )
   .option('--timing', 'print startup phase timings to stderr')
   .option('--dev', 'serve the client through Vite (development)', process.env.DIFFLE_DEV === '1' ? true : undefined)
   .argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>')
@@ -94,7 +112,9 @@ program
   .argument('[pr]', 'pull request number or url; default: the pull request for this branch')
   .summary('a GitHub pull request')
   .description('A GitHub pull request, as GitHub shows it: merge-base(base, head) vs head.')
-  .action(async (pr: string | undefined, _o, cmd: Command) => run({ kind: 'pr', pr }, cmd.optsWithGlobals<GlobalOpts>()));
+  .action(async (pr: string | undefined, _o, cmd: Command) =>
+    run({ kind: 'pr', pr }, cmd.optsWithGlobals<GlobalOpts>()),
+  );
 
 const config = program.command('config').description('show or edit the user config (same settings as the UI dialog)');
 config
@@ -150,7 +170,9 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
   const timing = new Timing(opts.timing);
   // A signal during cloning must let git settle before removing its destination.
   let interrupted = false;
-  const interrupt = () => { interrupted = true; };
+  const interrupt = () => {
+    interrupted = true;
+  };
   process.on('SIGINT', interrupt);
   process.on('SIGTERM', interrupt);
   let review: Awaited<ReturnType<typeof openReviewRepository>> | undefined;
@@ -172,10 +194,19 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
   }
 }
 
-async function serve(req: ModeRequest, opts: GlobalOpts, repo: GitRepo, closeRepo: () => Promise<void>, config: UserConfigStore, timing: Timing): Promise<void> {
+async function serve(
+  req: ModeRequest,
+  opts: GlobalOpts,
+  repo: GitRepo,
+  closeRepo: () => Promise<void>,
+  config: UserConfigStore,
+  timing: Timing,
+): Promise<void> {
   const hub = new WsHub();
   const session = new Session(repo, hub, { watch: opts.watch, context: opts.context ?? config.get().contextLines });
-  const lsp = opts.lsp ? startLsp(typeof opts.lsp === 'string' ? opts.lsp : config.get().lspCommand, repo, session, hub) : null;
+  const lsp = opts.lsp
+    ? startLsp(typeof opts.lsp === 'string' ? opts.lsp : config.get().lspCommand, repo, session, hub)
+    : null;
   const server = new Server(
     { session, config, extraAutoViewed: opts.autoViewed, hub, lsp },
     { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host, dev: opts.dev || !hasClientBuild() },
@@ -225,8 +256,14 @@ async function serve(req: ModeRequest, opts: GlobalOpts, repo: GitRepo, closeRep
     console.error(`🔍 ${c.dim('comparing')} ${c.bold(snap.mode.label)}`);
     if (n === 0) console.error(`${c.yellow('!')} No differences. Open any file from the tree to comment on it.`);
     else console.error(`📝 ${n} changed file${n === 1 ? '' : 's'}  ${c.green(`+${adds}`)} ${c.red(`−${dels}`)}`);
-    if (snap.mode.live !== 'none') console.error(`👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`);
-    if (lsp) console.error(`🧭 ${c.dim('lsp')} ${lsp.status().command}${followsCheckout(snap) ? '' : c.dim(' (symbol navigation needs the new side to be the checkout)')}`);
+    if (snap.mode.live !== 'none')
+      console.error(
+        `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
+      );
+    if (lsp)
+      console.error(
+        `🧭 ${c.dim('lsp')} ${lsp.status().command}${followsCheckout(snap) ? '' : c.dim(' (symbol navigation needs the new side to be the checkout)')}`,
+      );
     timing.report();
   } catch (e) {
     await dispose();
@@ -248,7 +285,9 @@ async function serve(req: ModeRequest, opts: GlobalOpts, repo: GitRepo, closeRep
  */
 function startLsp(command: string, repo: GitRepo, session: Session, hub: WsHub): LspBridge {
   session.onSnapshot((snap) => {
-    const paths = followsCheckout(snap) ? snap.changed.filter((f) => f.status !== 'D' && !f.binary && isPython(f.path)).map((f) => f.path) : [];
+    const paths = followsCheckout(snap)
+      ? snap.changed.filter((f) => f.status !== 'D' && !f.binary && isPython(f.path)).map((f) => f.path)
+      : [];
     void lsp.track(paths);
   });
   const lsp = LspBridge.start({

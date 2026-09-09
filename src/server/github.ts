@@ -136,14 +136,21 @@ export class GithubExporter {
  * of an already-submitted review are out of reach — those would have to be replied to.
  */
 async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
-  if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)');
-  if (snap.headSha === '' || snap.newSha !== snap.headSha) throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
+  if (snap.newSha === 'worktree')
+    throw new GithubError(
+      'GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)',
+    );
+  if (snap.headSha === '' || snap.newSha !== snap.headSha)
+    throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
   const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
-  if (review.comments.length === 0) throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
+  if (review.comments.length === 0)
+    throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
   const pr = parsePr(await run(['pr', 'view', '--json', 'number,url,headRefOid'], { cwd: snap.root }));
   if (pr.headRefOid !== snap.newSha) {
-    throw new GithubError(`the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`);
+    throw new GithubError(
+      `the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`,
+    );
   }
 
   for (const [i, comment] of review.comments.entries()) {
@@ -176,7 +183,9 @@ async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportI
         skipped.push({ id, reason: 'already in the review' });
         continue;
       }
-      await graphql(run, snap.root, UPDATE_COMMENT, { input: { pullRequestReviewCommentId: hit.nodeId, body: c.body } });
+      await graphql(run, snap.root, UPDATE_COMMENT, {
+        input: { pullRequestReviewCommentId: hit.nodeId, body: c.body },
+      });
       updated++;
     }
     for (const c of add) {
@@ -250,7 +259,12 @@ interface ThreadNode {
 
 interface ThreadsQueryData {
   repository?: {
-    pullRequest?: { reviewThreads?: { pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }; nodes?: (ThreadNode | null)[] } };
+    pullRequest?: {
+      reviewThreads?: {
+        pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+        nodes?: (ThreadNode | null)[];
+      };
+    };
   };
 }
 
@@ -260,13 +274,23 @@ interface ThreadsQueryData {
  * `side` and `start_line` null for one, and the GraphQL comment type has no side field at all.
  * A failed or incomplete lookup aborts the export: absence is safe to infer only from a complete read.
  */
-async function pendingComments(run: GhRunner, cwd: string, pr: PrInfo, reviewId: string): Promise<Map<string, PendingComment[]>> {
+async function pendingComments(
+  run: GhRunner,
+  cwd: string,
+  pr: PrInfo,
+  reviewId: string,
+): Promise<Map<string, PendingComment[]>> {
   const by = new Map<string, PendingComment[]>();
   const { owner, repo } = repoOfPrUrl(pr.url);
   let after: string | null = null;
   // Bound API work, but never use a partial map to decide which comments to add.
   for (let page = 0; page < 10; page++) {
-    const data: ThreadsQueryData = await graphql<ThreadsQueryData>(run, cwd, THREADS_QUERY, { owner, repo, number: pr.number, after });
+    const data: ThreadsQueryData = await graphql<ThreadsQueryData>(run, cwd, THREADS_QUERY, {
+      owner,
+      repo,
+      number: pr.number,
+      after,
+    });
     const threads = data.repository?.pullRequest?.reviewThreads;
     if (!threads?.nodes || typeof threads.pageInfo?.hasNextPage !== 'boolean') {
       throw new GithubError('cannot read the complete pending review', 502);
@@ -296,14 +320,23 @@ const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){up
 
 /** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */
 async function createPendingReview(run: GhRunner, cwd: string, number: number, review: ReviewPayload): Promise<void> {
-  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--input', '-'], { cwd, input: JSON.stringify(review) });
+  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--input', '-'], {
+    cwd,
+    input: JSON.stringify(review),
+  });
 }
 
 const ADD_THREAD = `mutation($input:AddPullRequestReviewThreadInput!){addPullRequestReviewThread(input:$input){thread{id}}}`;
 
 /** Appends one thread through GraphQL; REST cannot extend a pending review. */
 async function addToPendingReview(run: GhRunner, cwd: string, reviewId: string, c: ReviewComment): Promise<void> {
-  const input: Record<string, unknown> = { pullRequestReviewId: reviewId, path: c.path, line: c.line, side: c.side, body: c.body };
+  const input: Record<string, unknown> = {
+    pullRequestReviewId: reviewId,
+    path: c.path,
+    line: c.line,
+    side: c.side,
+    body: c.body,
+  };
   if (c.start_line != null) {
     input.startLine = c.start_line;
     input.startSide = c.start_side;
@@ -348,7 +381,8 @@ export const runGh: GhRunner = (args, { cwd, input }) =>
   new Promise((resolve, reject) => {
     const child = execFile('gh', args, { cwd, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (!err) return resolve(stdout);
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reject(new GithubError('gh is not installed; see https://cli.github.com'));
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT')
+        return reject(new GithubError('gh is not installed; see https://cli.github.com'));
       const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
       // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
       reject(new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409));

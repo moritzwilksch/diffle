@@ -23,10 +23,33 @@ import {
 } from '../shared/protocol.js';
 import { api } from './api.js';
 import { anchorFromRange, resolveRange, sideOf } from './comments/anchor.js';
-import { buildNav, cursorFromSelection, selectionFor, step, stepFile, stepHunk, type Cursor, type LineRange, type NavItem } from './keyboard/nav.js';
+import {
+  buildNav,
+  cursorFromSelection,
+  selectionFor,
+  step,
+  stepFile,
+  stepHunk,
+  type Cursor,
+  type LineRange,
+  type NavItem,
+} from './keyboard/nav.js';
 import { lspTarget, type TokenTarget } from './lsp/target.js';
 import type { ExportOutcome } from './model.js';
-import { currentPath, filterSymbols, isCollapsed, isViewed, itemIdOf, lastCommitsRequest, linesOf, OVERSIZED_LINES, patchBatches, pathFromItemId, reuseThreads, visibleThreads } from './model.js';
+import {
+  currentPath,
+  filterSymbols,
+  isCollapsed,
+  isViewed,
+  itemIdOf,
+  lastCommitsRequest,
+  linesOf,
+  OVERSIZED_LINES,
+  patchBatches,
+  pathFromItemId,
+  reuseThreads,
+  visibleThreads,
+} from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 
 export type Loaded =
@@ -295,7 +318,13 @@ export interface ReviewState {
   /** Bumped when the user wants CodeView to scroll to `scrollTarget`. */
   /** align 'eye' pins the line at the vertical center of the viewport for jump navigation. */
   /** 'top' / 'bottom' pin the line near the edges of the viewport (zt / zb), the same way 'eye' pins it at the gaze point. */
-  scrollTarget: { id: string; line?: number; side?: Side; align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom'; nonce: number } | null;
+  scrollTarget: {
+    id: string;
+    line?: number;
+    side?: Side;
+    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom';
+    nonce: number;
+  } | null;
 
   /** Fetches everything unconditionally: the first load, and the resync after the socket reconnects. */
   boot(): Promise<void>;
@@ -418,7 +447,8 @@ export const useStore = create<ReviewState>((set, get) => {
    * push while a reconnect resyncs must not be judged against the previous lifetime's count.
    */
   let resyncing = false;
-  const accounted = (version: number) => version <= fetching || (!resyncing && version <= (get().snapshot?.version ?? 0));
+  const accounted = (version: number) =>
+    version <= fetching || (!resyncing && version <= (get().snapshot?.version ?? 0));
   /** Threads and viewed marks for a transition, numbered so a refresh started later in the same generation wins. */
   const fetchLists = () => {
     const tt = threadsSeq.start();
@@ -466,7 +496,8 @@ export const useStore = create<ReviewState>((set, get) => {
     if (have != null) return have;
     const g = generation;
     const res = await loadFile(path, side);
-    if (current(g)) set((s) => ({ contents: { ...s.contents, [path]: { ...s.contents[path], [side]: res.contents } } }));
+    if (current(g))
+      set((s) => ({ contents: { ...s.contents, [path]: { ...s.contents[path], [side]: res.contents } } }));
     return res.contents;
   };
 
@@ -474,12 +505,17 @@ export const useStore = create<ReviewState>((set, get) => {
    * New content generation for `paths`: the item ids change, so the selection
    * and the draft move to the new ids and the cursor survives the reload.
    */
-  const regen = (s: ReviewState, paths: string[]): Pick<ReviewState, 'gens' | 'selection' | 'draft' | 'scrollTarget' | 'reveal'> => {
+  const regen = (
+    s: ReviewState,
+    paths: string[],
+  ): Pick<ReviewState, 'gens' | 'selection' | 'draft' | 'scrollTarget' | 'reveal'> => {
     const gens = { ...s.gens };
     for (const p of paths) gens[p] = (gens[p] ?? 0) + 1;
     const moved = <T extends { id: string }>(x: T): T => {
       const path = pathFromItemId(x.id);
-      return paths.includes(path) ? { ...x, id: itemIdOf({ snapshot: s.snapshot, gens, fileView: s.fileView }, path) } : x;
+      return paths.includes(path)
+        ? { ...x, id: itemIdOf({ snapshot: s.snapshot, gens, fileView: s.fileView }, path) }
+        : x;
     };
     return {
       gens,
@@ -507,14 +543,23 @@ export const useStore = create<ReviewState>((set, get) => {
       const f = byPath.get(p)!;
       if (f.binary) immediate[p] = { kind: 'binary' };
       // A diff already on screen is refreshed in place whatever its size; only an unloaded one waits to be asked for.
-      else if (linesOf(f) > OVERSIZED_LINES && prev[p]?.kind !== 'diff') immediate[p] = { kind: 'oversized', lines: linesOf(f) };
+      else if (linesOf(f) > OVERSIZED_LINES && prev[p]?.kind !== 'diff')
+        immediate[p] = { kind: 'oversized', lines: linesOf(f) };
       else textual.push(f);
     }
-    if (Object.keys(immediate).length > 0) set((s) => ({ loaded: { ...s.loaded, ...immediate }, ...regen(s, Object.keys(immediate)) }));
+    if (Object.keys(immediate).length > 0)
+      set((s) => ({ loaded: { ...s.loaded, ...immediate }, ...regen(s, Object.keys(immediate)) }));
     const s = get();
-    const first = [s.fileView?.path, s.activePath, s.selection && pathFromItemId(s.selection.id)].filter((p): p is string => p != null);
+    const first = [s.fileView?.path, s.activePath, s.selection && pathFromItemId(s.selection.id)].filter(
+      (p): p is string => p != null,
+    );
     const batches = patchBatches(snap, textual, first, (p) => isCollapsed(s, p));
-    await mapLimit(batches, 2, () => !current(g), (batch) => loadBatch(snap, batch, g));
+    await mapLimit(
+      batches,
+      2,
+      () => !current(g),
+      (batch) => loadBatch(snap, batch, g),
+    );
   };
 
   /** One patch request for `paths` (non-binary changed files), committed on arrival and queued for hydration. */
@@ -539,7 +584,12 @@ export const useStore = create<ReviewState>((set, get) => {
     // First paint: the parsed patches, straight away.
     set((s) => ({ loaded: { ...s.loaded, ...loaded }, ...regen(s, Object.keys(loaded)) }));
     // A submodule's patch is the commit-id change itself; there is no file to hydrate from.
-    hydrate(paths.filter((p) => !byPath.get(p)!.submodule), files, loaded, g);
+    hydrate(
+      paths.filter((p) => !byPath.get(p)!.submodule),
+      files,
+      loaded,
+      g,
+    );
   };
 
   /**
@@ -562,7 +612,12 @@ export const useStore = create<ReviewState>((set, get) => {
   const HYDRATION_WORKERS = 4;
   const hydrationQueue: HydrationJob[] = [];
   let hydrationWorkers = 0;
-  const hydrate = (paths: string[], files: Map<string, FileDiffMetadata>, committed: Record<string, Loaded>, g: number) => {
+  const hydrate = (
+    paths: string[],
+    files: Map<string, FileDiffMetadata>,
+    committed: Record<string, Loaded>,
+    g: number,
+  ) => {
     for (const p of paths) {
       const f = files.get(p);
       if (f?.isPartial && (f.type === 'change' || f.type === 'rename-changed' || f.type === 'rename-pure')) {
@@ -640,7 +695,14 @@ export const useStore = create<ReviewState>((set, get) => {
         loaded[h.path] = { kind: 'diff', fileDiff: h.fileDiff };
         contents[h.path] = { ...contents[h.path], old: h.old, new: h.new };
       }
-      return { loaded, contents, ...regen(s, live.map((h) => h.path)) };
+      return {
+        loaded,
+        contents,
+        ...regen(
+          s,
+          live.map((h) => h.path),
+        ),
+      };
     });
   };
 
@@ -683,7 +745,11 @@ export const useStore = create<ReviewState>((set, get) => {
     // dropped), or when a side moved: an unchanged file's content follows the commit it is read from.
     const prevView = get().fileView;
     let fileView = modeChanged || prevView == null || !next.tree.includes(prevView.path) ? null : prevView;
-    const viewMoved = prevView != null && (sidesMoved || prevChanged.has(prevView.path) !== nextChanged.has(prevView.path) || reload.includes(prevView.path));
+    const viewMoved =
+      prevView != null &&
+      (sidesMoved ||
+        prevChanged.has(prevView.path) !== nextChanged.has(prevView.path) ||
+        reload.includes(prevView.path));
     // Its item, like a stale diff, stays up until the refetch commits.
     if (fileView && viewMoved) delete contents[fileView.path];
     const collapsed = modeChanged ? {} : { ...get().collapsed };
@@ -707,7 +773,10 @@ export const useStore = create<ReviewState>((set, get) => {
         search: { ...s.search, open: false, kind: 'text', direction: 1, matches: [], index: -1 },
       }));
     }
-    await Promise.all([loadPatches(next, reload, g), ...(fileView && (viewMoved || !fileView.item) ? [loadFileView(fileView.path, g, true)] : [])]);
+    await Promise.all([
+      loadPatches(next, reload, g),
+      ...(fileView && (viewMoved || !fileView.item) ? [loadFileView(fileView.path, g, true)] : []),
+    ]);
   };
 
   /**
@@ -719,13 +788,22 @@ export const useStore = create<ReviewState>((set, get) => {
   const loadFileView = async (path: string, g: number, refresh = false) => {
     // Moving between files inside the view keeps the original way back to the diff.
     const from = get().fileView?.from ?? { position: currentPosition(), activePath: get().activePath };
-    if (!refresh) set({ fileView: { path, item: null, from }, selection: null, visualAnchor: null, draft: null, focusedThread: null });
+    if (!refresh)
+      set({
+        fileView: { path, item: null, from },
+        selection: null,
+        visualAnchor: null,
+        draft: null,
+        focusedThread: null,
+      });
     let item: Loaded;
     let contents: string | undefined;
     try {
       const res = await fetchFile(path, 'new');
       contents = res.contents;
-      item = res.binary ? { kind: 'binary' } : { kind: 'file', file: { name: path, contents: res.contents, cacheKey: `${path}@full@${Date.now()}` } };
+      item = res.binary
+        ? { kind: 'binary' }
+        : { kind: 'file', file: { name: path, contents: res.contents, cacheKey: `${path}@full@${Date.now()}` } };
     } catch (e) {
       item = { kind: 'error', message: String(e) };
     }
@@ -764,7 +842,13 @@ export const useStore = create<ReviewState>((set, get) => {
     const { jumps, jumpIndex } = get();
     const kept = jumps.slice(0, jumpIndex);
     const last = kept[kept.length - 1];
-    if (last && last.path === pos.path && last.line === pos.line && last.side === pos.side && !!last.full === !!pos.full) {
+    if (
+      last &&
+      last.path === pos.path &&
+      last.line === pos.line &&
+      last.side === pos.side &&
+      !!last.full === !!pos.full
+    ) {
       set({ jumps: kept, jumpIndex: kept.length });
       return;
     }
@@ -829,7 +913,13 @@ export const useStore = create<ReviewState>((set, get) => {
     set((s) => ({
       selection: { id: item.id, range: { start: pos.line, side, end: pos.line, endSide: side } },
       activePath: pos.path,
-      scrollTarget: { id: item.id, line: pos.line, side: pos.side, align: 'eye', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+      scrollTarget: {
+        id: item.id,
+        line: pos.line,
+        side: pos.side,
+        align: 'eye',
+        nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+      },
     }));
   };
 
@@ -882,7 +972,13 @@ export const useStore = create<ReviewState>((set, get) => {
       activePath: item.path,
       visualAnchor: keepAnchor ? s.visualAnchor : null,
       focusedThread: null,
-      scrollTarget: { id: item.id, line: row.line, side: row.side === 'deletions' ? 'old' : 'new', align, nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+      scrollTarget: {
+        id: item.id,
+        line: row.line,
+        side: row.side === 'deletions' ? 'old' : 'new',
+        align,
+        nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+      },
     }));
   };
 
@@ -917,7 +1013,8 @@ export const useStore = create<ReviewState>((set, get) => {
     if (lsp.state === 'off') return 'Start diffle with --lsp for symbol navigation';
     if (lsp.state === 'starting') return 'Language server is starting…';
     if (lsp.state === 'unavailable') return `Language server unavailable: ${lsp.message ?? 'unknown error'}`;
-    if (!snapshot || !followsCheckout(snapshot)) return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
+    if (!snapshot || !followsCheckout(snapshot))
+      return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
     return null;
   };
 
@@ -925,7 +1022,13 @@ export const useStore = create<ReviewState>((set, get) => {
   const lspPosition = (target: TokenTarget | null | undefined): LspPosition | null => {
     const reason =
       lspBlocker() ??
-      (!target ? 'Hover a symbol first' : target.side === 'old' ? 'Symbol navigation works on the new side only' : !isPython(target.path) ? 'Not a Python file' : null);
+      (!target
+        ? 'Hover a symbol first'
+        : target.side === 'old'
+          ? 'Symbol navigation works on the new side only'
+          : !isPython(target.path)
+            ? 'Not a Python file'
+            : null);
     if (reason) {
       get().flash(reason);
       return null;
@@ -987,7 +1090,9 @@ export const useStore = create<ReviewState>((set, get) => {
     const path = pathFromItemId(sel.id);
     const side = sideOf(sel);
     const line = sel.range.end;
-    return visibleThreads(s).find((t) => t.anchor.path === path && t.anchor.side === side && line >= t.anchor.startLine && line <= t.anchor.endLine);
+    return visibleThreads(s).find(
+      (t) => t.anchor.path === path && t.anchor.side === side && line >= t.anchor.startLine && line <= t.anchor.endLine,
+    );
   };
 
   /** The authoritative list replaces the store's; threads that did not change keep their objects. */
@@ -1070,7 +1175,15 @@ export const useStore = create<ReviewState>((set, get) => {
     pickModeEntry(n) {
       set({ modeMenuOpen: false });
       const req: ModeRequest | null =
-        n === 1 ? { kind: 'pr' } : n === 2 ? { kind: 'branch' } : n === 3 ? { kind: 'working' } : n === 4 ? lastCommitsRequest(get().lastCommits) : null;
+        n === 1
+          ? { kind: 'pr' }
+          : n === 2
+            ? { kind: 'branch' }
+            : n === 3
+              ? { kind: 'working' }
+              : n === 4
+                ? lastCommitsRequest(get().lastCommits)
+                : null;
       if (req) void get().switchMode(req);
       else set({ modeMenuOpen: true, twoRefsOpen: true });
     },
@@ -1097,9 +1210,32 @@ export const useStore = create<ReviewState>((set, get) => {
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
     },
-    search: { open: false, kind: 'text', direction: 1, ignoreCase: true, regex: false, scope: 'diff', path: null, focusNonce: 0, query: '', matches: [], index: -1, loading: false, truncated: false },
+    search: {
+      open: false,
+      kind: 'text',
+      direction: 1,
+      ignoreCase: true,
+      regex: false,
+      scope: 'diff',
+      path: null,
+      focusNonce: 0,
+      query: '',
+      matches: [],
+      index: -1,
+      loading: false,
+      truncated: false,
+    },
     openSearch(scope) {
-      set((s) => ({ search: { ...s.search, open: true, kind: 'text', direction: 1, scope: scope ?? s.search.scope, focusNonce: s.search.focusNonce + 1 } }));
+      set((s) => ({
+        search: {
+          ...s.search,
+          open: true,
+          kind: 'text',
+          direction: 1,
+          scope: scope ?? s.search.scope,
+          focusNonce: s.search.focusNonce + 1,
+        },
+      }));
     },
     setSearchOptions(opts) {
       set((s) => ({ search: { ...s.search, ...opts } }));
@@ -1109,7 +1245,9 @@ export const useStore = create<ReviewState>((set, get) => {
     closeSearch() {
       // Escape cancels a search in flight: its matches would move the cursor for a bar no longer shown.
       searchSeq.start();
-      set((s) => ({ search: { ...s.search, open: false, kind: 'text', direction: 1, matches: [], index: -1, loading: false } }));
+      set((s) => ({
+        search: { ...s.search, open: false, kind: 'text', direction: 1, matches: [], index: -1, loading: false },
+      }));
     },
     async runSearch(query) {
       const g = generation;
@@ -1125,9 +1263,18 @@ export const useStore = create<ReviewState>((set, get) => {
         }
         const res = await api.search(query, { ignoreCase, regex, scope, ...(path ? { path } : {}) });
         if (!searchOwned(g, t)) return;
-        set((s) => ({ search: { ...s.search, matches: res.matches, truncated: res.truncated, index: -1, loading: false } }));
+        set((s) => ({
+          search: { ...s.search, matches: res.matches, truncated: res.truncated, index: -1, loading: false },
+        }));
         if (res.matches.length) get().moveMatch(1);
-        else get().flash(scope === 'file' ? `No matches for “${query}” in ${path}` : scope === 'diff' ? `No matches for “${query}” in the diff` : `No matches for “${query}”`);
+        else
+          get().flash(
+            scope === 'file'
+              ? `No matches for “${query}” in ${path}`
+              : scope === 'diff'
+                ? `No matches for “${query}” in the diff`
+                : `No matches for “${query}”`,
+          );
       } catch (e) {
         if (!searchOwned(g, t)) return;
         set((s) => ({ search: { ...s.search, loading: false } }));
@@ -1149,7 +1296,19 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!word) return get().flash('Focus a word first (w / b, or hover one)');
       const g = generation;
       const t = searchSeq.start();
-      set((s) => ({ search: { ...s.search, open: true, kind: 'word', direction: delta, query: word, matches: [], index: -1, loading: true, truncated: false } }));
+      set((s) => ({
+        search: {
+          ...s.search,
+          open: true,
+          kind: 'word',
+          direction: delta,
+          query: word,
+          matches: [],
+          index: -1,
+          loading: true,
+          truncated: false,
+        },
+      }));
       try {
         const res = await api.search(word, { word: true, scope: 'repo' });
         if (!searchOwned(g, t)) return;
@@ -1160,7 +1319,8 @@ export const useStore = create<ReviewState>((set, get) => {
         const rank = (path: string) => order.get(path) ?? Infinity;
         // Positive when the match lies after the cursor in reading order.
         const compare = (m: SearchMatch) => (at ? rank(m.path) - rank(at.path) || m.line - at.line : delta);
-        let index = delta === 1 ? matches.findIndex((m) => compare(m) > 0) : matches.findLastIndex((m) => compare(m) < 0);
+        let index =
+          delta === 1 ? matches.findIndex((m) => compare(m) > 0) : matches.findLastIndex((m) => compare(m) < 0);
         if (index === -1 && matches.length) index = delta === 1 ? 0 : matches.length - 1;
         set((s) => ({ search: { ...s.search, matches, truncated: res.truncated, index, loading: false } }));
         const m = matches[index];
@@ -1275,7 +1435,19 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!m) return;
       // Hand the list to the search bar so n / N continue from the picked reference. A type pick is one-off.
       if (r.kind === 'references') {
-        set((s) => ({ search: { ...s.search, open: true, kind: 'references', direction: 1, query: r.symbol, matches: r.items, index: r.index, loading: false, truncated: false } }));
+        set((s) => ({
+          search: {
+            ...s.search,
+            open: true,
+            kind: 'references',
+            direction: 1,
+            query: r.symbol,
+            matches: r.items,
+            index: r.index,
+            loading: false,
+            truncated: false,
+          },
+        }));
       }
       void jumpToLine(m.path, m.line);
     },
@@ -1288,7 +1460,18 @@ export const useStore = create<ReviewState>((set, get) => {
       if (blocker) return get().flash(blocker);
       const path = get().activePath;
       if (scope === 'document' && (!path || !isPython(path))) return get().flash('Move to a Python file first');
-      set({ symbols: { open: true, scope, path: scope === 'document' ? path : null, query: '', all: [], items: [], index: -1, loading: scope === 'document' } });
+      set({
+        symbols: {
+          open: true,
+          scope,
+          path: scope === 'document' ? path : null,
+          query: '',
+          all: [],
+          items: [],
+          index: -1,
+          loading: scope === 'document',
+        },
+      });
       if (scope !== 'document') return;
       const g = generation;
       try {
@@ -1409,12 +1592,21 @@ export const useStore = create<ReviewState>((set, get) => {
       // A binary or unloaded file has no rows, so no selection: the active file stands in for the cursor there.
       const at = items.findIndex((i) => i.path === get().activePath);
       const from = currentCursor() ?? (at === -1 ? null : { itemIndex: at, rowIndex: 0 });
-      const cur = delta === 'first' ? { itemIndex: 0, rowIndex: 0 } : delta === 'last' ? { itemIndex: items.length - 1, rowIndex: 0 } : stepFile(items, from, delta);
+      const cur =
+        delta === 'first'
+          ? { itemIndex: 0, rowIndex: 0 }
+          : delta === 'last'
+            ? { itemIndex: items.length - 1, rowIndex: 0 }
+            : stepFile(items, from, delta);
       if (!cur) return;
       const item = items[cur.itemIndex]!;
       recordJump();
       if (item.rows.length === 0) {
-        set((s) => ({ selection: null, activePath: item.path, scrollTarget: { id: item.id, nonce: (s.scrollTarget?.nonce ?? 0) + 1 } }));
+        set((s) => ({
+          selection: null,
+          activePath: item.path,
+          scrollTarget: { id: item.id, nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+        }));
         return;
       }
       placeCursor(cur);
@@ -1496,7 +1688,12 @@ export const useStore = create<ReviewState>((set, get) => {
         /* ignore */
       }
       // The cursor survives the re-layout; its line goes back to the gaze point, since row heights change.
-      set((s) => ({ diffStyle: style, draft: null, visualAnchor: null, ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}) }));
+      set((s) => ({
+        diffStyle: style,
+        draft: null,
+        visualAnchor: null,
+        ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}),
+      }));
     },
     snapshot: null,
     error: null,
@@ -1522,7 +1719,9 @@ export const useStore = create<ReviewState>((set, get) => {
       set((s) => {
         const path = pathFromItemId(id);
         // Ranges from an older generation of the same file describe a renderer that no longer exists.
-        const kept = Object.fromEntries(Object.entries(s.revealed).filter(([k]) => k === id || pathFromItemId(k) !== path));
+        const kept = Object.fromEntries(
+          Object.entries(s.revealed).filter(([k]) => k === id || pathFromItemId(k) !== path),
+        );
         return { revealed: { ...kept, [id]: [...(kept[id] ?? []), [start, end] as LineRange] } };
       });
     },
@@ -1669,11 +1868,26 @@ export const useStore = create<ReviewState>((set, get) => {
       const { position, activePath } = view.from;
       // Point the jumplist at the position we return to, so Ctrl+i re-enters the view.
       const jumps = get().jumps;
-      const at = position ? jumps.findLastIndex((j) => j.path === position.path && j.line === position.line && j.side === position.side && !j.full) : -1;
-      set({ fileView: null, selection: null, visualAnchor: null, draft: null, focusedThread: null, activePath, ...(at >= 0 ? { jumpIndex: at } : {}) });
+      const at = position
+        ? jumps.findLastIndex(
+            (j) => j.path === position.path && j.line === position.line && j.side === position.side && !j.full,
+          )
+        : -1;
+      set({
+        fileView: null,
+        selection: null,
+        visualAnchor: null,
+        draft: null,
+        focusedThread: null,
+        activePath,
+        ...(at >= 0 ? { jumpIndex: at } : {}),
+      });
       // Restore the cursor the view was entered from; without one, at least the file that was in view.
       if (position) void goToPositionSilently(position);
-      else if (activePath) set((s) => ({ scrollTarget: { id: itemIdOf(s, activePath), align: 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 } }));
+      else if (activePath)
+        set((s) => ({
+          scrollTarget: { id: itemIdOf(s, activePath), align: 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+        }));
     },
 
     setSelection(sel) {
@@ -1714,7 +1928,14 @@ export const useStore = create<ReviewState>((set, get) => {
       }
       // Keep the cursor on the commented line so `e` / `dd` apply to it.
       const s = d.selection.range;
-      set({ draft: null, visualAnchor: null, selection: { id: d.selection.id, range: { start: s.end, side: s.endSide ?? s.side, end: s.end, endSide: s.endSide ?? s.side } } });
+      set({
+        draft: null,
+        visualAnchor: null,
+        selection: {
+          id: d.selection.id,
+          range: { start: s.end, side: s.endSide ?? s.side, end: s.end, endSide: s.endSide ?? s.side },
+        },
+      });
       await get().refreshThreads();
     },
 
@@ -1729,9 +1950,12 @@ export const useStore = create<ReviewState>((set, get) => {
       await get().refreshThreads();
     },
 
-    editMessage: (threadId, messageId, body) => mutateThreads('Editing the message', () => api.editMessage(threadId, messageId, body)),
-    deleteMessage: (threadId, messageId) => mutateThreads('Deleting the message', () => api.deleteMessage(threadId, messageId)),
-    setResolved: (threadId, resolved) => mutateThreads(resolved ? 'Resolving' : 'Reopening', () => api.setResolved(threadId, resolved)),
+    editMessage: (threadId, messageId, body) =>
+      mutateThreads('Editing the message', () => api.editMessage(threadId, messageId, body)),
+    deleteMessage: (threadId, messageId) =>
+      mutateThreads('Deleting the message', () => api.deleteMessage(threadId, messageId)),
+    setResolved: (threadId, resolved) =>
+      mutateThreads(resolved ? 'Resolving' : 'Reopening', () => api.setResolved(threadId, resolved)),
     deleteThread: (id) => mutateThreads('Deleting the thread', () => api.deleteThread(id)),
     clearThreads: () => mutateThreads('Deleting all threads', () => api.clearThreads()),
     deleteStaleThreads: () => mutateThreads('Deleting stale threads', () => api.deleteStaleThreads()),
@@ -1807,7 +2031,10 @@ export const useStore = create<ReviewState>((set, get) => {
         const itemIndex = items.findIndex((i) => i.id === id);
         const item = items[itemIndex];
         if (item && !item.collapsed && item.rows.length) {
-          const rowIndex = Math.max(0, item.rows.findIndex((r) => r.hunkStart));
+          const rowIndex = Math.max(
+            0,
+            item.rows.findIndex((r) => r.hunkStart),
+          );
           set({ selection: selectionFor(items, { itemIndex, rowIndex }), visualAnchor: null });
         }
       }
@@ -1815,13 +2042,19 @@ export const useStore = create<ReviewState>((set, get) => {
         // A new-side line folded into collapsed context has no row to scroll to: expand around it first.
         // Deleted lines always sit inside a hunk, so the old side never needs this.
         const item = nav().find((i) => i.id === id);
-        const folded = item != null && get().loaded[path]?.kind === 'diff' && !item.rows.some((r) => r.side === 'additions' && r.line === line);
+        const folded =
+          item != null &&
+          get().loaded[path]?.kind === 'diff' &&
+          !item.rows.some((r) => r.side === 'additions' && r.line === line);
         if (folded) {
           set((s) => ({ activePath: path, reveal: { id, path, line, nonce: (s.reveal?.nonce ?? 0) + 1 } }));
           return;
         }
       }
-      set((s) => ({ scrollTarget: { id, line, side, align: line ? 'eye' : 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 }, activePath: path }));
+      set((s) => ({
+        scrollTarget: { id, line, side, align: line ? 'eye' : 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+        activePath: path,
+      }));
     },
 
     setActivePath(path) {
@@ -1831,7 +2064,13 @@ export const useStore = create<ReviewState>((set, get) => {
 });
 
 function sameChange(a: ChangedFile, b: ChangedFile): boolean {
-  return a.blob === b.blob && a.status === b.status && a.oldPath === b.oldPath && a.additions === b.additions && a.deletions === b.deletions;
+  return (
+    a.blob === b.blob &&
+    a.status === b.status &&
+    a.oldPath === b.oldPath &&
+    a.additions === b.additions &&
+    a.deletions === b.deletions
+  );
 }
 
 // Dev-only hook: read store state from the console. Not part of the production surface.
@@ -1843,7 +2082,12 @@ declare global {
 if (import.meta.env.DEV && typeof window !== 'undefined') window.__diffle = () => useStore.getState();
 
 /** Run `fn` over `items` with at most `limit` in flight; `stopped()` is consulted before each dequeue. */
-async function mapLimit<T>(items: T[], limit: number, stopped: () => boolean, fn: (item: T) => Promise<void>): Promise<void> {
+async function mapLimit<T>(
+  items: T[],
+  limit: number,
+  stopped: () => boolean,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
   let i = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (i < items.length && !stopped()) await fn(items[i++]!);

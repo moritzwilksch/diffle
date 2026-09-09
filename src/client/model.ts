@@ -1,5 +1,14 @@
 import picomatch from 'picomatch/posix';
-import type { ChangedFile, CommentThread, LspSymbol, ModeRequest, SearchScope, Snapshot, UserConfig, ViewedState } from '../shared/protocol.js';
+import type {
+  ChangedFile,
+  CommentThread,
+  LspSymbol,
+  ModeRequest,
+  SearchScope,
+  Snapshot,
+  UserConfig,
+  ViewedState,
+} from '../shared/protocol.js';
 import type { ReviewState } from './store.js';
 
 // Pure functions over store state. No effects, no store import at runtime, so
@@ -39,9 +48,15 @@ export const linesOf = (f: ChangedFile): number => f.additions + f.deletions;
  * file too big for a shared batch sinks below the rest, so a lockfile never delays a source file.
  * Each batch stays within PATCH_BATCH_FILES and PATCH_BATCH_LINES.
  */
-export function patchBatches(snapshot: Snapshot, files: ChangedFile[], first: string[], isCollapsed: (path: string) => boolean): string[][] {
+export function patchBatches(
+  snapshot: Snapshot,
+  files: ChangedFile[],
+  first: string[],
+  isCollapsed: (path: string) => boolean,
+): string[][] {
   const byPath = new Map(files.map((f) => [f.path, f]));
-  const rank = (p: string) => (first.includes(p) ? 0 : (isCollapsed(p) ? 4 : 2) + (linesOf(byPath.get(p)!) > PATCH_BATCH_LINES ? 1 : 0));
+  const rank = (p: string) =>
+    first.includes(p) ? 0 : (isCollapsed(p) ? 4 : 2) + (linesOf(byPath.get(p)!) > PATCH_BATCH_LINES ? 1 : 0);
   const order = orderedPaths(snapshot)
     .filter((p) => byPath.has(p))
     .sort((a, b) => rank(a) - rank(b));
@@ -164,7 +179,10 @@ export function countViewed(state: Pick<ReviewState, 'viewed' | 'config'>, chang
 }
 
 /** Collapsed defaults to viewed or generated, until the user toggles it. */
-export function isCollapsed(state: Pick<ReviewState, 'collapsed' | 'viewed' | 'config' | 'snapshot'>, path: string): boolean {
+export function isCollapsed(
+  state: Pick<ReviewState, 'collapsed' | 'viewed' | 'config' | 'snapshot'>,
+  path: string,
+): boolean {
   const explicit = state.collapsed[path];
   if (explicit != null) return explicit;
   const f = state.snapshot?.changed.find((x) => x.path === path);
@@ -198,7 +216,12 @@ export function reuseThreads(prev: CommentThread[], next: CommentThread[]): Comm
 }
 
 /** Everything CodeView paints for `path` beyond its content; comparable by identity, see `itemVersion`. */
-export function itemDeps(state: Pick<ReviewState, 'draft' | 'replyTo' | 'editingId'>, path: string, mine: CommentThread[], collapsed: boolean): unknown[] {
+export function itemDeps(
+  state: Pick<ReviewState, 'draft' | 'replyTo' | 'editingId'>,
+  path: string,
+  mine: CommentThread[],
+  collapsed: boolean,
+): unknown[] {
   const reply = state.replyTo != null && mine.some((t) => t.id === state.replyTo) ? state.replyTo : null;
   const editing = state.editingId != null && threadOfMessage(mine, state.editingId) ? state.editingId : null;
   return [...mine, state.draft?.path === path ? state.draft : null, collapsed, reply, editing];

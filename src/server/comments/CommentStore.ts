@@ -89,8 +89,8 @@ export class CommentStore {
   /** Threads matching `q`; default every thread, ordered by path, line, then creation. */
   threads(q: ThreadQuery = {}): CommentThread[] {
     const state = q.state ?? 'all';
-    return this.read().threads
-      .filter((t) => {
+    return this.read()
+      .threads.filter((t) => {
         if (state === 'open' && t.resolved) return false;
         if (state === 'resolved' && !t.resolved) return false;
         if (q.path != null && t.anchor.path !== q.path) return false;
@@ -103,7 +103,10 @@ export class CommentStore {
     return this.read().threads.find((t) => t.id === id);
   }
 
-  addThread(anchor: CommentAnchor, msg: Omit<CommentMessage, 'id' | 'createdAt' | 'updatedAt'>): Promise<CommentThread> {
+  addThread(
+    anchor: CommentAnchor,
+    msg: Omit<CommentMessage, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<CommentThread> {
     return this.mutate((set) => {
       const t: CommentThread = { id: randomUUID(), anchor, messages: [newMessage(msg)], resolved: false, stale: false };
       set.threads.push(t);
@@ -183,11 +186,20 @@ export class CommentStore {
           const startLine = t.startLine;
           const endLine = t.endLine ?? startLine;
           const fromSnapshot = await quote(t.path, side, startLine, endLine);
-          if (fromSnapshot == null) throw new UnquotableError(`cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`);
+          if (fromSnapshot == null)
+            throw new UnquotableError(
+              `cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`,
+            );
           const anchor: CommentAnchor = { path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
           pending.push({ anchor, t });
           // Later imports in the same batch may duplicate this one.
-          existing.push({ id: '', anchor, messages: [{ id: '', body: t.body, createdAt: 0, updatedAt: 0 }], resolved: false, stale: false });
+          existing.push({
+            id: '',
+            anchor,
+            messages: [{ id: '', body: t.body, createdAt: 0, updatedAt: 0 }],
+            resolved: false,
+            stale: false,
+          });
         }
         for (const { anchor, t } of pending) {
           const thread: CommentThread = {

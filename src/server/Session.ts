@@ -144,7 +144,10 @@ export class Session {
     const mode = await resolveMode(req, this.repo);
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
-    const [comments, snap] = await Promise.all([CommentStore.open(this.repo.gitDir, mode.commentKey), snapshotter.current()]);
+    const [comments, snap] = await Promise.all([
+      CommentStore.open(this.repo.gitDir, mode.commentKey),
+      snapshotter.current(),
+    ]);
     // Build the complete next state, then swap it in and retire the previous one.
     const next: Active = { mode, snapshotter, comments, watcher: null };
     // The repository may have moved on while no server was watching it.

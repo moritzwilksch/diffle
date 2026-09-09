@@ -24,7 +24,11 @@ export async function highlightLines(lines: string[], path: string, theme: Theme
 }
 
 /** Like `highlightLines`, for a language named directly (a markdown fence's info string). */
-export async function highlightCode(lines: string[], lang: SupportedLanguages, theme: ThemeChoice): Promise<HlToken[][]> {
+export async function highlightCode(
+  lines: string[],
+  lang: SupportedLanguages,
+  theme: ThemeChoice,
+): Promise<HlToken[][]> {
   const themeName = isDark(theme) ? SHIKI_THEMES.dark : SHIKI_THEMES.light;
   const highlighter = await getSharedHighlighter({ themes: [SHIKI_THEMES.dark, SHIKI_THEMES.light], langs: [lang] });
   return lines.map((line) => {
@@ -47,7 +51,11 @@ const yieldToLoop = () => new Promise<void>((r) => setTimeout(r, 0));
  * go plain when `items` change but keep their old colors across a theme toggle.
  * Token arrays keep their identity across updates so memoized rows stay put.
  */
-export function useHighlighted(items: { path: string; text: string }[], theme: ThemeChoice, near = 0): Map<string, HlToken[]> {
+export function useHighlighted(
+  items: { path: string; text: string }[],
+  theme: ThemeChoice,
+  near = 0,
+): Map<string, HlToken[]> {
   const [map, setMap] = useState<Map<string, HlToken[]>>(new Map());
   const nearRef = useRef(near);
   nearRef.current = near;

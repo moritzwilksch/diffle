@@ -17,7 +17,15 @@ function isAlive(pid: number): boolean {
 
 const TSX = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const MAIN = join(process.cwd(), 'src', 'cli', 'main.ts');
-const env = { ...process.env, NO_COLOR: '1', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' };
+const env = {
+  ...process.env,
+  NO_COLOR: '1',
+  GIT_AUTHOR_NAME: 't',
+  GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 't',
+  GIT_COMMITTER_EMAIL: 't@t',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+};
 
 let dir: string;
 let blocker: Server;

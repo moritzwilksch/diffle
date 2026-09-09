@@ -22,7 +22,8 @@ export function matchPattern(search: SearchState): RegExp | null {
   const literal = search.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   try {
     if (search.kind === 'word') return new RegExp(`(?<![\\p{L}\\p{N}_])${literal}(?![\\p{L}\\p{N}_])`, 'gu');
-    if (search.kind === 'text') return new RegExp(search.regex ? search.query : literal, search.ignoreCase ? 'gi' : 'g');
+    if (search.kind === 'text')
+      return new RegExp(search.regex ? search.query : literal, search.ignoreCase ? 'gi' : 'g');
   } catch {
     return null;
   }
@@ -101,7 +102,10 @@ export class MatchCache {
 
 const supported = (): boolean => typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
 
-export function installSearchHighlights(viewer: () => CodeViewHandle<unknown> | null, scroller: HTMLElement): () => void {
+export function installSearchHighlights(
+  viewer: () => CodeViewHandle<unknown> | null,
+  scroller: HTMLElement,
+): () => void {
   if (!supported()) return () => {};
   let frame = 0;
   const observed = new WeakSet<Node>();
