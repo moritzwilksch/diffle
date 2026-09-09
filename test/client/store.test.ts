@@ -57,6 +57,8 @@ const api = {
   exportToGithub: vi.fn(),
 };
 vi.mock('../../src/client/api.js', () => ({ api }));
+const { blocksSymbol } = vi.hoisted(() => ({ blocksSymbol: vi.fn() }));
+vi.mock('../../src/client/lsp/syntax.js', () => ({ blocksSymbol }));
 
 const { useStore, TOAST_MS, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('../../src/client/store.js');
 const {
@@ -100,6 +102,7 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
 
 beforeEach(() => {
   vi.clearAllMocks();
+  blocksSymbol.mockReset().mockResolvedValue(false);
   useStore.setState({
     snapshot: null,
     loaded: {},
@@ -986,6 +989,7 @@ describe('symbol navigation', () => {
     const slow = deferred<{ contents: string | null }>();
     api.lspHover.mockReturnValueOnce(slow.promise);
     const first = useStore.getState().requestHover(target, anchor);
+    await Promise.resolve(); // Let the syntax gate finish before replacing the LSP response.
     api.lspHover.mockResolvedValue({ contents: 'second' });
     await useStore.getState().requestHover({ ...target, col: 9 }, anchor);
     slow.resolve({ contents: 'first' });
@@ -994,6 +998,79 @@ describe('symbol navigation', () => {
     await useStore.getState().openSymbolMenu(target, 0, 0);
     expect(useStore.getState().hover).toBeNull();
     await useStore.getState().requestHover(target, anchor);
+    expect(useStore.getState().hover).toBeNull();
+  });
+
+  it('uses the language server when syntax classification is unavailable', async () => {
+    ready();
+    useStore.setState({ toast: null, symbolMenu: null });
+    const anchor = { left: 10, top: 20, bottom: 36 };
+    const comment = { ...target, line: 2, col: 3, text: 'comment' };
+    api.lspHover.mockResolvedValueOnce({ contents: 'foo: int' });
+    await useStore.getState().requestHover(target, anchor);
+    expect(useStore.getState().hover).not.toBeNull();
+
+    api.lspHover.mockResolvedValueOnce({ contents: null });
+    await useStore.getState().requestHover(comment, anchor);
+    expect(api.lspHover).toHaveBeenLastCalledWith({ path: comment.path, line: comment.line, col: comment.col });
+    expect(useStore.getState().hover).toBeNull();
+    expect(useStore.getState().toast).toBeNull();
+
+    // Some servers resolve documentation references inside comments.
+    api.lspHover.mockResolvedValueOnce({ contents: 'Referenced symbol' });
+    await useStore.getState().requestHover(comment, anchor);
+    expect(useStore.getState().hover).toEqual({ target: comment, contents: 'Referenced symbol', anchor });
+  });
+
+  it('suppresses hover and menus on syntax-classified prose, including the old side', async () => {
+    ready();
+    useStore.setState({ symbolMenu: null, hover: null });
+    blocksSymbol.mockResolvedValue(true);
+    await useStore.getState().requestHover(target, { left: 0, top: 0, bottom: 0 });
+    expect(api.lspHover).not.toHaveBeenCalled();
+    expect(useStore.getState().hover).toBeNull();
+    await useStore.getState().openSymbolMenu(target, 0, 0);
+    await useStore.getState().openSymbolMenu({ ...target, side: 'old' }, 0, 0);
+    expect(api.lspTokenKind).not.toHaveBeenCalled();
+    expect(useStore.getState().symbolMenu).toBeNull();
+  });
+
+  it('drops syntax answers after closing a popup or starting a newer request', async () => {
+    ready();
+    useStore.setState({ symbolMenu: null, hover: null });
+    const slow = deferred<boolean>();
+    blocksSymbol.mockReturnValueOnce(slow.promise);
+    const hover = useStore.getState().requestHover(target, { left: 0, top: 0, bottom: 0 });
+    useStore.getState().closeHover();
+    slow.resolve(false);
+    await hover;
+    expect(api.lspHover).not.toHaveBeenCalled();
+
+    const oldClick = deferred<boolean>();
+    blocksSymbol.mockReturnValueOnce(oldClick.promise);
+    const menu = useStore.getState().openSymbolMenu(target, 1, 1);
+    blocksSymbol.mockResolvedValue(true);
+    await useStore.getState().openSymbolMenu({ ...target, col: 9 }, 2, 2);
+    oldClick.resolve(false);
+    await menu;
+    expect(useStore.getState().symbolMenu).toBeNull();
+    expect(api.lspTokenKind).not.toHaveBeenCalled();
+  });
+
+  it('drops syntax answers across a mode switch', async () => {
+    ready();
+    useStore.setState({ symbolMenu: null, hover: null });
+    const slow = deferred<boolean>();
+    blocksSymbol.mockReturnValue(slow.promise);
+    const hover = useStore.getState().requestHover(target, { left: 0, top: 0, bottom: 0 });
+    const menu = useStore.getState().openSymbolMenu(target, 1, 2);
+    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
+    await useStore.getState().switchMode({ kind: 'pr' });
+    slow.resolve(false);
+    await Promise.all([hover, menu]);
+    expect(api.lspHover).not.toHaveBeenCalled();
+    expect(api.lspTokenKind).not.toHaveBeenCalled();
+    expect(useStore.getState().symbolMenu).toBeNull();
     expect(useStore.getState().hover).toBeNull();
   });
 
@@ -1054,6 +1131,7 @@ describe('symbol navigation', () => {
     const slow = deferred<{ kind: string | null }>();
     api.lspTokenKind.mockReturnValue(slow.promise);
     const opening = useStore.getState().openSymbolMenu(target, 1, 2);
+    await Promise.resolve(); // Reach the semantic-token request after the syntax gate.
     useStore.getState().closeSymbolMenu();
     slow.resolve({ kind: 'variable' });
     await opening;
