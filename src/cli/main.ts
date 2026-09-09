@@ -12,6 +12,7 @@ import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
 import { followsCheckout, isPython, type ModeRequest } from '../shared/protocol.js';
 import { parseContext, parsePort } from './args.js';
+import { watchBrowserLifetime } from './browserLifetime.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
 import { Timing } from './timing.js';
@@ -83,8 +84,8 @@ Revisions follow git diff:
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
 
-Status goes to stderr, so stdout carries only the review: closing diffle (Ctrl+C)
-prints the open comments as a prompt for an agent.`,
+Status goes to stderr, so stdout carries only the review: closing the last auto-opened
+browser tab (or pressing Ctrl+C) stops diffle and prints the open comments as a prompt for an agent.`,
   )
   .action(async (revs: string[], _o, cmd: Command) => {
     if (revs.length === 0) cmd.help();
@@ -211,17 +212,20 @@ async function serve(
     { session, config, extraAutoViewed: opts.autoViewed, hub, lsp },
     { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host, dev: opts.dev || !hasClientBuild() },
   );
+  let stopBrowserWatch = () => {};
   // Every long-lived resource goes through one release, whatever ends the run: a
   // signal, a usage error, or a failure such as an occupied port. Wait for git
   // before deleting its refs or clone; bound socket and LSP shutdown separately.
-  const dispose = () =>
-    Promise.all([
+  const dispose = () => {
+    stopBrowserWatch();
+    return Promise.all([
       session.close(),
       Promise.race([
         Promise.allSettled([server.close(), lsp?.close()]),
         new Promise((res) => setTimeout(res, 1500).unref()),
       ]),
     ]).then(closeRepo);
+  };
 
   let closing = false;
   const shutdown = () => {
@@ -239,6 +243,7 @@ async function serve(
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  stopBrowserWatch = watchBrowserLifetime(hub, opts.open, shutdown);
 
   try {
     // Bind and open the browser before any further git work.
