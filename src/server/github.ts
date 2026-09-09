@@ -138,7 +138,7 @@ export class GithubExporter {
 async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree')
     throw new GithubError(
-      'GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)',
+      'GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr or a revspec ending at HEAD)',
     );
   if (snap.headSha === '' || snap.newSha !== snap.headSha)
     throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');

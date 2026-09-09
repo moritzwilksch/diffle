@@ -6,14 +6,10 @@ export type Side = 'old' | 'new';
 export type OldSpec = { kind: 'rev'; rev: string } | { kind: 'merge-base'; a: string; b: string };
 
 /** What the user asks for. Resolved by the server into a ModeSpec. */
-export type ModeRequest =
-  | { kind: 'working' }
-  | { kind: 'branch'; base?: string }
-  | { kind: 'pr'; pr?: string }
-  | { kind: 'revspec'; args: string[] };
+export type ModeRequest = { kind: 'working' } | { kind: 'pr'; pr?: string } | { kind: 'revspec'; args: string[] };
 
 export interface ModeSpec {
-  kind: 'working' | 'branch' | 'pr' | 'revspec';
+  kind: 'working' | 'pr' | 'revspec';
   /** The request that produced this spec. */
   request: ModeRequest;
   old: OldSpec;

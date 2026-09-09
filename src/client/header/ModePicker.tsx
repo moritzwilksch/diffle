@@ -92,7 +92,11 @@ export function ModePicker() {
                   </option>
                 ))}
               </select>
-              <button className="primary" disabled={!base} onClick={() => choose({ kind: 'branch', base })}>
+              <button
+                className="primary"
+                disabled={!base}
+                onClick={() => choose({ kind: 'revspec', args: [`${base}...HEAD`] })}
+              >
                 Go
               </button>
             </span>
@@ -152,7 +156,7 @@ export function ModePicker() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!a || !b) return;
-                choose({ kind: 'revspec', args: b === 'worktree' ? [a] : [`${a}${dots}${b}`] });
+                choose({ kind: 'revspec', args: [`${a}${dots}${b}`] });
               }}
             >
               <RefSelect label="Old" value={a} onChange={setA} refs={refs} />
