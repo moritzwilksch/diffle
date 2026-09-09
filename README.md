@@ -36,8 +36,8 @@ tables; raw HTML stays literal). A
 touch the worktree. The view updates live while files change; threads follow
 their text and are flagged stale when it disappears or leaves the diff.
 
-Files matching auto-viewed globs (`*.lock` and friends by default) and files
-that look generated (lockfiles, minified bundles, `@generated` / `DO NOT EDIT`
+Files matching auto-viewed globs (none by default) and files that look
+generated (lockfiles, minified bundles, `@generated` / `DO NOT EDIT`
 headers) start collapsed; edit the globs in the settings dialog or with
 `diffle config`. A file you marked viewed that changes afterwards shows a
 half-filled mark: changed since you viewed it.

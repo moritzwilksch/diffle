@@ -118,7 +118,7 @@ describe('row keys', () => {
     const changed = [file('x.ts'), file('y.lock')];
     const base = decorationKey(state, changed);
     expect(decorationKey({ ...state, viewed: [{ path: 'x.ts', blob: 'b1', viewed: true }] }, changed)).not.toBe(base);
-    expect(decorationKey({ ...state, config: { ...DEFAULT_USER_CONFIG, autoViewed: [] } }, changed)).not.toBe(base);
+    expect(decorationKey({ ...state, config: { ...DEFAULT_USER_CONFIG, autoViewed: ['*.lock'] } }, changed)).not.toBe(base);
     expect(decorationKey(state, [file('x.ts', { deletions: 3 }), file('y.lock')])).not.toBe(base);
   });
 });
