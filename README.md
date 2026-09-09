@@ -116,6 +116,8 @@ npm run dev -- working
 npm test && npm run typecheck && npm run build
 ```
 
+`npm run dev` builds the client, then starts the server from source. Restart it after client changes; the server always serves `dist/client`.
+
 See [AGENTS.md](AGENTS.md) for repository notes.
 
 ## Acknowledgements

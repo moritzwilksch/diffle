@@ -5,14 +5,13 @@ import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { LspBridge } from '../server/lsp/LspBridge.js';
 import { RevspecError } from '../server/revspec.js';
-import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
+import { DEFAULT_PORT, Server } from '../server/Server.js';
 import { Session } from '../server/Session.js';
 import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
 import { followsCheckout, isPython, type ModeRequest } from '../shared/protocol.js';
 import { parseContext, parsePort } from './args.js';
 import { openBrowser } from './open.js';
-import { Timing } from './timing.js';
 
 /** Minimal ANSI colors; off when stderr is not a TTY or NO_COLOR is set. */
 const useColor = process.stderr.isTTY && !process.env.NO_COLOR;
@@ -26,8 +25,6 @@ interface GlobalOpts {
   host: string;
   open: boolean;
   watch: boolean;
-  timing: boolean;
-  dev: boolean;
   autoViewed: string[];
   context?: number;
   /** true: the configured command; string: an explicit one. */
@@ -46,8 +43,6 @@ const program = new Command()
   .option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)', collect, [])
   .option('-U, --context <n>', 'context lines around changes for this session (default: config, 5)', parseContext)
   .option('--lsp [command]', 'start a language server for go-to-definition, references and symbols (default command: config lspCommand, "pyrefly lsp")')
-  .option('--timing', 'print startup phase timings to stderr')
-  .option('--dev', 'serve the client through Vite (development)', process.env.DIFFLE_DEV === '1')
   .argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>')
   .addHelpText(
     'after',
@@ -147,9 +142,7 @@ async function openRepo(opts: GlobalOpts): Promise<GitRepo> {
 }
 
 async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
-  const timing = new Timing(opts.timing);
   const repo = await openRepo(opts);
-  timing.mark('git rev-parse');
 
   const hub = new WsHub();
   const config = await UserConfigStore.open();
@@ -157,7 +150,7 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
   const lsp = opts.lsp ? startLsp(typeof opts.lsp === 'string' ? opts.lsp : config.get().lspCommand, repo, session, hub) : null;
   const server = new Server(
     { session, config, extraAutoViewed: opts.autoViewed, hub, lsp },
-    { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host, dev: opts.dev || !hasClientBuild() },
+    { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host },
   );
   // Every long-lived resource goes through one release, whatever ends the run: a
   // signal, a usage error, or a failure such as an occupied port. The LSP child
@@ -190,13 +183,11 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
   try {
     // Bind and open the browser before any further git work.
     const url = await server.listen();
-    timing.mark('listen');
     if (opts.open) openBrowser(url.href);
     console.error(`🚀 diffle running at ${c.cyan(url.href)}`);
     console.error(`📂 ${c.dim('repo')} ${repo.root}`);
 
     const snap = await session.start(req);
-    timing.mark('snapshot');
     const n = snap.changed.length;
     const adds = snap.changed.reduce((a, f) => a + f.additions, 0);
     const dels = snap.changed.reduce((a, f) => a + f.deletions, 0);
@@ -205,7 +196,6 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
     else console.error(`📝 ${n} changed file${n === 1 ? '' : 's'}  ${c.green(`+${adds}`)} ${c.red(`−${dels}`)}`);
     if (snap.mode.live !== 'none') console.error(`👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`);
     if (lsp) console.error(`🧭 ${c.dim('lsp')} ${lsp.status().command}${followsCheckout(snap) ? '' : c.dim(' (symbol navigation needs the new side to be the checkout)')}`);
-    timing.report();
   } catch (e) {
     await dispose();
     if (e instanceof RevspecError || e instanceof GitError) {

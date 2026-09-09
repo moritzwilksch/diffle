@@ -34,7 +34,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "tsx src/cli/main.ts",
+    "dev": "npm run build:client >&2 && tsx src/cli/main.ts",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsdown",
