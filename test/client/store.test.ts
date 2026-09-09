@@ -612,6 +612,49 @@ describe('client transitions', () => {
     );
   });
 
+  it('file and line motions stop once on collapsed headers, independent of viewed state', async () => {
+    const changed = ['a.txt', 'b.txt', 'c.txt'].map((path, i) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b${i}`,
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
+    api.viewed.mockResolvedValueOnce([{ path: 'c.txt', blob: 'b2', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
+    await useStore.getState().boot();
+    // Stop on explicitly collapsed b.txt although it is unviewed; c.txt stays navigable although it is viewed.
+    useStore.setState({ collapsed: { 'b.txt': true, 'c.txt': false }, diffStyle: 'unified' });
+    useStore.getState().moveFile('first');
+    expect(useStore.getState().activePath).toBe('a.txt');
+    useStore.getState().moveFile(1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveFile(1);
+    expect(useStore.getState().activePath).toBe('c.txt');
+    useStore.getState().moveFile(-1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveFile(-1);
+    expect(useStore.getState().activePath).toBe('a.txt');
+
+    // Down/up line motions likewise stop on the header, then continue across it on the next press.
+    useStore.getState().moveCursor(1);
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState().activePath).toBe('c.txt');
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState().activePath).toBe('a.txt');
+  });
+
   it('a slow first refresh never overwrites a faster second one', async () => {
     const slow = deferred<Snapshot>();
     const fast = deferred<Snapshot>();
