@@ -422,10 +422,11 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
 });
 
 describe('resolveMode + Snapshotter', () => {
-  it('branch mode diffs merge-base against HEAD and keys comments by merge-base', async () => {
-    const mode = await resolveMode({ kind: 'branch', base: 'main' }, repo);
+  it('a lone revision diffs its merge-base with HEAD against HEAD', async () => {
+    const mode = await resolveMode({ kind: 'revspec', args: ['main'] }, repo);
     const mb = await repo.mergeBase('main', 'feat');
-    expect(mode.commentKey).toBe(`branch:${mb}`);
+    expect(mode.label).toBe('main...HEAD');
+    expect(mode.commentKey).toBe(`revspec:${mb}..${await repo.resolve('HEAD')}`);
     expect(mode.live).toBe('refs');
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
     expect(snap.oldSha).toBe(mb);
@@ -458,7 +459,8 @@ describe('resolveMode + Snapshotter', () => {
     const sha = await repo.resolve('main');
     expect((await resolveMode({ kind: 'revspec', args: [`${sha}..${sha}`] }, repo)).live).toBe('none');
     expect((await resolveMode({ kind: 'revspec', args: ['main..feat'] }, repo)).live).toBe('refs');
-    expect((await resolveMode({ kind: 'revspec', args: ['main'] }, repo)).live).toBe('worktree');
+    expect((await resolveMode({ kind: 'revspec', args: ['main'] }, repo)).live).toBe('refs');
+    expect((await resolveMode({ kind: 'revspec', args: ['main..worktree'] }, repo)).live).toBe('worktree');
   });
 });
 

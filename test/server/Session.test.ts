@@ -309,10 +309,10 @@ describe('Session', () => {
     });
     await session.start({ kind: 'revspec', args: ['main..feat'] });
     const a = session.switchMode({ kind: 'working' });
-    const b = session.switchMode({ kind: 'branch', base: 'main' });
+    const b = session.switchMode({ kind: 'revspec', args: ['main'] });
     const [snapA, snapB] = await Promise.all([a, b]);
     expect(snapB.version).toBeGreaterThan(snapA.version);
-    expect(session.mode.kind).toBe('branch');
+    expect(session.mode.label).toBe('main...HEAD');
     expect(session.comments.key).toBe(session.mode.commentKey);
     expect(watchers.map((w) => w.state)).toEqual(['closed', 'closed', 'open']);
     await session.close();

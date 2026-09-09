@@ -1173,16 +1173,26 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     pickModeEntry(n) {
       set({ modeMenuOpen: false });
+      // Only the server knows the default branch, so the branch entry asks before it compares.
+      if (n === 2) {
+        void api
+          .refs()
+          .then((r) => {
+            const base = r.defaultBranch || r.branches[0];
+            if (base) return get().switchMode({ kind: 'revspec', args: [`${base}...HEAD`] });
+            set({ modeMenuOpen: true });
+          })
+          .catch((e) => report('Branch vs base', e));
+        return;
+      }
       const req: ModeRequest | null =
         n === 1
           ? { kind: 'pr' }
-          : n === 2
-            ? { kind: 'branch' }
-            : n === 3
-              ? { kind: 'working' }
-              : n === 4
-                ? lastCommitsRequest(get().lastCommits)
-                : null;
+          : n === 3
+            ? { kind: 'working' }
+            : n === 4
+              ? lastCommitsRequest(get().lastCommits)
+              : null;
       if (req) void get().switchMode(req);
       else set({ modeMenuOpen: true, twoRefsOpen: true });
     },

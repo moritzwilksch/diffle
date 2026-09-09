@@ -1,4 +1,4 @@
-import type { ModeRequest, ModeSpec, OldSpec } from '../shared/protocol.js';
+import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
 import { parseRevspec, RevspecError } from './revspec.js';
@@ -39,20 +39,6 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner 
         live: 'worktree',
         commentKey: 'working',
       };
-    case 'branch': {
-      const base = req.base ? req.base : await repo.defaultBranch();
-      const old: OldSpec = { kind: 'merge-base', a: base, b: 'HEAD' };
-      const mb = await mergeBaseOrExplain(repo, base, 'HEAD');
-      return {
-        kind: 'branch',
-        request: req,
-        old,
-        newRev: 'HEAD',
-        label: `${base}...HEAD`,
-        live: 'refs',
-        commentKey: `branch:${mb}`,
-      };
-    }
     case 'pr':
       return resolvePr(req, repo, gh);
     case 'revspec': {

@@ -98,15 +98,16 @@ const program = new Command()
     'after',
     `
 Shorthands (in place of <revs>):
-  working                  same as HEAD: uncommitted changes, staged and untracked included
-  branch [base]            same as <base>...HEAD: the commits on this branch (base: the default branch)
+  working                  same as HEAD..worktree: uncommitted changes, staged and untracked included
   pr [number|url]          a GitHub pull request: its base...head, fetched if needed
                            (without an argument: the pull request for this branch)
 
-Revisions follow git diff:
-  diffle HEAD~3            the last three commits, plus uncommitted changes
+Revisions follow git diff, except that a lone one compares from the merge base:
+  diffle main              same as main...HEAD: what this branch added since it left main
+  diffle HEAD~3            the last three commits
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
+  diffle main..worktree    main vs the uncommitted tree ("worktree" works on either side)
 
 Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
 closing the last auto-opened browser tab stops diffle and prints the open comments as a prompt for an agent.
@@ -120,18 +121,9 @@ Ctrl+C always stops it.`,
 // Shorthands name what to compare, not commands, so help lists them separately.
 program
   .command('working', { hidden: true })
-  .summary('same as HEAD')
-  .description('Same as `diffle HEAD`: uncommitted changes, staged and untracked files included.')
+  .summary('same as HEAD..worktree')
+  .description('Same as `diffle HEAD..worktree`: uncommitted changes, staged and untracked files included.')
   .action(async (_o, cmd: Command) => run({ kind: 'working' }, cmd.optsWithGlobals<GlobalOpts>()));
-
-program
-  .command('branch', { hidden: true })
-  .argument('[base]', 'branch to compare against; default: the default branch')
-  .summary('same as <base>...HEAD')
-  .description('Same as `diffle <base>...HEAD`: the commits this branch added since it left <base>.')
-  .action(async (base: string | undefined, _o, cmd: Command) =>
-    run({ kind: 'branch', base }, cmd.optsWithGlobals<GlobalOpts>()),
-  );
 
 program
   .command('pr', { hidden: true })

@@ -2,11 +2,32 @@ import { describe, expect, it } from 'vitest';
 import { parseRevspec, RevspecError } from '../../src/server/revspec.js';
 
 describe('parseRevspec', () => {
-  it('single rev diffs against the worktree', () => {
-    expect(parseRevspec(['HEAD~3'])).toEqual({
-      old: { kind: 'rev', rev: 'HEAD~3' },
+  it('single rev diffs its merge base with HEAD against HEAD', () => {
+    expect(parseRevspec(['main'])).toEqual({
+      old: { kind: 'merge-base', a: 'main', b: 'HEAD' },
+      newRev: 'HEAD',
+      label: 'main...HEAD',
+    });
+    expect(parseRevspec(['main'])).toEqual(parseRevspec(['main...HEAD']));
+  });
+
+  it('names the uncommitted tree on the new side of any form', () => {
+    expect(parseRevspec(['main..worktree'])).toEqual({
+      old: { kind: 'rev', rev: 'main' },
       newRev: 'worktree',
-      label: 'HEAD~3 → worktree',
+      label: 'main..worktree',
+    });
+    // A merge base needs a commit, and the worktree sits on HEAD.
+    expect(parseRevspec(['main...worktree'])).toEqual({
+      old: { kind: 'merge-base', a: 'main', b: 'HEAD' },
+      newRev: 'worktree',
+      label: 'main...worktree',
+    });
+    expect(parseRevspec(['main', 'worktree']).newRev).toBe('worktree');
+    expect(parseRevspec(['worktree'])).toEqual({
+      old: { kind: 'rev', rev: 'HEAD' },
+      newRev: 'worktree',
+      label: 'HEAD..worktree',
     });
   });
 
