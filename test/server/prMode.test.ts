@@ -31,6 +31,12 @@ const env = {
 };
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env }).trim();
 
+/**
+ * A local path as git sees a URL. Windows separators would be escapes inside a
+ * config value, and `remoteSlug` splits on `/`, so a `\` path never matches a slug.
+ */
+const asGitUrl = (p: string) => p.replaceAll('\\', '/');
+
 /** What `gh pr view` would say for PR 7 of o/r. */
 const PR_VIEW = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
@@ -68,7 +74,7 @@ beforeAll(async () => {
 
   // A clone that has never seen the PR head: only refs/heads/main.
   local = join(tmp, 'work');
-  execFileSync('git', ['clone', '-q', origin, local], { encoding: 'utf8', env });
+  execFileSync('git', ['clone', '-q', asGitUrl(origin), local], { encoding: 'utf8', env });
   repo = await GitRepo.open(local);
 });
 afterAll(() => rmTmp(tmp));
@@ -134,7 +140,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
 
   it('fetches from the remote that points at the base repository, whatever it is called', async () => {
     const forked = join(tmp, 'forked');
-    execFileSync('git', ['clone', '-q', '--origin', 'upstream', origin, forked], { encoding: 'utf8', env });
+    execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     const forkRepo = await GitRepo.open(forked);
     const mode = await resolveMode({ kind: 'pr', pr: '7' }, forkRepo, gh);
     expect(mode.newRev).toBe(headSha);
@@ -186,7 +192,7 @@ describe('openReviewRepository', () => {
       await writeFile(join(bin, 'gh'), `#!/usr/bin/env node\nconsole.log(${JSON.stringify(PR_VIEW({ url }))});\n`);
       await chmod(join(bin, 'gh'), 0o755);
       const config = join(tmp, 'cli-gitconfig');
-      await writeFile(config, `[url "${origin}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
+      await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
       const child = spawn(
         process.execPath,
         [
@@ -234,7 +240,7 @@ describe('openReviewRepository', () => {
     const scratch = join(tmp, 'failed-clone');
     await mkdir(scratch);
     const config = join(tmp, 'missing-gitconfig');
-    await writeFile(config, `[url "${tmp}/missing"]\n\tinsteadOf = https://github.com/foreign/missing\n`);
+    await writeFile(config, `[url "${asGitUrl(tmp)}/missing"]\n\tinsteadOf = https://github.com/foreign/missing\n`);
     vi.stubEnv('GIT_CONFIG_GLOBAL', config);
     vi.stubEnv('TMPDIR', scratch);
     try {
@@ -248,7 +254,7 @@ describe('openReviewRepository', () => {
 
   it('clones foreign PRs into temp storage, including outside a git repository', async () => {
     const config = join(tmp, 'gitconfig');
-    await writeFile(config, `[url "${origin}"]\n\tinsteadOf = https://github.com/foreign/repo\n`);
+    await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/repo\n`);
     vi.stubEnv('GIT_CONFIG_GLOBAL', config);
     const foreign: GhRunner = async () => PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' });
     const refs = git(local, 'show-ref');

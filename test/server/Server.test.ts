@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
@@ -105,8 +105,8 @@ describe('Server', () => {
     });
     expect(counts).toEqual([1]);
     ws.close();
-    await new Promise<void>((res) => ws.once('close', () => res()));
-    expect(counts).toEqual([1, 0]);
+    // The client's close event is not the server's; wait for the hub to see the disconnect.
+    await vi.waitFor(() => expect(counts).toEqual([1, 0]));
     unsubscribe();
   });
 
