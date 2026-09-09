@@ -108,6 +108,7 @@ async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: Gh
     old: { kind: 'rev', rev: mb },
     newRev: headSha,
     label: `#${pr.number} ${pr.baseRefName}...${pr.headRefName}`,
+    repository: pr.baseRepo,
     live: 'none',
     commentKey: `pr:#${pr.number}`,
   };

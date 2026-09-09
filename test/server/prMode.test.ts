@@ -111,6 +111,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
       old: { kind: 'rev', rev: mergeBase },
       newRev: headSha,
       label: '#7 main...feat',
+      repository: 'o/r',
       live: 'none',
       // The number, not a sha: comments outlive a force-push to the pull request.
       commentKey: 'pr:#7',
