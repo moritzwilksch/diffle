@@ -139,7 +139,8 @@ button.off { opacity: 0.45; }
 .toggle button.on { background: var(--bg-3); font-weight: 600; }
 
 .review { min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; outline: none; }
-.review .codeview { flex: 1; min-height: 0; overflow: auto; background: var(--bg-2); }
+/* The viewer restores focus here during virtualization; avoid a native ring around the pane. */
+.review .codeview { flex: 1; min-height: 0; overflow: auto; background: var(--bg-2); outline: none; }
 /* Same for the diff renderer: its font, row height and gaps default to px. */
 .review .codeview { --diffs-font-size: 0.8125rem; --diffs-line-height: 1.25rem; --diffs-gap-block: 0.5rem; --diffs-gap-inline: 0.5rem; }
 /* Each file is a full-width block on a slightly darker page, as on GitHub: the gap between blocks says where a file ends. */
