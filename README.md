@@ -43,7 +43,6 @@ diffle pr               # merge-base(default branch, HEAD) vs HEAD
 diffle branch develop   # merge-base(develop, HEAD) vs HEAD
 diffle main...feat      # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle working --lsp    # add Python symbol navigation through pyrefly
-diffle --skill          # print the agent-facing usage guide
 diffle --help           # list all commands and flags
 ```
 

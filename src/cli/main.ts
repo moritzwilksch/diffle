@@ -11,7 +11,6 @@ import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
 import { followsCheckout, isPython, type ModeRequest } from '../shared/protocol.js';
 import { parseContext, parsePort } from './args.js';
-import { SKILL } from './skill.js';
 import { openBrowser } from './open.js';
 import { Timing } from './timing.js';
 
@@ -47,7 +46,6 @@ const program = new Command()
   .option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)', collect, [])
   .option('-U, --context <n>', 'context lines around changes for this session (default: config, 5)', parseContext)
   .option('--lsp [command]', 'start a language server for go-to-definition, references and symbols (default command: config lspCommand, "pyrefly lsp")')
-  .option('--skill', 'print the agent-facing usage guide on stdout and exit')
   .option('--timing', 'print startup phase timings to stderr')
   .option('--dev', 'serve the client through Vite (development)', process.env.DIFFLE_DEV === '1')
   .argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>')
@@ -67,11 +65,7 @@ Named modes are shorthand:
 Status goes to stderr, so stdout carries only the review: closing diffle (Ctrl+C)
 prints the open comments as a prompt for an agent.`,
   )
-  .action(async (revs: string[], opts: { skill?: boolean }, cmd: Command) => {
-    if (opts.skill) {
-      process.stdout.write(SKILL);
-      return;
-    }
+  .action(async (revs: string[], _o, cmd: Command) => {
     if (revs.length === 0) cmd.help();
     await run({ kind: 'revspec', args: revs }, cmd.optsWithGlobals<GlobalOpts>());
   });
