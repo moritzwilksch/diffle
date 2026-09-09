@@ -52,7 +52,7 @@ Generated files and files matching auto-viewed globs start collapsed. There are 
 
 ## Shortcuts
 
-- `j` / `k`: next or previous line
+- `j` / `k`: next or previous line (`10j` / `10k`: ten lines down or up)
 - `J` / `K`: next or previous file
 - `]` / `[`: next or previous hunk
 - `c`: comment

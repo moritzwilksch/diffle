@@ -13,6 +13,7 @@ export const COLUMNS: HelpSection[][] = [[
     title: 'Move',
     rows: [
       ['j / k  or  ↓ / ↑', 'next / previous line'],
+      ['{n}j / {n}k', 'n lines down / up'],
       ['Ctrl+d / Ctrl+u', 'half a page down / up'],
       ['Ctrl+o / Ctrl+i', 'jump back / forward in history'],
       ['←  or  ⌘/Ctrl+Shift+e  /  →', 'focus the file tree / back to the diff'],
