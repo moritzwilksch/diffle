@@ -94,7 +94,9 @@ export function createApi(deps: ApiDeps): Hono {
     const rev = c.req.query('rev') as Side | undefined;
     if (!path || (rev !== 'old' && rev !== 'new')) return c.json({ error: 'path and rev=old|new required' }, 400);
     const snap = await session.snapshotter.current();
-    const buf = await session.readSide(snap, path, rev);
+    // Outside the snapshot only a file the language server named is readable (see LspBridge.readExternal).
+    const buf =
+      (await session.readSide(snap, path, rev)) ?? (rev === 'new' ? await deps.lsp?.readExternal(path) : null);
     if (buf == null) return c.json({ error: 'absent on that side' }, 404);
     const binary = isBinary(buf);
     const body: FileResponse = { path, contents: binary ? '' : buf.toString('utf8'), binary };
@@ -147,6 +149,14 @@ export function createApi(deps: ApiDeps): Hono {
     const q = threadQuery(c, 'open');
     if ('error' in q) return c.json(q, 400);
     return c.text(formatPrompt(session.comments.threads(q)));
+  });
+
+  app.get('/api/threads/:id/messages/:mid/export', (c) => {
+    const thread = session.comments.get(c.req.param('id'));
+    if (!thread) throw new NotFoundError(c.req.param('id'));
+    const message = thread.messages.find((m) => m.id === c.req.param('mid'));
+    if (!message) throw new NotFoundError(c.req.param('mid'));
+    return c.text(formatPrompt([{ ...thread, messages: [message] }]));
   });
 
   // One object or an array. Returns what was created; open duplicates are skipped.

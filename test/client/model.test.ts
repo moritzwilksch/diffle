@@ -160,7 +160,7 @@ describe('search scope', () => {
       generated: false,
     }));
     const snapshot = { changed, tree: ['src/a.ts', 'src/b.ts', 'src/c.ts'] } as unknown as Snapshot;
-    const view = { path: 'src/c.ts', item: null, from: { position: null, activePath: null } };
+    const view = { path: 'src/c.ts', external: false, item: null, from: { position: null, activePath: null } };
     expect(currentPath({ snapshot, activePath: 'src/b.ts', fileView: view })).toBe('src/b.ts');
     expect(currentPath({ snapshot, activePath: null, fileView: view })).toBe('src/c.ts');
     expect(currentPath({ snapshot, activePath: null, fileView: null })).toBe('src/a.ts');

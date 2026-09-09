@@ -24,6 +24,8 @@ function send(msg) {
   process.stdout.write(body);
 }
 const log = (line) => process.stderr.write(line + '\n');
+// FAKE_LSP_EXTERNAL: the file outside the root definitions also point at; tests set it to a real file.
+const EXTERNAL = process.env.FAKE_LSP_EXTERNAL ?? '/usr/lib/python3/site.py';
 const base = (uri) => uri.replace(/^.*\//, '');
 const reply = (id, result) => send({ jsonrpc: '2.0', id, result });
 const range = (line, ch = 0) => ({ start: { line, character: ch }, end: { line, character: ch + 1 } });
@@ -71,7 +73,7 @@ function handle(msg) {
         : msg.params.textDocument.uri;
       return reply(msg.id, [
         { uri, range: range(1, 4) },
-        { uri: pathToFileURL('/usr/lib/python3/site.py').href, range: range(0) },
+        { uri: pathToFileURL(EXTERNAL).href, range: range(0) },
       ]);
     }
     case 'textDocument/references': {

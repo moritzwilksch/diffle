@@ -197,10 +197,12 @@ describe('openReviewRepository', () => {
       await chmod(join(bin, 'gh'), 0o755);
       const config = join(tmp, 'cli-gitconfig');
       await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
+      // Load TypeScript in-process so SIGTERM reaches diffle, not tsx's signal relay.
       const child = spawn(
         process.execPath,
         [
-          join(process.cwd(), 'node_modules/tsx/dist/cli.mjs'),
+          '--import',
+          'tsx',
           join(process.cwd(), 'src/cli/main.ts'),
           '-C',
           local,
