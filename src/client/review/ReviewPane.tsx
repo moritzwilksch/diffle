@@ -37,6 +37,7 @@ import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
 import { rowOf } from './rows.js';
+import { reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { CommentCard } from './CommentCard.js';
@@ -46,13 +47,6 @@ export type Annot = { kind: 'thread'; thread: CommentThread } | { kind: 'draft' 
 
 /** Where jump navigation parks the target line, as a fraction of the viewport height. */
 const EYE_FRACTION = 0.5;
-// Row metrics in rem, matching the stylesheet: multiply by remPx() when comparing with measured pixels.
-// zt / zb: a couple of rows in from the edge, so the line has context on both sides.
-const EDGE_ROWS_REM = 3;
-// Offsets place a row's top edge; the bottom pin subtracts one row so the margin below is the same as above.
-const ROW_REM = 1.25;
-/** The viewer positions 'start' targets below its sticky file header; subtract it to hit true center. */
-const STICKY_HEADER_REM = 2.75;
 
 /**
  * Full contents for both sides of a patch-based diff, fetched when the user
@@ -186,7 +180,6 @@ function markHover(el: HTMLElement, on: boolean): void {
 }
 
 const codeViewOptions = {
-  unsafeCSS: HEADER_CSS,
   theme: SHIKI_THEMES,
   loadDiffFiles,
   stickyHeaders: true,
@@ -199,14 +192,9 @@ const codeViewOptions = {
 
 const LOADING: Loaded = { kind: 'loading' };
 
-/** Card spacing in CSS px at the current root font size, so it scales with the rest of the UI. */
-function cardLayout(): { paddingTop: number; paddingBottom: number; gap: number } {
-  const rem = remPx();
-  // Cards on a darker page: the gap is page background between two bordered files.
-  return { paddingTop: 0.75 * rem, paddingBottom: 12.5 * rem, gap: rem };
-}
-
 export function ReviewPane() {
+  const rem = remPx();
+  const geometry = useMemo(() => reviewGeometry(rem), [rem]);
   const snapshot = useStore((s) => s.snapshot);
   const error = useStore((s) => s.error);
   const loaded = useStore((s) => s.loaded);
@@ -334,8 +322,8 @@ export function ReviewPane() {
       if (jumping.current || useStore.getState().selection) return;
       const items = viewerRef.current?.getInstance()?.getRenderedItems() ?? [];
       const box = scroller.getBoundingClientRect();
-      const header = STICKY_HEADER_REM * remPx();
-      const eye = box.top + header + (box.height - header) * EYE_FRACTION;
+      const header = geometry.itemMetrics.diffHeaderHeight;
+      const eye = box.top + box.height * EYE_FRACTION;
       const inView = items
         .map((r) => ({ id: r.id, rect: r.element.getBoundingClientRect() }))
         .filter((r) => r.rect.bottom > box.top + header + 1 && r.rect.top < box.bottom && r.rect.height > 0);
@@ -356,7 +344,7 @@ export function ReviewPane() {
       scroller.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [scroller]);
+  }, [scroller, geometry]);
 
   // Reveal a line hidden in collapsed context: bring the item into the virtual window,
   // ask its instance to expand around the line, then center it.
@@ -405,36 +393,38 @@ export function ReviewPane() {
   }, [reveal]);
   // The scroll request for a target: eye/top/bottom pin the line at a fixed height ('start' plus an
   // offset below the sticky header); the landing in the effect below measures the row and makes it exact.
-  const scrollPlan = (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
-    const requested = scrollTarget.align ?? 'center';
-    const eye = requested === 'eye' || requested === 'top' || requested === 'bottom';
-    const height = containerRef.current?.clientHeight ?? 800;
-    const rem = remPx();
-    const header = Math.round(STICKY_HEADER_REM * rem);
-    const edge = Math.round(EDGE_ROWS_REM * rem);
-    const offset =
-      requested === 'eye'
-        ? Math.round(height * EYE_FRACTION) - header
-        : requested === 'top'
-          ? edge
-          : requested === 'bottom'
-            ? Math.max(edge, height - header - edge - Math.round(ROW_REM * rem))
-            : 0;
-    const align = eye ? 'start' : requested;
-    const target = scrollTarget.line
-      ? {
-          type: 'line' as const,
-          id: scrollTarget.id,
-          lineNumber: scrollTarget.line,
-          side: scrollTarget.side === 'old' ? ('deletions' as const) : ('additions' as const),
-          align,
-          offset,
-          // Jumps are instant so the target lands exactly where expected; no mid-animation drift.
-          behavior: eye ? ('instant' as const) : undefined,
-        }
-      : { type: 'item' as const, id: scrollTarget.id, align: 'start' as const, behavior: 'instant' as const };
-    return { eye, offset, header, target };
-  };
+  const scrollPlan = useCallback(
+    (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
+      const requested = scrollTarget.align ?? 'center';
+      const eye = requested === 'eye' || requested === 'top' || requested === 'bottom';
+      const height = containerRef.current?.clientHeight ?? 800;
+      const header = geometry.itemMetrics.diffHeaderHeight;
+      const edge = geometry.edge;
+      const offset =
+        requested === 'eye'
+          ? height * EYE_FRACTION - header
+          : requested === 'top'
+            ? edge
+            : requested === 'bottom'
+              ? Math.max(edge, height - header - edge - geometry.itemMetrics.lineHeight)
+              : 0;
+      const align = eye ? 'start' : requested;
+      const target = scrollTarget.line
+        ? {
+            type: 'line' as const,
+            id: scrollTarget.id,
+            lineNumber: scrollTarget.line,
+            side: scrollTarget.side === 'old' ? ('deletions' as const) : ('additions' as const),
+            align,
+            offset,
+            // Jumps are instant so the target lands exactly where expected; no mid-animation drift.
+            behavior: eye ? ('instant' as const) : undefined,
+          }
+        : { type: 'item' as const, id: scrollTarget.id, align: 'start' as const, behavior: 'instant' as const };
+      return { eye, offset, header, target };
+    },
+    [geometry],
+  );
   const renderedRow = (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
     const rendered = viewerRef.current
       ?.getInstance()
@@ -494,7 +484,7 @@ export function ReviewPane() {
           ?.getInstance()
           ?.getRenderedItems()
           .find((r) => r.id === scrollTarget.id)?.element;
-        return card ? card.getBoundingClientRect().top - (base + cardLayout().paddingTop) : NaN;
+        return card ? card.getBoundingClientRect().top - (base + geometry.layout.paddingTop) : NaN;
       }
       const top = renderedRow(scrollTarget)?.getBoundingClientRect().top ?? NaN;
       return top - (base + offset + header);
@@ -573,7 +563,7 @@ export function ReviewPane() {
       cancelled = true;
       if (settled) clearTimeout(settled);
     };
-  }, [scrollTarget]);
+  }, [scrollTarget, geometry, scrollPlan]);
 
   const onSelectedLinesChange = useCallback(
     (sel: CodeViewLineSelection | null) => {
@@ -587,10 +577,10 @@ export function ReviewPane() {
   const options = useMemo(
     () => ({
       ...codeViewOptions,
-      layout: cardLayout(),
-      // A larger estimate than the CSS row height can leave EOF outside the virtual range
-      // while the next file is already visible. Keep the row budget in the same units as the code.
-      itemMetrics: { lineHeight: ROW_REM * remPx() },
+      unsafeCSS: HEADER_CSS + geometry.css,
+      layout: geometry.layout,
+      itemMetrics: geometry.itemMetrics,
+      hunkSeparators: 'line-info' as const,
       themeType: theme,
       diffStyle,
       onLineSelectionEnd: () => {
@@ -641,7 +631,7 @@ export function ReviewPane() {
         void openSymbolMenu(target, event.clientX, event.clientY);
       },
     }),
-    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle],
+    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, geometry],
   );
 
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {

@@ -40,7 +40,6 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "test": "vitest run",
-    "test:browser": "playwright test --config=test/browser/playwright.config.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {
@@ -60,7 +59,6 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
     "@types/node": "^22",
     "@types/picomatch": "^4.0.3",
     "@types/react": "^19",

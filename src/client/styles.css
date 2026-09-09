@@ -334,17 +334,12 @@ button.off {
   background: var(--bg-2);
   outline: none;
 }
-/* Same for the diff renderer: its font, row height and gaps default to px. */
-.review .codeview {
-  --diffs-font-size: 0.8125rem;
-  --diffs-line-height: 1.25rem;
-  --diffs-gap-block: 0.5rem;
-  --diffs-gap-inline: 0.5rem;
-}
 /* Each file is a full-width block on a slightly darker page, as on GitHub: the gap between blocks says where a file ends. */
 .review .codeview diffs-container {
   display: block;
-  border-block: 1px solid var(--border);
+  /* Paint the border inside the card; real borders add height the virtualizer cannot see. */
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
 }
 .review .empty {
   padding: 2.5rem;
