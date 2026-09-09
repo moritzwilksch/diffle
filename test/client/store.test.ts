@@ -164,7 +164,7 @@ describe('client transitions', () => {
     expect(viewFetches()).toBe(2);
     expect(itemIdOf(s, 'a.txt')).not.toBe(before);
     expect(s.fileView?.item).not.toBe(viewBefore);
-    expect((s.fileView?.item as { file: { contents: string } }).file.contents).toBe('two\n');
+    expect((s.fileView!.item as { file: { contents: string } }).file.contents).toBe('two\n');
     expect(s.contents['b.txt']).toEqual({ new: 'two\n' });
   });
 
@@ -209,7 +209,7 @@ describe('client transitions', () => {
     expect(useStore.getState().fileView?.item).toBe(item);
     slowFile.resolve({ contents: 'two\n', binary: false });
     await refresh2;
-    expect((useStore.getState().fileView?.item as { file: { contents: string } }).file.contents).toBe('two\n');
+    expect((useStore.getState().fileView!.item as { file: { contents: string } }).file.contents).toBe('two\n');
   });
 
   it('hydrated diffs that land together commit as one store transaction', async () => {
@@ -402,7 +402,7 @@ describe('client transitions', () => {
     api.file.mockResolvedValue({ contents: 'q\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working', ['a.txt', 'b.txt']), changed: [{ ...changed[0]!, blob: 'b2' }] });
     await useStore.getState().refreshSnapshot();
-    expect((useStore.getState().fileView?.item as { file: { contents: string } }).file.contents).toBe('q\n');
+    expect((useStore.getState().fileView!.item as { file: { contents: string } }).file.contents).toBe('q\n');
 
     // The back button returns to the newest diff-side position.
     useStore.getState().closeFullFile();

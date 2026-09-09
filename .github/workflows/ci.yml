@@ -19,15 +19,20 @@ jobs:
         run: |
           npm ci
           npm test
-      # `npm ci` only checks the dependency tree, so drift in the lockfile's own
-      # metadata (name, version, bin, engines) passes it silently.
-      - name: Check package-lock.json is up to date
+
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Lint
         run: |
-          npm install --package-lock-only --no-audit --no-fund
-          git diff --exit-code -- package-lock.json || {
-            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result"
-            exit 1
-          }
+          npm ci
+          npm run lint
 
   build:
     runs-on: ubuntu-latest
@@ -47,3 +52,23 @@ jobs:
         with:
           path: "*.tgz"
           archive: false
+
+  lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # The `npm ci` in the other jobs only checks the dependency tree, so drift in
+      # the lockfile's own metadata (name, version, bin, engines) passes it silently.
+      # `--package-lock-only` needs no install, so this job does not run `npm ci`.
+      - name: Check package-lock.json is up to date
+        run: |
+          npm install --package-lock-only --no-audit --no-fund
+          git diff --exit-code -- package-lock.json || {
+            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
+            exit 1
+          }

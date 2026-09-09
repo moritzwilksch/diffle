@@ -39,6 +39,7 @@
     "build:client": "vite build",
     "build:server": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "lint": "oxlint",
     "test": "vitest run",
     "prepack": "npm run build"
   },
@@ -66,6 +67,7 @@
     "@types/ws": "^8",
     "@vitejs/plugin-react": "^5",
     "jsdom": "^30.0.1",
+    "oxlint": "^1.82.0",
     "tsdown": "^0.22.14",
     "tsx": "^4",
     "typescript": "^5.9",

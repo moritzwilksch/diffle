@@ -90,7 +90,7 @@ function Tip({ hover, ref }: { hover: HoverState; ref: RefObject<HTMLDivElement 
     const below = bottom + GAP + height <= window.innerHeight;
     el.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`;
     el.style.top = `${below ? bottom + GAP : Math.max(8, top - GAP - height)}px`;
-  }, [hover]);
+  }, [hover, ref]);
   return (
     <div ref={ref} className="hover-tip" role="tooltip" onPointerEnter={hoverControl.hold} onPointerLeave={hoverControl.leave}>
       <Markdown text={hover.contents} path={hover.target.path} highlight />

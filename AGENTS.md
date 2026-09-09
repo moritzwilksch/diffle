@@ -26,10 +26,11 @@ Asked to read or answer the human's review comments, or to get your own diff rev
 npm run dev -- working --no-open   # tsx + Vite middleware; the `--` is required before flags
 npm test                           # vitest, real temp git repos, no mocks for git
 npm run typecheck                  # two tsconfigs: server/node and client/DOM (test/client is client-side)
+npm run lint                       # oxlint, correctness rules only; `.oxlintrc.json` records why each rule is off
 npm run build                      # dist/client + dist/server; the server serves dist/client when present
 ```
 
-Done means all three pass. Tests for server behavior build a throwaway repo with `git init` in a tmpdir (see `test/server/Session.test.ts`); client store tests `vi.mock` `src/client/api.js` and race deferred promises.
+Done means all four pass. Tests for server behavior build a throwaway repo with `git init` in a tmpdir (see `test/server/Session.test.ts`); client store tests `vi.mock` `src/client/api.js` and race deferred promises.
 
 ## The agent skill
 
