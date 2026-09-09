@@ -22,6 +22,7 @@ diffle main...feat      # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle export           # print the open threads as a prompt, no server needed (--format json, --state all)
 diffle --skill          # print the agent-facing usage guide (feed it to your agent)
 diffle --version        # print the installed version
+diffle completion bash  # print a completion script for bash, zsh or fish
 diffle working --lsp    # plus go-to-definition, references and symbols via `pyrefly lsp`
 diffle --help           # all flags: -C, --port (default 4966, next free if taken), --host, --no-open, --no-watch, -U, --auto-viewed, --lsp, --comment, --as, --background
 ```
@@ -48,6 +49,23 @@ search the diff or codebase, `gf` filter the file tree, `yy` copy all. `F` (or
 the header button, or a file picked from the tree that is not in the diff) opens
 the whole file in place of the diff list; Ctrl+o or the back button return to
 where you were. Press `?` in the app for the full list.
+
+## Shell completions
+
+`diffle completion <shell>` prints a completion script for `bash`, `zsh` or
+`fish`. It completes subcommands, every flag the command accepts, the closed
+sets (`--state`, `--format`), paths for `-C`, `--comment` and `--path`, and the
+branches, tags and remote refs of the repository you are in where a revspec
+goes.
+
+```bash
+eval "$(diffle completion bash)"                                  # in ~/.bashrc
+eval "$(diffle completion zsh)"                                   # in ~/.zshrc, after compinit
+diffle completion fish > ~/.config/fish/completions/diffle.fish
+```
+
+The script lists the commands and flags of the diffle that printed it, so print
+it again after upgrading.
 
 ## Post to GitHub
 

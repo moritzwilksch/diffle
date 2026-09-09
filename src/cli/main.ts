@@ -20,6 +20,7 @@ import { WsHub } from '../server/ws.js';
 import { followsCheckout, isPython, type ModeRequest, type ThreadState } from '../shared/protocol.js';
 import { parseContext, parsePort } from './args.js';
 import { commentCommand, loadImports, parseFormat, parseState, readStdin } from './comment.js';
+import { completionCommand } from './completion.js';
 import { SKILL } from './skill.js';
 import { openBrowser } from './open.js';
 import { Timing } from './timing.js';
@@ -132,6 +133,7 @@ program
   });
 
 program.addCommand(commentCommand());
+program.addCommand(completionCommand());
 
 const config = program.command('config').description('show or edit the user config (same settings as the UI dialog)');
 config
