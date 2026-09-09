@@ -3,9 +3,18 @@ import type { LastCommitsPreview } from '../../shared/protocol.js';
 import { api } from '../api.js';
 
 /** Live endpoint messages; obsolete requests cannot replace a newer count's preview. */
-export function CommitPreview({ count, version }: { count: number | null; version: number }) {
+export function CommitPreview({
+  oldOffset,
+  newOffset,
+  version,
+}: {
+  oldOffset: number | null;
+  newOffset: number | null;
+  version: number;
+}) {
   const [state, setState] = useState<{
-    count: number;
+    oldOffset: number;
+    newOffset: number;
     version: number;
     result?: LastCommitsPreview;
     error?: string;
@@ -22,16 +31,16 @@ export function CommitPreview({ count, version }: { count: number | null; versio
   });
 
   useEffect(() => {
-    if (count === null) return;
+    if (oldOffset === null || newOffset === null) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      void api.lastCommitsPreview(count, controller.signal).then(
+      void api.lastCommitsPreview(oldOffset, newOffset, controller.signal).then(
         (result) => {
-          if (!controller.signal.aborted) setState({ count, version, result });
+          if (!controller.signal.aborted) setState({ oldOffset, newOffset, version, result });
         },
         (error: unknown) => {
           if (!controller.signal.aborted)
-            setState({ count, version, error: error instanceof Error ? error.message : String(error) });
+            setState({ oldOffset, newOffset, version, error: error instanceof Error ? error.message : String(error) });
         },
       );
     }, 150);
@@ -39,13 +48,14 @@ export function CommitPreview({ count, version }: { count: number | null; versio
       clearTimeout(timer);
       controller.abort();
     };
-  }, [count, version]);
+  }, [oldOffset, newOffset, version]);
 
-  const current = state?.count === count && state.version === version ? state : null;
-  const loading = count !== null && !current;
+  const current =
+    state?.oldOffset === oldOffset && state.newOffset === newOffset && state.version === version ? state : null;
+  const loading = oldOffset !== null && newOffset !== null && !current;
   const status =
-    count === null
-      ? 'Enter a positive whole number to preview commits.'
+    oldOffset === null || newOffset === null
+      ? 'Enter nonnegative whole numbers to preview commits.'
       : (current?.error ?? (loading ? 'Loading commit messages…' : null));
   const result = current?.result;
   return (
@@ -58,16 +68,16 @@ export function CommitPreview({ count, version }: { count: number | null; versio
         <div className="commit-previews" aria-live="polite">
           {(
             [
-              [`HEAD~${count}`, result.old, result.head ? 'Not enough history for this count.' : 'No commits yet.'],
-              ['HEAD', result.head, 'No commits yet.'],
+              [`HEAD~${oldOffset}`, result.old],
+              [`HEAD~${newOffset}`, result.new],
             ] as const
-          ).map(([ref, commit, missing]) => (
-            <div className="commit-preview" key={ref}>
+          ).map(([ref, commit], index) => (
+            <div className="commit-preview" key={index}>
               <div className="commit-preview-ref">
                 <span>{ref}</span>
                 {commit && <span title={commit.sha}>{commit.short}</span>}
               </div>
-              <p>{commit ? commit.message || '(Empty commit message)' : missing}</p>
+              <p>{commit ? commit.message || '(Empty commit message)' : 'Commit unavailable at this offset.'}</p>
             </div>
           ))}
         </div>

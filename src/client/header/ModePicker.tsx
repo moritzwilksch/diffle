@@ -1,18 +1,11 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  GitCommitHorizontal,
-  GitPullRequest,
-  History,
-  PencilRuler,
-} from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, GitCommitHorizontal, GitPullRequest, History, PencilRuler } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { lastCommitsRequest } from '../model.js';
 import { useStore } from '../store.js';
 import { RefInput } from './RefInput.js';
+import { CommitOffsetInput, parseOffset } from './CommitOffsetInput.js';
 import { CommitPreview } from './CommitPreview.js';
 
 /** Comparison modes with configuration in an adjacent pane. */
@@ -23,20 +16,12 @@ export function ModePicker() {
   const setOpen = useStore((s) => s.setModeMenuOpen);
   const pane = useStore((s) => s.modePane);
   const pick = useStore((s) => s.pickModeEntry);
-  const lastCommits = useStore((s) => s.lastCommits);
   const [refs, setRefs] = useState<RefsResponse | null>(null);
   const [a, setA] = useState('');
   const [b, setB] = useState('HEAD');
   const [dots, setDots] = useState<'..' | '...'>('..');
-  const [countText, setCountText] = useState(String(lastCommits));
-  const countInput = useRef<HTMLInputElement>(null);
-  const selectCount = useRef(false);
-  useLayoutEffect(() => {
-    if (!selectCount.current) return;
-    countInput.current?.focus();
-    countInput.current?.select();
-    selectCount.current = false;
-  }, [countText]);
+  const [oldOffsetText, setOldOffsetText] = useState('1');
+  const [newOffsetText, setNewOffsetText] = useState('0');
   const [pr, setPr] = useState('');
   const [prPending, setPrPending] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -105,15 +90,9 @@ export function ModePicker() {
       setPrPending(false);
     }
   };
-  const count = Number(countText);
-  const validCount = /^[0-9]+$/.test(countText) && Number.isSafeInteger(count) && count >= 1;
-  const stepCount = (delta: number) => {
-    const next = String(Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, (validCount ? count : 0) + delta)));
-    selectCount.current = next !== countText;
-    setCountText(next);
-    countInput.current?.focus();
-    countInput.current?.select();
-  };
+  const oldOffset = parseOffset(oldOffsetText);
+  const newOffset = parseOffset(newOffsetText);
+  const validOffsets = oldOffset !== null && newOffset !== null;
   const entries = [
     { label: 'Working', icon: PencilRuler, pane: null },
     { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
@@ -161,9 +140,8 @@ export function ModePicker() {
                 e.preventDefault();
                 if (pane === 'refs' && a.trim() && b.trim())
                   choose({ kind: 'revspec', args: [`${a.trim()}${dots}${b.trim()}`] });
-                if (pane === 'commits' && validCount) {
-                  useStore.getState().setLastCommits(count);
-                  choose(lastCommitsRequest(count));
+                if (pane === 'commits' && validOffsets) {
+                  choose(lastCommitsRequest(oldOffset, newOffset));
                 }
                 if (pane === 'pr') void openPr();
               }}
@@ -238,55 +216,16 @@ export function ModePicker() {
                 <div className="commit-config">
                   <div className="commit-range">
                     <span>HEAD~</span>
-                    <div className="commit-count">
-                      <input
-                        ref={countInput}
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]+"
-                        aria-label="Number of commits"
-                        aria-invalid={!validCount}
-                        title="Number of commits (at least 1)"
-                        autoFocus
-                        onFocus={(e) => e.currentTarget.select()}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                          e.preventDefault();
-                          e.stopPropagation();
-                          stepCount(e.key === 'ArrowUp' ? 1 : -1);
-                        }}
-                        required
-                        value={countText}
-                        style={{ width: `${Math.max(1, countText.length)}ch` }}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (/^[0-9]*$/.test(value)) setCountText(value);
-                        }}
-                      />
-                      <div className="commit-count-buttons">
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          aria-label="Increase number of commits"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => stepCount(1)}
-                        >
-                          <ChevronUp size="0.625rem" />
-                        </button>
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          aria-label="Decrease number of commits"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => stepCount(-1)}
-                        >
-                          <ChevronDown size="0.625rem" />
-                        </button>
-                      </div>
-                    </div>
-                    <span>..HEAD</span>
+                    <CommitOffsetInput
+                      label="Base offset"
+                      value={oldOffsetText}
+                      onChange={setOldOffsetText}
+                      autoFocus
+                    />
+                    <span>..HEAD~</span>
+                    <CommitOffsetInput label="Target offset" value={newOffsetText} onChange={setNewOffsetText} />
                   </div>
-                  <CommitPreview count={validCount ? count : null} version={snapshot?.version ?? 0} />
+                  <CommitPreview oldOffset={oldOffset} newOffset={newOffset} version={snapshot?.version ?? 0} />
                 </div>
               )}
               {pane === 'pr' && (
@@ -324,7 +263,7 @@ export function ModePicker() {
                 type="submit"
                 aria-live={pane === 'pr' ? 'polite' : undefined}
                 aria-busy={pane === 'pr' && prPending}
-                disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validCount}
+                disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validOffsets}
               >
                 {pane === 'pr' ? (prPending ? 'Opening PR…' : 'Open PR') : 'Compare'}
               </button>

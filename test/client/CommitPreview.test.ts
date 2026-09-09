@@ -17,7 +17,9 @@ beforeEach(() => {
   requests.length = 0;
   vi.mocked(api.lastCommitsPreview)
     .mockReset()
-    .mockImplementation((_count, signal) => new Promise((resolve) => requests.push({ signal, resolve })));
+    .mockImplementation(
+      (_oldOffset, _newOffset, signal) => new Promise((resolve) => requests.push({ signal, resolve })),
+    );
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -27,28 +29,28 @@ afterEach(async () => {
   host.remove();
   vi.useRealTimers();
 });
-async function render(count: number | null) {
-  await act(() => root.render(createElement(CommitPreview, { count, version: 1 })));
+async function render(oldOffset: number | null, newOffset: number | null = 0) {
+  await act(() => root.render(createElement(CommitPreview, { oldOffset, newOffset, version: 1 })));
   await act(() => vi.advanceTimersByTime(150));
 }
 it('shows endpoint messages and ignores responses for older counts', async () => {
   await render(1);
   await render(2);
   expect(requests[0]!.signal?.aborted).toBe(true);
-  await act(() => requests[1]!.resolve({ old: commit('Older commit\n\nDetails'), head: commit('Latest commit') }));
+  await act(() => requests[1]!.resolve({ old: commit('Older commit\n\nDetails'), new: commit('Latest commit') }));
   expect(host.textContent).toContain('HEAD~2');
   expect(host.textContent).toContain('Older commit\n\nDetails');
   expect(host.textContent).toContain('Latest commit');
-  await act(() => requests[0]!.resolve({ old: commit('Stale message'), head: commit('Stale head') }));
+  await act(() => requests[0]!.resolve({ old: commit('Stale message'), new: commit('Stale head') }));
   expect(host.textContent).not.toContain('Stale');
 });
 it('handles missing history and clears previews for invalid input', async () => {
   await render(999);
-  await act(() => requests[0]!.resolve({ old: null, head: commit('Latest commit') }));
-  expect(host.textContent).toContain('Not enough history');
+  await act(() => requests[0]!.resolve({ old: null, new: commit('Latest commit') }));
+  expect(host.textContent).toContain('Commit unavailable');
   expect(host.textContent).toContain('Latest commit');
   await render(null);
-  expect(host.textContent).toContain('Enter a positive whole number');
+  expect(host.textContent).toContain('Enter nonnegative whole numbers');
   expect(host.textContent).not.toContain('Latest commit');
   expect(api.lastCommitsPreview).toHaveBeenCalledTimes(1);
 });
@@ -61,7 +63,7 @@ it('preserves the measured preview height through loading and empty input', asyn
   try {
     await render(1);
     measuredHeight = 180;
-    await act(() => requests[0]!.resolve({ old: commit('Long message'), head: commit('Latest commit') }));
+    await act(() => requests[0]!.resolve({ old: commit('Long message'), new: commit('Latest commit') }));
     const area = host.querySelector<HTMLElement>('.commit-preview-area')!;
     expect(area.style.minHeight).toBe('180px');
     measuredHeight = 24;
@@ -73,4 +75,15 @@ it('preserves the measured preview height through loading and empty input', asyn
   } finally {
     measure.mockRestore();
   }
+});
+
+it('refreshes the target preview and rejects older target responses', async () => {
+  await render(5, 1);
+  await render(5, 2);
+  expect(requests[0]!.signal?.aborted).toBe(true);
+  await act(() => requests[1]!.resolve({ old: commit('Base'), new: commit('Target two') }));
+  await act(() => requests[0]!.resolve({ old: commit('Base'), new: commit('Target one') }));
+  expect(host.textContent).toContain('HEAD~2');
+  expect(host.textContent).toContain('Target two');
+  expect(host.textContent).not.toContain('Target one');
 });

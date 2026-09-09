@@ -73,11 +73,10 @@ export function createApi(deps: ApiDeps): Hono {
   app.get('/api/refs', async (c) => c.json(await session.repo.refs()));
 
   app.get('/api/last-commits-preview', async (c) => {
-    const value = c.req.query('count') ?? '';
-    const count = Number(value);
-    if (!/^[0-9]+$/.test(value) || !Number.isSafeInteger(count) || count < 1)
-      return c.json({ error: 'count must be a positive whole number' }, 400);
-    return c.json(await session.repo.lastCommitsPreview(count));
+    const values = [c.req.query('oldOffset') ?? '', c.req.query('newOffset') ?? ''];
+    if (values.some((value) => !/^[0-9]+$/.test(value) || !Number.isSafeInteger(Number(value))))
+      return c.json({ error: 'offsets must be nonnegative whole numbers' }, 400);
+    return c.json(await session.repo.lastCommitsPreview(Number(values[0]), Number(values[1])));
   });
 
   app.get('/api/patch', async (c) => {

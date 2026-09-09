@@ -161,10 +161,10 @@ export interface CommitInfo {
   message: string;
 }
 
-/** Endpoints of HEAD~count..HEAD, resolved against the same HEAD. Null means the commit does not exist. */
+/** Endpoints of HEAD~oldOffset..HEAD~newOffset, resolved against the same HEAD. Null means the commit does not exist. */
 export interface LastCommitsPreview {
   old: CommitInfo | null;
-  head: CommitInfo | null;
+  new: CommitInfo | null;
 }
 
 export interface RefsResponse {

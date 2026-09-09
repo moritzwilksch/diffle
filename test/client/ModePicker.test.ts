@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/client/api.js', () => ({
   api: {
-    lastCommitsPreview: vi.fn(async () => ({ old: null, head: null })),
+    lastCommitsPreview: vi.fn(async () => ({ old: null, new: null })),
     refs: vi.fn(async () => ({
       defaultBranch: 'main',
       branches: ['main'],
@@ -97,25 +97,44 @@ it('does not close another pane when an older PR request completes', async () =>
 it('steps the commit count with arrows and buttons and selects the entire updated value', async () => {
   await act(() => useStore.getState().pickModeEntry(3));
   await type('9');
-  const input = host.querySelector<HTMLInputElement>('input[aria-label="Number of commits"]')!;
+  const input = host.querySelector<HTMLInputElement>('input[aria-label="Base offset"]')!;
   const up = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
   await act(() => input.dispatchEvent(up));
   expect(up.defaultPrevented).toBe(true);
   expect(input.value).toBe('10');
   expect(input.selectionStart).toBe(0);
   expect(input.selectionEnd).toBe(2);
-  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Decrease number of commits"]')!.click());
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Decrease base offset"]')!.click());
   expect(input.value).toBe('9');
   expect(document.activeElement).toBe(input);
   expect(input.selectionStart).toBe(0);
   expect(input.selectionEnd).toBe(1);
-  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase number of commits"]')!.click());
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase base offset"]')!.click());
   expect(input.value).toBe('10');
   expect(input.selectionEnd).toBe(2);
-  await type('1');
+  await type('0');
   await act(() => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
-  expect(input.value).toBe('1');
+  expect(input.value).toBe('0');
   expect(input.selectionStart).toBe(0);
   expect(input.selectionEnd).toBe(1);
   expect(switchMode).not.toHaveBeenCalled();
+});
+
+it('defaults to HEAD~1..HEAD~0 and applies both editable offsets', async () => {
+  await act(() => useStore.getState().pickModeEntry(3));
+  const base = host.querySelector<HTMLInputElement>('[aria-label="Base offset"]')!;
+  const target = host.querySelector<HTMLInputElement>('[aria-label="Target offset"]')!;
+  expect(base.value).toBe('1');
+  expect(target.value).toBe('0');
+  expect(document.activeElement).toBe(base);
+  await type('5');
+  await act(() => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
+  expect(target.value).toBe('1');
+  expect(document.activeElement).toBe(target);
+  expect(target.selectionStart).toBe(0);
+  expect(target.selectionEnd).toBe(1);
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase target offset"]')!.click());
+  expect(target.value).toBe('2');
+  await submit();
+  expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~5..HEAD~2'] });
 });

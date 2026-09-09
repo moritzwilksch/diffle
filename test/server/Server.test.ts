@@ -83,12 +83,12 @@ afterAll(async () => {
 
 describe('Server', () => {
   it('validates preview counts and returns the available endpoint messages', async () => {
-    for (const count of ['', '0', '-1', '1.5', 'nope', '9007199254740992']) {
-      expect((await send('GET', '/api/last-commits-preview?count=' + count)).status).toBe(400);
+    for (const count of ['', '-1', '1.5', 'nope', '9007199254740992']) {
+      expect((await send('GET', '/api/last-commits-preview?newOffset=0&oldOffset=' + count)).status).toBe(400);
     }
-    const response = await send('GET', '/api/last-commits-preview?count=1');
+    const response = await send('GET', '/api/last-commits-preview?oldOffset=1&newOffset=0');
     expect(response.status).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({ old: null, head: { message: 'base' } });
+    expect(JSON.parse(response.body)).toMatchObject({ old: null, new: { message: 'base' } });
   });
 
   it('serves the API to loopback hosts', async () => {

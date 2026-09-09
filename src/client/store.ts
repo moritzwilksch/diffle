@@ -202,9 +202,6 @@ export interface ReviewState {
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
   modePane: 'refs' | 'commits' | 'pr' | null;
-  /** N for the last-commits comparison (HEAD~N..HEAD). */
-  lastCommits: number;
-  setLastCommits(n: number): void;
   pickModeEntry(n: number): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
@@ -1183,10 +1180,6 @@ export const useStore = create<ReviewState>((set, get) => {
       } else if (n >= 2 && n <= 4) {
         set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr' });
       }
-    },
-    lastCommits: 1,
-    setLastCommits(n) {
-      set({ lastCommits: Math.max(1, Math.floor(n)) });
     },
     helpOpen: false,
     setHelpOpen(open) {

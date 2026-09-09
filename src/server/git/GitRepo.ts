@@ -123,10 +123,13 @@ export class GitRepo {
     return (await this.text(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`])).trim();
   }
 
-  /** Commit messages at both ends of the last-count-commits comparison, pinned to one HEAD. */
-  async lastCommitsPreview(count: number): Promise<LastCommitsPreview> {
+  /** Commit messages for two ancestor offsets, pinned to one HEAD. */
+  async lastCommitsPreview(oldOffset: number, newOffset: number): Promise<LastCommitsPreview> {
     const head = await this.commitInfo('HEAD');
-    return { head, old: head ? await this.commitInfo(`${head.sha}~${count}`) : null };
+    if (!head) return { old: null, new: null };
+    const at = (offset: number) => (offset === 0 ? Promise.resolve(head) : this.commitInfo(`${head.sha}~${offset}`));
+    const [old, next] = await Promise.all([at(oldOffset), at(newOffset)]);
+    return { old, new: next };
   }
 
   private async commitInfo(rev: string): Promise<CommitInfo | null> {
