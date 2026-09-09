@@ -22,14 +22,24 @@ export function parseLanguage(raw: string): LanguageId {
   return language as LanguageId;
 }
 
+/** A `--lsp` value: which language to serve with which command. */
+export interface LspOverride {
+  language: LanguageId;
+  command: string;
+}
+
 /**
- * A `--lsp <language>=<command>` value. Bare `--lsp` (no value) keeps the default on,
- * so it collects nothing; the language must be one diffle knows, or the pair reads as a
- * command with an `=` in it and would silently serve nothing.
+ * A `--lsp <language>=<command>` value. The language must be one diffle knows, or the pair
+ * reads as a command with an `=` in it and would silently serve nothing.
  */
-export function parseLspOverride(raw: string): { language: LanguageId; command: string } {
+export function parseLspOverride(raw: string): LspOverride {
   const eq = raw.indexOf('=');
   if (eq === -1)
     throw new InvalidArgumentError(`expected <language>=<command>, e.g. --lsp python="pyrefly lsp" (got "${raw}")`);
   return { language: parseLanguage(raw.slice(0, eq)), command: raw.slice(eq + 1).trim() };
+}
+
+/** Repeated `--lsp`, in the order given; `prev` is the option's default until the first one. */
+export function collectLspOverride(raw: string, prev: boolean | LspOverride[]): LspOverride[] {
+  return [...(Array.isArray(prev) ? prev : []), parseLspOverride(raw)];
 }

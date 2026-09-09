@@ -19,7 +19,7 @@ import {
   type ModeRequest,
   type UserConfig,
 } from '../shared/protocol.js';
-import { parseContext, parseLanguage, parseLspOverride, parsePort } from './args.js';
+import { collectLspOverride, type LspOverride, parseContext, parseLanguage, parsePort } from './args.js';
 import { watchBrowserLifetime } from './browserLifetime.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
@@ -74,11 +74,14 @@ const program = new Command()
   )
   .option('-U, --context <n>', 'context lines around changes for this session (default: config, 5)', parseContext)
   .addOption(
+    // The value is required. Servers are on by default, so a value-less `--lsp` would mean
+    // nothing, and commander skips the parser for a missing optional value: it would store
+    // `true` over the overrides an earlier `--lsp` named.
     new Option(
-      '--lsp [language=command]',
+      '--lsp <language=command>',
       "language server command for one language, started for this run (repeatable); by default the diff's languages are served by whatever is on PATH",
     )
-      .argParser(collectLsp)
+      .argParser(collectLspOverride)
       .default(true, "the diff's languages, resolved on PATH"),
   )
   .option('--no-lsp', 'do not start any language server')
@@ -217,14 +220,6 @@ program
 
 function collect(value: string, prev: string[]): string[] {
   return [...prev, value];
-}
-
-/** A `--lsp` value: which language to serve with which command. */
-type LspOverride = ReturnType<typeof parseLspOverride>;
-
-/** Repeated `--lsp`; a bare `--lsp` leaves the default `true` behind, so it collects nothing. */
-function collectLsp(value: string, prev: boolean | LspOverride[]): LspOverride[] {
-  return [...(Array.isArray(prev) ? prev : []), parseLspOverride(value)];
 }
 
 function printLspCommands(config: UserConfig): void {
