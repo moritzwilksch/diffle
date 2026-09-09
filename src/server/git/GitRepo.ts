@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { lstat, open, readFile, readlink } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { ChangedFile, ChangeStatus, RefsResponse } from '../../shared/protocol.js';
@@ -46,6 +46,8 @@ interface ExecOptions {
   /** Exit codes that are not errors (e.g. 1 for `diff --no-index`). */
   okCodes?: number[];
   input?: string;
+  /** Merged over the inherited environment. */
+  env?: Record<string, string>;
 }
 
 interface RecordOptions extends ExecOptions {
@@ -65,6 +67,19 @@ export class GitRepo {
   }
 
   private readonly catFile: CatFileBatch;
+  readonly reviewRefs = `refs/diffle/${randomUUID()}`;
+
+  /** Clone into an empty temporary directory; full history preserves merge bases. */
+  static async clone(url: string, dir: string): Promise<GitRepo> {
+    await execGit(dir, ['clone', '--quiet', '--no-tags', '--', url, '.'], { env: { GIT_TERMINAL_PROMPT: '0' } });
+    return GitRepo.open(dir);
+  }
+
+  /** Remove only refs owned by this review, never another running instance. */
+  async cleanReviewRefs(): Promise<void> {
+    const refs = (await this.text(['for-each-ref', '--format=%(refname)', `${this.reviewRefs}/`])).trim();
+    if (refs) await this.exec(['update-ref', '--stdin'], { input: refs.split('\n').map((ref) => `delete ${ref}\n`).join('') });
+  }
 
   /** How many `cat-file --batch` processes this repository has started. Diagnostics and tests. */
   get catFileSpawns(): number {
@@ -118,6 +133,34 @@ export class GitRepo {
       }
     }
     throw new GitError('cannot determine default branch; pass a base explicitly', [], null, '');
+  }
+
+  /** Configured remotes, in git's order, with their fetch URLs. */
+  async remotes(): Promise<{ name: string; url: string }[]> {
+    // Read configured URLs before insteadOf rewriting, which can hide repository identity.
+    const out = await this.text(['config', '--null', '--get-regexp', '^remote\\..*\\.url$'], { okCodes: [1] });
+    const seen = new Map<string, string>();
+    for (const record of out.split('\0')) {
+      const m = /^remote\.(.*)\.url\n([\s\S]*)$/.exec(record);
+      if (m && !seen.has(m[1]!)) seen.set(m[1]!, m[2]!);
+    }
+    return [...seen].map(([name, url]) => ({ name, url }));
+  }
+
+  /**
+   * Fetches explicit refspecs from `remote` (a name or a URL). The
+   * refspecs must stay inside `refs/diffle/`, so no ref the user owns moves, and
+   * FETCH_HEAD is left alone. Terminal prompts are off: a repository that needs
+   * credentials fails instead of hanging.
+   */
+  async fetch(remote: string, refspecs: string[]): Promise<void> {
+    for (const spec of refspecs) {
+      const dst = spec.slice(spec.indexOf(':') + 1);
+      if (!dst.startsWith('refs/diffle/')) throw new GitError(`refusing to fetch into ${dst}`, ['fetch'], null, '');
+    }
+    await this.exec(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--end-of-options', remote, ...refspecs], {
+      env: { GIT_TERMINAL_PROMPT: '0' },
+    });
   }
 
   async lsFiles(): Promise<string[]> {
@@ -579,7 +622,7 @@ function execGit(cwd: string, args: string[], opts: ExecOptions = {}): Promise<B
     const child = execFile(
       'git',
       [...CONFIG_ARGS, ...args],
-      { cwd, maxBuffer: MAX_BUFFER, encoding: 'buffer', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } },
+      { cwd, maxBuffer: MAX_BUFFER, encoding: 'buffer', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', ...opts.env } },
       (err, stdout, stderr) => {
         const code = err ? ((err as NodeJS.ErrnoException & { code?: number | string }).code ?? null) : 0;
         if (err && !(typeof code === 'number' && opts.okCodes?.includes(code))) {

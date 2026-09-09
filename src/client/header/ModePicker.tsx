@@ -70,7 +70,7 @@ export function ModePicker() {
           <button className={`entry ${kind === 'pr' ? 'active' : ''}`} onClick={() => choose({ kind: 'pr' })}>
             <GitPullRequest size="0.875rem" />
             <span className="label">PR</span>
-            <span className="desc">{refs?.defaultBranch ?? 'default'}...HEAD</span>
+            <span className="desc">this branch on GitHub</span>
             <kbd>1</kbd>
           </button>
           <div className="entry static">

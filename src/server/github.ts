@@ -356,3 +356,54 @@ export const runGh: GhRunner = (args, { cwd, input }) =>
     if (input != null) child.stdin?.end(input);
     else child.stdin?.end();
   });
+
+/** A pull request as `gh pr view` reports it, plus the base repository derived from its URL. */
+export interface PullRequest {
+  number: number;
+  /** `https://github.com/<owner>/<repo>/pull/<number>` */
+  url: string;
+  baseRefName: string;
+  headRefName: string;
+  headRefOid: string;
+  /** `<owner>/<repo>` of the base repository: where `refs/pull/<number>/head` lives. */
+  baseRepo: string;
+}
+
+const PR_FIELDS = 'number,url,baseRefName,headRefName,headRefOid';
+
+/**
+ * `gh pr view` for a PR named by number, `#number`, URL or branch. Without a
+ * selector, the PR of the checked-out branch. Option-shaped selectors are
+ * refused so a stray flag never reaches gh.
+ */
+export async function viewPr(selector: string | undefined, cwd: string, run: GhRunner = runGh): Promise<PullRequest> {
+  const arg = selector == null ? [] : [normalizeSelector(selector)];
+  const out = await run(['pr', 'view', ...arg, '--json', PR_FIELDS], { cwd });
+  return parsePrView(out);
+}
+
+function normalizeSelector(selector: string): string {
+  const s = selector.trim();
+  if (s.startsWith('-')) throw new GithubError(`not a pull request: ${selector}`, 400);
+  const num = /^#?(\d+)$/.exec(s);
+  return num ? num[1]! : s;
+}
+
+function parsePrView(out: string): PullRequest {
+  let pr: Partial<PullRequest>;
+  try {
+    pr = JSON.parse(out) as Partial<PullRequest>;
+  } catch {
+    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+  }
+  const ok =
+    typeof pr.number === 'number' &&
+    typeof pr.url === 'string' &&
+    typeof pr.baseRefName === 'string' &&
+    typeof pr.headRefName === 'string' &&
+    typeof pr.headRefOid === 'string';
+  if (!ok) throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+  const slug = /^https?:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+/.exec(pr.url!);
+  if (!slug) throw new GithubError(`cannot read the repository from the pull request url: ${pr.url}`, 502);
+  return { ...(pr as Omit<PullRequest, 'baseRepo'>), baseRepo: slug[1]! };
+}

@@ -32,8 +32,8 @@ export function Header() {
       <span className="brand">
         <GitCompareArrows size="1rem" /> diffle
       </span>
-      <span className="root" title={snapshot?.root}>
-        {snapshot ? basename(snapshot.root) : ''}
+      <span className="root" title={snapshot?.mode.repository ?? snapshot?.root}>
+        {snapshot ? snapshot.mode.repository ?? basename(snapshot.root) : ''}
       </span>
       <ModePicker />
       <span className="stat">
