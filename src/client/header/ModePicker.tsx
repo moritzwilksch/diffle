@@ -52,7 +52,7 @@ export function ModePicker() {
     void switchMode(req);
   };
   const count = Number(countText);
-  const validCount = Number.isSafeInteger(count) && count >= 1;
+  const validCount = /^[0-9]+$/.test(countText) && Number.isSafeInteger(count) && count >= 1;
   const entries = [
     { label: 'Working', icon: PencilRuler, pane: null },
     { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
@@ -107,9 +107,7 @@ export function ModePicker() {
                 if (pane === 'pr') choose(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
               }}
             >
-              <div className="menu-title">
-                {pane === 'refs' ? 'Two refs' : pane === 'commits' ? 'Last commits' : 'Pull request'}
-              </div>
+              {pane !== 'commits' && <div className="menu-title">{pane === 'refs' ? 'Two refs' : 'Pull request'}</div>}
               {pane === 'refs' && (
                 <>
                   <RefSelect label="Old" value={a} onChange={setA} refs={refs} />
@@ -124,20 +122,30 @@ export function ModePicker() {
                 </>
               )}
               {pane === 'commits' && (
-                <>
-                  <label className="ref-select">
-                    <span className="lbl">Number of commits</span>
+                <div className="commit-config">
+                  <div className="commit-range">
+                    <span>HEAD~</span>
                     <input
-                      type="number"
-                      min={1}
-                      step={1}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]+"
+                      aria-label="Number of commits"
+                      aria-describedby="commit-count-hint"
+                      aria-invalid={!validCount}
+                      title="Number of commits (at least 1)"
+                      autoFocus
+                      onFocus={(e) => e.currentTarget.select()}
                       required
                       value={countText}
+                      style={{ width: `${Math.max(1, countText.length)}ch` }}
                       onChange={(e) => setCountText(e.target.value)}
                     />
-                  </label>
-                  <p className="mode-hint">{validCount ? `HEAD~${count}..HEAD` : 'Enter a positive whole number.'}</p>
-                </>
+                    <span>..HEAD</span>
+                  </div>
+                  <p className="mode-hint" id="commit-count-hint">
+                    Choose how many recent commits to compare.
+                  </p>
+                </div>
               )}
               {pane === 'pr' && (
                 <>
