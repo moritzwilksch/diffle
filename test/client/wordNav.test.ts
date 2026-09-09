@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { clearWordFocus, moveWord, moveWordToEdge, setViewer } from '../../src/client/lsp/wordNav.js';
+import { clearWordFocus, moveWord, moveWordToEdge, setViewer, wordsIn } from '../../src/client/lsp/wordNav.js';
 import { lspTarget } from '../../src/client/lsp/target.js';
-import { wordsIn } from '../../src/client/lsp/words.js';
 
 vi.mock('../../src/client/model.js', () => ({
   itemIdOf: () => 'file.py',
