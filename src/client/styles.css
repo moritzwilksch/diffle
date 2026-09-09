@@ -194,7 +194,7 @@ kbd {
     background 120ms ease;
 }
 .resizer:hover,
-body.resizing .resizer {
+.resizer.resizing {
   background: var(--accent);
   opacity: 1;
 }
