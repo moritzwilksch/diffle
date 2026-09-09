@@ -43,7 +43,15 @@ const openFile = vi.fn(() => Promise.resolve());
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   openFile.mockClear();
-  useStore.setState({ snapshot, activePath: 'a.txt', collapsed: { 'a.txt': true }, openFile });
+  useStore.setState({
+    snapshot,
+    activePath: 'a.txt',
+    collapsed: { 'a.txt': true, 'b.txt': true },
+    viewed: [],
+    config: { autoViewed: [], contextLines: 5, lspCommand: '' },
+    loaded: {},
+    openFile,
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -70,13 +78,15 @@ function click(path: string) {
 }
 
 describe('FileTreePane clicks', () => {
-  it('clicking the already-active collapsed file asks to open it', () => {
+  it('clicking the already-active collapsed file expands and opens it', () => {
     click('a.txt');
+    expect(useStore.getState().collapsed['a.txt']).toBe(false);
     expect(openFile.mock.calls).toEqual([['a.txt']]);
   });
 
-  it('clicking another file opens it once, through the selection change', () => {
+  it('clicking another collapsed file expands and opens it once through the selection change', () => {
     click('b.txt');
+    expect(useStore.getState().collapsed['b.txt']).toBe(false);
     expect(openFile.mock.calls).toEqual([['b.txt']]);
   });
 });

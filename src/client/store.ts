@@ -334,7 +334,7 @@ export interface ReviewState {
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
   switchMode(req: ModeRequest): Promise<void>;
-  /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. Expands the file if collapsed. */
+  /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
   loadFile(path: string, side: Side): Promise<FileResponse>;
@@ -856,7 +856,7 @@ export const useStore = create<ReviewState>((set, get) => {
     set({ jumps: next, jumpIndex: next.length });
   };
 
-  /** Expand a collapsed file so a jump to it has something to land on. */
+  /** Expand a collapsed file so a jump into it has something to land on. */
   const ensureExpanded = (path: string) => {
     if (!isCollapsed(get(), path)) return;
     set((s) => ({ collapsed: { ...s.collapsed, [path]: false } }));
@@ -1082,6 +1082,34 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   const currentCursor = () => cursorFromSelection(nav(), get().selection);
+
+  /** Line/file motions treat the active collapsed header as a cursor stop. */
+  const currentNavCursor = (): Cursor | null => {
+    const selected = currentCursor();
+    if (selected) return selected;
+    const items = nav();
+    const itemIndex = items.findIndex((item) => item.path === get().activePath);
+    return itemIndex !== -1 && items[itemIndex]!.collapsed ? { itemIndex, rowIndex: -1 } : null;
+  };
+
+  /** Place a line cursor, or focus a collapsed file's header without inventing a hidden line selection. */
+  const placeNavCursor = (cur: Cursor | null, keepAnchor = false, align: 'nearest' | 'eye' = 'nearest') => {
+    if (!cur) return;
+    if (cur.rowIndex !== -1) return placeCursor(cur, keepAnchor, align);
+    const item = nav()[cur.itemIndex];
+    if (!item) return;
+    set((s) => ({
+      selection: null,
+      activePath: item.path,
+      visualAnchor: null,
+      focusedThread: null,
+      scrollTarget: {
+        id: item.id,
+        align,
+        nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+      },
+    }));
+  };
 
   const threadAtCursor = (): CommentThread | undefined => {
     const s = get();
@@ -1536,7 +1564,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     moveCursor(delta) {
       const items = nav();
-      placeCursor(step(items, cursorFromSelection(items, get().selection), delta), get().visualAnchor != null);
+      placeNavCursor(step(items, currentNavCursor(), delta), get().visualAnchor != null);
     },
     jumps: [],
     jumpIndex: 0,
@@ -1572,13 +1600,13 @@ export const useStore = create<ReviewState>((set, get) => {
     moveCursorBy(rows) {
       const items = nav();
       const dir: 1 | -1 = rows < 0 ? -1 : 1;
-      let cur = currentCursor();
+      let cur = currentNavCursor();
       for (let i = 0; i < Math.abs(rows); i++) {
         const next = step(items, cur, dir);
         if (!next || (cur && next.itemIndex === cur.itemIndex && next.rowIndex === cur.rowIndex)) break;
         cur = next;
       }
-      placeCursor(cur, get().visualAnchor != null, 'eye');
+      placeNavCursor(cur, get().visualAnchor != null, 'eye');
     },
     async goToLine(line) {
       const s = get();
@@ -1591,17 +1619,17 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!items.length) return;
       // A binary or unloaded file has no rows, so no selection: the active file stands in for the cursor there.
       const at = items.findIndex((i) => i.path === get().activePath);
-      const from = currentCursor() ?? (at === -1 ? null : { itemIndex: at, rowIndex: 0 });
+      const from = currentNavCursor() ?? (at === -1 ? null : { itemIndex: at, rowIndex: 0 });
       const cur =
         delta === 'first'
-          ? { itemIndex: 0, rowIndex: 0 }
+          ? stepFile(items, null, 1)
           : delta === 'last'
-            ? { itemIndex: items.length - 1, rowIndex: 0 }
+            ? stepFile(items, null, -1)
             : stepFile(items, from, delta);
       if (!cur) return;
       const item = items[cur.itemIndex]!;
       recordJump();
-      if (item.rows.length === 0) {
+      if (item.collapsed || item.rows.length === 0) {
         set((s) => ({
           selection: null,
           activePath: item.path,
@@ -2023,15 +2051,14 @@ export const useStore = create<ReviewState>((set, get) => {
 
     jumpTo(path, line, side) {
       recordJump();
-      // Every jump is an explicit request to read the file: a collapsed one (viewed, generated, zc) opens.
-      ensureExpanded(path);
+      if (line != null) ensureExpanded(path);
       const id = itemIdOf(get(), path);
       if (line == null) {
         // Opening a file: the cursor lands on its first hunk so ] / [ / n / N continue from there.
         const items = nav();
         const itemIndex = items.findIndex((i) => i.id === id);
         const item = items[itemIndex];
-        if (item && item.rows.length) {
+        if (item && !item.collapsed && item.rows.length) {
           const rowIndex = Math.max(
             0,
             item.rows.findIndex((r) => r.hunkStart),
