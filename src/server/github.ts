@@ -119,8 +119,8 @@ export interface ExportInput {
  * the PR and submits it themselves. Refuses when the new side is not the checked-out
  * commit: GitHub anchors comments to a commit, and only HEAD is what the PR shows.
  *
- * Re-exporting is idempotent against that pending review: a comment already sitting at the
- * thread's anchor is left alone when its body matches and rewritten when it does not, so
+ * Re-exporting matches a hidden thread ID and its anchor in the pending review.
+ * A matching comment is left alone when its body matches and rewritten when it does not, so
  * editing a thread and exporting again does not stack a second comment on the line. Comments
  * of an already-submitted review are out of reach — those would have to be replied to.
  */
@@ -135,6 +135,9 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
     throw new GithubError(`the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`);
   }
 
+  for (const [i, comment] of review.comments.entries()) {
+    comment.body += `\n\n${threadMarker(ids[i]!)}`;
+  }
   const pending = await findPendingReview(run, snap.root, pr);
   if (!pending) {
     await createPendingReview(run, snap.root, pr.number, review);
@@ -148,9 +151,10 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
   let updated = 0;
   for (const [i, c] of review.comments.entries()) {
     const id = ids[i]!;
-    // Each comment on the anchor is claimed once, in order, so two threads on the same
-    // lines take two comments instead of overwriting each other.
-    const hit = existing.get(anchorKey(c))?.shift();
+    // An anchor alone cannot distinguish our thread from another draft on the same lines.
+    const at = existing.get(anchorKey(c));
+    const index = at?.findIndex((comment) => comment.body.trimEnd().endsWith(threadMarker(id))) ?? -1;
+    const hit = index < 0 ? undefined : at!.splice(index, 1)[0];
     if (!hit) {
       add.push(c);
       continue;
@@ -166,7 +170,11 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
   return { url: pr.url, posted: add.length, updated, review: 'existing', skipped };
 }
 
-/** Where a comment sits in the diff: the identity diffle matches a thread to a comment by. */
+function threadMarker(id: string): string {
+  return `<!-- diffle-thread:${encodeURIComponent(id)} -->`;
+}
+
+/** The anchor must still match before we rewrite an exported thread. */
 function anchorKey(c: Pick<ReviewComment, 'path' | 'side' | 'line' | 'start_line'>): string {
   return [c.path, c.side, c.start_line ?? c.line, c.line].join('\0');
 }
@@ -229,38 +237,38 @@ interface ThreadsQueryData {
  * The pending review's own comments, by anchor. It has to be `reviewThreads`: it is the only view
  * that reports a *pending* comment's real position — REST's review-comment list leaves `line`,
  * `side` and `start_line` null for one, and the GraphQL comment type has no side field at all.
- * Failure returns an empty map, which just means nothing matches and the export adds its comments
- * as before.
+ * A failed or incomplete lookup aborts the export: absence is safe to infer only from a complete read.
  */
 async function pendingComments(run: GhRunner, cwd: string, pr: PrInfo, reviewId: string): Promise<Map<string, PendingComment[]>> {
   const by = new Map<string, PendingComment[]>();
   const { owner, repo } = repoOfPrUrl(pr.url);
   let after: string | null = null;
-  try {
-    // Bounded: a PR with more than 10 pages of threads gets a partial map, never a hang.
-    for (let page = 0; page < 10; page++) {
-      const data: ThreadsQueryData = await graphql<ThreadsQueryData>(run, cwd, THREADS_QUERY, { owner, repo, number: pr.number, after });
-      const threads = data.repository?.pullRequest?.reviewThreads;
-      for (const t of threads?.nodes ?? []) {
-        const c = t?.comments?.nodes?.[0];
-        // Only this pending review's own comments: a submitted comment must not be rewritten.
-        if (!t?.path || !c?.id || c.pullRequestReview?.id !== reviewId) continue;
-        const line = t.line;
-        if (line == null) continue;
-        const side = t.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT';
-        // A queue per anchor: the review may already hold several comments on the same lines.
-        const key = anchorKey({ path: t.path, side, line, start_line: t.startLine ?? undefined });
-        const at = by.get(key);
-        if (at) at.push({ nodeId: c.id, body: c.body ?? '' });
-        else by.set(key, [{ nodeId: c.id, body: c.body ?? '' }]);
-      }
-      if (!threads?.pageInfo?.hasNextPage || !threads.pageInfo.endCursor) break;
-      after = threads.pageInfo.endCursor;
+  // Bound API work, but never use a partial map to decide which comments to add.
+  for (let page = 0; page < 10; page++) {
+    const data: ThreadsQueryData = await graphql<ThreadsQueryData>(run, cwd, THREADS_QUERY, { owner, repo, number: pr.number, after });
+    const threads = data.repository?.pullRequest?.reviewThreads;
+    if (!threads?.nodes || typeof threads.pageInfo?.hasNextPage !== 'boolean') {
+      throw new GithubError('cannot read the complete pending review', 502);
     }
-  } catch {
-    return by;
+    for (const t of threads.nodes) {
+      const c = t?.comments?.nodes?.[0];
+      // Only this pending review's own comments: a submitted comment must not be rewritten.
+      if (!t?.path || !c?.id || c.pullRequestReview?.id !== reviewId) continue;
+      const line = t.line;
+      if (line == null) continue;
+      const side = t.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT';
+      const key = anchorKey({ path: t.path, side, line, start_line: t.startLine ?? undefined });
+      const at = by.get(key);
+      if (at) at.push({ nodeId: c.id, body: c.body ?? '' });
+      else by.set(key, [{ nodeId: c.id, body: c.body ?? '' }]);
+    }
+    if (!threads.pageInfo.hasNextPage) return by;
+    if (!threads.pageInfo.endCursor || threads.pageInfo.endCursor === after) {
+      throw new GithubError('cannot read the next page of the pending review', 502);
+    }
+    after = threads.pageInfo.endCursor;
   }
-  return by;
+  throw new GithubError('pending review exceeds the 1000-thread lookup limit; export stopped without changes', 502);
 }
 
 const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){updatePullRequestReviewComment(input:$input){pullRequestReviewComment{id}}}`;

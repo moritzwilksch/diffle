@@ -122,7 +122,7 @@ describe('exportToGithub', () => {
       ['api', '--method', 'POST', 'repos/{owner}/{repo}/pulls/7/reviews', '--input', '-'],
     ]);
     const body = JSON.parse(calls[2]!.input!) as Record<string, unknown>;
-    expect(body).toEqual({ commit_id: HEAD, comments: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' }] });
+    expect(body).toEqual({ commit_id: HEAD, comments: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->' }] });
   });
 
   it('adds a thread per comment to the pending review the viewer already has', async () => {
@@ -135,13 +135,13 @@ describe('exportToGithub', () => {
     expect(calls.some((c) => c.args.includes('--method'))).toBe(false);
     const inputs = calls.slice(3).map((c) => (JSON.parse(c.input!) as { variables: { input: unknown } }).variables.input);
     expect(inputs).toEqual([
-      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' },
-      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 8, side: 'LEFT', body: 'gone', startLine: 5, startSide: 'LEFT' },
+      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->' },
+      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 8, side: 'LEFT', body: 'gone\n\n<!-- diffle-thread:o -->', startLine: 5, startSide: 'LEFT' },
     ]);
   });
 
   it('leaves an identical comment already in the pending review alone', async () => {
-    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'hi' }];
+    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'hi\n\n<!-- diffle-thread:k -->' }];
     const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: runner('PRR_1', existing) });
     expect(res).toEqual({ url: PR_URL, posted: 0, updated: 0, review: 'existing', skipped: [{ id: 'k', reason: 'already in the review' }] });
     // Nothing was written: the list is the last call.
@@ -150,30 +150,92 @@ describe('exportToGithub', () => {
 
   it('rewrites the comment in place when the thread was edited, matching path, side and lines', async () => {
     const existing = [
-      { node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'stale text' },
-      { node_id: 'C_2', path: 'a.txt', side: 'LEFT' as const, line: 8, start_line: 5, body: 'gone' },
+      { node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'stale text\n\n<!-- diffle-thread:k -->' },
+      { node_id: 'C_2', path: 'a.txt', side: 'LEFT' as const, line: 8, start_line: 5, body: 'gone\n\n<!-- diffle-thread:o -->' },
     ];
     const threads = [thread({ id: 'k', body: 'hi' }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' }), thread({ id: 'n', line: 9, body: 'new one' })];
     const res = await exportToGithub({ snap, threads, run: runner('PRR_1', existing) });
     expect(res).toEqual({ url: PR_URL, posted: 1, updated: 1, review: 'existing', skipped: [{ id: 'o', reason: 'already in the review' }] });
     const inputs = calls.slice(3).map((c) => (JSON.parse(c.input!) as { variables: { input: unknown } }).variables.input);
     expect(inputs).toEqual([
-      { pullRequestReviewCommentId: 'C_1', body: 'hi' },
-      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 9, side: 'RIGHT', body: 'new one' },
+      { pullRequestReviewCommentId: 'C_1', body: 'hi\n\n<!-- diffle-thread:k -->' },
+      { pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 9, side: 'RIGHT', body: 'new one\n\n<!-- diffle-thread:n -->' },
     ]);
   });
 
   it('side and lines are part of the identity: a comment on the other side is not a match', async () => {
-    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'LEFT' as const, line: 3, body: 'hi' }];
+    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'LEFT' as const, line: 3, body: 'hi\n\n<!-- diffle-thread:k -->' }];
     const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: runner('PRR_1', existing) });
     expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [] });
   });
 
   it('two threads on one line become two comments: the matched comment is claimed once', async () => {
-    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'first' }];
+    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'first\n\n<!-- diffle-thread:a -->' }];
     const threads = [thread({ id: 'a', body: 'first' }), thread({ id: 'b', body: 'second' })];
     const res = await exportToGithub({ snap, threads, run: runner('PRR_1', existing) });
     expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [{ id: 'a', reason: 'already in the review' }] });
+  });
+
+  it('leaves an untagged GitHub draft on the same lines untouched', async () => {
+    const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'My GitHub draft' }];
+    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: runner('PRR_1', existing) });
+    expect(res).toMatchObject({ posted: 1, updated: 0 });
+    expect(JSON.parse(calls[3]!.input!).variables.input).toEqual({
+      pullRequestReviewId: 'PRR_1', path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->',
+    });
+  });
+
+  it('re-exporting only the second same-line thread updates only its comment', async () => {
+    const existing = [
+      { node_id: 'C_A', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'first\n\n<!-- diffle-thread:a -->' },
+      { node_id: 'C_B', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'second\n\n<!-- diffle-thread:b -->' },
+    ];
+    const threads = [thread({ id: 'a', body: 'first' }), thread({ id: 'b', body: 'edited' })];
+    const res = await exportToGithub({ snap, threads, threadIds: ['b'], run: runner('PRR_1', existing) });
+    expect(res).toMatchObject({ posted: 0, updated: 1 });
+    expect(calls).toHaveLength(4);
+    expect(JSON.parse(calls[3]!.input!).variables.input).toEqual({
+      pullRequestReviewCommentId: 'C_B', body: 'edited\n\n<!-- diffle-thread:b -->',
+    });
+  });
+
+  it('finds an exported comment on a later page before deciding to add it', async () => {
+    const paginated: GhRunner = async (args, opts) => {
+      if (args[1] === 'graphql' && JSON.parse(opts.input!).query.includes('reviewThreads')) {
+        calls.push({ args, input: opts.input });
+        const after = JSON.parse(opts.input!).variables.after;
+        const nodes = after === null ? [] : threadNodes([
+          { node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'hi\n\n<!-- diffle-thread:k -->' },
+        ], 'PRR_1');
+        return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: {
+          nodes, pageInfo: { hasNextPage: after === null, endCursor: 'page-1' },
+        } } } } });
+      }
+      return runner('PRR_1')(args, opts);
+    };
+    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: paginated });
+    expect(res).toMatchObject({ posted: 0, updated: 0, skipped: [{ id: 'k', reason: 'already in the review' }] });
+    expect(calls).toHaveLength(4);
+    expect(JSON.parse(calls[3]!.input!).variables.after).toBe('page-1');
+  });
+
+  it.each(['failure', 'limit', 'missing cursor', 'missing data'])('does not write after an incomplete lookup: %s', async (kind) => {
+    let pages = 0;
+    const incomplete: GhRunner = async (args, opts) => {
+      if (args[1] === 'graphql' && JSON.parse(opts.input!).query.includes('reviewThreads')) {
+        pages++;
+        if (kind === 'failure' && pages === 2) throw new GithubError('lookup failed', 502);
+        const nodes = threadNodes([{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'old\n\n<!-- diffle-thread:k -->' }], 'PRR_1');
+        const reviewThreads = kind === 'missing data' ? null : {
+          nodes, pageInfo: { hasNextPage: true, endCursor: kind === 'missing cursor' ? null : `page-${pages}` },
+        };
+        return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads } } } });
+      }
+      return runner('PRR_1')(args, opts);
+    };
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' })], run: incomplete })).rejects.toThrow(GithubError);
+    expect(calls).toHaveLength(2);
+    expect(pages).toBe(kind === 'limit' ? 10 : kind === 'failure' ? 2 : 1);
   });
 
   it('never rewrites a comment of another review: only the pending review\'s own count', async () => {
@@ -189,13 +251,13 @@ describe('exportToGithub', () => {
     expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [] });
   });
 
-  it('adds its comments anyway when the pending review\'s own comments cannot be read', async () => {
+  it('does not write when the pending review cannot be read', async () => {
     const blind: GhRunner = async (args, o) => {
       if (args[1] === 'graphql' && (JSON.parse(o.input!) as { query: string }).query.includes('reviewThreads')) throw new GithubError('gh api graphql failed: 502', 502);
       return runner('PRR_1')(args, o);
     };
-    const res = await exportToGithub({ snap, threads: [thread({ id: 'k' })], run: blind });
-    expect(res).toMatchObject({ posted: 1, updated: 0 });
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' })], run: blind })).rejects.toThrow(/502/);
+    expect(calls).toHaveLength(2);
   });
 
   it('ignores a pending review that is not the viewer\'s own', async () => {

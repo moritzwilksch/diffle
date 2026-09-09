@@ -76,7 +76,9 @@ Nothing is submitted for you: open the pull request on GitHub and submit the rev
 
 Posting works for pushed branches in `pr`, `branch`, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
 
-Adding twice does not stack duplicates: a comment already in the pending review at the same lines is left alone, or rewritten in place when you edited the thread. The button says which — Added, Updated, or Already added.
+Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
+
+If the pending review cannot be read completely, export stops before changing it. Reviews with more than 1,000 threads exceed the lookup limit.
 
 ## Language server
 
