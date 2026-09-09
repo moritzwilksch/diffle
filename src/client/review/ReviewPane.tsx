@@ -40,6 +40,7 @@ import { rowOf } from './rows.js';
 import { reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
+import { installThreadHighlights } from './threadHighlights.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 
@@ -115,6 +116,14 @@ const HEADER_CSS = `
 /* Collapsed-context bars run edge to edge: inset rounded pills next to a full-width file header read as misaligned. */
 [data-separator='line-info'] [data-separator-wrapper] { padding-inline: 0 !important; margin-inline: 0 !important; }
 [data-separator='line-info'] :is([data-separator-wrapper], [data-separator-content], [data-expand-up], [data-expand-down], [data-expand-both]) { border-radius: 0 !important; }
+/* Lines a saved comment refers to (see threadHighlights.ts): the selection tint, fainter, so the cursor's
+   own selection still stands out on top of it. Feeds the library's line-background chain like its own rule. */
+[data-thread-line]:not([data-selected-line]):is([data-line], [data-column-number]) {
+  --diffs-computed-selected-line-bg: light-dark(
+    color-mix(in lab, var(--diffs-computed-diff-line-bg) 90%, var(--diffs-selection-base)),
+    color-mix(in lab, var(--diffs-computed-diff-line-bg) 84%, var(--diffs-selection-base))
+  );
+}
 ::highlight(diffle-search) { background: var(--search-match); }
 ::highlight(diffle-search-current) { background: var(--search-current); color: var(--search-current-fg); }
 `;
@@ -300,6 +309,11 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+  }, [scroller]);
+  // So do the tints on the lines saved comments refer to.
+  useEffect(() => {
+    if (!scroller) return;
+    return installThreadHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
   }, [scroller]);
   useEffect(() => {
     onSelectionChanged();
