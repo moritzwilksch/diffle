@@ -22,7 +22,7 @@ From [conda-forge](https://prefix.dev/channels/conda-forge/packages/diffle):
 pixi global install diffle
 ```
 
-Or from [npm](https://www.npmjs.com/package/@moritzwilksch/diffle) (needs Node 24 or newer):
+Or from [npm](https://npmx.dev/package/@moritzwilksch/diffle):
 
 ```bash
 npm install -g @moritzwilksch/diffle
