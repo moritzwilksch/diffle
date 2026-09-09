@@ -65,12 +65,11 @@ function normalize(c: Partial<UserConfig>): UserConfig {
 /**
  * Per-language commands, keeping only languages diffle knows: a typo in the file would
  * otherwise sit there looking effective. An empty value is kept, it turns the language
- * off. `lspCommand`, the single Python-only command older versions wrote, becomes the
- * python entry.
+ * off. Unknown keys are dropped on the next save, so a config written by an older
+ * version simply loses what this version does not read.
  */
-function lspCommands(c: Partial<UserConfig> & { lspCommand?: unknown }): Partial<Record<LanguageId, string>> {
+function lspCommands(c: Partial<UserConfig>): Partial<Record<LanguageId, string>> {
   const out: Partial<Record<LanguageId, string>> = {};
-  if (typeof c.lspCommand === 'string' && c.lspCommand.trim()) out.python = c.lspCommand.trim();
   for (const [language, command] of Object.entries(c.lspCommands ?? {})) {
     if (typeof command !== 'string') continue;
     if ((LANGUAGE_IDS as string[]).includes(language)) out[language as LanguageId] = command.trim();

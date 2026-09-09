@@ -26,16 +26,12 @@ describe('UserConfigStore', () => {
     expect((await UserConfigStore.open(store.file)).get()).toMatchObject(expected);
   });
 
-  it('keeps known languages, drops the rest, and adopts a legacy lspCommand as python', async () => {
+  it('keeps known languages and drops the rest, including fields it does not read', async () => {
     const file = join(dir, 'config.json');
-    await writeFile(
-      file,
-      JSON.stringify({ lspCommand: 'pyrefly lsp', lspCommands: { go: ' gopls ', rust: '', nope: 'x' } }),
-    );
-    expect((await UserConfigStore.open(file)).get().lspCommands).toEqual({
-      python: 'pyrefly lsp',
-      go: 'gopls',
-      rust: '',
-    });
+    await writeFile(file, JSON.stringify({ lspCommand: 'x', lspCommands: { go: ' gopls ', rust: '', nope: 'x' } }));
+    const store = await UserConfigStore.open(file);
+    expect(store.get().lspCommands).toEqual({ go: 'gopls', rust: '' });
+    await store.set({ contextLines: 3 });
+    expect(JSON.parse(await readFile(file, 'utf8'))).not.toHaveProperty('lspCommand');
   });
 });
