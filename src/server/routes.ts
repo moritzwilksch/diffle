@@ -72,6 +72,14 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.get('/api/refs', async (c) => c.json(await session.repo.refs()));
 
+  app.get('/api/last-commits-preview', async (c) => {
+    const value = c.req.query('count') ?? '';
+    const count = Number(value);
+    if (!/^[0-9]+$/.test(value) || !Number.isSafeInteger(count) || count < 1)
+      return c.json({ error: 'count must be a positive whole number' }, 400);
+    return c.json(await session.repo.lastCommitsPreview(count));
+  });
+
   app.get('/api/patch', async (c) => {
     const path = c.req.query('path');
     if (!path) return c.text(await session.snapshotter.patchAll());

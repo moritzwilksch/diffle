@@ -50,6 +50,17 @@ beforeAll(async () => {
 afterAll(() => rm(dir, { recursive: true, force: true }));
 
 describe('GitRepo', () => {
+  it('previews both last-commit endpoints and reports missing ancestors', async () => {
+    const preview = await repo.lastCommitsPreview(1);
+    expect(preview.old?.message).toBe('base');
+    expect(preview.head?.message).toBe('feat 1');
+    expect(preview.old?.sha).toBe(git('rev-parse', 'HEAD~1'));
+    expect(preview.head?.sha).toBe(git('rev-parse', 'HEAD'));
+    const missing = await repo.lastCommitsPreview(999);
+    expect(missing.old).toBeNull();
+    expect(missing.head).toEqual(preview.head);
+  });
+
   it('opens from a subdirectory path and resolves root/gitDir', async () => {
     expect(repo.root).toBe(await realpath(dir));
     expect(repo.gitDir).toBe(join(await realpath(dir), '.git'));

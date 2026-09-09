@@ -2,7 +2,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { lstat, open, readFile, readlink } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
-import type { ChangedFile, ChangeStatus, RefsResponse } from '../../shared/protocol.js';
+import type { ChangedFile, ChangeStatus, CommitInfo, LastCommitsPreview, RefsResponse } from '../../shared/protocol.js';
 import { mapLimit } from '../concurrency.js';
 
 const MAX_BUFFER = 512 * 1024 * 1024;
@@ -121,6 +121,25 @@ export class GitRepo {
   /** Commit sha for a user-supplied revision. `--end-of-options` keeps an option-shaped name a name. */
   async resolve(rev: string): Promise<string> {
     return (await this.text(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`])).trim();
+  }
+
+  /** Commit messages at both ends of the last-count-commits comparison, pinned to one HEAD. */
+  async lastCommitsPreview(count: number): Promise<LastCommitsPreview> {
+    const head = await this.commitInfo('HEAD');
+    return { head, old: head ? await this.commitInfo(`${head.sha}~${count}`) : null };
+  }
+
+  private async commitInfo(rev: string): Promise<CommitInfo | null> {
+    let sha: string;
+    try {
+      sha = await this.resolve(rev);
+    } catch (e) {
+      if (e instanceof GitError && e.code === 1) return null;
+      throw e;
+    }
+    const output = await this.text(['log', '-1', '--no-show-signature', '--format=%h%x00%B', sha, '--']);
+    const separator = output.indexOf('\0');
+    return { sha, short: output.slice(0, separator), message: output.slice(separator + 1).trimEnd() };
   }
 
   /** The empty tree under the repository's hash algorithm: the old side of an unborn branch. */

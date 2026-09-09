@@ -1,5 +1,6 @@
 import type {
   CommentThread,
+  LastCommitsPreview,
   FileResponse,
   GithubExportRequest,
   GithubExportResponse,
@@ -33,6 +34,8 @@ async function json<T>(input: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
   if (res.status === 204) return undefined as T;
+  if (!res.headers.get('content-type')?.includes('application/json'))
+    throw new ApiError(res.status, 'The server returned a page instead of API data. Restart diffle and reload.');
   return (await res.json()) as T;
 }
 
@@ -67,6 +70,8 @@ export const api = {
   snapshot: () => json<Snapshot>('/api/snapshot'),
   switchMode: (req: ModeRequest) => json<Snapshot>('/api/mode', { method: 'POST', body: JSON.stringify(req) }),
   refs: () => json<RefsResponse>('/api/refs'),
+  lastCommitsPreview: (count: number, signal?: AbortSignal) =>
+    json<LastCommitsPreview>(`/api/last-commits-preview?${q({ count: String(count) })}`, { signal }),
   patch: (path: string) => text(`/api/patch?${q({ path })}`),
   /** Patches of several changed files in one response. */
   patches: (paths: string[]) =>

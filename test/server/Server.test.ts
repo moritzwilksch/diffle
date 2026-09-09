@@ -82,10 +82,25 @@ afterAll(async () => {
 });
 
 describe('Server', () => {
+  it('validates preview counts and returns the available endpoint messages', async () => {
+    for (const count of ['', '0', '-1', '1.5', 'nope', '9007199254740992']) {
+      expect((await send('GET', '/api/last-commits-preview?count=' + count)).status).toBe(400);
+    }
+    const response = await send('GET', '/api/last-commits-preview?count=1');
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({ old: null, head: { message: 'base' } });
+  });
+
   it('serves the API to loopback hosts', async () => {
     const r = await send('GET', '/api/snapshot');
     expect(r.status).toBe(200);
     expect(JSON.parse(r.body).mode.kind).toBe('working');
+  });
+
+  it('returns a JSON error for unknown API routes instead of the app page', async () => {
+    const response = await send('GET', '/api/unknown-endpoint');
+    expect(response.status).toBe(404);
+    expect(JSON.parse(response.body).error).toContain('API endpoint not found');
   });
 
   it('rejects foreign Host and mismatched Origin with 403', async () => {

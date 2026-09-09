@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { lastCommitsRequest } from '../model.js';
 import { useStore } from '../store.js';
 import { RefInput } from './RefInput.js';
+import { CommitPreview } from './CommitPreview.js';
 
 /** Comparison modes with configuration in an adjacent pane. */
 export function ModePicker() {
@@ -237,6 +238,7 @@ export function ModePicker() {
                   <p className="mode-hint" id="commit-count-hint">
                     Choose how many recent commits to compare.
                   </p>
+                  <CommitPreview count={validCount ? count : null} version={snapshot?.version ?? 0} />
                 </div>
               )}
               {pane === 'pr' && (
