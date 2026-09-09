@@ -13,7 +13,7 @@ import type {
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
 import { ArrowLeft, ChevronDown, ChevronRight, Download, FileText, MessageSquare, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { isPython, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
+import { languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
 import { FilePath } from '../FilePath.js';
 import { lineBounds, sideOf } from '../comments/anchor.js';
 import { SearchBar } from '../keyboard/SearchBar.js';
@@ -129,7 +129,8 @@ function targetOf(
   clientX?: number,
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
-  if (!isPython(path)) return null;
+  // No server for this language means no hover, no menu: a target would only produce blockers.
+  if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
   const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX);
   if (clientX != null && !word) return null;
@@ -146,6 +147,13 @@ function targetOf(
   return word
     ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
     : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+}
+
+/** Whether some running language server claims this file's language. */
+function served(path: string): boolean {
+  const language = languageOf(path);
+  const { lsp } = useStore.getState();
+  return language != null && lsp.enabled && lsp.servers.some((s) => s.languages.includes(language));
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;

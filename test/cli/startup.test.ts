@@ -64,7 +64,18 @@ describe('failed startup', () => {
     // A server that survives its stdin closing: only a signal ends it.
     const pidFile = join(dir, 'lsp.pid');
     const lsp = `echo $$ > "${pidFile}"; exec "${process.execPath}" -e "setInterval(() => {}, 1e6)"`;
-    const run = await cli(['working', '--no-open', '--no-watch', '-C', dir, '-p', String(port), '--lsp', lsp]);
+    // A named `--lsp` language starts before the first snapshot, so it exists to leak here.
+    const run = await cli([
+      'working',
+      '--no-open',
+      '--no-watch',
+      '-C',
+      dir,
+      '-p',
+      String(port),
+      '--lsp',
+      `python=${lsp}`,
+    ]);
     expect(run.code).toBe(1);
     expect(run.stderr).toContain('EADDRINUSE');
 

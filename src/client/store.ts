@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
   followsCheckout,
-  isPython,
+  lspBlocker,
   type ChangedFile,
   type CommentThread,
   type FileResponse,
@@ -230,7 +230,7 @@ export interface ReviewState {
   lsp: LspStatus;
   setLspStatus(status: LspStatus): void;
   symbolMenu: SymbolMenuState | null;
-  /** Opens the popover; not at all without `--lsp`, and not on a token the server classifies as a keyword. */
+  /** Opens the popover; not at all with `--no-lsp`, and not on a token the server classifies as a keyword. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
   closeSymbolMenu(): void;
   hover: HoverState | null;
@@ -1007,28 +1007,27 @@ export const useStore = create<ReviewState>((set, get) => {
     }));
   };
 
-  /** Why symbol navigation cannot run right now, or null when it can. */
-  const lspBlocker = (): string | null => {
+  /**
+   * Why symbol navigation cannot run right now, or null when it can. With a path, the
+   * answer is about the server for that file's language; without one, about any of them.
+   */
+  const blocker = (path?: string): string | null => {
     const { lsp, snapshot } = get();
-    if (lsp.state === 'off') return 'Start diffle with --lsp for symbol navigation';
-    if (lsp.state === 'starting') return 'Language server is starting…';
-    if (lsp.state === 'unavailable') return `Language server unavailable: ${lsp.message ?? 'unknown error'}`;
+    if (!lsp.enabled) return lspBlocker(lsp);
     if (!snapshot || !followsCheckout(snapshot))
       return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
-    return null;
+    return lspBlocker(lsp, path);
   };
 
   /** The LSP position for a hovered token, or null after flashing why not. */
   const lspPosition = (target: TokenTarget | null | undefined): LspPosition | null => {
     const reason =
-      lspBlocker() ??
+      blocker() ??
       (!target
         ? 'Hover a symbol first'
         : target.side === 'old'
           ? 'Symbol navigation works on the new side only'
-          : !isPython(target.path)
-            ? 'Not a Python file'
-            : null);
+          : blocker(target.path));
     if (reason) {
       get().flash(reason);
       return null;
@@ -1332,18 +1331,18 @@ export const useStore = create<ReviewState>((set, get) => {
         report('Search', e);
       }
     },
-    lsp: { state: 'off', command: '' },
+    lsp: { enabled: false, servers: [], missing: [] },
     setLspStatus(status) {
       set({ lsp: status });
     },
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {
-      // Without a language server every action would only flash "start with --lsp": no menu to offer.
-      if (get().lsp.state === 'off') return;
+      // With language servers off every action would only flash why: no menu to offer.
+      if (!get().lsp.enabled) return;
       get().closeHover();
       const t = ++menuSeq;
       // Only the server can answer on the new side; elsewhere the menu's actions flash their own reason.
-      if (!lspBlocker() && target.side === 'new' && isPython(target.path)) {
+      if (target.side === 'new' && !blocker(target.path)) {
         const g = generation;
         let kind: string | null = null;
         try {
@@ -1364,7 +1363,7 @@ export const useStore = create<ReviewState>((set, get) => {
     hover: null,
     async requestHover(target, anchor) {
       const t = ++hoverSeq;
-      if (get().symbolMenu || lspBlocker() || target.side === 'old' || !isPython(target.path)) return;
+      if (get().symbolMenu || target.side === 'old' || blocker(target.path)) return;
       const g = generation;
       try {
         const res = await api.lspHover({ path: target.path, line: target.line, col: target.col });
@@ -1456,10 +1455,10 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     symbols: { open: false, scope: 'document', path: null, query: '', all: [], items: [], index: -1, loading: false },
     async openSymbols(scope) {
-      const blocker = lspBlocker();
-      if (blocker) return get().flash(blocker);
-      const path = get().activePath;
-      if (scope === 'document' && (!path || !isPython(path))) return get().flash('Move to a Python file first');
+      const path = scope === 'document' ? get().activePath : null;
+      if (scope === 'document' && !path) return get().flash('Move to a file first');
+      const reason = blocker(path ?? undefined);
+      if (reason) return get().flash(reason);
       set({
         symbols: {
           open: true,
@@ -1733,7 +1732,7 @@ export const useStore = create<ReviewState>((set, get) => {
       fetching = 0;
       try {
         // The language server is optional; its status failing must not take the review down.
-        const lspStatus = api.lspStatus().catch((): LspStatus => ({ state: 'off', command: '' }));
+        const lspStatus = api.lspStatus().catch((): LspStatus => ({ enabled: false, servers: [], missing: [] }));
         const tc = configSeq.start();
         const [snap, lists, config, lsp] = await Promise.all([api.snapshot(), fetchLists(), api.config(), lspStatus]);
         // Mode-independent, and nothing else fetches them: a pushed refresh that overtook this
