@@ -1,4 +1,4 @@
-import { Parser, type Language, type Node, type Tree } from 'web-tree-sitter';
+import type { Parser, Node, Tree } from 'web-tree-sitter';
 
 const STRINGS = new Set([
   'string',
@@ -37,8 +37,10 @@ const EXPRESSIONS = new Set([
   'variable_name',
 ]);
 
-/** Walk outward so comments inside interpolations are still blocked. */
+/** Reject grammar keyword tokens and literal text, but allow interpolated expressions. */
 export function blocksNode(node: Node | null): boolean {
+  // Grammars distinguish anonymous keyword tokens from named identifiers, even for the same spelling.
+  if (node && !node.isNamed && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(node.type)) return true;
   for (; node; node = node.parent) {
     if (node.type.includes('comment') || STRINGS.has(node.type)) return true;
     if (EXPRESSIONS.has(node.type)) return false;
@@ -49,17 +51,15 @@ export function blocksNode(node: Node | null): boolean {
 /** Worker-owned, bounded tree cache. Replaced and evicted WASM trees are freed explicitly. */
 export class SyntaxClassifier {
   private entries = new Map<string, { contents: string; grammar: string; tree: Tree }>();
-  constructor(private load: (grammar: string) => Promise<Language>) {}
+  constructor(private load: (grammar: string) => Promise<Parser>) {}
 
   async blocked(key: string, grammar: string, contents: string, line: number, col: number): Promise<boolean> {
     if (contents.length > 1_000_000 || line < 1 || col < 0) return false;
     let entry = this.entries.get(key);
     if (!entry || entry.contents !== contents || entry.grammar !== grammar) {
-      const language = await this.load(grammar);
-      const parser = new Parser();
+      const parser = await this.load(grammar);
       let tree: Tree | null;
       try {
-        parser.setLanguage(language);
         tree = parser.parse(contents);
       } finally {
         parser.delete();

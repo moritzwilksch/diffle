@@ -4,13 +4,20 @@ import { SyntaxClassifier } from '../../src/client/lsp/SyntaxClassifier.js';
 import { GRAMMARS, grammarOf } from '../../src/client/lsp/syntax.js';
 
 const languages = new Map<string, Promise<Language>>();
-const classifier = new SyntaxClassifier((grammar) => {
+const classifier = new SyntaxClassifier(async (grammar) => {
   let language = languages.get(grammar);
   if (!language) {
-    language = Language.load(`node_modules/tree-sitter-wasms/out/tree-sitter-${grammar}.wasm`);
+    language = Language.load(
+      grammar === 'lua'
+        ? 'node_modules/@tree-sitter-grammars/tree-sitter-lua/tree-sitter-lua.wasm'
+        : `node_modules/tree-sitter-wasms/out/tree-sitter-${grammar}.wasm`,
+    );
     languages.set(grammar, language);
   }
-  return language;
+  const loaded = await language;
+  const parser = new Parser();
+  parser.setLanguage(loaded);
+  return parser;
 });
 beforeAll(async () => {
   await Parser.init();
@@ -62,6 +69,49 @@ describe('client syntax classification', () => {
   ])('keeps interpolated expressions actionable in %s', async (grammar, source) => {
     expect(await blocked(grammar, source, 'literal')).toBe(true);
     expect(await blocked(grammar, source, 'symbol')).toBe(false);
+  });
+
+  it.each([
+    [
+      'typescript',
+      'export function value() { const local = 1; return local; }',
+      ['export', 'function', 'const', 'return'],
+    ],
+    [
+      'javascript',
+      'export function value() { const local = 1; return local; }',
+      ['export', 'function', 'const', 'return'],
+    ],
+    ['python', 'def value():\n  if ready:\n    return ready', ['def', 'if', 'return']],
+    ['rust', 'pub fn value() { let local = 1; }', ['pub', 'fn', 'let']],
+    ['go', 'func value() { var local = 1 }', ['func', 'var']],
+    ['c', 'static void value() { return; }', ['static', 'return']],
+    ['cpp', 'namespace value { class Thing {}; }', ['namespace', 'class']],
+    ['ruby', 'def value\n  return local\nend', ['def', 'return', 'end']],
+    ['java', 'public class Value { static void value() {} }', ['public', 'class', 'static']],
+    ['lua', 'local function value() return localValue end', ['local', 'function', 'return', 'end']],
+    ['zig', 'pub fn value() void { const local = 1; }', ['pub', 'fn', 'const']],
+    ['swift', 'public func value() { let local = 1 }', ['public', 'func', 'let']],
+    ['php', '<?php function value() { return 1; }', ['function', 'return']],
+    ['bash', 'if test -f path; then echo value; fi', ['if', 'then', 'fi']],
+    ['ocaml', 'let value = if ready then 1 else 0', ['let', 'if', 'then', 'else']],
+    ['tsx', 'export const value = <div />;', ['export', 'const']],
+  ])('blocks grammar keywords in %s', async (grammar, source, keywords) => {
+    for (const keyword of keywords) expect(await blocked(grammar, source, keyword), keyword).toBe(true);
+  });
+
+  it('classifies Lua keywords after replacing a tree containing strings', async () => {
+    expect(await blocked('lua', 'local value = "string"', 'string')).toBe(true);
+    expect(await blocked('lua', 'local function value() return 1 end', 'end')).toBe(true);
+  });
+
+  it('allows keyword spellings used as identifiers or property names', async () => {
+    for (const name of ['export', 'function', 'const']) {
+      expect(await blocked('typescript', `object.${name}`, name)).toBe(false);
+      expect(await blocked('javascript', `const object = { ${name}: value };`, `${name}:`)).toBe(false);
+    }
+    expect(await blocked('typescript', 'const exported = value;', 'exported')).toBe(false);
+    expect(await blocked('typescript', 'const value = `text ${object.const}`;', 'const}')).toBe(false);
   });
 
   it('handles multiline syntax, Unicode columns, nested comments and JSX', async () => {

@@ -231,7 +231,7 @@ export interface ReviewState {
   lsp: LspStatus;
   setLspStatus(status: LspStatus): void;
   symbolMenu: SymbolMenuState | null;
-  /** Opens the popover; not at all with `--no-lsp`, and not on a token the server classifies as a keyword. */
+  /** Opens the popover unless LSP is off, syntax blocks the target, or the server identifies a keyword. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
   closeSymbolMenu(): void;
   hover: HoverState | null;
