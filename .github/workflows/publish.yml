@@ -16,6 +16,17 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - name: Verify release tag matches package version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          const expected = `v${version}`;
+          if (process.env.GITHUB_REF_NAME !== expected) {
+            console.error(`::error::Release tag ${process.env.GITHUB_REF_NAME} does not match package version ${expected}`);
+            process.exit(1);
+          }
+          NODE
       - name: Publish package
         run: |
           npm ci
