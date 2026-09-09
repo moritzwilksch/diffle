@@ -47,7 +47,7 @@ diffle working --lsp    # add Python symbol navigation through pyrefly
 diffle --help           # list all commands and flags
 ```
 
-`diffle pr` reads the pull request with [`gh`](https://cli.github.com/) and fetches what the repository is missing into `refs/diffle/`, so a pull request nobody has checked out is reviewable. Its comments are keyed by pull request number and survive a force-push.
+`diffle pr` reads the pull request with [`gh`](https://cli.github.com/) and fetches what the repository is missing into `refs/diffle/`, so a pull request nobody has checked out is reviewable; nothing else in the repository moves. Its comments are keyed by pull request number and survive a force-push. Drop what it fetched with `git for-each-ref --format='%(refname)' refs/diffle | xargs -n1 git update-ref -d`.
 
 Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
 
