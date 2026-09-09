@@ -99,10 +99,13 @@ describe('CommentStore', () => {
 
   it('imports payloads, quoting from the snapshot and skipping open duplicates', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const quote = async (path: string, _side: string, start: number, end: number) => (path === 'a.py' && end <= 3 ? `L${start}-${end}` : null);
+    const quote = async (path: string, _side: string, start: number, end: number) =>
+      path === 'a.py' && end <= 3 ? `L${start}-${end}` : null;
     const first = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one' }], quote);
     expect(first.skipped).toBe(0);
-    expect(first.added[0]).toMatchObject({ anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'L1-1' } });
+    expect(first.added[0]).toMatchObject({
+      anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'L1-1' },
+    });
     expect(first.added[0]!.messages[0]).toMatchObject({ body: 'one' });
     const second = await s.importThreads(
       [
@@ -118,7 +121,15 @@ describe('CommentStore', () => {
     await s.setResolved(first.added[0]!.id, true);
     expect((await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one' }], quote)).added).toHaveLength(1);
     // An unquotable range adds nothing from the batch.
-    await expect(s.importThreads([{ path: 'a.py', startLine: 1, body: 'new' }, { path: 'a.py', startLine: 8, body: 'x' }], quote)).rejects.toBeInstanceOf(UnquotableError);
+    await expect(
+      s.importThreads(
+        [
+          { path: 'a.py', startLine: 1, body: 'new' },
+          { path: 'a.py', startLine: 8, body: 'x' },
+        ],
+        quote,
+      ),
+    ).rejects.toBeInstanceOf(UnquotableError);
     expect(s.threads().some((t) => t.messages[0]!.body === 'new')).toBe(false);
   });
 
@@ -177,19 +188,21 @@ describe('CommentStore', () => {
     expect(s.threads().map((t) => t.id)).toEqual([kept.id]);
   });
 
-  it('two stores on one file keep each other\'s sets', async () => {
+  it("two stores on one file keep each other's sets", async () => {
     const working = await CommentStore.open(dir, 'working');
     const pr = await CommentStore.open(dir, 'pr:abc');
     await working.addThread(anchor, { body: 'w' });
     await pr.addThread(anchor, { body: 'p' });
     await working.setViewed('a.py', 'sha', true);
-    const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8')) as { sets: Record<string, { threads: { messages: { body: string }[] }[] }> };
+    const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8')) as {
+      sets: Record<string, { threads: { messages: { body: string }[] }[] }>;
+    };
     expect(raw.sets.working!.threads.map((t) => t.messages[0]!.body)).toEqual(['w']);
     expect(raw.sets['pr:abc']!.threads.map((t) => t.messages[0]!.body)).toEqual(['p']);
     expect((await CommentStore.open(dir, 'pr:abc')).threads()).toHaveLength(1);
   });
 
-  it('two open stores on one key see and keep each other\'s writes', async () => {
+  it("two open stores on one key see and keep each other's writes", async () => {
     const a = await CommentStore.open(dir, 'working');
     const b = await CommentStore.open(dir, 'working');
     const t = await a.addThread(anchor, { body: 'from a' });
@@ -219,9 +232,19 @@ describe('CommentStore', () => {
     ]);
     const working = await CommentStore.open(dir, 'working');
     const pr = await CommentStore.open(dir, 'pr:abc');
-    expect(working.threads().map((t) => t.messages[0]!.body).sort()).toEqual(['o1', 'o2']);
+    expect(
+      working
+        .threads()
+        .map((t) => t.messages[0]!.body)
+        .sort(),
+    ).toEqual(['o1', 'o2']);
     expect(working.viewed()).toEqual([{ path: 'a.py', blob: 'sha', viewed: true }]);
-    expect(pr.threads().map((t) => t.messages[0]!.body).sort()).toEqual(['n1', 'n2']);
+    expect(
+      pr
+        .threads()
+        .map((t) => t.messages[0]!.body)
+        .sort(),
+    ).toEqual(['n1', 'n2']);
     expect(pr.viewed()).toEqual([{ path: 'b.py', blob: 'sha', viewed: true }]);
     // Unique temp names and a released lock: nothing left beside the file.
     expect((await readdir(join(dir, 'diffle'))).sort()).toEqual(['comments.json']);
@@ -259,10 +282,12 @@ describe('CommentStore', () => {
     await expect(stat(lock)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('checks a payload\'s own quoted range against the snapshot before keeping it', async () => {
+  it("checks a payload's own quoted range against the snapshot before keeping it", async () => {
     const s = await CommentStore.open(dir, 'working');
     const quote = async (path: string) => (path === 'a.py' ? 'from snapshot' : null);
-    await expect(s.importThreads([{ path: '../../etc/passwd', startLine: 1, body: 'x', quoted: 'root:x:0:0' }], quote)).rejects.toBeInstanceOf(UnquotableError);
+    await expect(
+      s.importThreads([{ path: '../../etc/passwd', startLine: 1, body: 'x', quoted: 'root:x:0:0' }], quote),
+    ).rejects.toBeInstanceOf(UnquotableError);
     const { added } = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'x', quoted: 'as shown' }], quote);
     expect(added[0]!.anchor.quoted).toBe('as shown');
   });
@@ -274,7 +299,9 @@ describe('CommentStore', () => {
     await expect(s.addThread(anchor, { body: 'first' })).rejects.toThrow();
     await rmdir(s.file);
     await s.addThread(anchor, { body: 'second' });
-    const raw = JSON.parse(await readFile(s.file, 'utf8')) as { sets: { working: { threads: { messages: { body: string }[] }[] } } };
+    const raw = JSON.parse(await readFile(s.file, 'utf8')) as {
+      sets: { working: { threads: { messages: { body: string }[] }[] } };
+    };
     expect(raw.sets.working.threads.map((t) => t.messages[0]!.body)).toEqual(['second']);
     expect((await readdir(join(dir, 'diffle'))).sort()).toEqual(['comments.json']);
   });

@@ -4,6 +4,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
+import type { CodeViewOptions } from '@pierre/diffs';
+import { reviewGeometry } from '../../src/client/review/geometry.js';
 
 const api = {
   snapshot: vi.fn(),
@@ -22,11 +24,19 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 // rows is enough to see which element the pane's effects bound to.
 type Rendered = { id: string; element: HTMLElement; type: 'diff' };
 let rendered: Rendered[] = [];
+const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 vi.mock('@pierre/diffs/react', () => ({
   CodeView: forwardRef(function CodeView(
-    props: { containerRef: (el: HTMLDivElement | null) => void; className: string; items: { id: string }[]; renderHeaderMetadata: (item: { id: string }) => unknown },
+    props: {
+      containerRef: (el: HTMLDivElement | null) => void;
+      className: string;
+      items: { id: string }[];
+      options: CodeViewOptions<unknown>;
+      renderHeaderMetadata: (item: { id: string }) => unknown;
+    },
     ref,
   ) {
+    captureOptions(props.options);
     useImperativeHandle(ref, () => ({
       getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
@@ -36,7 +46,9 @@ vi.mock('@pierre/diffs/react', () => ({
     return createElement(
       'div',
       { ref: props.containerRef, className: props.className },
-      props.items.map((it) => createElement('div', { key: it.id, className: 'header' }, props.renderHeaderMetadata(it) as never)),
+      props.items.map((it) =>
+        createElement('div', { key: it.id, className: 'header' }, props.renderHeaderMetadata(it) as never),
+      ),
     );
   }),
 }));
@@ -53,7 +65,15 @@ const { ReviewPane } = await import('../../src/client/review/ReviewPane.js');
 function snap(changed: Snapshot['changed']): Snapshot {
   return {
     root: '/r',
-    mode: { kind: 'working', request: { kind: 'working' }, old: { kind: 'rev', rev: 'HEAD' }, newRev: 'worktree', label: 'working', live: 'none', commentKey: 'working' },
+    mode: {
+      kind: 'working',
+      request: { kind: 'working' },
+      old: { kind: 'rev', rev: 'HEAD' },
+      newRev: 'worktree',
+      label: 'working',
+      live: 'none',
+      commentKey: 'working',
+    },
     version: 1,
     oldSha: 'x',
     newSha: 'worktree',
@@ -63,10 +83,22 @@ function snap(changed: Snapshot['changed']): Snapshot {
     tree: ['a.txt'],
   };
 }
-const changed = [{ path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false }];
+const changed = [
+  { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+];
 
 const box = (el: HTMLElement, top: number, bottom: number) => {
-  el.getBoundingClientRect = () => ({ top, bottom, height: bottom - top, left: 0, right: 800, width: 800, x: 0, y: top, toJSON: () => ({}) });
+  el.getBoundingClientRect = () => ({
+    top,
+    bottom,
+    height: bottom - top,
+    left: 0,
+    right: 800,
+    width: 800,
+    x: 0,
+    y: top,
+    toJSON: () => ({}),
+  });
 };
 const flush = () => act(() => new Promise((r) => setTimeout(r, 30)));
 
@@ -76,7 +108,16 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   installSearchHighlights.mockClear();
   rendered = [];
-  useStore.setState({ snapshot: null, loaded: {}, fileView: null, error: null, activePath: null, selection: null, gens: {} });
+  useStore.setState({
+    snapshot: null,
+    loaded: {},
+    fileView: null,
+    error: null,
+    activePath: null,
+    selection: null,
+    scrollTarget: null,
+    gens: {},
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -84,9 +125,36 @@ beforeEach(() => {
 afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
+  document.documentElement.style.removeProperty('font-size');
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('uses the rendered header height for navigation and the same geometry for CSS and virtualization', async () => {
+    document.documentElement.style.fontSize = '14.4px';
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(changed) }));
+    const geometry = reviewGeometry(14.4);
+    const viewerOptions = captureOptions.mock.calls.at(-1)![0];
+    expect(viewerOptions.itemMetrics).toEqual(geometry.itemMetrics);
+    expect(viewerOptions.layout).toEqual(geometry.layout);
+    expect(viewerOptions.unsafeCSS).toContain(geometry.css);
+    expect(viewerOptions.hunkSeparators).toBe('line-info');
+
+    const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
+    box(scroller, 0, 800);
+    scroller.scrollTop = 500;
+    const card = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.line = '62';
+    box(row, 36, 54);
+    card.appendChild(row);
+    rendered = [{ id: 'diff:a.txt@0', element: card, type: 'diff' }];
+    await act(() =>
+      useStore.setState({ scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 1 } }),
+    );
+    expect(scroller.scrollTop).toBe(497);
+  });
+
   it('bind to the viewer that mounts after the empty-changes branch, and again after a theme remount', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     await act(() => useStore.setState({ snapshot: snap([]) }));
@@ -121,9 +189,14 @@ describe('ReviewPane scroller effects', () => {
   });
 
   it('keeps the active file while it is on screen, even when another file sits at the gaze point', async () => {
-    const two = [...changed, { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true }];
+    const two = [
+      ...changed,
+      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true },
+    ];
     await act(() => root.render(createElement(ReviewPane)));
-    await act(() => useStore.setState({ snapshot: { ...snap(two), tree: ['a.txt', 'b.txt'] }, activePath: 'b.txt', selection: null }));
+    await act(() =>
+      useStore.setState({ snapshot: { ...snap(two), tree: ['a.txt', 'b.txt'] }, activePath: 'b.txt', selection: null }),
+    );
     const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
     box(scroller, 0, 800);
     // J landed b.txt's collapsed header at the top; a.txt fills the rest of the viewport, gaze point included.
@@ -146,10 +219,17 @@ describe('ReviewPane scroller effects', () => {
   });
 
   it('leaves the active file alone while a line is focused, even when the cursor has scrolled off screen', async () => {
-    const two = [...changed, { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true }];
+    const two = [
+      ...changed,
+      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true },
+    ];
     await act(() => root.render(createElement(ReviewPane)));
-    const selection = { id: 'diff:b.txt@0', lineNumber: 1, side: 'additions' } as unknown as NonNullable<ReturnType<typeof useStore.getState>['selection']>;
-    await act(() => useStore.setState({ snapshot: { ...snap(two), tree: ['a.txt', 'b.txt'] }, activePath: 'b.txt', selection }));
+    const selection = { id: 'diff:b.txt@0', lineNumber: 1, side: 'additions' } as unknown as NonNullable<
+      ReturnType<typeof useStore.getState>['selection']
+    >;
+    await act(() =>
+      useStore.setState({ snapshot: { ...snap(two), tree: ['a.txt', 'b.txt'] }, activePath: 'b.txt', selection }),
+    );
     const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
     box(scroller, 0, 800);
     // The cursor's file has scrolled away; a.txt fills the viewport, gaze point included.
@@ -181,13 +261,23 @@ describe('ReviewPane scroller effects', () => {
     box(row, 812, 830);
     card.appendChild(row);
     rendered = [{ id: 'diff:a.txt@0', element: card, type: 'diff' }];
-    const sel = { id: 'diff:a.txt@0', range: { start: 62, side: 'additions', end: 62, endSide: 'additions' } } as unknown as NonNullable<ReturnType<typeof useStore.getState>['selection']>;
-    await act(() => useStore.setState({ selection: sel, scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 1 } }));
+    const sel = {
+      id: 'diff:a.txt@0',
+      range: { start: 62, side: 'additions', end: 62, endSide: 'additions' },
+    } as unknown as NonNullable<ReturnType<typeof useStore.getState>['selection']>;
+    await act(() =>
+      useStore.setState({
+        selection: sel,
+        scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 1 },
+      }),
+    );
     await flush();
     expect(scroller.scrollTop).toBe(530);
     // A row already inside the pane is left alone.
     box(row, 400, 418);
-    await act(() => useStore.setState({ scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 2 } }));
+    await act(() =>
+      useStore.setState({ scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 2 } }),
+    );
     await flush();
     expect(scroller.scrollTop).toBe(530);
   });
@@ -202,6 +292,13 @@ describe('ReviewPane scroller effects', () => {
     expect(installSearchHighlights.mock.calls[0]![1]).toBe(host.querySelector('.codeview'));
   });
 
+  it('shows the viewed shortcut in the file header tooltip', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };
+    await act(() => useStore.setState({ snapshot: snap(changed), loaded: { 'a.txt': file } }));
+    expect(host.querySelector('[title="Mark as viewed and collapse the file (v)"]')).not.toBeNull();
+  });
+
   it('offers one way back from the file view: the bar above, not the file header too', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };
@@ -209,7 +306,9 @@ describe('ReviewPane scroller effects', () => {
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(1);
     expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(0);
 
-    await act(() => useStore.setState({ fileView: { path: 'a.txt', item: file, from: { position: null, activePath: null } } }));
+    await act(() =>
+      useStore.setState({ fileView: { path: 'a.txt', item: file, from: { position: null, activePath: null } } }),
+    );
     expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(1);
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(0);
   });

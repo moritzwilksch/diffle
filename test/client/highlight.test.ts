@@ -3,8 +3,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { MatchCache, matchPattern } from '../../src/client/search/highlight.js';
 import type { SearchState } from '../../src/client/store.js';
 
-const base: SearchState = { open: true, kind: 'text', direction: 1, ignoreCase: true, regex: false, scope: 'diff', path: null, focusNonce: 0, query: 'a.b', matches: [{ path: 'x', line: 1, text: '' }], index: 0, loading: false, truncated: false };
-const hits = (s: Partial<SearchState>, text: string) => [...text.matchAll(matchPattern({ ...base, ...s })!)].map((m) => m[0]);
+const base: SearchState = {
+  open: true,
+  kind: 'text',
+  direction: 1,
+  ignoreCase: true,
+  regex: false,
+  scope: 'diff',
+  path: null,
+  focusNonce: 0,
+  query: 'a.b',
+  matches: [{ path: 'x', line: 1, text: '' }],
+  index: 0,
+  loading: false,
+  truncated: false,
+};
+const hits = (s: Partial<SearchState>, text: string) =>
+  [...text.matchAll(matchPattern({ ...base, ...s })!)].map((m) => m[0]);
 
 describe('search highlight pattern', () => {
   it('follows the text-search toggles', () => {

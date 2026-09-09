@@ -1,12 +1,37 @@
 import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
 import type { ChangedFile, CommentThread, Snapshot } from '../../src/shared/protocol.js';
-import { compareTreeOrder, countViewed, currentPath, nextSearchScope, orderedPaths, reuseThreads, widenSearchScope } from '../../src/client/model.js';
+import {
+  compareTreeOrder,
+  countViewed,
+  currentPath,
+  nextSearchScope,
+  orderedPaths,
+  reuseThreads,
+  widenSearchScope,
+} from '../../src/client/model.js';
 
 describe('orderedPaths', () => {
   it('follows the file tree: folders first, then case-insensitive natural order', () => {
-    const paths = ['src/App.tsx', 'src/api.ts', 'README.md', 'src/review/order.ts', '.github/ci.yml', 'src/.eslintrc', 'a/b/c.ts', 'a/b.ts'];
-    const changed = paths.map((path) => ({ path, status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b', generated: false }));
+    const paths = [
+      'src/App.tsx',
+      'src/api.ts',
+      'README.md',
+      'src/review/order.ts',
+      '.github/ci.yml',
+      'src/.eslintrc',
+      'a/b/c.ts',
+      'a/b.ts',
+    ];
+    const changed = paths.map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: 'b',
+      generated: false,
+    }));
     const snapshot = { changed, tree: [...paths].sort() } as unknown as Snapshot;
     expect(orderedPaths(snapshot)).toEqual([
       '.github/ci.yml',
@@ -27,7 +52,22 @@ describe('orderedPaths', () => {
   });
 
   it('matches the tree library on the cases where locale order and dot-first rules disagree with it', () => {
-    const paths = ['b/a_x.py', 'b/a-x.py', 'file10.py', 'file2.py', 'File2.py', '.github/ci.yml', '_secrets.py', 'secrets.enc.yaml', 'B.md', 'a.md', 'x/y/z.ts', 'x/y.ts', 'v1.2.3/a', 'v1.10.0/a'];
+    const paths = [
+      'b/a_x.py',
+      'b/a-x.py',
+      'file10.py',
+      'file2.py',
+      'File2.py',
+      '.github/ci.yml',
+      '_secrets.py',
+      'secrets.enc.yaml',
+      'B.md',
+      'a.md',
+      'x/y/z.ts',
+      'x/y.ts',
+      'v1.2.3/a',
+      'v1.10.0/a',
+    ];
     const theirs = prepareFileTreeInput(paths).paths;
     expect([...paths].sort(compareTreeOrder)).toEqual(theirs);
   });
@@ -36,7 +76,25 @@ describe('orderedPaths', () => {
     // Deterministic LCG so a failure is reproducible.
     let seed = 42;
     const rand = (n: number) => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
-    const segs = ['a', 'B', 'a_b', 'a-b', 'a.b', '.dot', 'x1', 'x10', 'x2', 'X02', 'z', 'ä', '_u', 'e2e', 'E2E', 'main', 'Main'];
+    const segs = [
+      'a',
+      'B',
+      'a_b',
+      'a-b',
+      'a.b',
+      '.dot',
+      'x1',
+      'x10',
+      'x2',
+      'X02',
+      'z',
+      'ä',
+      '_u',
+      'e2e',
+      'E2E',
+      'main',
+      'Main',
+    ];
     for (let round = 0; round < 200; round++) {
       const set = new Set<string>();
       const count = 2 + rand(12);
@@ -91,7 +149,15 @@ describe('search scope', () => {
   });
 
   it('the current file is the cursor’s, else the whole-file view’s, else the first in tree order', () => {
-    const changed = ['src/b.ts', 'src/a.ts'].map((path) => ({ path, status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b', generated: false }));
+    const changed = ['src/b.ts', 'src/a.ts'].map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: 'b',
+      generated: false,
+    }));
     const snapshot = { changed, tree: ['src/a.ts', 'src/b.ts', 'src/c.ts'] } as unknown as Snapshot;
     const view = { path: 'src/c.ts', item: null, from: { position: null, activePath: null } };
     expect(currentPath({ snapshot, activePath: 'src/b.ts', fileView: view })).toBe('src/b.ts');
@@ -102,7 +168,15 @@ describe('search scope', () => {
 });
 
 describe('countViewed', () => {
-  const file = (path: string, blob = 'b'): ChangedFile => ({ path, status: 'M', additions: 1, deletions: 0, binary: false, blob, generated: false });
+  const file = (path: string, blob = 'b'): ChangedFile => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob,
+    generated: false,
+  });
   const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommand: '' };
 
   it('counts explicit marks at the current blob and auto-viewed files; a stale mark is not viewed', () => {

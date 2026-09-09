@@ -15,10 +15,22 @@ const git = (...args: string[]) =>
   execFileSync('git', args, {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' },
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 't',
+      GIT_AUTHOR_EMAIL: 't@t',
+      GIT_COMMITTER_NAME: 't',
+      GIT_COMMITTER_EMAIL: 't@t',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+    },
   }).trim();
 
-const hub = { messages: [] as ServerMessage[], broadcast(m: ServerMessage) { this.messages.push(m); } };
+const hub = {
+  messages: [] as ServerMessage[],
+  broadcast(m: ServerMessage) {
+    this.messages.push(m);
+  },
+};
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'diffle-session-'));
@@ -81,7 +93,10 @@ describe('Session', () => {
     expect(await session.readSide(snap, 'old.txt', 'new')).toBeNull();
 
     await session.comments.clear();
-    const c = await session.comments.addThread({ path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' }, { body: 'old-side note' });
+    const c = await session.comments.addThread(
+      { path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' },
+      { body: 'old-side note' },
+    );
     await session.refresh();
     expect(session.comments.get(c.id)?.stale).toBe(false);
     await session.close();
@@ -92,11 +107,23 @@ describe('Session', () => {
     await session.start({ kind: 'revspec', args: ['main..feat'] });
     await session.comments.clear();
     // Context 0 shows only `delta`; `alpha` exists on both sides but is outside every hunk.
-    const outside = await session.comments.addThread({ path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' }, { body: 'context line' });
-    const inside = await session.comments.addThread({ path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' }, { body: 'added line' });
+    const outside = await session.comments.addThread(
+      { path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' },
+      { body: 'context line' },
+    );
+    const inside = await session.comments.addThread(
+      { path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' },
+      { body: 'added line' },
+    );
     // `same.txt` is not part of the diff: nothing can display an old-side thread on it, the file view shows a new-side one.
-    const unchangedOld = await session.comments.addThread({ path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' }, { body: 'x' });
-    const unchangedNew = await session.comments.addThread({ path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' }, { body: 'y' });
+    const unchangedOld = await session.comments.addThread(
+      { path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' },
+      { body: 'x' },
+    );
+    const unchangedNew = await session.comments.addThread(
+      { path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' },
+      { body: 'y' },
+    );
     await session.refresh();
     const stale = () => [outside, inside, unchangedOld, unchangedNew].map((t) => session.comments.get(t.id)?.stale);
     expect(stale()).toEqual([true, false, true, false]);
@@ -218,7 +245,19 @@ describe('Session', () => {
   it('refreshes the live worktree snapshot when only the index changes', async () => {
     // Own repo: the real chokidar watcher must see a `git add -f` of an ignored file that never changed on disk.
     const live = await mkdtemp(join(tmpdir(), 'diffle-live-'));
-    const liveGit = (...args: string[]) => execFileSync('git', args, { cwd: live, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' } }).trim();
+    const liveGit = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: live,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+          GIT_CONFIG_GLOBAL: '/dev/null',
+        },
+      }).trim();
     try {
       liveGit('init', '-q', '-b', 'main');
       await writeFile(join(live, '.gitignore'), '*.env\n');
@@ -226,12 +265,13 @@ describe('Session', () => {
       liveGit('add', '.gitignore');
       liveGit('commit', '-q', '-m', 'base');
       const session = new Session(await GitRepo.open(live), hub, { watch: true, context: 3 });
-      const nextSnapshot = () => new Promise<Snapshot>((resolve) => {
-        const off = session.onSnapshot((snap) => {
-          off();
-          resolve(snap);
+      const nextSnapshot = () =>
+        new Promise<Snapshot>((resolve) => {
+          const off = session.onSnapshot((snap) => {
+            off();
+            resolve(snap);
+          });
         });
-      });
       const first = await session.start({ kind: 'working' });
       expect(first.changed).toEqual([]);
       expect(first.tree).toEqual(['.gitignore']);

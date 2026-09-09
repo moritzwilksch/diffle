@@ -119,9 +119,16 @@ describe('useKeymap', () => {
 
   it('⌘/Ctrl+Shift+e focuses the file tree on the active file, showing the tree first when it is hidden', async () => {
     const tree = { getItem: vi.fn(() => ({})), focusPath: vi.fn(), focusNearestPath: vi.fn() };
-    useStore.setState({ treeModel: tree as never, activePath: 'a.py', layout: { ...useStore.getState().layout, treeVisible: false } });
+    useStore.setState({
+      treeModel: tree as never,
+      activePath: 'a.py',
+      layout: { ...useStore.getState().layout, treeVisible: false },
+    });
     try {
-      for (const init of [{ metaKey: true, shiftKey: true }, { ctrlKey: true, shiftKey: true }]) {
+      for (const init of [
+        { metaKey: true, shiftKey: true },
+        { ctrlKey: true, shiftKey: true },
+      ]) {
         tree.focusPath.mockClear();
         expect(press('e', init).defaultPrevented).toBe(true);
         await new Promise((r) => requestAnimationFrame(r));
@@ -153,7 +160,10 @@ describe('useKeymap', () => {
   });
 
   it('0 and $ focus the first / last symbol of the cursor line and say so when there is none', () => {
-    useStore.setState({ selection: { id: 'diff:a.py@0', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } }, toast: null });
+    useStore.setState({
+      selection: { id: 'diff:a.py@0', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },
+      toast: null,
+    });
     // No viewer is mounted in this test, so the line has no rendered words.
     press('$');
     expect(useStore.getState().toast).toBe('No symbol on this line');
@@ -165,11 +175,10 @@ describe('useKeymap', () => {
     expect(useStore.getState().toast).toBeNull();
   });
 
-  it('a count before gg or G jumps to that line; other keys drop the count', () => {
+  it('a count before gg or G jumps to that line', () => {
     const goToLine = vi.fn(async () => {});
     const moveFile = vi.fn();
-    const moveCursor = vi.fn();
-    useStore.setState({ goToLine, moveFile, moveCursor });
+    useStore.setState({ goToLine, moveFile });
     // Digits are swallowed (no browser default); the first g only starts the chord.
     for (const k of ['1', '2', '0']) expect(press(k).defaultPrevented).toBe(true);
     press('g');
@@ -179,20 +188,52 @@ describe('useKeymap', () => {
     press('G');
     expect(goToLine).toHaveBeenLastCalledWith(7);
     expect(moveFile).not.toHaveBeenCalled();
-    // j consumes the count without using it; the following gg is plain.
-    press('4');
-    press('j');
-    expect(moveCursor).toHaveBeenCalledWith(1);
+    // Without a count the same chords act on files.
     press('g');
     press('g');
     expect(moveFile).toHaveBeenLastCalledWith('first');
     expect(goToLine).toHaveBeenCalledTimes(2);
   });
 
+  it('a count before j, k or the arrows walks that many lines; one key drops it', () => {
+    const moveCursorBy = vi.fn();
+    const moveCursor = vi.fn();
+    const moveFile = vi.fn();
+    useStore.setState({ moveCursorBy, moveCursor, moveFile });
+    press('1');
+    press('0');
+    press('j');
+    expect(moveCursorBy).toHaveBeenLastCalledWith(10);
+    press('3');
+    press('k');
+    expect(moveCursorBy).toHaveBeenLastCalledWith(-3);
+    press('4');
+    expect(press('ArrowDown').defaultPrevented).toBe(true);
+    expect(moveCursorBy).toHaveBeenLastCalledWith(4);
+    press('2');
+    press('ArrowUp');
+    expect(moveCursorBy).toHaveBeenLastCalledWith(-2);
+    expect(moveCursor).not.toHaveBeenCalled();
+    // A count is spent by the key it precedes, whether or not that key takes one.
+    press('5');
+    press('J');
+    press('j');
+    press('ArrowDown');
+    expect(moveFile).toHaveBeenCalledWith(1);
+    expect(moveCursor).toHaveBeenCalledTimes(2);
+    expect(moveCursorBy).toHaveBeenCalledTimes(4);
+  });
+
   it('t re-anchors the cursor line after the theme change remounts the viewer', () => {
-    useStore.setState({ selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } }, scrollTarget: null, toast: null });
+    useStore.setState({
+      selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },
+      scrollTarget: null,
+      toast: null,
+    });
     press('t');
-    expect(useStore.getState().scrollTarget).toEqual(expect.objectContaining({ id: 'diff:a.py@1', line: 3, align: 'eye' }));
+    expect(useStore.getState().scrollTarget).toEqual(
+      expect.objectContaining({ id: 'diff:a.py@1', line: 3, align: 'eye' }),
+    );
     useStore.setState({ selection: null, scrollTarget: null });
     press('t');
     expect(useStore.getState().scrollTarget).toBeNull();

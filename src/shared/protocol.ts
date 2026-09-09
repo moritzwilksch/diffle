@@ -3,15 +3,13 @@
 export type Side = 'old' | 'new';
 
 /** How the old side is resolved. Kept symbolic so live modes can re-resolve. */
-export type OldSpec =
-  | { kind: 'rev'; rev: string }
-  | { kind: 'merge-base'; a: string; b: string };
+export type OldSpec = { kind: 'rev'; rev: string } | { kind: 'merge-base'; a: string; b: string };
 
 /** What the user asks for. Resolved by the server into a ModeSpec. */
 export type ModeRequest =
   | { kind: 'working' }
   | { kind: 'branch'; base?: string }
-  | { kind: 'pr' }
+  | { kind: 'pr'; pr?: string }
   | { kind: 'revspec'; args: string[] };
 
 export interface ModeSpec {
@@ -23,6 +21,8 @@ export interface ModeSpec {
   newRev: string | 'worktree';
   /** Shown in the UI header. */
   label: string;
+  /** Repository shown in the header when this mode reviews another repository. */
+  repository?: string;
   /** worktree: fs watch; refs: watch .git refs; none: static. */
   live: 'worktree' | 'refs' | 'none';
   /** Comment set key, fixed when the mode is entered. */

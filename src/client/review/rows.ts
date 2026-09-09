@@ -11,5 +11,8 @@ export function isDeletionRow(row: HTMLElement): boolean {
 /** The rendered row for `line` on one side, or null when it is not on screen. */
 export function rowOf(root: ParentNode, line: number, side: 'old' | 'new'): HTMLElement | null {
   const wantDeletion = side === 'old';
-  return [...root.querySelectorAll<HTMLElement>(`[data-line="${line}"]`)].find((r) => isDeletionRow(r) === wantDeletion) ?? null;
+  return (
+    [...root.querySelectorAll<HTMLElement>(`[data-line="${line}"]`)].find((r) => isDeletionRow(r) === wantDeletion) ??
+    null
+  );
 }

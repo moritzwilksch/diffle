@@ -22,11 +22,22 @@ import { ReferencesList } from '../lsp/ReferencesList.js';
 import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '../lsp/target.js';
-import { isCollapsed, itemDeps, itemId, itemVersion, orderedPaths, pathFromItemId, viewedState, visibleThreads, type ItemVersion } from '../model.js';
+import {
+  isCollapsed,
+  itemDeps,
+  itemId,
+  itemVersion,
+  orderedPaths,
+  pathFromItemId,
+  viewedState,
+  visibleThreads,
+  type ItemVersion,
+} from '../model.js';
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
 import { rowOf } from './rows.js';
+import { reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { CommentCard } from './CommentCard.js';
@@ -36,13 +47,6 @@ export type Annot = { kind: 'thread'; thread: CommentThread } | { kind: 'draft' 
 
 /** Where jump navigation parks the target line, as a fraction of the viewport height. */
 const EYE_FRACTION = 0.5;
-// Row metrics in rem, matching the stylesheet: multiply by remPx() when comparing with measured pixels.
-// zt / zb: a couple of rows in from the edge, so the line has context on both sides.
-const EDGE_ROWS_REM = 3;
-// Offsets place a row's top edge; the bottom pin subtracts one row so the margin below is the same as above.
-const ROW_REM = 1.25;
-/** The viewer positions 'start' targets below its sticky file header; subtract it to hit true center. */
-const STICKY_HEADER_REM = 2.75;
 
 /**
  * Full contents for both sides of a patch-based diff, fetched when the user
@@ -119,7 +123,11 @@ const HEADER_CSS = `
  * Token under the pointer → LSP target. Diff tokens carry a side; file items are new-side only.
  * A context line is the same text on both sides, so its old-side column resolves to the new-side line.
  */
-function targetOf(props: TokenEventBase | DiffTokenEventBaseProps, itemId: string, clientX?: number): TokenTarget | null {
+function targetOf(
+  props: TokenEventBase | DiffTokenEventBaseProps,
+  itemId: string,
+  clientX?: number,
+): TokenTarget | null {
   const path = pathFromItemId(itemId);
   if (!isPython(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
@@ -135,7 +143,9 @@ function targetOf(props: TokenEventBase | DiffTokenEventBaseProps, itemId: strin
       line = alt;
     }
   }
-  return word ? { path, side, line, col: props.lineCharStart + word.start, text: word.text } : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+  return word
+    ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
+    : { path, side, line, col: props.lineCharStart, text: props.tokenText };
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -170,7 +180,6 @@ function markHover(el: HTMLElement, on: boolean): void {
 }
 
 const codeViewOptions = {
-  unsafeCSS: HEADER_CSS,
   theme: SHIKI_THEMES,
   loadDiffFiles,
   stickyHeaders: true,
@@ -183,14 +192,9 @@ const codeViewOptions = {
 
 const LOADING: Loaded = { kind: 'loading' };
 
-/** Card spacing in CSS px at the current root font size, so it scales with the rest of the UI. */
-function cardLayout(): { paddingTop: number; paddingBottom: number; gap: number } {
-  const rem = remPx();
-  // Cards on a darker page: the gap is page background between two bordered files.
-  return { paddingTop: 0.75 * rem, paddingBottom: 12.5 * rem, gap: rem };
-}
-
 export function ReviewPane() {
+  const rem = remPx();
+  const geometry = useMemo(() => reviewGeometry(rem), [rem]);
   const snapshot = useStore((s) => s.snapshot);
   const error = useStore((s) => s.error);
   const loaded = useStore((s) => s.loaded);
@@ -230,14 +234,18 @@ export function ReviewPane() {
       else threadsByPath.set(t.anchor.path, [t]);
     }
     const versionOf = (path: string, mine: CommentThread[], isCollapsed: boolean) => {
-      const v = itemVersion(versions.current.get(path), itemDeps({ draft, replyTo, editingId }, path, mine, isCollapsed));
+      const v = itemVersion(
+        versions.current.get(path),
+        itemDeps({ draft, replyTo, editingId }, path, mine, isCollapsed),
+      );
       versions.current.set(path, v);
       return v.version;
     };
     if (fileView) {
       const { path, item } = fileView;
       const mine = threadsByPath.get(path) ?? [];
-      const one = item && toItem(path, item, undefined, mine, draft, versionOf(path, mine, false), gens[path] ?? 0, false);
+      const one =
+        item && toItem(path, item, undefined, mine, draft, versionOf(path, mine, false), gens[path] ?? 0, false);
       return one ? [one] : [];
     }
     const out: CodeViewItem<Annot>[] = [];
@@ -247,7 +255,16 @@ export function ReviewPane() {
       const l = loaded[path] ?? LOADING;
       const mine = threadsByPath.get(path) ?? [];
       const folded = isCollapsed(state, path);
-      const item = toItem(path, l, byPath.get(path), mine, draft, versionOf(path, mine, folded), gens[path] ?? 0, folded);
+      const item = toItem(
+        path,
+        l,
+        byPath.get(path),
+        mine,
+        draft,
+        versionOf(path, mine, folded),
+        gens[path] ?? 0,
+        folded,
+      );
       if (item) out.push(item);
     }
     return out;
@@ -305,8 +322,8 @@ export function ReviewPane() {
       if (jumping.current || useStore.getState().selection) return;
       const items = viewerRef.current?.getInstance()?.getRenderedItems() ?? [];
       const box = scroller.getBoundingClientRect();
-      const header = STICKY_HEADER_REM * remPx();
-      const eye = box.top + header + (box.height - header) * EYE_FRACTION;
+      const header = geometry.itemMetrics.diffHeaderHeight;
+      const eye = box.top + box.height * EYE_FRACTION;
       const inView = items
         .map((r) => ({ id: r.id, rect: r.element.getBoundingClientRect() }))
         .filter((r) => r.rect.bottom > box.top + header + 1 && r.rect.top < box.bottom && r.rect.height > 0);
@@ -327,7 +344,7 @@ export function ReviewPane() {
       scroller.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [scroller]);
+  }, [scroller, geometry]);
 
   // Reveal a line hidden in collapsed context: bring the item into the virtual window,
   // ask its instance to expand around the line, then center it.
@@ -339,7 +356,10 @@ export function ReviewPane() {
     let cancelled = false;
     const attempt = () => {
       if (cancelled) return;
-      const rendered = handle.getInstance()?.getRenderedItems().find((r) => r.id === reveal.id);
+      const rendered = handle
+        .getInstance()
+        ?.getRenderedItems()
+        .find((r) => r.id === reveal.id);
       if (rendered?.type === 'diff') {
         rendered.instance.revealLine(reveal.line);
         // Tell the cursor model which lines are now on screen, so j / k walk them instead of skipping to the next hunk.
@@ -353,7 +373,13 @@ export function ReviewPane() {
         setTimeout(() => {
           if (cancelled) return;
           useStore.setState((s) => ({
-            scrollTarget: { id: reveal.id, line: reveal.line, side: 'new', align: 'eye', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+            scrollTarget: {
+              id: reveal.id,
+              line: reveal.line,
+              side: 'new',
+              align: 'eye',
+              nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+            },
           }));
         }, 30);
         return;
@@ -367,35 +393,43 @@ export function ReviewPane() {
   }, [reveal]);
   // The scroll request for a target: eye/top/bottom pin the line at a fixed height ('start' plus an
   // offset below the sticky header); the landing in the effect below measures the row and makes it exact.
-  const scrollPlan = (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
-    const requested = scrollTarget.align ?? 'center';
-    const eye = requested === 'eye' || requested === 'top' || requested === 'bottom';
-    const height = containerRef.current?.clientHeight ?? 800;
-    const rem = remPx();
-    const header = Math.round(STICKY_HEADER_REM * rem);
-    const edge = Math.round(EDGE_ROWS_REM * rem);
-    const offset =
-      requested === 'eye' ? Math.round(height * EYE_FRACTION) - header
-      : requested === 'top' ? edge
-      : requested === 'bottom' ? Math.max(edge, height - header - edge - Math.round(ROW_REM * rem))
-      : 0;
-    const align = eye ? 'start' : requested;
-    const target = scrollTarget.line
-      ? {
-          type: 'line' as const,
-          id: scrollTarget.id,
-          lineNumber: scrollTarget.line,
-          side: scrollTarget.side === 'old' ? ('deletions' as const) : ('additions' as const),
-          align,
-          offset,
-          // Jumps are instant so the target lands exactly where expected; no mid-animation drift.
-          behavior: eye ? ('instant' as const) : undefined,
-        }
-      : { type: 'item' as const, id: scrollTarget.id, align: 'start' as const, behavior: 'instant' as const };
-    return { eye, offset, header, target };
-  };
+  const scrollPlan = useCallback(
+    (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
+      const requested = scrollTarget.align ?? 'center';
+      const eye = requested === 'eye' || requested === 'top' || requested === 'bottom';
+      const height = containerRef.current?.clientHeight ?? 800;
+      const header = geometry.itemMetrics.diffHeaderHeight;
+      const edge = geometry.edge;
+      const offset =
+        requested === 'eye'
+          ? height * EYE_FRACTION - header
+          : requested === 'top'
+            ? edge
+            : requested === 'bottom'
+              ? Math.max(edge, height - header - edge - geometry.itemMetrics.lineHeight)
+              : 0;
+      const align = eye ? 'start' : requested;
+      const target = scrollTarget.line
+        ? {
+            type: 'line' as const,
+            id: scrollTarget.id,
+            lineNumber: scrollTarget.line,
+            side: scrollTarget.side === 'old' ? ('deletions' as const) : ('additions' as const),
+            align,
+            offset,
+            // Jumps are instant so the target lands exactly where expected; no mid-animation drift.
+            behavior: eye ? ('instant' as const) : undefined,
+          }
+        : { type: 'item' as const, id: scrollTarget.id, align: 'start' as const, behavior: 'instant' as const };
+      return { eye, offset, header, target };
+    },
+    [geometry],
+  );
   const renderedRow = (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
-    const rendered = viewerRef.current?.getInstance()?.getRenderedItems().find((r) => r.id === scrollTarget.id);
+    const rendered = viewerRef.current
+      ?.getInstance()
+      ?.getRenderedItems()
+      .find((r) => r.id === scrollTarget.id);
     const root = rendered?.element.shadowRoot ?? rendered?.element;
     return root && scrollTarget.line ? rowOf(root, scrollTarget.line, scrollTarget.side ?? 'new') : null;
   };
@@ -446,8 +480,11 @@ export function ReviewPane() {
       if (!scroller) return NaN;
       const base = scroller.getBoundingClientRect().top;
       if (target.type === 'item') {
-        const card = viewerRef.current?.getInstance()?.getRenderedItems().find((r) => r.id === scrollTarget.id)?.element;
-        return card ? card.getBoundingClientRect().top - (base + cardLayout().paddingTop) : NaN;
+        const card = viewerRef.current
+          ?.getInstance()
+          ?.getRenderedItems()
+          .find((r) => r.id === scrollTarget.id)?.element;
+        return card ? card.getBoundingClientRect().top - (base + geometry.layout.paddingTop) : NaN;
       }
       const top = renderedRow(scrollTarget)?.getBoundingClientRect().top ?? NaN;
       return top - (base + offset + header);
@@ -526,8 +563,7 @@ export function ReviewPane() {
       cancelled = true;
       if (settled) clearTimeout(settled);
     };
-  }, [scrollTarget]);
-
+  }, [scrollTarget, geometry, scrollPlan]);
 
   const onSelectedLinesChange = useCallback(
     (sel: CodeViewLineSelection | null) => {
@@ -541,14 +577,21 @@ export function ReviewPane() {
   const options = useMemo(
     () => ({
       ...codeViewOptions,
-      layout: cardLayout(),
+      unsafeCSS: HEADER_CSS + geometry.css,
+      layout: geometry.layout,
+      itemMetrics: geometry.itemMetrics,
+      hunkSeparators: 'line-info' as const,
       themeType: theme,
       diffStyle,
       onLineSelectionEnd: () => {
         const sel = viewerRef.current?.getSelectedLines();
         if (sel) void openDraft(sel);
       },
-      onTokenEnter: (props: TokenEventBase | DiffTokenEventBaseProps, event: PointerEvent, ctx: { item: { id: string } }) => {
+      onTokenEnter: (
+        props: TokenEventBase | DiffTokenEventBaseProps,
+        event: PointerEvent,
+        ctx: { item: { id: string } },
+      ) => {
         // The word under the pointer when it entered; the whole token if the pointer sits on punctuation.
         const t = targetOf(props, ctx.item.id, event.clientX) ?? targetOf(props, ctx.item.id);
         lspTarget.set(t, props.tokenElement);
@@ -571,7 +614,11 @@ export function ReviewPane() {
         setActivePath(pathFromItemId(ctx.item.id));
       },
       // A plain click on a symbol opens the action popover; ⌘/Ctrl+click jumps straight to the definition.
-      onTokenClick: (props: TokenEventBase | DiffTokenEventBaseProps, event: MouseEvent, ctx: { item: { id: string } }) => {
+      onTokenClick: (
+        props: TokenEventBase | DiffTokenEventBaseProps,
+        event: MouseEvent,
+        ctx: { item: { id: string } },
+      ) => {
         const target = targetOf(props, ctx.item.id, event.clientX);
         if (!target) return;
         markHover(props.tokenElement, false);
@@ -584,7 +631,7 @@ export function ReviewPane() {
         void openSymbolMenu(target, event.clientX, event.clientY);
       },
     }),
-    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle],
+    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, geometry],
   );
 
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {
@@ -601,8 +648,18 @@ export function ReviewPane() {
     [],
   );
 
-  if (error) return <main className="review"><div className="banner error">{error}</div></main>;
-  if (!snapshot) return <main className="review"><div className="empty">Loading snapshot…</div></main>;
+  if (error)
+    return (
+      <main className="review">
+        <div className="banner error">{error}</div>
+      </main>
+    );
+  if (!snapshot)
+    return (
+      <main className="review">
+        <div className="empty">Loading snapshot…</div>
+      </main>
+    );
   if (snapshot.changed.length === 0 && !fileView) {
     return (
       <main className="review">
@@ -621,7 +678,9 @@ export function ReviewPane() {
       <HoverTooltip />
       <ReferencesList />
       {fileView && <FileViewBar path={fileView.path} />}
-      {fileView ? !fileView.item && <div className="banner">Loading {fileView.path}…</div> : snapshot.changed.some((f) => !loaded[f.path]) && <div className="banner">Loading diffs…</div>}
+      {fileView
+        ? !fileView.item && <div className="banner">Loading {fileView.path}…</div>
+        : snapshot.changed.some((f) => !loaded[f.path]) && <div className="banner">Loading diffs…</div>}
       <CodeView<Annot>
         key={theme}
         ref={viewerRef}
@@ -686,11 +745,20 @@ function toItem(
     if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
     // Binary, oversized or failed: header-only placeholder via an empty file item under the diff id.
     const note =
-      loaded.kind === 'oversized' ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
-      : loaded.kind === 'error' ? `// ${loaded.message}`
-      : loaded.kind === 'loading' ? '// loading…'
-      : '';
-    return { id, type: 'file', file: { name: path, contents: note }, version, collapsed: loaded.kind === 'binary' || collapsed };
+      loaded.kind === 'oversized'
+        ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
+        : loaded.kind === 'error'
+          ? `// ${loaded.message}`
+          : loaded.kind === 'loading'
+            ? '// loading…'
+            : '';
+    return {
+      id,
+      type: 'file',
+      file: { name: path, contents: note },
+      version,
+      collapsed: loaded.kind === 'binary' || collapsed,
+    };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   if (loaded.kind !== 'file') {
@@ -775,7 +843,13 @@ function FileHeaderMeta({ path }: { path: string }) {
       )}
       {file && !full && (
         <>
-          <label title={vs === 'restale' ? 'Mark viewed again (collapses the file)' : 'Mark as viewed (collapses the file)'}>
+          <label
+            title={
+              vs === 'restale'
+                ? 'Mark viewed again and collapse the file (v)'
+                : 'Mark as viewed and collapse the file (v)'
+            }
+          >
             <input type="checkbox" checked={vs === 'viewed'} onChange={(e) => void setViewed(path, e.target.checked)} />
             Viewed
           </label>

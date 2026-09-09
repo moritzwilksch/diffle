@@ -18,7 +18,15 @@ function isAlive(pid: number): boolean {
 
 const TSX = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const MAIN = join(process.cwd(), 'src', 'cli', 'main.ts');
-const env = { ...process.env, NO_COLOR: '1', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' };
+const env = {
+  ...process.env,
+  NO_COLOR: '1',
+  GIT_AUTHOR_NAME: 't',
+  GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 't',
+  GIT_COMMITTER_EMAIL: 't@t',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+};
 
 let dir: string;
 let blocker: Server;
@@ -55,21 +63,25 @@ afterAll(async () => {
 describe('failed startup', () => {
   // The probe is a POSIX shell one-liner (`$$`, process groups); the Windows teardown
   // path in LspBridge kills the tree with taskkill instead and is not exercised here.
-  it.skipIf(process.platform === 'win32')('leaves no LSP child behind when the requested port is taken', async () => {
-    // A server that survives its stdin closing: only a signal ends it.
-    const pidFile = join(dir, 'lsp.pid');
-    const lsp = `echo $$ > "${pidFile}"; exec "${process.execPath}" -e "setInterval(() => {}, 1e6)"`;
-    const run = await cli(['working', '--no-open', '--no-watch', '-C', dir, '-p', String(port), '--lsp', lsp]);
-    expect(run.code).toBe(1);
-    expect(run.stderr).toContain('EADDRINUSE');
+  it.skipIf(process.platform === 'win32')(
+    'leaves no LSP child behind when the requested port is taken',
+    async () => {
+      // A server that survives its stdin closing: only a signal ends it.
+      const pidFile = join(dir, 'lsp.pid');
+      const lsp = `echo $$ > "${pidFile}"; exec "${process.execPath}" -e "setInterval(() => {}, 1e6)"`;
+      const run = await cli(['working', '--no-open', '--no-watch', '-C', dir, '-p', String(port), '--lsp', lsp]);
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain('EADDRINUSE');
 
-    // The shell writes its pid well within the bridge's shutdown grace, so the pid is always there.
-    const pid = Number((await readFile(pidFile, 'utf8')).trim());
-    expect(pid).toBeGreaterThan(0);
-    try {
-      expect(isAlive(pid)).toBe(false);
-    } finally {
-      if (isAlive(pid)) process.kill(pid, 'SIGKILL');
-    }
-  }, 30_000);
+      // The shell writes its pid well within the bridge's shutdown grace, so the pid is always there.
+      const pid = Number((await readFile(pidFile, 'utf8')).trim());
+      expect(pid).toBeGreaterThan(0);
+      try {
+        expect(isAlive(pid)).toBe(false);
+      } finally {
+        if (isAlive(pid)) process.kill(pid, 'SIGKILL');
+      }
+    },
+    30_000,
+  );
 });

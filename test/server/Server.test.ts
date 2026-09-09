@@ -4,6 +4,7 @@ import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import WebSocket from 'ws';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
@@ -17,7 +18,15 @@ let server: Server;
 let session: Session;
 let base: URL;
 let config: UserConfigStore;
-const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' };
+let hub: WsHub;
+const env = {
+  ...process.env,
+  GIT_AUTHOR_NAME: 't',
+  GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 't',
+  GIT_COMMITTER_EMAIL: 't@t',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+};
 
 interface Res {
   status: number;
@@ -25,10 +34,20 @@ interface Res {
 }
 
 /** node:http, not fetch: fetch drops a caller-set Host header. */
-function send(method: string, path: string, opts: { headers?: Record<string, string>; body?: string } = {}): Promise<Res> {
+function send(
+  method: string,
+  path: string,
+  opts: { headers?: Record<string, string>; body?: string } = {},
+): Promise<Res> {
   return new Promise((res, rej) => {
     const req = request(
-      { host: base.hostname, port: base.port, method, path, headers: { 'content-type': 'application/json', connection: 'close', ...opts.headers } },
+      {
+        host: base.hostname,
+        port: base.port,
+        method,
+        path,
+        headers: { 'content-type': 'application/json', connection: 'close', ...opts.headers },
+      },
       (r) => {
         let body = '';
         r.setEncoding('utf8');
@@ -48,10 +67,13 @@ beforeAll(async () => {
   execFileSync('git', ['add', '.'], { cwd: dir, env });
   execFileSync('git', ['commit', '-q', '-m', 'base'], { cwd: dir, env });
   const repo = await GitRepo.open(dir);
-  const hub = new WsHub();
+  hub = new WsHub();
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3 });
-  server = new Server({ session, config, extraAutoViewed: [], hub, lsp: null }, { port: 0, host: '127.0.0.1', dev: false });
+  server = new Server(
+    { session, config, extraAutoViewed: [], hub, lsp: null },
+    { port: 0, host: '127.0.0.1', dev: false },
+  );
   base = await server.listen();
   await session.start({ kind: 'working' });
 });
@@ -71,6 +93,21 @@ describe('Server', () => {
     expect((await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: base.origin } })).status).toBe(200);
+  });
+
+  it('reports WebSocket clients joining and leaving', async () => {
+    const counts: number[] = [];
+    const unsubscribe = hub.onClientsChanged((count) => counts.push(count));
+    const ws = new WebSocket(base.href.replace('http:', 'ws:') + 'ws');
+    await new Promise<void>((res, rej) => {
+      ws.once('open', () => res());
+      ws.once('error', rej);
+    });
+    expect(counts).toEqual([1]);
+    ws.close();
+    await new Promise<void>((res) => ws.once('close', () => res()));
+    expect(counts).toEqual([1, 0]);
+    unsubscribe();
   });
 
   it('survives a malformed WebSocket frame and keeps serving', async () => {
@@ -96,7 +133,9 @@ describe('Server', () => {
     // No watcher in this test: refresh by hand so the snapshot sees the writes.
     await session.refresh();
     try {
-      const r = await send('POST', '/api/patch', { body: JSON.stringify({ paths: ['a.txt', 'n.txt', 'missing.txt'] }) });
+      const r = await send('POST', '/api/patch', {
+        body: JSON.stringify({ paths: ['a.txt', 'n.txt', 'missing.txt'] }),
+      });
       expect(r.status).toBe(200);
       expect(r.body).toContain('+++ b/a.txt');
       expect(r.body).toContain('+++ b/n.txt');
@@ -120,7 +159,8 @@ describe('Server', () => {
     execFileSync('git', ['commit', '-q', '-m', 'unchanged file'], { cwd: dir, env });
     await session.refresh();
     try {
-      const paths = async (qs: string) => (JSON.parse((await send('GET', `/api/search?${qs}`)).body).matches as { path: string }[]).map((m) => m.path);
+      const paths = async (qs: string) =>
+        (JSON.parse((await send('GET', `/api/search?${qs}`)).body).matches as { path: string }[]).map((m) => m.path);
       expect(await paths('q=needle')).toEqual(['a.txt']);
       expect(await paths('q=needle&scope=diff')).toEqual(['a.txt']);
       expect(await paths('q=needle&scope=repo')).toEqual(['a.txt', 'n.txt']);
@@ -137,9 +177,10 @@ describe('Server', () => {
   it.each(['content-length', 'chunked'])('rejects oversized %s bodies with 413', async (framing) => {
     const before = config.get();
     const body = JSON.stringify({ autoViewed: ['x'.repeat(2 * 1024 * 1024)] });
-    const headers: Record<string, string> = framing === 'chunked'
-      ? { 'transfer-encoding': 'chunked' }
-      : { 'content-length': String(Buffer.byteLength(body)) };
+    const headers: Record<string, string> =
+      framing === 'chunked'
+        ? { 'transfer-encoding': 'chunked' }
+        : { 'content-length': String(Buffer.byteLength(body)) };
     const r = await send('PUT', '/api/config', { body, headers });
     expect(r.status).toBe(413);
     expect(JSON.parse(r.body)).toEqual({ error: 'request body too large' });

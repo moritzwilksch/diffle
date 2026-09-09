@@ -1,46 +1,40 @@
 # Working in diffle
 
-Local git diff reviewer: Node server wraps git, React client renders diffs with `@pierre/diffs`, line comments export as an agent prompt. `README.md` has usage.
+Diffle is a local Git review app: a Node/Hono server owns repository state; a React client renders diffs with `@pierre/diffs`; comments can become an agent prompt or a pending GitHub review. Keep `README.md` focused on installation, core workflows, and user-visible constraints. Let `--help`, code, and tests carry exhaustive detail.
 
-## Layout and boundaries
+## Find the owner
 
-- `src/shared/protocol.ts` is the only code both sides import. Add a field there before using it on either side.
-- `src/server/git/GitRepo.ts` is the only module that spawns git. Every call is a plumbing command with explicit args and `-z` output.
-- `src/client/api.ts` is the only module that knows URLs.
-- `src/server/Session.ts` owns the active mode: snapshotter, comment store, watcher. Mode switches are serialized; reads go through `readSide`, which enforces the snapshot path allowlist and maps a rename's old side to its old path.
-- `src/client/store.ts` is one zustand store; `src/client/model.ts` holds the pure functions over its state (item ids, viewed state, ordering) so other modules can import them without a cycle. Every transition (boot, refresh, mode switch) carries a generation token; a result commits only while its token is current.
-- Comments live in `<git-dir>/diffle/comments.json`, keyed by `ModeSpec.commentKey`. Nothing ever writes to the worktree or mutates the repo.
+- `src/shared/protocol.ts`: the only client/server contract. Define cross-boundary fields here first.
+- `src/server/git/GitRepo.ts`: all Git execution. Use explicit argv and preserve stable, NUL-delimited parser inputs where applicable.
+- `src/server/Session.ts`: active mode, snapshots, comments, watcher, and serialized transitions.
+- `src/server/Snapshotter.ts`: derives trees, changed files, and patches for one mode.
+- `src/server/routes.ts`: HTTP behavior; `src/server/ws.ts`: server-to-client invalidation messages.
+- `src/server/comments/`: persistence, relocation, import, and prompt formatting.
+- `src/server/github.ts`: `gh` integration and pending-review export.
+- `src/server/lsp/LspBridge.ts`: language-server process and JSON-RPC lifecycle.
+- `src/client/api.ts`: the only client module that knows URLs.
+- `src/client/store.ts`: Zustand state and effects; guard async commits with the current generation.
+- `src/client/model.ts`: pure state functions and item identity, kept separate to avoid store cycles.
+- `src/client/review/ReviewPane.tsx`: `CodeView` rendering, measurement, and scroll placement.
 
-## Invariants that bite
+## Preserve these invariants
 
-- A rendered `FileDiffMetadata` is never mutated. Hydrate with `hydratePartialDiff('clone', …)` and replace the store entry; the item id embeds `gens[path]`, so a new generation gives the viewer a fresh renderer.
-- `Snapshot.version` is monotonic across refreshes and mode switches. Bump it via `Session`, never by hand.
-- `Snapshot.tree` describes the new side: the new commit's tree, or index plus untracked for the worktree. Ignored files and `.git` are never in it, and `/api/file` refuses anything outside it.
-- Every jump (search `n`/`N`, `*`/`#`, references, `gd`, symbols, the jumplist) lands the target line on the fixed gaze point: `placeCursor(…, 'eye')` or `scrollTarget.align: 'eye'`, never `'start'`/`'nearest'`. The reader's eyes stay put and the code moves. Fresh or wrapped items lay out from estimates, so the scroll effect in `ReviewPane` lands a jump synchronously: `scrollTo`, then `render(true)` on the viewer instance so that frame measures and re-resolves before paint, then re-issue with the measured residue folded into the offset. Never correct a jump across frames: the reader sees every step. Handled keys stop propagating in `useKeymap`, because the viewer cancels its pending scroll on any keydown that reaches it.
+- `Session` alone advances `Snapshot.version`; mode switches, refreshes, and context changes stay serialized.
+- `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session.readSide`; it also maps a rename's old path.
+- Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`; keep the worktree untouched.
+- PR fetches use session-owned `refs/diffle/` refs. `GitRepo.fetch` must reject destinations outside them.
+- Treat rendered `FileDiffMetadata` as immutable. Hydrate with `hydratePartialDiff('clone', ...)`, replace the store entry, and change its generation-backed item id.
+- Every async boot, refresh, or mode-switch result commits only while its generation is current.
+- Navigation jumps land at the fixed gaze point with `placeCursor(..., 'eye')` or `align: 'eye'`.
+- `ReviewPane` resolves estimated jump layouts synchronously: scroll, `render(true)`, then reissue the measured offset before paint. Avoid cross-frame correction.
+- Handled keys stop propagation in `useKeymap`; `CodeView` cancels pending scroll on propagated keydown.
+- User input errors become `RevspecError`, `GitError`, `GithubError`, or Commander usage errors and exit 2; unexpected failures propagate.
 
-## Commands
+## Verify changes
 
-```bash
-npm run dev -- working --no-open   # tsx + Vite middleware; the `--` is required before flags
-npm test                           # vitest, real temp git repos, no mocks for git
-npm run typecheck                  # two tsconfigs: server/node and client/DOM (test/client is client-side)
-npm run lint                       # oxlint, correctness rules only; `.oxlintrc.json` records why each rule is off
-npm run build                      # dist/client + dist/server; the server serves dist/client when present
-```
-
-Done means all four pass. Tests for server behavior build a throwaway repo with `git init` in a tmpdir (see `test/server/Session.test.ts`); client store tests `vi.mock` `src/client/api.js` and race deferred promises.
-
-CI runs the tests and the build on Linux, macOS and Windows, x64 and arm64. What
-Windows cannot express is `skipIf`ed there with a note: a `"` or a newline in a
-filename, POSIX mode bits, a POSIX-shell probe. Temp directories come down
-through `rmTmp` in `test/tmp.ts`, because an idle `cat-file --batch` holds the
-repo root as its cwd and Windows refuses to remove it until the child is reaped.
-
-## The prompt
-
-Comments only flow human → agent: nothing lets an agent post one, and no route writes on an agent's behalf. `formatPrompt` in `src/server/comments/format.ts` is the one place that renders the handoff; its doc comment records the block shape.
-
-## Style
-
-- Comments explain why, one or two lines. Doc comments on exported functions state the contract, not the implementation.
-- Errors that are the user's fault (bad revspec, bad flag) become `RevspecError` / commander usage errors and exit 2; everything else propagates.
+- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing.
+- Server tests use temporary real Git repositories. Client store tests mock `src/client/api.js` and exercise races with deferred promises.
+- Use `npm run dev -- working --no-open` for a local source run; restart after client changes because the server serves `dist/client`.
+- CI runs the tests and the build on Linux, macOS, and Windows, x64 and arm64. `skipIf` what Windows cannot express, with a note: a `"` or a newline in a filename, POSIX mode bits, a POSIX-shell probe.
+- Remove temp directories with `rmTmp` from `test/tmp.ts`: an idle `cat-file --batch` holds the repo root as its cwd, and Windows refuses to remove it until the child is reaped.
+- Comments explain why in one or two lines. Exported doc comments state contracts, not implementations.

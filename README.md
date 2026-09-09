@@ -39,12 +39,17 @@ npx @moritzwilksch/diffle working
 
 ```bash
 diffle working          # HEAD vs worktree: staged, unstaged, untracked
-diffle pr               # merge-base(default branch, HEAD) vs HEAD
+diffle branch           # merge-base(default branch, HEAD) vs HEAD
 diffle branch develop   # merge-base(develop, HEAD) vs HEAD
+diffle pr 27            # GitHub PR 27, or its url; without a number, this branch's PR
 diffle main...feat      # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle working --lsp    # add Python symbol navigation through pyrefly
 diffle --help           # list all commands and flags
 ```
+
+`diffle pr` needs an authenticated [`gh`](https://cli.github.com/). Foreign PR URLs open in a temporary clone, leaving your local repository untouched.
+
+Closing the last browser tab that diffle opened stops the server and prints open comments to stdout. Pass `--keep-alive` to keep it running, or use `--no-open` and press Ctrl+C when done.
 
 Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
 
@@ -52,7 +57,7 @@ Generated files and files matching auto-viewed globs start collapsed. There are 
 
 ## Shortcuts
 
-- `j` / `k`: next or previous line
+- `j` / `k`: next or previous line (`10j` / `10k`: ten lines down or up)
 - `J` / `K`: next or previous file
 - `]` / `[`: next or previous hunk
 - `c`: comment
@@ -74,7 +79,7 @@ Use the pull request icon to add one thread or all open threads to a pending Git
 
 Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
 
-Posting works for pushed branches in `pr`, `branch`, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
+Posting works for pushed branches in `branch`, `pr` for the checked-out branch, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
 
 Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
 
@@ -115,6 +120,8 @@ npm install
 npm run dev -- working
 npm test && npm run typecheck && npm run build
 ```
+
+`npm run dev` builds the client, then starts the server from source. Restart it after client changes; the server always serves `dist/client`.
 
 See [AGENTS.md](AGENTS.md) for repository notes.
 

@@ -122,10 +122,18 @@ describe('GitRepo', () => {
 
   it('produces a parseable patch for tracked and untracked files', async () => {
     const files = await repo.numstat('HEAD', 'worktree');
-    const a = await repo.patch('HEAD', 'worktree', files.find((f) => f.path === 'a.txt')!);
+    const a = await repo.patch(
+      'HEAD',
+      'worktree',
+      files.find((f) => f.path === 'a.txt')!,
+    );
     expect(a).toContain('diff --git a/a.txt b/a.txt');
     expect(a).toContain('+four');
-    const u = await repo.patch('HEAD', 'worktree', files.find((f) => f.path === 'untracked.txt')!);
+    const u = await repo.patch(
+      'HEAD',
+      'worktree',
+      files.find((f) => f.path === 'untracked.txt')!,
+    );
     expect(u).toContain('diff --git a/untracked.txt b/untracked.txt');
     expect(u).toContain('+++ b/untracked.txt');
     const all = await repo.patchAll('HEAD', 'worktree', files);
@@ -200,13 +208,17 @@ describe('GitRepo', () => {
 
   it('text search is case-sensitive unless asked otherwise, and can take an extended regex', async () => {
     expect((await repo.grep('ONE', 'worktree', 50)).matches).toEqual([]);
-    expect((await repo.grep('ONE', 'worktree', 50, { ignoreCase: true })).matches.map((m) => m.path)).toEqual(['a.txt']);
+    expect((await repo.grep('ONE', 'worktree', 50, { ignoreCase: true })).matches.map((m) => m.path)).toEqual([
+      'a.txt',
+    ]);
     expect((await repo.grep('t(wo|hree)', 'worktree', 50)).matches).toEqual([]);
     expect((await repo.grep('t(wo|hree)', 'worktree', 50, { regex: true })).matches.map((m) => m.line)).toEqual([2, 3]);
   });
 
   it('restricts a search to the given paths literally, and an empty list matches nothing', async () => {
-    expect((await repo.grep('o', 'worktree', 50, { paths: ['a.txt'] })).matches.every((m) => m.path === 'a.txt')).toBe(true);
+    expect((await repo.grep('o', 'worktree', 50, { paths: ['a.txt'] })).matches.every((m) => m.path === 'a.txt')).toBe(
+      true,
+    );
     expect((await repo.grep('o', 'worktree', 50, { paths: ['a.txt'] })).matches.length).toBeGreaterThan(0);
     expect((await repo.grep('o', 'worktree', 50, { paths: [] })).matches).toEqual([]);
     // `*` is a literal character, not a glob, so it selects no file.
@@ -240,7 +252,14 @@ describe('GitRepo under hostile config', () => {
     execFileSync('git', args, {
       cwd: hostile,
       encoding: 'utf8',
-      env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' },
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 't',
+        GIT_AUTHOR_EMAIL: 't@t',
+        GIT_COMMITTER_NAME: 't',
+        GIT_COMMITTER_EMAIL: 't@t',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+      },
     }).trim();
 
   beforeAll(async () => {
@@ -296,18 +315,21 @@ describe('GitRepo under hostile config', () => {
   });
 
   // Windows forbids `"` in a filename, so the quoting path is only reachable on POSIX.
-  it.skipIf(process.platform === 'win32')('mirrors the quoting of the new side when rewriting the /dev/null header', async () => {
-    const quoted = 'qu"ote.txt';
-    await writeFile(join(hostile, quoted), 'q\n');
-    try {
-      const file = (await hrepo.numstat('HEAD', 'worktree')).find((f) => f.path === quoted)!;
-      const p = await hrepo.patch('HEAD', 'worktree', file);
-      expect(p).toContain('diff --git "a/qu\\"ote.txt" "b/qu\\"ote.txt"\n');
-      expect(p).not.toContain('dev/null b/');
-    } finally {
-      await rm(join(hostile, quoted));
-    }
-  });
+  it.skipIf(process.platform === 'win32')(
+    'mirrors the quoting of the new side when rewriting the /dev/null header',
+    async () => {
+      const quoted = 'qu"ote.txt';
+      await writeFile(join(hostile, quoted), 'q\n');
+      try {
+        const file = (await hrepo.numstat('HEAD', 'worktree')).find((f) => f.path === quoted)!;
+        const p = await hrepo.patch('HEAD', 'worktree', file);
+        expect(p).toContain('diff --git "a/qu\\"ote.txt" "b/qu\\"ote.txt"\n');
+        expect(p).not.toContain('dev/null b/');
+      } finally {
+        await rm(join(hostile, quoted));
+      }
+    },
+  );
 
   it('searches without colour escapes or a column field', async () => {
     const hits = await hrepo.grep('zwei', 'worktree', 10);
@@ -321,7 +343,14 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
   let base: string;
   let sup: string;
   let srepo: GitRepo;
-  const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' };
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 't',
+    GIT_AUTHOR_EMAIL: 't@t',
+    GIT_COMMITTER_NAME: 't',
+    GIT_COMMITTER_EMAIL: 't@t',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+  };
   const sgit = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env }).trim();
 
   beforeAll(async () => {
@@ -395,19 +424,22 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
   });
 
   // `chmod 0` only sets the read-only bit on Windows, so nothing there makes the read fail.
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('an unreadable file keeps an empty blob without failing the batch', async () => {
-    await writeFile(join(sup, 'locked.txt'), 'x\n');
-    await chmod(join(sup, 'locked.txt'), 0o000);
-    try {
-      const files = await srepo.numstat('HEAD', 'worktree');
-      const byPath = new Map(files.map((f) => [f.path, f]));
-      expect(byPath.get('locked.txt')).toMatchObject({ status: 'A', blob: '' });
-      expect(byPath.get('a.txt')!.blob).toBe(sgit(sup, 'hash-object', '--', 'a.txt'));
-    } finally {
-      await chmod(join(sup, 'locked.txt'), 0o644);
-      await rm(join(sup, 'locked.txt'));
-    }
-  });
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'an unreadable file keeps an empty blob without failing the batch',
+    async () => {
+      await writeFile(join(sup, 'locked.txt'), 'x\n');
+      await chmod(join(sup, 'locked.txt'), 0o000);
+      try {
+        const files = await srepo.numstat('HEAD', 'worktree');
+        const byPath = new Map(files.map((f) => [f.path, f]));
+        expect(byPath.get('locked.txt')).toMatchObject({ status: 'A', blob: '' });
+        expect(byPath.get('a.txt')!.blob).toBe(sgit(sup, 'hash-object', '--', 'a.txt'));
+      } finally {
+        await chmod(join(sup, 'locked.txt'), 0o644);
+        await rm(join(sup, 'locked.txt'));
+      }
+    },
+  );
 });
 
 describe('resolveMode + Snapshotter', () => {
@@ -493,7 +525,14 @@ async function realpath(p: string): Promise<string> {
 describe('cat-file batch', () => {
   let bdir: string;
   let brepo: GitRepo;
-  const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null' };
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 't',
+    GIT_AUTHOR_EMAIL: 't@t',
+    GIT_COMMITTER_NAME: 't',
+    GIT_COMMITTER_EMAIL: 't@t',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+  };
   const bgit = (...args: string[]) => execFileSync('git', args, { cwd: bdir, encoding: 'utf8', env }).trim();
   const odd = 'odd\nname.txt';
 
@@ -519,7 +558,12 @@ describe('cat-file batch', () => {
   afterAll(() => rmTmp(bdir));
 
   it('answers a list of blob shas from one process, keeping only a prefix of each', async () => {
-    const shas = [bgit('rev-parse', 'HEAD:small.txt'), bgit('rev-parse', 'HEAD:big.txt'), '0'.repeat(40), bgit('rev-parse', 'HEAD:dir')];
+    const shas = [
+      bgit('rev-parse', 'HEAD:small.txt'),
+      bgit('rev-parse', 'HEAD:big.txt'),
+      '0'.repeat(40),
+      bgit('rev-parse', 'HEAD:dir'),
+    ];
     const before = brepo.catFileSpawns;
     const heads = await brepo.blobHeads(shas, 16);
     expect(brepo.catFileSpawns).toBe(before + 1);
@@ -529,14 +573,18 @@ describe('cat-file batch', () => {
     expect(heads.has(shas[2]!)).toBe(false);
     expect(heads.has(shas[3]!)).toBe(false);
     // Concurrent readers share the process; answers stay matched to their names.
-    const many = await Promise.all(Array.from({ length: 40 }, (_, i) => brepo.head('HEAD', i % 2 ? 'small.txt' : 'big.txt', 4)));
+    const many = await Promise.all(
+      Array.from({ length: 40 }, (_, i) => brepo.head('HEAD', i % 2 ? 'small.txt' : 'big.txt', 4)),
+    );
     expect(many.map((b) => b?.toString())).toEqual(Array.from({ length: 40 }, (_, i) => (i % 2 ? 'one\n' : 'xxxx')));
     expect(brepo.catFileSpawns).toBe(before + 1);
   });
 
   it('show reads whole blobs through the same process and reports non-blobs as absent', async () => {
     const before = brepo.catFileSpawns;
-    const bodies = await Promise.all(Array.from({ length: 300 }, (_, i) => brepo.show('HEAD', ['small.txt', 'big.txt', 'dir/in.txt'][i % 3]!)));
+    const bodies = await Promise.all(
+      Array.from({ length: 300 }, (_, i) => brepo.show('HEAD', ['small.txt', 'big.txt', 'dir/in.txt'][i % 3]!)),
+    );
     expect(bodies.map((b) => b?.length)).toEqual(Array.from({ length: 300 }, (_, i) => [14, 200_001, 3][i % 3]));
     // At most one new process: none when the previous test's is still within its idle grace.
     expect(brepo.catFileSpawns - before).toBeLessThanOrEqual(1);
@@ -562,9 +610,14 @@ describe('cat-file batch', () => {
     const snapshotter = new Snapshotter(brepo, mode, 1, 3);
     const spy = vi.spyOn(brepo, 'blobHeads');
     const first = await snapshotter.current();
-    expect(Object.fromEntries(first.changed.map((f) => [f.path, f.generated]))).toEqual({ 'gen.py': true, 'small.txt': false });
+    expect(Object.fromEntries(first.changed.map((f) => [f.path, f.generated]))).toEqual({
+      'gen.py': true,
+      'small.txt': false,
+    });
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0]![0].sort()).toEqual([bgit('rev-parse', 'feat:gen.py'), bgit('rev-parse', 'feat:small.txt')].sort());
+    expect(spy.mock.calls[0]![0].sort()).toEqual(
+      [bgit('rev-parse', 'feat:gen.py'), bgit('rev-parse', 'feat:small.txt')].sort(),
+    );
     expect(spy.mock.calls[0]![1]).toBe(SNIFF_BYTES);
     // Same blobs: the verdicts come from the cache.
     snapshotter.invalidate(2);

@@ -34,7 +34,8 @@ function toThreadCreate(entry: unknown, where: string): ThreadCreate {
   if (typeof x.path !== 'string' || x.path === '') return fail('path required');
   if (typeof x.body !== 'string' || x.body.trim() === '') return fail('body required');
   if (!isLine(x.startLine)) return fail('startLine must be a positive integer');
-  if (x.endLine != null && (!isLine(x.endLine) || x.endLine < x.startLine)) return fail('endLine must be an integer ≥ startLine');
+  if (x.endLine != null && (!isLine(x.endLine) || x.endLine < x.startLine))
+    return fail('endLine must be an integer ≥ startLine');
   if (x.side != null && x.side !== 'old' && x.side !== 'new') return fail("side must be 'old' or 'new'");
   if (x.quoted != null && typeof x.quoted !== 'string') return fail('quoted must be a string');
   const t: ThreadCreate = { path: x.path, startLine: x.startLine, body: x.body };

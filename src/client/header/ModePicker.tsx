@@ -1,4 +1,12 @@
-import { ChevronDown, ChevronUp, GitBranch, GitCommitHorizontal, GitPullRequest, History, PencilRuler } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  GitBranch,
+  GitCommitHorizontal,
+  GitPullRequest,
+  History,
+  PencilRuler,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
@@ -70,7 +78,7 @@ export function ModePicker() {
           <button className={`entry ${kind === 'pr' ? 'active' : ''}`} onClick={() => choose({ kind: 'pr' })}>
             <GitPullRequest size="0.875rem" />
             <span className="label">PR</span>
-            <span className="desc">{refs?.defaultBranch ?? 'default'}...HEAD</span>
+            <span className="desc">this branch on GitHub</span>
             <kbd>1</kbd>
           </button>
           <div className="entry static">
@@ -128,7 +136,11 @@ export function ModePicker() {
             <kbd>4</kbd>
           </form>
           <div className="sep" />
-          <button className={`entry ${twoRefs ? 'active' : ''}`} onClick={() => setTwoRefs((t) => !t)} aria-expanded={twoRefs}>
+          <button
+            className={`entry ${twoRefs ? 'active' : ''}`}
+            onClick={() => setTwoRefs((t) => !t)}
+            aria-expanded={twoRefs}
+          >
             <GitCommitHorizontal size="0.875rem" />
             <span className="label">Two refs…</span>
             <span className="desc">{twoRefs ? <ChevronUp size="0.875rem" /> : <ChevronDown size="0.875rem" />}</span>

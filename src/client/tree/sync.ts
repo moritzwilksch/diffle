@@ -29,7 +29,13 @@ export function expandedAfterReset(model: Pick<FileTree, 'getItem'>, next: reado
 /** The tree's four-valued git lane for a changed file; T and U draw as modified, C as renamed. */
 export function toGitStatus(f: ChangedFile): GitStatusEntry {
   const status =
-    f.status === 'A' ? 'added' : f.status === 'D' ? 'deleted' : f.status === 'R' || f.status === 'C' ? 'renamed' : 'modified';
+    f.status === 'A'
+      ? 'added'
+      : f.status === 'D'
+        ? 'deleted'
+        : f.status === 'R' || f.status === 'C'
+          ? 'renamed'
+          : 'modified';
   return { path: f.path, status };
 }
 
@@ -48,7 +54,9 @@ export function statusKey(changed: readonly ChangedFile[]): string {
  * or a config save that leaves the marks alone must not redraw the tree.
  */
 export function decorationKey(state: Pick<ReviewState, 'viewed' | 'config'>, changed: readonly ChangedFile[]): string {
-  return changed.map((f) => `${f.path}\0${f.additions}\0${f.deletions}\0${f.binary ? 1 : 0}\0${viewedState(state, f)}`).join('\n');
+  return changed
+    .map((f) => `${f.path}\0${f.additions}\0${f.deletions}\0${f.binary ? 1 : 0}\0${viewedState(state, f)}`)
+    .join('\n');
 }
 
 /** Content signatures of the three things the tree shows; compared across renders by `syncStep`. */

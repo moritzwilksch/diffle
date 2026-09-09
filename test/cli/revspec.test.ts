@@ -3,15 +3,27 @@ import { parseRevspec, RevspecError } from '../../src/server/revspec.js';
 
 describe('parseRevspec', () => {
   it('single rev diffs against the worktree', () => {
-    expect(parseRevspec(['HEAD~3'])).toEqual({ old: { kind: 'rev', rev: 'HEAD~3' }, newRev: 'worktree', label: 'HEAD~3 → worktree' });
+    expect(parseRevspec(['HEAD~3'])).toEqual({
+      old: { kind: 'rev', rev: 'HEAD~3' },
+      newRev: 'worktree',
+      label: 'HEAD~3 → worktree',
+    });
   });
 
   it('two-dot is a direct comparison', () => {
-    expect(parseRevspec(['main..feat'])).toEqual({ old: { kind: 'rev', rev: 'main' }, newRev: 'feat', label: 'main..feat' });
+    expect(parseRevspec(['main..feat'])).toEqual({
+      old: { kind: 'rev', rev: 'main' },
+      newRev: 'feat',
+      label: 'main..feat',
+    });
   });
 
   it('three-dot uses the merge base', () => {
-    expect(parseRevspec(['main...feat'])).toEqual({ old: { kind: 'merge-base', a: 'main', b: 'feat' }, newRev: 'feat', label: 'main...feat' });
+    expect(parseRevspec(['main...feat'])).toEqual({
+      old: { kind: 'merge-base', a: 'main', b: 'feat' },
+      newRev: 'feat',
+      label: 'main...feat',
+    });
   });
 
   it('empty sides default to HEAD', () => {

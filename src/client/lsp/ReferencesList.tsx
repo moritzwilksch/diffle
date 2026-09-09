@@ -71,7 +71,13 @@ export function ReferencesList() {
                 <span className="count">{g.rows.length}</span>
               </header>
               {g.rows.map((r) => (
-                <RefRow key={`${r.line}:${r.i}`} row={r} on={r.i === refs.index} tokens={highlighted.get(`${g.path}\n${r.text}`)} onPick={onPick} />
+                <RefRow
+                  key={`${r.line}:${r.i}`}
+                  row={r}
+                  on={r.i === refs.index}
+                  tokens={highlighted.get(`${g.path}\n${r.text}`)}
+                  onPick={onPick}
+                />
               ))}
             </section>
           ))}
@@ -82,7 +88,17 @@ export function ReferencesList() {
 }
 
 /** One reference. Memoized on stable inputs so moving the selection rerenders two rows, not the whole list. */
-const RefRow = memo(function RefRow({ row, on, tokens, onPick }: { row: Row; on: boolean; tokens: HlToken[] | undefined; onPick: (i: number) => void }) {
+const RefRow = memo(function RefRow({
+  row,
+  on,
+  tokens,
+  onPick,
+}: {
+  row: Row;
+  on: boolean;
+  tokens: HlToken[] | undefined;
+  onPick: (i: number) => void;
+}) {
   return (
     <div className={`ref${on ? ' on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(row.i)}>
       <span className="line">{row.line}</span>

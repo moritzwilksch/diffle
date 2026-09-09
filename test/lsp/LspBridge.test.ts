@@ -39,7 +39,10 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) 
     maxOpen,
     onStatus: (s) => statuses.push(s),
     spawnProcess: () => {
-      const child = spawn(process.execPath, [FAKE], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, FAKE_LSP_ROOT: root, ...env } });
+      const child = spawn(process.execPath, [FAKE], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, FAKE_LSP_ROOT: root, ...env },
+      });
       child.stderr.on('data', (d: Buffer) => events.push(...d.toString().split('\n').filter(Boolean)));
       return child;
     },
@@ -141,7 +144,9 @@ describe('LspBridge', () => {
       { name: 'bar', kind: 6, container: 'Foo', path: 'a.py', line: 2, endLine: 3, col: 8 },
       { name: 'baz', kind: 12, container: undefined, path: 'a.py', line: 6, endLine: 7, col: 4 },
     ]);
-    expect(await bridge.workspaceSymbols('q')).toEqual([{ name: 'q_sym', kind: 12, container: 'mod', path: 'other.py', line: 5, endLine: 5, col: 2 }]);
+    expect(await bridge.workspaceSymbols('q')).toEqual([
+      { name: 'q_sym', kind: 12, container: 'mod', path: 'other.py', line: 5, endLine: 5, col: 2 },
+    ]);
     await bridge.close();
   });
 

@@ -28,14 +28,26 @@ export function Markdown({ text, path, highlight = false }: { text: string; path
   );
   return (
     <div className="body markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} urlTransform={urlTransform} disallowedElements={['img']} unwrapDisallowed>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        urlTransform={urlTransform}
+        disallowedElements={['img']}
+        unwrapDisallowed
+      >
         {text}
       </ReactMarkdown>
     </div>
   );
 }
 
-function Pre({ children, node: _node, path, highlight, ...rest }: ComponentProps<'pre'> & { node?: unknown; path?: string; highlight?: boolean }) {
+function Pre({
+  children,
+  node: _node,
+  path,
+  highlight,
+  ...rest
+}: ComponentProps<'pre'> & { node?: unknown; path?: string; highlight?: boolean }) {
   const theme = useStore((s) => s.theme);
   const code = Array.isArray(children) ? children[0] : children;
   const props = (code as { props?: { className?: string; children?: unknown } })?.props;
@@ -76,12 +88,27 @@ function Highlighted({ path, source }: { path: string; source: string }) {
   const theme = useStore((s) => s.theme);
   const pool = useWorkerPool();
   const [primed, setPrimed] = useState(0);
-  const file = useMemo(() => ({ name: path, contents: source, cacheKey: `suggestion:${path}:${source}` }), [path, source]);
-  const options = useMemo(() => ({ theme: SHIKI_THEMES, themeType: theme, disableFileHeader: true, disableLineNumbers: true, overflow: 'wrap' as const }), [theme]);
+  const file = useMemo(
+    () => ({ name: path, contents: source, cacheKey: `suggestion:${path}:${source}` }),
+    [path, source],
+  );
+  const options = useMemo(
+    () => ({
+      theme: SHIKI_THEMES,
+      themeType: theme,
+      disableFileHeader: true,
+      disableLineNumbers: true,
+      overflow: 'wrap' as const,
+    }),
+    [theme],
+  );
   // The File component paints nothing until a highlight exists, so fill the pool's cache first and re-render on it.
   useEffect(() => {
     let live = true;
-    void pool?.primeFileHighlightCache(file).then(() => live && setPrimed((n) => n + 1)).catch(() => {});
+    void pool
+      ?.primeFileHighlightCache(file)
+      .then(() => live && setPrimed((n) => n + 1))
+      .catch(() => {});
     return () => {
       live = false;
     };

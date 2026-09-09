@@ -2,24 +2,23 @@
   "name": "@moritzwilksch/diffle",
   "version": "0.0.2",
   "description": "Local git diff reviewer in the browser with line comments exported as agent prompts",
+  "keywords": [
+    "agent",
+    "cli",
+    "code-review",
+    "diff",
+    "git"
+  ],
+  "homepage": "https://github.com/moritzwilksch/diffle#readme",
+  "bugs": {
+    "url": "https://github.com/moritzwilksch/diffle/issues"
+  },
   "license": "Apache-2.0",
   "author": "Moritz Wilksch",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moritzwilksch/diffle.git"
   },
-  "homepage": "https://github.com/moritzwilksch/diffle#readme",
-  "bugs": {
-    "url": "https://github.com/moritzwilksch/diffle/issues"
-  },
-  "keywords": [
-    "git",
-    "diff",
-    "code-review",
-    "agent",
-    "cli"
-  ],
-  "type": "module",
   "bin": {
     "diffle": "dist/server/main.js"
   },
@@ -27,11 +26,9 @@
     "bin",
     "dist"
   ],
+  "type": "module",
   "publishConfig": {
     "access": "public"
-  },
-  "engines": {
-    "node": ">=24"
   },
   "scripts": {
     "dev": "tsx src/cli/main.ts",
@@ -40,6 +37,8 @@
     "build:server": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "test": "vitest run",
     "prepack": "npm run build"
   },
@@ -67,11 +66,15 @@
     "@types/ws": "^8",
     "@vitejs/plugin-react": "^5",
     "jsdom": "^30.0.1",
+    "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
     "tsdown": "^0.22.14",
     "tsx": "^4",
     "typescript": "^5.9",
     "vite": "^8.2.2",
     "vitest": "^4"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

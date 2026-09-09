@@ -35,7 +35,13 @@ function List({ near, theme = 'dark', rows = items }: { near: number; theme?: 'd
   return createElement(
     'div',
     null,
-    rows.map((it) => createElement('span', { key: it.text, className: map.has(`${it.path}\n${it.text}`) ? 'hl' : 'plain' }, createElement(CodeLine, { tokens: map.get(`${it.path}\n${it.text}`), fallback: it.text }))),
+    rows.map((it) =>
+      createElement(
+        'span',
+        { key: it.text, className: map.has(`${it.path}\n${it.text}`) ? 'hl' : 'plain' },
+        createElement(CodeLine, { tokens: map.get(`${it.path}\n${it.text}`), fallback: it.text }),
+      ),
+    ),
   );
 }
 
