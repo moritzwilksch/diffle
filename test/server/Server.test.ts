@@ -4,6 +4,7 @@ import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
 import { Session } from '../../src/server/Session.js';
@@ -56,7 +57,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await server.close();
-  await rm(dir, { recursive: true, force: true });
+  await rmTmp(dir);
 });
 
 describe('Server', () => {
@@ -146,12 +147,17 @@ describe('Server', () => {
     expect((await send('GET', '/api/snapshot')).status).toBe(200);
   });
 
-  it('ignores lspCommand on PUT /api/config and writes the file owner-only', async () => {
+  it('ignores lspCommand on PUT /api/config', async () => {
     const before = config.get().lspCommand;
     const r = await send('PUT', '/api/config', { body: JSON.stringify({ lspCommand: 'rm -rf /', contextLines: 7 }) });
     expect(r.status).toBe(200);
     expect(JSON.parse(r.body).lspCommand).toBe(before);
     expect(config.get()).toMatchObject({ lspCommand: before, contextLines: 7 });
+  });
+
+  // Windows has no POSIX mode bits to check.
+  it.skipIf(process.platform === 'win32')('writes the config file and its directory owner-only', async () => {
+    await send('PUT', '/api/config', { body: JSON.stringify({ contextLines: 7 }) });
     expect((await stat(config.file)).mode & 0o777).toBe(0o600);
     expect((await stat(join(dir, 'cfg'))).mode & 0o777).toBe(0o700);
   });

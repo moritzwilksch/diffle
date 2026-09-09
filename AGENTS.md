@@ -30,6 +30,12 @@ npm run build                      # dist/client + dist/server; the server serve
 
 Done means all four pass. Tests for server behavior build a throwaway repo with `git init` in a tmpdir (see `test/server/Session.test.ts`); client store tests `vi.mock` `src/client/api.js` and race deferred promises.
 
+CI runs the tests and the build on Linux, macOS and Windows, x64 and arm64. What
+Windows cannot express is `skipIf`ed there with a note: a `"` or a newline in a
+filename, POSIX mode bits, a POSIX-shell probe. Temp directories come down
+through `rmTmp` in `test/tmp.ts`, because an idle `cat-file --batch` holds the
+repo root as its cwd and Windows refuses to remove it until the child is reaped.
+
 ## The prompt
 
 Comments only flow human → agent: nothing lets an agent post one, and no route writes on an agent's behalf. `formatPrompt` in `src/server/comments/format.ts` is the one place that renders the handoff; its doc comment records the block shape.

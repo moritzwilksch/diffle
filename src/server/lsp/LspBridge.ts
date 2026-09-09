@@ -592,9 +592,15 @@ function safeFileURLToPath(uri: string): string {
   }
 }
 
+/**
+ * Canonical `p`, or `p` itself when it cannot be resolved. Uses libuv's
+ * realpath, the same one the async `realpath` in `pathOf` uses: the JS
+ * `realpathSync` keeps a Windows 8.3 short name (`RUNNER~1`) that libuv
+ * expands, and the two answers would never compare equal.
+ */
 function safeRealpathSync(p: string): string {
   try {
-    return realpathSync(p);
+    return realpathSync.native(p);
   } catch {
     return p;
   }

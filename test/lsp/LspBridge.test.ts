@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
 import type { LspStatus } from '../../src/shared/protocol.js';
@@ -62,7 +62,8 @@ describe('LspBridge', () => {
     expect(res).toEqual({
       locations: [{ path: 'a.py', line: 2, col: 4, text: 'def f():' }],
       external: 1,
-      externalPath: '/usr/lib/python3/site.py',
+      // The fake answers with a file URL, so the path comes back rooted for the platform.
+      externalPath: resolve('/usr/lib/python3/site.py'),
       hidden: 0,
     });
     expect(statuses.map((s) => s.state)).toEqual(['ready']);

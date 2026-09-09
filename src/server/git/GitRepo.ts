@@ -76,7 +76,9 @@ export class GitRepo {
     const [root, gitDir, common] = out.toString('utf8').trim().split('\n');
     if (!root || !gitDir) throw new GitError(`not a git repository: ${dir}`, [], 128, '');
     const commonDir = common ? resolve(root, common) : gitDir;
-    return new GitRepo(root, gitDir, commonDir);
+    // Git prints POSIX separators even on Windows; resolve them to native ones
+    // so every path this class hands out compares equal to a `join`ed one.
+    return new GitRepo(resolve(root), resolve(gitDir), commonDir);
   }
 
   private exec(args: string[], opts: ExecOptions = {}): Promise<Buffer> {
