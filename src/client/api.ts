@@ -34,8 +34,6 @@ async function json<T>(input: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
   if (res.status === 204) return undefined as T;
-  if (!res.headers.get('content-type')?.includes('application/json'))
-    throw new ApiError(res.status, 'The server returned a page instead of API data. Restart diffle and reload.');
   return (await res.json()) as T;
 }
 
