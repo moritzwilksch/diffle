@@ -10,8 +10,12 @@ import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
 import { resolveMode } from '../../src/server/mode.js';
 
-/** macOS reaches `os.tmpdir()` through a symlink (`/var` → `/private/var`); git reports the physical path. */
-const TMP_ROOT = realpathSync(tmpdir());
+/**
+ * The temp root as git reports it: macOS reaches `os.tmpdir()` through a symlink
+ * (`/var` → `/private/var`), and Windows hands out an 8.3 short name (`RUNNER~1`)
+ * that only libuv's realpath expands — the JS `realpathSync` keeps it.
+ */
+const TMP_ROOT = realpathSync.native(tmpdir());
 
 let tmp: string;
 /** Bare "GitHub": holds refs/pull/7/head. Its path ends in o/r so it matches the PR url's slug. */
