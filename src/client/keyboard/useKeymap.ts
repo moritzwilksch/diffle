@@ -188,6 +188,7 @@ export function useKeymap(): void {
         return; // the tree owns every other key while focused
       }
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
+      if (s.modeMenuOpen && target?.closest('#mode-picker') && !/^[1-4]$/.test(e.key)) return;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const dir = e.key === 'ArrowDown' ? 1 : -1;
@@ -204,7 +205,7 @@ export function useKeymap(): void {
         s.setHelpOpen(false);
         return;
       }
-      if (s.modeMenuOpen && /^[1-5]$/.test(e.key)) {
+      if (s.modeMenuOpen && /^[1-4]$/.test(e.key)) {
         e.preventDefault();
         s.pickModeEntry(Number(e.key));
         return;

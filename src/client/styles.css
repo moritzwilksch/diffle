@@ -758,63 +758,70 @@ button.off {
   justify-self: end;
   color: var(--fg-2);
 }
-.menu .entry.static {
-  cursor: default;
+.mode-menu {
+  display: flex;
+  min-width: 15rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
 }
-.menu .entry .control {
-  display: inline-flex;
+.mode-entries {
+  width: 15rem;
+  flex-shrink: 0;
+}
+.mode-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 19rem;
+  min-width: 0;
+  padding: 0 0.75rem 0.5rem;
+  margin-left: 0.375rem;
+  border-left: 1px solid var(--border);
+}
+.mode-config .ref-select {
+  display: flex;
+  flex-direction: column;
   gap: 0.375rem;
-  align-items: center;
-  justify-self: end;
+  min-width: 0;
 }
-.menu .sep {
-  height: 1px;
-  background: var(--border);
-  margin: 0.375rem 0.25rem;
+.mode-config .lbl,
+.mode-hint {
+  font-size: 0.75rem;
+  color: var(--fg-2);
 }
-.menu select,
-.menu input {
+.mode-hint {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  white-space: normal;
+}
+.mode-config .mode-hint {
+  padding: 0;
+}
+.mode-config select,
+.mode-config input {
+  width: 100%;
+  min-width: 0;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 0.375rem;
-  padding: 0.1875rem 0.5rem;
-  min-width: 0;
+  padding: 0.375rem 0.5rem;
   font: 0.75rem var(--mono);
   color: var(--fg);
 }
-.menu .control select {
-  max-width: 13.75rem;
+.mode-config > button {
+  align-self: flex-end;
+  margin-top: auto;
 }
-.menu .control input.count {
-  width: 3.5rem;
-  text-align: right;
-}
-.menu .two-refs {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
-  gap: 0.5rem;
-  padding: 0.5rem 0.625rem 0.375rem;
-  align-items: end;
-}
-.menu .two-refs .ref-select {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1875rem;
-  min-width: 0;
-}
-.menu .two-refs .ref-select .lbl {
-  font-size: 0.6875rem;
-  color: var(--fg-2);
-}
-.menu .two-refs select {
-  width: 100%;
-  max-width: 100%;
-}
-.menu .two-refs input {
-  width: 100%;
-}
-.menu:has(.two-refs) {
-  min-width: 40rem;
+@media (max-width: 640px) {
+  .mode-menu {
+    position: fixed;
+    top: 3rem;
+    left: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+  .mode-entries {
+    width: 11rem;
+  }
 }
 
 .dialog-backdrop {

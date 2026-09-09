@@ -836,15 +836,26 @@ describe('client transitions', () => {
 });
 
 describe('mode picker', () => {
-  it('shortcut 4 compares the last N commits with the chosen count', async () => {
-    api.switchMode.mockResolvedValue(snap(2, 'revspec:x'));
-    useStore.getState().pickModeEntry(4);
-    expect(api.switchMode).toHaveBeenLastCalledWith({ kind: 'revspec', args: ['HEAD~1..HEAD'] });
-    useStore.getState().setLastCommits(5);
-    useStore.getState().pickModeEntry(4);
-    expect(api.switchMode).toHaveBeenLastCalledWith({ kind: 'revspec', args: ['HEAD~5..HEAD'] });
-    useStore.getState().setLastCommits(0);
-    expect(useStore.getState().lastCommits).toBe(1);
+  it('opens configuration for modes 2–4 without switching', () => {
+    for (const [entry, pane] of [
+      [2, 'refs'],
+      [3, 'commits'],
+      [4, 'pr'],
+    ] as const) {
+      useStore.getState().pickModeEntry(entry);
+      expect(useStore.getState().modeMenuOpen).toBe(true);
+      expect(useStore.getState().modePane).toBe(pane);
+    }
+    expect(api.switchMode).not.toHaveBeenCalled();
+    useStore.getState().setModeMenuOpen(false);
+    expect(useStore.getState().modePane).toBeNull();
+  });
+
+  it('shortcut 1 compares HEAD to the worktree immediately', () => {
+    api.switchMode.mockResolvedValue(snap(2, 'working'));
+    useStore.getState().pickModeEntry(1);
+    expect(api.switchMode).toHaveBeenLastCalledWith({ kind: 'working' });
+    expect(useStore.getState().modeMenuOpen).toBe(false);
   });
 });
 
