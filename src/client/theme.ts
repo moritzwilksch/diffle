@@ -7,6 +7,12 @@ export type ThemeChoice = 'system' | 'light' | 'dark';
  * The app palette in `styles.css` is derived from these two, so code and chrome share one look.
  */
 export const SHIKI_THEMES: ThemesType = { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' };
+/**
+ * Lowercase foregrounds `SHIKI_THEMES.light` paints comments and strings with.
+ * Rendered tokens carry theme colors but no scopes, so this is how the viewer
+ * tells prose inside code from symbols; a test pins it to the theme.
+ */
+export const NON_CODE_COLORS: ReadonlySet<string> = new Set(['#66707b', '#032563']);
 const KEY = 'diffle:theme';
 
 export function readTheme(): ThemeChoice {

@@ -21,7 +21,7 @@ import { HoverTooltip, hoverControl } from '../lsp/HoverTooltip.js';
 import { ReferencesList } from '../lsp/ReferencesList.js';
 import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
-import { lspTarget, type TokenTarget } from '../lsp/target.js';
+import { isSymbolToken, lspTarget, type TokenTarget } from '../lsp/target.js';
 import {
   isCollapsed,
   itemDeps,
@@ -139,7 +139,7 @@ function targetOf(
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
   // No server for this language means no hover, no menu: a target would only produce blockers.
-  if (!served(path)) return null;
+  if (!served(path) || !isSymbolToken(props.tokenElement)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
   const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX);
   if (clientX != null && !word) return null;

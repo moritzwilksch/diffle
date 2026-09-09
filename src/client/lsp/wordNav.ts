@@ -4,7 +4,7 @@ import { sideOf } from '../comments/anchor.js';
 import { itemIdOf, pathFromItemId } from '../model.js';
 import { rowOf } from '../review/rows.js';
 import { useStore } from '../store.js';
-import { lspTarget } from './target.js';
+import { isSymbolToken, lspTarget } from './target.js';
 
 /**
  * Keyboard word focus (vim w / b): walk the identifier tokens of the cursor line
@@ -127,12 +127,12 @@ function rootOf(path: string): ShadowRoot | HTMLElement | null {
   return rendered?.element.shadowRoot ?? rendered?.element ?? null;
 }
 
-/** Identifier tokens of a rendered new-side line, in order; null when the row is not rendered. */
+/** Identifier tokens of a rendered new-side line, in order, skipping comment and string text; null when the row is not rendered. */
 function wordsOf(path: string, line: number): HTMLElement[] | null {
   const root = rootOf(path);
   const row = root && rowOf(root, line, 'new');
   if (!row) return null;
-  return [...row.querySelectorAll<HTMLElement>('span[data-char]')].filter((el) =>
-    /^[\p{L}_][\p{L}\p{N}_]*$/u.test(el.textContent ?? ''),
+  return [...row.querySelectorAll<HTMLElement>('span[data-char]')].filter(
+    (el) => /^[\p{L}_][\p{L}\p{N}_]*$/u.test(el.textContent ?? '') && isSymbolToken(el),
   );
 }

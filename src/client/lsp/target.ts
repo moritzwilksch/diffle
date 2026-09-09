@@ -1,4 +1,5 @@
 import type { Side } from '../../shared/protocol.js';
+import { NON_CODE_COLORS } from '../theme.js';
 
 /** The token `gd` / `gA` act on: keyboard-focused (w / b) first, else under the pointer. */
 export interface TokenTarget {
@@ -30,3 +31,18 @@ export const lspTarget = {
     focusedEl = t ? el : null;
   },
 };
+
+/** The CSS variable the diff viewer stores a token's light-theme foreground in. */
+const TOKEN_COLOR = '--diffs-token-light';
+
+/**
+ * Whether a rendered token is code the language server can resolve, as opposed
+ * to comment or string text. A token merged from several fragments carries its
+ * color on the fragments, not the wrapper.
+ */
+export function isSymbolToken(el: HTMLElement): boolean {
+  const color =
+    el.style.getPropertyValue(TOKEN_COLOR) ||
+    el.querySelector<HTMLElement>('[style]')?.style.getPropertyValue(TOKEN_COLOR);
+  return !color || !NON_CODE_COLORS.has(color.trim().toLowerCase());
+}
