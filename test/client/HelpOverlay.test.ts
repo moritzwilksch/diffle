@@ -11,7 +11,7 @@ const { COLUMNS, HelpOverlay } = await import('../../src/client/keyboard/HelpOve
 // Every binding the keymap exposes; regrouping the overlay must not drop one.
 const BOUND = [
   'j / k  or  ↓ / ↑', '←  or  ⌘/Ctrl+Shift+e  /  →', 'Ctrl+d / Ctrl+u', 'Ctrl+o / Ctrl+i', 'J / K', '] / [   n / N', 'gg / G', '{n}gg / {n}G', 'V, then j / k',
-  'c', 'e', 'dd', 'R', 'v', 'zo / zc', 'zO / zC', 'zt / zb', 'zz', 'F', 's', 't', 'yy or Y / yf', '/', 'g/', 'gf', 'w / b', '0 / $', '* / #',
+  'c', 'e', 'dd', 'R', 'v', 'zo / zc', 'zO / zC', 'zt / zb', 'zz', 'F', 's', 't', 'yy or Y', '/', 'g/', 'gf', 'w / b', '0 / $', '* / #',
   'hover a symbol  or  gh', 'click a symbol', 'gd  or  ⌘/Ctrl+click', 'gy', 'gA', 'gs / gS', 'm, then 1–5', '⌘/Ctrl+b', '?', 'Esc',
 ];
 

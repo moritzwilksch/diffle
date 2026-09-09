@@ -45,12 +45,11 @@ afterEach(async () => {
 });
 
 describe('CommentPanel rows', () => {
-  it('leave Markdown bodies alone when the active file changes', async () => {
+  it('do not rerender on unrelated store changes', async () => {
     await act(() => root.render(createElement(CommentPanel)));
     expect(rendered.sort()).toEqual(['body a', 'body b', 'body c']);
     rendered.length = 0;
     await act(() => useStore.setState({ activePath: 'b.md' }));
-    expect(host.querySelector('.copy-btn')?.getAttribute('title')).toContain('b.md');
     expect(rendered).toEqual([]);
     await act(() => useStore.setState({ activePath: 'c.md' }));
     expect(rendered).toEqual([]);

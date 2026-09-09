@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ClipboardCopy, Copy, GitPullRequestArrow, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardCopy, GitPullRequestArrow, MessageSquare, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
@@ -13,7 +13,6 @@ export function CommentPanel() {
   const threads = useStore((s) => s.threads);
   const showResolved = useStore((s) => s.showResolved);
   const setShowResolved = useStore((s) => s.setShowResolved);
-  const activePath = useStore((s) => s.activePath);
   const openFile = useStore((s) => s.openFile);
   const clearThreads = useStore((s) => s.clearThreads);
   const deleteThread = useStore((s) => s.deleteThread);
@@ -52,21 +51,19 @@ export function CommentPanel() {
     return [...by.entries()];
   }, [shown]);
 
-  const copy = async (path?: string): Promise<boolean> => {
+  const copy = async (): Promise<boolean> => {
     let text: string;
     try {
-      text = await api.exportComments(path);
+      text = await api.exportComments();
     } catch (e) {
       // Otherwise the button stays quiet and the previous clipboard gets pasted into the agent.
-      report(path ? `Copying comments for ${path}` : 'Copying comments', e);
+      report('Copying comments', e);
       return false;
     }
     if (await copyText(text)) return true;
     setManual(text);
     return false;
   };
-
-  const forFile = activePath ? open.filter((t) => t.anchor.path === activePath).length : 0;
 
   return (
     <aside className="panel">
@@ -75,13 +72,6 @@ export function CommentPanel() {
           <MessageSquare size="0.9375rem" /> Threads
           {open.length > 0 && <span className="count">{open.length}</span>}
         </span>
-        <CopyButton
-          label="File"
-          icon={<Copy size="0.875rem" />}
-          disabled={forFile === 0}
-          title={activePath ? `Copy ${forFile} open thread(s) for ${activePath} (yf)` : 'Select a file first'}
-          onCopy={() => copy(activePath ?? undefined)}
-        />
         <CopyButton label="All" icon={<ClipboardCopy size="0.875rem" />} primary disabled={open.length === 0} title="Copy all open threads as a prompt (yy)" onCopy={() => copy()} />
         <button
           className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}

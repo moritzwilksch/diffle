@@ -39,7 +39,7 @@ export const COLUMNS: HelpSection[][] = [[
       ['e', 'edit the newest message of the thread under the cursor'],
       ['dd', 'delete the thread under the cursor'],
       ['R', 'resolve / reopen the thread under the cursor'],
-      ['yy or Y / yf', 'copy all comments / the current file’s comments'],
+      ['yy or Y', 'copy all comments'],
     ],
   },
 ], [
