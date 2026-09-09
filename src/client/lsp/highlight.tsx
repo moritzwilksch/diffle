@@ -1,13 +1,11 @@
 import { getFiletypeFromFileName, getSharedHighlighter, type SupportedLanguages } from '@pierre/diffs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ThemeChoice } from '../theme.js';
+import { SHIKI_THEMES, type ThemeChoice } from '../theme.js';
 
 export interface HlToken {
   text: string;
   color?: string;
 }
-
-const THEMES = { dark: 'pierre-dark', light: 'pierre-light' } as const;
 
 /** Lines tokenized between yields to the event loop; a big result file must not hold the main thread. */
 const CHUNK = 200;
@@ -27,8 +25,8 @@ export async function highlightLines(lines: string[], path: string, theme: Theme
 
 /** Like `highlightLines`, for a language named directly (a markdown fence's info string). */
 export async function highlightCode(lines: string[], lang: SupportedLanguages, theme: ThemeChoice): Promise<HlToken[][]> {
-  const themeName = isDark(theme) ? THEMES.dark : THEMES.light;
-  const highlighter = await getSharedHighlighter({ themes: [THEMES.dark, THEMES.light], langs: [lang] });
+  const themeName = isDark(theme) ? SHIKI_THEMES.dark : SHIKI_THEMES.light;
+  const highlighter = await getSharedHighlighter({ themes: [SHIKI_THEMES.dark, SHIKI_THEMES.light], langs: [lang] });
   return lines.map((line) => {
     try {
       const [tokens = []] = highlighter.codeToTokensBase(line, { lang, theme: themeName });
