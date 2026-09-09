@@ -8,7 +8,7 @@ import { compareThreads } from './anchor.js';
  *
  *   > quoted line
  *
- *   body                 (each message prefixed by its author when the thread has replies)
+ *   body                 (a thread's messages joined by a blank line)
  *
  *   ---
  *
@@ -29,24 +29,15 @@ function formatOne(t: CommentThread): string {
     .split('\n')
     .map((l) => (l.length ? `> ${l}` : '>'))
     .join('\n');
-  const threaded = t.messages.length > 1;
-  const body = t.messages.map((m) => formatMessage(m, anchor.quoted, threaded)).join('\n\n');
+  const body = t.messages.map((m) => formatMessage(m, anchor.quoted)).join('\n\n');
   return `${header}\n\n${quote}\n\n${body}\n\n---\n`;
 }
 
-function formatMessage(m: CommentMessage, quoted: string, threaded: boolean): string {
-  const text = parseSuggestions(m.body)
+function formatMessage(m: CommentMessage, quoted: string): string {
+  return parseSuggestions(m.body)
     .map((seg) => (seg.code == null ? seg.text.trim() : renderSuggestion(quoted, seg.code)))
     .filter((s) => s.length > 0)
     .join('\n\n');
-  if (!threaded) return text;
-  return `${authorLabel(m)}:\n${text}`;
-}
-
-/** "you" for the human; "agent" or "agent (name)" for a labelled agent. */
-export function authorLabel(m: Pick<CommentMessage, 'author' | 'authorName'>): string {
-  if (m.author === 'human') return 'you';
-  return m.authorName ? `agent (${m.authorName})` : 'agent';
 }
 
 function renderSuggestion(original: string, code: string): string {

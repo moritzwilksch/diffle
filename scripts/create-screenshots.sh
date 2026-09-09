@@ -5,7 +5,7 @@ readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_URL="https://github.com/pavelzw/pixi-browse"
 readonly REV="f47af39167ab6750ae558106d3b19536963ae747"
 readonly OUTPUT_DIR="$ROOT/.github/assets"
-readonly FINDING='{"path":"pixi_browse/tui/app.py","startLine":157,"body":"Could this be immutable? I only see the whole value being replaced.","author":"human"}'
+readonly FINDING='{"path":"pixi_browse/tui/app.py","startLine":157,"body":"Could this be immutable? I only see the whole value being replaced."}'
 
 cd "$ROOT"
 command -v pyrefly >/dev/null || { echo "pyrefly is required to create the screenshots." >&2; exit 1; }
@@ -65,7 +65,6 @@ NO_COLOR=1 "$ROOT/node_modules/.bin/tsx" "$ROOT/src/cli/main.ts" \
   --no-open \
   --no-watch \
   --lsp \
-  --comment "$FINDING" \
   HEAD~5...HEAD \
   >"$stdout_log" 2>"$stderr_log" &
 diffle_pid=$!
@@ -86,6 +85,19 @@ if [[ -z "$url" ]]; then
   cat "$stderr_log" >&2
   exit 1
 fi
+
+# The screenshot needs a comment on screen; the server has no other way in.
+SEED_URL="$url" SEED_BODY="$FINDING" node --input-type=module <<'EOF'
+const res = await fetch(new URL('api/threads', process.env.SEED_URL), {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: process.env.SEED_BODY,
+});
+if (!res.ok) {
+  console.error(`seeding the screenshot comment failed: HTTP ${res.status} ${await res.text()}`);
+  process.exit(1);
+}
+EOF
 
 PLAYWRIGHT_MODULE="$playwright_module" SCREENSHOT_URL="$url" SCREENSHOT_OUTPUT_DIR="$OUTPUT_DIR" node --input-type=module <<'EOF'
 import { join } from 'node:path';

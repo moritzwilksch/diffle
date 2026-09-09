@@ -11,14 +11,14 @@ beforeEach(async () => {
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 const anchor = { path: 'a.py', side: 'new' as const, startLine: 2, endLine: 2, quoted: 'b' };
-const human = { author: 'human' as const, body: 'hello' };
+const hello = { body: 'hello' };
 
 describe('CommentStore', () => {
   it('persists threads per mode key and reloads them', async () => {
     const s1 = await CommentStore.open(dir, 'working');
-    const t = await s1.addThread(anchor, human);
+    const t = await s1.addThread(anchor, hello);
     expect(t.id).toBeTruthy();
-    expect(t.messages[0]).toMatchObject({ author: 'human', body: 'hello' });
+    expect(t.messages[0]).toMatchObject({ body: 'hello' });
     const s2 = await CommentStore.open(dir, 'working');
     expect(s2.threads()).toEqual([t]);
     const other = await CommentStore.open(dir, 'pr:abc');
@@ -47,7 +47,7 @@ describe('CommentStore', () => {
     const [t] = s.threads();
     expect(t).toMatchObject({ id: 'c1', anchor, resolved: false, stale: true, staleFromLine: 9 });
     expect(t!.messages).toHaveLength(1);
-    expect(t!.messages[0]).toMatchObject({ author: 'human', body: 'old note', createdAt: 5, updatedAt: 6 });
+    expect(t!.messages[0]).toMatchObject({ body: 'old note', createdAt: 5, updatedAt: 6 });
     expect(s.viewed()).toEqual([{ path: 'a.py', blob: 'sha', viewed: true }]);
     expect(JSON.parse(await readFile(join(dir, 'diffle', 'comments.v1.bak'), 'utf8'))).toEqual(v1);
     await s.reply('c1', { body: 'reply' });
@@ -58,12 +58,9 @@ describe('CommentStore', () => {
 
   it('replies, edits, removes messages and threads, resolves, and clears', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const t = await s.addThread(anchor, human);
-    await s.reply(t.id, { body: 'fixed', author: 'agent', authorName: 'claude' });
-    expect(s.get(t.id)?.messages.map((m) => [m.author, m.authorName, m.body])).toEqual([
-      ['human', undefined, 'hello'],
-      ['agent', 'claude', 'fixed'],
-    ]);
+    const t = await s.addThread(anchor, hello);
+    await s.reply(t.id, { body: 'fixed' });
+    expect(s.get(t.id)?.messages.map((m) => m.body)).toEqual(['hello', 'fixed']);
     const [first, second] = s.get(t.id)!.messages;
     await s.editMessage(t.id, first!.id, 'hello again');
     expect(s.get(t.id)?.messages[0]?.body).toBe('hello again');
@@ -80,28 +77,27 @@ describe('CommentStore', () => {
     expect(s.threads()).toEqual([]);
     await expect(s.removeThread(t.id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(s.reply('nope', { body: 'x' })).rejects.toBeInstanceOf(NotFoundError);
-    await s.addThread(anchor, human);
+    await s.addThread(anchor, hello);
     await s.clear();
     expect(s.threads()).toEqual([]);
   });
 
-  it('filters by author and path, ordered by path then line', async () => {
+  it('filters by path, ordered by path then line', async () => {
     const s = await CommentStore.open(dir, 'working');
-    await s.addThread({ ...anchor, path: 'z.py', startLine: 1, endLine: 1 }, { author: 'agent', body: 'z' });
-    await s.addThread({ ...anchor, startLine: 9, endLine: 9 }, human);
-    await s.addThread(anchor, { author: 'agent', authorName: 'claude', body: 'a' });
+    await s.addThread({ ...anchor, path: 'z.py', startLine: 1, endLine: 1 }, { body: 'z' });
+    await s.addThread({ ...anchor, startLine: 9, endLine: 9 }, hello);
+    await s.addThread(anchor, { body: 'a' });
     expect(s.threads().map((t) => `${t.anchor.path}:${t.anchor.startLine}`)).toEqual(['a.py:2', 'a.py:9', 'z.py:1']);
-    expect(s.threads({ author: 'agent' }).map((t) => t.messages[0]!.body)).toEqual(['a', 'z']);
     expect(s.threads({ path: 'z.py' })).toHaveLength(1);
   });
 
   it('imports payloads, quoting from the snapshot and skipping open duplicates', async () => {
     const s = await CommentStore.open(dir, 'working');
     const quote = async (path: string, _side: string, start: number, end: number) => (path === 'a.py' && end <= 3 ? `L${start}-${end}` : null);
-    const first = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one', author: 'agent', authorName: 'claude' }], quote);
+    const first = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one' }], quote);
     expect(first.skipped).toBe(0);
     expect(first.added[0]).toMatchObject({ anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'L1-1' } });
-    expect(first.added[0]!.messages[0]).toMatchObject({ author: 'agent', authorName: 'claude', body: 'one' });
+    expect(first.added[0]!.messages[0]).toMatchObject({ body: 'one' });
     const second = await s.importThreads(
       [
         { path: 'a.py', startLine: 1, body: 'one' },
@@ -137,7 +133,7 @@ describe('CommentStore', () => {
 
   it('relocates, flags stale, and un-flags when text returns', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const t = await s.addThread(anchor, human);
+    const t = await s.addThread(anchor, hello);
     await s.reply(t.id, { body: 'follows the anchor' });
     const whole = (contents: string) => async () => ({ contents, shown: null });
     expect(await s.relocateAll(whole('z\na\nb\n'))).toBe(true);
@@ -153,7 +149,7 @@ describe('CommentStore', () => {
 
   it('flags a thread stale when its text survives but leaves the shown ranges, and clears it when they return', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const t = await s.addThread(anchor, human);
+    const t = await s.addThread(anchor, hello);
     const contents = 'a\nb\nc\nd\ne\n';
     expect(await s.relocateAll(async () => ({ contents, shown: [[4, 5]] }))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(true);
@@ -166,8 +162,8 @@ describe('CommentStore', () => {
 
   it('removes stale threads only', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const gone = await s.addThread({ ...anchor, quoted: 'missing' }, human);
-    const kept = await s.addThread(anchor, human);
+    const gone = await s.addThread({ ...anchor, quoted: 'missing' }, hello);
+    const kept = await s.addThread(anchor, hello);
     await s.relocateAll(async () => ({ contents: 'a\nb\n', shown: null }));
     expect(s.get(gone.id)?.stale).toBe(true);
     expect(await s.removeStale()).toBe(1);
@@ -178,8 +174,8 @@ describe('CommentStore', () => {
   it('two stores on one file keep each other\'s sets', async () => {
     const working = await CommentStore.open(dir, 'working');
     const pr = await CommentStore.open(dir, 'pr:abc');
-    await working.addThread(anchor, { author: 'human', body: 'w' });
-    await pr.addThread(anchor, { author: 'human', body: 'p' });
+    await working.addThread(anchor, { body: 'w' });
+    await pr.addThread(anchor, { body: 'p' });
     await working.setViewed('a.py', 'sha', true);
     const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8')) as { sets: Record<string, { threads: { messages: { body: string }[] }[] }> };
     expect(raw.sets.working!.threads.map((t) => t.messages[0]!.body)).toEqual(['w']);
@@ -190,7 +186,7 @@ describe('CommentStore', () => {
   it('two open stores on one key see and keep each other\'s writes', async () => {
     const a = await CommentStore.open(dir, 'working');
     const b = await CommentStore.open(dir, 'working');
-    const t = await a.addThread(anchor, { author: 'human', body: 'from a' });
+    const t = await a.addThread(anchor, { body: 'from a' });
     // b never loaded t, yet serves it and must not drop it on its own write.
     expect(b.threads()).toEqual([t]);
     await b.setViewed('a.py', 'sha', true);
@@ -209,11 +205,11 @@ describe('CommentStore', () => {
     const other = await CommentStore.open(dir, 'working');
     await Promise.all([
       old.setViewed('a.py', 'sha', true),
-      next.addThread(anchor, { author: 'human', body: 'n1' }),
-      old.addThread(anchor, { author: 'human', body: 'o1' }),
+      next.addThread(anchor, { body: 'n1' }),
+      old.addThread(anchor, { body: 'o1' }),
       next.setViewed('b.py', 'sha', true),
-      other.addThread(anchor, { author: 'agent', body: 'o2' }),
-      next.addThread(anchor, { author: 'human', body: 'n2' }),
+      other.addThread(anchor, { body: 'o2' }),
+      next.addThread(anchor, { body: 'n2' }),
     ]);
     const working = await CommentStore.open(dir, 'working');
     const pr = await CommentStore.open(dir, 'pr:abc');
@@ -228,7 +224,7 @@ describe('CommentStore', () => {
   it('a deletion by one store is not resurrected by another', async () => {
     const a = await CommentStore.open(dir, 'working');
     const b = await CommentStore.open(dir, 'working');
-    const t = await a.addThread(anchor, human);
+    const t = await a.addThread(anchor, hello);
     expect(b.get(t.id)).toBeDefined();
     await a.removeThread(t.id);
     await b.setViewed('a.py', 'sha', true);
@@ -244,7 +240,7 @@ describe('CommentStore', () => {
     // Held by this (live) process: the write waits until the lock goes away.
     await writeFile(lock, `${process.pid}\n`);
     let done = false;
-    const write = s.addThread(anchor, human).then(() => (done = true));
+    const write = s.addThread(anchor, hello).then(() => (done = true));
     await new Promise((r) => setTimeout(r, 80));
     expect(done).toBe(false);
     await unlink(lock);
@@ -252,7 +248,7 @@ describe('CommentStore', () => {
     expect(s.threads()).toHaveLength(1);
     // Left behind by a dead process: taken over at once.
     await writeFile(lock, '999999999\n');
-    await s.addThread(anchor, human);
+    await s.addThread(anchor, hello);
     expect(s.threads()).toHaveLength(2);
     await expect(stat(lock)).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -269,9 +265,9 @@ describe('CommentStore', () => {
     const s = await CommentStore.open(dir, 'working');
     // A directory where the file belongs makes the read-modify-write fail.
     await mkdir(s.file, { recursive: true });
-    await expect(s.addThread(anchor, { author: 'human', body: 'first' })).rejects.toThrow();
+    await expect(s.addThread(anchor, { body: 'first' })).rejects.toThrow();
     await rmdir(s.file);
-    await s.addThread(anchor, { author: 'human', body: 'second' });
+    await s.addThread(anchor, { body: 'second' });
     const raw = JSON.parse(await readFile(s.file, 'utf8')) as { sets: { working: { threads: { messages: { body: string }[] }[] } } };
     expect(raw.sets.working.threads.map((t) => t.messages[0]!.body)).toEqual(['second']);
     expect((await readdir(join(dir, 'diffle'))).sort()).toEqual(['comments.json']);

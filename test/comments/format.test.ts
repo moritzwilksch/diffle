@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatPrompt, parseSuggestions } from '../../src/server/comments/format.js';
 import type { CommentMessage, CommentThread } from '../../src/shared/protocol.js';
 
-const msg = (body: string, over: Partial<CommentMessage> = {}): CommentMessage => ({ id: 'm', author: 'human', body, createdAt: 1, updatedAt: 1, ...over });
+const msg = (body: string, over: Partial<CommentMessage> = {}): CommentMessage => ({ id: 'm', body, createdAt: 1, updatedAt: 1, ...over });
 
 const t = (over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> }): CommentThread => ({
   id: 'x',
@@ -39,14 +39,9 @@ describe('formatPrompt', () => {
     expect(out.indexOf('second')).toBeLessThan(out.indexOf('third'));
   });
 
-  it('labels each message by author once a thread has replies; a lone agent message stays bare', () => {
-    const threaded = t({
-      messages: [msg('Is this safe?', { author: 'agent', authorName: 'claude' }), msg('Yes, the lock covers it.'), msg('Then add a comment.', { author: 'agent' })],
-    });
-    expect(formatPrompt([threaded])).toBe(
-      'src/a.py:3\n\n> def foo():\n\nagent (claude):\nIs this safe?\n\nyou:\nYes, the lock covers it.\n\nagent:\nThen add a comment.\n\n---\n',
-    );
-    expect(formatPrompt([t({ messages: [msg('Solo finding', { author: 'agent' })] })])).toBe('src/a.py:3\n\n> def foo():\n\nSolo finding\n\n---\n');
+  it('joins a thread\'s messages with a blank line, unlabelled', () => {
+    const threaded = t({ messages: [msg('Is this safe?'), msg('Never mind, the lock covers it.')] });
+    expect(formatPrompt([threaded])).toBe('src/a.py:3\n\n> def foo():\n\nIs this safe?\n\nNever mind, the lock covers it.\n\n---\n');
   });
 
   it('expands suggestion fences to ORIGINAL / SUGGESTED blocks', () => {

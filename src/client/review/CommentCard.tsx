@@ -1,4 +1,4 @@
-import { AlertTriangle, Bot, Check, Copy, GitPullRequestArrow, MessageSquare, Pencil, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, GitPullRequestArrow, MessageSquare, Pencil, Reply, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { copyText } from '../clipboard.js';
@@ -29,8 +29,8 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     const t = setTimeout(() => setPosted(false), 2000);
     return () => clearTimeout(t);
   }, [posted]);
-  // A single human message has no `who` row of its own, so its edit control sits with the thread actions.
-  const solo = thread.messages.length === 1 && thread.messages[0]!.author === 'human' ? thread.messages[0]! : null;
+  // A lone message has no `who` row of its own, so its edit control sits with the thread actions.
+  const solo = thread.messages.length === 1 ? thread.messages[0]! : null;
   const editingSolo = solo != null && editingId === solo.id;
 
   const a = thread.anchor;
@@ -43,7 +43,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
         <span className="loc">
           {a.side === 'old' ? 'removed ' : ''}L{range}
         </span>
-        {solo && <span className="author">you</span>}
         {thread.stale && (
           <span className="stale-tag" title="Not found in the current diff: the text changed or left the changed lines">
             <AlertTriangle size="0.75rem" /> stale
@@ -119,16 +118,9 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
     setEditingId(null);
   };
   return (
-    <div className={`message ${message.author}`}>
-      {(threaded || message.author === 'agent') && (
+    <div className="message">
+      {threaded && (
         <div className="who">
-          {message.author === 'agent' ? (
-            <span className="author agent" title="Written by the agent">
-              <Bot size="0.75rem" /> {message.authorName ?? 'agent'}
-            </span>
-          ) : (
-            <span className="author">you</span>
-          )}
           <span className="spacer" />
           <CopyMessageButton text={message.body} size="0.75rem" />
           <button className="ghost icon" onClick={() => setEditingId(editing ? null : message.id)} title={editing ? 'Cancel' : 'Edit (e)'}>

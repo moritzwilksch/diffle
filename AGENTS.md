@@ -2,8 +2,6 @@
 
 Local git diff reviewer: Node server wraps git, React client renders diffs with `@pierre/diffs`, line comments export as an agent prompt. `README.md` has usage.
 
-Asked to read or answer the human's review comments, or to get your own diff reviewed: run `diffle --skill` (`npx . --skill` in this checkout) and follow it. It covers the CLI end to end; the HTTP routes are a fallback, not the interface.
-
 ## Layout and boundaries
 
 - `src/shared/protocol.ts` is the only code both sides import. Add a field there before using it on either side.
@@ -32,9 +30,9 @@ npm run build                      # dist/client + dist/server; the server serve
 
 Done means all four pass. Tests for server behavior build a throwaway repo with `git init` in a tmpdir (see `test/server/Session.test.ts`); client store tests `vi.mock` `src/client/api.js` and race deferred promises.
 
-## The agent skill
+## The prompt
 
-`diffle --skill` prints `SKILL` from `src/cli/skill.ts`: the guide an agent reads to drive a review (seed findings, read feedback, reply, resolve). It is a cache of the CLI surface, so it goes stale silently. Any change to `diffle comment`, to `--comment`/`--as`/`--background`, to the findings payload, or to the prompt format lands in `skill.ts` in the same commit; `test/cli/skill.test.ts` pins the names it mentions.
+Comments only flow human → agent: nothing lets an agent post one, and no route writes on an agent's behalf. `formatPrompt` in `src/server/comments/format.ts` is the one place that renders the handoff; its doc comment records the block shape.
 
 ## Style
 

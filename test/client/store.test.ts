@@ -957,10 +957,10 @@ describe('symbol navigation', () => {
 });
 
 const file = (over: Partial<ChangedFile>): ChangedFile => ({ path: 'a.py', status: 'M', additions: 3, deletions: 1, binary: false, blob: 'b2', generated: false, ...over });
-const thread = (over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']>; author?: 'human' | 'agent' }): CommentThread => ({
+const thread = (over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> }): CommentThread => ({
   id: over.id ?? 't',
   anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
-  messages: [{ id: 'm', author: over.author ?? 'human', body: 'b', createdAt: 1, updatedAt: 1 }],
+  messages: [{ id: 'm', body: 'b', createdAt: 1, updatedAt: 1 }],
   resolved: over.resolved ?? false,
   stale: false,
 });
@@ -1240,7 +1240,7 @@ describe('threads', () => {
     const vb = version('b.py');
 
     api.reply.mockResolvedValue({});
-    const replied = { ...a, messages: [...a.messages, { id: 'm2', author: 'human' as const, body: 'r', createdAt: 2, updatedAt: 2 }] };
+    const replied = { ...a, messages: [...a.messages, { id: 'm2', body: 'r', createdAt: 2, updatedAt: 2 }] };
     api.threads.mockResolvedValueOnce([replied, { ...b }]);
     await useStore.getState().submitReply('a', 'r');
     const s = useStore.getState();

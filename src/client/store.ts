@@ -1706,7 +1706,7 @@ export const useStore = create<ReviewState>((set, get) => {
         const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
         const contents = await ensureContents(d.path, range.side);
         const anchor = anchorFromRange(d.path, range, contents);
-        await api.addThread({ ...anchor, body, author: 'human' });
+        await api.addThread({ ...anchor, body });
       } catch (e) {
         return report('Posting the comment', e);
       }
@@ -1719,7 +1719,7 @@ export const useStore = create<ReviewState>((set, get) => {
     async submitReply(threadId, body) {
       if (!body.trim()) return;
       try {
-        await api.reply(threadId, { body, author: 'human' });
+        await api.reply(threadId, { body });
       } catch (e) {
         return report('Posting the reply', e);
       }

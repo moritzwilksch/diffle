@@ -54,7 +54,7 @@ describe('reuseThreads', () => {
   const thread = (id: string, over: Partial<CommentThread> = {}): CommentThread => ({
     id,
     anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x' },
-    messages: [{ id: `${id}-m`, author: 'human', body: 'b', createdAt: 1, updatedAt: 1 }],
+    messages: [{ id: `${id}-m`, body: 'b', createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
     ...over,
