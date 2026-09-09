@@ -8,6 +8,12 @@
 Review a git diff in the browser, comment on lines or blocks, then copy the
 comments as a prompt for an agent.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/diffle-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/diffle-light.png">
+  <img alt="diffle reviewing a git diff" src=".github/assets/diffle-light.png">
+</picture>
+
 ```text
 src/app.py:42-44
 
