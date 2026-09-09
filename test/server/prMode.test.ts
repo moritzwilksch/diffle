@@ -118,7 +118,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
       old: { kind: 'rev', rev: mergeBase },
       newRev: headSha,
       label: '#7 main...feat',
-      repository: 'o/r',
+      pullRequest: { repository: 'o/r', number: 7 },
       live: 'none',
       // The number, not a sha: comments outlive a force-push to the pull request.
       commentKey: 'pr:#7',
@@ -251,7 +251,7 @@ describe('openReviewRepository', () => {
           expect(review.repo.root.startsWith(join(tmpdir(), 'diffle-pr-'))).toBe(true);
           const mode = await resolveMode(req, review.repo, foreign);
           expect(mode.newRev).toBe(headSha);
-          expect(mode.repository).toBe('foreign/repo');
+          expect(mode.pullRequest?.repository).toBe('foreign/repo');
           expect(mode.old).toEqual({ kind: 'rev', rev: mergeBase });
           expect(git(local, 'show-ref')).toBe(refs);
           expect(git(local, 'count-objects', '-v')).toBe(objects);
