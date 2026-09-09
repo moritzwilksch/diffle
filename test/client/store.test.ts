@@ -37,7 +37,7 @@ const api = {
 };
 vi.mock('../../src/client/api.js', () => ({ api }));
 
-const { useStore, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('../../src/client/store.js');
+const { useStore, TOAST_MS, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('../../src/client/store.js');
 const { filterSymbols, viewedState, isCollapsed, itemIdOf, itemDeps, itemVersion, visibleThreads, OVERSIZED_LINES, PATCH_BATCH_LINES, PATCH_BATCH_FILES } = await import('../../src/client/model.js');
 /** A one-line patch per path, so a `patches` mock can answer any batch. */
 const patchesFor = (paths: string[]) => paths.map((p) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -1,1 +1,1 @@\n-x\n+y\n`).join('');
@@ -596,6 +596,22 @@ describe('client transitions', () => {
     api.setResolved.mockRejectedValueOnce(new Error('boom'));
     await useStore.getState().setResolved('t', true);
     expect(useStore.getState().toast).toMatch(/Resolving failed: boom/);
+  });
+
+  it('every toast stays for TOAST_MS, and a new toast restarts the clock', () => {
+    vi.useFakeTimers();
+    try {
+      useStore.getState().flash('first');
+      vi.advanceTimersByTime(TOAST_MS - 1);
+      expect(useStore.getState().toast).toBe('first');
+      useStore.getState().flash('second');
+      vi.advanceTimersByTime(TOAST_MS - 1);
+      expect(useStore.getState().toast).toBe('second');
+      vi.advanceTimersByTime(1);
+      expect(useStore.getState().toast).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('opening a path that left the tree reports instead of loading', async () => {
