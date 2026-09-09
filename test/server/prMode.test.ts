@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { access, chmod, mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,9 @@ import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
 import { resolveMode } from '../../src/server/mode.js';
+
+/** macOS reaches `os.tmpdir()` through a symlink (`/var` → `/private/var`); git reports the physical path. */
+const TMP_ROOT = realpathSync(tmpdir());
 
 let tmp: string;
 /** Bare "GitHub": holds refs/pull/7/head. Its path ends in o/r so it matches the PR url's slug. */
@@ -45,7 +49,7 @@ const gh: GhRunner = async (args) => {
 };
 
 beforeAll(async () => {
-  tmp = await mkdtemp(join(tmpdir(), 'diffle-pr-'));
+  tmp = await mkdtemp(join(TMP_ROOT, 'diffle-pr-'));
   origin = join(tmp, 'o', 'r');
   await mkdir(origin, { recursive: true });
   git(origin, 'init', '-q', '-b', 'main');
@@ -255,7 +259,7 @@ describe('openReviewRepository', () => {
         const review = await openReviewRepository(req, cwd, foreign);
         try {
           expect(review.repo.root).not.toBe(local);
-          expect(review.repo.root.startsWith(join(tmpdir(), 'diffle-pr-'))).toBe(true);
+          expect(review.repo.root.startsWith(join(TMP_ROOT, 'diffle-pr-'))).toBe(true);
           const mode = await resolveMode(req, review.repo, foreign);
           expect(mode.newRev).toBe(headSha);
           expect(mode.repository).toBe('foreign/repo');
