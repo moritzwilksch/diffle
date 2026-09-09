@@ -5,6 +5,7 @@ import {
   compareTreeOrder,
   countViewed,
   currentPath,
+  documentTitle,
   nextSearchScope,
   orderedPaths,
   reuseThreads,
@@ -177,7 +178,7 @@ describe('countViewed', () => {
     blob,
     generated: false,
   });
-  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommand: '' };
+  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
 
   it('counts explicit marks at the current blob and auto-viewed files; a stale mark is not viewed', () => {
     const changed = [file('a.ts'), file('b.ts'), file('c.ts', 'new'), file('yarn.lock')];
@@ -190,5 +191,23 @@ describe('countViewed', () => {
     expect(countViewed({ viewed: [], config }, changed)).toBe(1);
     expect(countViewed({ viewed: [{ path: 'yarn.lock', blob: 'b', viewed: false }], config }, changed)).toBe(0);
     expect(countViewed({ viewed, config }, [])).toBe(0);
+  });
+});
+
+describe('documentTitle', () => {
+  const snapshot = (mode: Partial<Snapshot['mode']>, root = '/home/me/rattler/'): Snapshot =>
+    ({ root, mode: { kind: 'working', ...mode } }) as Snapshot;
+
+  it('names the root directory', () => {
+    expect(documentTitle(snapshot({}))).toBe('diffle: rattler');
+  });
+
+  it('names the pull request by its base repository and number, not the checkout directory', () => {
+    const mode = { kind: 'pr' as const, pullRequest: { repository: 'conda/rattler', number: 12345 } };
+    expect(documentTitle(snapshot(mode, '/tmp/diffle-pr-lTXVEf'))).toBe('diffle: conda/rattler #12345');
+  });
+
+  it('falls back before the first snapshot', () => {
+    expect(documentTitle(null)).toBe('diffle');
   });
 });

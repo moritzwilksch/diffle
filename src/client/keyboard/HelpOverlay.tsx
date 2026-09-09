@@ -58,7 +58,7 @@ export const COLUMNS: HelpSection[][] = [
       ],
     },
     {
-      title: 'Code intelligence (--lsp)',
+      title: 'Code intelligence (language server)',
       rows: [
         ['hover a symbol  or  gh', 'signature and docs tooltip (gh: focused word); Esc closes'],
         ['click a symbol', 'definition / type definition / references popover'],

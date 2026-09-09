@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
-import type { LspStatus } from '../../src/shared/protocol.js';
+import type { LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -18,7 +18,7 @@ const files: Record<string, string> = {
 };
 
 function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) {
-  const statuses: LspStatus[] = [];
+  const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
   /** Paths `read` was asked for, and the most reads in flight at once. */
@@ -220,6 +220,22 @@ describe('LspBridge', () => {
       ['ready', false],
     ]);
     await bridge.close();
+  });
+
+  it('re-asks a request the server refuses as stale, and reports an outage when it keeps refusing', async () => {
+    // Two refusals, then the answer: a document change racing a query must not surface as a failure.
+    const one = start({ FAKE_LSP_MODIFIED: '2' });
+    const res = await one.bridge.definition({ path: 'a.py', line: 3, col: 4 });
+    expect(res.locations).toEqual([{ path: 'a.py', line: 2, col: 4, text: 'def f():' }]);
+    expect(one.events.filter((e) => e.startsWith('refused'))).toHaveLength(2);
+    await one.bridge.close();
+
+    const many = start({ FAKE_LSP_MODIFIED: '99' });
+    await expect(many.bridge.references({ path: 'a.py', line: 1, col: 0 })).rejects.toThrow(/kept changing; try again/);
+    // Three attempts, then it stops asking; the server is still up for the next query.
+    expect(many.events.filter((e) => e.startsWith('refused'))).toHaveLength(3);
+    expect(many.bridge.status().state).toBe('ready');
+    await many.bridge.close();
   });
 
   it('reports unavailable when the server dies during initialize', async () => {

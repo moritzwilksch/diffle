@@ -135,7 +135,7 @@ export const api = {
   lspSymbols: (query: { path: string } | { q: string }) => json<LspSymbol[]>(`/api/lsp/symbols?${q(query)}`),
   /** Changed declarations in a file with their call sites outside the diff. */
   config: () => json<UserConfig>('/api/config'),
-  /** lspCommand is CLI-only; the server ignores it. */
+  /** lspCommands is CLI-only; the server ignores it. */
   saveConfig: (config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>) =>
     json<UserConfig>('/api/config', { method: 'PUT', body: JSON.stringify(config) }),
 };

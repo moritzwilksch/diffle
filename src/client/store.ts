@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
   followsCheckout,
-  isPython,
+  lspBlocker,
   type ChangedFile,
   type CommentThread,
   type FileResponse,
@@ -230,7 +230,7 @@ export interface ReviewState {
   lsp: LspStatus;
   setLspStatus(status: LspStatus): void;
   symbolMenu: SymbolMenuState | null;
-  /** Opens the popover; not at all without `--lsp`, and not on a token the server classifies as a keyword. */
+  /** Opens the popover; not at all with `--no-lsp`, and not on a token the server classifies as a keyword. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
   closeSymbolMenu(): void;
   hover: HoverState | null;
@@ -752,7 +752,14 @@ export const useStore = create<ReviewState>((set, get) => {
         reload.includes(prevView.path));
     // Its item, like a stale diff, stays up until the refetch commits.
     if (fileView && viewMoved) delete contents[fileView.path];
-    const collapsed = modeChanged ? {} : { ...get().collapsed };
+    // A fold or unfold answers one version of a file. Once its blob moves, the default rules again:
+    // a file marked viewed and then edited ('restale') must reopen for re-review.
+    const collapsed: Record<string, boolean> = {};
+    if (!modeChanged) {
+      for (const [path, folded] of Object.entries(get().collapsed)) {
+        if (prevChanged.get(path)?.blob === nextChanged.get(path)?.blob) collapsed[path] = folded;
+      }
+    }
     // A watcher refresh must not take the comment being typed with it; only a new mode or a vanished file does.
     const draft = get().draft;
     const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
@@ -1007,28 +1014,27 @@ export const useStore = create<ReviewState>((set, get) => {
     }));
   };
 
-  /** Why symbol navigation cannot run right now, or null when it can. */
-  const lspBlocker = (): string | null => {
+  /**
+   * Why symbol navigation cannot run right now, or null when it can. With a path, the
+   * answer is about the server for that file's language; without one, about any of them.
+   */
+  const blocker = (path?: string): string | null => {
     const { lsp, snapshot } = get();
-    if (lsp.state === 'off') return 'Start diffle with --lsp for symbol navigation';
-    if (lsp.state === 'starting') return 'Language server is starting…';
-    if (lsp.state === 'unavailable') return `Language server unavailable: ${lsp.message ?? 'unknown error'}`;
+    if (!lsp.enabled) return lspBlocker(lsp);
     if (!snapshot || !followsCheckout(snapshot))
       return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
-    return null;
+    return lspBlocker(lsp, path);
   };
 
   /** The LSP position for a hovered token, or null after flashing why not. */
   const lspPosition = (target: TokenTarget | null | undefined): LspPosition | null => {
     const reason =
-      lspBlocker() ??
+      blocker() ??
       (!target
         ? 'Hover a symbol first'
         : target.side === 'old'
           ? 'Symbol navigation works on the new side only'
-          : !isPython(target.path)
-            ? 'Not a Python file'
-            : null);
+          : blocker(target.path));
     if (reason) {
       get().flash(reason);
       return null;
@@ -1082,6 +1088,34 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   const currentCursor = () => cursorFromSelection(nav(), get().selection);
+
+  /** Line/file motions treat the active collapsed header as a cursor stop. */
+  const currentNavCursor = (): Cursor | null => {
+    const selected = currentCursor();
+    if (selected) return selected;
+    const items = nav();
+    const itemIndex = items.findIndex((item) => item.path === get().activePath);
+    return itemIndex !== -1 && items[itemIndex]!.collapsed ? { itemIndex, rowIndex: -1 } : null;
+  };
+
+  /** Place a line cursor, or focus a collapsed file's header without inventing a hidden line selection. */
+  const placeNavCursor = (cur: Cursor | null, keepAnchor = false, align: 'nearest' | 'eye' = 'nearest') => {
+    if (!cur) return;
+    if (cur.rowIndex !== -1) return placeCursor(cur, keepAnchor, align);
+    const item = nav()[cur.itemIndex];
+    if (!item) return;
+    set((s) => ({
+      selection: null,
+      activePath: item.path,
+      visualAnchor: null,
+      focusedThread: null,
+      scrollTarget: {
+        id: item.id,
+        align,
+        nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+      },
+    }));
+  };
 
   const threadAtCursor = (): CommentThread | undefined => {
     const s = get();
@@ -1174,16 +1208,26 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     pickModeEntry(n) {
       set({ modeMenuOpen: false });
+      // Only the server knows the default branch, so the branch entry asks before it compares.
+      if (n === 2) {
+        void api
+          .refs()
+          .then((r) => {
+            const base = r.defaultBranch || r.branches[0];
+            if (base) return get().switchMode({ kind: 'revspec', args: [`${base}...HEAD`] });
+            set({ modeMenuOpen: true });
+          })
+          .catch((e) => report('Branch vs base', e));
+        return;
+      }
       const req: ModeRequest | null =
         n === 1
           ? { kind: 'pr' }
-          : n === 2
-            ? { kind: 'branch' }
-            : n === 3
-              ? { kind: 'working' }
-              : n === 4
-                ? lastCommitsRequest(get().lastCommits)
-                : null;
+          : n === 3
+            ? { kind: 'working' }
+            : n === 4
+              ? lastCommitsRequest(get().lastCommits)
+              : null;
       if (req) void get().switchMode(req);
       else set({ modeMenuOpen: true, twoRefsOpen: true });
     },
@@ -1332,18 +1376,18 @@ export const useStore = create<ReviewState>((set, get) => {
         report('Search', e);
       }
     },
-    lsp: { state: 'off', command: '' },
+    lsp: { enabled: false, servers: [], missing: [] },
     setLspStatus(status) {
       set({ lsp: status });
     },
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {
-      // Without a language server every action would only flash "start with --lsp": no menu to offer.
-      if (get().lsp.state === 'off') return;
+      // With language servers off every action would only flash why: no menu to offer.
+      if (!get().lsp.enabled) return;
       get().closeHover();
       const t = ++menuSeq;
       // Only the server can answer on the new side; elsewhere the menu's actions flash their own reason.
-      if (!lspBlocker() && target.side === 'new' && isPython(target.path)) {
+      if (target.side === 'new' && !blocker(target.path)) {
         const g = generation;
         let kind: string | null = null;
         try {
@@ -1364,7 +1408,7 @@ export const useStore = create<ReviewState>((set, get) => {
     hover: null,
     async requestHover(target, anchor) {
       const t = ++hoverSeq;
-      if (get().symbolMenu || lspBlocker() || target.side === 'old' || !isPython(target.path)) return;
+      if (get().symbolMenu || target.side === 'old' || blocker(target.path)) return;
       const g = generation;
       try {
         const res = await api.lspHover({ path: target.path, line: target.line, col: target.col });
@@ -1456,10 +1500,10 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     symbols: { open: false, scope: 'document', path: null, query: '', all: [], items: [], index: -1, loading: false },
     async openSymbols(scope) {
-      const blocker = lspBlocker();
-      if (blocker) return get().flash(blocker);
-      const path = get().activePath;
-      if (scope === 'document' && (!path || !isPython(path))) return get().flash('Move to a Python file first');
+      const path = scope === 'document' ? get().activePath : null;
+      if (scope === 'document' && !path) return get().flash('Move to a file first');
+      const reason = blocker(path ?? undefined);
+      if (reason) return get().flash(reason);
       set({
         symbols: {
           open: true,
@@ -1536,7 +1580,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     moveCursor(delta) {
       const items = nav();
-      placeCursor(step(items, cursorFromSelection(items, get().selection), delta), get().visualAnchor != null);
+      placeNavCursor(step(items, currentNavCursor(), delta), get().visualAnchor != null);
     },
     jumps: [],
     jumpIndex: 0,
@@ -1572,13 +1616,13 @@ export const useStore = create<ReviewState>((set, get) => {
     moveCursorBy(rows) {
       const items = nav();
       const dir: 1 | -1 = rows < 0 ? -1 : 1;
-      let cur = currentCursor();
+      let cur = currentNavCursor();
       for (let i = 0; i < Math.abs(rows); i++) {
         const next = step(items, cur, dir);
         if (!next || (cur && next.itemIndex === cur.itemIndex && next.rowIndex === cur.rowIndex)) break;
         cur = next;
       }
-      placeCursor(cur, get().visualAnchor != null, 'eye');
+      placeNavCursor(cur, get().visualAnchor != null, 'eye');
     },
     async goToLine(line) {
       const s = get();
@@ -1591,17 +1635,17 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!items.length) return;
       // A binary or unloaded file has no rows, so no selection: the active file stands in for the cursor there.
       const at = items.findIndex((i) => i.path === get().activePath);
-      const from = currentCursor() ?? (at === -1 ? null : { itemIndex: at, rowIndex: 0 });
+      const from = currentNavCursor() ?? (at === -1 ? null : { itemIndex: at, rowIndex: 0 });
       const cur =
         delta === 'first'
-          ? { itemIndex: 0, rowIndex: 0 }
+          ? stepFile(items, null, 1)
           : delta === 'last'
-            ? { itemIndex: items.length - 1, rowIndex: 0 }
+            ? stepFile(items, null, -1)
             : stepFile(items, from, delta);
       if (!cur) return;
       const item = items[cur.itemIndex]!;
       recordJump();
-      if (item.rows.length === 0) {
+      if (item.collapsed || item.rows.length === 0) {
         set((s) => ({
           selection: null,
           activePath: item.path,
@@ -1733,7 +1777,7 @@ export const useStore = create<ReviewState>((set, get) => {
       fetching = 0;
       try {
         // The language server is optional; its status failing must not take the review down.
-        const lspStatus = api.lspStatus().catch((): LspStatus => ({ state: 'off', command: '' }));
+        const lspStatus = api.lspStatus().catch((): LspStatus => ({ enabled: false, servers: [], missing: [] }));
         const tc = configSeq.start();
         const [snap, lists, config, lsp] = await Promise.all([api.snapshot(), fetchLists(), api.config(), lspStatus]);
         // Mode-independent, and nothing else fetches them: a pushed refresh that overtook this

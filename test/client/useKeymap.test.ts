@@ -8,8 +8,8 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async () => []),
   viewed: vi.fn(async () => []),
-  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, lspCommand: '' })),
-  lspStatus: vi.fn(async () => ({ state: 'off', command: '' })),
+  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, lspCommands: {} })),
+  lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   exportComments: vi.fn(),
 };
 vi.mock('../../src/client/api.js', () => ({ api }));

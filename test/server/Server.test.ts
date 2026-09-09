@@ -188,12 +188,14 @@ describe('Server', () => {
     expect((await send('GET', '/api/snapshot')).status).toBe(200);
   });
 
-  it('ignores lspCommand on PUT /api/config', async () => {
-    const before = config.get().lspCommand;
-    const r = await send('PUT', '/api/config', { body: JSON.stringify({ lspCommand: 'rm -rf /', contextLines: 7 }) });
+  it('ignores lspCommands on PUT /api/config', async () => {
+    const before = config.get().lspCommands;
+    const r = await send('PUT', '/api/config', {
+      body: JSON.stringify({ lspCommands: { python: 'rm -rf /' }, contextLines: 7 }),
+    });
     expect(r.status).toBe(200);
-    expect(JSON.parse(r.body).lspCommand).toBe(before);
-    expect(config.get()).toMatchObject({ lspCommand: before, contextLines: 7 });
+    expect(JSON.parse(r.body).lspCommands).toEqual(before);
+    expect(config.get()).toMatchObject({ lspCommands: before, contextLines: 7 });
   });
 
   // Windows has no POSIX mode bits to check.

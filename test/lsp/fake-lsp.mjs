@@ -32,7 +32,15 @@ const span = (startLine, endLine, ch = 0) => ({
   end: { line: endLine, character: 0 },
 });
 
+/** FAKE_LSP_MODIFIED: refuse this many document requests with ContentModified before answering. */
+let modified = Number(process.env.FAKE_LSP_MODIFIED ?? 0);
+
 function handle(msg) {
+  if (modified > 0 && msg.id != null && msg.method?.startsWith('textDocument/')) {
+    modified--;
+    log(`refused ${msg.method}`);
+    return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32801, message: 'content modified' } });
+  }
   switch (msg.method) {
     case 'initialize':
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);

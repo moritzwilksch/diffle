@@ -13,7 +13,7 @@ import type {
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
 import { ArrowLeft, ChevronDown, ChevronRight, Download, FileText, MessageSquare, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { isPython, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
+import { languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
 import { FilePath } from '../FilePath.js';
 import { lineBounds, sideOf } from '../comments/anchor.js';
 import { SearchBar } from '../keyboard/SearchBar.js';
@@ -40,6 +40,7 @@ import { rowOf } from './rows.js';
 import { reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
+import { installThreadHighlights } from './threadHighlights.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 
@@ -115,6 +116,14 @@ const HEADER_CSS = `
 /* Collapsed-context bars run edge to edge: inset rounded pills next to a full-width file header read as misaligned. */
 [data-separator='line-info'] [data-separator-wrapper] { padding-inline: 0 !important; margin-inline: 0 !important; }
 [data-separator='line-info'] :is([data-separator-wrapper], [data-separator-content], [data-expand-up], [data-expand-down], [data-expand-both]) { border-radius: 0 !important; }
+/* Lines a saved comment refers to (see threadHighlights.ts): the selection tint, fainter, so the cursor's
+   own selection still stands out on top of it. Feeds the library's line-background chain like its own rule. */
+[data-thread-line]:not([data-selected-line]):is([data-line], [data-column-number]) {
+  --diffs-computed-selected-line-bg: light-dark(
+    color-mix(in lab, var(--diffs-computed-diff-line-bg) 90%, var(--diffs-selection-base)),
+    color-mix(in lab, var(--diffs-computed-diff-line-bg) 84%, var(--diffs-selection-base))
+  );
+}
 ::highlight(diffle-search) { background: var(--search-match); }
 ::highlight(diffle-search-current) { background: var(--search-current); color: var(--search-current-fg); }
 `;
@@ -129,7 +138,8 @@ function targetOf(
   clientX?: number,
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
-  if (!isPython(path)) return null;
+  // No server for this language means no hover, no menu: a target would only produce blockers.
+  if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
   const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX);
   if (clientX != null && !word) return null;
@@ -146,6 +156,13 @@ function targetOf(
   return word
     ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
     : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+}
+
+/** Whether some running language server claims this file's language. */
+function served(path: string): boolean {
+  const language = languageOf(path);
+  const { lsp } = useStore.getState();
+  return language != null && lsp.enabled && lsp.servers.some((s) => s.languages.includes(language));
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -300,6 +317,11 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+  }, [scroller]);
+  // So do the tints on the lines saved comments refer to.
+  useEffect(() => {
+    if (!scroller) return;
+    return installThreadHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
   }, [scroller]);
   useEffect(() => {
     onSelectionChanged();

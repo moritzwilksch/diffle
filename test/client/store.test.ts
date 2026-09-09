@@ -1,5 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChangedFile, CommentThread, Snapshot, ViewedEntry } from '../../src/shared/protocol.js';
+import type {
+  ChangedFile,
+  CommentThread,
+  LspServerStatus,
+  LspStatus,
+  Snapshot,
+  UserConfig,
+  ViewedEntry,
+} from '../../src/shared/protocol.js';
+
+/** One python server in `state`; LSP_OFF is a run started with --no-lsp. */
+const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStatus> = {}): LspStatus => ({
+  enabled: true,
+  servers: [{ name: 'pyrefly', command: 'pyrefly lsp', state, languages: ['python'], ...extra }],
+  missing: [],
+});
+const LSP_OFF: LspStatus = { enabled: false, servers: [], missing: [] };
 
 type Deferred<T> = { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void };
 function deferred<T>(): Deferred<T> {
@@ -16,8 +32,12 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async (): Promise<CommentThread[]> => []),
   viewed: vi.fn(async (): Promise<ViewedEntry[]> => []),
-  config: vi.fn(async () => ({ autoViewed: [] as string[], contextLines: 5, lspCommand: 'pyrefly lsp' })),
-  lspStatus: vi.fn(async () => ({ state: 'off', command: 'pyrefly lsp' })),
+  config: vi.fn(async (): Promise<UserConfig> => ({
+    autoViewed: [],
+    contextLines: 5,
+    lspCommands: { python: 'pyrefly lsp' },
+  })),
+  lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
   lspDefinition: vi.fn(),
   lspTypeDefinition: vi.fn(),
   lspReferences: vi.fn(),
@@ -592,6 +612,49 @@ describe('client transitions', () => {
     );
   });
 
+  it('file and line motions stop once on collapsed headers, independent of viewed state', async () => {
+    const changed = ['a.txt', 'b.txt', 'c.txt'].map((path, i) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b${i}`,
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
+    api.viewed.mockResolvedValueOnce([{ path: 'c.txt', blob: 'b2', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
+    await useStore.getState().boot();
+    // Stop on explicitly collapsed b.txt although it is unviewed; c.txt stays navigable although it is viewed.
+    useStore.setState({ collapsed: { 'b.txt': true, 'c.txt': false }, diffStyle: 'unified' });
+    useStore.getState().moveFile('first');
+    expect(useStore.getState().activePath).toBe('a.txt');
+    useStore.getState().moveFile(1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveFile(1);
+    expect(useStore.getState().activePath).toBe('c.txt');
+    useStore.getState().moveFile(-1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveFile(-1);
+    expect(useStore.getState().activePath).toBe('a.txt');
+
+    // Down/up line motions likewise stop on the header, then continue across it on the next press.
+    useStore.getState().moveCursor(1);
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveCursor(1);
+    expect(useStore.getState().activePath).toBe('c.txt');
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    useStore.getState().moveCursor(-1);
+    expect(useStore.getState().activePath).toBe('a.txt');
+  });
+
   it('a slow first refresh never overwrites a faster second one', async () => {
     const slow = deferred<Snapshot>();
     const fast = deferred<Snapshot>();
@@ -608,13 +671,13 @@ describe('client transitions', () => {
 
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
     useStore.setState({
-      config: { autoViewed: [], contextLines: 5, lspCommand: 'pyrefly lsp' },
-      lsp: { state: 'off', command: '' },
+      config: { autoViewed: [], contextLines: 5, lspCommands: {} },
+      lsp: LSP_OFF,
     });
     const slow = deferred<Snapshot>();
     api.snapshot.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(snap(2, 'working'));
-    api.config.mockResolvedValueOnce({ autoViewed: ['*.lock'], contextLines: 9, lspCommand: 'pyrefly lsp' });
-    api.lspStatus.mockResolvedValueOnce({ state: 'ready', command: 'pyrefly lsp' });
+    api.config.mockResolvedValueOnce({ autoViewed: ['*.lock'], contextLines: 9, lspCommands: {} });
+    api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
     const boot = useStore.getState().boot();
     // The watcher pushes while boot's requests are in flight.
     await useStore.getState().refreshSnapshot();
@@ -623,7 +686,7 @@ describe('client transitions', () => {
     const s = useStore.getState();
     expect(s.snapshot?.version).toBe(2);
     expect(s.config.contextLines).toBe(9);
-    expect(s.lsp.state).toBe('ready');
+    expect(s.lsp.servers[0]?.state).toBe('ready');
   });
 
   it('a mode switch whose push lands before the POST response fetches once and resets the composer via the push', async () => {
@@ -831,16 +894,16 @@ describe('mode picker', () => {
 describe('symbol navigation', () => {
   const target = { path: 'a.py', side: 'new' as const, line: 3, col: 4, text: 'foo' };
   const ready = () => {
-    useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), lsp: { state: 'ready', command: 'x' } });
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), lsp: lspStatus('ready') });
     api.file.mockResolvedValue({ path: 'b.py', contents: 'x = 1\ny = 2\n', binary: false });
   };
 
   it('explains why navigation is blocked instead of calling the server', async () => {
-    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), lsp: { state: 'off', command: 'x' } });
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), lsp: LSP_OFF });
     await useStore.getState().goToDefinition(target);
     expect(api.lspDefinition).not.toHaveBeenCalled();
-    expect(useStore.getState().toast).toMatch(/--lsp/);
-    useStore.setState({ lsp: { state: 'ready', command: 'x' } });
+    expect(useStore.getState().toast).toMatch(/--no-lsp/);
+    useStore.setState({ lsp: lspStatus('ready') });
     await useStore.getState().goToDefinition({ ...target, side: 'old' });
     expect(api.lspDefinition).not.toHaveBeenCalled();
     expect(useStore.getState().toast).toMatch(/new side/);
@@ -848,7 +911,7 @@ describe('symbol navigation', () => {
 
   it('hover: silent when blocked, shows the answer at the anchor, drops stale answers, closes with the menu', async () => {
     const anchor = { left: 10, top: 20, bottom: 36 };
-    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), lsp: { state: 'off', command: 'x' }, toast: null });
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), lsp: LSP_OFF, toast: null });
     await useStore.getState().requestHover(target, anchor);
     expect(api.lspHover).not.toHaveBeenCalled();
     expect(useStore.getState().toast).toBeNull();
@@ -939,14 +1002,14 @@ describe('symbol navigation', () => {
     slow.resolve({ kind: 'variable' });
     await opening;
     expect(useStore.getState().symbolMenu).toBeNull();
-    // Started without --lsp: nothing the menu offers can work, so there is no menu.
+    // Started with --no-lsp: nothing the menu offers can work, so there is no menu.
     api.lspTokenKind.mockClear();
-    useStore.setState({ lsp: { state: 'off', command: 'x' } });
+    useStore.setState({ lsp: LSP_OFF });
     await useStore.getState().openSymbolMenu(target, 1, 2);
     expect(api.lspTokenKind).not.toHaveBeenCalled();
     expect(useStore.getState().symbolMenu).toBeNull();
     // A server that is starting or broken still gets a menu, whose actions explain the blocker.
-    useStore.setState({ lsp: { state: 'unavailable', command: 'x', message: 'boom' } });
+    useStore.setState({ lsp: lspStatus('unavailable', { message: 'boom' }) });
     await useStore.getState().openSymbolMenu(target, 1, 2);
     expect(api.lspTokenKind).not.toHaveBeenCalled();
     expect(useStore.getState().symbolMenu).not.toBeNull();
@@ -1217,7 +1280,7 @@ const thread = (
   resolved: over.resolved ?? false,
   stale: false,
 });
-const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommand: '' };
+const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
 
 describe('request ownership', () => {
   type SearchResponse = { query: string; matches: { path: string; line: number; text: string }[]; truncated: boolean };
@@ -1227,7 +1290,7 @@ describe('request ownership', () => {
     truncated: false,
   });
   const ready = () => {
-    useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), lsp: { state: 'ready', command: 'x' } });
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), lsp: lspStatus('ready') });
     api.file.mockResolvedValue({ path: 'b.py', contents: 'x = 1\ny = 2\n', binary: false });
   };
 
@@ -1335,6 +1398,26 @@ describe('request ownership', () => {
     expect(useStore.getState().viewed).toEqual([{ path: 'c.py', blob: 'c1', viewed: true }]);
   });
 
+  it('a viewed file that changes afterwards reopens as restale; untouched folds survive the refresh', async () => {
+    const changed = [file({ path: 'a.py', blob: 'b1' }), file({ path: 'b.py', blob: 'c1' })];
+    useStore.setState({ snapshot: { ...snap(1, 'working', ['a.py', 'b.py']), changed } });
+    api.setViewed.mockResolvedValueOnce([{ path: 'a.py', blob: 'b1', viewed: true }]);
+    api.patches.mockResolvedValue(patchesFor(['a.py', 'b.py']));
+    await useStore.getState().setViewed('a.py', true);
+    useStore.setState((s) => ({ collapsed: { ...s.collapsed, 'b.py': true } }));
+    expect(isCollapsed(useStore.getState(), 'a.py')).toBe(true);
+    api.viewed.mockResolvedValueOnce([{ path: 'a.py', blob: 'b1', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(2, 'working', ['a.py', 'b.py']),
+      changed: [file({ path: 'a.py', blob: 'b2' }), file({ path: 'b.py', blob: 'c1' })],
+    });
+    await useStore.getState().refreshSnapshot();
+    const s = useStore.getState();
+    expect(viewedState(s, file({ path: 'a.py', blob: 'b2' }))).toBe('restale');
+    expect(isCollapsed(s, 'a.py')).toBe(false);
+    expect(isCollapsed(s, 'b.py')).toBe(true);
+  });
+
   it('a failed viewed mutation from a previous mode neither toasts nor refetches', async () => {
     const changed = [file({ path: 'a.py', blob: 'b1' })];
     useStore.setState({ snapshot: { ...snap(1, 'working', ['a.py']), changed }, toast: null });
@@ -1417,10 +1500,9 @@ describe('request ownership', () => {
   });
 
   it('config loads and saves: the newest request wins and saves run in order', async () => {
-    type Config = { autoViewed: string[]; contextLines: number; lspCommand: string };
-    const cfg = (contextLines: number): Config => ({ autoViewed: [], contextLines, lspCommand: '' });
-    const load = deferred<Config>();
-    const save = deferred<Config>();
+    const cfg = (contextLines: number): UserConfig => ({ autoViewed: [], contextLines, lspCommands: {} });
+    const load = deferred<UserConfig>();
+    const save = deferred<UserConfig>();
     api.config.mockReturnValueOnce(load.promise);
     api.saveConfig.mockReturnValueOnce(save.promise);
     const loading = useStore.getState().refreshConfig();
@@ -1432,8 +1514,8 @@ describe('request ownership', () => {
     await loading;
     expect(useStore.getState().config.contextLines).toBe(9);
 
-    const first = deferred<Config>();
-    const second = deferred<Config>();
+    const first = deferred<UserConfig>();
+    const second = deferred<UserConfig>();
     api.saveConfig.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const a = useStore.getState().saveConfig(cfg(1));
     const b = useStore.getState().saveConfig(cfg(2));

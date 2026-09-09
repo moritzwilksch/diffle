@@ -13,7 +13,8 @@ import {
   Sun,
 } from 'lucide-react';
 import { useState } from 'react';
-import type { LspStatus } from '../../shared/protocol.js';
+import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
+import { repoName } from '../model.js';
 import { useStore } from '../store.js';
 import { nextTheme, type ThemeChoice } from '../theme.js';
 import { ModePicker } from './ModePicker.js';
@@ -45,8 +46,8 @@ export function Header() {
       <span className="brand">
         <GitCompareArrows size="1rem" /> diffle
       </span>
-      <span className="root" title={snapshot?.mode.repository ?? snapshot?.root}>
-        {snapshot ? (snapshot.mode.repository ?? basename(snapshot.root)) : ''}
+      <span className="root" title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}>
+        {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
       <span className="stat">
@@ -54,7 +55,7 @@ export function Header() {
         <span style={{ color: 'var(--del)' }}>−{dels}</span>
       </span>
       <span className="spacer" />
-      {lsp.state !== 'off' && <LspIndicator lsp={lsp} />}
+      {lsp.enabled && <LspIndicator lsp={lsp} />}
       <div className="toggle" title="Diff layout">
         <button className={diffStyle === 'split' ? 'on' : ''} onClick={() => setDiffStyle('split')}>
           <Columns2 size="0.875rem" /> Split
@@ -88,38 +89,53 @@ export function Header() {
   );
 }
 
-/** Language server state at a glance; the spinner runs while it starts or indexes the workspace. */
+/**
+ * Every language server at a glance: the spinner runs while any of them starts or
+ * indexes, and the tooltip lists them with the languages nothing serves.
+ */
 function LspIndicator({ lsp }: { lsp: LspStatus }) {
-  const busy = lsp.state === 'starting' || lsp.indexing === true;
-  const label =
-    lsp.state === 'starting'
-      ? 'starting'
-      : lsp.indexing
-        ? 'indexing'
-        : lsp.state === 'unavailable'
-          ? 'unavailable'
-          : '';
-  const title =
-    lsp.state === 'unavailable'
-      ? `Language server unavailable: ${lsp.message ?? 'unknown error'}`
-      : lsp.indexing
-        ? 'Language server is indexing the repository; references in unchanged files are incomplete until it finishes'
-        : `Language server: ${lsp.command}`;
+  const starting = lsp.servers.filter((s) => s.state === 'starting');
+  const indexing = lsp.servers.filter((s) => s.indexing);
+  const broken = lsp.servers.filter((s) => s.state === 'unavailable');
+  const busy = starting.length > 0 || indexing.length > 0;
+  const state =
+    lsp.servers.length === 0
+      ? 'off'
+      : broken.length === lsp.servers.length
+        ? 'unavailable'
+        : busy
+          ? 'starting'
+          : 'ready';
+  const label = starting.length
+    ? 'starting'
+    : indexing.length
+      ? 'indexing'
+      : state === 'unavailable'
+        ? 'unavailable'
+        : '';
+  const lines = [
+    ...lsp.servers.map((s) => `${s.name} (${s.languages.join(', ')}): ${serverLabel(s)}`),
+    ...lsp.missing
+      .filter((m) => m.tried.length)
+      .map((m) => `${m.language}: nothing on PATH, tried ${m.tried.join(', ')}`),
+  ];
   return (
-    <span className={`lsp ${lsp.state}`} title={title}>
+    <span className={`lsp ${state}`} title={lines.join('\n') || 'No language server for the files in this diff'}>
       {busy ? <LoaderCircle size="0.875rem" className="spin" /> : <Compass size="0.875rem" />}
       {label}
     </span>
   );
 }
 
+function serverLabel(s: LspServerStatus): string {
+  if (s.state === 'unavailable') return `unavailable: ${s.message ?? 'unknown error'}`;
+  // Only while indexing does the reader need to distrust an answer: references can still be missing.
+  if (s.indexing) return 'indexing the repository, so references in unchanged files are incomplete';
+  return s.state;
+}
+
 function ThemeIcon({ choice }: { choice: ThemeChoice }) {
   if (choice === 'light') return <Sun size="1rem" />;
   if (choice === 'dark') return <Moon size="1rem" />;
   return <Monitor size="1rem" />;
-}
-
-function basename(p: string): string {
-  const parts = p.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? p;
 }

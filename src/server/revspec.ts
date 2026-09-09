@@ -6,13 +6,17 @@ export interface ParsedRevspec {
   label: string;
 }
 
+/** The uncommitted new side, spelled as a revision so every form can name it. */
+const WORKTREE = 'worktree';
+
 /**
  * git-diff style revision arguments:
- *   "a"      → a vs worktree
+ *   "a"      → merge-base(a, HEAD) vs HEAD, i.e. "a...HEAD"
  *   "a..b"   → a vs b
  *   "a...b"  → merge-base(a, b) vs b
  *   "a" "b"  → a vs b
- * Empty sides default to HEAD.
+ * Empty sides default to HEAD. Either side accepts "worktree" for the uncommitted
+ * tree; a merge base against it is taken against HEAD, the commit it sits on.
  */
 export function parseRevspec(args: string[]): ParsedRevspec {
   if (args.length === 0 || args.length > 2) throw new RevspecError('expected one or two revisions');
@@ -26,7 +30,7 @@ export function parseRevspec(args: string[]): ParsedRevspec {
   if (three !== -1) {
     const a = arg.slice(0, three) || 'HEAD';
     const b = arg.slice(three + 3) || 'HEAD';
-    return { old: { kind: 'merge-base', a, b }, newRev: b, label: `${a}...${b}` };
+    return { old: { kind: 'merge-base', a, b: b === WORKTREE ? 'HEAD' : b }, newRev: b, label: `${a}...${b}` };
   }
   const two = arg.indexOf('..');
   if (two !== -1) {
@@ -34,7 +38,9 @@ export function parseRevspec(args: string[]): ParsedRevspec {
     const b = arg.slice(two + 2) || 'HEAD';
     return { old: { kind: 'rev', rev: a }, newRev: b, label: `${a}..${b}` };
   }
-  return { old: { kind: 'rev', rev: arg }, newRev: 'worktree', label: `${arg} → worktree` };
+  // A lone revision reviews what it and HEAD diverged into: the everyday "my branch" diff.
+  if (arg === WORKTREE) return { old: { kind: 'rev', rev: 'HEAD' }, newRev: WORKTREE, label: `HEAD..${WORKTREE}` };
+  return { old: { kind: 'merge-base', a: arg, b: 'HEAD' }, newRev: 'HEAD', label: `${arg}...HEAD` };
 }
 
 export class RevspecError extends Error {}

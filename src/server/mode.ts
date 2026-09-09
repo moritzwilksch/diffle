@@ -1,4 +1,4 @@
-import type { ModeRequest, ModeSpec, OldSpec } from '../shared/protocol.js';
+import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
 import { parseRevspec, RevspecError } from './revspec.js';
@@ -39,20 +39,6 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner 
         live: 'worktree',
         commentKey: 'working',
       };
-    case 'branch': {
-      const base = req.base ? req.base : await repo.defaultBranch();
-      const old: OldSpec = { kind: 'merge-base', a: base, b: 'HEAD' };
-      const mb = await mergeBaseOrExplain(repo, base, 'HEAD');
-      return {
-        kind: 'branch',
-        request: req,
-        old,
-        newRev: 'HEAD',
-        label: `${base}...HEAD`,
-        live: 'refs',
-        commentKey: `branch:${mb}`,
-      };
-    }
     case 'pr':
       return resolvePr(req, repo, gh);
     case 'revspec': {
@@ -105,7 +91,7 @@ async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: Gh
     old: { kind: 'rev', rev: mb },
     newRev: headSha,
     label: `#${pr.number} ${pr.baseRefName}...${pr.headRefName}`,
-    repository: pr.baseRepo,
+    pullRequest: { repository: pr.baseRepo, number: pr.number },
     live: 'none',
     commentKey: `pr:#${pr.number}`,
   };

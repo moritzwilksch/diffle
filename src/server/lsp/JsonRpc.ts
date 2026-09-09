@@ -1,5 +1,15 @@
 import type { Readable, Writable } from 'node:stream';
 
+/** A server's error reply, carrying the code so callers can tell a refusal from an outage. */
+export class JsonRpcError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 /** JSON-RPC 2.0 over a byte stream with `Content-Length` framing (the LSP base protocol). No LSP semantics. */
 export class JsonRpcConnection {
   private nextId = 1;
@@ -111,7 +121,7 @@ export class JsonRpcConnection {
     if (!p) return;
     this.pending.delete(msg.id);
     if (p.timer) clearTimeout(p.timer);
-    if (msg.error) p.reject(new Error(msg.error.message));
+    if (msg.error) p.reject(new JsonRpcError(msg.error.code, msg.error.message));
     else p.resolve(msg.result);
   }
 }

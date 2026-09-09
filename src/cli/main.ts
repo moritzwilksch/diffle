@@ -4,14 +4,28 @@ import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { GithubError } from '../server/github.js';
-import { LspBridge } from '../server/lsp/LspBridge.js';
+import { LspPool } from '../server/lsp/LspPool.js';
+import { resolveServers } from '../server/lsp/registry.js';
 import { RevspecError } from '../server/revspec.js';
 import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
 import { Session } from '../server/Session.js';
 import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
-import { followsCheckout, isPython, type ModeRequest } from '../shared/protocol.js';
-import { parseContext, parsePort } from './args.js';
+import {
+  followsCheckout,
+  LANGUAGE_IDS,
+  type LanguageId,
+  type ModeRequest,
+  type UserConfig,
+} from '../shared/protocol.js';
+import {
+  collectLanguage,
+  collectLspOverride,
+  type LspOverride,
+  parseContext,
+  parseLanguage,
+  parsePort,
+} from './args.js';
 import { watchBrowserLifetime } from './browserLifetime.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
@@ -41,8 +55,8 @@ interface GlobalOpts {
   dev?: boolean;
   autoViewed: string[];
   context?: number;
-  /** true: the configured command; string: an explicit one. */
-  lsp?: true | string;
+  /** false: `--no-lsp`. true: a bare `--lsp`, which is the default anyway. Else per-language overrides. */
+  lsp: boolean | LspOverride[];
 }
 
 const program = new Command()
@@ -65,10 +79,18 @@ const program = new Command()
       .default([], 'none'),
   )
   .option('-U, --context <n>', 'context lines around changes for this session (default: config, 5)', parseContext)
-  .option(
-    '--lsp [command]',
-    'start a language server for go-to-definition, references and symbols (default command: config lspCommand, "pyrefly lsp")',
+  .addOption(
+    // The value is required. Servers are on by default, so a value-less `--lsp` would mean
+    // nothing, and commander skips the parser for a missing optional value: it would store
+    // `true` over the overrides an earlier `--lsp` named.
+    new Option(
+      '--lsp <language=command>',
+      "language server command for one language, started for this run (repeatable); by default the diff's languages are served by whatever is on PATH",
+    )
+      .argParser(collectLspOverride)
+      .default(true, "the diff's languages, resolved on PATH"),
   )
+  .option('--no-lsp', 'do not start any language server')
   .option('--timing', 'print startup phase timings to stderr')
   .option('--dev', 'serve the client through Vite (development)', process.env.DIFFLE_DEV === '1' ? true : undefined)
   .argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>')
@@ -76,15 +98,16 @@ const program = new Command()
     'after',
     `
 Shorthands (in place of <revs>):
-  working                  same as HEAD: uncommitted changes, staged and untracked included
-  branch [base]            same as <base>...HEAD: the commits on this branch (base: the default branch)
+  working                  same as HEAD..worktree: uncommitted changes, staged and untracked included
   pr [number|url]          a GitHub pull request: its base...head, fetched if needed
                            (without an argument: the pull request for this branch)
 
-Revisions follow git diff:
-  diffle HEAD~3            the last three commits, plus uncommitted changes
+Revisions follow git diff, except that a lone one compares from the merge base:
+  diffle main              same as main...HEAD: what this branch added since it left main
+  diffle HEAD~3            the last three commits
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
+  diffle main..worktree    main vs the uncommitted tree ("worktree" works on either side)
 
 Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
 closing the last auto-opened browser tab stops diffle and prints the open comments as a prompt for an agent.
@@ -98,18 +121,9 @@ Ctrl+C always stops it.`,
 // Shorthands name what to compare, not commands, so help lists them separately.
 program
   .command('working', { hidden: true })
-  .summary('same as HEAD')
-  .description('Same as `diffle HEAD`: uncommitted changes, staged and untracked files included.')
+  .summary('same as HEAD..worktree')
+  .description('Same as `diffle HEAD..worktree`: uncommitted changes, staged and untracked files included.')
   .action(async (_o, cmd: Command) => run({ kind: 'working' }, cmd.optsWithGlobals<GlobalOpts>()));
-
-program
-  .command('branch', { hidden: true })
-  .argument('[base]', 'branch to compare against; default: the default branch')
-  .summary('same as <base>...HEAD')
-  .description('Same as `diffle <base>...HEAD`: the commits this branch added since it left <base>.')
-  .action(async (base: string | undefined, _o, cmd: Command) =>
-    run({ kind: 'branch', base }, cmd.optsWithGlobals<GlobalOpts>()),
-  );
 
 program
   .command('pr', { hidden: true })
@@ -149,12 +163,27 @@ config
   });
 config
   .command('set-lsp')
-  .description('set the language-server command')
-  .argument('<command>', 'shell command that starts a stdio language server, e.g. "pyrefly lsp"')
-  .action(async (command: string) => {
+  .description('set the language-server command for one language')
+  .argument('<language>', `one of: ${LANGUAGE_IDS.join(', ')}`, parseLanguage)
+  .argument('<command>', 'shell command that starts a stdio language server, e.g. "pyrefly lsp"; "" to turn it off')
+  .action(async (language: LanguageId, command: string) => {
     const store = await UserConfigStore.open();
-    await store.set({ lspCommand: command });
-    console.log(store.get().lspCommand);
+    await store.set({ lspCommands: { ...store.get().lspCommands, [language]: command } });
+    printLspCommands(store.get());
+  });
+config
+  .command('unset-lsp')
+  .description('forget a language-server override, back to PATH')
+  .argument('<language...>', `one or more of: ${LANGUAGE_IDS.join(', ')}`, collectLanguage)
+  .action(async (languages: LanguageId[]) => {
+    const store = await UserConfigStore.open();
+    const drop = new Set(languages);
+    await store.set({
+      lspCommands: Object.fromEntries(
+        Object.entries(store.get().lspCommands).filter(([l]) => !drop.has(l as LanguageId)),
+      ),
+    });
+    printLspCommands(store.get());
   });
 config
   .command('remove-auto-viewed')
@@ -166,8 +195,30 @@ config
     console.log(store.get().autoViewed.join('\n'));
   });
 
+program
+  .command('lsp')
+  .description('show the language server each language would get, and what is missing from PATH')
+  .action(async () => {
+    const { lspCommands } = (await UserConfigStore.open()).get();
+    // The resolver decides, this only prints: what a run would start, said the same way.
+    const { servers, missing } = resolveServers(LANGUAGE_IDS, lspCommands);
+    const answer = new Map<LanguageId, string>();
+    for (const s of servers)
+      for (const language of s.languages)
+        answer.set(language, `${s.command}${lspCommands[language] == null ? '' : c.dim(' (config)')}`);
+    // An empty override is off, and names nothing to install: the resolver leaves `tried` empty.
+    for (const m of missing)
+      answer.set(m.language, c.dim(m.tried.length ? `not on PATH (tried ${m.tried.join(', ')})` : 'off in config'));
+    const width = Math.max(...LANGUAGE_IDS.map((l) => l.length));
+    for (const language of LANGUAGE_IDS) console.log(`${language.padEnd(width)}  ${answer.get(language) ?? ''}`);
+  });
+
 function collect(value: string, prev: string[]): string[] {
   return [...prev, value];
+}
+
+function printLspCommands(config: UserConfig): void {
+  for (const [language, command] of Object.entries(config.lspCommands)) console.log(`${language}=${command}`);
 }
 
 async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
@@ -208,9 +259,19 @@ async function serve(
 ): Promise<void> {
   const hub = new WsHub();
   const session = new Session(repo, hub, { watch: opts.watch, context: opts.context ?? config.get().contextLines });
-  const lsp = opts.lsp
-    ? startLsp(typeof opts.lsp === 'string' ? opts.lsp : config.get().lspCommand, repo, session, hub)
-    : null;
+  // A `--lsp` override outranks the config and starts its server whatever the diff holds.
+  const named = Array.isArray(opts.lsp) ? opts.lsp : [];
+  const overrides = { ...config.get().lspCommands, ...Object.fromEntries(named.map((o) => [o.language, o.command])) };
+  const lsp =
+    opts.lsp === false
+      ? null
+      : startLsp(
+          repo,
+          session,
+          hub,
+          overrides,
+          named.map((o) => o.language),
+        );
   const server = new Server(
     { session, config, extraAutoViewed: opts.autoViewed, hub, lsp },
     { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host, dev: opts.dev || !hasClientBuild() },
@@ -268,10 +329,16 @@ async function serve(
       console.error(
         `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
       );
-    if (lsp)
-      console.error(
-        `🧭 ${c.dim('lsp')} ${lsp.status().command}${followsCheckout(snap) ? '' : c.dim(' (symbol navigation needs the new side to be the checkout)')}`,
-      );
+    if (lsp) {
+      const { servers, missing } = lsp.status();
+      const names = servers.map((s) => `${s.name} ${c.dim(`(${s.languages.join(', ')})`)}`).join(', ');
+      if (!followsCheckout(snap))
+        console.error(`🧭 ${c.dim('no language server: symbol navigation needs the new side to be the checkout')}`);
+      else console.error(`🧭 ${c.dim('lsp')} ${names || c.dim('no language server for this diff')}`);
+      // Languages turned off in the config stay quiet; a missing program is worth saying once.
+      for (const m of missing.filter((m) => m.tried.length))
+        console.error(`${c.yellow('!')} no ${m.language} language server ${c.dim(`(tried ${m.tried.join(', ')})`)}`);
+    }
     timing.report();
   } catch (e) {
     await dispose();
@@ -284,30 +351,43 @@ async function serve(
 }
 
 /**
- * The bridge reads new-side text through the session, so the snapshot allowlist
- * applies to every LSP path. Every snapshot re-opens the diff's Python files in
- * the server, so references in them are found from the reviewed text (see
- * LspBridge.track). Nothing is opened when the new side is not the checkout:
- * the client refuses symbol navigation there, and the server would otherwise see
- * text that contradicts the disk it indexes.
+ * The pool reads new-side text through the session, so the snapshot allowlist applies to
+ * every LSP path. Each snapshot decides which languages run: it re-opens the diff's files
+ * in the server for their language, so references in them are found from the reviewed text
+ * (see LspPool.track). Nothing starts when the new side is not the checkout: the client
+ * refuses symbol navigation there, and a server would otherwise see text that contradicts
+ * the disk it indexes.
  */
-function startLsp(command: string, repo: GitRepo, session: Session, hub: WsHub): LspBridge {
+function startLsp(
+  repo: GitRepo,
+  session: Session,
+  hub: WsHub,
+  overrides: Partial<Record<LanguageId, string>>,
+  preload: LanguageId[],
+): LspPool {
   session.onSnapshot((snap) => {
     const paths = followsCheckout(snap)
-      ? snap.changed.filter((f) => f.status !== 'D' && !f.binary && isPython(f.path)).map((f) => f.path)
+      ? snap.changed.filter((f) => f.status !== 'D' && !f.binary).map((f) => f.path)
       : [];
     void lsp.track(paths);
   });
-  const lsp = LspBridge.start({
-    command,
+  // The status carries every server, so a failure is announced once per server, not per change.
+  const reported = new Set<string>();
+  const lsp = new LspPool({
     root: repo.root,
+    overrides,
+    preload,
     read: async (path) => {
       const buf = await session.readSide(await session.snapshotter.current(), path, 'new');
       return buf?.toString('utf8') ?? null;
     },
     has: async (path) => session.hasSide(await session.snapshotter.current(), path, 'new'),
     onStatus: (status) => {
-      if (status.state === 'unavailable') console.error(`${c.red('✖')} lsp unavailable: ${status.message}`);
+      for (const s of status.servers) {
+        if (s.state !== 'unavailable' || reported.has(s.command)) continue;
+        reported.add(s.command);
+        console.error(`${c.red('✖')} lsp ${s.name} unavailable: ${s.message}`);
+      }
       hub.broadcast({ type: 'lsp', payload: status });
     },
   });

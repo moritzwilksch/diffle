@@ -1,6 +1,6 @@
 import { parsePatchFiles } from '@pierre/diffs';
 import { describe, expect, it } from 'vitest';
-import { cursorFromSelection, diffRows, step, type NavItem } from '../../src/client/keyboard/nav.js';
+import { cursorFromSelection, diffRows, step, stepFile, type NavItem } from '../../src/client/keyboard/nav.js';
 
 const patch = `diff --git a/f.txt b/f.txt
 --- a/f.txt
@@ -17,6 +17,36 @@ const patch = `diff --git a/f.txt b/f.txt
  thirty-two
 `;
 const fileDiff = parsePatchFiles(patch, 'k')[0]!.files[0]!;
+
+describe('navigation', () => {
+  const row = (line: number) => ({ side: 'additions' as const, line, hunkStart: true });
+  const nav: NavItem[] = [
+    { id: 'a', path: 'a.txt', collapsed: false, rows: [row(1)] },
+    { id: 'b', path: 'b.txt', collapsed: true, rows: [row(1)] },
+    { id: 'c', path: 'c.txt', collapsed: false, rows: [row(1)] },
+  ];
+
+  it('stops once on a collapsed header in either direction', () => {
+    const first = { itemIndex: 0, rowIndex: 0 };
+    const header = { itemIndex: 1, rowIndex: -1 };
+    const last = { itemIndex: 2, rowIndex: 0 };
+
+    expect(step(nav, first, 1)).toEqual(header);
+    expect(step(nav, header, 1)).toEqual(last);
+    expect(step(nav, last, -1)).toEqual(header);
+    expect(step(nav, header, -1)).toEqual(first);
+    expect(stepFile(nav, first, 1)).toEqual(header);
+    expect(stepFile(nav, header, 1)).toEqual(last);
+    expect(stepFile(nav, last, -1)).toEqual(header);
+    expect(stepFile(nav, header, -1)).toEqual(first);
+  });
+
+  it('starts on a leading collapsed header', () => {
+    const leadingCollapsed = [nav[1]!, nav[2]!];
+    expect(step(leadingCollapsed, null, 1)).toEqual({ itemIndex: 0, rowIndex: -1 });
+    expect(stepFile(leadingCollapsed, null, 1)).toEqual({ itemIndex: 0, rowIndex: -1 });
+  });
+});
 
 describe('diffRows with revealed context', () => {
   it('walks lines the viewer expanded instead of skipping to the next hunk', () => {

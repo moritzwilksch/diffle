@@ -17,10 +17,9 @@ describe('diffle --help', () => {
   const commands = out.slice(out.indexOf('\nCommands:')).split('\nShorthands')[0]!;
 
   it('keeps the shorthands out of the command list, in a section of their own', () => {
-    for (const shorthand of ['working', 'branch', 'pr'])
-      expect(commands).not.toMatch(new RegExp(`^ +${shorthand}\\b`, 'm'));
+    for (const shorthand of ['working', 'pr']) expect(commands).not.toMatch(new RegExp(`^ +${shorthand}\\b`, 'm'));
     const shorthands = out.slice(out.indexOf('Shorthands'));
-    for (const shorthand of ['working', 'branch [base]', 'pr [number|url]']) expect(shorthands).toContain(shorthand);
+    for (const shorthand of ['working', 'pr [number|url]']) expect(shorthands).toContain(shorthand);
   });
 
   it('still lists the commands, which are verbs', () => {
@@ -28,8 +27,11 @@ describe('diffle --help', () => {
   });
 
   it('says what each shorthand is the same as before explaining it', () => {
-    expect(out).toMatch(/^ {2}working {2,}same as HEAD: /m);
-    expect(out).toMatch(/^ {2}branch \[base] {2,}same as <base>\.\.\.HEAD: /m);
+    expect(out).toMatch(/^ {2}working {2,}same as HEAD\.\.worktree: /m);
+  });
+
+  it('spells out that a lone revision compares from the merge base', () => {
+    expect(out).toMatch(/^ {2}diffle main {2,}same as main\.\.\.HEAD: /m);
   });
 
   it('carries no empty defaults for the repeatable options', () => {
@@ -42,7 +44,7 @@ describe('diffle --help', () => {
   });
 
   it('describes every shorthand and config subcommand it lists', () => {
-    for (const shorthand of ['working', 'branch', 'pr']) expect(help(shorthand).split('\n')[2]).not.toBe('');
+    for (const shorthand of ['working', 'pr']) expect(help(shorthand).split('\n')[2]).not.toBe('');
     const configCommands = help('config').slice(help('config').indexOf('\nCommands:'));
     for (const line of configCommands.split('\n').slice(2).filter(Boolean)) expect(line).toMatch(/\S {2,}\S/);
   });
