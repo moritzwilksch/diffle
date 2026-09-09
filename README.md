@@ -76,6 +76,8 @@ Nothing is submitted for you: open the pull request on GitHub and submit the rev
 
 Posting works for pushed branches in `pr`, `branch`, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
 
+Adding twice does not stack duplicates: a comment already in the pending review at the same lines is left alone, or rewritten in place when you edited the thread. The button says which — Added, Updated, or Already added.
+
 ## Language server
 
 Run `diffle working --lsp` to add Python definitions, references, hover details, and symbol search through `pyrefly lsp`.

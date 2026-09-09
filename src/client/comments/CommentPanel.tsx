@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
-import { visibleThreads } from '../model.js';
+import { exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
@@ -23,10 +23,10 @@ export function CommentPanel() {
   const exportToGithub = useStore((s) => s.exportToGithub);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
-  const [posted, setPosted] = useState(false);
+  const [posted, setPosted] = useState<ExportOutcome | null>(null);
   useEffect(() => {
     if (!posted) return;
-    const t = setTimeout(() => setPosted(false), 2000);
+    const t = setTimeout(() => setPosted(null), 2000);
     return () => clearTimeout(t);
   }, [posted]);
   const post = useConfirm(() => {
@@ -91,7 +91,7 @@ export function CommentPanel() {
           onClick={post.fire}
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Add all?' : posted ? 'Added' : null}
+          {post.armed ? 'Add all?' : posted ? exportLabel(posted) : null}
         </button>
         <button
           className={`ghost danger ${clear.armed ? 'confirm' : 'icon'}`}

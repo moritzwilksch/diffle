@@ -36,6 +36,8 @@ export interface ReviewPayload {
 
 export interface BuiltReview {
   review: ReviewPayload;
+  /** The thread each `review.comments[i]` came from, so a per-comment outcome can name its thread. */
+  ids: string[];
   skipped: GithubExportResponse['skipped'];
 }
 
@@ -60,14 +62,16 @@ export function buildReview(threads: CommentThread[], commitId: string, threadId
     chosen = threads.filter((t) => !t.resolved);
   }
   const comments: ReviewComment[] = [];
+  const ids: string[] = [];
   for (const t of [...chosen].sort(compareThreads)) {
     if (t.stale) {
       skipped.push({ id: t.id, reason: 'stale' });
       continue;
     }
     comments.push(toReviewComment(t));
+    ids.push(t.id);
   }
-  return { review: { commit_id: commitId, comments }, skipped };
+  return { review: { commit_id: commitId, comments }, ids, skipped };
 }
 
 function toReviewComment(t: CommentThread): ReviewComment {
@@ -114,11 +118,16 @@ export interface ExportInput {
  * the pending review when there is none. The review is never submitted: the human opens
  * the PR and submits it themselves. Refuses when the new side is not the checked-out
  * commit: GitHub anchors comments to a commit, and only HEAD is what the PR shows.
+ *
+ * Re-exporting is idempotent against that pending review: a comment already sitting at the
+ * thread's anchor is left alone when its body matches and rewritten when it does not, so
+ * editing a thread and exporting again does not stack a second comment on the line. Comments
+ * of an already-submitted review are out of reach — those would have to be replied to.
  */
 export async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr, branch or a revspec ending at HEAD)');
   if (snap.headSha === '' || snap.newSha !== snap.headSha) throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
-  const { review, skipped } = buildReview(threads, snap.newSha, threadIds);
+  const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
   if (review.comments.length === 0) throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
   const pr = parsePr(await run(['pr', 'view', '--json', 'number,url,headRefOid'], { cwd: snap.root }));
@@ -127,34 +136,135 @@ export async function exportToGithub({ snap, threads, threadIds, run = runGh }: 
   }
 
   const pending = await findPendingReview(run, snap.root, pr);
-  if (pending) await addToPendingReview(run, snap.root, pending, review.comments);
-  else await createPendingReview(run, snap.root, pr.number, review);
-  return { url: pr.url, posted: review.comments.length, review: pending ? 'existing' : 'created', skipped };
+  if (!pending) {
+    await createPendingReview(run, snap.root, pr.number, review);
+    return { url: pr.url, posted: review.comments.length, updated: 0, review: 'created', skipped };
+  }
+
+  // A second export of the same threads must not stack duplicates on the line: an
+  // identical comment is left alone, an edited one is rewritten where it already sits.
+  const existing = await pendingComments(run, snap.root, pr, pending.databaseId);
+  const add: ReviewComment[] = [];
+  let updated = 0;
+  for (const [i, c] of review.comments.entries()) {
+    const id = ids[i]!;
+    const key = anchorKey(c);
+    const hit = existing.get(key);
+    if (!hit) {
+      add.push(c);
+      continue;
+    }
+    // One comment per anchor is claimed once, so two threads on the same lines
+    // become two comments instead of overwriting each other.
+    existing.delete(key);
+    if (hit.body.trim() === c.body.trim()) {
+      skipped.push({ id, reason: 'already in the review' });
+      continue;
+    }
+    await updateComment(run, snap.root, hit.nodeId, c.body, updated, review.comments.length);
+    updated++;
+  }
+  await addToPendingReview(run, snap.root, pending.id, add);
+  return { url: pr.url, posted: add.length, updated, review: 'existing', skipped };
+}
+
+/** Where a comment sits in the diff: the identity diffle matches a thread to a comment by. */
+function anchorKey(c: Pick<ReviewComment, 'path' | 'side' | 'line' | 'start_line'>): string {
+  return [c.path, c.side, c.start_line ?? c.line, c.line].join('\0');
 }
 
 const PENDING_QUERY = `query($owner:String!,$repo:String!,$number:Int!){
   viewer{login}
-  repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:20,states:[PENDING]){nodes{id author{login}}}}}
+  repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:20,states:[PENDING]){nodes{id fullDatabaseId author{login}}}}}
 }`;
 
 interface PendingQueryData {
   viewer?: { login?: string };
-  repository?: { pullRequest?: { reviews?: { nodes?: ({ id?: string; author?: { login?: string } | null } | null)[] } } };
+  repository?: {
+    pullRequest?: { reviews?: { nodes?: ({ id?: string; fullDatabaseId?: string | number; author?: { login?: string } | null } | null)[] } };
+  };
+}
+
+/** The viewer's own pending review: `id` for the GraphQL mutations, `databaseId` for the REST comment list. */
+interface PendingReview {
+  id: string;
+  databaseId: string;
 }
 
 /**
- * The node id of the viewer's own pending review on the PR, or null. GitHub hides other
- * people's pending reviews, and the login check makes sure of it: appending to someone
- * else's draft would put our comments in their review.
+ * The viewer's own pending review on the PR, or null. GitHub hides other people's pending
+ * reviews, and the login check makes sure of it: appending to someone else's draft would
+ * put our comments in their review.
  */
-async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<string | null> {
+async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<PendingReview | null> {
   const { owner, repo } = repoOfPrUrl(pr.url);
   const data = await graphql<PendingQueryData>(run, cwd, PENDING_QUERY, { owner, repo, number: pr.number });
   const login = data.viewer?.login;
   for (const node of data.repository?.pullRequest?.reviews?.nodes ?? []) {
-    if (node?.id && node.author?.login === login) return node.id;
+    if (node?.id && node.author?.login === login) return { id: node.id, databaseId: String(node.fullDatabaseId ?? '') };
   }
   return null;
+}
+
+/** One comment already in the pending review: its node id (to rewrite) and body (to compare). */
+interface PendingComment {
+  nodeId: string;
+  body: string;
+}
+
+interface RestReviewComment {
+  node_id?: string;
+  path?: string;
+  side?: string;
+  line?: number | null;
+  original_line?: number | null;
+  start_line?: number | null;
+  body?: string;
+}
+
+/**
+ * The pending review's own comments, by anchor. REST is the only view that carries `side`
+ * — the GraphQL comment type has no such field — and it lists a pending review's comments
+ * for their author. An empty map (unreadable review, no databaseId) just means nothing
+ * matches, so the export still adds its comments.
+ */
+async function pendingComments(run: GhRunner, cwd: string, pr: PrInfo, databaseId: string): Promise<Map<string, PendingComment>> {
+  const by = new Map<string, PendingComment>();
+  if (!databaseId) return by;
+  const { owner, repo } = repoOfPrUrl(pr.url);
+  let out: string;
+  try {
+    out = await run(['api', '--paginate', `repos/${owner}/${repo}/pulls/${pr.number}/reviews/${databaseId}/comments?per_page=100`], { cwd });
+  } catch {
+    return by;
+  }
+  let list: RestReviewComment[];
+  try {
+    list = JSON.parse(out) as RestReviewComment[];
+  } catch {
+    return by;
+  }
+  if (!Array.isArray(list)) return by;
+  for (const c of list) {
+    const line = c.line ?? c.original_line;
+    if (!c.node_id || !c.path || line == null) continue;
+    const side = c.side === 'LEFT' ? 'LEFT' : 'RIGHT';
+    by.set(anchorKey({ path: c.path, side, line, start_line: c.start_line ?? undefined }), { nodeId: c.node_id, body: c.body ?? '' });
+  }
+  return by;
+}
+
+const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){updatePullRequestReviewComment(input:$input){pullRequestReviewComment{id}}}`;
+
+/** Rewrites one pending comment's body in place. `done` is how many changes already landed, for the partial-failure message. */
+async function updateComment(run: GhRunner, cwd: string, nodeId: string, body: string, done: number, total: number): Promise<void> {
+  try {
+    await graphql(run, cwd, UPDATE_COMMENT, { input: { pullRequestReviewCommentId: nodeId, body } });
+  } catch (e) {
+    if (done === 0) throw e;
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new GithubError(`changed ${done} of ${total} comments in the pending review, then ${detail}`, 502);
+  }
 }
 
 /** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */

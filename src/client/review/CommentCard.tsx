@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
+import { exportLabel, type ExportOutcome } from '../model.js';
 import { useStore } from '../store.js';
 import { useConfirm } from '../useConfirm.js';
 
@@ -18,7 +19,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const [posting, setPosting] = useState(false);
-  const [posted, setPosted] = useState(false);
+  const [posted, setPosted] = useState<ExportOutcome | null>(null);
   const del = useConfirm(() => void deleteThread(thread.id));
   const post = useConfirm(() => {
     setPosting(true);
@@ -28,7 +29,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   });
   useEffect(() => {
     if (!posted) return;
-    const t = setTimeout(() => setPosted(false), 2000);
+    const t = setTimeout(() => setPosted(null), 2000);
     return () => clearTimeout(t);
   }, [posted]);
   // A lone message has no `who` row of its own, so its edit control sits with the thread actions.
@@ -75,7 +76,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           }
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Add?' : posted ? 'Added' : null}
+          {post.armed ? 'Add?' : posted ? exportLabel(posted) : null}
         </button>
         <button className="ghost icon" onClick={() => (replying ? closeReply() : openReply(thread.id))} title={replying ? 'Cancel reply' : 'Reply'}>
           {replying ? <X size="0.875rem" /> : <Reply size="0.875rem" />}
