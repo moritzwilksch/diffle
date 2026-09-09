@@ -1,6 +1,6 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import { pathFromItemId } from '../model.js';
-import { isDeletionRow } from '../review/rows.js';
+import { isDeletionRow, watchRenderedRows } from '../review/rows.js';
 import { useStore, type SearchState } from '../store.js';
 
 /**
@@ -8,9 +8,9 @@ import { useStore, type SearchState } from '../store.js';
  * in the rendered code, with the match the cursor sits on painted stronger.
  * Uses the CSS Custom Highlight API so the viewer's DOM is never mutated;
  * the styles live in the viewer's injected CSS (`::highlight(diffle-search)`).
- * Rows come and go with virtualization, so the pass reruns on scroll, on
- * store search changes, and on mutations inside each item's shadow root;
- * per-row matches are cached so a pass only rescans new or changed rows.
+ * Rows come and go with virtualization, so the pass reruns whenever the
+ * rendered rows or the store's search change (`watchRenderedRows`); per-row
+ * matches are cached so a pass only rescans new or changed rows.
  */
 
 const ALL = 'diffle-search';
@@ -107,60 +107,43 @@ export function installSearchHighlights(
   scroller: HTMLElement,
 ): () => void {
   if (!supported()) return () => {};
-  let frame = 0;
-  const observed = new WeakSet<Node>();
   const cache = new MatchCache();
-  const observer = new MutationObserver((records) => {
-    for (const r of records) cache.invalidate(r.target);
-    schedule();
-  });
-  const schedule = () => {
-    if (frame) return;
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      apply();
-    });
-  };
-  const apply = () => {
-    const search = useStore.getState().search;
-    const pattern = matchPattern(search);
-    if (!pattern) {
-      CSS.highlights.delete(ALL);
-      CSS.highlights.delete(CURRENT);
-      return;
-    }
-    const current = search.matches[search.index];
-    const all: Range[] = [];
-    const cur: Range[] = [];
-    for (const item of viewer()?.getInstance()?.getRenderedItems() ?? []) {
-      const root = item.element.shadowRoot ?? item.element;
-      if (!observed.has(root)) {
-        observed.add(root);
-        observer.observe(root, { childList: true, subtree: true, characterData: true });
+  const stop = watchRenderedRows(
+    viewer,
+    scroller,
+    (schedule) =>
+      useStore.subscribe((s, prev) => {
+        if (s.search !== prev.search || s.loaded !== prev.loaded || s.collapsed !== prev.collapsed) schedule();
+      }),
+    (items) => {
+      const search = useStore.getState().search;
+      const pattern = matchPattern(search);
+      if (!pattern) {
+        CSS.highlights.delete(ALL);
+        CSS.highlights.delete(CURRENT);
+        return;
       }
-      const path = pathFromItemId(item.id);
-      for (const row of root.querySelectorAll<HTMLElement>('[data-line]')) {
-        // Matches are new-side lines; a deleted row's text is not on disk.
-        if (isDeletionRow(row)) continue;
-        const here = current != null && current.path === path && Number(row.dataset.line) === current.line;
-        for (const r of cache.rangesFor(row, pattern)) (here ? cur : all).push(r);
+      const current = search.matches[search.index];
+      const all: Range[] = [];
+      const cur: Range[] = [];
+      for (const { id, root } of items) {
+        const path = pathFromItemId(id);
+        for (const row of root.querySelectorAll<HTMLElement>('[data-line]')) {
+          // Matches are new-side lines; a deleted row's text is not on disk.
+          if (isDeletionRow(row)) continue;
+          const here = current != null && current.path === path && Number(row.dataset.line) === current.line;
+          for (const r of cache.rangesFor(row, pattern)) (here ? cur : all).push(r);
+        }
       }
-    }
-    CSS.highlights.set(ALL, new Highlight(...all));
-    CSS.highlights.set(CURRENT, new Highlight(...cur));
-  };
-  scroller.addEventListener('scroll', schedule, { passive: true });
-  // Items mount into the light DOM as they virtualize in; their shadow roots are observed on first paint.
-  observer.observe(scroller, { childList: true, subtree: true });
-  const unsubscribe = useStore.subscribe((s, prev) => {
-    if (s.search !== prev.search || s.loaded !== prev.loaded || s.collapsed !== prev.collapsed) schedule();
-  });
-  schedule();
+      CSS.highlights.set(ALL, new Highlight(...all));
+      CSS.highlights.set(CURRENT, new Highlight(...cur));
+    },
+    (records) => {
+      for (const r of records) cache.invalidate(r.target);
+    },
+  );
   return () => {
-    cancelAnimationFrame(frame);
-    observer.disconnect();
-    scroller.removeEventListener('scroll', schedule);
-    unsubscribe();
+    stop();
     CSS.highlights.delete(ALL);
     CSS.highlights.delete(CURRENT);
   };
