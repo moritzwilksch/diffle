@@ -63,4 +63,28 @@ describe('CommentPanel rows', () => {
     await act(() => useStore.setState({ threads: [a!, { ...b!, messages: [{ ...b!.messages[0]!, body: 'body b2' }] }, c!] }));
     expect(rendered).toEqual(['body b2']);
   });
+
+  it('delete a thread only on the second click, and disarm after a pause', async () => {
+    vi.useFakeTimers();
+    try {
+      const deleteThread = vi.fn(() => Promise.resolve());
+      useStore.setState({ deleteThread });
+      await act(() => root.render(createElement(CommentPanel)));
+      const btn = () => host.querySelector<HTMLButtonElement>('.item .delete')!;
+      const click = () => act(() => btn().dispatchEvent(new MouseEvent('click', { bubbles: true })));
+      await click();
+      expect(btn().classList.contains('confirm')).toBe(true);
+      expect(btn().textContent).toBe('Delete?');
+      expect(deleteThread).not.toHaveBeenCalled();
+      await act(() => vi.advanceTimersByTime(3000));
+      expect(btn().classList.contains('confirm')).toBe(false);
+      expect(deleteThread).not.toHaveBeenCalled();
+      await click();
+      await click();
+      expect(deleteThread).toHaveBeenCalledWith('t1');
+      expect(btn().classList.contains('confirm')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -4,6 +4,7 @@ import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
 import { useStore } from '../store.js';
+import { useConfirm } from '../useConfirm.js';
 
 /** A thread rendered inline under its last anchored line: messages, reply composer, resolve. */
 export function CommentCard({ thread }: { thread: CommentThread }) {
@@ -19,6 +20,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const [posting, setPosting] = useState(false);
   const [confirmPost, setConfirmPost] = useState(false);
   const [posted, setPosted] = useState(false);
+  const del = useConfirm(() => void deleteThread(thread.id));
   useEffect(() => {
     if (!confirmPost) return;
     const t = setTimeout(() => setConfirmPost(false), 3000);
@@ -91,8 +93,9 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
         >
           {thread.resolved ? <RotateCcw size="0.875rem" /> : <Check size="0.875rem" />}
         </button>
-        <button className="ghost danger icon" onClick={() => void deleteThread(thread.id)} title="Delete thread (dd)">
+        <button className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`} onClick={del.fire} title={del.armed ? 'Click again to delete this thread' : 'Delete thread (dd)'}>
           <Trash2 size="0.875rem" />
+          {del.armed && 'Delete?'}
         </button>
       </div>
       {thread.messages.map((m, i) => (
@@ -109,6 +112,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
   const editing = useStore((s) => s.editingId === message.id);
   const setEditingId = useStore((s) => s.setEditingId);
   const [text, setText] = useState(message.body);
+  const del = useConfirm(() => void deleteMessage(thread.id, message.id));
   useEffect(() => {
     if (editing) setText(message.body);
   }, [editing, message.body]);
@@ -127,8 +131,9 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
             {editing ? <X size="0.75rem" /> : <Pencil size="0.75rem" />}
           </button>
           {!first && (
-            <button className="ghost danger icon" onClick={() => void deleteMessage(thread.id, message.id)} title="Delete this reply">
+            <button className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`} onClick={del.fire} title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}>
               <Trash2 size="0.75rem" />
+              {del.armed && 'Delete?'}
             </button>
           )}
         </div>

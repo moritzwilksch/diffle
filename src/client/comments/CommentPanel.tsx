@@ -7,6 +7,7 @@ import { visibleThreads } from '../model.js';
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
+import { useConfirm } from '../useConfirm.js';
 
 export function CommentPanel() {
   const threads = useStore((s) => s.threads);
@@ -201,6 +202,7 @@ const ThreadRow = memo(function ThreadRow({
   deleteThread: (id: string) => Promise<void>;
 }) {
   const first = t.messages[0];
+  const del = useConfirm(() => void deleteThread(t.id));
   const open = () => {
     void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
     // Set after the jump: moving the cursor or selecting lines clears the ring again.
@@ -240,15 +242,16 @@ const ThreadRow = memo(function ThreadRow({
         )}
         <button
           type="button"
-          className="ghost danger icon delete"
-          title="Delete this thread"
+          className={`ghost danger delete ${del.armed ? 'confirm' : 'icon'}`}
+          title={del.armed ? 'Click again to delete this thread' : 'Delete this thread'}
           aria-label="Delete this thread"
           onClick={(e) => {
             e.stopPropagation();
-            void deleteThread(t.id);
+            del.fire();
           }}
         >
           <Trash2 size="0.75rem" />
+          {del.armed && 'Delete?'}
         </button>
       </div>
       <div className="content">
