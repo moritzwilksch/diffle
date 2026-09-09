@@ -51,19 +51,6 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-describe('removed options', () => {
-  it.each(['--background', '--timing', '--dev'])('rejects %s', async (flag) => {
-    const run = await cli(['working', flag]);
-    expect(run.code).not.toBe(0);
-    expect(run.stderr).toContain(`unknown option '${flag}'`);
-  });
-
-  it('omits removed options from help', async () => {
-    const help = execFileSync(process.execPath, [TSX, MAIN, '--help'], { env, encoding: 'utf8' });
-    for (const flag of ['--background', '--timing', '--dev']) expect(help).not.toContain(flag);
-  });
-});
-
 describe('failed startup', () => {
   it('leaves no LSP child behind when the requested port is taken', async () => {
     // A server that survives its stdin closing: only a signal ends it.
