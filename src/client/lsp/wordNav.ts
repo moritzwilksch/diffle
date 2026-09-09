@@ -5,6 +5,7 @@ import { itemIdOf, pathFromItemId } from '../model.js';
 import { rowOf } from '../review/rows.js';
 import { useStore } from '../store.js';
 import { lspTarget } from './target.js';
+import { wordsIn } from './words.js';
 
 /**
  * Keyboard word focus (vim w / b): walk the identifier tokens of the cursor line
@@ -15,6 +16,13 @@ import { lspTarget } from './target.js';
  */
 let viewer: () => CodeViewHandle<unknown> | null = () => null;
 let focusedEl: HTMLElement | null = null;
+let focusedCol: number | null = null;
+
+interface Word {
+  el: HTMLElement;
+  col: number;
+  text: string;
+}
 /** Set while word navigation itself moves the cursor, so the selection watcher keeps the focus. */
 let keepOnSelectionChange = false;
 
@@ -25,6 +33,7 @@ export function setViewer(get: () => CodeViewHandle<unknown> | null): void {
 export function clearWordFocus(): void {
   focusedEl?.classList.remove('lsp-focus');
   focusedEl = null;
+  focusedCol = null;
   lspTarget.focus(null);
 }
 
@@ -51,7 +60,7 @@ export function moveWord(delta: 1 | -1): void {
   const path = pathFromItemId(sel.id);
   const line = newSideLine(path, sel.range.end, sideOf(sel) === 'old');
   const words = line == null ? [] : (wordsOf(path, line) ?? []);
-  const idx = focusedEl ? words.indexOf(focusedEl) : -1;
+  const idx = words.findIndex((word) => word.el === focusedEl && word.col === focusedCol);
   const next = idx === -1 ? (delta === 1 ? 0 : words.length - 1) : idx + delta;
   if (line != null && next >= 0 && next < words.length) {
     focusWord(words[next]!, path, line);
@@ -96,11 +105,12 @@ function sameRow(a: CodeViewLineSelection, b: CodeViewLineSelection): boolean {
   return a.id === b.id && a.range.end === b.range.end && sideOf(a) === sideOf(b);
 }
 
-function focusWord(el: HTMLElement, path: string, line: number): void {
+function focusWord({ el, col, text }: Word, path: string, line: number): void {
   focusedEl?.classList.remove('lsp-focus');
   focusedEl = el;
+  focusedCol = col;
   el.classList.add('lsp-focus');
-  lspTarget.focus({ path, side: 'new', line, col: Number(el.dataset.char), text: el.textContent ?? '' }, el);
+  lspTarget.focus({ path, side: 'new', line, col, text }, el);
 }
 
 /**
@@ -128,11 +138,15 @@ function rootOf(path: string): ShadowRoot | HTMLElement | null {
 }
 
 /** Identifier tokens of a rendered new-side line, in order; null when the row is not rendered. */
-function wordsOf(path: string, line: number): HTMLElement[] | null {
+function wordsOf(path: string, line: number): Word[] | null {
   const root = rootOf(path);
   const row = root && rowOf(root, line, 'new');
   if (!row) return null;
-  return [...row.querySelectorAll<HTMLElement>('span[data-char]')].filter((el) =>
-    /^[\p{L}_][\p{L}\p{N}_]*$/u.test(el.textContent ?? ''),
+  return [...row.querySelectorAll<HTMLElement>('span[data-char]')].flatMap((el) =>
+    wordsIn(el.textContent ?? '').map((word) => ({
+      el,
+      col: Number(el.dataset.char) + word.start,
+      text: word.text,
+    })),
   );
 }
