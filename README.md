@@ -81,9 +81,6 @@ search-path = ["src"]
 
 ## Security
 
-> [!WARNING]
-> `--host 0.0.0.0` exposes repository paths, refs, patches, file contents, and comments to anyone who can reach the port. Use it only on a trusted network.
-
 The configured language-server command runs through a shell inside the repository and can read anything available to your user.
 
 ## Development
