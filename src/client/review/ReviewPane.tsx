@@ -723,6 +723,7 @@ export function ReviewPane() {
 /** The file view's header: the way back to the diff list. */
 function FileViewBar({ path }: { path: string }) {
   const closeFullFile = useStore((s) => s.closeFullFile);
+  const external = useStore((s) => s.fileView?.external ?? false);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
     <div className="fileview-bar">
@@ -738,6 +739,7 @@ function FileViewBar({ path }: { path: string }) {
           {file.deletions > 0 && <span className="del">−{file.deletions}</span>}
         </span>
       )}
+      {external && <span className="file-meta">outside the repository, read-only</span>}
       <kbd>Ctrl+o</kbd>
     </div>
   );
