@@ -10,6 +10,7 @@ const MAX_PAYLOAD_BYTES = 4096;
 /** Broadcast hub on `/ws`: server → client only. */
 export class WsHub {
   private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
+  private readonly clientListeners = new Set<(count: number) => void>();
 
   attach(server: HttpServer, guard: RequestGuard = () => true): void {
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -21,6 +22,8 @@ export class WsHub {
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         // A malformed frame emits 'error'; unhandled, it would take the process down.
         ws.on('error', () => ws.terminate());
+        ws.once('close', () => this.notifyClientListeners());
+        this.notifyClientListeners();
       });
     });
   }
@@ -32,6 +35,16 @@ export class WsHub {
 
   get clientCount(): number {
     return this.wss.clients.size;
+  }
+
+  /** Reports each client-count change until the returned unsubscribe function runs. */
+  onClientsChanged(listener: (count: number) => void): () => void {
+    this.clientListeners.add(listener);
+    return () => this.clientListeners.delete(listener);
+  }
+
+  private notifyClientListeners(): void {
+    for (const listener of this.clientListeners) listener(this.clientCount);
   }
 
   close(): Promise<void> {

@@ -60,6 +60,7 @@ export function useHighlighted(
   const nearRef = useRef(near);
   nearRef.current = near;
   const shown = useRef(items);
+  const itemsChanged = shown.current !== items;
   useEffect(() => {
     let cancelled = false;
     // A new result set starts plain; a theme toggle keeps the old colors until each file is redone.
@@ -105,7 +106,8 @@ export function useHighlighted(
       cancelled = true;
     };
   }, [items, theme]);
-  return map;
+  // Passive effects may run after paint; never expose stale highlights for a changed result set.
+  return itemsChanged ? new Map() : map;
 }
 
 /**

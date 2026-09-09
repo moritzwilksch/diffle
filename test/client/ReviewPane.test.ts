@@ -292,6 +292,13 @@ describe('ReviewPane scroller effects', () => {
     expect(installSearchHighlights.mock.calls[0]![1]).toBe(host.querySelector('.codeview'));
   });
 
+  it('shows the viewed shortcut in the file header tooltip', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };
+    await act(() => useStore.setState({ snapshot: snap(changed), loaded: { 'a.txt': file } }));
+    expect(host.querySelector('[title="Mark as viewed and collapse the file (v)"]')).not.toBeNull();
+  });
+
   it('offers one way back from the file view: the bar above, not the file header too', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };

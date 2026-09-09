@@ -4,6 +4,7 @@ import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import WebSocket from 'ws';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
 import { Session } from '../../src/server/Session.js';
@@ -16,6 +17,7 @@ let server: Server;
 let session: Session;
 let base: URL;
 let config: UserConfigStore;
+let hub: WsHub;
 const env = {
   ...process.env,
   GIT_AUTHOR_NAME: 't',
@@ -64,7 +66,7 @@ beforeAll(async () => {
   execFileSync('git', ['add', '.'], { cwd: dir, env });
   execFileSync('git', ['commit', '-q', '-m', 'base'], { cwd: dir, env });
   const repo = await GitRepo.open(dir);
-  const hub = new WsHub();
+  hub = new WsHub();
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3 });
   server = new Server(
@@ -90,6 +92,21 @@ describe('Server', () => {
     expect((await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: base.origin } })).status).toBe(200);
+  });
+
+  it('reports WebSocket clients joining and leaving', async () => {
+    const counts: number[] = [];
+    const unsubscribe = hub.onClientsChanged((count) => counts.push(count));
+    const ws = new WebSocket(base.href.replace('http:', 'ws:') + 'ws');
+    await new Promise<void>((res, rej) => {
+      ws.once('open', () => res());
+      ws.once('error', rej);
+    });
+    expect(counts).toEqual([1]);
+    ws.close();
+    await new Promise<void>((res) => ws.once('close', () => res()));
+    expect(counts).toEqual([1, 0]);
+    unsubscribe();
   });
 
   it('survives a malformed WebSocket frame and keeps serving', async () => {

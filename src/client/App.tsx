@@ -29,6 +29,7 @@ export function App() {
   const startResize = useCallback(
     (side: 'tree' | 'panel') => (e: React.PointerEvent) => {
       e.preventDefault();
+      const resizer = e.currentTarget;
       const startX = e.clientX;
       // Until the first drag the width is the stylesheet's; measure it so the pane does not jump.
       const pane = side === 'tree' ? e.currentTarget.previousElementSibling : e.currentTarget.nextElementSibling;
@@ -42,11 +43,15 @@ export function App() {
       const onUp = () => {
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
         document.body.classList.remove('resizing');
+        resizer.classList.remove('resizing');
       };
       document.body.classList.add('resizing');
+      resizer.classList.add('resizing');
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
     },
     [layout.treeWidth, layout.panelWidth, setLayout],
   );

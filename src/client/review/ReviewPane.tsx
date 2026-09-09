@@ -852,7 +852,11 @@ function FileHeaderMeta({ path }: { path: string }) {
       {file && !full && (
         <>
           <label
-            title={vs === 'restale' ? 'Mark viewed again (collapses the file)' : 'Mark as viewed (collapses the file)'}
+            title={
+              vs === 'restale'
+                ? 'Mark viewed again and collapse the file (v)'
+                : 'Mark as viewed and collapse the file (v)'
+            }
           >
             <input type="checkbox" checked={vs === 'viewed'} onChange={(e) => void setViewed(path, e.target.checked)} />
             Viewed

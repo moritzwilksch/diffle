@@ -37,6 +37,10 @@ describe('diffle --help', () => {
     expect(out).not.toContain('(default: false)');
   });
 
+  it('offers an opt-out from browser-lifetime shutdown', () => {
+    expect(out).toContain('--keep-alive');
+  });
+
   it('describes every shorthand and config subcommand it lists', () => {
     for (const shorthand of ['working', 'branch', 'pr']) expect(help(shorthand).split('\n')[2]).not.toBe('');
     const configCommands = help('config').slice(help('config').indexOf('\nCommands:'));
