@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { realpath } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -117,6 +117,8 @@ const INIT_TIMEOUT_MS = 60_000;
 const MAX_UNTRACKED_OPEN = 64;
 /** Concurrent snapshot reads while mapping a result set back to paths. */
 const READ_CONCURRENCY = 8;
+/** Files outside the snapshot remembered for `readExternal`; the least recently named is forgotten first. */
+const MAX_EXTERNAL = 1024;
 /** Graceful shutdown budget. Both together stay under the CLI's hard exit deadline (main.ts). */
 const SHUTDOWN_RPC_MS = 500;
 const SIGKILL_AFTER_MS = 500;
@@ -152,6 +154,8 @@ export class LspBridge {
   private readonly realRoot: string;
   /** Semantic token legend from the server's capabilities, else the spec's default numbering. */
   private tokenTypes: string[] = DEFAULT_TOKEN_TYPES;
+  /** Absolute paths of files outside the snapshot that results named, least recently first. */
+  private external = new Set<string>();
 
   private constructor(private readonly opts: LspBridgeOptions) {
     this.realRoot = safeRealpathSync(opts.root);
@@ -372,6 +376,17 @@ export class LspBridge {
       });
     });
     return out;
+  }
+
+  /**
+   * Contents of a file outside the snapshot that a recent result named as
+   * `external`, read from disk; null for every other path. This is the only
+   * read the bridge does on a client's behalf, so a path the language server
+   * never returned stays behind the snapshot allowlist.
+   */
+  async readExternal(path: string): Promise<Buffer | null> {
+    if (!this.external.has(path)) return null;
+    return readFile(path).catch(() => null);
   }
 
   /** `has` for each distinct path, in parallel. */
@@ -660,44 +675,54 @@ export class LspBridge {
   }
 
   /**
-   * Maps server locations to snapshot paths with the text of each line. Paths
-   * resolve in parallel and each distinct file is read once, in parallel with
-   * a limit, so a large reference set costs a bounded number of reads.
+   * Maps server locations to paths with the text of each line: a snapshot path,
+   * or, for a file the snapshot lacks (stdlib, site-packages, an ignored venv),
+   * the file itself read from disk and marked external. Each distinct URI is
+   * read once, in parallel with a limit, so a large reference set costs a
+   * bounded number of reads. A file readable neither way is dropped.
    */
   private async toLocations(locs: { uri: string; range: Range }[]): Promise<LspLocationsResponse> {
-    const paths = await Promise.all(locs.map((l) => this.pathOf(l.uri)));
-    const distinct = [...new Set(paths.filter((p): p is string => p != null))];
-    const bodies = await mapLimit(
-      distinct,
-      READ_CONCURRENCY,
-      async (p) => this.open.get(p)?.text ?? (await this.opts.read(p)),
-    );
-    const texts = new Map(distinct.map((p, i) => [p, bodies[i]!]));
+    const uris = [...new Set(locs.map((l) => l.uri))];
+    const found = await mapLimit(uris, READ_CONCURRENCY, (uri) => this.locate(uri));
+    const byUri = new Map(uris.map((uri, i) => [uri, found[i]!]));
     const out: LspLocation[] = [];
-    let external = 0;
-    let externalPath: string | undefined;
-    let hidden = 0;
-    let hiddenPath: string | undefined;
-    locs.forEach((l, i) => {
-      const path = paths[i];
-      if (path == null) {
-        external++;
-        externalPath ??= safeFileURLToPath(l.uri);
-        return;
-      }
-      const text = texts.get(path);
-      if (text == null) {
-        hidden++;
-        hiddenPath ??= path;
-        return;
-      }
+    for (const l of locs) {
+      const f = byUri.get(l.uri);
+      if (!f) continue;
       const line = l.range.start.line + 1;
-      out.push({ path, line, col: l.range.start.character, text: lineAt(text, line) });
-    });
-    const res: LspLocationsResponse = { locations: out, external, hidden };
-    if (externalPath != null) res.externalPath = externalPath;
-    if (hiddenPath != null) res.hiddenPath = hiddenPath;
-    return res;
+      const loc: LspLocation = { path: f.path, line, col: l.range.start.character, text: lineAt(f.text, line) };
+      if (f.external) loc.external = true;
+      out.push(loc);
+    }
+    return { locations: out };
+  }
+
+  private async locate(uri: string): Promise<{ path: string; text: string; external: boolean } | null> {
+    const path = await this.pathOf(uri);
+    if (path != null) {
+      const text = this.open.get(path)?.text ?? (await this.opts.read(path));
+      if (text != null) return { path, text, external: false };
+    }
+    let abs: string;
+    try {
+      abs = fileURLToPath(uri);
+    } catch {
+      return null;
+    }
+    const text = await readFile(abs, 'utf8').catch(() => null);
+    if (text == null) return null;
+    this.remember(abs);
+    return { path: abs, text, external: true };
+  }
+
+  private remember(abs: string): void {
+    // Re-insert to mark it most recently named.
+    this.external.delete(abs);
+    this.external.add(abs);
+    for (const old of this.external) {
+      if (this.external.size <= MAX_EXTERNAL) break;
+      this.external.delete(old);
+    }
   }
 }
 
@@ -706,14 +731,6 @@ function relativeInside(root: string, abs: string): string | null {
   const rel = relative(root, abs);
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return null;
   return rel.split('\\').join('/');
-}
-
-function safeFileURLToPath(uri: string): string {
-  try {
-    return fileURLToPath(uri);
-  } catch {
-    return uri;
-  }
 }
 
 /** How status messages name a server: `basedpyright-langserver --stdio` → `basedpyright-langserver`. */
