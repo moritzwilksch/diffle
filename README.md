@@ -14,6 +14,27 @@ comments as a prompt for an agent.
   <img alt="diffle reviewing a git diff" src=".github/assets/diffle-light.png">
 </picture>
 
+## Installation
+
+From [conda-forge](https://prefix.dev/channels/conda-forge/packages/diffle):
+
+```bash
+pixi global install diffle
+```
+
+Or from [npm](https://www.npmjs.com/package/@moritzwilksch/diffle) (needs Node 24 or newer):
+
+```bash
+npm install -g @moritzwilksch/diffle
+```
+
+To run it without installing anything:
+
+```bash
+pixi exec diffle working
+npx @moritzwilksch/diffle working
+```
+
 ## Usage
 
 ```bash
