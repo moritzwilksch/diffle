@@ -27,6 +27,11 @@ describe('HelpOverlay', () => {
     }
   });
 
+  // Rows never wrap, so a long description would widen the dialog past the viewport.
+  it('keeps every description short enough for one line', () => {
+    for (const [, action] of COLUMNS.flat().flatMap((s) => s.rows)) expect(action.length).toBeLessThanOrEqual(60);
+  });
+
   describe('rendering', () => {
     let root: Root;
     let host: HTMLDivElement;
@@ -47,7 +52,7 @@ describe('HelpOverlay', () => {
       expect(host.querySelectorAll('.help-col')).toHaveLength(2);
       const headings = [...host.querySelectorAll('.help-body h4')].map((h) => h.textContent);
       expect(headings).toEqual(COLUMNS.flat().map((s) => s.title));
-      expect(host.querySelectorAll('tr')).toHaveLength(BOUND.length);
+      expect(host.querySelectorAll('.help-row')).toHaveLength(BOUND.length);
     });
   });
 });
