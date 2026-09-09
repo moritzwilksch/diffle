@@ -12,6 +12,7 @@ import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
 import { followsCheckout, isPython, type ModeRequest } from '../shared/protocol.js';
 import { parseContext, parsePort } from './args.js';
+import { watchBrowserLifetime } from './browserLifetime.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
 import { Timing } from './timing.js';
@@ -34,6 +35,7 @@ interface GlobalOpts {
   port?: number;
   host: string;
   open: boolean;
+  keepAlive: boolean;
   watch: boolean;
   timing: boolean;
   dev?: boolean;
@@ -55,6 +57,7 @@ const program = new Command()
   )
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
   .option('--no-open', 'do not open a browser')
+  .option('--keep-alive', 'keep the server running after all browser tabs close')
   .option('--no-watch', 'do not watch for changes')
   .addOption(
     new Option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)')
@@ -83,8 +86,9 @@ Revisions follow git diff:
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
 
-Status goes to stderr, so stdout carries only the review: closing diffle (Ctrl+C)
-prints the open comments as a prompt for an agent.`,
+Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
+closing the last auto-opened browser tab stops diffle and prints the open comments as a prompt for an agent.
+Ctrl+C always stops it.`,
   )
   .action(async (revs: string[], _o, cmd: Command) => {
     if (revs.length === 0) cmd.help();
@@ -211,17 +215,20 @@ async function serve(
     { session, config, extraAutoViewed: opts.autoViewed, hub, lsp },
     { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host, dev: opts.dev || !hasClientBuild() },
   );
+  let stopBrowserWatch = () => {};
   // Every long-lived resource goes through one release, whatever ends the run: a
   // signal, a usage error, or a failure such as an occupied port. Wait for git
   // before deleting its refs or clone; bound socket and LSP shutdown separately.
-  const dispose = () =>
-    Promise.all([
+  const dispose = () => {
+    stopBrowserWatch();
+    return Promise.all([
       session.close(),
       Promise.race([
         Promise.allSettled([server.close(), lsp?.close()]),
         new Promise((res) => setTimeout(res, 1500).unref()),
       ]),
     ]).then(closeRepo);
+  };
 
   let closing = false;
   const shutdown = () => {
@@ -239,6 +246,7 @@ async function serve(
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  stopBrowserWatch = watchBrowserLifetime(hub, opts.open && !opts.keepAlive, shutdown);
 
   try {
     // Bind and open the browser before any further git work.
