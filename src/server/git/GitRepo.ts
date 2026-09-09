@@ -46,6 +46,8 @@ interface ExecOptions {
   /** Exit codes that are not errors (e.g. 1 for `diff --no-index`). */
   okCodes?: number[];
   input?: string;
+  /** Merged over the inherited environment. */
+  env?: Record<string, string>;
 }
 
 interface RecordOptions extends ExecOptions {
@@ -118,6 +120,34 @@ export class GitRepo {
       }
     }
     throw new GitError('cannot determine default branch; pass a base explicitly', [], null, '');
+  }
+
+  /** Configured remotes, in git's order, with their fetch URLs. */
+  async remotes(): Promise<{ name: string; url: string }[]> {
+    const out = await this.text(['remote', '-v']);
+    const seen = new Map<string, string>();
+    for (const line of out.split('\n')) {
+      const m = /^(\S+)\t(\S+) \(fetch\)$/.exec(line);
+      if (m && !seen.has(m[1]!)) seen.set(m[1]!, m[2]!);
+    }
+    return [...seen].map(([name, url]) => ({ name, url }));
+  }
+
+  /**
+   * Fetches explicit refspecs from `remote` (a name or a URL). The only call that
+   * touches the network, and the only one that writes to the repository: the
+   * refspecs must stay inside `refs/diffle/`, so no ref the user owns moves, and
+   * FETCH_HEAD is left alone. Terminal prompts are off: a repository that needs
+   * credentials fails instead of hanging.
+   */
+  async fetch(remote: string, refspecs: string[]): Promise<void> {
+    for (const spec of refspecs) {
+      const dst = spec.slice(spec.indexOf(':') + 1);
+      if (!dst.startsWith('refs/diffle/')) throw new GitError(`refusing to fetch into ${dst}`, ['fetch'], null, '');
+    }
+    await this.exec(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--end-of-options', remote, ...refspecs], {
+      env: { GIT_TERMINAL_PROMPT: '0' },
+    });
   }
 
   async lsFiles(): Promise<string[]> {
@@ -579,7 +609,7 @@ function execGit(cwd: string, args: string[], opts: ExecOptions = {}): Promise<B
     const child = execFile(
       'git',
       [...CONFIG_ARGS, ...args],
-      { cwd, maxBuffer: MAX_BUFFER, encoding: 'buffer', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } },
+      { cwd, maxBuffer: MAX_BUFFER, encoding: 'buffer', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', ...opts.env } },
       (err, stdout, stderr) => {
         const code = err ? ((err as NodeJS.ErrnoException & { code?: number | string }).code ?? null) : 0;
         if (err && !(typeof code === 'number' && opts.okCodes?.includes(code))) {

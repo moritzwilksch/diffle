@@ -1,5 +1,6 @@
 import type { ModeRequest, ModeSpec, OldSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
+import { type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
 import { parseRevspec, RevspecError } from './revspec.js';
 
 async function resolveOrExplain(repo: GitRepo, rev: string): Promise<string> {
@@ -26,7 +27,7 @@ function isShaPrefix(rev: string, sha: string): boolean {
 }
 
 /** Resolves a ModeRequest into a ModeSpec, including the comment key. */
-export async function resolveMode(req: ModeRequest, repo: GitRepo): Promise<ModeSpec> {
+export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner = runGh): Promise<ModeSpec> {
   switch (req.kind) {
     case 'working':
       return {
@@ -38,21 +39,22 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo): Promise<Mode
         live: 'worktree',
         commentKey: 'working',
       };
-    case 'branch':
-    case 'pr': {
-      const base = req.kind === 'branch' && req.base ? req.base : await repo.defaultBranch();
+    case 'branch': {
+      const base = req.base ? req.base : await repo.defaultBranch();
       const old: OldSpec = { kind: 'merge-base', a: base, b: 'HEAD' };
       const mb = await mergeBaseOrExplain(repo, base, 'HEAD');
       return {
-        kind: req.kind,
+        kind: 'branch',
         request: req,
         old,
         newRev: 'HEAD',
         label: `${base}...HEAD`,
         live: 'refs',
-        commentKey: `${req.kind}:${mb}`,
+        commentKey: `branch:${mb}`,
       };
     }
+    case 'pr':
+      return resolvePr(req, repo, gh);
     case 'revspec': {
       const parsed = parseRevspec(req.args);
       const oldSha =
@@ -79,4 +81,55 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo): Promise<Mode
       };
     }
   }
+}
+
+/** Where diffle parks the refs it fetches: never a ref the user owns. */
+const PR_REFS = 'refs/diffle/pull';
+
+/**
+ * A GitHub pull request, as GitHub shows it: merge-base(base tip, head) vs head.
+ * `gh` names the PR, then one fetch brings the base tip and the PR head into
+ * `refs/diffle/pull/<n>/`, so a PR nobody has checked out is reviewable. Both
+ * sides are pinned to commits, so the mode is static and the comment key follows
+ * the PR number: comments survive a force-push.
+ */
+async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: GhRunner): Promise<ModeSpec> {
+  const pr = await viewPr(req.pr, repo.root, gh);
+  const head = `${PR_REFS}/${pr.number}/head`;
+  const base = `${PR_REFS}/${pr.number}/base`;
+  await repo.fetch(await fetchSource(repo, pr), [
+    `+refs/pull/${pr.number}/head:${head}`,
+    `+refs/heads/${pr.baseRefName}:${base}`,
+  ]);
+  const [headSha, mb] = await Promise.all([resolveOrExplain(repo, head), mergeBaseOrExplain(repo, base, head)]);
+  return {
+    kind: 'pr',
+    request: req,
+    old: { kind: 'rev', rev: mb },
+    newRev: headSha,
+    label: `#${pr.number} ${pr.baseRefName}...${pr.headRefName}`,
+    live: 'none',
+    commentKey: `pr:#${pr.number}`,
+  };
+}
+
+/**
+ * `refs/pull/*` lives on the base repository, so the fetch goes to the remote
+ * that points at it — a fork's `origin` would not have the ref. Falls back to the
+ * PR's own url, which git can clone from when no remote matches.
+ */
+async function fetchSource(repo: GitRepo, pr: PullRequest): Promise<string> {
+  const slug = pr.baseRepo.toLowerCase();
+  const match = (await repo.remotes()).find((r) => remoteSlug(r.url) === slug);
+  return match?.name ?? pr.url.slice(0, pr.url.indexOf('/pull/'));
+}
+
+/** `<owner>/<repo>`, lowercased, from an https or scp-style remote url. */
+function remoteSlug(url: string): string {
+  return url
+    .replace(/\.git$/, '')
+    .toLowerCase()
+    .split(/[/:]/)
+    .slice(-2)
+    .join('/');
 }

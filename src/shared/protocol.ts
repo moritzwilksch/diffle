@@ -11,7 +11,7 @@ export type OldSpec =
 export type ModeRequest =
   | { kind: 'working' }
   | { kind: 'branch'; base?: string }
-  | { kind: 'pr' }
+  | { kind: 'pr'; pr?: string }
   | { kind: 'revspec'; args: string[] };
 
 export interface ModeSpec {

@@ -9,7 +9,7 @@ Local git diff reviewer: Node server wraps git, React client renders diffs with 
 - `src/client/api.ts` is the only module that knows URLs.
 - `src/server/Session.ts` owns the active mode: snapshotter, comment store, watcher. Mode switches are serialized; reads go through `readSide`, which enforces the snapshot path allowlist and maps a rename's old side to its old path.
 - `src/client/store.ts` is one zustand store; `src/client/model.ts` holds the pure functions over its state (item ids, viewed state, ordering) so other modules can import them without a cycle. Every transition (boot, refresh, mode switch) carries a generation token; a result commits only while its token is current.
-- Comments live in `<git-dir>/diffle/comments.json`, keyed by `ModeSpec.commentKey`. Nothing ever writes to the worktree or mutates the repo.
+- Comments live in `<git-dir>/diffle/comments.json`, keyed by `ModeSpec.commentKey`. Nothing ever writes to the worktree, and the only repo write is `GitRepo.fetch`, which `pr` mode uses to bring a pull request's base and head into `refs/diffle/`; it refuses any refspec pointing elsewhere.
 
 ## Invariants that bite
 

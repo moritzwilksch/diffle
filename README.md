@@ -39,12 +39,15 @@ npx @moritzwilksch/diffle working
 
 ```bash
 diffle working          # HEAD vs worktree: staged, unstaged, untracked
-diffle pr               # merge-base(default branch, HEAD) vs HEAD
+diffle branch           # merge-base(default branch, HEAD) vs HEAD
 diffle branch develop   # merge-base(develop, HEAD) vs HEAD
+diffle pr 27            # GitHub PR 27, or its url; without a number, this branch's PR
 diffle main...feat      # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle working --lsp    # add Python symbol navigation through pyrefly
 diffle --help           # list all commands and flags
 ```
+
+`diffle pr` reads the pull request with [`gh`](https://cli.github.com/) and fetches what the repository is missing into `refs/diffle/`, so a pull request nobody has checked out is reviewable. Its comments are keyed by pull request number and survive a force-push.
 
 Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
 
@@ -74,7 +77,7 @@ Use the pull request icon to add one thread or all open threads to a pending Git
 
 Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
 
-Posting works for pushed branches in `pr`, `branch`, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
+Posting works for pushed branches in `branch`, `pr` for the checked-out branch, or a revspec ending at HEAD. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
 
 Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
 

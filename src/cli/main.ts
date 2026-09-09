@@ -3,6 +3,7 @@ import { Command, CommanderError } from 'commander';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
+import { GithubError } from '../server/github.js';
 import { LspBridge } from '../server/lsp/LspBridge.js';
 import { RevspecError } from '../server/revspec.js';
 import { DEFAULT_PORT, Server } from '../server/Server.js';
@@ -80,8 +81,9 @@ program
 
 program
   .command('pr')
-  .description('review committed changes on this branch, like a GitHub PR (same as: diffle origin/main...HEAD)')
-  .action(async (_o, cmd: Command) => run({ kind: 'pr' }, cmd.optsWithGlobals<GlobalOpts>()));
+  .argument('[pr]', 'pull request number or url; default: the pull request for this branch')
+  .description('review a GitHub pull request: merge-base(base, head) vs head')
+  .action(async (pr: string | undefined, _o, cmd: Command) => run({ kind: 'pr', pr }, cmd.optsWithGlobals<GlobalOpts>()));
 
 const config = program.command('config').description('show or edit the user config (same settings as the UI dialog)');
 config
@@ -198,7 +200,7 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
     if (lsp) console.error(`🧭 ${c.dim('lsp')} ${lsp.status().command}${followsCheckout(snap) ? '' : c.dim(' (symbol navigation needs the new side to be the checkout)')}`);
   } catch (e) {
     await dispose();
-    if (e instanceof RevspecError || e instanceof GitError) {
+    if (e instanceof RevspecError || e instanceof GitError || e instanceof GithubError) {
       console.error(`${c.red('✖')} ${e.message}`);
       process.exit(2);
     }
@@ -239,5 +241,5 @@ program.exitOverride();
 program.parseAsync(process.argv).catch((e) => {
   if (e instanceof CommanderError) process.exit(e.exitCode);
   console.error(`${c.red('✖')} ${e instanceof Error ? e.message : e}`);
-  process.exit(1);
+  process.exit(e instanceof GithubError ? 2 : 1);
 });

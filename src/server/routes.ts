@@ -329,8 +329,9 @@ function isModeRequest(r: unknown): r is ModeRequest {
   const x = r as Record<string, unknown>;
   switch (x.kind) {
     case 'working':
-    case 'pr':
       return true;
+    case 'pr':
+      return x.pr == null || typeof x.pr === 'string';
     case 'branch':
       return x.base == null || typeof x.base === 'string';
     case 'revspec':
