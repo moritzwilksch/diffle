@@ -30,9 +30,17 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - Handled keys stop propagation in `useKeymap`; `CodeView` cancels pending scroll on propagated keydown.
 - User input errors become `RevspecError`, `GitError`, `GithubError`, or Commander usage errors and exit 2; unexpected failures propagate.
 
+## Renovate cleanly
+
+- Drop backwards compatibility: replace old paradigms directly with cleaner solutions instead of adding shims or legacy support code. Rip off the bandaid; announce breaking changes in your output with `💥 Breaking: <explanation>`.
+
 ## Verify changes
 
 - Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing.
 - Server tests use temporary real Git repositories. Client store tests mock `src/client/api.js` and exercise races with deferred promises.
 - Use `npm run dev -- working --no-open` for a local source run; restart after client changes because the server serves `dist/client`.
 - Comments explain why in one or two lines. Exported doc comments state contracts, not implementations.
+
+## Conventional commits
+
+- Use conventional commits for commit messages and PR titles (e.g. `feat(cli): add pr command`, `fix(store): guard async commits`).

@@ -285,3 +285,17 @@ export type ExportOutcome = 'added' | 'updated' | 'unchanged';
 export function exportLabel(outcome: ExportOutcome): string {
   return outcome === 'updated' ? 'Updated' : outcome === 'unchanged' ? 'Already added' : 'Added';
 }
+
+/** What names the review: the pull request's base repository, else the root directory. */
+export function repoName(snapshot: Snapshot): string {
+  if (snapshot.mode.pullRequest) return snapshot.mode.pullRequest.repository;
+  const parts = snapshot.root.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? snapshot.root;
+}
+
+/** Browser tab title; the PR number tells tabs of one repository apart. */
+export function documentTitle(snapshot: Snapshot | null): string {
+  if (!snapshot) return 'diffle';
+  const pr = snapshot.mode.pullRequest;
+  return pr ? `diffle: ${repoName(snapshot)} #${pr.number}` : `diffle: ${repoName(snapshot)}`;
+}

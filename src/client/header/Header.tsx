@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
+import { repoName } from '../model.js';
 import { useStore } from '../store.js';
 import { nextTheme, type ThemeChoice } from '../theme.js';
 import { ModePicker } from './ModePicker.js';
@@ -45,8 +46,8 @@ export function Header() {
       <span className="brand">
         <GitCompareArrows size="1rem" /> diffle
       </span>
-      <span className="root" title={snapshot?.mode.repository ?? snapshot?.root}>
-        {snapshot ? (snapshot.mode.repository ?? basename(snapshot.root)) : ''}
+      <span className="root" title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}>
+        {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
       <span className="stat">
@@ -137,9 +138,4 @@ function ThemeIcon({ choice }: { choice: ThemeChoice }) {
   if (choice === 'light') return <Sun size="1rem" />;
   if (choice === 'dark') return <Moon size="1rem" />;
   return <Monitor size="1rem" />;
-}
-
-function basename(p: string): string {
-  const parts = p.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? p;
 }

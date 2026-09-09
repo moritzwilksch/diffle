@@ -17,8 +17,8 @@ export interface ModeSpec {
   newRev: string | 'worktree';
   /** Shown in the UI header. */
   label: string;
-  /** Repository shown in the header when this mode reviews another repository. */
-  repository?: string;
+  /** The reviewed pull request; its base repository names the tab and header instead of the root directory. */
+  pullRequest?: { repository: string; number: number };
   /** worktree: fs watch; refs: watch .git refs; none: static. */
   live: 'worktree' | 'refs' | 'none';
   /** Comment set key, fixed when the mode is entered. */

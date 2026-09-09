@@ -1355,6 +1355,26 @@ describe('request ownership', () => {
     expect(useStore.getState().viewed).toEqual([{ path: 'c.py', blob: 'c1', viewed: true }]);
   });
 
+  it('a viewed file that changes afterwards reopens as restale; untouched folds survive the refresh', async () => {
+    const changed = [file({ path: 'a.py', blob: 'b1' }), file({ path: 'b.py', blob: 'c1' })];
+    useStore.setState({ snapshot: { ...snap(1, 'working', ['a.py', 'b.py']), changed } });
+    api.setViewed.mockResolvedValueOnce([{ path: 'a.py', blob: 'b1', viewed: true }]);
+    api.patches.mockResolvedValue(patchesFor(['a.py', 'b.py']));
+    await useStore.getState().setViewed('a.py', true);
+    useStore.setState((s) => ({ collapsed: { ...s.collapsed, 'b.py': true } }));
+    expect(isCollapsed(useStore.getState(), 'a.py')).toBe(true);
+    api.viewed.mockResolvedValueOnce([{ path: 'a.py', blob: 'b1', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({
+      ...snap(2, 'working', ['a.py', 'b.py']),
+      changed: [file({ path: 'a.py', blob: 'b2' }), file({ path: 'b.py', blob: 'c1' })],
+    });
+    await useStore.getState().refreshSnapshot();
+    const s = useStore.getState();
+    expect(viewedState(s, file({ path: 'a.py', blob: 'b2' }))).toBe('restale');
+    expect(isCollapsed(s, 'a.py')).toBe(false);
+    expect(isCollapsed(s, 'b.py')).toBe(true);
+  });
+
   it('a failed viewed mutation from a previous mode neither toasts nor refetches', async () => {
     const changed = [file({ path: 'a.py', blob: 'b1' })];
     useStore.setState({ snapshot: { ...snap(1, 'working', ['a.py']), changed }, toast: null });
