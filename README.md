@@ -82,15 +82,13 @@ search-path = ["src"]
 
 ## Shell completions
 
-`diffle completion <shell>` prints a completion script for bash, zsh, or fish. It completes subcommands, the flags each command accepts, closed sets like `--state` and `--format`, paths for `-C`, `--comment`, and `--path`, and the branches, tags, and remote refs of the repository you are in wherever a revspec goes.
+`diffle completion <shell>` prints a completion script for bash, zsh, or fish.
 
 ```bash
 eval "$(diffle completion bash)"                                # ~/.bashrc
 eval "$(diffle completion zsh)"                                 # ~/.zshrc, after compinit
 diffle completion fish > ~/.config/fish/completions/diffle.fish
 ```
-
-The script describes the diffle that printed it, so print it again after upgrading.
 
 ## Security
 

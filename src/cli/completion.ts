@@ -10,8 +10,8 @@ import { Command, InvalidArgumentError, type Option } from 'commander';
  */
 
 /** Shells with a generator. */
-export const SHELLS = ['bash', 'zsh', 'fish'] as const;
-export type Shell = (typeof SHELLS)[number];
+const SHELLS = ['bash', 'zsh', 'fish'] as const;
+type Shell = (typeof SHELLS)[number];
 
 /** Candidates for one value: a fixed word list plus at most one dynamic source. */
 interface Source {
@@ -377,7 +377,7 @@ function fishScript(ns: Node[]): string {
 }
 
 /** The completion script for one shell, generated from the CLI's own command tree. */
-export function completionScript(root: Command, shell: Shell): string {
+function completionScript(root: Command, shell: Shell): string {
   const ns = nodes(root);
   if (shell === 'bash') return bashScript(ns);
   if (shell === 'zsh') return zshScript(ns);
