@@ -4,6 +4,7 @@ import { CommentPanel } from './comments/CommentPanel.js';
 import { Header } from './header/Header.js';
 import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
+import { documentTitle } from './model.js';
 import { ReviewPane } from './review/ReviewPane.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
@@ -18,13 +19,12 @@ export function App() {
   const toast = useStore((s) => s.toast);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
-  const root = useStore((s) => s.snapshot?.root);
+  const title = useStore((s) => documentTitle(s.snapshot));
   useKeymap();
 
   useEffect(() => {
-    const name = root?.replace(/\/+$/, '').split('/').pop();
-    document.title = name ? `diffle: ${name}` : 'diffle';
-  }, [root]);
+    document.title = title;
+  }, [title]);
 
   const startResize = useCallback(
     (side: 'tree' | 'panel') => (e: React.PointerEvent) => {
