@@ -41,22 +41,23 @@ const program = new Command()
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
   .option('--no-open', 'do not open a browser')
   .option('--no-watch', 'do not watch for changes')
-  .option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)', collect, [])
+  .option('--auto-viewed <glob>', 'mark matching files viewed for this session (repeatable)', collect)
   .option('-U, --context <n>', 'context lines around changes for this session (default: config, 5)', parseContext)
   .option('--lsp [command]', 'start a language server for go-to-definition, references and symbols (default command: config lspCommand, "pyrefly lsp")')
   .argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>')
   .addHelpText(
     'after',
     `
-Revisions follow git diff:
-  diffle HEAD~3            HEAD~3 vs worktree
-  diffle main..feat        main vs feat
-  diffle main...feat       merge-base(main, feat) vs feat
+Shorthands (in place of <revs>):
+  working                  same as HEAD: uncommitted changes, staged and untracked included
+  branch [base]            same as <base>...HEAD: the commits on this branch (base: the default branch)
+  pr [number|url]          a GitHub pull request: its base...head, fetched if needed
+                           (without an argument: the pull request for this branch)
 
-Named modes are shorthand:
-  working                  same as: diffle HEAD
-  branch [base]            same as: diffle <base>...HEAD
-  pr                       same as: diffle <default-branch>...HEAD
+Revisions follow git diff:
+  diffle HEAD~3            the last three commits, plus uncommitted changes
+  diffle main..feat        main vs feat
+  diffle main...feat       what feat added since it left main
 
 Status goes to stderr, so stdout carries only the review: closing diffle (Ctrl+C)
 prints the open comments as a prompt for an agent.`,
@@ -66,23 +67,27 @@ prints the open comments as a prompt for an agent.`,
     await run({ kind: 'revspec', args: revs }, cmd.optsWithGlobals<GlobalOpts>());
   });
 
+// Shorthands name what to compare, not commands, so help lists them separately.
 program
-  .command('working')
-  .description('review uncommitted changes: HEAD vs worktree, incl. staged and untracked (same as: diffle HEAD)')
+  .command('working', { hidden: true })
+  .summary('same as HEAD')
+  .description('Same as `diffle HEAD`: uncommitted changes, staged and untracked files included.')
   .action(async (_o, cmd: Command) => run({ kind: 'working' }, cmd.optsWithGlobals<GlobalOpts>()));
 
 program
-  .command('branch')
-  .argument('[base]', 'base branch; default: the default branch')
-  .description('review commits on this branch: merge-base(base, HEAD) vs HEAD (same as: diffle <base>...HEAD)')
+  .command('branch', { hidden: true })
+  .argument('[base]', 'branch to compare against; default: the default branch')
+  .summary('same as <base>...HEAD')
+  .description('Same as `diffle <base>...HEAD`: the commits this branch added since it left <base>.')
   .action(async (base: string | undefined, _o, cmd: Command) =>
     run({ kind: 'branch', base }, cmd.optsWithGlobals<GlobalOpts>()),
   );
 
 program
-  .command('pr')
+  .command('pr', { hidden: true })
   .argument('[pr]', 'pull request number or url; default: the pull request for this branch')
-  .description('review a GitHub pull request: merge-base(base, head) vs head')
+  .summary('a GitHub pull request')
+  .description('A GitHub pull request, as GitHub shows it: merge-base(base, head) vs head.')
   .action(async (pr: string | undefined, _o, cmd: Command) => run({ kind: 'pr', pr }, cmd.optsWithGlobals<GlobalOpts>()));
 
 const config = program.command('config').description('show or edit the user config (same settings as the UI dialog)');
@@ -96,6 +101,7 @@ config
   });
 config
   .command('add-auto-viewed')
+  .description('add patterns for files that start viewed')
   .argument('<glob...>', 'patterns for files that start viewed and collapsed, e.g. "*.lock"')
   .action(async (globs: string[]) => {
     const store = await UserConfigStore.open();
@@ -104,6 +110,7 @@ config
   });
 config
   .command('set-context')
+  .description('set context lines around changes')
   .argument('<n>', 'context lines around changes', parseContext)
   .action(async (n: number) => {
     const store = await UserConfigStore.open();
@@ -112,6 +119,7 @@ config
   });
 config
   .command('set-lsp')
+  .description('set the language-server command')
   .argument('<command>', 'shell command that starts a stdio language server, e.g. "pyrefly lsp"')
   .action(async (command: string) => {
     const store = await UserConfigStore.open();
@@ -120,6 +128,7 @@ config
   });
 config
   .command('remove-auto-viewed')
+  .description('remove patterns for files that start viewed')
   .argument('<glob...>')
   .action(async (globs: string[]) => {
     const store = await UserConfigStore.open();
@@ -127,8 +136,8 @@ config
     console.log(store.get().autoViewed.join('\n'));
   });
 
-function collect(value: string, prev: string[]): string[] {
-  return [...prev, value];
+function collect(value: string, prev?: string[]): string[] {
+  return [...(prev ?? []), value];
 }
 
 async function openRepo(opts: GlobalOpts): Promise<GitRepo> {

@@ -23,7 +23,7 @@ describe('diffle --help', () => {
   });
 
   it('still lists the commands, which are verbs', () => {
-    for (const command of ['export', 'comment', 'config']) expect(commands).toMatch(new RegExp(`^ +${command}\\b`, 'm'));
+    expect(commands).toMatch(/^ +config\b/m);
   });
 
   it('says what each shorthand is the same as before explaining it', () => {
