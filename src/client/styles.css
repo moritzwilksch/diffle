@@ -295,17 +295,17 @@ button.off { opacity: 0.45; }
 .searchbar .status { color: var(--fg-2); font: 0.75rem var(--mono); min-width: 4.375rem; text-align: right; }
 .flash { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); max-width: min(48rem, 90vw); overflow-wrap: anywhere; background: var(--fg); color: var(--bg); font-size: 1rem; line-height: 1.4; padding: 0.75rem 1.25rem; border-radius: 0.5rem; box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35); z-index: 60; animation: flash-in 160ms ease; }
 @keyframes flash-in { from { opacity: 0; transform: translate(-50%, 0.375rem); } to { opacity: 1; transform: translate(-50%, 0); } }
-.dialog.help { width: min(66.25rem, 96vw); max-height: calc(100vh - 2rem); display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.dialog.help { width: max-content; max-width: 96vw; max-height: calc(100vh - 2rem); display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .help-head { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.125rem 0.625rem; border-bottom: 1px solid var(--border); }
 .help-head h3 { margin: 0; font-size: 0.9375rem; }
-/* Two balanced columns; the body scrolls when even that exceeds the viewport. */
-.help-body { overflow: auto; padding: 0.5rem 1.125rem 0.875rem; display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.75rem; align-items: start; }
-.help-body section { margin-bottom: 0.5rem; }
-.help-body h4 { margin: 0.25rem 0 2px; font-size: 0.75rem; font-weight: 600; color: var(--fg-2); }
-.dialog.help table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
-.dialog.help td { padding: 0.1875rem 0.25rem; vertical-align: top; border-bottom: 1px solid var(--border); line-height: 1.4; }
-.dialog.help tr:last-child td { border-bottom: 0; }
-.dialog.help td:first-child { white-space: nowrap; width: 9.375rem; }
+/* Two columns of one-line rows; keys share a width within a column via subgrid. The body scrolls when the viewport is smaller. */
+.help-body { overflow: auto; padding: 0.625rem 1.125rem 0.875rem; display: grid; grid-template-columns: auto auto; column-gap: 2.5rem; align-items: start; font-size: 0.75rem; white-space: nowrap; }
+.help-col { display: grid; grid-template-columns: max-content 1fr; column-gap: 0.75rem; align-content: start; }
+.help-col section { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; margin-bottom: 0.625rem; }
+.help-col section:last-child { margin-bottom: 0; }
+.help-body h4 { grid-column: 1 / -1; margin: 0 0 0.125rem; font-size: 0.75rem; font-weight: 600; color: var(--fg-2); }
+.help-row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; line-height: 1.7; }
+.help-keys { display: inline-flex; gap: 0.375rem; }
 .menu .entry kbd, .menu .inline kbd { margin-left: 0.25rem; }
 
 /* Threads */
