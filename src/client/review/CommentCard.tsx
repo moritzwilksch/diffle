@@ -18,14 +18,14 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const [posting, setPosting] = useState(false);
-  const [confirmPost, setConfirmPost] = useState(false);
   const [posted, setPosted] = useState(false);
   const del = useConfirm(() => void deleteThread(thread.id));
-  useEffect(() => {
-    if (!confirmPost) return;
-    const t = setTimeout(() => setConfirmPost(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirmPost]);
+  const post = useConfirm(() => {
+    setPosting(true);
+    void exportToGithub([thread.id])
+      .then(setPosted)
+      .finally(() => setPosting(false));
+  });
   useEffect(() => {
     if (!posted) return;
     const t = setTimeout(() => setPosted(false), 2000);
@@ -63,25 +63,13 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           </button>
         )}
         <button
-          className={`ghost ${confirmPost ? 'confirm' : posted ? 'posted' : 'icon'}`}
+          className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
           disabled={posting || thread.stale}
-          onClick={async () => {
-            if (!confirmPost) {
-              setConfirmPost(true);
-              return;
-            }
-            setConfirmPost(false);
-            setPosting(true);
-            try {
-              setPosted(await exportToGithub([thread.id]));
-            } finally {
-              setPosting(false);
-            }
-          }}
-          title={thread.stale ? 'Stale threads cannot be posted to GitHub' : confirmPost ? 'Click again to post this thread to the pull request' : 'Post this thread to the GitHub pull request'}
+          onClick={post.fire}
+          title={thread.stale ? 'Stale threads cannot be posted to GitHub' : post.armed ? 'Click again to post this thread to the pull request' : 'Post this thread to the GitHub pull request'}
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {confirmPost ? 'Post?' : posted ? 'Posted' : null}
+          {post.armed ? 'Post?' : posted ? 'Posted' : null}
         </button>
         <button className="ghost icon" onClick={() => (replying ? closeReply() : openReply(thread.id))} title={replying ? 'Cancel reply' : 'Reply'}>
           {replying ? <X size="0.875rem" /> : <Reply size="0.875rem" />}

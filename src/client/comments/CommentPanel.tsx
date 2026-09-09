@@ -23,24 +23,20 @@ export function CommentPanel() {
   const exportToGithub = useStore((s) => s.exportToGithub);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
-  const [confirmPost, setConfirmPost] = useState(false);
   const [posted, setPosted] = useState(false);
   useEffect(() => {
     if (!posted) return;
     const t = setTimeout(() => setPosted(false), 2000);
     return () => clearTimeout(t);
   }, [posted]);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [confirmStale, setConfirmStale] = useState(false);
-  useEffect(() => {
-    if (!confirmPost && !confirmClear && !confirmStale) return;
-    const t = setTimeout(() => {
-      setConfirmPost(false);
-      setConfirmClear(false);
-      setConfirmStale(false);
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [confirmPost, confirmClear, confirmStale]);
+  const post = useConfirm(() => {
+    setPosting(true);
+    void exportToGithub()
+      .then(setPosted)
+      .finally(() => setPosting(false));
+  });
+  const clear = useConfirm(() => void clearThreads());
+  const stale = useConfirm(() => void deleteStaleThreads());
 
   const shown = useMemo(() => visibleThreads({ threads, showResolved }), [threads, showResolved]);
   const open = threads.filter((t) => !t.resolved);
@@ -88,61 +84,32 @@ export function CommentPanel() {
         />
         <CopyButton label="All" icon={<ClipboardCopy size="0.875rem" />} primary disabled={open.length === 0} title="Copy all open threads as a prompt (yy)" onCopy={() => copy()} />
         <button
-          className={`ghost ${confirmPost ? 'confirm' : posted ? 'posted' : 'icon'}`}
+          className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
           disabled={posting || (open.length === 0 && !posted)}
-          title={confirmPost ? 'Click again to post all open threads to the pull request' : 'Post all open threads to the GitHub pull request'}
-          aria-label="Post all open threads to the GitHub pull request"
-          onClick={async () => {
-            if (!confirmPost) {
-              setConfirmPost(true);
-              return;
-            }
-            setConfirmPost(false);
-            setPosting(true);
-            try {
-              setPosted(await exportToGithub());
-            } finally {
-              setPosting(false);
-            }
-          }}
+          title={post.armed ? 'Click again to post all open threads to the pull request' : 'Post all open threads to the GitHub pull request'}
+          aria-label={post.armed ? 'Post all open threads to the pull request? Click again to confirm' : 'Post all open threads to the GitHub pull request'}
+          onClick={post.fire}
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {confirmPost ? 'Post all?' : posted ? 'Posted' : null}
+          {post.armed ? 'Post all?' : posted ? 'Posted' : null}
         </button>
         <button
-          className={`ghost danger ${confirmClear ? 'confirm' : 'icon'}`}
+          className={`ghost danger ${clear.armed ? 'confirm' : 'icon'}`}
           disabled={threads.length === 0}
-          title={confirmClear ? 'Click again to delete all threads' : 'Delete all threads for this mode'}
-          onClick={() => {
-            if (!confirmClear) {
-              setConfirmClear(true);
-              return;
-            }
-            setConfirmClear(false);
-            void clearThreads();
-          }}
+          title={clear.armed ? 'Click again to delete all threads' : 'Delete all threads for this mode'}
+          onClick={clear.fire}
         >
           <Trash2 size="0.875rem" />
-          {confirmClear && 'Delete all?'}
+          {clear.armed && 'Delete all?'}
         </button>
       </div>
       {staleCount > 0 && (
         <div className="panel-filter stale-row" title="Stale threads no longer point into the diff: their text changed or left the changed lines">
           <AlertTriangle size="0.75rem" />
           {staleCount} stale
-          <button
-            className={`ghost danger ${confirmStale ? 'confirm' : ''}`}
-            onClick={() => {
-              if (!confirmStale) {
-                setConfirmStale(true);
-                return;
-              }
-              setConfirmStale(false);
-              void deleteStaleThreads();
-            }}
-          >
+          <button className={`ghost danger ${stale.armed ? 'confirm' : ''}`} onClick={stale.fire}>
             <Trash2 size="0.75rem" />
-            {confirmStale ? 'Delete stale?' : 'Delete'}
+            {stale.armed ? 'Delete stale?' : 'Delete'}
           </button>
         </div>
       )}
@@ -244,7 +211,7 @@ const ThreadRow = memo(function ThreadRow({
           type="button"
           className={`ghost danger delete ${del.armed ? 'confirm' : 'icon'}`}
           title={del.armed ? 'Click again to delete this thread' : 'Delete this thread'}
-          aria-label="Delete this thread"
+          aria-label={del.armed ? 'Delete this thread? Click again to confirm' : 'Delete this thread'}
           onClick={(e) => {
             e.stopPropagation();
             del.fire();

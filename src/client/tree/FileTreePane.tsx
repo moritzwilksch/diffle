@@ -7,6 +7,7 @@ import { focusReview } from '../keyboard/useKeymap.js';
 import { countViewed, isCollapsed, isViewed, viewedState } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore } from '../store.js';
+import { useConfirm } from '../useConfirm.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
 
@@ -48,12 +49,7 @@ export function FileTreePane() {
   const config = useStore((s) => s.config);
   // Memoised: a raw selector would rescan every changed file on each store update, including cursor moves.
   const viewedCount = useMemo(() => (snapshot ? countViewed({ viewed, config }, snapshot.changed) : 0), [snapshot, viewed, config]);
-  const [confirmUnview, setConfirmUnview] = useState(false);
-  useEffect(() => {
-    if (!confirmUnview) return;
-    const t = setTimeout(() => setConfirmUnview(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirmUnview]);
+  const unview = useConfirm(() => void unviewAll());
 
   const paths = useMemo(() => {
     if (!snapshot) return [] as string[];
@@ -195,20 +191,13 @@ export function FileTreePane() {
         </div>
         <span style={{ marginLeft: 'auto' }}>{paths.length}</span>
         <button
-          className={`ghost ${confirmUnview ? 'confirm' : 'icon'}`}
+          className={`ghost ${unview.armed ? 'confirm' : 'icon'}`}
           disabled={viewedCount === 0}
-          title={confirmUnview ? 'Click again to mark all files not viewed' : `Mark all ${viewedCount} viewed file(s) not viewed`}
-          onClick={() => {
-            if (!confirmUnview) {
-              setConfirmUnview(true);
-              return;
-            }
-            setConfirmUnview(false);
-            void unviewAll();
-          }}
+          title={unview.armed ? 'Click again to mark all files not viewed' : `Mark all ${viewedCount} viewed file(s) not viewed`}
+          onClick={unview.fire}
         >
           <EyeOff size="0.875rem" />
-          {confirmUnview && 'Un-view all?'}
+          {unview.armed && 'Un-view all?'}
         </button>
       </div>
       <div className="tree-body" ref={bodyRef}>

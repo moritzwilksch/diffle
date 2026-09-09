@@ -34,7 +34,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   rendered.length = 0;
-  useStore.setState({ threads, showResolved: false, activePath: null });
+  useStore.setState({ threads, showResolved: false, activePath: null, deleteThread: () => Promise.resolve() });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -75,6 +75,7 @@ describe('CommentPanel rows', () => {
       await click();
       expect(btn().classList.contains('confirm')).toBe(true);
       expect(btn().textContent).toBe('Delete?');
+      expect(btn().getAttribute('aria-label')).toContain('Click again');
       expect(deleteThread).not.toHaveBeenCalled();
       await act(() => vi.advanceTimersByTime(3000));
       expect(btn().classList.contains('confirm')).toBe(false);
