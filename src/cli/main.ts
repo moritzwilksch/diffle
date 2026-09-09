@@ -5,8 +5,7 @@ import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { GithubError } from '../server/github.js';
 import { LspPool } from '../server/lsp/LspPool.js';
-import { candidatesFor } from '../server/lsp/registry.js';
-import { argv0, findOnPath } from '../server/lsp/which.js';
+import { resolveServers } from '../server/lsp/registry.js';
 import { RevspecError } from '../server/revspec.js';
 import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
 import { Session } from '../server/Session.js';
@@ -209,20 +208,17 @@ program
   .description('show the language server each language would get, and what is missing from PATH')
   .action(async () => {
     const { lspCommands } = (await UserConfigStore.open()).get();
+    // The resolver decides, this only prints: what a run would start, said the same way.
+    const { servers, missing } = resolveServers(LANGUAGE_IDS, lspCommands);
+    const answer = new Map<LanguageId, string>();
+    for (const s of servers)
+      for (const language of s.languages)
+        answer.set(language, `${s.command}${lspCommands[language] == null ? '' : c.dim(' (config)')}`);
+    // An empty override is off, and names nothing to install: the resolver leaves `tried` empty.
+    for (const m of missing)
+      answer.set(m.language, c.dim(m.tried.length ? `not on PATH (tried ${m.tried.join(', ')})` : 'off in config'));
     const width = Math.max(...LANGUAGE_IDS.map((l) => l.length));
-    for (const language of LANGUAGE_IDS) {
-      const override = lspCommands[language];
-      const command = override ?? candidatesFor(language).find((cmd) => findOnPath(cmd) != null);
-      console.log(
-        `${language.padEnd(width)}  ${
-          override === ''
-            ? c.dim('off in config')
-            : command == null
-              ? c.dim(`not on PATH (tried ${candidatesFor(language).map(argv0).join(', ')})`)
-              : `${command}${override == null ? '' : c.dim(' (config)')}`
-        }`,
-      );
-    }
+    for (const language of LANGUAGE_IDS) console.log(`${language.padEnd(width)}  ${answer.get(language) ?? ''}`);
   });
 
 function collect(value: string, prev: string[]): string[] {
