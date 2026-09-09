@@ -23,13 +23,21 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 type Rendered = { id: string; element: HTMLElement; type: 'diff' };
 let rendered: Rendered[] = [];
 vi.mock('@pierre/diffs/react', () => ({
-  CodeView: forwardRef(function CodeView(props: { containerRef: (el: HTMLDivElement | null) => void; className: string }, ref) {
+  CodeView: forwardRef(function CodeView(
+    props: { containerRef: (el: HTMLDivElement | null) => void; className: string; items: { id: string }[]; renderHeaderMetadata: (item: { id: string }) => unknown },
+    ref,
+  ) {
     useImperativeHandle(ref, () => ({
       getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
       scrollTo: () => {},
     }));
-    return createElement('div', { ref: props.containerRef, className: props.className });
+    // Each item's header metadata renders in the light DOM so tests can see the header's buttons.
+    return createElement(
+      'div',
+      { ref: props.containerRef, className: props.className },
+      props.items.map((it) => createElement('div', { key: it.id, className: 'header' }, props.renderHeaderMetadata(it) as never)),
+    );
   }),
 }));
 
@@ -192,5 +200,17 @@ describe('ReviewPane scroller effects', () => {
     await act(() => useStore.setState({ error: null }));
     expect(installSearchHighlights).toHaveBeenCalledTimes(1);
     expect(installSearchHighlights.mock.calls[0]![1]).toBe(host.querySelector('.codeview'));
+  });
+
+  it('offers one way back from the file view: the bar above, not the file header too', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };
+    await act(() => useStore.setState({ snapshot: snap(changed), loaded: { 'a.txt': file } }));
+    expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(1);
+    expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(0);
+
+    await act(() => useStore.setState({ fileView: { path: 'a.txt', item: file, from: { position: null, activePath: null } } }));
+    expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(1);
+    expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(0);
   });
 });

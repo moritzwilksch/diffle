@@ -11,7 +11,7 @@ import type {
   TokenEventBase,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
-import { ArrowLeft, ChevronDown, ChevronRight, Download, FileDiff, FileText, MessageSquare, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Download, FileText, MessageSquare, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { isPython, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
 import { FilePath } from '../FilePath.js';
@@ -738,7 +738,6 @@ function FileHeaderMeta({ path }: { path: string }) {
   const collapsedNow = useStore((s) => isCollapsed(s, path));
   const full = useStore((s) => s.fileView?.path === path);
   const openFullFile = useStore((s) => s.openFullFile);
-  const closeFullFile = useStore((s) => s.closeFullFile);
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');
   const loadPatch = useStore((s) => s.loadPatch);
   return (
@@ -768,9 +767,10 @@ function FileHeaderMeta({ path }: { path: string }) {
           <RefreshCw size="0.75rem" /> changed since viewed
         </span>
       )}
-      {(!file || (!file.binary && !file.submodule && file.status !== 'D')) && (
-        <button className={`ghost icon${full ? ' on' : ''}`} onClick={() => (full ? closeFullFile() : void openFullFile(path))} title={full ? 'Back to the diff (Ctrl+o)' : 'View full file (F)'}>
-          {full ? <FileDiff size="0.875rem" /> : <FileText size="0.875rem" />}
+      {/* In the file view the bar above already carries the way back, so the header offers no second button. */}
+      {!full && (!file || (!file.binary && !file.submodule && file.status !== 'D')) && (
+        <button className="ghost icon" onClick={() => void openFullFile(path)} title="View full file (F)">
+          <FileText size="0.875rem" />
         </button>
       )}
       {file && !full && (

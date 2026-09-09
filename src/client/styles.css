@@ -155,8 +155,6 @@ button.off { opacity: 0.45; }
 .file-meta .add { color: var(--add); }
 .file-meta .del { color: var(--del); }
 .file-meta label { display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; font-family: var(--sans); }
-/* The whole-file toggle stays lit while the diff is swapped out, so the header says why there are no hunks. */
-.file-meta button.ghost.on { background: var(--bg-3); color: var(--accent); }
 .file-meta .badge { background: var(--bg-3); border-radius: 0.625rem; padding: 0 0.4375rem; display: inline-flex; align-items: center; gap: 0.1875rem; }
 
 .annotation { font-family: var(--sans); font-size: 0.8125rem; margin: 0.25rem 0.5rem; }
