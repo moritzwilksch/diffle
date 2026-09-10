@@ -10,6 +10,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
+import { focusReview } from '../keyboard/useKeymap.js';
 import { lastCommitsRequest } from '../model.js';
 import { useStore } from '../store.js';
 import { RefInput } from './RefInput.js';
@@ -45,7 +46,6 @@ export function ModePicker() {
   }, [open, pane]);
 
   const wrap = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
   const targetRef = useRef<HTMLInputElement>(null);
   const comparisonToggle = useRef<HTMLDivElement>(null);
 
@@ -74,7 +74,9 @@ export function ModePicker() {
 
   const choose = (req: ModeRequest) => {
     setOpen(false);
-    trigger.current?.focus();
+    // Hand focus back to the diff instead of the trigger: a programmatic focus there shows the
+    // native ring even though the user never navigated to the button.
+    focusReview();
     void switchMode(req);
   };
   const openPr = async () => {
@@ -88,7 +90,7 @@ export function ModePicker() {
       if (view !== prView.current) return;
       if (result === 'applied') {
         setOpen(false);
-        trigger.current?.focus();
+        focusReview();
       } else if (typeof result === 'object') {
         setPrError(result.error);
         prInput.current?.focus();
@@ -115,7 +117,6 @@ export function ModePicker() {
   return (
     <div className="menu-wrap" ref={wrap}>
       <button
-        ref={trigger}
         onClick={() => setOpen(!open)}
         title="Change what is compared (m)"
         aria-expanded={open}
