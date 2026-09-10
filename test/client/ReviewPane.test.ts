@@ -336,5 +336,14 @@ describe('ReviewPane scroller effects', () => {
     );
     expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(1);
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(0);
+    expect(host.querySelector('[title="Collapse / expand"]')).toBeNull();
+    const collapsed = useStore.getState().collapsed;
+    await act(() => host.querySelector<HTMLElement>('[data-diffs-header] .filename')!.click());
+    expect(useStore.getState().collapsed).toBe(collapsed);
+
+    await act(() => useStore.setState({ fileView: null }));
+    expect(host.querySelector('[title="Collapse / expand"]')).not.toBeNull();
+    await act(() => host.querySelector<HTMLElement>('[data-diffs-header] .filename')!.click());
+    expect(useStore.getState().collapsed['a.txt']).toBe(true);
   });
 });

@@ -831,7 +831,9 @@ function FileHeaderMeta({ path }: { path: string }) {
     return () => host.removeAttribute('data-active');
   }, [active]);
   const toggleCollapsed = useStore((s) => s.toggleCollapsed);
+  const full = useStore((s) => s.fileView?.path === path);
   useEffect(() => {
+    if (full) return;
     const metadata = ref.current;
     const host = metadata && hostOf(metadata);
     const header =
@@ -845,12 +847,11 @@ function FileHeaderMeta({ path }: { path: string }) {
     };
     header.addEventListener('click', toggle);
     return () => header.removeEventListener('click', toggle);
-  }, [path, toggleCollapsed]);
+  }, [path, toggleCollapsed, full]);
   const vs = useStore((s) => (file ? viewedState(s, file) : 'unviewed'));
   const setViewed = useStore((s) => s.setViewed);
   const count = useStore((s) => s.threads.filter((t) => t.anchor.path === path && !t.resolved).length);
   const collapsedNow = useStore((s) => isCollapsed(s, path));
-  const full = useStore((s) => s.fileView?.path === path);
   const openFullFile = useStore((s) => s.openFullFile);
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');
   const loadPatch = useStore((s) => s.loadPatch);
@@ -911,9 +912,11 @@ function FileHeaderMeta({ path }: { path: string }) {
           </label>
         </>
       )}
-      <Button variant="ghost" icon onClick={() => toggleCollapsed(path)} title="Collapse / expand">
-        {collapsedNow ? <ChevronRight size="0.875rem" /> : <ChevronDown size="0.875rem" />}
-      </Button>
+      {!full && (
+        <Button variant="ghost" icon onClick={() => toggleCollapsed(path)} title="Collapse / expand">
+          {collapsedNow ? <ChevronRight size="0.875rem" /> : <ChevronDown size="0.875rem" />}
+        </Button>
+      )}
     </span>
   );
 }
