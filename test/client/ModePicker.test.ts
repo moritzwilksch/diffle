@@ -70,6 +70,20 @@ it('focuses the PR field and prevents duplicate submissions while opening the cu
   expect(useStore.getState().modeMenuOpen).toBe(false);
 });
 
+it('returns focus to the review pane after a successful switch instead of the menu trigger', async () => {
+  const review = document.createElement('main');
+  review.className = 'review';
+  review.tabIndex = -1;
+  document.body.appendChild(review);
+  try {
+    await submit();
+    await act(() => finish('applied'));
+    expect(document.activeElement).toBe(review);
+  } finally {
+    review.remove();
+  }
+});
+
 it('keeps failed input for correction and clears the inline error on editing', async () => {
   await type('123');
   await submit();
