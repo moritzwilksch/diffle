@@ -1,0 +1,85 @@
+/* Preserve browser form defaults and the app density; Tailwind Preflight is intentionally omitted. */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 90%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 0.8125rem/1.4 var(--sans);
+  color: var(--fg);
+  background: var(--bg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+kbd {
+  font: 0.6875rem var(--mono);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  background: var(--bg-2);
+}
+
+/* Checkboxes outside rendered markdown: drawn here, not by the platform, so they match the buttons. */
+input[type='checkbox']:not(.markdown *) {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.1875rem;
+  background: var(--bg);
+  cursor: pointer;
+  vertical-align: middle;
+  transition:
+    background 80ms,
+    border-color 80ms;
+}
+input[type='checkbox']:not(.markdown *):hover {
+  border-color: var(--fg-2);
+}
+input[type='checkbox']:not(.markdown *):checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type='checkbox']:not(.markdown *):checked::after {
+  content: '';
+  width: 0.25rem;
+  height: 0.5rem;
+  margin-top: -2px;
+  border: solid var(--accent-fg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+input[type='checkbox']:not(.markdown *):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input[type='checkbox']:not(.markdown *):disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+body[data-resizing] {
+  cursor: col-resize;
+  user-select: none;
+}

@@ -1,3 +1,6 @@
+import { ToggleButton } from '../ui/ToggleButton.js';
+import { twMerge } from 'tailwind-merge';
+import { Button } from '../ui/Button.js';
 import {
   Columns2,
   Compass,
@@ -35,55 +38,57 @@ export function Header() {
   const dels = snapshot?.changed.reduce((n, f) => n + f.deletions, 0) ?? 0;
 
   return (
-    <header className="header">
-      <button
-        className={`ghost icon ${layout.treeVisible ? '' : 'off'}`}
+    <header className="col-span-full flex items-center gap-2.5 border-b border-b-border bg-surface px-3 py-0">
+      <Button
+        variant="ghost"
+        icon
+        className={layout.treeVisible ? '' : 'opacity-45'}
         onClick={() => setLayout({ treeVisible: !layout.treeVisible })}
         title="Toggle file tree (⌘/Ctrl+b)"
       >
         <PanelLeft size="1rem" />
-      </button>
-      <span className="brand">
+      </Button>
+      <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em]">
         <GitCompareArrows size="1rem" /> diffle
       </span>
-      <span className="root" title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}>
+      <span
+        className="truncate font-mono text-[0.75rem] text-muted"
+        title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}
+      >
         {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
-      <span className="stat">
-        {changed} files · <span style={{ color: 'var(--add)' }}>+{adds}</span>{' '}
-        <span style={{ color: 'var(--del)' }}>−{dels}</span>
+      <span className="text-muted">
+        {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>
       </span>
-      <span className="spacer" />
+      <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
-      <div className="toggle" title="Diff layout">
-        <button className={diffStyle === 'split' ? 'on' : ''} onClick={() => setDiffStyle('split')}>
+      <div className="flex overflow-hidden rounded-md border border-border" title="Diff layout">
+        <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')}>
           <Columns2 size="0.875rem" /> Split
-        </button>
-        <button className={diffStyle === 'unified' ? 'on' : ''} onClick={() => setDiffStyle('unified')}>
+        </ToggleButton>
+        <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')}>
           <Rows3 size="0.875rem" /> Unified
-        </button>
+        </ToggleButton>
       </div>
-      <button className="ghost icon" onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
+      <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
-      </button>
-      <button
-        className="ghost icon"
-        onClick={() => useStore.getState().setHelpOpen(true)}
-        title="Keyboard shortcuts (?)"
-      >
+      </Button>
+      <Button variant="ghost" icon onClick={() => useStore.getState().setHelpOpen(true)} title="Keyboard shortcuts (?)">
         <Keyboard size="1rem" />
-      </button>
-      <button className="ghost" onClick={() => setSettingsOpen(true)} title="Settings">
+      </Button>
+      <Button variant="ghost" onClick={() => setSettingsOpen(true)} title="Settings">
         <Settings size="0.9375rem" /> Settings
-      </button>
-      <button
-        className={`ghost icon ${layout.panelVisible ? '' : 'off'}`}
+      </Button>
+      <Button
+        variant="ghost"
+        icon
+        className={layout.panelVisible ? '' : 'opacity-45'}
         onClick={() => setLayout({ panelVisible: !layout.panelVisible })}
         title="Toggle comments panel (⌘/Ctrl+Shift+b)"
       >
         <PanelRight size="1rem" />
-      </button>
+      </Button>
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </header>
   );
@@ -120,8 +125,17 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
       .map((m) => `${m.language}: nothing on PATH, tried ${m.tried.join(', ')}`),
   ];
   return (
-    <span className={`lsp ${state}`} title={lines.join('\n') || 'No language server for the files in this diff'}>
-      {busy ? <LoaderCircle size="0.875rem" className="spin" /> : <Compass size="0.875rem" />}
+    <span
+      className={twMerge(
+        `inline-flex items-center gap-1.25 text-[0.75rem] whitespace-nowrap text-muted ${state === 'unavailable' ? 'text-warn' : ''}`,
+      )}
+      title={lines.join('\n') || 'No language server for the files in this diff'}
+    >
+      {busy ? (
+        <LoaderCircle size="0.875rem" className="animate-[spin_900ms_linear_infinite]" />
+      ) : (
+        <Compass size="0.875rem" />
+      )}
       {label}
     </span>
   );

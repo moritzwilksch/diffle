@@ -28,7 +28,7 @@ export const KIND_LABEL: Record<number, string> = {
   26: 'type param',
 };
 
-/** Color group per SymbolKind (a CSS class on the label): types, callables, values, containers; else neutral. */
+/** Semantic color group per SymbolKind: types, callables, values, containers; else neutral. */
 export function kindGroup(kind: number): string {
   if ([5, 10, 11, 23, 26].includes(kind)) return 'type';
   if ([6, 9, 12].includes(kind)) return 'callable';

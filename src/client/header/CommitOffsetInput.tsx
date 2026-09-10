@@ -1,3 +1,4 @@
+import { Button } from '../ui/Button.js';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 
@@ -35,8 +36,9 @@ export function CommitOffsetInput({
     input.current?.select();
   };
   return (
-    <div className="commit-count">
+    <div className="mx-0.5 my-0 inline-flex items-stretch overflow-hidden rounded-md bg-surface focus-within:bg-hover">
       <input
+        className="m-0 box-content w-full max-w-[8ch] min-w-[1ch] flex-[0_1_auto] rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-center text-foreground [font:inherit] focus:outline-none"
         ref={input}
         type="text"
         inputMode="numeric"
@@ -59,8 +61,9 @@ export function CommitOffsetInput({
           if (/^[0-9]*$/.test(e.target.value)) onChange(e.target.value);
         }}
       />
-      <div className="commit-count-buttons">
-        <button
+      <div className="grid grid-rows-[1fr_1fr]">
+        <Button
+          className="rounded-none border-0 bg-transparent px-0.75 py-0 leading-[1] text-muted hover:bg-surface hover:text-foreground"
           type="button"
           tabIndex={-1}
           aria-label={`Increase ${label.toLowerCase()}`}
@@ -68,8 +71,9 @@ export function CommitOffsetInput({
           onClick={() => step(1)}
         >
           <ChevronUp size="0.625rem" />
-        </button>
-        <button
+        </Button>
+        <Button
+          className="rounded-none border-0 bg-transparent px-0.75 py-0 leading-[1] text-muted hover:bg-surface hover:text-foreground"
           type="button"
           tabIndex={-1}
           aria-label={`Decrease ${label.toLowerCase()}`}
@@ -77,7 +81,7 @@ export function CommitOffsetInput({
           onClick={() => step(-1)}
         >
           <ChevronDown size="0.625rem" />
-        </button>
+        </Button>
       </div>
     </div>
   );

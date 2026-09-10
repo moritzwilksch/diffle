@@ -1,3 +1,6 @@
+import { ToggleButton } from '../ui/ToggleButton.js';
+import { twMerge } from 'tailwind-merge';
+import { Button } from '../ui/Button.js';
 import {
   ArrowLeftRight,
   ChevronDown,
@@ -115,38 +118,45 @@ export function ModePicker() {
   ] as const;
 
   return (
-    <div className="menu-wrap" ref={wrap}>
-      <button
+    <div className="relative" ref={wrap}>
+      <Button
         onClick={() => setOpen(!open)}
         title="Change what is compared (m)"
         aria-expanded={open}
         aria-controls="mode-picker"
-        style={{ fontFamily: 'var(--mono)' }}
+        className="font-mono"
       >
         {snapshot?.mode.label ?? '…'} <ChevronDown size="0.875rem" />
-      </button>
+      </Button>
       {open && (
-        <div className="menu mode-menu" id="mode-picker" role="dialog" aria-label="Compare">
-          <div className="mode-entries">
-            <div className="menu-title">Compare</div>
+        <div
+          className="absolute top-[calc(100%_+_0.375rem)] left-0 z-20 flex w-max max-w-[calc(100vw_-_2rem)] min-w-60 rounded-[0.625rem] border border-border bg-canvas p-1.5 shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)] max-[640px]:fixed max-[640px]:top-12 max-[640px]:left-2 max-[640px]:max-w-[calc(100vw_-_1rem)]"
+          id="mode-picker"
+          role="dialog"
+          aria-label="Compare"
+        >
+          <div className="w-60 shrink-0 max-[640px]:w-44">
+            <div className="px-2.5 pt-1 pb-1.5 text-[0.6875rem] font-semibold text-muted">Compare</div>
             {entries.map((entry, i) => (
-              <button
+              <Button
                 key={entry.label}
-                className={`entry ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.kind === 'working') ? 'active' : ''}`}
+                className={twMerge(
+                  `grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.kind === 'working') ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
+                )}
                 aria-expanded={entry.pane ? pane === entry.pane : undefined}
                 aria-controls={entry.pane ? 'mode-config' : undefined}
                 onClick={() => pick(i + 1)}
               >
                 <entry.icon size="0.875rem" />
-                <span className="label">{entry.label}</span>
+                <span className="whitespace-nowrap">{entry.label}</span>
                 <kbd>{i + 1}</kbd>
                 {entry.pane ? <ChevronRight size="0.875rem" /> : <span />}
-              </button>
+              </Button>
             ))}
           </div>
           {pane && (
             <form
-              className="mode-config"
+              className="ml-1.5 flex w-76 min-w-0 flex-col gap-3 border-l border-l-border px-3 pt-0 pb-2"
               id="mode-config"
               aria-label={entries.find((e) => e.pane === pane)?.label}
               onKeyDown={(e) => {
@@ -166,10 +176,12 @@ export function ModePicker() {
                 if (pane === 'pr') void openPr();
               }}
             >
-              {pane === 'pr' && <div className="menu-title">Pull request</div>}
+              {pane === 'pr' && (
+                <div className="px-2.5 pt-1 pb-1.5 text-[0.6875rem] font-semibold text-muted">Pull request</div>
+              )}
               {pane === 'refs' && (
                 <>
-                  <div className="ref-range">
+                  <div className="flex items-center gap-1.5 pt-1.5 font-mono text-[0.8125rem] leading-[1.5]">
                     <RefInput
                       label="Base ref"
                       value={a}
@@ -189,9 +201,9 @@ export function ModePicker() {
                       onAccept={() => comparisonToggle.current?.focus()}
                     />
                   </div>
-                  <div className="ref-actions">
+                  <div className="flex items-center gap-2">
                     <div
-                      className="toggle ref-comparison"
+                      className="flex self-start overflow-hidden rounded-md border border-border focus-visible:outline-2 focus-visible:outline-offset-[2px] focus-visible:outline-accent focus-visible:outline-solid"
                       ref={comparisonToggle}
                       role="group"
                       aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
@@ -209,28 +221,21 @@ export function ModePicker() {
                         if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
                       }}
                     >
-                      <button
-                        type="button"
-                        className={dots === '..' ? 'on' : ''}
-                        tabIndex={-1}
-                        aria-pressed={dots === '..'}
-                        onClick={() => setDots('..')}
-                      >
+                      <ToggleButton type="button" selected={dots === '..'} tabIndex={-1} onClick={() => setDots('..')}>
                         Direct
-                      </button>
-                      <button
+                      </ToggleButton>
+                      <ToggleButton
                         type="button"
-                        className={dots === '...' ? 'on' : ''}
+                        selected={dots === '...'}
                         tabIndex={-1}
-                        aria-pressed={dots === '...'}
                         onClick={() => setDots('...')}
                       >
                         Merge base
-                      </button>
+                      </ToggleButton>
                     </div>
-                    <button
+                    <Button
                       id="swap-refs"
-                      className="swap-refs"
+                      className="border-0 bg-transparent p-0.5 text-muted hover:bg-hover hover:text-foreground"
                       type="button"
                       tabIndex={-1}
                       aria-label="Swap refs"
@@ -239,16 +244,16 @@ export function ModePicker() {
                       onClick={swapRefs}
                     >
                       <ArrowLeftRight size="0.75rem" />
-                    </button>
+                    </Button>
                   </div>
-                  <p className="mode-hint">
+                  <p className="m-0 p-0 text-[0.75rem] whitespace-normal text-muted">
                     {dots === '..' ? 'Compare these two revisions.' : 'Compare changes since their common ancestor.'}
                   </p>
                 </>
               )}
               {pane === 'commits' && (
-                <div className="commit-config">
-                  <div className="commit-range">
+                <div className="flex flex-col gap-2 pt-1.5">
+                  <div className="flex items-baseline font-mono text-[0.8125rem] leading-[1.5]">
                     <span>HEAD~</span>
                     <CommitOffsetInput
                       label="Base offset"
@@ -264,9 +269,10 @@ export function ModePicker() {
               )}
               {pane === 'pr' && (
                 <>
-                  <label className="ref-select">
-                    <span className="lbl">PR number or URL</span>
+                  <label className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-[0.75rem] text-muted">PR number or URL</span>
                     <input
+                      className="w-full min-w-0 rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-[0.75rem] leading-[normal] text-foreground"
                       ref={prInput}
                       autoFocus
                       autoComplete="off"
@@ -282,25 +288,26 @@ export function ModePicker() {
                       placeholder="Current branch’s PR"
                     />
                   </label>
-                  <p className="mode-hint" id="pr-hint">
+                  <p className="m-0 p-0 text-[0.75rem] whitespace-normal text-muted" id="pr-hint">
                     Enter a PR number or URL, or leave blank for this branch.
                   </p>
                   {prError && (
-                    <p className="mode-error" id="pr-error" role="alert">
+                    <p className="m-0 text-[0.75rem] wrap-anywhere text-del" id="pr-error" role="alert">
                       {prError}
                     </p>
                   )}
                 </>
               )}
-              <button
-                className="primary"
+              <Button
+                className="mt-auto self-end"
+                variant="primary"
                 type="submit"
                 aria-live={pane === 'pr' ? 'polite' : undefined}
                 aria-busy={pane === 'pr' && prPending}
                 disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validOffsets}
               >
                 {pane === 'pr' ? (prPending ? 'Opening PR…' : 'Open PR') : 'Compare'}
-              </button>
+              </Button>
             </form>
           )}
         </div>

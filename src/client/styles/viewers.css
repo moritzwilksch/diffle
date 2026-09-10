@@ -1,0 +1,43 @@
+/* Viewer hosts inherit our palette; shadow-root rules remain with their integrations. */
+:root[data-theme='dark'] file-tree-container {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] file-tree-container {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) file-tree-container {
+    color-scheme: dark;
+  }
+}
+
+.tree-theme {
+  --trees-font-family: var(--sans);
+  --trees-font-family-override: var(--sans);
+  /* Row height and density come from FileTreePane; these px defaults sit outside the density factor, so restate them in rem. */
+  --trees-font-size-override: 0.8125rem;
+  --trees-padding-inline-override: 1rem;
+  --trees-icon-width-override: 1rem;
+  --trees-git-lane-width-override: 0.75rem;
+  /* The tree ships its own grey-on-grey palette; route every colour through our tokens so it reads like the rest of the UI. */
+  --trees-bg-override: var(--bg-2);
+  --trees-border-color-override: var(--border);
+  --trees-fg-override: var(--fg);
+  --trees-fg-muted-override: var(--fg-2);
+  --trees-accent-override: var(--accent);
+  --trees-git-added-color-override: var(--add);
+  --trees-git-untracked-color-override: var(--add);
+  --trees-git-modified-color-override: var(--accent);
+  --trees-git-renamed-color-override: var(--kind-type);
+  --trees-git-deleted-color-override: var(--del);
+  --trees-git-ignored-color-override: var(--fg-2);
+}
+
+.codeview diffs-container {
+  display: block;
+  /* Paint the border inside the card; real borders add height the virtualizer cannot see. */
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+}
