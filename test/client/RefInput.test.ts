@@ -62,7 +62,8 @@ it('focuses the base, filters suggestions, and selects one without submitting', 
   expect(document.activeElement).toBe(input());
   expect(input().selectionStart).toBe(0);
   expect(input().selectionEnd).toBe(4);
-  expect(host.querySelectorAll('[role="option"]')).toHaveLength(6);
+  expect(input().getAttribute('aria-expanded')).toBe('false');
+  expect(host.querySelector('[role="listbox"]')).toBeNull();
   await type('scroll');
   expect(host.querySelectorAll('[role="option"]')).toHaveLength(1);
   expect(host.querySelector('[role="option"]')?.textContent).toContain('Fix scrolling');

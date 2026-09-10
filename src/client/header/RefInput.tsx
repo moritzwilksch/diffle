@@ -73,8 +73,8 @@ export function RefInput({
           e.currentTarget.select();
           setQuery('');
           setActive(-1);
-          setOpen(true);
         }}
+        onClick={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onChange={(e) => {
           onChange(e.target.value);

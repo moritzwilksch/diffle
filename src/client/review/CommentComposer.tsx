@@ -1,6 +1,6 @@
 import { Button } from '../ui/Button.js';
 import { FileDiff } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '../store.js';
 
 /** Inline comment editor rendered as an annotation at the selection's last line. */
@@ -11,6 +11,15 @@ export function CommentComposer({ lines }: { lines: string }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = ref.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const style = getComputedStyle(textarea);
+    const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+    textarea.style.height = `${textarea.scrollHeight + borders}px`;
+  }, [text]);
 
   useEffect(() => {
     ref.current?.focus();
@@ -37,7 +46,7 @@ export function CommentComposer({ lines }: { lines: string }) {
   return (
     <div className="mx-2 my-1 rounded-md border border-accent bg-surface p-2 font-sans text-[0.8125rem]">
       <textarea
-        className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
+        className="max-h-[60vh] min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder={`Comment on ${lines}…`}
