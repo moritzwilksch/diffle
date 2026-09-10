@@ -671,20 +671,20 @@ export function ReviewPane() {
 
   if (error)
     return (
-      <main className="min-w-0 min-h-0 relative flex flex-col outline-none">
-        <div className="py-2 px-3 bg-hover border-b border-b-border text-danger">{error}</div>
+      <main className="relative flex min-h-0 min-w-0 flex-col outline-none">
+        <div className="border-b border-b-border bg-hover px-3 py-2 text-danger">{error}</div>
       </main>
     );
   if (!snapshot)
     return (
-      <main className="min-w-0 min-h-0 relative flex flex-col outline-none">
-        <div className="p-10 text-muted text-center">Loading snapshot…</div>
+      <main className="relative flex min-h-0 min-w-0 flex-col outline-none">
+        <div className="p-10 text-center text-muted">Loading snapshot…</div>
       </main>
     );
   if (snapshot.changed.length === 0 && !fileView) {
     return (
-      <main className="min-w-0 min-h-0 relative flex flex-col outline-none">
-        <div className="p-10 text-muted text-center">
+      <main className="relative flex min-h-0 min-w-0 flex-col outline-none">
+        <div className="p-10 text-center text-muted">
           No changes for <code>{snapshot.mode.label}</code>. Open any file from the tree to comment on it.
         </div>
       </main>
@@ -692,7 +692,7 @@ export function ReviewPane() {
   }
 
   return (
-    <main className="min-w-0 min-h-0 relative flex flex-col outline-none" tabIndex={-1}>
+    <main className="relative flex min-h-0 min-w-0 flex-col outline-none" tabIndex={-1}>
       <SearchBar />
       <SymbolPicker />
       <SymbolMenu />
@@ -701,16 +701,16 @@ export function ReviewPane() {
       {fileView && <FileViewBar path={fileView.path} />}
       {fileView
         ? !fileView.item && (
-            <div className="py-2 px-3 bg-hover border-b border-b-border text-muted">Loading {fileView.path}…</div>
+            <div className="border-b border-b-border bg-hover px-3 py-2 text-muted">Loading {fileView.path}…</div>
           )
         : snapshot.changed.some((f) => !loaded[f.path]) && (
-            <div className="py-2 px-3 bg-hover border-b border-b-border text-muted">Loading diffs…</div>
+            <div className="border-b border-b-border bg-hover px-3 py-2 text-muted">Loading diffs…</div>
           )}
       <CodeView<Annot>
         key={theme}
         ref={viewerRef}
         containerRef={attachScroller}
-        className="codeview flex-1 min-h-0 overflow-auto bg-surface outline-none"
+        className="codeview min-h-0 flex-1 overflow-auto bg-surface outline-none"
         items={items}
         options={options}
         selectedLines={selection}
@@ -728,11 +728,11 @@ function FileViewBar({ path }: { path: string }) {
   const external = useStore((s) => s.fileView?.external ?? false);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
-    <div className="flex items-center gap-3 py-1.5 px-3 bg-hover border-b border-b-border text-[0.75rem]">
+    <div className="flex items-center gap-3 border-b border-b-border bg-hover px-3 py-1.5 text-[0.75rem]">
       <Button variant="ghost" onClick={closeFullFile} title="Back to the diff (Ctrl+o)">
         <ArrowLeft size="0.875rem" /> Back to diff
       </Button>
-      <span className="min-w-0 flex-1 font-mono truncate">
+      <span className="min-w-0 flex-1 truncate font-mono">
         <FilePath path={path} />
       </span>
       {file && (
@@ -857,13 +857,13 @@ function FileHeaderMeta({ path }: { path: string }) {
   return (
     <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
       {count > 0 && (
-        <span className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75">
+        <span className="inline-flex items-center gap-0.75 rounded-[0.625rem] bg-hover px-1.75 py-0">
           <MessageSquare size="0.75rem" /> {count}
         </span>
       )}
       {file?.generated && (
         <span
-          className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75 text-muted font-sans"
+          className="inline-flex items-center gap-0.75 rounded-[0.625rem] bg-hover px-1.75 py-0 font-sans text-muted"
           title="Detected as generated: starts collapsed and ranks low"
         >
           generated
@@ -871,7 +871,7 @@ function FileHeaderMeta({ path }: { path: string }) {
       )}
       {file?.submodule && (
         <span
-          className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75 text-muted font-sans"
+          className="inline-flex items-center gap-0.75 rounded-[0.625rem] bg-hover px-1.75 py-0 font-sans text-muted"
           title="Submodule: only the recorded commit changes"
         >
           submodule
@@ -884,7 +884,7 @@ function FileHeaderMeta({ path }: { path: string }) {
       )}
       {file && vs === 'restale' && (
         <span
-          className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75 text-warn font-sans"
+          className="inline-flex items-center gap-0.75 rounded-[0.625rem] bg-hover px-1.75 py-0 font-sans text-warn"
           title="You marked this viewed, then its contents changed"
         >
           <RefreshCw size="0.75rem" /> changed since viewed
@@ -899,7 +899,7 @@ function FileHeaderMeta({ path }: { path: string }) {
       {file && !full && (
         <>
           <label
-            className="inline-flex items-center gap-1 cursor-pointer font-sans"
+            className="inline-flex cursor-pointer items-center gap-1 font-sans"
             title={
               vs === 'restale'
                 ? 'Mark viewed again and collapse the file (v)'

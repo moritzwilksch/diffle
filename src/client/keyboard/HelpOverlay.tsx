@@ -99,20 +99,20 @@ export function HelpOverlay() {
     <Dialog
       label="Keyboard shortcuts"
       onClose={() => setOpen(false)}
-      className="w-max max-w-[96vw] p-0 max-h-[calc(100vh_-_2rem)] flex flex-col overflow-hidden"
+      className="flex max-h-[calc(100vh_-_2rem)] w-max max-w-[96vw] flex-col overflow-hidden p-0"
     >
-      <div className="flex items-center justify-between px-4.5 pt-3 pb-2.5 border-b border-b-border">
+      <div className="flex items-center justify-between border-b border-b-border px-4.5 pt-3 pb-2.5">
         <h3 className="m-0 text-[0.9375rem]">Keyboard shortcuts</h3>
         <Button onClick={() => setOpen(false)}>Close</Button>
       </div>
-      <div className="overflow-auto px-4.5 pt-2.5 pb-3.5 grid grid-cols-[auto_auto] gap-x-10 items-start text-[0.75rem] whitespace-nowrap">
+      <div className="grid grid-cols-[auto_auto] items-start gap-x-10 overflow-auto px-4.5 pt-2.5 pb-3.5 text-[0.75rem] whitespace-nowrap">
         {COLUMNS.map((sections, col) => (
-          <div key={col} className="grid grid-cols-[max-content_1fr] gap-x-3 content-start">
+          <div key={col} className="grid grid-cols-[max-content_1fr] content-start gap-x-3">
             {sections.map((section) => (
-              <section className="grid grid-cols-subgrid col-span-full mb-2.5 last:mb-0" key={section.title}>
+              <section className="col-span-full mb-2.5 grid grid-cols-subgrid last:mb-0" key={section.title}>
                 <h4 className="col-span-full m-0 mb-0.5 text-[0.75rem] font-semibold text-muted">{section.title}</h4>
                 {section.rows.map(([k, a]) => (
-                  <div key={k} className="grid grid-cols-subgrid col-span-full items-baseline leading-[1.7]">
+                  <div key={k} className="col-span-full grid grid-cols-subgrid items-baseline leading-[1.7]">
                     <span className="inline-flex gap-1.5">
                       {k.split(/\s{2,}/).map((part, i) => (
                         <kbd key={i}>{part}</kbd>

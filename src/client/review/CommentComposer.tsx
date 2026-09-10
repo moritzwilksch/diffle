@@ -35,9 +35,9 @@ export function CommentComposer({ lines }: { lines: string }) {
   };
 
   return (
-    <div className="font-sans text-[0.8125rem] my-1 mx-2 border border-accent rounded-md bg-surface p-2">
+    <div className="mx-2 my-1 rounded-md border border-accent bg-surface p-2 font-sans text-[0.8125rem]">
       <textarea
-        className="w-full min-h-17.5 resize-y border border-border rounded p-1.5 bg-canvas font-mono text-[0.75rem] leading-[1.5]"
+        className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder={`Comment on ${lines}…`}
@@ -47,8 +47,8 @@ export function CommentComposer({ lines }: { lines: string }) {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
       />
-      <div className="flex gap-1.5 justify-end mt-1.5 items-center">
-        <span className="text-muted text-[0.75rem] mr-auto">
+      <div className="mt-1.5 flex items-center justify-end gap-1.5">
+        <span className="mr-auto text-[0.75rem] text-muted">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
         </span>
         <Button

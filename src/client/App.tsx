@@ -92,7 +92,7 @@ export function App() {
   }, [boot, refreshSnapshot, refreshThreads, refreshViewed, refreshConfig, setLspStatus]);
 
   return (
-    <div className="h-full grid grid-rows-[2.5rem_1fr]" style={{ gridTemplateColumns: columns }}>
+    <div className="grid h-full grid-rows-[2.5rem_1fr]" style={{ gridTemplateColumns: columns }}>
       <Header />
       {layout.treeVisible && (
         <>
@@ -117,7 +117,7 @@ export function App() {
       )}
       <HelpOverlay />
       {toast && (
-        <div className="fixed bottom-6 left-[50%] [transform:translateX(-50%)] max-w-[min(48rem,_90vw)] wrap-anywhere bg-foreground text-canvas text-[1rem] leading-[1.4] py-3 px-5 rounded-lg shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.35)] z-60 [animation:flash-in_160ms_ease]">
+        <div className="fixed bottom-6 left-[50%] z-60 max-w-[min(48rem,_90vw)] [transform:translateX(-50%)] [animation:flash-in_160ms_ease] rounded-lg bg-foreground px-5 py-3 text-[1rem] leading-[1.4] wrap-anywhere text-canvas shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.35)]">
           {toast}
         </div>
       )}

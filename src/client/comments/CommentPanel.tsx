@@ -70,12 +70,12 @@ export function CommentPanel() {
   };
 
   return (
-    <aside className="min-h-0 flex flex-col bg-surface">
-      <div className="py-1.5 px-2.5 flex gap-1.5 items-center border-b border-b-border min-h-10 [&_button]:flex-none [&_button]:whitespace-nowrap [&_button]:px-2">
-        <span className="min-w-0 truncate font-semibold mr-auto inline-flex items-center gap-1.5">
+    <aside className="flex min-h-0 flex-col bg-surface">
+      <div className="flex min-h-10 items-center gap-1.5 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:px-2 [&_button]:whitespace-nowrap">
+        <span className="mr-auto inline-flex min-w-0 items-center gap-1.5 truncate font-semibold">
           <MessageSquare size="0.9375rem" /> Threads
           {open.length > 0 && (
-            <span className="bg-hover rounded-[0.625rem] py-0 px-1.75 font-medium text-muted">{open.length}</span>
+            <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">{open.length}</span>
           )}
         </span>
         <CopyButton
@@ -121,7 +121,7 @@ export function CommentPanel() {
       </div>
       {staleCount > 0 && (
         <div
-          className="flex items-center gap-1.5 py-1 px-2.5 border-b border-b-border text-[0.75rem] cursor-default text-warn"
+          className="flex cursor-default items-center gap-1.5 border-b border-b-border px-2.5 py-1 text-[0.75rem] text-warn"
           title="Stale threads no longer point into the diff: their text changed or left the changed lines"
         >
           <AlertTriangle size="0.75rem" />
@@ -130,7 +130,7 @@ export function CommentPanel() {
             variant="ghost"
             danger
             feedback={stale.armed ? 'confirm' : undefined}
-            className="ml-auto py-px px-1.5 text-[0.75rem] leading-[1.2] gap-1"
+            className="ml-auto gap-1 px-1.5 py-px text-[0.75rem] leading-[1.2]"
             onClick={stale.fire}
           >
             <Trash2 size="0.75rem" />
@@ -140,16 +140,16 @@ export function CommentPanel() {
       )}
       {resolvedCount > 0 && (
         <label
-          className="flex items-center gap-1.5 py-1 px-2.5 border-b border-b-border text-muted text-[0.75rem] cursor-pointer"
+          className="flex cursor-pointer items-center gap-1.5 border-b border-b-border px-2.5 py-1 text-[0.75rem] text-muted"
           title="Resolved threads are kept but left out of the prompt"
         >
           <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />
           Show {resolvedCount} resolved
         </label>
       )}
-      <div className="flex-1 overflow-auto p-2.5 flex flex-col gap-3.5">
+      <div className="flex flex-1 flex-col gap-3.5 overflow-auto p-2.5">
         {groups.length === 0 && (
-          <div className="text-muted py-6 px-3 text-center [&>p]:mt-0 [&>p]:mr-0 [&>p]:mb-1.5 [&>p]:ml-0">
+          <div className="px-3 py-6 text-center text-muted [&>p]:mt-0 [&>p]:mr-0 [&>p]:mb-1.5 [&>p]:ml-0">
             <p>{threads.length ? 'Every thread is resolved.' : 'No comments yet.'}</p>
             <p>Click a line number to comment, or drag across line numbers for a block.</p>
           </div>
@@ -181,13 +181,13 @@ export function CommentPanel() {
             The browser blocked clipboard access. Select the text below and press Ctrl/⌘+c.
           </p>
           <textarea
-            className="w-full min-h-40 font-mono text-[0.75rem] bg-surface border border-border rounded-md p-2"
+            className="min-h-40 w-full rounded-md border border-border bg-surface p-2 font-mono text-[0.75rem]"
             readOnly
             value={manual}
             autoFocus
             onFocus={(e) => e.currentTarget.select()}
           />
-          <div className="flex gap-1.5 justify-end mt-2.5">
+          <div className="mt-2.5 flex justify-end gap-1.5">
             <Button onClick={() => setManual(null)}>Close</Button>
           </div>
         </Dialog>
@@ -224,7 +224,7 @@ const ThreadRow = memo(function ThreadRow({
       role="button"
       tabIndex={0}
       className={twMerge(
-        `group/thread block w-full text-left border border-border rounded-md p-0 bg-card shadow-card overflow-hidden cursor-pointer mb-2 [transition:border-color_120ms_ease] font-sans text-[0.8125rem] leading-[1.4] text-foreground hover:border-accent focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-accent focus-visible:outline-offset-[1px] ${t.stale ? 'border-dashed' : ''} ${t.resolved ? 'opacity-65' : ''}`,
+        `group/thread mb-2 block w-full cursor-pointer overflow-hidden rounded-md border border-border bg-card p-0 text-left font-sans text-[0.8125rem] leading-[1.4] text-foreground shadow-card [transition:border-color_120ms_ease] hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-[1px] focus-visible:outline-accent focus-visible:outline-solid ${t.stale ? 'border-dashed' : ''} ${t.resolved ? 'opacity-65' : ''}`,
       )}
       onClick={open}
       onKeyDown={(e) => {
@@ -235,9 +235,9 @@ const ThreadRow = memo(function ThreadRow({
         }
       }}
     >
-      <div className="flex gap-2 items-center text-[0.75rem] text-muted py-1 pr-1.5 pl-2.5 bg-hover border-b border-b-border [&>svg]:flex-none [&>svg]:text-accent">
+      <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
-        <span className="font-mono text-foreground font-semibold">
+        <span className="font-mono font-semibold text-foreground">
           {t.anchor.side === 'old' ? 'removed ' : ''}L{t.anchor.startLine}
           {t.anchor.endLine !== t.anchor.startLine ? `–${t.anchor.endLine}` : ''}
         </span>
@@ -247,12 +247,12 @@ const ThreadRow = memo(function ThreadRow({
           </span>
         )}
         {t.stale && (
-          <span className="text-warn inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal]">
+          <span className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-warn">
             <AlertTriangle size="0.6875rem" /> stale
           </span>
         )}
         {t.resolved && (
-          <span className="text-add inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal]">
+          <span className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-add">
             <Check size="0.6875rem" /> resolved
           </span>
         )}
@@ -262,7 +262,7 @@ const ThreadRow = memo(function ThreadRow({
           danger
           icon={!del.armed}
           feedback={del.armed ? 'confirm' : undefined}
-          className="ml-auto py-[1px] px-0.75 opacity-0 [transition:opacity_120ms_ease] group-hover/thread:opacity-100 group-focus-within/thread:opacity-100 data-[feedback=confirm]:opacity-100"
+          className="ml-auto px-0.75 py-[1px] opacity-0 [transition:opacity_120ms_ease] group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
           title={del.armed ? 'Click again to delete this thread' : 'Delete this thread'}
           aria-label={del.armed ? 'Delete this thread? Click again to confirm' : 'Delete this thread'}
           onClick={(e) => {
@@ -274,8 +274,8 @@ const ThreadRow = memo(function ThreadRow({
           {del.armed && 'Delete?'}
         </Button>
       </div>
-      <div className="px-2.5 pt-1.5 pb-2 [&>.markdown]:[word-break:break-word] [&>.markdown]:font-sans [&>.markdown]:text-[0.8125rem] [&>.markdown]:leading-[1.4]">
-        <div className="font-mono text-[0.75rem] leading-[1.4] text-muted m-0 mb-1.5 whitespace-nowrap overflow-hidden text-ellipsis">
+      <div className="px-2.5 pt-1.5 pb-2 [&>.markdown]:font-sans [&>.markdown]:text-[0.8125rem] [&>.markdown]:leading-[1.4] [&>.markdown]:[word-break:break-word]">
+        <div className="m-0 mb-1.5 overflow-hidden font-mono text-[0.75rem] leading-[1.4] text-ellipsis whitespace-nowrap text-muted">
           {firstLine(t.anchor.quoted)}
         </div>
         <Markdown text={first?.body ?? ''} path={t.anchor.path} />

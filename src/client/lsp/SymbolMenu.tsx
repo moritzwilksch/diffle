@@ -42,34 +42,34 @@ export function SymbolMenu() {
   const style = below ? { left, top: menu.y + 12 } : { left, top: menu.y - height };
   return (
     <div
-      className="fixed z-40 flex gap-[2px] p-0.75 bg-canvas border border-border rounded-lg shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
+      className="fixed z-40 flex gap-[2px] rounded-lg border border-border bg-canvas p-0.75 shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
       style={style}
       role="menu"
       data-symbol-menu
     >
       <Button
-        className="flex items-center gap-1.5 py-1 px-2 border-0 rounded-md bg-transparent text-foreground font-sans text-[0.75rem] leading-[normal] cursor-pointer hover:bg-hover"
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 font-sans text-[0.75rem] leading-[normal] text-foreground hover:bg-hover"
         onClick={() => void goToDefinition(menu.target)}
         title="Go to definition (gd)"
       >
         <Crosshair size="0.8125rem" /> Definition <kbd className="ml-[2px]">gd</kbd>
       </Button>
       <Button
-        className="flex items-center gap-1.5 py-1 px-2 border-0 rounded-md bg-transparent text-foreground font-sans text-[0.75rem] leading-[normal] cursor-pointer hover:bg-hover"
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 font-sans text-[0.75rem] leading-[normal] text-foreground hover:bg-hover"
         onClick={() => void findReferences(menu.target)}
         title="Find references (gA)"
       >
         <Link2 size="0.8125rem" /> References <kbd className="ml-[2px]">gA</kbd>
       </Button>
       <Button
-        className="flex items-center gap-1.5 py-1 px-2 border-0 rounded-md bg-transparent text-foreground font-sans text-[0.75rem] leading-[normal] cursor-pointer hover:bg-hover"
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 font-sans text-[0.75rem] leading-[normal] text-foreground hover:bg-hover"
         onClick={() => void goToTypeDefinition(menu.target)}
         title="Go to type definition (gy)"
       >
         <Shapes size="0.8125rem" /> Type <kbd className="ml-[2px]">gy</kbd>
       </Button>
       <span
-        className="ml-1 py-0.75 px-2 border-l border-l-border font-mono text-[0.75rem] leading-[normal] text-foreground max-w-55 truncate self-center"
+        className="ml-1 max-w-55 self-center truncate border-l border-l-border px-2 py-0.75 font-mono text-[0.75rem] leading-[normal] text-foreground"
         title={menu.target.text}
       >
         <CodeLine tokens={highlighted.get(`${menu.target.path}\n${menu.target.text}`)} fallback={menu.target.text} />

@@ -65,15 +65,15 @@ export function CommitPreview({
         <p
           className={twMerge(
             current?.error
-              ? 'm-0 text-del text-[0.75rem] wrap-anywhere'
-              : 'text-[0.75rem] text-muted m-0 p-0 whitespace-normal',
+              ? 'm-0 text-[0.75rem] wrap-anywhere text-del'
+              : 'm-0 p-0 text-[0.75rem] whitespace-normal text-muted',
           )}
           role="status"
         >
           {status}
         </p>
       ) : result ? (
-        <div className="grid gap-3 mt-1" aria-live="polite">
+        <div className="mt-1 grid gap-3" aria-live="polite">
           {(
             [
               [`HEAD~${oldOffset}`, result.old],
@@ -81,11 +81,11 @@ export function CommitPreview({
             ] as const
           ).map(([ref, commit], index) => (
             <div key={index}>
-              <div className="flex justify-between gap-2 text-muted font-mono text-[0.6875rem] leading-[1.5]">
+              <div className="flex justify-between gap-2 font-mono text-[0.6875rem] leading-[1.5] text-muted">
                 <span>{ref}</span>
                 {commit && <span title={commit.sha}>{commit.short}</span>}
               </div>
-              <p className="mt-0.5 mb-0 font-sans text-[0.75rem] leading-[1.5] whitespace-pre-wrap wrap-anywhere max-h-24 overflow-auto">
+              <p className="mt-0.5 mb-0 max-h-24 overflow-auto font-sans text-[0.75rem] leading-[1.5] wrap-anywhere whitespace-pre-wrap">
                 {commit ? commit.message || '(Empty commit message)' : 'Commit unavailable at this offset.'}
               </p>
             </div>

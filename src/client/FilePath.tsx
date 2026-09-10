@@ -12,7 +12,7 @@ export function FilePath({ path, className, nowrap = false }: { path: string; cl
   const base = path.slice(cut);
   return (
     <span
-      className={twMerge('font-mono wrap-anywhere break-normal', nowrap && 'min-w-0 truncate', className)}
+      className={twMerge('font-mono break-normal wrap-anywhere', nowrap && 'min-w-0 truncate', className)}
       title={path}
     >
       {dirs.length > 0 && (
@@ -24,7 +24,7 @@ export function FilePath({ path, className, nowrap = false }: { path: string; cl
           ))}
         </span>
       )}
-      <span className="text-foreground font-semibold">{base}</span>
+      <span className="font-semibold text-foreground">{base}</span>
     </span>
   );
 }

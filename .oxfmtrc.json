@@ -4,6 +4,10 @@
   // one-time reformat to real changes instead of restyling every file.
   "singleQuote": true,
   "printWidth": 120,
+  "sortTailwindcss": {
+    "stylesheet": "./src/client/styles.css",
+    "functions": ["twMerge"]
+  },
   // The workflows are hand-maintained, with pinned action SHAs and comments; the
   // formatter only wants to reflow their quotes, so it stays out of them.
   "ignorePatterns": ["**/*.yml", "**/*.yaml"]

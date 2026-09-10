@@ -69,6 +69,7 @@
     "@types/react-dom": "^19",
     "@types/ws": "^8",
     "@vitejs/plugin-react": "^5",
+    "eslint-plugin-better-tailwindcss": "^4.7.0",
     "jsdom": "^30.0.1",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",

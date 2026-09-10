@@ -38,7 +38,7 @@ export function Header() {
   const dels = snapshot?.changed.reduce((n, f) => n + f.deletions, 0) ?? 0;
 
   return (
-    <header className="col-span-full flex items-center gap-2.5 py-0 px-3 border-b border-b-border bg-surface">
+    <header className="col-span-full flex items-center gap-2.5 border-b border-b-border bg-surface px-3 py-0">
       <Button
         variant="ghost"
         icon
@@ -48,11 +48,11 @@ export function Header() {
       >
         <PanelLeft size="1rem" />
       </Button>
-      <span className="font-bold tracking-[0.02em] inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em]">
         <GitCompareArrows size="1rem" /> diffle
       </span>
       <span
-        className="text-muted font-mono text-[0.75rem] truncate"
+        className="truncate font-mono text-[0.75rem] text-muted"
         title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}
       >
         {snapshot ? repoName(snapshot) : ''}
@@ -63,7 +63,7 @@ export function Header() {
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
-      <div className="flex border border-border rounded-md overflow-hidden" title="Diff layout">
+      <div className="flex overflow-hidden rounded-md border border-border" title="Diff layout">
         <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')}>
           <Columns2 size="0.875rem" /> Split
         </ToggleButton>
@@ -127,7 +127,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
   return (
     <span
       className={twMerge(
-        `inline-flex items-center gap-1.25 text-muted text-[0.75rem] whitespace-nowrap ${state === 'unavailable' ? 'text-warn' : ''}`,
+        `inline-flex items-center gap-1.25 text-[0.75rem] whitespace-nowrap text-muted ${state === 'unavailable' ? 'text-warn' : ''}`,
       )}
       title={lines.join('\n') || 'No language server for the files in this diff'}
     >

@@ -49,13 +49,13 @@ export function ReferencesList() {
     <Dialog
       label="References"
       onClose={close}
-      className="w-[min(60rem,_92vw)] p-0 max-h-[80vh] flex flex-col overflow-hidden"
+      className="flex max-h-[80vh] w-[min(60rem,_92vw)] flex-col overflow-hidden p-0"
     >
-      <div className="flex items-baseline gap-3.5 px-4.5 pt-3.5 pb-2.5 border-b border-b-border">
+      <div className="flex items-baseline gap-3.5 border-b border-b-border px-4.5 pt-3.5 pb-2.5">
         <h3 className="m-0 text-[0.9375rem]">
           {refs.kind === 'types' ? (
             <>
-              <code className="font-mono bg-hover py-[1px] px-1.5 rounded-[0.3125rem] text-foreground">
+              <code className="rounded-[0.3125rem] bg-hover px-1.5 py-[1px] font-mono text-foreground">
                 {refs.symbol}
               </code>{' '}
               has {items.length} types in its signature; pick one
@@ -63,23 +63,23 @@ export function ReferencesList() {
           ) : (
             <>
               {items.length} reference{items.length === 1 ? '' : 's'} to{' '}
-              <code className="font-mono bg-hover py-[1px] px-1.5 rounded-[0.3125rem] text-foreground">
+              <code className="rounded-[0.3125rem] bg-hover px-1.5 py-[1px] font-mono text-foreground">
                 {refs.symbol}
               </code>
             </>
           )}
         </h3>
-        <span className="ml-auto text-[0.6875rem] text-muted whitespace-nowrap">
+        <span className="ml-auto text-[0.6875rem] whitespace-nowrap text-muted">
           <kbd>j</kbd> <kbd>k</kbd> move · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> close
         </span>
       </div>
       <div className="overflow-auto px-2.5 pt-2 pb-3" ref={listRef}>
         {groups.map((g) => (
           <section className="[&+section]:mt-2.5" key={g.path}>
-            <header className="sticky top-0 z-1 flex items-center gap-2 py-1.5 px-2.5 mb-[2px] bg-hover border border-border rounded-lg font-mono text-[0.75rem] leading-[normal] [&>svg]:text-muted [&>svg]:flex-none">
+            <header className="sticky top-0 z-1 mb-[2px] flex items-center gap-2 rounded-lg border border-border bg-hover px-2.5 py-1.5 font-mono text-[0.75rem] leading-[normal] [&>svg]:flex-none [&>svg]:text-muted">
               <FileCode2 size="0.875rem" />
               <FilePath path={g.path} nowrap className="flex-1" />
-              <span className="ml-auto py-0 px-1.75 rounded-[0.625rem] bg-canvas border border-border text-[0.6875rem] text-muted">
+              <span className="ml-auto rounded-[0.625rem] border border-border bg-canvas px-1.75 py-0 text-[0.6875rem] text-muted">
                 {g.rows.length}
               </span>
             </header>
@@ -115,13 +115,13 @@ const RefRow = memo(function RefRow({
     <div
       data-active={on}
       className={twMerge(
-        `grid grid-cols-[3.25rem_1fr] gap-3 py-0.75 px-2.5 rounded-md font-mono text-[0.75rem] leading-[1.6] cursor-pointer hover:bg-surface ${on ? 'bg-hover hover:bg-hover' : ''}`,
+        `grid cursor-pointer grid-cols-[3.25rem_1fr] gap-3 rounded-md px-2.5 py-0.75 font-mono text-[0.75rem] leading-[1.6] hover:bg-surface ${on ? 'bg-hover hover:bg-hover' : ''}`,
       )}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => onPick(row.i)}
     >
-      <span className="text-muted text-right">{row.line}</span>
-      <span className="whitespace-pre overflow-hidden text-ellipsis">
+      <span className="text-right text-muted">{row.line}</span>
+      <span className="overflow-hidden text-ellipsis whitespace-pre">
         <CodeLine tokens={tokens} fallback={row.text} />
       </span>
     </div>

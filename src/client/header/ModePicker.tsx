@@ -130,7 +130,7 @@ export function ModePicker() {
       </Button>
       {open && (
         <div
-          className="absolute top-[calc(100%_+_0.375rem)] left-0 min-w-60 bg-canvas border border-border rounded-[0.625rem] shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)] p-1.5 z-20 flex w-max max-w-[calc(100vw_-_2rem)] max-[640px]:fixed max-[640px]:top-12 max-[640px]:left-2 max-[640px]:max-w-[calc(100vw_-_1rem)]"
+          className="absolute top-[calc(100%_+_0.375rem)] left-0 z-20 flex w-max max-w-[calc(100vw_-_2rem)] min-w-60 rounded-[0.625rem] border border-border bg-canvas p-1.5 shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)] max-[640px]:fixed max-[640px]:top-12 max-[640px]:left-2 max-[640px]:max-w-[calc(100vw_-_1rem)]"
           id="mode-picker"
           role="dialog"
           aria-label="Compare"
@@ -141,7 +141,7 @@ export function ModePicker() {
               <Button
                 key={entry.label}
                 className={twMerge(
-                  `grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1 ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.kind === 'working') ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
+                  `grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.kind === 'working') ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
                 )}
                 aria-expanded={entry.pane ? pane === entry.pane : undefined}
                 aria-controls={entry.pane ? 'mode-config' : undefined}
@@ -156,7 +156,7 @@ export function ModePicker() {
           </div>
           {pane && (
             <form
-              className="flex flex-col gap-3 w-76 min-w-0 px-3 pt-0 pb-2 ml-1.5 border-l border-l-border"
+              className="ml-1.5 flex w-76 min-w-0 flex-col gap-3 border-l border-l-border px-3 pt-0 pb-2"
               id="mode-config"
               aria-label={entries.find((e) => e.pane === pane)?.label}
               onKeyDown={(e) => {
@@ -201,9 +201,9 @@ export function ModePicker() {
                       onAccept={() => comparisonToggle.current?.focus()}
                     />
                   </div>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex items-center gap-2">
                     <div
-                      className="flex border border-border rounded-md overflow-hidden self-start focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-accent focus-visible:outline-offset-[2px]"
+                      className="flex self-start overflow-hidden rounded-md border border-border focus-visible:outline-2 focus-visible:outline-offset-[2px] focus-visible:outline-accent focus-visible:outline-solid"
                       ref={comparisonToggle}
                       role="group"
                       aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
@@ -235,7 +235,7 @@ export function ModePicker() {
                     </div>
                     <Button
                       id="swap-refs"
-                      className="border-0 p-0.5 bg-transparent text-muted hover:bg-hover hover:text-foreground"
+                      className="border-0 bg-transparent p-0.5 text-muted hover:bg-hover hover:text-foreground"
                       type="button"
                       tabIndex={-1}
                       aria-label="Swap refs"
@@ -246,7 +246,7 @@ export function ModePicker() {
                       <ArrowLeftRight size="0.75rem" />
                     </Button>
                   </div>
-                  <p className="text-[0.75rem] text-muted m-0 p-0 whitespace-normal">
+                  <p className="m-0 p-0 text-[0.75rem] whitespace-normal text-muted">
                     {dots === '..' ? 'Compare these two revisions.' : 'Compare changes since their common ancestor.'}
                   </p>
                 </>
@@ -269,10 +269,10 @@ export function ModePicker() {
               )}
               {pane === 'pr' && (
                 <>
-                  <label className="flex flex-col gap-1.5 min-w-0">
+                  <label className="flex min-w-0 flex-col gap-1.5">
                     <span className="text-[0.75rem] text-muted">PR number or URL</span>
                     <input
-                      className="w-full min-w-0 bg-surface border border-border rounded-md py-1.5 px-2 font-mono text-[0.75rem] leading-[normal] text-foreground"
+                      className="w-full min-w-0 rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-[0.75rem] leading-[normal] text-foreground"
                       ref={prInput}
                       autoFocus
                       autoComplete="off"
@@ -288,18 +288,18 @@ export function ModePicker() {
                       placeholder="Current branch’s PR"
                     />
                   </label>
-                  <p className="text-[0.75rem] text-muted m-0 p-0 whitespace-normal" id="pr-hint">
+                  <p className="m-0 p-0 text-[0.75rem] whitespace-normal text-muted" id="pr-hint">
                     Enter a PR number or URL, or leave blank for this branch.
                   </p>
                   {prError && (
-                    <p className="m-0 text-del text-[0.75rem] wrap-anywhere" id="pr-error" role="alert">
+                    <p className="m-0 text-[0.75rem] wrap-anywhere text-del" id="pr-error" role="alert">
                       {prError}
                     </p>
                   )}
                 </>
               )}
               <Button
-                className="self-end mt-auto"
+                className="mt-auto self-end"
                 variant="primary"
                 type="submit"
                 aria-live={pane === 'pr' ? 'polite' : undefined}

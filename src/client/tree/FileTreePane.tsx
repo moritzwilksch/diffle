@@ -195,9 +195,9 @@ export function FileTreePane() {
   }, [model, keys, paths, gitStatus]);
 
   return (
-    <aside className="tree-theme min-h-0 flex flex-col bg-surface">
-      <div className="py-1.5 px-2.5 flex gap-2 items-center border-b border-b-border text-muted [&_button]:whitespace-nowrap [&_button]:flex-none">
-        <div className="flex border border-border rounded-md overflow-hidden">
+    <aside className="tree-theme flex min-h-0 flex-col bg-surface">
+      <div className="flex items-center gap-2 border-b border-b-border px-2.5 py-1.5 text-muted [&_button]:flex-none [&_button]:whitespace-nowrap">
+        <div className="flex overflow-hidden rounded-md border border-border">
           <ToggleButton selected={scope === 'changed'} onClick={() => setScope('changed')}>
             Changed
           </ToggleButton>
@@ -223,7 +223,7 @@ export function FileTreePane() {
           {unview.armed && 'Un-view all?'}
         </Button>
       </div>
-      <div className="flex-1 min-h-0" ref={bodyRef}>
+      <div className="min-h-0 flex-1" ref={bodyRef}>
         <FileTree
           model={model}
           className="h-full"
@@ -244,11 +244,11 @@ function TreeMenu({ path, kind, close }: { path: string; kind: 'file' | 'directo
   const openFile = useStore((s) => s.openFile);
   if (kind !== 'file') return null;
   return (
-    <div className="static top-[calc(100%_+_0.375rem)] left-0 min-w-95 bg-canvas border border-border rounded-[0.625rem] shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)] p-1.5 z-20">
+    <div className="static top-[calc(100%_+_0.375rem)] left-0 z-20 min-w-95 rounded-[0.625rem] border border-border bg-canvas p-1.5 shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)]">
       {file ? (
         <>
           <Button
-            className="grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1"
+            className="grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted"
             onClick={() => {
               void setViewed(path, !viewed);
               close();
@@ -256,13 +256,13 @@ function TreeMenu({ path, kind, close }: { path: string; kind: 'file' | 'directo
           >
             {viewed ? <EyeOff size="0.875rem" /> : <Eye size="0.875rem" />}
             <span className="whitespace-nowrap">{viewed ? 'Mark not viewed' : 'Mark viewed'}</span>
-            <span className="text-muted font-mono text-[0.75rem] leading-[normal] justify-self-end inline-flex items-center">
+            <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted">
               {viewed ? '' : <Check size="0.75rem" />}
             </span>
             <kbd>v</kbd>
           </Button>
           <Button
-            className="grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1"
+            className="grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted"
             onClick={() => {
               toggleCollapsed(path);
               close();
@@ -270,13 +270,13 @@ function TreeMenu({ path, kind, close }: { path: string; kind: 'file' | 'directo
           >
             {collapsed ? <ChevronsUpDown size="0.875rem" /> : <ChevronsDownUp size="0.875rem" />}
             <span className="whitespace-nowrap">{collapsed ? 'Expand' : 'Collapse'}</span>
-            <span className="text-muted font-mono text-[0.75rem] leading-[normal] justify-self-end inline-flex items-center" />
+            <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted" />
             <kbd>{collapsed ? 'zo' : 'zc'}</kbd>
           </Button>
         </>
       ) : (
         <Button
-          className="grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1"
+          className="grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted"
           onClick={() => {
             void openFile(path);
             close();
@@ -284,7 +284,7 @@ function TreeMenu({ path, kind, close }: { path: string; kind: 'file' | 'directo
         >
           <Eye size="0.875rem" />
           <span className="whitespace-nowrap">Open</span>
-          <span className="text-muted font-mono text-[0.75rem] leading-[normal] justify-self-end inline-flex items-center" />
+          <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted" />
           <span />
         </Button>
       )}

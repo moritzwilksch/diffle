@@ -57,12 +57,12 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   return (
     <div
       className={twMerge(
-        `font-sans text-[0.8125rem] my-1 mx-2 border border-border rounded-md bg-card p-0 shadow-card overflow-hidden [&_.markdown]:[word-break:break-word] ${thread.stale ? 'border-dashed' : ''} ${thread.resolved ? 'opacity-70' : ''} ${focused ? 'border-accent shadow-[0_0_0_1px_var(--accent),_var(--review-card-shadow)]' : ''}`,
+        `mx-2 my-1 overflow-hidden rounded-md border border-border bg-card p-0 font-sans text-[0.8125rem] shadow-card [&_.markdown]:[word-break:break-word] ${thread.stale ? 'border-dashed' : ''} ${thread.resolved ? 'opacity-70' : ''} ${focused ? 'border-accent shadow-[0_0_0_1px_var(--accent),_var(--review-card-shadow)]' : ''}`,
       )}
     >
-      <div className="flex gap-2 items-center text-muted text-[0.75rem] py-1 pr-1.5 pl-2.5 bg-hover border-b border-b-border [&>svg]:flex-none [&>svg]:text-accent">
+      <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
-        <span className="font-mono text-foreground font-semibold">
+        <span className="font-mono font-semibold text-foreground">
           {a.side === 'old' ? 'removed ' : ''}L{range}
         </span>
         {thread.stale && (
@@ -159,9 +159,9 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
     setEditingId(null);
   };
   return (
-    <div className="py-2 px-2.5 data-[first=false]:border-t data-[first=false]:border-border" data-first={first}>
+    <div className="px-2.5 py-2 data-[first=false]:border-t data-[first=false]:border-border" data-first={first}>
       {threaded && (
-        <div className="flex items-center gap-1.5 text-[0.6875rem] text-muted mb-[2px]">
+        <div className="mb-[2px] flex items-center gap-1.5 text-[0.6875rem] text-muted">
           <span className="flex-1" />
           <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
           <Button
@@ -188,9 +188,9 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
         </div>
       )}
       {editing ? (
-        <div className="border-0 rounded-md bg-surface p-0">
+        <div className="rounded-md border-0 bg-surface p-0">
           <textarea
-            className="w-full min-h-17.5 resize-y border border-border rounded p-1.5 bg-canvas font-mono text-[0.75rem] leading-[1.5]"
+            className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -199,7 +199,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
             }}
             autoFocus
           />
-          <div className="flex gap-1.5 justify-end mt-1.5 items-center">
+          <div className="mt-1.5 flex items-center justify-end gap-1.5">
             <Button variant="primary" onClick={save}>
               Save
             </Button>
@@ -266,9 +266,9 @@ function ReplyComposer({ threadId }: { threadId: string }) {
     }
   };
   return (
-    <div className="border border-accent rounded-md bg-surface p-2 mx-2.5 mt-0 mb-2.5">
+    <div className="mx-2.5 mt-0 mb-2.5 rounded-md border border-accent bg-surface p-2">
       <textarea
-        className="w-full min-h-17.5 resize-y border border-border rounded p-1.5 bg-canvas font-mono text-[0.75rem] leading-[1.5]"
+        className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder="Reply…"
@@ -278,8 +278,8 @@ function ReplyComposer({ threadId }: { threadId: string }) {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
       />
-      <div className="flex gap-1.5 justify-end mt-1.5 items-center">
-        <span className="text-muted text-[0.75rem] mr-auto">
+      <div className="mt-1.5 flex items-center justify-end gap-1.5">
+        <span className="mr-auto text-[0.75rem] text-muted">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to cancel
         </span>
         <Button onClick={closeReply}>Cancel</Button>

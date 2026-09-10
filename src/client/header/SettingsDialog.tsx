@@ -52,7 +52,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     <Dialog
       label="Settings"
       onClose={onClose}
-      className="[&_code]:font-mono [&_code]:bg-hover [&_code]:px-1 [&_code]:rounded"
+      className="[&_code]:rounded-sm [&_code]:bg-hover [&_code]:px-1 [&_code]:font-mono"
     >
       <h3 className="m-0 mb-2">Auto-viewed patterns</h3>
       <p className="m-0 mb-2 text-muted">
@@ -61,7 +61,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <code>diffle config add-auto-viewed</code>.
       </p>
       <textarea
-        className="w-full min-h-40 font-mono text-[0.75rem] bg-surface border border-border rounded-md p-2"
+        className="min-h-40 w-full rounded-md border border-border bg-surface p-2 font-mono text-[0.75rem]"
         value={text}
         onChange={(e) => setText(e.target.value)}
         spellCheck={false}
@@ -98,7 +98,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           ))}
         </p>
       )}
-      <div className="flex gap-1.5 justify-end mt-2.5">
+      <div className="mt-2.5 flex justify-end gap-1.5">
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={save} disabled={saving}>
           Save

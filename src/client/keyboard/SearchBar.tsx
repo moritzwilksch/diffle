@@ -30,7 +30,7 @@ export function SearchBar() {
   const n = search.matches.length;
   if (search.kind !== 'text') {
     return (
-      <div className="flex items-center gap-2 py-1.5 px-2.5 border-b border-b-border bg-surface">
+      <div className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5">
         {search.kind === 'references' ? <Link2 size="0.875rem" /> : <WholeWord size="0.875rem" />}
         <span className="flex-1 font-mono text-[0.75rem] leading-[normal] text-muted [&_code]:text-foreground">
           {search.kind === 'references'
@@ -40,7 +40,7 @@ export function SearchBar() {
               : 'occurrences (upwards) of'}{' '}
           <code>{search.query}</code>
         </span>
-        <span className="text-muted font-mono text-[0.75rem] leading-[normal] min-w-17.5 text-right">
+        <span className="min-w-17.5 text-right font-mono text-[0.75rem] leading-[normal] text-muted">
           {search.loading ? 'searching…' : n ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}` : 'none'}
         </span>
         <Button type="button" variant="ghost" icon onClick={closeSearch} title="Close (Esc)">
@@ -52,7 +52,7 @@ export function SearchBar() {
   const ScopeIcon = SCOPE_ICON[search.scope];
   return (
     <form
-      className="flex items-center gap-2 py-1.5 px-2.5 border-b border-b-border bg-surface"
+      className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5"
       onSubmit={(e) => {
         e.preventDefault();
         void runSearch(q).then(() => {
@@ -63,7 +63,7 @@ export function SearchBar() {
     >
       <Search size="0.875rem" />
       <input
-        className="flex-1 bg-canvas border border-border rounded-md py-1 px-2 font-mono text-[0.75rem]"
+        className="flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
         ref={ref}
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -78,7 +78,7 @@ export function SearchBar() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `py-[2px] px-1.5 font-mono text-[0.6875rem] leading-[normal] text-muted border border-transparent rounded ${search.ignoreCase ? '' : 'text-accent border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)]'}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.ignoreCase ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
         )}
         aria-pressed={!search.ignoreCase}
         onClick={() => setSearchOptions({ ignoreCase: !search.ignoreCase })}
@@ -90,7 +90,7 @@ export function SearchBar() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `py-[2px] px-1.5 font-mono text-[0.6875rem] leading-[normal] text-muted border border-transparent rounded ${search.regex ? 'text-accent border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)]' : ''}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.regex ? 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent' : ''}`,
         )}
         aria-pressed={search.regex}
         onClick={() => setSearchOptions({ regex: !search.regex })}
@@ -102,7 +102,7 @@ export function SearchBar() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `py-[2px] px-1.5 font-mono text-[0.6875rem] leading-[normal] text-muted border border-transparent rounded ${search.scope === 'diff' ? '' : 'text-accent border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)]'}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.scope === 'diff' ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
         )}
         aria-label={`Searching ${SCOPE_LABEL[search.scope]}`}
         data-scope={search.scope}
@@ -111,7 +111,7 @@ export function SearchBar() {
       >
         <ScopeIcon size="0.75rem" />
       </Button>
-      <span className="text-muted font-mono text-[0.75rem] leading-[normal] min-w-17.5 text-right">
+      <span className="min-w-17.5 text-right font-mono text-[0.75rem] leading-[normal] text-muted">
         {search.loading
           ? 'searching…'
           : n === 0 && search.query

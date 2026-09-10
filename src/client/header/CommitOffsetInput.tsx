@@ -36,9 +36,9 @@ export function CommitOffsetInput({
     input.current?.select();
   };
   return (
-    <div className="inline-flex items-stretch my-0 mx-0.5 rounded-md bg-surface overflow-hidden focus-within:bg-hover">
+    <div className="mx-0.5 my-0 inline-flex items-stretch overflow-hidden rounded-md bg-surface focus-within:bg-hover">
       <input
-        className="w-full min-w-[1ch] bg-transparent border rounded-md py-0.5 px-1.5 [font:inherit] text-foreground box-content flex-[0_1_auto] max-w-[8ch] m-0 border-transparent text-center focus:outline-none"
+        className="m-0 box-content w-full max-w-[8ch] min-w-[1ch] flex-[0_1_auto] rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-center text-foreground [font:inherit] focus:outline-none"
         ref={input}
         type="text"
         inputMode="numeric"
@@ -63,7 +63,7 @@ export function CommitOffsetInput({
       />
       <div className="grid grid-rows-[1fr_1fr]">
         <Button
-          className="border-0 rounded-none py-0 px-0.75 bg-transparent text-muted leading-[1] hover:bg-surface hover:text-foreground"
+          className="rounded-none border-0 bg-transparent px-0.75 py-0 leading-[1] text-muted hover:bg-surface hover:text-foreground"
           type="button"
           tabIndex={-1}
           aria-label={`Increase ${label.toLowerCase()}`}
@@ -73,7 +73,7 @@ export function CommitOffsetInput({
           <ChevronUp size="0.625rem" />
         </Button>
         <Button
-          className="border-0 rounded-none py-0 px-0.75 bg-transparent text-muted leading-[1] hover:bg-surface hover:text-foreground"
+          className="rounded-none border-0 bg-transparent px-0.75 py-0 leading-[1] text-muted hover:bg-surface hover:text-foreground"
           type="button"
           tabIndex={-1}
           aria-label={`Decrease ${label.toLowerCase()}`}
