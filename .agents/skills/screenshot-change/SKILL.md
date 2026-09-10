@@ -24,6 +24,7 @@ Read back only the crops. A 500×200 crop costs a fraction of a 1440×900 frame,
    ```
 
    GitHub CLI uploads the files and rewrites their local references to GitHub URLs. It can also append unreferenced attachments. See [Attaching files with GitHub CLI](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli). Completion: the PR body renders every pair.
+
 6. **Verify** by reading one crop per change. Completion: the pixels show the stated difference; re-capture rather than describe a mismatch.
 
 ## Efficiency rules
