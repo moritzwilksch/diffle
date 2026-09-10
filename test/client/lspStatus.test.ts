@@ -36,7 +36,26 @@ describe('LSP status indicator', () => {
     expect(render({ state: 'starting' })).toContain('lucide-loader-circle spin');
     expect(render({ activity: ['Loading workspace'] })).toContain('lucide-loader-circle spin');
     expect(render({})).not.toContain('lucide-loader-circle spin');
-    expect(render({})).toContain('no active work reported');
+    expect(render({})).toContain('lucide-check');
+    expect(render({})).toContain('>Connected</span>');
+    expect(render({})).toContain('<details class="lsp-diagnostics">');
+  });
+
+  it('uses compact missing-server labels with install candidates in the tooltip', () => {
+    state.lsp.missing = [
+      { language: 'rust', tried: ['rust-analyzer'] },
+      { language: 'python', tried: [] },
+    ];
+    try {
+      const html = render({});
+      expect(html).toContain('lucide-circle-off');
+      expect(html).toContain('>Not on PATH</span>');
+      expect(html).toContain('>Disabled</span>');
+      expect(html).toContain('title="rust-analyzer"');
+      expect(html).not.toContain('nothing on PATH, tried');
+    } finally {
+      state.lsp.missing = [];
+    }
   });
 
   it('keeps protocol errors and stderr visible while the process is alive', () => {
@@ -45,6 +64,7 @@ describe('LSP status indicator', () => {
       stderr: 'Missing build tool',
     });
     expect(html).toContain('Workspace loading failed');
+    expect(html).toContain('lucide-circle-alert');
     expect(html).toContain('Missing build tool');
     expect(html).toContain('>error</summary>');
     const stderrOnly = render({ stderr: 'Workspace configuration could not be read' });

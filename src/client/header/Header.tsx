@@ -2,6 +2,9 @@ import { ToggleButton } from '../ui/ToggleButton.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
 import {
+  Check,
+  CircleAlert,
+  CircleOff,
   Columns2,
   Compass,
   GitCompareArrows,
@@ -123,41 +126,64 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
       <section className="lsp-panel" aria-label="Language server status">
         <strong>Language servers</strong>
         {lsp.servers.map((s) => (
-          <div key={s.command} className="lsp-server">
-            <strong>
-              {s.name} ({s.languages.join(', ')})
-            </strong>
-            <pre>{s.command}</pre>
-            <pre>{serverLabel(s)}</pre>
-          </div>
+          <ServerStatus key={s.command} server={s} />
         ))}
-        {!lsp.servers.length && <p>No language server for the files in this diff</p>}
+        {!lsp.servers.length && !lsp.missing.length && <p className="lsp-muted">No servers</p>}
         {lsp.missing.map((m) => (
-          <p key={m.language}>
-            {m.language}: {m.tried.length ? `nothing on PATH, tried ${m.tried.join(', ')}` : 'disabled in config'}
-          </p>
+          <div className="lsp-server lsp-missing" key={m.language} title={m.tried.join(', ')}>
+            <CircleOff size="0.875rem" />
+            <span className="lsp-name">{m.language}</span>
+            <span className="lsp-badge">{m.tried.length ? 'Not on PATH' : 'Disabled'}</span>
+          </div>
         ))}
       </section>
     </details>
   );
 }
 
-function serverLabel(s: LspServerStatus): string {
-  const status =
-    s.state === 'unavailable'
-      ? `unavailable: ${s.message ?? 'unknown error'}`
-      : s.state === 'starting'
-        ? 'starting'
-        : s.activity?.length
-          ? s.activity.join('; ')
-          : 'connected; no active work reported';
-  return [
-    status,
-    s.notice && `${s.notice.severity}: ${s.notice.message}`,
-    s.stderr && `Last stderr output:\n${s.stderr}`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+function ServerStatus({ server: s }: { server: LspServerStatus }) {
+  const busy = s.state === 'starting' || !!s.activity?.length;
+  const problem = s.state === 'unavailable' || !!s.notice;
+  const label =
+    s.state === 'unavailable' ? 'Unavailable' : s.state === 'starting' ? 'Starting' : busy ? 'Working' : 'Connected';
+  return (
+    <div className="lsp-server">
+      <div className={`lsp-server-row ${problem ? 'lsp-problem' : busy ? 'lsp-working' : 'lsp-connected'}`}>
+        {busy ? (
+          <LoaderCircle size="0.875rem" className="spin" />
+        ) : problem ? (
+          <CircleAlert size="0.875rem" />
+        ) : (
+          <Check size="0.875rem" />
+        )}
+        <strong className="lsp-name">{s.name}</strong>
+        <span
+          className="lsp-badge"
+          title={label === 'Connected' ? 'Initialized; workspace readiness is not reported by LSP' : undefined}
+        >
+          {label}
+        </span>
+      </div>
+      <div className="lsp-languages">{s.languages.join(', ')}</div>
+      {s.activity?.map((activity, i) => (
+        <p className="lsp-activity" key={i}>
+          {activity}
+        </p>
+      ))}
+      {s.message && <p className="lsp-problem lsp-message">{s.message}</p>}
+      {s.notice && <p className="lsp-problem lsp-message">{s.notice.message}</p>}
+      <details className="lsp-diagnostics">
+        <summary>Details</summary>
+        <pre>{s.command}</pre>
+        {s.stderr && (
+          <>
+            <span className="lsp-muted">stderr</span>
+            <pre>{s.stderr}</pre>
+          </>
+        )}
+      </details>
+    </div>
+  );
 }
 
 function ThemeIcon({ choice }: { choice: ThemeChoice }) {
