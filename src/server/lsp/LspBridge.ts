@@ -101,13 +101,6 @@ const DEFAULT_TOKEN_TYPES = [
 ];
 
 const STDERR_TAIL = 2000;
-/**
- * pyrefly reports nothing about its workspace index over the protocol (no
- * `$/progress`, even when asked) but logs it on stderr at the default level.
- * Other servers never match and simply never report indexing.
- */
-const INDEX_START = /Populating up to \d+ files in the workspace/;
-const INDEX_DONE = /Populated all files in the workspace/;
 const INIT_TIMEOUT_MS = 60_000;
 /**
  * Navigation opens whatever file a query lands in. Without a cap every path
@@ -139,8 +132,7 @@ export class LspBridge {
   private current: LspProcessStatus;
   private ready: Promise<void>;
   private stderr = '';
-  /** Partial last stderr line, so a log phrase split across chunks still matches. */
-  private stderrTail = '';
+  private progress = new Map<string | number, { title: string; message?: string; percentage?: number }>();
   /** Open documents, least recently synced first. */
   private open = new Map<string, { version: number; text: string }>();
   /** Syncs in flight by path, so a track pass and a query racing on one file send a single didOpen. */
@@ -459,7 +451,8 @@ export class LspBridge {
     child.stderr?.on('data', (d: Buffer) => {
       const chunk = d.toString('utf8');
       this.stderr = (this.stderr + chunk).slice(-STDERR_TAIL);
-      this.noteIndexing(chunk);
+      if (!this.closing && this.current.state !== 'unavailable')
+        this.set({ ...this.current, stderr: this.stderr.trim() });
     });
     child.on('error', (e) => this.fail(`cannot start "${this.opts.command}": ${e.message}`));
     child.on('exit', (code, signal) => {
@@ -474,6 +467,7 @@ export class LspBridge {
     }
     const rpc = new JsonRpcConnection(child.stdout, child.stdin);
     this.rpc = rpc;
+    rpc.onNotification((method, params) => this.noteWorkspace(method, params));
     const rootUri = pathToFileURL(this.opts.root).href;
     try {
       const init = await rpc.request<{
@@ -487,6 +481,7 @@ export class LspBridge {
           rootPath: this.opts.root,
           workspaceFolders: [{ uri: rootUri, name: 'workspace' }],
           capabilities: {
+            window: { workDoneProgress: true },
             textDocument: {
               synchronization: { didSave: false },
               definition: { linkSupport: true },
@@ -516,14 +511,38 @@ export class LspBridge {
     if (this.current.state === 'starting') this.set({ ...this.current, state: 'ready' });
   }
 
-  private noteIndexing(chunk: string): void {
-    const text = this.stderrTail + chunk;
-    const nl = text.lastIndexOf('\n');
-    this.stderrTail = nl === -1 ? text.slice(-200) : text.slice(nl + 1);
-    // Both phrases in one chunk means the index finished before we looked.
-    const indexing = INDEX_DONE.test(text) ? false : INDEX_START.test(text) ? true : null;
-    if (indexing == null || this.current.state !== 'ready' || this.current.indexing === indexing) return;
-    this.set({ ...this.current, indexing });
+  private noteWorkspace(method: string, params: unknown): void {
+    if (!params || typeof params !== 'object' || this.closing || this.current.state === 'unavailable') return;
+    const p = params as Record<string, unknown>;
+    if (method === 'window/showMessage' || method === 'window/logMessage' || method === 'window/showMessageRequest') {
+      if ((p.type !== 1 && p.type !== 2) || typeof p.message !== 'string' || !p.message.trim()) return;
+      const notice = { severity: p.type === 1 ? ('error' as const) : ('warning' as const), message: p.message };
+      if (notice.severity !== this.current.notice?.severity || notice.message !== this.current.notice?.message)
+        this.set({ ...this.current, notice });
+      return;
+    }
+    if (method !== '$/progress' || (typeof p.token !== 'string' && typeof p.token !== 'number')) return;
+    if (!p.value || typeof p.value !== 'object') return;
+    const { kind, title, message, percentage } = p.value as Record<string, unknown>;
+    const percent = typeof percentage === 'number' && percentage >= 0 && percentage <= 100 ? percentage : undefined;
+    if (kind === 'begin' && typeof title === 'string') {
+      this.progress.set(p.token, {
+        title,
+        message: typeof message === 'string' ? message : undefined,
+        percentage: percent,
+      });
+    } else if (kind === 'report' && this.progress.has(p.token)) {
+      if (typeof message === 'string') this.progress.get(p.token)!.message = message;
+      if (percent !== undefined) this.progress.get(p.token)!.percentage = percent;
+    } else if (kind === 'end') {
+      if (!this.progress.delete(p.token)) return;
+    } else return;
+    this.set({
+      ...this.current,
+      activity: [...this.progress.values()].map(
+        (p) => `${p.title}${p.percentage == null ? '' : ` (${p.percentage}%)`}${p.message ? `: ${p.message}` : ''}`,
+      ),
+    });
   }
 
   private fail(message: string): void {
@@ -533,6 +552,7 @@ export class LspBridge {
   }
 
   private set(status: LspProcessStatus): void {
+    if (JSON.stringify(status) === JSON.stringify(this.current)) return;
     this.current = status;
     this.opts.onStatus(status);
   }
@@ -560,7 +580,20 @@ export class LspBridge {
     for (let attempt = 0; ; attempt++) {
       const rpc = path == null ? await this.ensureReady() : await this.sync(path);
       try {
-        return await rpc.request<T>(method, params);
+        const pending = busyReason(this.current);
+        const result = await rpc.request<T>(method, params);
+        if (result == null || (Array.isArray(result) && !result.length)) {
+          // Background work does not prevent useful answers, but makes empty answers inconclusive.
+          const busy = busyReason(this.current) ?? pending;
+          if (busy) throw new LspUnavailableError(busy);
+          if (this.current.notice) {
+            const { severity, message } = this.current.notice;
+            throw new LspUnavailableError(
+              `${this.current.name} returned no result; last server ${severity}: ${message}`,
+            );
+          }
+        }
+        return result;
       } catch (e) {
         if (!(e instanceof JsonRpcError) || e.code !== CONTENT_MODIFIED) throw e;
         const backoff = CONTENT_MODIFIED_BACKOFF_MS[attempt];
@@ -788,4 +821,10 @@ function lineAt(text: string, line: number): string {
 function lastLine(s: string): string {
   const lines = s.trim().split('\n');
   return lines[lines.length - 1] ?? '';
+}
+
+/** Why an empty result may be incomplete while the server reports background work. */
+function busyReason(s: LspProcessStatus): string | null {
+  const work = s.activity?.length ? s.activity.join('; ') : null;
+  return work ? `${s.name} is busy: ${work}; try again when it finishes` : null;
 }

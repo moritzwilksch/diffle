@@ -394,8 +394,8 @@ function startLsp(
       : [];
     void lsp.track(paths);
   });
-  // The status carries every server, so a failure is announced once per server, not per change.
-  const reported = new Set<string>();
+  // Progress repeats the full status; print each changed warning or error once.
+  const reported = new Map<string, string>();
   const lsp = new LspPool({
     root: repo.root,
     overrides,
@@ -407,9 +407,14 @@ function startLsp(
     has: async (path) => session.hasSide(await session.snapshotter.current(), path, 'new'),
     onStatus: (status) => {
       for (const s of status.servers) {
-        if (s.state !== 'unavailable' || reported.has(s.command)) continue;
-        reported.add(s.command);
-        console.error(`${c.red('✖')} lsp ${s.name} unavailable: ${s.message}`);
+        const message = s.state === 'unavailable' ? (s.message ?? 'unavailable') : s.notice?.message;
+        if (!message) {
+          reported.delete(s.command);
+          continue;
+        }
+        if (reported.get(s.command) === message) continue;
+        reported.set(s.command, message);
+        console.error(`${c.red('✖')} lsp ${s.name}: ${message}`);
       }
       hub.broadcast({ type: 'lsp', payload: status });
     },

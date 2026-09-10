@@ -99,6 +99,8 @@ If the pending review cannot be read completely, export stops before changing it
 
 ## Language servers
 
+Language-server indexing can take a while, especially in large repositories.
+
 Definitions, references, hover details, and symbol search come from a language server. diffle looks for one on `PATH` for every language in the diff and starts it for the run:
 
 - `gd` or Command/Ctrl+click: definition

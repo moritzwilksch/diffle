@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
-import type { LspProcessStatus } from '../../src/shared/protocol.js';
+import { type LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -18,6 +18,7 @@ const files: Record<string, string> = {
 };
 
 function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) {
+  let notify: (method: string, params: unknown) => void;
   const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
@@ -43,11 +44,25 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) 
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, FAKE_LSP_ROOT: root, ...env },
       });
+      notify = (method, params) => {
+        const body = Buffer.from(
+          JSON.stringify({ jsonrpc: '2.0', method: 'test/notification', params: { method, params } }),
+        );
+        child.stdin.write(`Content-Length: ${body.length}\r\n\r\n`);
+        child.stdin.write(body);
+      };
       child.stderr.on('data', (d: Buffer) => events.push(...d.toString().split('\n').filter(Boolean)));
       return child;
     },
   });
-  return { bridge, statuses, events, reads, peak: () => peak };
+  return {
+    bridge,
+    statuses,
+    events,
+    reads,
+    peak: () => peak,
+    notify: (method: string, params: unknown) => notify(method, params),
+  };
 }
 
 /** Notifications have no reply; let the fake's stderr catch up. */
@@ -64,7 +79,7 @@ describe('LspBridge', () => {
     const res = await bridge.definition({ path: 'a.py', line: 3, col: 4 });
     // The fake also points at /usr/lib/python3/site.py, which is neither in the snapshot nor on disk.
     expect(res).toEqual({ locations: [{ path: 'a.py', line: 2, col: 4, text: 'def f():' }] });
-    expect(statuses.map((s) => s.state)).toEqual(['ready']);
+    expect([...new Set(statuses.map((s) => s.state))]).toEqual(['ready']);
     expect(bridge.status().state).toBe('ready');
     await bridge.close();
   });
@@ -242,16 +257,77 @@ describe('LspBridge', () => {
     await bridge.close();
   });
 
-  it('reports indexing from pyrefly-style stderr log lines, start and end', async () => {
-    const { bridge, statuses } = start({ FAKE_LSP_INDEX: '1' });
-    await bridge.definition({ path: 'a.py', line: 1, col: 0 });
-    for (let i = 0; i < 50 && bridge.status().indexing !== false; i++) await settle();
-    expect(statuses.map((s) => [s.state, s.indexing])).toEqual([
-      ['ready', undefined],
-      ['ready', true],
-      ['ready', false],
-    ]);
-    await bridge.close();
+  it('tracks concurrent standard progress and keeps documents synced until all work finishes', async () => {
+    const { bridge, notify, events } = start();
+    const pos = { path: 'a.py', line: 3, col: 4 };
+    try {
+      await bridge.track(['a.py']);
+      notify('$/progress', { token: 'load', value: { kind: 'begin', title: 'Loading workspace' } });
+      notify('$/progress', { token: 2, value: { kind: 'begin', title: 'Indexing' } });
+      await expect.poll(() => bridge.status().activity?.length).toBe(2);
+      expect((await bridge.definition(pos)).locations).toHaveLength(1);
+      await expect(bridge.hover({ ...pos, line: 1 })).rejects.toThrow('Loading workspace');
+      expect((await bridge.references(pos)).locations.length).toBeGreaterThan(0);
+      await bridge.track(['a.py', 'other.py']);
+      await settle();
+      expect(events).toContain('open other.py v1');
+
+      notify('$/progress', { token: 'load', value: { kind: 'end' } });
+      notify('$/progress', { token: 2, value: { kind: 'report', message: 'dependencies', percentage: 40 } });
+      await expect.poll(() => bridge.status().activity).toEqual(['Indexing (40%): dependencies']);
+      await expect(bridge.hover({ ...pos, line: 1 })).rejects.toThrow('Indexing (40%): dependencies');
+      notify('$/progress', { token: 2, value: { kind: 'end' } });
+      await expect.poll(() => bridge.status().activity).toEqual([]);
+      expect(await bridge.hover({ ...pos, line: 1 })).toEqual({ contents: null });
+      expect((await bridge.definition(pos)).locations).toHaveLength(1);
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it.each(['window/showMessage', 'window/logMessage', 'window/showMessageRequest'])(
+    'surfaces %s errors without killing a usable server',
+    async (method) => {
+      const { bridge, notify } = start();
+      try {
+        await bridge.track(['a.py']);
+        notify(method, { type: 1, message: 'Failed to load workspace' });
+        await expect
+          .poll(() => bridge.status().notice)
+          .toEqual({ severity: 'error', message: 'Failed to load workspace' });
+        expect((await bridge.definition({ path: 'a.py', line: 3, col: 4 })).locations).toHaveLength(1);
+        await expect(bridge.hover({ path: 'a.py', line: 1, col: 0 })).rejects.toThrow(
+          'last server error: Failed to load workspace',
+        );
+        notify(method, { type: 3, message: 'An unrelated info message' });
+        notify('$/progress', { token: 2, value: [1, 2, 3] });
+        await settle();
+        expect(bridge.status().notice?.severity).toBe('error');
+        expect(bridge.status().activity).toBeUndefined();
+      } finally {
+        await bridge.close();
+      }
+    },
+  );
+
+  it('rejects an empty answer when standard progress begins during the request', async () => {
+    const { bridge } = start({ FAKE_LSP_LOADING_DURING_QUERY: '1' });
+    try {
+      await expect(bridge.definition({ path: 'a.py', line: 3, col: 4 })).rejects.toThrow('Reloading workspace');
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it('exposes stderr while the server remains alive', async () => {
+    const { bridge } = start();
+    try {
+      await bridge.track(['a.py']);
+      await expect.poll(() => bridge.status().stderr).toContain('open a.py');
+      expect(bridge.status().state).toBe('ready');
+    } finally {
+      await bridge.close();
+    }
   });
 
   it('re-asks a request the server refuses as stale, and reports an outage when it keeps refusing', async () => {
