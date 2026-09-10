@@ -1,6 +1,6 @@
 import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
-import type { ChangedFile, CommentThread, Snapshot } from '../../src/shared/protocol.js';
+import type { ChangedFile, CommentThread, GithubMetadata, Snapshot } from '../../src/shared/protocol.js';
 import {
   canExportToGithub,
   compareTreeOrder,
@@ -196,30 +196,24 @@ describe('countViewed', () => {
 });
 
 describe('canExportToGithub', () => {
-  const snap = (kind: Snapshot['mode']['kind']): Snapshot => ({ mode: { kind } }) as unknown as Snapshot;
-
-  it('allows only PR mode', () => {
-    expect(canExportToGithub(snap('pr'))).toBe(true);
-    expect(canExportToGithub(snap('working'))).toBe(false);
-    expect(canExportToGithub(snap('revspec'))).toBe(false);
-  });
-
-  it('refuses before the first snapshot', () => {
+  it('uses export eligibility independently of the comparison', () => {
+    expect(canExportToGithub({ canExport: true } as GithubMetadata)).toBe(true);
+    expect(canExportToGithub({ canExport: false } as GithubMetadata)).toBe(false);
     expect(canExportToGithub(null)).toBe(false);
   });
 });
 
 describe('documentTitle', () => {
   const snapshot = (mode: Partial<Snapshot['mode']>, root = '/home/me/rattler/'): Snapshot =>
-    ({ root, mode: { kind: 'working', ...mode } }) as Snapshot;
+    ({ root, mode }) as Snapshot;
 
   it('names the root directory', () => {
     expect(documentTitle(snapshot({}))).toBe('diffle: rattler');
   });
 
   it('names the pull request by its base repository and number, not the checkout directory', () => {
-    const mode = { kind: 'pr' as const, pullRequest: { repository: 'conda/rattler', number: 12345 } };
-    expect(documentTitle(snapshot(mode, '/tmp/diffle-pr-lTXVEf'))).toBe('diffle: conda/rattler #12345');
+    const github = { pullRequest: { repository: 'conda/rattler', number: 12345 } } as GithubMetadata;
+    expect(documentTitle(snapshot({}, '/tmp/diffle-pr-lTXVEf'), github)).toBe('diffle: conda/rattler #12345');
   });
 
   it('falls back before the first snapshot', () => {

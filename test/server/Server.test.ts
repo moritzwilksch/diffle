@@ -84,6 +84,17 @@ afterAll(async () => {
 });
 
 describe('Server', () => {
+  it('serves local repository identity and independently resolved metadata', async () => {
+    const snap = await session.snapshotter.current();
+    expect(JSON.parse((await send('GET', '/api/github/repository')).body)).toEqual({ repository: null });
+    const response = await send('GET', `/api/github?version=${snap.version}`);
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({ version: snap.version, pullRequest: null, canExport: false });
+    expect((await send('GET', '/api/github?version=0')).status).toBe(409);
+    expect((await send('POST', '/api/github/export', { body: JSON.stringify({ version: 0 }) })).status).toBe(409);
+    expect(session.mode).not.toHaveProperty('kind');
+  });
+
   it('validates preview counts and returns the available endpoint messages', async () => {
     for (const count of ['', '-1', '1.5', 'nope', '9007199254740992']) {
       expect((await send('GET', '/api/last-commits-preview?newOffset=0&oldOffset=' + count)).status).toBe(400);
@@ -96,7 +107,7 @@ describe('Server', () => {
   it('serves the API to loopback hosts', async () => {
     const r = await send('GET', '/api/snapshot');
     expect(r.status).toBe(200);
-    expect(JSON.parse(r.body).mode.kind).toBe('working');
+    expect(JSON.parse(r.body).mode.new).toBe('worktree');
   });
 
   it('returns a JSON error for unknown API routes instead of the app page', async () => {

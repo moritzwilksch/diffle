@@ -8,6 +8,8 @@ import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { GithubError, listPrsForHead, viewPr, type GhRunner } from '../../src/server/github.js';
+import { discoverGithub, githubRepository, originRepository } from '../../src/server/GithubMetadata.js';
+import { Snapshotter } from '../../src/server/Snapshotter.js';
 import { resolveMode } from '../../src/server/mode.js';
 
 /**
@@ -44,6 +46,10 @@ const asGitUrl = (p: string) => p.replaceAll('\\', '/');
 /** What `gh pr view` would say for PR 7 of o/r. */
 const PR_VIEW = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
+    title: 'Improve feature',
+    state: 'OPEN',
+    isDraft: false,
+    baseRefOid: mergeBase,
     number: 7,
     url: 'https://github.com/o/r/pull/7',
     baseRefName: 'main',
@@ -103,11 +109,16 @@ describe('viewPr', () => {
         'view',
         expected,
         '--json',
-        'number,url,baseRefName,headRefName,headRefOid',
+        'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid',
       ]);
     }
     await viewPr(undefined, local, gh);
-    expect(ghCalls.pop()).toEqual(['pr', 'view', '--json', 'number,url,baseRefName,headRefName,headRefOid']);
+    expect(ghCalls.pop()).toEqual([
+      'pr',
+      'view',
+      '--json',
+      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid',
+    ]);
   });
 
   it('reads the base repository off the pull request url', async () => {
@@ -115,7 +126,7 @@ describe('viewPr', () => {
   });
 
   it('lists open pull requests for an explicit remote branch', async () => {
-    const prs = await listPrsForHead('feat', 'o/r', local, async (args) => {
+    const prs = await listPrsForHead('o/r', 'main', 'feat', 'o/r', local, async (args) => {
       ghCalls.push(args);
       return JSON.stringify([
         JSON.parse(PR_VIEW()),
@@ -126,6 +137,10 @@ describe('viewPr', () => {
     expect(ghCalls[0]).toEqual([
       'pr',
       'list',
+      '--repo',
+      'o/r',
+      '--base',
+      'main',
       '--head',
       'feat',
       '--state',
@@ -133,7 +148,7 @@ describe('viewPr', () => {
       '--limit',
       '100',
       '--json',
-      'number,url,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
+      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
     ]);
   });
 
@@ -154,11 +169,11 @@ describe("resolveMode({ kind: 'pr' })", () => {
   it('fetches the pull request and pins both sides to commits', async () => {
     const mode = await resolveMode({ kind: 'pr', pr: '7' }, repo, gh);
     expect(mode).toMatchObject({
-      kind: 'pr',
-      old: { kind: 'rev', rev: mergeBase },
-      newRev: headSha,
+      old: mergeBase,
+      mergeBase: false,
+      new: headSha,
       label: '#7 main...feat',
-      pullRequest: { repository: 'o/r', number: 7 },
+      request: { kind: 'pr', pr: 'https://github.com/o/r/pull/7' },
       live: 'none',
       // The number, not a sha: comments outlive a force-push to the pull request.
       commentKey: 'pr:#7',
@@ -172,7 +187,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
     execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     const forkRepo = await GitRepo.open(forked);
     const mode = await resolveMode({ kind: 'pr', pr: '7' }, forkRepo, gh);
-    expect(mode.newRev).toBe(headSha);
+    expect(mode.new).toBe(headSha);
   });
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
@@ -202,90 +217,125 @@ describe("resolveMode({ kind: 'pr' })", () => {
   });
 });
 
-describe('automatic PR mode', () => {
-  async function onCheckedOutPr<T>(fn: () => Promise<T>): Promise<T> {
+describe('independent GitHub metadata', () => {
+  async function checkedOut<T>(fn: () => Promise<T>): Promise<T> {
     git(local, 'update-ref', 'refs/remotes/origin/feat', headSha);
     git(local, 'checkout', '-q', '-B', 'feat', '--track', 'origin/feat');
+    const remotes = vi.spyOn(repo, 'remotes').mockResolvedValue([{ name: 'origin', url: 'git@github.com:o/r.git' }]);
     try {
       return await fn();
     } finally {
+      remotes.mockRestore();
       git(local, 'checkout', '-q', 'main');
       git(local, 'branch', '-q', '-D', 'feat');
       git(local, 'update-ref', '-d', 'refs/remotes/origin/feat');
     }
   }
+  const snapshot = async (args: string[]) =>
+    new Snapshotter(repo, await resolveMode({ kind: 'revspec', args }, repo), 1, 3).current();
+  const found: GhRunner = async (args, opts) => {
+    ghCalls.push(args);
+    expect(opts.timeoutMs).toBe(5000);
+    return JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: headSha }))]);
+  };
 
-  it('promotes a checked-out PR from a matching merge-base comparison', async () => {
-    const mode = await onCheckedOutPr(() =>
-      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async (args) => {
-        ghCalls.push(args);
-        return JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: headSha }))]);
-      }),
-    );
-    expect(mode).toMatchObject({
-      kind: 'pr',
-      request: { kind: 'pr', pr: '7' },
-      old: { kind: 'rev', rev: mergeBase },
-      newRev: headSha,
-      pullRequest: { repository: 'o/r', number: 7 },
-    });
-    expect(ghCalls[0]).toEqual([
-      'pr',
-      'list',
-      '--head',
-      'feat',
-      '--state',
-      'open',
-      '--limit',
-      '100',
-      '--json',
-      'number,url,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
-    ]);
-  });
+  it('discovers both upstreams without promoting, pinning, or fetching the comparison', async () =>
+    checkedOut(async () => {
+      const fetch = vi.spyOn(repo, 'fetch');
+      try {
+        const snap = await snapshot(['origin/main']);
+        const before = structuredClone(snap.mode);
+        const metadata = await discoverGithub(repo, snap, found);
+        expect(metadata).toMatchObject({
+          canExport: true,
+          pullRequest: { repository: 'o/r', number: 7, title: 'Improve feature', state: 'OPEN', isDraft: false },
+        });
+        expect(snap.mode).toEqual(before);
+        expect(snap.mode).toMatchObject({ old: 'origin/main', new: 'HEAD', mergeBase: true, live: 'refs' });
+        expect(snap.mode).not.toHaveProperty('kind');
+        expect(fetch).not.toHaveBeenCalled();
+        expect(ghCalls[0]?.slice(0, 8)).toEqual(['pr', 'list', '--repo', 'o/r', '--base', 'main', '--head', 'feat']);
+      } finally {
+        fetch.mockRestore();
+      }
+    }));
 
-  it('keeps revspec mode when discovery fails or the PR head differs', async () => {
-    const failed = await onCheckedOutPr(() =>
-      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async () => {
-        throw new GithubError('no pull requests found');
-      }),
-    );
-    expect(failed.kind).toBe('revspec');
+  it('resolves exact local and remote branches, but never expressions or tags', async () =>
+    checkedOut(async () => {
+      expect(await repo.upstreamBranch('HEAD')).toEqual({ remote: 'origin', branch: 'feat' });
+      expect(await repo.upstreamBranch('feat')).toEqual({ remote: 'origin', branch: 'feat' });
+      expect(await repo.upstreamBranch('origin/main')).toEqual({ remote: 'origin', branch: 'main' });
+      expect(await repo.upstreamBranch('HEAD~1')).toBeNull();
+      expect(await repo.upstreamBranch(headSha)).toBeNull();
+      expect(await repo.upstreamBranch('worktree')).toBeNull();
+      git(local, 'tag', 'metadata-tag', headSha);
+      try {
+        expect(await repo.upstreamBranch('metadata-tag')).toBeNull();
+      } finally {
+        git(local, 'tag', '-d', 'metadata-tag');
+      }
+      git(local, 'checkout', '-q', '--detach', headSha);
+      expect(await repo.upstreamBranch('HEAD')).toBeNull();
+    }));
 
-    const behind = await onCheckedOutPr(() =>
-      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async () =>
+  it('skips GitHub for a worktree or an expression on either endpoint', async () =>
+    checkedOut(async () => {
+      for (const args of [['origin/main..worktree'], ['worktree..HEAD'], ['HEAD~1..HEAD']]) {
+        const metadata = await discoverGithub(repo, await snapshot(args), found);
+        expect(metadata.pullRequest).toBeNull();
+      }
+      expect(ghCalls).toEqual([]);
+    }));
+
+  it('shows metadata for an unpushed branch but refuses export', async () =>
+    checkedOut(async () => {
+      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), async () =>
         JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: mergeBase }))]),
-      ),
-    );
-    expect(behind.kind).toBe('revspec');
+      );
+      expect(metadata.pullRequest?.number).toBe(7);
+      expect(metadata.canExport).toBe(false);
+      expect(metadata.reason).toMatch(/head/);
+    }));
+
+  it('shows matching metadata even when the old commit differs from GitHub’s diff', async () =>
+    checkedOut(async () => {
+      const snap = await snapshot(['origin/main']);
+      const metadata = await discoverGithub(repo, { ...snap, oldSha: headSha }, found);
+      expect(metadata.pullRequest?.number).toBe(7);
+      expect(metadata.canExport).toBe(false);
+      expect(metadata.reason).toMatch(/does not match/);
+    }));
+
+  it('does not select an arbitrary PR when discovery is ambiguous', async () =>
+    checkedOut(async () => {
+      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), async () =>
+        JSON.stringify([
+          JSON.parse(PR_VIEW({ headRefOid: headSha })),
+          JSON.parse(PR_VIEW({ number: 8, headRefOid: headSha })),
+        ]),
+      );
+      expect(metadata.pullRequest).toBeNull();
+      expect(metadata.reason).toMatch(/Multiple/);
+    }));
+
+  it('keeps an explicit PR identity when neither commit has a branch', async () => {
+    const mode = await resolveMode({ kind: 'pr', pr: '7' }, repo, gh);
+    const snap = await new Snapshotter(repo, mode, 1, 3).current();
+    const metadata = await discoverGithub(repo, snap, async (args) => {
+      expect(args[2]).toBe('https://github.com/o/r/pull/7');
+      return PR_VIEW({ headRefOid: headSha, isDraft: true });
+    });
+    expect(metadata).toMatchObject({ canExport: true, pullRequest: { number: 7, isDraft: true } });
   });
 
-  it('does not query GitHub when the checked-out branch has no upstream', async () => {
-    const calls: string[][] = [];
-    git(local, 'checkout', '-q', '-B', 'local-only', headSha);
-    try {
-      const mode = await resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async (args) => {
-        calls.push(args);
-        return '[]';
-      });
-      expect(mode.kind).toBe('revspec');
-      expect(calls).toEqual([]);
-    } finally {
-      git(local, 'checkout', '-q', 'main');
-      git(local, 'branch', '-q', '-D', 'local-only');
-    }
-  });
-
-  it('does not promote a direct two-dot comparison', async () => {
-    const calls: string[][] = [];
-    const mode = await onCheckedOutPr(() =>
-      resolveMode({ kind: 'revspec', args: ['origin/main..HEAD'] }, repo, async (args) => {
-        calls.push(args);
-        return PR_VIEW({ headRefOid: headSha });
-      }),
-    );
-    expect(mode.kind).toBe('revspec');
-    expect(calls).toEqual([]);
-  });
+  it('reads origin locally and recognizes GitHub URL forms', async () =>
+    checkedOut(async () => {
+      expect(await originRepository(repo)).toBe('o/r');
+      for (const url of ['https://github.com/o/r.git', 'git@github.com:o/r.git', 'ssh://git@github.com/o/r.git'])
+        expect(githubRepository(url)).toBe('o/r');
+      expect(githubRepository('https://notgithub.com/o/r')).toBeNull();
+      expect(githubRepository('/local/o/r')).toBeNull();
+    }));
 });
 
 describe('openReviewRepository', () => {
@@ -387,9 +437,9 @@ describe('openReviewRepository', () => {
           const root = await realpath(review.repo.root);
           expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
           const mode = await resolveMode(req, review.repo, foreign);
-          expect(mode.newRev).toBe(headSha);
-          expect(mode.pullRequest?.repository).toBe('foreign/repo');
-          expect(mode.old).toEqual({ kind: 'rev', rev: mergeBase });
+          expect(mode.new).toBe(headSha);
+          expect(mode.request).toEqual({ kind: 'pr', pr: 'https://github.com/foreign/repo/pull/7' });
+          expect(mode.old).toBe(mergeBase);
           expect(git(local, 'show-ref')).toBe(refs);
           expect(git(local, 'count-objects', '-v')).toBe(objects);
         } finally {

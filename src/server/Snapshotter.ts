@@ -108,7 +108,11 @@ export class Snapshotter {
     // The tree belongs to the selected new side: a commit's own listing, or the
     // index plus untracked files (added below via `changed`) for the worktree.
     const [tracked, changed] = await Promise.all([
-      newSha === 'worktree' ? this.repo.lsFiles() : this.repo.lsTree(newSha),
+      newSha === 'worktree'
+        ? Promise.all([this.repo.lsFiles(), this.repo.untracked()]).then((lists) =>
+            lists.flat().filter((p) => !p.endsWith('/')),
+          )
+        : this.repo.lsTree(newSha),
       this.repo.numstat(oldSha, newSha),
     ]);
     await this.fillGenerated(changed, newSha);
@@ -170,19 +174,31 @@ export class Snapshotter {
   }
 
   private async resolveOld(): Promise<string> {
-    const o = this.mode.old;
-    if (o.kind !== 'rev') return this.repo.mergeBase(o.a, o.b);
-    try {
-      return await this.repo.resolve(o.rev);
-    } catch (e) {
-      // A fresh `git init` has no commit yet (`rev-parse --verify` exits 1), so
-      // working mode diffs everything against the empty tree instead of failing.
-      if (o.rev === 'HEAD' && e instanceof GitError && e.code === 1) return this.repo.emptyTree();
-      throw e;
-    }
+    if (this.mode.mergeBase)
+      return this.repo.mergeBase(
+        this.mode.old === 'worktree' ? 'HEAD' : this.mode.old,
+        this.mode.new === 'worktree' ? 'HEAD' : this.mode.new,
+      );
+    return this.resolveSide(this.mode.old);
   }
 
-  private resolveNew(): Promise<string | 'worktree'> {
-    return this.mode.newRev === 'worktree' ? Promise.resolve('worktree') : this.repo.resolve(this.mode.newRev);
+  private resolveNew(): Promise<string> {
+    return this.resolveSide(this.mode.new);
+  }
+
+  private async resolveSide(rev: string): Promise<string> {
+    if (rev === 'worktree') return rev;
+    try {
+      return await this.repo.resolve(rev);
+    } catch (e) {
+      if (
+        rev === 'HEAD' &&
+        [this.mode.old, this.mode.new].includes('worktree') &&
+        e instanceof GitError &&
+        e.code === 1
+      )
+        return this.repo.emptyTree();
+      throw e;
+    }
   }
 }

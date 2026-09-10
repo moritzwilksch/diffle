@@ -1,8 +1,10 @@
-import type { ModeRequest, ModeSpec, ServerMessage, Side, Snapshot } from '../shared/protocol.js';
+import type { GithubMetadata, ModeRequest, ModeSpec, ServerMessage, Side, Snapshot } from '../shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type QuoteFn } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
+import { discoverGithub } from './GithubMetadata.js';
+import { type GhRunner } from './github.js';
 import { resolveMode } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -27,6 +29,7 @@ interface Active {
 
 export interface SessionOptions {
   watch: boolean;
+  gh?: GhRunner;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
   /** Replaces the chokidar-backed Watcher. Test seam. */
@@ -44,6 +47,7 @@ export interface SessionOptions {
  */
 export class Session {
   private active: Active | null = null;
+  private githubCache = new WeakMap<Snapshot, { expires: number; promise: Promise<GithubMetadata> }>();
   private readyPromise: Promise<void>;
   private resolveReady!: () => void;
   private rejectReady!: (e: unknown) => void;
@@ -76,6 +80,19 @@ export class Session {
 
   get snapshotter(): Snapshotter {
     return this.require().snapshotter;
+  }
+
+  /** Cached independently of snapshot construction; callers never hold the transition queue. */
+  github(snap: Snapshot, fresh = false): Promise<GithubMetadata> {
+    const cached = this.githubCache.get(snap);
+    if (!fresh && cached && cached.expires > Date.now()) return cached.promise;
+    const promise = discoverGithub(this.repo, snap, this.opts.gh);
+    const entry = { expires: Date.now() + 30_000, promise };
+    this.githubCache.set(snap, entry);
+    void promise.catch(() => {
+      if (this.githubCache.get(snap) === entry) this.githubCache.delete(snap);
+    });
+    return promise;
   }
 
   get comments(): CommentStore {
@@ -141,7 +158,7 @@ export class Session {
   }
 
   private async transition(req: ModeRequest): Promise<Snapshot> {
-    const mode = await resolveMode(req, this.repo);
+    const mode = await resolveMode(req, this.repo, this.opts.gh);
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([
@@ -228,7 +245,7 @@ export class Session {
     if (side === 'new') {
       return snap.newSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.newSha, target);
     }
-    return this.repo.show(snap.oldSha, target);
+    return snap.oldSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.oldSha, target);
   }
 
   /** Whether `readSide` would find `path` on `side`: the allowlist alone, no read. */

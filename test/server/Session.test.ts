@@ -218,7 +218,7 @@ describe('Session', () => {
     await Promise.all([switching, context, refreshed]);
     const versions = seen.map((snap) => snap.version);
     expect(versions.every((v, i) => i === 0 || v > versions[i - 1]!)).toBe(true);
-    expect(session.mode.kind).toBe('working');
+    expect(session.mode.new).toBe('worktree');
     const current = await session.snapshotter.current();
     expect(session.context).toBe(5);
     expect(current.context).toBe(5);
@@ -365,3 +365,20 @@ class FakeWatcher implements WatcherLike {
     this.state = 'closed';
   }
 }
+
+describe('old-side worktree reads', () => {
+  it('maps reverse rename anchors into the worktree and preserves the new-side allowlist', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 3 });
+    try {
+      const snap = await session.start({ kind: 'revspec', args: ['worktree..main'] });
+      const renamed = snap.changed.find((file) => file.path === 'old.txt')!;
+      expect(renamed.oldPath).toBe('new.txt');
+      expect((await session.readSide(snap, 'old.txt', 'old'))?.toString()).toBe('alpha\nbeta\ngamma\ndelta\n');
+      expect((await session.readSide(snap, 'old.txt', 'new'))?.toString()).toBe('alpha\nbeta\ngamma\n');
+      expect(await session.readSide(snap, 'secret.env', 'old')).toBeNull();
+      expect(await session.readSide(snap, 'new.txt', 'new')).toBeNull();
+    } finally {
+      await session.close();
+    }
+  });
+});

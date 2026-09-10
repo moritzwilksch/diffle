@@ -278,9 +278,9 @@ export function lastCommitsRequest(n: number, m: number): ModeRequest {
   return { kind: 'revspec', args: [`HEAD~${n}..HEAD~${m}`] };
 }
 
-/** GitHub-specific controls belong only to a resolved pull-request review. */
-export function canExportToGithub(snapshot: Snapshot | null): boolean {
-  return snapshot?.mode.kind === 'pr';
+/** Export eligibility is independent of how the comparison was opened. */
+export function canExportToGithub(metadata: import('../shared/protocol.js').GithubMetadata | null): boolean {
+  return metadata?.canExport === true;
 }
 
 /** What an export did to the pending review: new comments, bodies rewritten in place, or nothing left to do. */
@@ -291,16 +291,18 @@ export function exportLabel(outcome: ExportOutcome): string {
   return outcome === 'updated' ? 'Updated' : outcome === 'unchanged' ? 'Already added' : 'Added';
 }
 
-/** What names the review: the pull request's base repository, else the root directory. */
+/** Local repository name, independent of GitHub discovery. */
 export function repoName(snapshot: Snapshot): string {
-  if (snapshot.mode.pullRequest) return snapshot.mode.pullRequest.repository;
   const parts = snapshot.root.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] ?? snapshot.root;
 }
 
 /** Browser tab title; the PR number tells tabs of one repository apart. */
-export function documentTitle(snapshot: Snapshot | null): string {
+export function documentTitle(
+  snapshot: Snapshot | null,
+  github: import('../shared/protocol.js').GithubMetadata | null = null,
+): string {
   if (!snapshot) return 'diffle';
-  const pr = snapshot.mode.pullRequest;
-  return pr ? `diffle: ${repoName(snapshot)} #${pr.number}` : `diffle: ${repoName(snapshot)}`;
+  const pr = github?.pullRequest;
+  return pr ? `diffle: ${pr.repository} #${pr.number}` : `diffle: ${repoName(snapshot)}`;
 }

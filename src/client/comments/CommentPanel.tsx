@@ -24,7 +24,7 @@ export function CommentPanel() {
   const focusThread = useStore((s) => s.focusThread);
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
-  const canExport = useStore((s) => canExportToGithub(s.snapshot));
+  const canExport = useStore((s) => canExportToGithub(s.github));
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);

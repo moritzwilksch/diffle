@@ -37,7 +37,13 @@ const CONFIG_ARGS = [
   'core.quotePath=false',
 ];
 /** Fixed header prefixes and no `diff.external`, so a patch is always a unified diff. */
-const PATCH_ARGS = ['--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/'];
+function patchArgs(oldRev: string): string[] {
+  // -R swaps Git's prefixes too; keep the rendered old/new sides named a/b.
+  return [
+    '--no-ext-diff',
+    ...(oldRev === 'worktree' ? ['--src-prefix=b/', '--dst-prefix=a/'] : ['--src-prefix=a/', '--dst-prefix=b/']),
+  ];
+}
 /** An idle `cat-file --batch` is reaped after this long; the next request respawns one. */
 const CAT_FILE_IDLE_MS = 2000;
 
@@ -175,19 +181,35 @@ export class GitRepo {
     throw new GitError('cannot determine default branch; pass a base explicitly', [], null, '');
   }
 
-  /** The checked-out branch's configured upstream, or null when HEAD is detached or untracked. */
-  async upstreamBranch(): Promise<{ remote: string; branch: string } | null> {
-    let head: string;
+  /** Remote branch identity for an exact local/remote branch; expressions and detached HEAD have none. */
+  async upstreamBranch(rev: string): Promise<{ remote: string; branch: string } | null> {
+    if (rev === 'worktree') return null;
+    let ref: string;
     try {
-      head = (await this.text(['symbolic-ref', '--quiet', 'HEAD'])).trim();
+      ref = (
+        await this.text(
+          rev === 'HEAD'
+            ? ['symbolic-ref', '--quiet', 'HEAD']
+            : ['rev-parse', '--symbolic-full-name', '--verify', '--end-of-options', rev],
+        )
+      ).trim();
     } catch (e) {
-      if (e instanceof GitError && e.code === 1) return null;
+      if (e instanceof GitError) return null;
       throw e;
     }
-    const out = await this.text(['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)%00', head]);
-    const [remote, ref] = out.split('\0');
-    if (!remote || remote === '.' || !ref?.startsWith('refs/heads/')) return null;
-    return { remote, branch: ref.slice('refs/heads/'.length) };
+    if (ref.startsWith('refs/heads/')) {
+      const out = await this.text(['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)%00', ref]);
+      const [remote, upstream] = out.split('\0');
+      if (!remote || remote === '.' || !upstream?.startsWith('refs/heads/')) return null;
+      return { remote, branch: upstream.slice('refs/heads/'.length) };
+    }
+    if (ref.startsWith('refs/remotes/')) {
+      // Remote names can contain slashes; match the longest configured name.
+      const remotes = (await this.remotes()).sort((a, b) => b.name.length - a.name.length);
+      const remote = remotes.find((r) => ref.startsWith(`refs/remotes/${r.name}/`));
+      if (remote) return { remote: remote.name, branch: ref.slice(`refs/remotes/${remote.name}/`.length) };
+    }
+    return null;
   }
 
   /** Configured remotes, in git's order, with their fetch URLs. */
@@ -239,14 +261,16 @@ export class GitRepo {
    * One diff call yields status, line counts and, against a commit, the new-side
    * blob; the worktree's blobs are hashed from disk.
    */
-  async numstat(oldRev: string, newRev: string | 'worktree'): Promise<ChangedFile[]> {
-    const range = newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
+  async numstat(oldRev: string, newRev: string): Promise<ChangedFile[]> {
+    if (oldRev === 'worktree' && newRev === 'worktree') return [];
+    const reverse = oldRev === 'worktree';
+    const range = diffRange(oldRev, newRev);
     const [diff, untracked] = await Promise.all([
       this.exec(['diff', '-z', '-M', '--raw', '--no-abbrev', '--numstat', ...range]),
-      newRev === 'worktree' ? this.untracked() : Promise.resolve([]),
+      [oldRev, newRev].includes('worktree') ? this.untracked() : Promise.resolve([]),
     ]);
     const files = parseRawNumstat(diff);
-    const known = new Set(files.map((f) => f.path));
+    const known = new Set(files.flatMap((f) => [f.path, ...(f.oldPath ? [f.oldPath] : [])]));
     // `ls-files --others` lists a nested repository as `dir/`; git has no diff for it.
     const extra = await mapLimit(
       untracked.filter((p) => !known.has(p) && !p.endsWith('/')),
@@ -254,7 +278,7 @@ export class GitRepo {
       async (path): Promise<ChangedFile> => {
         const file: ChangedFile = {
           path,
-          status: 'A',
+          status: reverse ? 'D' : 'A',
           additions: 0,
           deletions: 0,
           binary: false,
@@ -266,7 +290,10 @@ export class GitRepo {
         // Unreadable (permissions) counts as empty: one bad path must not fail the snapshot.
         const buf = (await this.readWorktree(path).catch(() => null)) ?? Buffer.alloc(0);
         file.binary = isBinary(buf);
-        if (!file.binary) file.additions = countLines(buf);
+        if (!file.binary) {
+          if (reverse) file.deletions = countLines(buf);
+          else file.additions = countLines(buf);
+        }
         return file;
       },
     );
@@ -408,29 +435,52 @@ export class GitRepo {
     context = 3,
     untracked?: boolean,
   ): Promise<string> {
-    if (newRev === 'worktree' && file.status === 'A' && (untracked ?? !(await this.isTracked(file.path)))) {
-      const out = await this.text(['diff', '--no-index', ...PATCH_ARGS, `-U${context}`, '--', '/dev/null', file.path], {
-        okCodes: [0, 1],
-      });
+    if (oldRev === 'worktree' && newRev === 'worktree') return '';
+    const reverse = oldRev === 'worktree';
+    if (
+      (reverse ? file.status === 'D' : newRev === 'worktree' && file.status === 'A') &&
+      (untracked ?? !(await this.isTracked(file.path)))
+    ) {
+      const out = await this.text(
+        [
+          'diff',
+          '--no-index',
+          ...(reverse ? ['-R'] : []),
+          ...patchArgs(oldRev),
+          `-U${context}`,
+          '--',
+          '/dev/null',
+          file.path,
+        ],
+        {
+          okCodes: [0, 1],
+        },
+      );
       // Normalize the a/ side so parsers see a conventional added-file header. Git
       // quotes each side on its own, so mirror the b/ side's quoting rather than assume none.
+      if (reverse)
+        return out.replace(
+          /^diff --git ("?)a\/(.*) "?b\/dev\/null"?$/m,
+          (_m, q: string, rest: string) => `diff --git ${q}a/${rest} ${q}b/${rest}`,
+        );
       return out.replace(
         /^diff --git "?a\/dev\/null"? ("?)b\/(.*)$/m,
         (_m, q: string, rest: string) => `diff --git ${q}a/${rest} ${q}b/${rest}`,
       );
     }
-    const range = newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
+    const range = diffRange(oldRev, newRev);
     const paths = file.oldPath ? [file.oldPath, file.path] : [file.path];
-    return this.text(['diff', '-M', ...PATCH_ARGS, `-U${context}`, ...range, '--', ...paths]);
+    return this.text(['diff', '-M', ...patchArgs(oldRev), `-U${context}`, ...range, '--', ...paths]);
   }
 
   /** Patches for all changed files. Tracked files in one call; untracked appended. */
-  async patchAll(oldRev: string, newRev: string | 'worktree', files: ChangedFile[], context = 3): Promise<string> {
-    const range = newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
-    const tracked = this.text(['diff', '-M', ...PATCH_ARGS, `-U${context}`, ...range]);
+  async patchAll(oldRev: string, newRev: string, files: ChangedFile[], context = 3): Promise<string> {
+    if (oldRev === 'worktree' && newRev === 'worktree') return '';
+    const range = diffRange(oldRev, newRev);
+    const tracked = this.text(['diff', '-M', ...patchArgs(oldRev), `-U${context}`, ...range]);
     let untracked: ChangedFile[] = [];
-    if (newRev === 'worktree') {
-      const added = files.filter((f) => f.status === 'A' && !f.binary);
+    if ([oldRev, newRev].includes('worktree')) {
+      const added = files.filter((f) => f.status === (oldRev === 'worktree' ? 'D' : 'A') && !f.binary);
       if (added.length) {
         // The whole index rather than the added paths as arguments: a large diff would exceed argv.
         const known = new Set(await this.lsFiles());
@@ -446,12 +496,15 @@ export class GitRepo {
    * (`patch` probes whether they are untracked). The caller bounds the batch, so the paths ride argv.
    */
   async patchMany(oldRev: string, newRev: string | 'worktree', files: ChangedFile[], context = 3): Promise<string> {
-    const single = newRev === 'worktree' ? files.filter((f) => f.status === 'A') : [];
+    if (oldRev === 'worktree' && newRev === 'worktree') return '';
+    const single = [oldRev, newRev].includes('worktree')
+      ? files.filter((f) => f.status === (oldRev === 'worktree' ? 'D' : 'A'))
+      : [];
     const batched = files.filter((f) => !single.includes(f));
-    const range = newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
+    const range = diffRange(oldRev, newRev);
     const paths = batched.flatMap((f) => (f.oldPath ? [f.oldPath, f.path] : [f.path]));
     const tracked = batched.length
-      ? this.text(['diff', '-M', ...PATCH_ARGS, `-U${context}`, ...range, '--', ...paths])
+      ? this.text(['diff', '-M', ...patchArgs(oldRev), `-U${context}`, ...range, '--', ...paths])
       : Promise.resolve('');
     const extras = await mapLimit(single, READ_CONCURRENCY, (f) => this.patch(oldRev, newRev, f, context));
     return [await tracked, ...extras].join('');
@@ -876,4 +929,9 @@ function countLines(buf: Buffer): number {
   for (const b of buf) if (b === 10) n++;
   if (buf[buf.length - 1] !== 10) n++;
   return n;
+}
+
+/** Git reverses the commit-to-worktree diff when the worktree is the old endpoint. */
+function diffRange(oldRev: string, newRev: string): string[] {
+  return oldRev === 'worktree' ? ['-R', newRev] : newRev === 'worktree' ? [oldRev] : [oldRev, newRev];
 }

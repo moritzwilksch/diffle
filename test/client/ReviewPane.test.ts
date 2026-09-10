@@ -72,10 +72,10 @@ function snap(changed: Snapshot['changed']): Snapshot {
   return {
     root: '/r',
     mode: {
-      kind: 'working',
       request: { kind: 'working' },
-      old: { kind: 'rev', rev: 'HEAD' },
-      newRev: 'worktree',
+      old: 'HEAD',
+      mergeBase: false,
+      new: 'worktree',
       label: 'working',
       live: 'none',
       commentKey: 'working',

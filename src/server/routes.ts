@@ -20,6 +20,7 @@ import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
+import { originRepository } from './GithubMetadata.js';
 import { GithubExporter, GithubError } from './github.js';
 import { LspUnavailableError } from './lsp/LspBridge.js';
 import type { LspPool } from './lsp/LspPool.js';
@@ -68,6 +69,13 @@ export function createApi(deps: ApiDeps): Hono {
     const req = (await c.req.json()) as ModeRequest;
     if (!isModeRequest(req)) return c.json({ error: 'invalid mode request' }, 400);
     return c.json(await session.switchMode(req));
+  });
+
+  app.get('/api/github/repository', async (c) => c.json({ repository: await originRepository(session.repo) }));
+  app.get('/api/github', async (c) => {
+    const snap = await session.snapshotter.current();
+    if (c.req.query('version') !== String(snap.version)) return c.json({ error: 'comparison changed' }, 409);
+    return c.json(await session.github(snap));
   });
 
   app.get('/api/refs', async (c) => c.json(await session.repo.refs()));
@@ -218,15 +226,27 @@ export function createApi(deps: ApiDeps): Hono {
     return c.body(null, 204);
   });
 
-  // Adds threads to a pending review on the checked-out branch's pull request through the local `gh`; the human submits it on GitHub.
+  // Adds threads to a pending review on the matching pull request through the local `gh`; the human submits it on GitHub.
   app.post('/api/github/export', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Partial<GithubExportRequest>;
     const ids = body.threadIds;
     if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
       return c.json({ error: 'threadIds must be a string list' }, 400);
     const snap = await session.snapshotter.current();
-    if (snap.mode.kind !== 'pr') throw new GithubError('GitHub review export requires PR mode');
-    return c.json(await github.export({ snap, threads: session.comments.threads({ state: 'all' }), threadIds: ids }));
+    if (body.version !== snap.version) throw new GithubError('Comparison changed; try again');
+    const comments = session.comments;
+    const metadata = await session.github(snap, true);
+    if (!metadata.pullRequest || !metadata.canExport)
+      throw new GithubError(metadata.reason ?? 'No matching pull request');
+    if (snap !== (await session.snapshotter.current())) throw new GithubError('Comparison changed; try again');
+    return c.json(
+      await github.export({
+        snap,
+        pullRequest: metadata.pullRequest,
+        threads: comments.threads({ state: 'all' }),
+        threadIds: ids,
+      }),
+    );
   });
 
   app.get('/api/viewed', (c) => c.json(session.comments.viewed()));

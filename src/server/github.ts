@@ -107,9 +107,8 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
 }
 
 export interface ExportInput {
-  snap: Pick<Snapshot, 'root' | 'newSha'> & {
-    mode: Pick<Snapshot['mode'], 'kind' | 'pullRequest'>;
-  };
+  snap: Pick<Snapshot, 'root' | 'newSha'>;
+  pullRequest: { repository: string; number: number };
   threads: CommentThread[];
   threadIds?: string[];
   run?: GhRunner;
@@ -136,19 +135,27 @@ export class GithubExporter {
  * editing a thread and exporting again does not stack a second comment on the line. Comments
  * of an already-submitted review are out of reach — those would have to be replied to.
  */
-async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
-  const selected = snap.mode.kind === 'pr' ? snap.mode.pullRequest : undefined;
-  if (!selected || snap.newSha === 'worktree') throw new GithubError('GitHub review export requires PR mode');
+async function exportToGithub({
+  snap,
+  pullRequest: selected,
+  threads,
+  threadIds,
+  run = runGh,
+}: ExportInput): Promise<GithubExportResponse> {
+  if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to the worktree');
   const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
   if (review.comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
   const pr = parsePr(
-    await run(['pr', 'view', String(selected.number), '--json', 'number,url,headRefOid'], { cwd: snap.root }),
+    await run(
+      ['pr', 'view', String(selected.number), '--repo', selected.repository, '--json', 'number,url,headRefOid'],
+      { cwd: snap.root },
+    ),
   );
   if (pr.headRefOid !== snap.newSha)
     throw new GithubError(
-      `the pull request head moved from ${snap.newSha.slice(0, 7)} to ${pr.headRefOid.slice(0, 7)}; refresh PR mode`,
+      `the pull request head moved from ${snap.newSha.slice(0, 7)} to ${pr.headRefOid.slice(0, 7)}; reopen the pull request comparison`,
     );
 
   for (const [i, comment] of review.comments.entries()) {
@@ -156,7 +163,7 @@ async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportI
   }
   const pending = await findPendingReview(run, snap.root, pr);
   if (!pending) {
-    await createPendingReview(run, snap.root, pr.number, review);
+    await createPendingReview(run, snap.root, selected.repository, pr.number, review);
     return { url: pr.url, posted: review.comments.length, updated: 0, review: 'created', skipped };
   }
 
@@ -317,8 +324,14 @@ async function pendingComments(
 const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){updatePullRequestReviewComment(input:$input){pullRequestReviewComment{id}}}`;
 
 /** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */
-async function createPendingReview(run: GhRunner, cwd: string, number: number, review: ReviewPayload): Promise<void> {
-  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--input', '-'], {
+async function createPendingReview(
+  run: GhRunner,
+  cwd: string,
+  repository: string,
+  number: number,
+  review: ReviewPayload,
+): Promise<void> {
+  await run(['api', '--method', 'POST', `repos/${repository}/pulls/${number}/reviews`, '--input', '-'], {
     cwd,
     input: JSON.stringify(review),
   });
@@ -401,6 +414,10 @@ export interface PullRequest {
   number: number;
   /** `https://github.com/<owner>/<repo>/pull/<number>` */
   url: string;
+  title: string;
+  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  isDraft: boolean;
+  baseRefOid: string;
   baseRefName: string;
   headRefName: string;
   headRefOid: string;
@@ -408,7 +425,7 @@ export interface PullRequest {
   baseRepo: string;
 }
 
-const PR_FIELDS = 'number,url,baseRefName,headRefName,headRefOid';
+const PR_FIELDS = 'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid';
 
 /**
  * `gh pr view` for a PR named by number, `#number`, URL or branch. Without a
@@ -430,16 +447,36 @@ const PR_LIST_FIELDS = `${PR_FIELDS},headRepository,headRepositoryOwner`;
 
 /** Open pull requests whose head is the named branch in the named remote repository. */
 export async function listPrsForHead(
+  baseRepo: string,
+  base: string,
   head: string,
   headRepo: string,
   cwd: string,
   run: GhRunner = runGh,
   timeoutMs?: number,
 ): Promise<PullRequest[]> {
-  const out = await run(['pr', 'list', '--head', head, '--state', 'open', '--limit', '100', '--json', PR_LIST_FIELDS], {
-    cwd,
-    timeoutMs,
-  });
+  const out = await run(
+    [
+      'pr',
+      'list',
+      '--repo',
+      baseRepo,
+      '--base',
+      base,
+      '--head',
+      head,
+      '--state',
+      'open',
+      '--limit',
+      '100',
+      '--json',
+      PR_LIST_FIELDS,
+    ],
+    {
+      cwd,
+      timeoutMs,
+    },
+  );
   let values: unknown;
   try {
     values = JSON.parse(out);
@@ -452,8 +489,8 @@ export async function listPrsForHead(
       headRepository?: { name?: unknown };
       headRepositoryOwner?: { login?: unknown };
     };
-    const owner = candidate.headRepositoryOwner?.login;
-    const name = candidate.headRepository?.name;
+    const owner = candidate?.headRepositoryOwner?.login;
+    const name = candidate?.headRepository?.name;
     if (typeof owner !== 'string' || typeof name !== 'string')
       throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
     if (`${owner}/${name}`.toLowerCase() !== headRepo.toLowerCase()) return [];
@@ -476,6 +513,11 @@ function parsePrView(out: string): PullRequest {
     throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
   }
   const ok =
+    pr != null &&
+    typeof pr.title === 'string' &&
+    ['OPEN', 'CLOSED', 'MERGED'].includes(pr.state ?? '') &&
+    typeof pr.isDraft === 'boolean' &&
+    typeof pr.baseRefOid === 'string' &&
     typeof pr.number === 'number' &&
     typeof pr.url === 'string' &&
     typeof pr.baseRefName === 'string' &&

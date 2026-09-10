@@ -6,6 +6,7 @@ import {
   DEFAULT_USER_CONFIG,
   followsCheckout,
   lspBlocker,
+  type GithubMetadata,
   type ChangedFile,
   type CommentThread,
   type FileResponse,
@@ -207,6 +208,13 @@ export interface ReviewState {
   focusedThread: string | null;
   focusThread(threadId: string | null): void;
   closeReply(): void;
+  githubMenuOpen: boolean;
+  setGithubMenuOpen(open: boolean): void;
+  githubRepository: string | null;
+  github: GithubMetadata | null;
+  githubLoading: boolean;
+  githubError: string | null;
+  refreshGithub(): Promise<void>;
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
   modePane: 'refs' | 'commits' | 'pr' | null;
@@ -381,6 +389,7 @@ export const useStore = create<ReviewState>((set, get) => {
    * can never overwrite state from a newer transition.
    */
   let generation = 0;
+  let githubRequest = 0;
   const current = (g: number) => g === generation;
   /** Bumped by every symbol menu open and close, so a stale token-kind answer cannot open a menu the user already dismissed. */
   let menuSeq = 0;
@@ -717,7 +726,7 @@ export const useStore = create<ReviewState>((set, get) => {
     const contextChanged = prev != null && prev.context !== next.context;
     // `ChangedFile` names only the new blob. The old side moving (amend, rebase, a fetched base)
     // keeps blob, status and counts and still changes every patch, so it invalidates like context does.
-    const oldMoved = prev != null && prev.oldSha !== next.oldSha;
+    const oldMoved = prev != null && (prev.oldSha === 'worktree' || prev.oldSha !== next.oldSha);
     const sidesMoved = oldMoved || (prev != null && prev.newSha !== next.newSha);
     const prevChanged = new Map(prev?.changed.map((f) => [f.path, f]) ?? []);
     const nextChanged = new Map(next.changed.map((f) => [f.path, f]));
@@ -773,6 +782,7 @@ export const useStore = create<ReviewState>((set, get) => {
     const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
     resyncing = false;
     set({ snapshot: next, loaded, contents, fileView, collapsed, error: null, draft: keepDraft ? draft : null });
+    void get().refreshGithub();
     if (modeChanged) {
       // Positions, matches and revealed ranges all name lines of the previous mode.
       set((s) => ({
@@ -1204,10 +1214,46 @@ export const useStore = create<ReviewState>((set, get) => {
     closeReply() {
       if (get().replyTo) set({ replyTo: null });
     },
+    githubMenuOpen: false,
+    githubRepository: null,
+    github: null,
+    githubLoading: false,
+    githubError: null,
+    setGithubMenuOpen(open) {
+      set({ githubMenuOpen: open, ...(open ? { modeMenuOpen: false } : {}) });
+      if (open) void get().refreshGithub();
+    },
+    async refreshGithub() {
+      const snap = get().snapshot;
+      if (!snap) return;
+      const g = generation;
+      const request = ++githubRequest;
+      const current = () => g === generation && get().snapshot === snap && githubRequest === request;
+      set({ github: null, githubLoading: true, githubError: null });
+      await Promise.all([
+        (async () => {
+          try {
+            const result = await api.githubRepository();
+            if (current()) set({ githubRepository: result.repository });
+          } catch {
+            /* PR lookup reports connection failures; the origin is optional. */
+          }
+        })(),
+        (async () => {
+          try {
+            const result = await api.github(snap.version);
+            if (current() && result.version === snap.version) set({ github: result });
+          } catch (e) {
+            if (current()) set({ githubError: e instanceof Error ? e.message : String(e) });
+          }
+        })(),
+      ]);
+      if (current()) set({ githubLoading: false });
+    },
     modeMenuOpen: false,
     modePane: null,
     setModeMenuOpen(open) {
-      set({ modeMenuOpen: open, modePane: null });
+      set({ modeMenuOpen: open, modePane: null, ...(open ? { githubMenuOpen: false } : {}) });
     },
     pickModeEntry(n) {
       if (n === 1) {
@@ -1708,6 +1754,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const s = get();
       if (s.helpOpen) set({ helpOpen: false });
       else if (s.modeMenuOpen) set({ modeMenuOpen: false });
+      else if (s.githubMenuOpen) set({ githubMenuOpen: false });
       else if (s.hover) s.closeHover();
       else if (s.symbolMenu) s.closeSymbolMenu();
       else if (s.references.open) s.closeReferences();
@@ -1855,6 +1902,7 @@ export const useStore = create<ReviewState>((set, get) => {
         if (!current(g)) return 'superseded';
         const error = errorMessage(e);
         set({ error });
+        void get().refreshGithub();
         return { error };
       } finally {
         if (owned && snap && fetching === snap.version) fetching = 0;
@@ -2009,9 +2057,11 @@ export const useStore = create<ReviewState>((set, get) => {
     deleteStaleThreads: () => mutateThreads('Deleting stale threads', () => api.deleteStaleThreads()),
 
     async exportToGithub(threadIds) {
+      const snap = get().snapshot;
+      if (!snap) return null;
       let res;
       try {
-        res = await api.exportToGithub(threadIds ? { threadIds } : {});
+        res = await api.exportToGithub({ version: snap.version, ...(threadIds ? { threadIds } : {}) });
       } catch (e) {
         report('Adding to the GitHub review', e);
         return null;

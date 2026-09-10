@@ -657,3 +657,36 @@ describe('cat-file batch', () => {
     expect((await brepo.show('main', 'small.txt'))?.toString()).toBe('one\ntwo\n');
   });
 });
+
+describe('worktree on either side', () => {
+  it('reverses modifications and untracked additions consistently in all patch APIs', async () => {
+    const mode = await resolveMode({ kind: 'revspec', args: ['worktree..HEAD'] }, repo);
+    const snapshotter = new Snapshotter(repo, mode, 1, 3);
+    const snap = await snapshotter.current();
+    expect(snap.oldSha).toBe('worktree');
+    expect(mode.live).toBe('worktree');
+    expect(snap.tree).not.toContain('untracked.txt');
+    expect(snap.changed.find((f) => f.path === 'a.txt')).toMatchObject({ status: 'M', additions: 0, deletions: 1 });
+    const untracked = snap.changed.find((f) => f.path === 'untracked.txt')!;
+    expect(untracked).toMatchObject({ status: 'D', additions: 0, deletions: 1 });
+    const single = await snapshotter.patch('untracked.txt');
+    expect(single).toContain('diff --git a/untracked.txt b/untracked.txt');
+    expect(single).toContain('--- a/untracked.txt');
+    expect(single).toContain('+++ /dev/null');
+    expect(single).toContain('-u');
+    const all = await snapshotter.patchAll();
+    const batch = await snapshotter.patchMany(['a.txt', 'untracked.txt']);
+    expect(all).toContain(single!);
+    expect(batch).toContain(single!);
+    expect(batch).toContain('-four');
+  });
+
+  it('an identical worktree comparison is empty but still exposes untracked files', async () => {
+    const mode = await resolveMode({ kind: 'revspec', args: ['worktree', 'worktree'] }, repo);
+    const snapshotter = new Snapshotter(repo, mode, 1, 3);
+    const snap = await snapshotter.current();
+    expect(snap.changed).toEqual([]);
+    expect(snap.tree).toContain('untracked.txt');
+    expect(await snapshotter.patchAll()).toBe('');
+  });
+});

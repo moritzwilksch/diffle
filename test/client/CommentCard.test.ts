@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread, Snapshot } from '../../src/shared/protocol.js';
+import type { CommentThread, GithubMetadata } from '../../src/shared/protocol.js';
 
 const api = { exportComment: vi.fn() };
 const copyText = vi.fn();
@@ -30,7 +30,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   api.exportComment.mockReset();
   copyText.mockReset();
-  useStore.setState({ editingId: null, replyTo: null, focusedThread: null, snapshot: null });
+  useStore.setState({ editingId: null, replyTo: null, focusedThread: null, github: null });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -41,17 +41,17 @@ afterEach(async () => {
 });
 
 describe('CommentCard GitHub button', () => {
-  const snapshot = (kind: Snapshot['mode']['kind']): Snapshot => ({ mode: { kind } }) as unknown as Snapshot;
+  const metadata = (canExport: boolean): GithubMetadata => ({ canExport }) as GithubMetadata;
   const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
 
-  it('is hidden outside PR mode', async () => {
-    useStore.setState({ snapshot: snapshot('revspec') });
+  it('is hidden without export eligibility', async () => {
+    useStore.setState({ github: metadata(false) });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).toBeNull();
   });
 
-  it('is shown in PR mode', async () => {
-    useStore.setState({ snapshot: snapshot('pr') });
+  it('is shown when export is eligible', async () => {
+    useStore.setState({ github: metadata(true) });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).not.toBeNull();
   });

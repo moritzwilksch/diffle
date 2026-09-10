@@ -33,7 +33,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const setEditingId = useStore((s) => s.setEditingId);
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
-  const canExport = useStore((s) => canExportToGithub(s.snapshot));
+  const canExport = useStore((s) => canExportToGithub(s.github));
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
   const del = useConfirm(() => void deleteThread(thread.id));

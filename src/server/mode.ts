@@ -1,6 +1,6 @@
 import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
-import { GithubError, type GhRunner, listPrsForHead, type PullRequest, runGh, viewPr } from './github.js';
+import { type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
 import { parseRevspec, RevspecError } from './revspec.js';
 
 async function resolveOrExplain(repo: GitRepo, rev: string): Promise<string> {
@@ -22,57 +22,44 @@ async function mergeBaseOrExplain(repo: GitRepo, a: string, b: string): Promise<
   }
 }
 
-function isShaPrefix(rev: string, sha: string): boolean {
-  return rev.length >= 7 && sha.startsWith(rev.toLowerCase());
-}
-
-/** Resolves a ModeRequest into a ModeSpec, including the comment key. */
+/** Resolves a request locally, except for an explicitly requested PR. */
 export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner = runGh): Promise<ModeSpec> {
-  switch (req.kind) {
-    case 'working':
-      return {
-        kind: 'working',
-        request: req,
-        old: { kind: 'rev', rev: 'HEAD' },
-        newRev: 'worktree',
-        label: 'HEAD → worktree',
-        live: 'worktree',
-        commentKey: 'working',
-      };
-    case 'pr':
-      return resolvePr(req, repo, gh);
-    case 'revspec': {
-      const parsed = parseRevspec(req.args);
-      const oldSha =
-        parsed.old.kind === 'rev'
-          ? await resolveOrExplain(repo, parsed.old.rev)
-          : await mergeBaseOrExplain(repo, parsed.old.a, parsed.old.b);
-      let live: ModeSpec['live'] = 'none';
-      let newKey: string = parsed.newRev;
-      if (parsed.newRev === 'worktree') live = 'worktree';
-      else {
-        const sha = await resolveOrExplain(repo, parsed.newRev);
-        // A pinned sha never moves; anything symbolic (branch, tag, HEAD~2) can.
-        if (!isShaPrefix(parsed.newRev, sha)) live = 'refs';
-        newKey = sha;
-      }
-      // A checked-out PR often enters through `diffle origin/main`, after `gh pr checkout`.
-      // Promote only an identical merge-base...HEAD diff; discovery must never break a valid revspec.
-      if (parsed.old.kind === 'merge-base' && parsed.newRev === 'HEAD') {
-        const prMode = await discoverMatchingPr(repo, gh, oldSha, newKey);
-        if (prMode) return prMode;
-      }
-      return {
-        kind: 'revspec',
-        request: req,
-        old: parsed.old,
-        newRev: parsed.newRev,
-        label: parsed.label,
-        live,
-        commentKey: `revspec:${oldSha}..${newKey}`,
-      };
+  if (req.kind === 'pr') return resolvePr(req, repo, gh);
+  const parsed =
+    req.kind === 'working'
+      ? { old: 'HEAD', new: 'worktree', mergeBase: false, label: 'HEAD → worktree' }
+      : parseRevspec(req.args);
+  const resolve = async (rev: string) => {
+    if (rev === 'worktree') return rev;
+    try {
+      return await repo.resolve(rev);
+    } catch (e) {
+      // Either direction of an unborn worktree compares against the empty tree.
+      if (rev === 'HEAD' && [parsed.old, parsed.new].includes('worktree') && e instanceof GitError && e.code === 1)
+        return repo.emptyTree();
+      if (e instanceof GitError) throw new RevspecError(`unknown revision: ${rev}`);
+      throw e;
     }
-  }
+  };
+  const [old, next] = await Promise.all([resolve(parsed.old), resolve(parsed.new)]);
+  const oldKey = parsed.mergeBase
+    ? await mergeBaseOrExplain(
+        repo,
+        parsed.old === 'worktree' ? 'HEAD' : parsed.old,
+        parsed.new === 'worktree' ? 'HEAD' : parsed.new,
+      )
+    : old;
+  const pinned = (rev: string, sha: string) => rev.length >= 7 && sha.startsWith(rev.toLowerCase());
+  return {
+    ...parsed,
+    request: req,
+    live: [parsed.old, parsed.new].includes('worktree')
+      ? 'worktree'
+      : pinned(parsed.old, old) && pinned(parsed.new, next)
+        ? 'none'
+        : 'refs',
+    commentKey: req.kind === 'working' ? 'working' : `revspec:${oldKey}..${next}`,
+  };
 }
 
 /**
@@ -96,40 +83,14 @@ async function resolveKnownPr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, p
   ]);
   const [headSha, mb] = await Promise.all([resolveOrExplain(repo, head), mergeBaseOrExplain(repo, base, head)]);
   return {
-    kind: 'pr',
-    request: req,
-    old: { kind: 'rev', rev: mb },
-    newRev: headSha,
+    request: { ...req, pr: pr.url },
+    old: mb,
+    new: headSha,
+    mergeBase: false,
     label: `#${pr.number} ${pr.baseRefName}...${pr.headRefName}`,
-    pullRequest: { repository: pr.baseRepo, number: pr.number },
     live: 'none',
     commentKey: `pr:#${pr.number}`,
   };
-}
-
-/** The tracked remote branch's open PR when GitHub and the requested comparison name the same commits. */
-async function discoverMatchingPr(
-  repo: GitRepo,
-  gh: GhRunner,
-  oldSha: string,
-  newSha: string,
-): Promise<ModeSpec | null> {
-  try {
-    const upstream = await repo.upstreamBranch();
-    if (!upstream) return null;
-    const remote = (await repo.remotes()).find((candidate) => candidate.name === upstream.remote);
-    if (!remote) return null;
-    const prs = await listPrsForHead(upstream.branch, remoteSlug(remote.url), repo.root, gh, 1500);
-    for (const pr of prs) {
-      if (pr.headRefOid !== newSha) continue;
-      const mode = await resolveKnownPr({ kind: 'pr', pr: String(pr.number) }, repo, pr);
-      if (mode.old.kind === 'rev' && mode.old.rev === oldSha && mode.newRev === newSha) return mode;
-    }
-    return null;
-  } catch (e) {
-    if (e instanceof GithubError || e instanceof GitError || e instanceof RevspecError) return null;
-    throw e;
-  }
 }
 
 /**

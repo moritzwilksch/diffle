@@ -2,27 +2,38 @@
 
 export type Side = 'old' | 'new';
 
-/** How the old side is resolved. Kept symbolic so live modes can re-resolve. */
-export type OldSpec = { kind: 'rev'; rev: string } | { kind: 'merge-base'; a: string; b: string };
-
-/** What the user asks for. Resolved by the server into a ModeSpec. */
+/** CLI and picker commands are translated into a comparison before rendering. */
 export type ModeRequest = { kind: 'working' } | { kind: 'pr'; pr?: string } | { kind: 'revspec'; args: string[] };
 
+/** A comparison; both endpoints accept a Git revision or "worktree". */
 export interface ModeSpec {
-  kind: 'working' | 'pr' | 'revspec';
-  /** The request that produced this spec. */
   request: ModeRequest;
-  old: OldSpec;
-  /** Symbolic rev (e.g. "HEAD", "feat") or the worktree. */
-  newRev: string | 'worktree';
-  /** Shown in the UI header. */
+  old: string;
+  new: string;
+  /** Compare merge-base(old, new) to new; worktree uses HEAD for the merge base. */
+  mergeBase: boolean;
   label: string;
-  /** The reviewed pull request; its base repository names the tab and header instead of the root directory. */
-  pullRequest?: { repository: string; number: number };
-  /** worktree: fs watch; refs: watch .git refs; none: static. */
   live: 'worktree' | 'refs' | 'none';
-  /** Comment set key, fixed when the mode is entered. */
+  /** Fixed when the comparison is entered; discovery never changes comment storage. */
   commentKey: string;
+}
+
+export interface GithubPullRequest {
+  repository: string;
+  number: number;
+  url: string;
+  title: string;
+  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  isDraft: boolean;
+  headSha: string;
+}
+
+/** Optional enrichment for a snapshot, independent of its comparison. */
+export interface GithubMetadata {
+  version: number;
+  pullRequest: GithubPullRequest | null;
+  canExport: boolean;
+  reason: string | null;
 }
 
 export type ChangeStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
@@ -49,6 +60,7 @@ export interface Snapshot {
   mode: ModeSpec;
   /** Monotonic; bumps on every refresh and mode switch. */
   version: number;
+  /** Resolved endpoints; either can be the worktree sentinel. */
   oldSha: string;
   newSha: string | 'worktree';
   /** The checked-out commit; '' on an unborn branch. Symbol navigation needs newSha to be this or the worktree. */
@@ -122,6 +134,8 @@ export type ThreadState = 'open' | 'resolved' | 'all';
 
 /** Body of `POST /api/github/export`. Without `threadIds`, every unresolved thread of the mode. */
 export interface GithubExportRequest {
+  /** The snapshot whose comments the user approved for export. */
+  version: number;
   threadIds?: string[];
 }
 

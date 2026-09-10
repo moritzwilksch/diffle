@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  GithubMetadata,
   ChangedFile,
   CommentThread,
   LspServerStatus,
@@ -29,6 +30,8 @@ function deferred<T>(): Deferred<T> {
 }
 
 const api = {
+  github: vi.fn(),
+  githubRepository: vi.fn(),
   snapshot: vi.fn(),
   threads: vi.fn(async (): Promise<CommentThread[]> => []),
   viewed: vi.fn(async (): Promise<ViewedEntry[]> => []),
@@ -82,10 +85,10 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
   return {
     root: '/r',
     mode: {
-      kind: 'working',
       request: { kind: 'working' },
-      old: { kind: 'rev', rev: 'HEAD' },
-      newRev: 'worktree',
+      old: 'HEAD',
+      mergeBase: false,
+      new: 'worktree',
       label: key,
       live: 'none',
       commentKey: key,
@@ -102,6 +105,13 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.github.mockReset().mockImplementation(async (version: number) => ({
+    version,
+    pullRequest: null,
+    canExport: false,
+    reason: 'No matching pull request',
+  }));
+  api.githubRepository.mockReset().mockResolvedValue({ repository: 'o/r' });
   blocksSymbol.mockReset().mockResolvedValue(false);
   useStore.setState({
     snapshot: null,
@@ -881,6 +891,7 @@ describe('client transitions', () => {
   });
 
   it('a github export reports what it did and only toasts what went wrong', async () => {
+    useStore.setState({ snapshot: snap(1, 'review') });
     const res = (over: Partial<{ posted: number; updated: number; skipped: { id: string; reason: string }[] }>) => ({
       url: 'https://github.com/o/r/pull/7',
       posted: 0,
@@ -1973,4 +1984,46 @@ describe('jumplist', () => {
     expect(s.activePath).toBe('a.py');
     api.patch.mockReset();
   });
+});
+
+describe('asynchronous GitHub metadata', () => {
+  it('renders the comparison and local repository while PR lookup is pending', async () => {
+    const lookup = deferred<GithubMetadata>();
+    api.github.mockReturnValueOnce(lookup.promise);
+    api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
+    await useStore.getState().boot();
+    expect(useStore.getState().snapshot?.version).toBe(1);
+    expect(useStore.getState().githubRepository).toBe('o/r');
+    expect(useStore.getState().githubLoading).toBe(true);
+    lookup.resolve({ version: 1, pullRequest: null, canExport: false, reason: 'No PR' });
+    await vi.waitFor(() => expect(useStore.getState().githubLoading).toBe(false));
+  });
+
+  it('discards a slow lookup after another comparison has loaded', async () => {
+    const old = deferred<GithubMetadata>();
+    api.github.mockReturnValueOnce(old.promise);
+    api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
+    await useStore.getState().boot();
+    api.switchMode.mockResolvedValueOnce(snap(2, 'second'));
+    await useStore.getState().switchMode({ kind: 'revspec', args: ['main'] });
+    await vi.waitFor(() => expect(useStore.getState().github?.version).toBe(2));
+    old.resolve({ version: 1, pullRequest: null, canExport: true, reason: null });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(useStore.getState().github).toMatchObject({ version: 2, canExport: false });
+  });
+});
+
+it('recovers GitHub lookup for the existing comparison after a failed switch', async () => {
+  const pending = deferred<GithubMetadata>();
+  api.github.mockReturnValueOnce(pending.promise);
+  api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
+  await useStore.getState().boot();
+  expect(useStore.getState().githubLoading).toBe(true);
+  api.switchMode.mockRejectedValueOnce(new Error('unknown revision'));
+  await useStore.getState().switchMode({ kind: 'revspec', args: ['missing'] });
+  await vi.waitFor(() => expect(useStore.getState().githubLoading).toBe(false));
+  expect(useStore.getState().github?.version).toBe(1);
+  pending.resolve({ version: 1, pullRequest: null, canExport: true, reason: null });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  expect(useStore.getState().github?.canExport).toBe(false);
 });

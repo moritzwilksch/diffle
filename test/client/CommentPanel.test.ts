@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread, Snapshot } from '../../src/shared/protocol.js';
+import type { CommentThread, GithubMetadata } from '../../src/shared/protocol.js';
 
 vi.mock('../../src/client/api.js', () => ({ api: {} }));
 
@@ -38,7 +38,7 @@ beforeEach(() => {
     threads,
     showResolved: false,
     activePath: null,
-    snapshot: null,
+    github: null,
     deleteThread: () => Promise.resolve(),
   });
   host = document.createElement('div');
@@ -96,15 +96,15 @@ describe('CommentPanel rows', () => {
     }
   });
 
-  it('shows the GitHub button only in PR mode', async () => {
+  it('shows the GitHub button only when export is eligible', async () => {
     const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
-    const snapshot = (kind: Snapshot['mode']['kind']): Snapshot => ({ mode: { kind } }) as unknown as Snapshot;
+    const metadata = (canExport: boolean): GithubMetadata => ({ canExport }) as GithubMetadata;
 
-    useStore.setState({ snapshot: snapshot('revspec') });
+    useStore.setState({ github: metadata(false) });
     await act(() => root.render(createElement(CommentPanel)));
     expect(post()).toBeNull();
 
-    await act(() => useStore.setState({ snapshot: snapshot('pr') }));
+    await act(() => useStore.setState({ github: metadata(true) }));
     expect(post()).not.toBeNull();
   });
 });

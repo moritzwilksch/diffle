@@ -146,7 +146,7 @@ export function ModePicker() {
               <Button
                 key={entry.label}
                 className={twMerge(
-                  `grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.kind === 'working') ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
+                  `grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.old === 'HEAD' && snapshot?.mode.new === 'worktree' && !snapshot?.mode.mergeBase) ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
                 )}
                 aria-expanded={entry.pane ? pane === entry.pane : undefined}
                 aria-controls={entry.pane ? 'mode-config' : undefined}
@@ -204,7 +204,6 @@ export function ModePicker() {
                       value={b}
                       onChange={setB}
                       refs={refs}
-                      allowWorktree
                       inputRef={targetRef}
                       onAccept={() => comparisonToggle.current?.focus()}
                     />

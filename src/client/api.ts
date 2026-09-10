@@ -3,6 +3,7 @@ import type {
   LastCommitsPreview,
   FileResponse,
   GithubExportRequest,
+  GithubMetadata,
   GithubExportResponse,
   LspHoverResponse,
   LspLocationsResponse,
@@ -65,6 +66,8 @@ const q = (params: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
+  githubRepository: () => json<{ repository: string | null }>('/api/github/repository'),
+  github: (version: number) => json<GithubMetadata>(`/api/github?version=${version}`),
   snapshot: () => json<Snapshot>('/api/snapshot'),
   switchMode: (req: ModeRequest) => json<Snapshot>('/api/mode', { method: 'POST', body: JSON.stringify(req) }),
   refs: () => json<RefsResponse>('/api/refs'),
@@ -99,8 +102,8 @@ export const api = {
   /** One message, with its thread's location and quote, as an agent prompt. */
   exportComment: (threadId: string, messageId: string) =>
     text(`/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
-  /** Posts threads to the active PR mode's pending review; all unresolved ones without `threadIds`. */
-  exportToGithub: (req: GithubExportRequest = {}) =>
+  /** Posts threads to the matching PR's pending review; all unresolved ones without `threadIds`. */
+  exportToGithub: (req: GithubExportRequest) =>
     json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),
   addThread: (t: ThreadCreate) => json<CommentThread[]>('/api/threads', { method: 'POST', body: JSON.stringify(t) }),
   reply: (id: string, r: ReplyCreate) =>
