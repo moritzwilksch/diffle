@@ -5,6 +5,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   languageOf,
+  type LanguageId,
   type LspHoverResponse,
   type LspLocation,
   type LspLocationsResponse,
@@ -16,11 +17,14 @@ import {
 import { mapLimit } from '../concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
+import { configuration, defaultSettings, jsonSchemas } from './settings.js';
 import { argv0 } from './which.js';
 
 export interface LspBridgeOptions {
   /** Shell command line that starts a stdio language server, e.g. `pyrefly lsp`. */
   command: string;
+  /** Languages routed to this process, used for schema configuration. */
+  languages?: readonly LanguageId[];
   /** Repository root; becomes the workspace folder and the process cwd. */
   root: string;
   /** New-side text of a snapshot path, or null when the snapshot does not expose it. */
@@ -474,7 +478,12 @@ export class LspBridge {
     }
     const rpc = new JsonRpcConnection(child.stdout, child.stdin);
     this.rpc = rpc;
+    const languages = this.opts.languages ?? [];
+    const settings = defaultSettings(languages);
+    const json = languages.some((language) => language === 'json' || language === 'jsonc');
+    rpc.onRequest('workspace/configuration', (params) => configuration(settings, params));
     const rootUri = pathToFileURL(this.opts.root).href;
+    rpc.onRequest('workspace/workspaceFolders', () => [{ uri: rootUri, name: 'workspace' }]);
     try {
       const init = await rpc.request<{
         capabilities?: { semanticTokensProvider?: { legend?: { tokenTypes?: string[] } } };
@@ -486,6 +495,7 @@ export class LspBridge {
           rootUri,
           rootPath: this.opts.root,
           workspaceFolders: [{ uri: rootUri, name: 'workspace' }],
+          ...(json ? { initializationOptions: { handledSchemaProtocols: ['file', 'http', 'https'] } } : {}),
           capabilities: {
             textDocument: {
               synchronization: { didSave: false },
@@ -501,7 +511,7 @@ export class LspBridge {
                 formats: ['relative'],
               },
             },
-            workspace: { symbol: {}, workspaceFolders: true },
+            workspace: { symbol: {}, workspaceFolders: true, configuration: true },
           },
         },
         INIT_TIMEOUT_MS,
@@ -509,6 +519,15 @@ export class LspBridge {
       const legend = init?.capabilities?.semanticTokensProvider?.legend?.tokenTypes;
       if (legend?.length) this.tokenTypes = legend;
       rpc.notify('initialized', {});
+      if (Object.keys(settings).length) rpc.notify('workspace/didChangeConfiguration', { settings });
+      if (json) {
+        // Schema discovery runs independently so an offline catalog cannot delay opening the diff.
+        void jsonSchemas().then((schemas) => {
+          if (this.closing || this.rpc !== rpc || this.current.state === 'unavailable') return;
+          settings.json = { schemas };
+          rpc.notify('workspace/didChangeConfiguration', { settings });
+        });
+      }
     } catch (e) {
       this.fail(`initialize failed: ${(e as Error).message}`);
       throw e;

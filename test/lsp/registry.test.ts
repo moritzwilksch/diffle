@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { candidatesFor, CANDIDATES, resolveServers } from '../../src/server/lsp/registry.js';
-import { LANGUAGE_IDS } from '../../src/shared/protocol.js';
+import { LANGUAGE_IDS, languageOf } from '../../src/shared/protocol.js';
 
 /** A PATH holding exactly `programs`. */
 const path =
@@ -9,6 +9,29 @@ const path =
     programs.includes(command.split(' ')[0]!) ? `/usr/bin/${command.split(' ')[0]}` : null;
 
 describe('resolveServers', () => {
+  it('routes config files and prefers Tombi, with Taplo as the fallback', () => {
+    expect(['package.json', 'settings.jsonc', 'ci.yaml', 'ci.yml', 'Cargo.toml'].map(languageOf)).toEqual([
+      'json',
+      'jsonc',
+      'yaml',
+      'yaml',
+      'toml',
+    ]);
+    expect(resolveServers(['toml'], {}, path('tombi', 'taplo')).servers).toEqual([
+      { command: 'tombi lsp', languages: ['toml'] },
+    ]);
+    expect(resolveServers(['toml'], {}, path('taplo')).servers).toEqual([
+      { command: 'taplo lsp stdio', languages: ['toml'] },
+    ]);
+    expect(
+      resolveServers(['json', 'jsonc', 'yaml'], {}, path('vscode-json-language-server', 'yaml-language-server'))
+        .servers,
+    ).toEqual([
+      { command: 'vscode-json-language-server --stdio', languages: ['json', 'jsonc'] },
+      { command: 'yaml-language-server --stdio', languages: ['yaml'] },
+    ]);
+  });
+
   it('takes the first candidate on PATH and names the rest as missing', () => {
     const { servers, missing } = resolveServers(['python', 'go'], {}, path('pylsp', 'jedi-language-server'));
     expect(servers).toEqual([{ command: 'pylsp', languages: ['python'] }]);

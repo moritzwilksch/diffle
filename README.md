@@ -103,9 +103,11 @@ python    pyrefly lsp
 rust      not on PATH (tried rust-analyzer)
 ```
 
-Languages served out of the box: C/C++ (`clangd`), Go (`gopls`), Haskell, Java, JavaScript/TypeScript (`typescript-language-server`, `vtsls`), Lua, Nix, OCaml, PHP, Python (`pyrefly`, `ty`, `basedpyright`, `pyright`, `pylsp`, `jedi`), Ruby, Rust (`rust-analyzer`), shell, Swift, Terraform, Zig.
+Languages served out of the box: C/C++ (`clangd`), Go (`gopls`), Haskell, Java, JavaScript/TypeScript (`typescript-language-server`, `vtsls`), JSON/JSONC (`vscode-json-language-server`), Lua, Nix, OCaml, PHP, Python (`pyrefly`, `ty`, `basedpyright`, `pyright`, `pylsp`, `jedi`), Ruby, Rust (`rust-analyzer`), shell, Swift, Terraform, TOML (`tombi`, then `taplo`), YAML (`yaml-language-server`), Zig.
 
-A client-side Tree-sitter worker suppresses hover and symbol menus on reserved keywords and in comments and string text; identifiers, including keyword spellings used as property names, and interpolated expressions remain actionable. Grammars load on demand. Haskell, Nix, Terraform, files over one million UTF-16 code units, and parser failures fall back to language-server behavior.
+JSON, YAML, and TOML servers use SchemaStore catalogs for schema-based hover documentation. Diffle fetches JSON associations in the background; YAML and TOML servers fetch their own schemas. Schema downloads require network access. Install the JSON server with `npm install -g vscode-langservers-extracted`, YAML with `npm install -g yaml-language-server`, and TOML with Tombi or an LSP-enabled Taplo build.
+
+A client-side Tree-sitter worker suppresses hover and symbol menus on reserved keywords and in comments and string text; identifiers, including keyword spellings used as property names, and interpolated expressions remain actionable. Grammars load on demand. JSON/JSONC, YAML, TOML, Haskell, Nix, Terraform, files over one million UTF-16 code units, and parser failures fall back to language-server behavior.
 
 Override a command, or turn one language off with an empty command:
 

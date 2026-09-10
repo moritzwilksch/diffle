@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
-import type { LspProcessStatus } from '../../src/shared/protocol.js';
+import type { LanguageId, LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -17,7 +17,7 @@ const files: Record<string, string> = {
   'z.py': 'z\n',
 };
 
-function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) {
+function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, languages?: LanguageId[]) {
   const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
@@ -27,6 +27,7 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) 
   let peak = 0;
   const bridge = LspBridge.start({
     command: 'fake',
+    languages,
     root,
     read: async (p) => {
       reads.push(p);
@@ -59,6 +60,20 @@ afterEach(() => {
 });
 
 describe('LspBridge', () => {
+  it('delivers JSON catalog settings through notifications and server configuration requests', async () => {
+    const schemas = [{ url: 'https://example.com/package.json', fileMatch: ['package.json'] }];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ schemas })));
+    const { bridge, events } = start({ FAKE_LSP_CONFIG: '1' }, ROOT, undefined, ['json']);
+    try {
+      await vi.waitFor(() => expect(events).toContain(`config ${JSON.stringify([{ schemas }, {}])}`));
+      expect(events).toContain('protocols file,http,https');
+      expect(bridge.status().state).toBe('ready');
+    } finally {
+      await bridge.close();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('maps definitions to snapshot paths and drops results it can read nowhere', async () => {
     const { bridge, statuses } = start();
     const res = await bridge.definition({ path: 'a.py', line: 3, col: 4 });

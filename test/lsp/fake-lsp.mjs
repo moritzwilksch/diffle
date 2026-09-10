@@ -43,10 +43,22 @@ function handle(msg) {
     log(`refused ${msg.method}`);
     return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32801, message: 'content modified' } });
   }
+  if (msg.id === 'config') return log(`config ${JSON.stringify(msg.result)}`);
   switch (msg.method) {
     case 'initialize':
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);
+      if (process.env.FAKE_LSP_CONFIG === '1')
+        log(`protocols ${msg.params.initializationOptions.handledSchemaProtocols.join(',')}`);
       return reply(msg.id, { capabilities: {} });
+    case 'workspace/didChangeConfiguration':
+      if (process.env.FAKE_LSP_CONFIG === '1')
+        send({
+          jsonrpc: '2.0',
+          id: 'config',
+          method: 'workspace/configuration',
+          params: { items: [{ section: 'json' }, { section: 'unknown' }] },
+        });
+      return;
     // Document lifecycle goes to stderr so tests can observe what the bridge opened.
     case 'textDocument/didOpen':
       docs.set(msg.params.textDocument.uri, msg.params.textDocument.text);

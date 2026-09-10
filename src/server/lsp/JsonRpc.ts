@@ -18,6 +18,7 @@ export class JsonRpcConnection {
     { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> | null }
   >();
   private handlers = new Set<(method: string, params: unknown) => void>();
+  private requestHandlers = new Map<string, (params: unknown) => unknown>();
   private buffer: Buffer = Buffer.alloc(0);
   private disposed: Error | null = null;
 
@@ -53,9 +54,14 @@ export class JsonRpcConnection {
     this.send({ jsonrpc: '2.0', method, params });
   }
 
-  /** Server → client notifications and requests (requests get an empty success reply). */
+  /** Server → client notifications. */
   onNotification(handler: (method: string, params: unknown) => void): void {
     this.handlers.add(handler);
+  }
+
+  /** Registers a synchronous reply to a server request. Unhandled requests receive null. */
+  onRequest(method: string, handler: (params: unknown) => unknown): void {
+    this.requestHandlers.set(method, handler);
   }
 
   /** Rejects every pending request and ignores further traffic. */
@@ -111,9 +117,12 @@ export class JsonRpcConnection {
       return;
     }
     if (msg.method != null) {
-      for (const h of this.handlers) h(msg.method, msg.params);
-      // Server → client requests (e.g. workDoneProgress/create, client/registerCapability): acknowledge.
-      if (msg.id != null) this.send({ jsonrpc: '2.0', id: msg.id, result: null });
+      if (msg.id != null) {
+        const result = this.requestHandlers.get(msg.method)?.(msg.params) ?? null;
+        this.send({ jsonrpc: '2.0', id: msg.id, result });
+      } else {
+        for (const h of this.handlers) h(msg.method, msg.params);
+      }
       return;
     }
     if (typeof msg.id !== 'number') return;
