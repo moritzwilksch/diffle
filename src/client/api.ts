@@ -99,7 +99,7 @@ export const api = {
   /** One message, with its thread's location and quote, as an agent prompt. */
   exportComment: (threadId: string, messageId: string) =>
     text(`/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
-  /** Posts threads as a review on the current branch's pull request; all unresolved ones without `threadIds`. */
+  /** Posts threads to the active PR mode's pending review; all unresolved ones without `threadIds`. */
   exportToGithub: (req: GithubExportRequest = {}) =>
     json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),
   addThread: (t: ThreadCreate) => json<CommentThread[]>('/api/threads', { method: 'POST', body: JSON.stringify(t) }),

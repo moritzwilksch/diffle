@@ -3,7 +3,7 @@ import type { CommentMessage, CommentThread, GithubExportResponse, Snapshot } fr
 import { compareThreads } from './comments/anchor.js';
 
 /** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
-export type GhRunner = (args: string[], opts: { cwd: string; input?: string }) => Promise<string>;
+export type GhRunner = (args: string[], opts: { cwd: string; input?: string; timeoutMs?: number }) => Promise<string>;
 
 /** A precondition the user can fix (no gh, no PR, wrong mode, unpushed head): the route answers 4xx. */
 export class GithubError extends Error {
@@ -107,7 +107,9 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
 }
 
 export interface ExportInput {
-  snap: Pick<Snapshot, 'root' | 'newSha' | 'headSha'>;
+  snap: Pick<Snapshot, 'root' | 'newSha'> & {
+    mode: Pick<Snapshot['mode'], 'kind' | 'pullRequest'>;
+  };
   threads: CommentThread[];
   threadIds?: string[];
   run?: GhRunner;
@@ -125,10 +127,9 @@ export class GithubExporter {
 }
 
 /**
- * Adds the threads to a *pending* review on the PR of the checked-out branch, creating
- * the pending review when there is none. The review is never submitted: the human opens
- * the PR and submits it themselves. Refuses when the new side is not the checked-out
- * commit: GitHub anchors comments to a commit, and only HEAD is what the PR shows.
+ * Adds the threads to a *pending* review on the active PR, creating the pending review
+ * when there is none. The review is never submitted: the human opens the PR and submits
+ * it themselves. The active mode names the PR and pins its reviewed head commit.
  *
  * Re-exporting matches a hidden thread ID and its anchor in the pending review.
  * A matching comment is left alone when its body matches and rewritten when it does not, so
@@ -136,22 +137,19 @@ export class GithubExporter {
  * of an already-submitted review are out of reach — those would have to be replied to.
  */
 async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
-  if (snap.newSha === 'worktree')
-    throw new GithubError(
-      'GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr or a revspec ending at HEAD)',
-    );
-  if (snap.headSha === '' || snap.newSha !== snap.headSha)
-    throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
+  const selected = snap.mode.kind === 'pr' ? snap.mode.pullRequest : undefined;
+  if (!selected || snap.newSha === 'worktree') throw new GithubError('GitHub review export requires PR mode');
   const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
   if (review.comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
-  const pr = parsePr(await run(['pr', 'view', '--json', 'number,url,headRefOid'], { cwd: snap.root }));
-  if (pr.headRefOid !== snap.newSha) {
+  const pr = parsePr(
+    await run(['pr', 'view', String(selected.number), '--json', 'number,url,headRefOid'], { cwd: snap.root }),
+  );
+  if (pr.headRefOid !== snap.newSha)
     throw new GithubError(
-      `the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`,
+      `the pull request head moved from ${snap.newSha.slice(0, 7)} to ${pr.headRefOid.slice(0, 7)}; refresh PR mode`,
     );
-  }
 
   for (const [i, comment] of review.comments.entries()) {
     comment.body += `\n\n${threadMarker(ids[i]!)}`;
@@ -377,16 +375,23 @@ function parsePr(out: string): PrInfo {
 }
 
 /** Spawns the local `gh`. A missing binary or a failing command becomes a GithubError carrying gh's own message. */
-export const runGh: GhRunner = (args, { cwd, input }) =>
+export const runGh: GhRunner = (args, { cwd, input, timeoutMs }) =>
   new Promise((resolve, reject) => {
-    const child = execFile('gh', args, { cwd, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (!err) return resolve(stdout);
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT')
-        return reject(new GithubError('gh is not installed; see https://cli.github.com'));
-      const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
-      // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
-      reject(new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409));
-    });
+    const child = execFile(
+      'gh',
+      args,
+      { cwd, maxBuffer: 16 * 1024 * 1024, timeout: timeoutMs },
+      (err, stdout, stderr) => {
+        if (!err) return resolve(stdout);
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT')
+          return reject(new GithubError('gh is not installed; see https://cli.github.com'));
+        const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
+        // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
+        reject(
+          new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409),
+        );
+      },
+    );
     if (input != null) child.stdin?.end(input);
     else child.stdin?.end();
   });
@@ -410,9 +415,14 @@ const PR_FIELDS = 'number,url,baseRefName,headRefName,headRefOid';
  * selector, the PR of the checked-out branch. Option-shaped selectors are
  * refused so a stray flag never reaches gh.
  */
-export async function viewPr(selector: string | undefined, cwd: string, run: GhRunner = runGh): Promise<PullRequest> {
+export async function viewPr(
+  selector: string | undefined,
+  cwd: string,
+  run: GhRunner = runGh,
+  timeoutMs?: number,
+): Promise<PullRequest> {
   const arg = selector == null ? [] : [normalizeSelector(selector)];
-  const out = await run(['pr', 'view', ...arg, '--json', PR_FIELDS], { cwd });
+  const out = await run(['pr', 'view', ...arg, '--json', PR_FIELDS], { cwd, timeoutMs });
   return parsePrView(out);
 }
 

@@ -278,12 +278,9 @@ export function lastCommitsRequest(n: number, m: number): ModeRequest {
   return { kind: 'revspec', args: [`HEAD~${n}..HEAD~${m}`] };
 }
 
-/**
- * Whether a snapshot can join a pending GitHub review. GitHub anchors a comment to a
- * commit, so the new side must be the checked-out commit; the worktree has no commit.
- */
+/** GitHub-specific controls belong only to a resolved pull-request review. */
 export function canExportToGithub(snapshot: Snapshot | null): boolean {
-  return snapshot != null && snapshot.newSha !== 'worktree' && snapshot.newSha === snapshot.headSha;
+  return snapshot?.mode.kind === 'pr';
 }
 
 /** What an export did to the pending review: new comments, bodies rewritten in place, or nothing left to do. */

@@ -1,6 +1,6 @@
 import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
-import { type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
+import { GithubError, type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
 import { parseRevspec, RevspecError } from './revspec.js';
 
 async function resolveOrExplain(repo: GitRepo, rev: string): Promise<string> {
@@ -56,6 +56,12 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner 
         if (!isShaPrefix(parsed.newRev, sha)) live = 'refs';
         newKey = sha;
       }
+      // A checked-out PR often enters through `diffle origin/main`, after `gh pr checkout`.
+      // Promote only an identical merge-base...HEAD diff; discovery must never break a valid revspec.
+      if (parsed.old.kind === 'merge-base' && parsed.newRev === 'HEAD') {
+        const prMode = await discoverMatchingPr(repo, gh, oldSha, newKey);
+        if (prMode) return prMode;
+      }
       return {
         kind: 'revspec',
         request: req,
@@ -78,6 +84,10 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner 
  */
 async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: GhRunner): Promise<ModeSpec> {
   const pr = await viewPr(req.pr, repo.root, gh);
+  return resolveKnownPr(req, repo, pr);
+}
+
+async function resolveKnownPr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, pr: PullRequest): Promise<ModeSpec> {
   const head = `${repo.reviewRefs}/${pr.number}/head`;
   const base = `${repo.reviewRefs}/${pr.number}/base`;
   await repo.fetch(await fetchSource(repo, pr), [
@@ -95,6 +105,24 @@ async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: Gh
     live: 'none',
     commentKey: `pr:#${pr.number}`,
   };
+}
+
+/** The current branch's open PR when GitHub and the requested comparison name the same commits. */
+async function discoverMatchingPr(
+  repo: GitRepo,
+  gh: GhRunner,
+  oldSha: string,
+  newSha: string,
+): Promise<ModeSpec | null> {
+  try {
+    const pr = await viewPr(undefined, repo.root, gh, 1500);
+    if (pr.headRefOid !== newSha) return null;
+    const mode = await resolveKnownPr({ kind: 'pr', pr: String(pr.number) }, repo, pr);
+    return mode.old.kind === 'rev' && mode.old.rev === oldSha && mode.newRev === newSha ? mode : null;
+  } catch (e) {
+    if (e instanceof GithubError || e instanceof GitError || e instanceof RevspecError) return null;
+    throw e;
+  }
 }
 
 /**

@@ -34,7 +34,13 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   rendered.length = 0;
-  useStore.setState({ threads, showResolved: false, activePath: null, deleteThread: () => Promise.resolve() });
+  useStore.setState({
+    threads,
+    showResolved: false,
+    activePath: null,
+    snapshot: null,
+    deleteThread: () => Promise.resolve(),
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -90,16 +96,15 @@ describe('CommentPanel rows', () => {
     }
   });
 
-  it('shows the GitHub button only when the new side is the checked-out commit', async () => {
+  it('shows the GitHub button only in PR mode', async () => {
     const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
-    const snapshot = (newSha: Snapshot['newSha']): Snapshot =>
-      ({ newSha, headSha: 'a'.repeat(40) }) as unknown as Snapshot;
+    const snapshot = (kind: Snapshot['mode']['kind']): Snapshot => ({ mode: { kind } }) as unknown as Snapshot;
 
-    useStore.setState({ snapshot: snapshot('worktree') });
+    useStore.setState({ snapshot: snapshot('revspec') });
     await act(() => root.render(createElement(CommentPanel)));
     expect(post()).toBeNull();
 
-    await act(() => useStore.setState({ snapshot: snapshot('a'.repeat(40)) }));
+    await act(() => useStore.setState({ snapshot: snapshot('pr') }));
     expect(post()).not.toBeNull();
   });
 });

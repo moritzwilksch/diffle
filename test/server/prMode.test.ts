@@ -177,6 +177,61 @@ describe("resolveMode({ kind: 'pr' })", () => {
   });
 });
 
+describe('automatic PR mode', () => {
+  async function onCheckedOutPr<T>(fn: () => Promise<T>): Promise<T> {
+    git(local, 'checkout', '-q', '-B', 'feat', headSha);
+    try {
+      return await fn();
+    } finally {
+      git(local, 'checkout', '-q', 'main');
+      git(local, 'branch', '-q', '-D', 'feat');
+    }
+  }
+
+  it('promotes a checked-out PR from a matching merge-base comparison', async () => {
+    const mode = await onCheckedOutPr(() =>
+      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async (args) => {
+        ghCalls.push(args);
+        return PR_VIEW({ headRefOid: headSha });
+      }),
+    );
+    expect(mode).toMatchObject({
+      kind: 'pr',
+      request: { kind: 'pr', pr: '7' },
+      old: { kind: 'rev', rev: mergeBase },
+      newRev: headSha,
+      pullRequest: { repository: 'o/r', number: 7 },
+    });
+    expect(ghCalls[0]).toEqual(['pr', 'view', '--json', 'number,url,baseRefName,headRefName,headRefOid']);
+  });
+
+  it('keeps revspec mode when discovery fails or the PR head differs', async () => {
+    const failed = await onCheckedOutPr(() =>
+      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async () => {
+        throw new GithubError('no pull requests found');
+      }),
+    );
+    expect(failed.kind).toBe('revspec');
+
+    const behind = await onCheckedOutPr(() =>
+      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async () => PR_VIEW({ headRefOid: mergeBase })),
+    );
+    expect(behind.kind).toBe('revspec');
+  });
+
+  it('does not promote a direct two-dot comparison', async () => {
+    const calls: string[][] = [];
+    const mode = await onCheckedOutPr(() =>
+      resolveMode({ kind: 'revspec', args: ['origin/main..HEAD'] }, repo, async (args) => {
+        calls.push(args);
+        return PR_VIEW({ headRefOid: headSha });
+      }),
+    );
+    expect(mode.kind).toBe('revspec');
+    expect(calls).toEqual([]);
+  });
+});
+
 describe('openReviewRepository', () => {
   it('keeps matching PRs in the local repository', async () => {
     const review = await openReviewRepository({ kind: 'pr', pr: '7' }, local, gh);

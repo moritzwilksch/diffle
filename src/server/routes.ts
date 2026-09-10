@@ -225,6 +225,7 @@ export function createApi(deps: ApiDeps): Hono {
     if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
       return c.json({ error: 'threadIds must be a string list' }, 400);
     const snap = await session.snapshotter.current();
+    if (snap.mode.kind !== 'pr') throw new GithubError('GitHub review export requires PR mode');
     return c.json(await github.export({ snap, threads: session.comments.threads({ state: 'all' }), threadIds: ids }));
   });
 

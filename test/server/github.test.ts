@@ -141,21 +141,26 @@ describe('GithubExporter', () => {
     };
   }
   const gh = runner();
-  const snap = { root: '/r', newSha: HEAD, headSha: HEAD };
+  const snap = {
+    root: '/r',
+    newSha: HEAD,
+    mode: { kind: 'pr' as const, pullRequest: { repository: 'o/r', number: 7 } },
+  };
 
   beforeEach(() => {
     calls.length = 0;
     exporter = new GithubExporter();
   });
 
-  it('refuses the worktree and a new side that is not HEAD', async () => {
+  it('refuses export outside PR mode', async () => {
     const threads = [thread({ id: 'k' })];
     await expect(
-      exportToGithub({ snap: { root: '/r', newSha: 'worktree', headSha: HEAD }, threads, run: gh }),
-    ).rejects.toThrow(GithubError);
-    await expect(
-      exportToGithub({ snap: { root: '/r', newSha: 'b'.repeat(40), headSha: HEAD }, threads, run: gh }),
-    ).rejects.toThrow(/checked-out commit/);
+      exportToGithub({
+        snap: { root: '/r', newSha: HEAD, mode: { kind: 'revspec', pullRequest: undefined } },
+        threads,
+        run: gh,
+      }),
+    ).rejects.toThrow(/requires PR mode/);
     expect(calls).toEqual([]);
   });
 
@@ -173,7 +178,7 @@ describe('GithubExporter', () => {
       skipped: [{ id: 's', reason: 'stale' }],
     });
     expect(calls.map((c) => c.args)).toEqual([
-      ['pr', 'view', '--json', 'number,url,headRefOid'],
+      ['pr', 'view', '7', '--json', 'number,url,headRefOid'],
       ['api', 'graphql', '--input', '-'],
       ['api', '--method', 'POST', 'repos/{owner}/{repo}/pulls/7/reviews', '--input', '-'],
     ]);
@@ -537,10 +542,12 @@ describe('GithubExporter', () => {
     });
   });
 
-  it('refuses when the PR head is not the local HEAD, before posting', async () => {
+  it('refuses when the PR head moved since PR mode was resolved, before posting', async () => {
     const behind: GhRunner = async (args, o) =>
       args[0] === 'pr' ? JSON.stringify({ number: 7, url: PR_URL, headRefOid: 'c'.repeat(40) }) : gh(args, o);
-    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' })], run: behind })).rejects.toThrow(/push first/);
+    await expect(exportToGithub({ snap, threads: [thread({ id: 'k' })], run: behind })).rejects.toThrow(
+      /refresh PR mode/,
+    );
     expect(calls).toEqual([]); // `behind` answers `pr view` itself, so nothing reached the api
   });
 

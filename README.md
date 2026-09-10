@@ -47,7 +47,7 @@ diffle working --no-lsp # skip the language servers for this run
 diffle --help           # list all commands and flags
 ```
 
-`diffle pr` needs an authenticated [`gh`](https://cli.github.com/). Foreign PR URLs open in a temporary clone, leaving your local repository untouched.
+`diffle pr` needs an authenticated [`gh`](https://cli.github.com/). Foreign PR URLs open in a temporary clone, leaving your local repository untouched. A matching merge-base comparison such as `diffle origin/main` also enters PR mode when the checked-out branch has an open, pushed PR.
 
 Closing the last browser tab that diffle opened stops the server and prints open comments to stdout. Pass `--keep-alive` to keep it running, or use `--no-open` and press Ctrl+C when done.
 
@@ -79,7 +79,7 @@ Use the pull request icon to add one thread or all open threads to a pending Git
 
 Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
 
-Posting works for `pr` on the checked-out branch, or any revspec ending at HEAD on a pushed branch. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
+GitHub controls appear only in PR mode. Use `diffle pr`, or check out an open PR and start a matching merge-base comparison such as `diffle origin/main`; diffle detects the PR automatically. Stale threads are skipped.
 
 Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
 

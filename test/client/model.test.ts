@@ -196,15 +196,12 @@ describe('countViewed', () => {
 });
 
 describe('canExportToGithub', () => {
-  const snap = (newSha: Snapshot['newSha'], headSha: string): Snapshot => ({ newSha, headSha }) as unknown as Snapshot;
+  const snap = (kind: Snapshot['mode']['kind']): Snapshot => ({ mode: { kind } }) as unknown as Snapshot;
 
-  it('allows a commit that is the checked-out HEAD', () => {
-    expect(canExportToGithub(snap('a'.repeat(40), 'a'.repeat(40)))).toBe(true);
-  });
-
-  it('refuses the worktree and a new side that is not HEAD', () => {
-    expect(canExportToGithub(snap('worktree', 'a'.repeat(40)))).toBe(false);
-    expect(canExportToGithub(snap('b'.repeat(40), 'a'.repeat(40)))).toBe(false);
+  it('allows only PR mode', () => {
+    expect(canExportToGithub(snap('pr'))).toBe(true);
+    expect(canExportToGithub(snap('working'))).toBe(false);
+    expect(canExportToGithub(snap('revspec'))).toBe(false);
   });
 
   it('refuses before the first snapshot', () => {

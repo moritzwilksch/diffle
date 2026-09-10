@@ -362,7 +362,7 @@ export interface ReviewState {
   deleteThread(id: string): Promise<void>;
   clearThreads(): Promise<void>;
   deleteStaleThreads(): Promise<void>;
-  /** Adds threads to a pending review on the branch's GitHub pull request; the human submits the review on GitHub. A toast appears only when threads are skipped or the post fails. */
+  /** Adds threads to the active PR's pending review; the human submits it on GitHub. A toast appears only when threads are skipped or the post fails. */
   /** Post open threads (or the given ones) to the PR; resolves to what happened, or null when the post failed. */
   exportToGithub(threadIds?: string[]): Promise<ExportOutcome | null>;
   setViewed(path: string, viewed: boolean): Promise<void>;

@@ -30,7 +30,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   api.exportComment.mockReset();
   copyText.mockReset();
-  useStore.setState({ editingId: null, replyTo: null, focusedThread: null });
+  useStore.setState({ editingId: null, replyTo: null, focusedThread: null, snapshot: null });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -41,18 +41,17 @@ afterEach(async () => {
 });
 
 describe('CommentCard GitHub button', () => {
-  const snapshot = (newSha: Snapshot['newSha']): Snapshot =>
-    ({ newSha, headSha: 'a'.repeat(40) }) as unknown as Snapshot;
+  const snapshot = (kind: Snapshot['mode']['kind']): Snapshot => ({ mode: { kind } }) as unknown as Snapshot;
   const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
 
-  it('is hidden while the new side is not the checked-out commit', async () => {
-    useStore.setState({ snapshot: snapshot('worktree') });
+  it('is hidden outside PR mode', async () => {
+    useStore.setState({ snapshot: snapshot('revspec') });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).toBeNull();
   });
 
-  it('is shown when the new side is the checked-out commit', async () => {
-    useStore.setState({ snapshot: snapshot('a'.repeat(40)) });
+  it('is shown in PR mode', async () => {
+    useStore.setState({ snapshot: snapshot('pr') });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).not.toBeNull();
   });
