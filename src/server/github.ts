@@ -426,6 +426,41 @@ export async function viewPr(
   return parsePrView(out);
 }
 
+const PR_LIST_FIELDS = `${PR_FIELDS},headRepository,headRepositoryOwner`;
+
+/** Open pull requests whose head is the named branch in the named remote repository. */
+export async function listPrsForHead(
+  head: string,
+  headRepo: string,
+  cwd: string,
+  run: GhRunner = runGh,
+  timeoutMs?: number,
+): Promise<PullRequest[]> {
+  const out = await run(['pr', 'list', '--head', head, '--state', 'open', '--limit', '100', '--json', PR_LIST_FIELDS], {
+    cwd,
+    timeoutMs,
+  });
+  let values: unknown;
+  try {
+    values = JSON.parse(out);
+  } catch {
+    throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
+  }
+  if (!Array.isArray(values)) throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
+  return values.flatMap((value) => {
+    const candidate = value as {
+      headRepository?: { name?: unknown };
+      headRepositoryOwner?: { login?: unknown };
+    };
+    const owner = candidate.headRepositoryOwner?.login;
+    const name = candidate.headRepository?.name;
+    if (typeof owner !== 'string' || typeof name !== 'string')
+      throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
+    if (`${owner}/${name}`.toLowerCase() !== headRepo.toLowerCase()) return [];
+    return [parsePrView(JSON.stringify(value))];
+  });
+}
+
 function normalizeSelector(selector: string): string {
   const s = selector.trim();
   if (s.startsWith('-')) throw new GithubError(`not a pull request: ${selector}`, 400);

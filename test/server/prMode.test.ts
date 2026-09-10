@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
-import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
+import { GithubError, listPrsForHead, viewPr, type GhRunner } from '../../src/server/github.js';
 import { resolveMode } from '../../src/server/mode.js';
 
 /**
@@ -49,6 +49,8 @@ const PR_VIEW = (over: Record<string, unknown> = {}) =>
     baseRefName: 'main',
     headRefName: 'feat',
     headRefOid: 'unused-here',
+    headRepository: { name: 'r' },
+    headRepositoryOwner: { login: 'o' },
     ...over,
   });
 
@@ -110,6 +112,29 @@ describe('viewPr', () => {
 
   it('reads the base repository off the pull request url', async () => {
     expect((await viewPr('7', local, gh)).baseRepo).toBe('o/r');
+  });
+
+  it('lists open pull requests for an explicit remote branch', async () => {
+    const prs = await listPrsForHead('feat', 'o/r', local, async (args) => {
+      ghCalls.push(args);
+      return JSON.stringify([
+        JSON.parse(PR_VIEW()),
+        JSON.parse(PR_VIEW({ number: 8, headRepositoryOwner: { login: 'other' } })),
+      ]);
+    });
+    expect(prs.map((pr) => pr.number)).toEqual([7]);
+    expect(ghCalls[0]).toEqual([
+      'pr',
+      'list',
+      '--head',
+      'feat',
+      '--state',
+      'open',
+      '--limit',
+      '100',
+      '--json',
+      'number,url,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
+    ]);
   });
 
   it('refuses an option-shaped selector before gh sees it', async () => {
@@ -179,12 +204,14 @@ describe("resolveMode({ kind: 'pr' })", () => {
 
 describe('automatic PR mode', () => {
   async function onCheckedOutPr<T>(fn: () => Promise<T>): Promise<T> {
-    git(local, 'checkout', '-q', '-B', 'feat', headSha);
+    git(local, 'update-ref', 'refs/remotes/origin/feat', headSha);
+    git(local, 'checkout', '-q', '-B', 'feat', '--track', 'origin/feat');
     try {
       return await fn();
     } finally {
       git(local, 'checkout', '-q', 'main');
       git(local, 'branch', '-q', '-D', 'feat');
+      git(local, 'update-ref', '-d', 'refs/remotes/origin/feat');
     }
   }
 
@@ -192,7 +219,7 @@ describe('automatic PR mode', () => {
     const mode = await onCheckedOutPr(() =>
       resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async (args) => {
         ghCalls.push(args);
-        return PR_VIEW({ headRefOid: headSha });
+        return JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: headSha }))]);
       }),
     );
     expect(mode).toMatchObject({
@@ -202,7 +229,18 @@ describe('automatic PR mode', () => {
       newRev: headSha,
       pullRequest: { repository: 'o/r', number: 7 },
     });
-    expect(ghCalls[0]).toEqual(['pr', 'view', '--json', 'number,url,baseRefName,headRefName,headRefOid']);
+    expect(ghCalls[0]).toEqual([
+      'pr',
+      'list',
+      '--head',
+      'feat',
+      '--state',
+      'open',
+      '--limit',
+      '100',
+      '--json',
+      'number,url,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
+    ]);
   });
 
   it('keeps revspec mode when discovery fails or the PR head differs', async () => {
@@ -214,9 +252,27 @@ describe('automatic PR mode', () => {
     expect(failed.kind).toBe('revspec');
 
     const behind = await onCheckedOutPr(() =>
-      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async () => PR_VIEW({ headRefOid: mergeBase })),
+      resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async () =>
+        JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: mergeBase }))]),
+      ),
     );
     expect(behind.kind).toBe('revspec');
+  });
+
+  it('does not query GitHub when the checked-out branch has no upstream', async () => {
+    const calls: string[][] = [];
+    git(local, 'checkout', '-q', '-B', 'local-only', headSha);
+    try {
+      const mode = await resolveMode({ kind: 'revspec', args: ['origin/main'] }, repo, async (args) => {
+        calls.push(args);
+        return '[]';
+      });
+      expect(mode.kind).toBe('revspec');
+      expect(calls).toEqual([]);
+    } finally {
+      git(local, 'checkout', '-q', 'main');
+      git(local, 'branch', '-q', '-D', 'local-only');
+    }
   });
 
   it('does not promote a direct two-dot comparison', async () => {

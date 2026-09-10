@@ -1,6 +1,6 @@
 import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
-import { GithubError, type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
+import { GithubError, type GhRunner, listPrsForHead, type PullRequest, runGh, viewPr } from './github.js';
 import { parseRevspec, RevspecError } from './revspec.js';
 
 async function resolveOrExplain(repo: GitRepo, rev: string): Promise<string> {
@@ -107,7 +107,7 @@ async function resolveKnownPr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, p
   };
 }
 
-/** The current branch's open PR when GitHub and the requested comparison name the same commits. */
+/** The tracked remote branch's open PR when GitHub and the requested comparison name the same commits. */
 async function discoverMatchingPr(
   repo: GitRepo,
   gh: GhRunner,
@@ -115,10 +115,17 @@ async function discoverMatchingPr(
   newSha: string,
 ): Promise<ModeSpec | null> {
   try {
-    const pr = await viewPr(undefined, repo.root, gh, 1500);
-    if (pr.headRefOid !== newSha) return null;
-    const mode = await resolveKnownPr({ kind: 'pr', pr: String(pr.number) }, repo, pr);
-    return mode.old.kind === 'rev' && mode.old.rev === oldSha && mode.newRev === newSha ? mode : null;
+    const upstream = await repo.upstreamBranch();
+    if (!upstream) return null;
+    const remote = (await repo.remotes()).find((candidate) => candidate.name === upstream.remote);
+    if (!remote) return null;
+    const prs = await listPrsForHead(upstream.branch, remoteSlug(remote.url), repo.root, gh, 1500);
+    for (const pr of prs) {
+      if (pr.headRefOid !== newSha) continue;
+      const mode = await resolveKnownPr({ kind: 'pr', pr: String(pr.number) }, repo, pr);
+      if (mode.old.kind === 'rev' && mode.old.rev === oldSha && mode.newRev === newSha) return mode;
+    }
+    return null;
   } catch (e) {
     if (e instanceof GithubError || e instanceof GitError || e instanceof RevspecError) return null;
     throw e;

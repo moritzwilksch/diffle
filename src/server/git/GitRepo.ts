@@ -175,6 +175,21 @@ export class GitRepo {
     throw new GitError('cannot determine default branch; pass a base explicitly', [], null, '');
   }
 
+  /** The checked-out branch's configured upstream, or null when HEAD is detached or untracked. */
+  async upstreamBranch(): Promise<{ remote: string; branch: string } | null> {
+    let head: string;
+    try {
+      head = (await this.text(['symbolic-ref', '--quiet', 'HEAD'])).trim();
+    } catch (e) {
+      if (e instanceof GitError && e.code === 1) return null;
+      throw e;
+    }
+    const out = await this.text(['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)%00', head]);
+    const [remote, ref] = out.split('\0');
+    if (!remote || remote === '.' || !ref?.startsWith('refs/heads/')) return null;
+    return { remote, branch: ref.slice('refs/heads/'.length) };
+  }
+
   /** Configured remotes, in git's order, with their fetch URLs. */
   async remotes(): Promise<{ name: string; url: string }[]> {
     // Read configured URLs before insteadOf rewriting, which can hide repository identity.
