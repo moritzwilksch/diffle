@@ -99,25 +99,21 @@ export function Header() {
  * indexes, and the tooltip lists them with the languages nothing serves.
  */
 function LspIndicator({ lsp }: { lsp: LspStatus }) {
-  const starting = lsp.servers.filter((s) => s.state === 'starting');
-  const indexing = lsp.servers.filter((s) => s.indexing);
-  const broken = lsp.servers.filter((s) => s.state === 'unavailable');
-  const busy = starting.length > 0 || indexing.length > 0;
-  const state =
-    lsp.servers.length === 0
-      ? 'off'
-      : broken.length === lsp.servers.length
-        ? 'unavailable'
-        : busy
-          ? 'starting'
-          : 'ready';
-  const label = starting.length
-    ? 'starting'
-    : indexing.length
-      ? 'indexing'
-      : state === 'unavailable'
-        ? 'unavailable'
-        : '';
+  const starting = lsp.servers.some((s) => s.state === 'starting');
+  const busy = starting || lsp.servers.some((s) => s.activity?.length || s.indexing);
+  const broken = lsp.servers.some((s) => s.state === 'unavailable');
+  const error = lsp.servers.some((s) => s.notice?.severity === 'error');
+  const warning = lsp.servers.some((s) => s.notice?.severity === 'warning');
+  const logs = lsp.servers.some((s) => s.stderr);
+  const state = !lsp.servers.length ? 'off' : broken ? 'unavailable' : busy ? 'starting' : 'ready';
+  const label =
+    (broken && 'unavailable') ||
+    (error && 'error') ||
+    (warning && 'warning') ||
+    (starting && 'starting') ||
+    (busy && 'busy') ||
+    (logs && 'logs') ||
+    '';
   const lines = [
     ...lsp.servers.map((s) => `${s.name} (${s.languages.join(', ')}): ${serverLabel(s)}`),
     ...lsp.missing
@@ -142,10 +138,23 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
 }
 
 function serverLabel(s: LspServerStatus): string {
-  if (s.state === 'unavailable') return `unavailable: ${s.message ?? 'unknown error'}`;
-  // Only while indexing does the reader need to distrust an answer: references can still be missing.
-  if (s.indexing) return 'indexing the repository, so references in unchanged files are incomplete';
-  return s.state;
+  const status =
+    s.state === 'unavailable'
+      ? `unavailable: ${s.message ?? 'unknown error'}`
+      : s.state === 'starting'
+        ? 'starting'
+        : s.activity?.length
+          ? s.activity.join('; ')
+          : s.indexing
+            ? 'indexing the repository, so references in unchanged files are incomplete'
+            : 'connected';
+  return [
+    status,
+    s.notice && `${s.notice.severity}: ${s.notice.message}`,
+    s.stderr && `Last stderr output:\n${s.stderr}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function ThemeIcon({ choice }: { choice: ThemeChoice }) {
