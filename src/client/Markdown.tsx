@@ -27,7 +27,7 @@ export function Markdown({ text, path, highlight = false }: { text: string; path
     [path, highlight],
   );
   return (
-    <div className="body markdown">
+    <div className="markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}

@@ -285,7 +285,7 @@ function focusTree(): void {
 /** Move keyboard focus to the review pane, so the vim keys reach the cursor instead of the tree or a field. */
 export function focusReview(): void {
   (document.activeElement as HTMLElement | null)?.blur?.();
-  document.querySelector<HTMLElement>('main.review')?.focus({ preventScroll: true });
+  document.querySelector<HTMLElement>('main[tabindex]')?.focus({ preventScroll: true });
 }
 
 async function copyComments(): Promise<void> {

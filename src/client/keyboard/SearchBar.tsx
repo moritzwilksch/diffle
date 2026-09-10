@@ -1,3 +1,5 @@
+import { twMerge } from 'tailwind-merge';
+import { Button } from '../ui/Button.js';
 import { FileDiff, FileSearch, FolderSearch, Link2, Search, WholeWord, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { SearchScope } from '../../shared/protocol.js';
@@ -28,9 +30,9 @@ export function SearchBar() {
   const n = search.matches.length;
   if (search.kind !== 'text') {
     return (
-      <div className="searchbar">
+      <div className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5">
         {search.kind === 'references' ? <Link2 size="0.875rem" /> : <WholeWord size="0.875rem" />}
-        <span className="label">
+        <span className="flex-1 font-mono text-[0.75rem] leading-[normal] text-muted [&_code]:text-foreground">
           {search.kind === 'references'
             ? 'references to'
             : search.direction === 1
@@ -38,29 +40,30 @@ export function SearchBar() {
               : 'occurrences (upwards) of'}{' '}
           <code>{search.query}</code>
         </span>
-        <span className="status">
+        <span className="min-w-17.5 text-right font-mono text-[0.75rem] leading-[normal] text-muted">
           {search.loading ? 'searching…' : n ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}` : 'none'}
         </span>
-        <button type="button" className="ghost icon" onClick={closeSearch} title="Close (Esc)">
+        <Button type="button" variant="ghost" icon onClick={closeSearch} title="Close (Esc)">
           <X size="0.875rem" />
-        </button>
+        </Button>
       </div>
     );
   }
   const ScopeIcon = SCOPE_ICON[search.scope];
   return (
     <form
-      className="searchbar"
+      className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5"
       onSubmit={(e) => {
         e.preventDefault();
         void runSearch(q).then(() => {
           ref.current?.blur();
-          document.querySelector<HTMLElement>('main.review')?.focus({ preventScroll: true });
+          document.querySelector<HTMLElement>('main[tabindex]')?.focus({ preventScroll: true });
         });
       }}
     >
       <Search size="0.875rem" />
       <input
+        className="flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
         ref={ref}
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -71,35 +74,44 @@ export function SearchBar() {
         }
         spellCheck={false}
       />
-      <button
+      <Button
         type="button"
-        className={`ghost opt ${search.ignoreCase ? '' : 'active'}`}
+        variant="ghost"
+        className={twMerge(
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.ignoreCase ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
+        )}
         aria-pressed={!search.ignoreCase}
         onClick={() => setSearchOptions({ ignoreCase: !search.ignoreCase })}
         title={search.ignoreCase ? 'Ignoring case; click to match case' : 'Matching case; click to ignore case'}
       >
         Aa
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        className={`ghost opt ${search.regex ? 'active' : ''}`}
+        variant="ghost"
+        className={twMerge(
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.regex ? 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent' : ''}`,
+        )}
         aria-pressed={search.regex}
         onClick={() => setSearchOptions({ regex: !search.regex })}
         title={search.regex ? 'Extended regex; click for plain text' : 'Plain text; click for extended regex'}
       >
         .*
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        className={`ghost opt ${search.scope === 'diff' ? '' : 'active'}`}
+        variant="ghost"
+        className={twMerge(
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.scope === 'diff' ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
+        )}
         aria-label={`Searching ${SCOPE_LABEL[search.scope]}`}
         data-scope={search.scope}
         onClick={() => setSearchOptions({ scope: nextSearchScope(search.scope) })}
         title={`Searching ${SCOPE_LABEL[search.scope]}; click to search ${SCOPE_LABEL[nextSearchScope(search.scope)]}`}
       >
         <ScopeIcon size="0.75rem" />
-      </button>
-      <span className="status">
+      </Button>
+      <span className="min-w-17.5 text-right font-mono text-[0.75rem] leading-[normal] text-muted">
         {search.loading
           ? 'searching…'
           : n === 0 && search.query
@@ -112,9 +124,9 @@ export function SearchBar() {
               ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}`
               : ''}
       </span>
-      <button type="button" className="ghost icon" onClick={closeSearch} title="Close (Esc)">
+      <Button type="button" variant="ghost" icon onClick={closeSearch} title="Close (Esc)">
         <X size="0.875rem" />
-      </button>
+      </Button>
     </form>
   );
 }

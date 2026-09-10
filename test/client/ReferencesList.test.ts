@@ -44,17 +44,17 @@ describe('ReferencesList', () => {
   it('rerenders only the rows whose selection changed when the index moves', async () => {
     await act(() => root.render(createElement(ReferencesList)));
     expect(drawn).toHaveLength(items.length);
-    expect(host.querySelector('.ref.on')?.textContent).toContain('a.ts:1');
+    expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:1');
     drawn.length = 0;
     await act(() => useStore.getState().moveReference(1));
-    expect(host.querySelector('.ref.on')?.textContent).toContain('a.ts:2');
+    expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:2');
     expect(drawn.sort()).toEqual(['a.ts:1', 'a.ts:2']);
 
     // A click on another file's row selects it and jumps.
     drawn.length = 0;
     const pick = vi.fn();
     await act(() => useStore.setState({ pickReference: pick }));
-    await act(() => host.querySelectorAll<HTMLElement>('.ref')[4]!.click());
+    await act(() => host.querySelectorAll<HTMLElement>('[data-active]')[4]!.click());
     expect(pick).toHaveBeenCalledOnce();
     expect(useStore.getState().references.index).toBe(4);
   });

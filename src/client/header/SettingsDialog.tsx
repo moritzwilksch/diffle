@@ -1,3 +1,5 @@
+import { Dialog } from '../ui/Dialog.js';
+import { Button } from '../ui/Button.js';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store.js';
 
@@ -47,53 +49,61 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-label="Settings">
-        <h3>Auto-viewed patterns</h3>
-        <p>
-          Files matching these globs start collapsed and marked viewed. One per line. Patterns without a slash match the
-          file name anywhere, e.g. <code>*.lock</code>; use <code>**/generated/**</code> for paths. Same as{' '}
-          <code>diffle config add-auto-viewed</code>.
+    <Dialog
+      label="Settings"
+      onClose={onClose}
+      className="[&_code]:rounded-sm [&_code]:bg-hover [&_code]:px-1 [&_code]:font-mono"
+    >
+      <h3 className="m-0 mb-2">Auto-viewed patterns</h3>
+      <p className="m-0 mb-2 text-muted">
+        Files matching these globs start collapsed and marked viewed. One per line. Patterns without a slash match the
+        file name anywhere, e.g. <code>*.lock</code>; use <code>**/generated/**</code> for paths. Same as{' '}
+        <code>diffle config add-auto-viewed</code>.
+      </p>
+      <textarea
+        className="min-h-40 w-full rounded-md border border-border bg-surface p-2 font-mono text-[0.75rem]"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        spellCheck={false}
+        autoFocus
+      />
+      <h3 className="m-0 mt-[14px] mb-2">Context lines</h3>
+      <p className="m-0 mb-2 text-muted">
+        Unchanged lines shown around each change (<code>git diff -U&lt;n&gt;</code>). Same as <code>--context</code> or{' '}
+        <code>diffle config set-context</code>.
+      </p>
+      <input
+        type="number"
+        min={0}
+        max={10000}
+        value={context}
+        onChange={(e) => setContext(e.target.value)}
+        className="w-[100px]"
+      />
+      <h3 className="m-0 mt-[14px] mb-2">Language servers</h3>
+      <p className="m-0 mb-2 text-muted">
+        Go-to-definition, references and symbols come from a language server per language, found on <code>PATH</code>.{' '}
+        <code>diffle lsp</code> lists what each language would get,{' '}
+        <code>diffle config set-lsp &lt;language&gt; &lt;command&gt;</code> overrides one, and <code>--no-lsp</code>{' '}
+        turns them off for a run. Commands are not editable here.
+      </p>
+      {overrides.length > 0 && (
+        <p className="m-0 mb-2 text-muted">
+          Overridden in your config:{' '}
+          {overrides.map(([language, command], i) => (
+            <span key={language}>
+              {i > 0 && ', '}
+              {language} <code>{command || '(off)'}</code>
+            </span>
+          ))}
         </p>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} autoFocus />
-        <h3 style={{ marginTop: 14 }}>Context lines</h3>
-        <p>
-          Unchanged lines shown around each change (<code>git diff -U&lt;n&gt;</code>). Same as <code>--context</code>{' '}
-          or <code>diffle config set-context</code>.
-        </p>
-        <input
-          type="number"
-          min={0}
-          max={10000}
-          value={context}
-          onChange={(e) => setContext(e.target.value)}
-          style={{ width: 100 }}
-        />
-        <h3 style={{ marginTop: 14 }}>Language servers</h3>
-        <p>
-          Go-to-definition, references and symbols come from a language server per language, found on <code>PATH</code>.{' '}
-          <code>diffle lsp</code> lists what each language would get,{' '}
-          <code>diffle config set-lsp &lt;language&gt; &lt;command&gt;</code> overrides one, and <code>--no-lsp</code>{' '}
-          turns them off for a run. Commands are not editable here.
-        </p>
-        {overrides.length > 0 && (
-          <p>
-            Overridden in your config:{' '}
-            {overrides.map(([language, command], i) => (
-              <span key={language}>
-                {i > 0 && ', '}
-                {language} <code>{command || '(off)'}</code>
-              </span>
-            ))}
-          </p>
-        )}
-        <div className="row">
-          <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={save} disabled={saving}>
-            Save
-          </button>
-        </div>
+      )}
+      <div className="mt-2.5 flex justify-end gap-1.5">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={save} disabled={saving}>
+          Save
+        </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }

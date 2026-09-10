@@ -2,7 +2,19 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "react", "react-hooks"],
   "categories": { "correctness": "error" },
+  "jsPlugins": ["eslint-plugin-better-tailwindcss"],
+  "settings": {
+    "better-tailwindcss": {
+      "entryPoint": "./src/client/styles.css",
+      "detectComponentClasses": true
+    }
+  },
   "rules": {
+    "better-tailwindcss/no-unknown-classes": "error",
+    "better-tailwindcss/no-conflicting-classes": "error",
+    "better-tailwindcss/no-concatenated-classes": "error",
+    "better-tailwindcss/no-duplicate-classes": "error",
+    "better-tailwindcss/no-deprecated-classes": "error",
     // Vite rewrites `?worker` imports to a module oxlint cannot resolve, so it sees
     // no default export where one exists.
     "import/default": "off",

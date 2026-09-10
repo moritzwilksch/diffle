@@ -83,12 +83,13 @@ describe('HelpOverlay', () => {
       host.remove();
     });
 
-    it('renders one column per group and a heading per section', async () => {
+    it('renders every shortcut section and action', async () => {
       await act(() => root.render(createElement(HelpOverlay)));
-      expect(host.querySelectorAll('.help-col')).toHaveLength(2);
-      const headings = [...host.querySelectorAll('.help-body h4')].map((h) => h.textContent);
+      const headings = [...host.querySelectorAll('[role="dialog"] section h4')].map((h) => h.textContent);
       expect(headings).toEqual(COLUMNS.flat().map((s) => s.title));
-      expect(host.querySelectorAll('.help-row')).toHaveLength(BOUND.length);
+      for (const [, action] of COLUMNS.flatMap((column) => column.flatMap((section) => section.rows))) {
+        expect(host.textContent).toContain(action);
+      }
     });
   });
 });

@@ -1,0 +1,76 @@
+:root {
+  color-scheme: light dark;
+  /* Both palettes are read off the Shiki themes the code is highlighted with (see `SHIKI_THEMES` in theme.ts):
+     github-light-high-contrast here, github-dark-high-contrast below. --bg is the theme's editor canvas, the
+     kind-* colours are its function/constant/variable token colours, so chrome and code never disagree. */
+  --bg: #ffffff;
+  --bg-2: #f0f3f6;
+  --bg-3: #e7ecf0;
+  --fg: #0e1116;
+  --fg-2: #66707b;
+  --border: #acb6c0;
+  --accent: #0349b4;
+  --accent-fg: #ffffff;
+  --danger: #a0111f;
+  --warn: #744500;
+  --add: #055d20;
+  --del: #a0111f;
+  --kind-type: #023b95;
+  --kind-callable: #622cbc;
+  --kind-value: #702c00;
+  --search-match: #f0ce5380;
+  --search-current: #e09b13;
+  --search-current-fg: #0e1116;
+  --bg-card: #ffffff;
+  --review-card-shadow: 0 1px 2px rgba(14, 17, 22, 0.08), 0 0.1875rem 0.625rem rgba(14, 17, 22, 0.1);
+  --mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0a0c10;
+    --bg-2: #0a0c10;
+    --bg-3: #272b33;
+    --fg: #f0f3f6;
+    --fg-2: #bdc4cc;
+    --border: #2f353d;
+    --accent: #71b7ff;
+    --accent-fg: #0a0c10;
+    --danger: #ff6a69;
+    --warn: #f0ce53;
+    --add: #26cd4d;
+    --del: #ff6a69;
+    --kind-type: #91cbff;
+    --kind-callable: #dbb7ff;
+    --kind-value: #ffb757;
+    --search-match: #fbd66940;
+    --search-current: #e09b13;
+    --search-current-fg: #0a0c10;
+    --bg-card: #14181f;
+    --review-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0.1875rem 0.625rem rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0a0c10;
+  --bg-2: #0a0c10;
+  --bg-3: #272b33;
+  --fg: #f0f3f6;
+  --fg-2: #bdc4cc;
+  --border: #2f353d;
+  --accent: #71b7ff;
+  --accent-fg: #0a0c10;
+  --danger: #ff6a69;
+  --warn: #f0ce53;
+  --add: #26cd4d;
+  --del: #ff6a69;
+  --kind-type: #91cbff;
+  --kind-callable: #dbb7ff;
+  --kind-value: #ffb757;
+  --search-match: #fbd66940;
+  --search-current: #e09b13;
+  --search-current-fg: #0a0c10;
+  --bg-card: #14181f;
+  --review-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0.1875rem 0.625rem rgba(0, 0, 0, 0.6);
+}

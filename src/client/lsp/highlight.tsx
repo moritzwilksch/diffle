@@ -130,7 +130,7 @@ export function HighlightedCode({ code, lang, theme }: { code: string; lang: str
   return (
     <>
       {lines.map((line, i) => (
-        <span key={i} className="hl-line">
+        <span key={i}>
           <CodeLine tokens={rows?.[i]} fallback={line} />
           {'\n'}
         </span>
