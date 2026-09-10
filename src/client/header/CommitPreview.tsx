@@ -1,3 +1,4 @@
+import { twMerge } from 'tailwind-merge';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LastCommitsPreview } from '../../shared/protocol.js';
 import { api } from '../api.js';
@@ -59,25 +60,34 @@ export function CommitPreview({
       : (current?.error ?? (loading ? 'Loading commit messages…' : null));
   const result = current?.result;
   return (
-    <div className="commit-preview-area" ref={area} aria-busy={loading}>
+    <div className="min-h-22" ref={area} aria-busy={loading}>
       {status !== null ? (
-        <p className={current?.error ? 'mode-error' : 'mode-hint'} role="status">
+        <p
+          className={twMerge(
+            current?.error
+              ? 'm-0 text-del text-[0.75rem] wrap-anywhere'
+              : 'text-[0.75rem] text-muted m-0 p-0 whitespace-normal',
+          )}
+          role="status"
+        >
           {status}
         </p>
       ) : result ? (
-        <div className="commit-previews" aria-live="polite">
+        <div className="grid gap-3 mt-1" aria-live="polite">
           {(
             [
               [`HEAD~${oldOffset}`, result.old],
               [`HEAD~${newOffset}`, result.new],
             ] as const
           ).map(([ref, commit], index) => (
-            <div className="commit-preview" key={index}>
-              <div className="commit-preview-ref">
+            <div key={index}>
+              <div className="flex justify-between gap-2 text-muted font-mono text-[0.6875rem] leading-[1.5]">
                 <span>{ref}</span>
                 {commit && <span title={commit.sha}>{commit.short}</span>}
               </div>
-              <p>{commit ? commit.message || '(Empty commit message)' : 'Commit unavailable at this offset.'}</p>
+              <p className="mt-0.5 mb-0 font-sans text-[0.75rem] leading-[1.5] whitespace-pre-wrap wrap-anywhere max-h-24 overflow-auto">
+                {commit ? commit.message || '(Empty commit message)' : 'Commit unavailable at this offset.'}
+              </p>
             </div>
           ))}
         </div>

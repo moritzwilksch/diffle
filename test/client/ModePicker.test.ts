@@ -161,7 +161,7 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   await act(() => swap.click());
   expect(base.value).toBe('HEAD');
   expect(target.value).toBe('main');
-  const toggle = host.querySelector<HTMLElement>('.ref-comparison')!;
+  const toggle = host.querySelector<HTMLElement>('[role="group"][aria-label^="Comparison:"]')!;
   const key = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true });
   await act(() => {
     toggle.focus();

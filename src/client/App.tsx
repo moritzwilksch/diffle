@@ -44,11 +44,11 @@ export function App() {
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
         document.removeEventListener('pointercancel', onUp);
-        document.body.classList.remove('resizing');
-        resizer.classList.remove('resizing');
+        delete document.body.dataset.resizing;
+        resizer.removeAttribute('data-resizing');
       };
-      document.body.classList.add('resizing');
-      resizer.classList.add('resizing');
+      document.body.dataset.resizing = '';
+      resizer.setAttribute('data-resizing', '');
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
       document.addEventListener('pointercancel', onUp);
@@ -92,23 +92,35 @@ export function App() {
   }, [boot, refreshSnapshot, refreshThreads, refreshViewed, refreshConfig, setLspStatus]);
 
   return (
-    <div className="app" style={{ gridTemplateColumns: columns }}>
+    <div className="h-full grid grid-rows-[2.5rem_1fr]" style={{ gridTemplateColumns: columns }}>
       <Header />
       {layout.treeVisible && (
         <>
           <FileTreePane />
-          <div className="resizer" onPointerDown={startResize('tree')} title="Drag to resize" />
+          <div
+            className="cursor-col-resize bg-border opacity-60 [transition:opacity_120ms_ease,_background_120ms_ease] hover:bg-accent hover:opacity-100 data-resizing:bg-accent data-resizing:opacity-100"
+            onPointerDown={startResize('tree')}
+            title="Drag to resize"
+          />
         </>
       )}
       <ReviewPane />
       {layout.panelVisible && (
         <>
-          <div className="resizer" onPointerDown={startResize('panel')} title="Drag to resize" />
+          <div
+            className="cursor-col-resize bg-border opacity-60 [transition:opacity_120ms_ease,_background_120ms_ease] hover:bg-accent hover:opacity-100 data-resizing:bg-accent data-resizing:opacity-100"
+            onPointerDown={startResize('panel')}
+            title="Drag to resize"
+          />
           <CommentPanel />
         </>
       )}
       <HelpOverlay />
-      {toast && <div className="flash">{toast}</div>}
+      {toast && (
+        <div className="fixed bottom-6 left-[50%] [transform:translateX(-50%)] max-w-[min(48rem,_90vw)] wrap-anywhere bg-foreground text-canvas text-[1rem] leading-[1.4] py-3 px-5 rounded-lg shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.35)] z-60 [animation:flash-in_160ms_ease]">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

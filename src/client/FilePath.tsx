@@ -1,3 +1,4 @@
+import { twMerge } from 'tailwind-merge';
 import { Fragment } from 'react';
 
 /**
@@ -10,9 +11,12 @@ export function FilePath({ path, className, nowrap = false }: { path: string; cl
   const dirs = path.slice(0, cut).split('/').filter(Boolean);
   const base = path.slice(cut);
   return (
-    <span className={`filepath${nowrap ? ' nowrap' : ''}${className ? ` ${className}` : ''}`} title={path}>
+    <span
+      className={twMerge('font-mono wrap-anywhere break-normal', nowrap && 'min-w-0 truncate', className)}
+      title={path}
+    >
       {dirs.length > 0 && (
-        <span className="dir">
+        <span className="text-muted">
           {dirs.map((d, i) => (
             <Fragment key={i}>
               {d}/<wbr />
@@ -20,7 +24,7 @@ export function FilePath({ path, className, nowrap = false }: { path: string; cl
           ))}
         </span>
       )}
-      <span className="base">{base}</span>
+      <span className="text-foreground font-semibold">{base}</span>
     </span>
   );
 }

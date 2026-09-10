@@ -94,7 +94,7 @@ function Tip({ hover, ref }: { hover: HoverState; ref: RefObject<HTMLDivElement 
   return (
     <div
       ref={ref}
-      className="hover-tip"
+      className="hover-markdown fixed z-40 max-w-[min(40rem,_90vw)] max-h-[45vh] overflow-auto py-2 px-3 bg-canvas border border-border rounded-lg shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)] text-[0.75rem]"
       role="tooltip"
       onPointerEnter={hoverControl.hold}
       onPointerLeave={hoverControl.leave}

@@ -1,3 +1,6 @@
+import { CopyIcon } from '../ui/CopyIcon.js';
+import { twMerge } from 'tailwind-merge';
+import { Button } from '../ui/Button.js';
 import {
   AlertTriangle,
   Check,
@@ -53,36 +56,44 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
 
   return (
     <div
-      className={`annotation comment-card ${thread.stale ? 'stale' : ''} ${thread.resolved ? 'resolved' : ''} ${focused ? 'focused' : ''}`}
+      className={twMerge(
+        `font-sans text-[0.8125rem] my-1 mx-2 border border-border rounded-md bg-card p-0 shadow-card overflow-hidden [&_.markdown]:[word-break:break-word] ${thread.stale ? 'border-dashed' : ''} ${thread.resolved ? 'opacity-70' : ''} ${focused ? 'border-accent shadow-[0_0_0_1px_var(--accent),_var(--review-card-shadow)]' : ''}`,
+      )}
     >
-      <div className="meta">
+      <div className="flex gap-2 items-center text-muted text-[0.75rem] py-1 pr-1.5 pl-2.5 bg-hover border-b border-b-border [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
-        <span className="loc">
+        <span className="font-mono text-foreground font-semibold">
           {a.side === 'old' ? 'removed ' : ''}L{range}
         </span>
         {thread.stale && (
-          <span className="stale-tag" title="Not found in the current diff: the text changed or left the changed lines">
+          <span
+            className="inline-flex items-center gap-0.75 text-warn"
+            title="Not found in the current diff: the text changed or left the changed lines"
+          >
             <AlertTriangle size="0.75rem" /> stale
           </span>
         )}
         {thread.resolved && (
-          <span className="resolved-tag">
+          <span className="inline-flex items-center gap-0.75 text-add">
             <Check size="0.75rem" /> resolved
           </span>
         )}
-        <span className="spacer" />
+        <span className="flex-1" />
         {solo && <CopyMessageButton threadId={thread.id} messageId={solo.id} size="0.875rem" />}
         {solo && (
-          <button
-            className="ghost icon"
+          <Button
+            variant="ghost"
+            icon
             onClick={() => setEditingId(editingSolo ? null : solo.id)}
             title={editingSolo ? 'Cancel' : 'Edit (e)'}
           >
             {editingSolo ? <X size="0.875rem" /> : <Pencil size="0.875rem" />}
-          </button>
+          </Button>
         )}
-        <button
-          className={`ghost ${post.armed ? 'confirm' : posted ? 'posted' : 'icon'}`}
+        <Button
+          variant="ghost"
+          icon={!post.armed && !posted}
+          feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
           disabled={posting || thread.stale}
           onClick={post.fire}
           title={
@@ -95,29 +106,34 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
         >
           {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
           {post.armed ? 'Add?' : posted ? exportLabel(posted) : null}
-        </button>
-        <button
-          className="ghost icon"
+        </Button>
+        <Button
+          variant="ghost"
+          icon
           onClick={() => (replying ? closeReply() : openReply(thread.id))}
           title={replying ? 'Cancel reply' : 'Reply'}
         >
           {replying ? <X size="0.875rem" /> : <Reply size="0.875rem" />}
-        </button>
-        <button
-          className="ghost icon"
+        </Button>
+        <Button
+          variant="ghost"
+          icon
           onClick={() => void setResolved(thread.id, !thread.resolved)}
           title={thread.resolved ? 'Reopen (R)' : 'Resolve (R)'}
         >
           {thread.resolved ? <RotateCcw size="0.875rem" /> : <Check size="0.875rem" />}
-        </button>
-        <button
-          className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`}
+        </Button>
+        <Button
+          variant="ghost"
+          danger
+          icon={!del.armed}
+          feedback={del.armed ? 'confirm' : undefined}
           onClick={del.fire}
           title={del.armed ? 'Click again to delete this thread' : 'Delete thread (dd)'}
         >
           <Trash2 size="0.875rem" />
           {del.armed && 'Delete?'}
-        </button>
+        </Button>
       </div>
       {thread.messages.map((m, i) => (
         <Message key={m.id} thread={thread} message={m} first={i === 0} />
@@ -143,33 +159,38 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
     setEditingId(null);
   };
   return (
-    <div className="message">
+    <div className="py-2 px-2.5 data-[first=false]:border-t data-[first=false]:border-border" data-first={first}>
       {threaded && (
-        <div className="who">
-          <span className="spacer" />
+        <div className="flex items-center gap-1.5 text-[0.6875rem] text-muted mb-[2px]">
+          <span className="flex-1" />
           <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
-          <button
-            className="ghost icon"
+          <Button
+            variant="ghost"
+            icon
             onClick={() => setEditingId(editing ? null : message.id)}
             title={editing ? 'Cancel' : 'Edit (e)'}
           >
             {editing ? <X size="0.75rem" /> : <Pencil size="0.75rem" />}
-          </button>
+          </Button>
           {!first && (
-            <button
-              className={`ghost danger ${del.armed ? 'confirm' : 'icon'}`}
+            <Button
+              variant="ghost"
+              danger
+              icon={!del.armed}
+              feedback={del.armed ? 'confirm' : undefined}
               onClick={del.fire}
               title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}
             >
               <Trash2 size="0.75rem" />
               {del.armed && 'Delete?'}
-            </button>
+            </Button>
           )}
         </div>
       )}
       {editing ? (
-        <div className="composer" style={{ border: 0, padding: 0 }}>
+        <div className="border-0 rounded-md bg-surface p-0">
           <textarea
+            className="w-full min-h-17.5 resize-y border border-border rounded p-1.5 bg-canvas font-mono text-[0.75rem] leading-[1.5]"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -178,10 +199,10 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
             }}
             autoFocus
           />
-          <div className="row">
-            <button className="primary" onClick={save}>
+          <div className="flex gap-1.5 justify-end mt-1.5 items-center">
+            <Button variant="primary" onClick={save}>
               Save
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -199,8 +220,11 @@ function CopyMessageButton({ threadId, messageId, size }: { threadId: string; me
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
   return (
-    <button
-      className={`ghost icon copy-btn ${done ? 'done' : ''}`}
+    <Button
+      variant="ghost"
+      icon
+      feedback={done ? 'copied' : undefined}
+      className="relative [transition:background_160ms_ease,_color_160ms_ease,_border-color_160ms_ease]"
       title="Copy this comment as a prompt"
       onClick={async () => {
         let text: string;
@@ -216,15 +240,10 @@ function CopyMessageButton({ threadId, messageId, size }: { threadId: string; me
         timer.current = setTimeout(() => setDone(false), 1400);
       }}
     >
-      <span className="copy-icon">
-        <span className="i">
-          <Copy size={size} />
-        </span>
-        <span className="ok">
-          <Check size={size} />
-        </span>
-      </span>
-    </button>
+      <CopyIcon done={done} size={size}>
+        <Copy size={size} />
+      </CopyIcon>
+    </Button>
   );
 }
 
@@ -247,8 +266,9 @@ function ReplyComposer({ threadId }: { threadId: string }) {
     }
   };
   return (
-    <div className="composer reply">
+    <div className="border border-accent rounded-md bg-surface p-2 mx-2.5 mt-0 mb-2.5">
       <textarea
+        className="w-full min-h-17.5 resize-y border border-border rounded p-1.5 bg-canvas font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder="Reply…"
@@ -258,14 +278,14 @@ function ReplyComposer({ threadId }: { threadId: string }) {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
       />
-      <div className="row">
-        <span className="hint">
+      <div className="flex gap-1.5 justify-end mt-1.5 items-center">
+        <span className="text-muted text-[0.75rem] mr-auto">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to cancel
         </span>
-        <button onClick={closeReply}>Cancel</button>
-        <button className="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
+        <Button onClick={closeReply}>Cancel</Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
           Reply
-        </button>
+        </Button>
       </div>
     </div>
   );

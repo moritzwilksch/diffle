@@ -77,7 +77,7 @@ it('focuses the base, filters suggestions, and selects one without submitting', 
 it('accepts custom revisions and dismisses suggestions without changing the value', async () => {
   await type('HEAD~3');
   expect(changed).toHaveBeenLastCalledWith('HEAD~3');
-  expect(host.querySelector('.ref-empty')).not.toBeNull();
+  expect(host.querySelector('[role="listbox"]')?.textContent).toContain('Use this revision as typed.');
   expect((await key('Escape')).defaultPrevented).toBe(true);
   expect(input().value).toBe('HEAD~3');
   expect(document.activeElement).toBe(input());

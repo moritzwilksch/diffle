@@ -1,3 +1,4 @@
+import { Button } from '../ui/Button.js';
 import type {
   CodeViewItem,
   CodeViewLineSelection,
@@ -670,20 +671,20 @@ export function ReviewPane() {
 
   if (error)
     return (
-      <main className="review">
-        <div className="banner error">{error}</div>
+      <main className="min-w-0 min-h-0 relative flex flex-col outline-none">
+        <div className="py-2 px-3 bg-hover border-b border-b-border text-danger">{error}</div>
       </main>
     );
   if (!snapshot)
     return (
-      <main className="review">
-        <div className="empty">Loading snapshot…</div>
+      <main className="min-w-0 min-h-0 relative flex flex-col outline-none">
+        <div className="p-10 text-muted text-center">Loading snapshot…</div>
       </main>
     );
   if (snapshot.changed.length === 0 && !fileView) {
     return (
-      <main className="review">
-        <div className="empty">
+      <main className="min-w-0 min-h-0 relative flex flex-col outline-none">
+        <div className="p-10 text-muted text-center">
           No changes for <code>{snapshot.mode.label}</code>. Open any file from the tree to comment on it.
         </div>
       </main>
@@ -691,7 +692,7 @@ export function ReviewPane() {
   }
 
   return (
-    <main className="review" tabIndex={-1}>
+    <main className="min-w-0 min-h-0 relative flex flex-col outline-none" tabIndex={-1}>
       <SearchBar />
       <SymbolPicker />
       <SymbolMenu />
@@ -699,13 +700,17 @@ export function ReviewPane() {
       <ReferencesList />
       {fileView && <FileViewBar path={fileView.path} />}
       {fileView
-        ? !fileView.item && <div className="banner">Loading {fileView.path}…</div>
-        : snapshot.changed.some((f) => !loaded[f.path]) && <div className="banner">Loading diffs…</div>}
+        ? !fileView.item && (
+            <div className="py-2 px-3 bg-hover border-b border-b-border text-muted">Loading {fileView.path}…</div>
+          )
+        : snapshot.changed.some((f) => !loaded[f.path]) && (
+            <div className="py-2 px-3 bg-hover border-b border-b-border text-muted">Loading diffs…</div>
+          )}
       <CodeView<Annot>
         key={theme}
         ref={viewerRef}
         containerRef={attachScroller}
-        className="codeview"
+        className="codeview flex-1 min-h-0 overflow-auto bg-surface outline-none"
         items={items}
         options={options}
         selectedLines={selection}
@@ -723,20 +728,24 @@ function FileViewBar({ path }: { path: string }) {
   const external = useStore((s) => s.fileView?.external ?? false);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
-    <div className="fileview-bar">
-      <button className="ghost" onClick={closeFullFile} title="Back to the diff (Ctrl+o)">
+    <div className="flex items-center gap-3 py-1.5 px-3 bg-hover border-b border-b-border text-[0.75rem]">
+      <Button variant="ghost" onClick={closeFullFile} title="Back to the diff (Ctrl+o)">
         <ArrowLeft size="0.875rem" /> Back to diff
-      </button>
-      <span className="path">
+      </Button>
+      <span className="min-w-0 flex-1 font-mono truncate">
         <FilePath path={path} />
       </span>
       {file && (
-        <span className="file-meta">
-          {file.additions > 0 && <span className="add">+{file.additions}</span>}
-          {file.deletions > 0 && <span className="del">−{file.deletions}</span>}
+        <span className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
+          {file.additions > 0 && <span className="text-add">+{file.additions}</span>}
+          {file.deletions > 0 && <span className="text-del">−{file.deletions}</span>}
         </span>
       )}
-      {external && <span className="file-meta">outside the repository, read-only</span>}
+      {external && (
+        <span className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
+          outside the repository, read-only
+        </span>
+      )}
       <kbd>Ctrl+o</kbd>
     </div>
   );
@@ -846,41 +855,51 @@ function FileHeaderMeta({ path }: { path: string }) {
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');
   const loadPatch = useStore((s) => s.loadPatch);
   return (
-    <span ref={ref} className="file-meta">
+    <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
       {count > 0 && (
-        <span className="badge">
+        <span className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75">
           <MessageSquare size="0.75rem" /> {count}
         </span>
       )}
       {file?.generated && (
-        <span className="badge generated" title="Detected as generated: starts collapsed and ranks low">
+        <span
+          className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75 text-muted font-sans"
+          title="Detected as generated: starts collapsed and ranks low"
+        >
           generated
         </span>
       )}
       {file?.submodule && (
-        <span className="badge submodule" title="Submodule: only the recorded commit changes">
+        <span
+          className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75 text-muted font-sans"
+          title="Submodule: only the recorded commit changes"
+        >
           submodule
         </span>
       )}
       {oversized && (
-        <button className="ghost" onClick={() => void loadPatch(path)} title="Large diff, not loaded yet (zo)">
+        <Button variant="ghost" onClick={() => void loadPatch(path)} title="Large diff, not loaded yet (zo)">
           <Download size="0.875rem" /> Load diff
-        </button>
+        </Button>
       )}
       {file && vs === 'restale' && (
-        <span className="badge restale" title="You marked this viewed, then its contents changed">
+        <span
+          className="bg-hover rounded-[0.625rem] py-0 px-1.75 inline-flex items-center gap-0.75 text-warn font-sans"
+          title="You marked this viewed, then its contents changed"
+        >
           <RefreshCw size="0.75rem" /> changed since viewed
         </span>
       )}
       {/* In the file view the bar above already carries the way back, so the header offers no second button. */}
       {!full && (!file || (!file.binary && !file.submodule && file.status !== 'D')) && (
-        <button className="ghost icon" onClick={() => void openFullFile(path)} title="View full file (F)">
+        <Button variant="ghost" icon onClick={() => void openFullFile(path)} title="View full file (F)">
           <FileText size="0.875rem" />
-        </button>
+        </Button>
       )}
       {file && !full && (
         <>
           <label
+            className="inline-flex items-center gap-1 cursor-pointer font-sans"
             title={
               vs === 'restale'
                 ? 'Mark viewed again and collapse the file (v)'
@@ -892,9 +911,9 @@ function FileHeaderMeta({ path }: { path: string }) {
           </label>
         </>
       )}
-      <button className="ghost icon" onClick={() => toggleCollapsed(path)} title="Collapse / expand">
+      <Button variant="ghost" icon onClick={() => toggleCollapsed(path)} title="Collapse / expand">
         {collapsedNow ? <ChevronRight size="0.875rem" /> : <ChevronDown size="0.875rem" />}
-      </button>
+      </Button>
     </span>
   );
 }

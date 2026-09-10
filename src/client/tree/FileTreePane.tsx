@@ -1,3 +1,5 @@
+import { ToggleButton } from '../ui/ToggleButton.js';
+import { Button } from '../ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
@@ -193,19 +195,22 @@ export function FileTreePane() {
   }, [model, keys, paths, gitStatus]);
 
   return (
-    <aside className="tree">
-      <div className="tree-head">
-        <div className="toggle">
-          <button className={scope === 'changed' ? 'on' : ''} onClick={() => setScope('changed')}>
+    <aside className="tree-theme min-h-0 flex flex-col bg-surface">
+      <div className="py-1.5 px-2.5 flex gap-2 items-center border-b border-b-border text-muted [&_button]:whitespace-nowrap [&_button]:flex-none">
+        <div className="flex border border-border rounded-md overflow-hidden">
+          <ToggleButton selected={scope === 'changed'} onClick={() => setScope('changed')}>
             Changed
-          </button>
-          <button className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>
+          </ToggleButton>
+          <ToggleButton selected={scope === 'all'} onClick={() => setScope('all')}>
             All files
-          </button>
+          </ToggleButton>
         </div>
-        <span style={{ marginLeft: 'auto' }}>{paths.length}</span>
-        <button
-          className={`ghost ${unview.armed ? 'confirm' : 'icon'}`}
+        <span className="ml-auto">{paths.length}</span>
+        <Button
+          variant="ghost"
+          danger={unview.armed}
+          icon={!unview.armed}
+          feedback={unview.armed ? 'confirm' : undefined}
           disabled={viewedCount === 0}
           title={
             unview.armed
@@ -216,12 +221,12 @@ export function FileTreePane() {
         >
           <EyeOff size="0.875rem" />
           {unview.armed && 'Un-view all?'}
-        </button>
+        </Button>
       </div>
-      <div className="tree-body" ref={bodyRef}>
+      <div className="flex-1 min-h-0" ref={bodyRef}>
         <FileTree
           model={model}
-          style={{ height: '100%' }}
+          className="h-full"
           renderContextMenu={(item, ctx) => <TreeMenu path={item.path} kind={item.kind} close={ctx.close} />}
         />
       </div>
@@ -239,47 +244,49 @@ function TreeMenu({ path, kind, close }: { path: string; kind: 'file' | 'directo
   const openFile = useStore((s) => s.openFile);
   if (kind !== 'file') return null;
   return (
-    <div className="menu tree-menu" style={{ position: 'static' }}>
+    <div className="static top-[calc(100%_+_0.375rem)] left-0 min-w-95 bg-canvas border border-border rounded-[0.625rem] shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)] p-1.5 z-20">
       {file ? (
         <>
-          <button
-            className="entry"
+          <Button
+            className="grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1"
             onClick={() => {
               void setViewed(path, !viewed);
               close();
             }}
           >
             {viewed ? <EyeOff size="0.875rem" /> : <Eye size="0.875rem" />}
-            <span className="label">{viewed ? 'Mark not viewed' : 'Mark viewed'}</span>
-            <span className="desc">{viewed ? '' : <Check size="0.75rem" />}</span>
+            <span className="whitespace-nowrap">{viewed ? 'Mark not viewed' : 'Mark viewed'}</span>
+            <span className="text-muted font-mono text-[0.75rem] leading-[normal] justify-self-end inline-flex items-center">
+              {viewed ? '' : <Check size="0.75rem" />}
+            </span>
             <kbd>v</kbd>
-          </button>
-          <button
-            className="entry"
+          </Button>
+          <Button
+            className="grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1"
             onClick={() => {
               toggleCollapsed(path);
               close();
             }}
           >
             {collapsed ? <ChevronsUpDown size="0.875rem" /> : <ChevronsDownUp size="0.875rem" />}
-            <span className="label">{collapsed ? 'Expand' : 'Collapse'}</span>
-            <span className="desc" />
+            <span className="whitespace-nowrap">{collapsed ? 'Expand' : 'Collapse'}</span>
+            <span className="text-muted font-mono text-[0.75rem] leading-[normal] justify-self-end inline-flex items-center" />
             <kbd>{collapsed ? 'zo' : 'zc'}</kbd>
-          </button>
+          </Button>
         </>
       ) : (
-        <button
-          className="entry"
+        <Button
+          className="grid grid-cols-[1.125rem_1fr_auto_1.5rem] gap-2.5 items-center w-full text-left py-1.75 px-2.5 border-0 bg-transparent rounded-[0.4375rem] text-foreground font-sans text-[0.8125rem] leading-[1.3] min-h-8.5 hover:bg-hover [&>svg]:text-muted [&_kbd]:justify-self-end [&_kbd]:text-muted [&_kbd]:ml-1"
           onClick={() => {
             void openFile(path);
             close();
           }}
         >
           <Eye size="0.875rem" />
-          <span className="label">Open</span>
-          <span className="desc" />
+          <span className="whitespace-nowrap">Open</span>
+          <span className="text-muted font-mono text-[0.75rem] leading-[normal] justify-self-end inline-flex items-center" />
           <span />
-        </button>
+        </Button>
       )}
     </div>
   );

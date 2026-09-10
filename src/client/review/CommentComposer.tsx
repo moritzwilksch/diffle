@@ -1,3 +1,4 @@
+import { Button } from '../ui/Button.js';
 import { FileDiff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store.js';
@@ -34,8 +35,9 @@ export function CommentComposer({ lines }: { lines: string }) {
   };
 
   return (
-    <div className="annotation composer">
+    <div className="font-sans text-[0.8125rem] my-1 mx-2 border border-accent rounded-md bg-surface p-2">
       <textarea
+        className="w-full min-h-17.5 resize-y border border-border rounded p-1.5 bg-canvas font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder={`Comment on ${lines}…`}
@@ -45,21 +47,21 @@ export function CommentComposer({ lines }: { lines: string }) {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
       />
-      <div className="row">
-        <span className="hint">
+      <div className="flex gap-1.5 justify-end mt-1.5 items-center">
+        <span className="text-muted text-[0.75rem] mr-auto">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
         </span>
-        <button
-          className="ghost"
+        <Button
+          variant="ghost"
           onClick={() => void suggest()}
           title="Insert the selected lines as a suggestion block to edit"
         >
           <FileDiff size="0.8125rem" /> Suggest change
-        </button>
-        <button onClick={closeDraft}>Cancel</button>
-        <button className="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
+        </Button>
+        <Button onClick={closeDraft}>Cancel</Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
           Comment
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -71,20 +71,20 @@ describe('CommentPanel rows', () => {
       const deleteThread = vi.fn(() => Promise.resolve());
       useStore.setState({ deleteThread });
       await act(() => root.render(createElement(CommentPanel)));
-      const btn = () => host.querySelector<HTMLButtonElement>('.item .delete')!;
+      const btn = () => host.querySelector<HTMLButtonElement>('button[aria-label^="Delete this thread"]')!;
       const click = () => act(() => btn().dispatchEvent(new MouseEvent('click', { bubbles: true })));
       await click();
-      expect(btn().classList.contains('confirm')).toBe(true);
+      expect(btn().getAttribute('aria-label')).toBe('Delete this thread? Click again to confirm');
       expect(btn().textContent).toBe('Delete?');
       expect(btn().getAttribute('aria-label')).toContain('Click again');
       expect(deleteThread).not.toHaveBeenCalled();
       await act(() => vi.advanceTimersByTime(3000));
-      expect(btn().classList.contains('confirm')).toBe(false);
+      expect(btn().getAttribute('aria-label')).toBe('Delete this thread');
       expect(deleteThread).not.toHaveBeenCalled();
       await click();
       await click();
       expect(deleteThread).toHaveBeenCalledWith('t1');
-      expect(btn().classList.contains('confirm')).toBe(false);
+      expect(btn().getAttribute('aria-label')).toBe('Delete this thread');
     } finally {
       vi.useRealTimers();
     }

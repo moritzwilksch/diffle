@@ -1,3 +1,5 @@
+import { twMerge } from 'tailwind-merge';
+import { Button } from '../ui/Button.js';
 import { Hash, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { FilePath } from '../FilePath.js';
@@ -23,7 +25,7 @@ export function SymbolPicker() {
   }, [symbols.open, symbols.scope]);
 
   useEffect(() => {
-    listRef.current?.querySelector('li.on')?.scrollIntoView({ block: 'nearest' });
+    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [symbols.index]);
 
   if (!symbols.open) return null;
@@ -48,16 +50,28 @@ export function SymbolPicker() {
 
   const placeholder =
     symbols.scope === 'document' ? `Symbols in ${symbols.path ?? 'file'}…` : 'Search symbols across the repository…';
+  const kindColor: Record<string, string> = {
+    type: 'text-kind-type',
+    callable: 'text-kind-callable',
+    value: 'text-kind-value',
+    scope: 'text-muted',
+    other: 'text-muted',
+  };
   const status = symbols.loading
     ? 'loading…'
     : symbols.items.length
       ? `${symbols.index + 1} / ${symbols.items.length}`
       : '';
   return (
-    <div className="symbols" role="dialog" aria-label="Symbols">
-      <div className="searchbar">
+    <div
+      className="absolute top-0 left-0 right-0 z-30 bg-surface border-b border-b-border shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)] flex flex-col max-h-[60%]"
+      role="dialog"
+      aria-label="Symbols"
+    >
+      <div className="flex items-center gap-2 py-1.5 px-2.5 border-b border-b-border bg-surface">
         <Hash size="0.875rem" />
         <input
+          className="flex-1 bg-canvas border border-border rounded-md py-1 px-2 font-mono text-[0.75rem]"
           ref={ref}
           value={q}
           onChange={(e) => onChange(e.target.value)}
@@ -65,29 +79,36 @@ export function SymbolPicker() {
           placeholder={placeholder}
           spellCheck={false}
         />
-        <span className="status">{status}</span>
-        <button type="button" className="ghost icon" onClick={closeSymbols} title="Close (Esc)">
+        <span className="text-muted font-mono text-[0.75rem] leading-[normal] min-w-17.5 text-right">{status}</span>
+        <Button type="button" variant="ghost" icon onClick={closeSymbols} title="Close (Esc)">
           <X size="0.875rem" />
-        </button>
+        </Button>
       </div>
       {symbols.items.length > 0 ? (
-        <ul ref={listRef}>
+        <ul role="listbox" aria-label="Symbols" className="list-none m-0 p-1 overflow-auto" ref={listRef}>
           {symbols.items.map((sym, i) => (
             <li
+              role="option"
+              aria-selected={i === symbols.index}
               key={`${sym.path}:${sym.line}:${sym.col}:${sym.name}`}
-              className={i === symbols.index ? 'on' : ''}
+              className={twMerge(
+                'grid grid-cols-[4rem_1fr_auto] gap-2.5 items-baseline py-1 px-2 rounded-md font-mono text-[0.75rem] leading-[normal] cursor-pointer',
+                i === symbols.index ? 'bg-hover' : '',
+              )}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 useStore.setState((s) => ({ symbols: { ...s.symbols, index: i } }));
                 pickSymbol();
               }}
             >
-              <span className={`kind ${kindGroup(sym.kind)}`}>{KIND_LABEL[sym.kind] ?? 'symbol'}</span>
+              <span className={twMerge(`text-muted text-[0.6875rem] lowercase ${kindColor[kindGroup(sym.kind)]}`)}>
+                {KIND_LABEL[sym.kind] ?? 'symbol'}
+              </span>
               <span>
                 {sym.name}
-                {sym.container && <span className="container"> · {sym.container}</span>}
+                {sym.container && <span className="text-muted"> · {sym.container}</span>}
               </span>
-              <span className="where">
+              <span className="text-muted text-[0.6875rem] whitespace-nowrap">
                 {symbols.scope === 'workspace' && <FilePath path={sym.path} nowrap />}
                 {symbols.scope === 'workspace' ? ':' : ''}
                 {sym.line}
@@ -96,7 +117,7 @@ export function SymbolPicker() {
           ))}
         </ul>
       ) : (
-        <div className="empty">
+        <div className="p-3">
           {symbols.loading ? '' : symbols.scope === 'workspace' && !q.trim() ? 'Type to search' : 'No symbols'}
         </div>
       )}

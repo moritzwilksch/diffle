@@ -64,7 +64,7 @@ it('preserves the measured preview height through loading and empty input', asyn
     await render(1);
     measuredHeight = 180;
     await act(() => requests[0]!.resolve({ old: commit('Long message'), new: commit('Latest commit') }));
-    const area = host.querySelector<HTMLElement>('.commit-preview-area')!;
+    const area = host.querySelector<HTMLElement>('[aria-busy]')!;
     expect(area.style.minHeight).toBe('180px');
     measuredHeight = 24;
     await render(2);
