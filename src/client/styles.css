@@ -28,6 +28,56 @@
   --shadow-card: var(--review-card-shadow);
 }
 
+.header .lsp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  color: var(--fg-2);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.lsp-details {
+  position: relative;
+}
+.lsp-details summary {
+  cursor: pointer;
+  list-style: none;
+}
+.lsp-details summary::-webkit-details-marker {
+  display: none;
+}
+.lsp-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.75rem);
+  z-index: 100;
+  width: min(32rem, 85vw);
+  max-height: 65vh;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 0.8125rem;
+}
+.lsp-server {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.lsp-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+}
+.header .has-error .lsp,
+.header .lsp.unavailable {
+  color: var(--warn);
+}
+.spin {
+  animation: spin 900ms linear infinite;
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);

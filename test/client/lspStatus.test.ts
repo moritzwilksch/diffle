@@ -26,8 +26,17 @@ describe('LSP status indicator', () => {
   it('shows reported work instead of claiming workspace readiness', () => {
     const html = render({ activity: ['Loading workspace: dependencies'] });
     expect(html).toContain('Loading workspace: dependencies');
-    expect(html).toContain('>busy</span>');
-    expect(render({})).toContain('server (python): connected');
+    expect(html).toContain('>busy</summary>');
+    expect(render({})).toContain('connected');
+    expect(html).toContain('<details');
+    expect(html).toContain('aria-label="Language server status"');
+  });
+
+  it('spins during initialization and standard reported work', () => {
+    expect(render({ state: 'starting' })).toContain('lucide-loader-circle spin');
+    expect(render({ activity: ['Loading workspace'] })).toContain('lucide-loader-circle spin');
+    expect(render({})).not.toContain('lucide-loader-circle spin');
+    expect(render({})).toContain('no active work reported');
   });
 
   it('keeps protocol errors and stderr visible while the process is alive', () => {
@@ -37,9 +46,9 @@ describe('LSP status indicator', () => {
     });
     expect(html).toContain('Workspace loading failed');
     expect(html).toContain('Missing build tool');
-    expect(html).toContain('>error</span>');
+    expect(html).toContain('>error</summary>');
     const stderrOnly = render({ stderr: 'Workspace configuration could not be read' });
     expect(stderrOnly).toContain('Workspace configuration could not be read');
-    expect(stderrOnly).toContain('>logs</span>');
+    expect(stderrOnly).toContain('>logs</summary>');
   });
 });

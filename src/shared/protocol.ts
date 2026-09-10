@@ -238,8 +238,6 @@ export interface LspProcessStatus {
   /** `ready` means initialized; LSP has no universal workspace-ready signal. */
   state: 'starting' | 'ready' | 'unavailable';
   message?: string;
-  /** The server is building its workspace index; references in unopened files are incomplete until it finishes. Unset when the server does not say. */
-  indexing?: boolean;
   /** Active work reported through LSP work-done progress; absent when none is reported. */
   activity?: string[];
   /** Last warning or error reported by the server, not a process failure. */

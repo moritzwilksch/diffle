@@ -257,20 +257,6 @@ describe('LspBridge', () => {
     await bridge.close();
   });
 
-  it('reports indexing from pyrefly-style stderr log lines, start and end', async () => {
-    const { bridge, statuses } = start({ FAKE_LSP_INDEX: '1' });
-    await bridge.definition({ path: 'a.py', line: 1, col: 0 });
-    for (let i = 0; i < 50 && bridge.status().indexing !== false; i++) await settle();
-    expect([
-      ...new Map(statuses.map((s) => [JSON.stringify([s.state, s.indexing]), [s.state, s.indexing]])).values(),
-    ]).toEqual([
-      ['ready', undefined],
-      ['ready', true],
-      ['ready', false],
-    ]);
-    await bridge.close();
-  });
-
   it('tracks concurrent standard progress and keeps documents synced until all work finishes', async () => {
     const { bridge, notify, events } = start();
     const pos = { path: 'a.py', line: 3, col: 4 };
@@ -287,9 +273,9 @@ describe('LspBridge', () => {
       expect(events).toContain('open other.py v1');
 
       notify('$/progress', { token: 'load', value: { kind: 'end' } });
-      notify('$/progress', { token: 2, value: { kind: 'report', message: 'dependencies' } });
-      await expect.poll(() => bridge.status().activity).toEqual(['Indexing: dependencies']);
-      await expect(bridge.hover({ ...pos, line: 1 })).rejects.toThrow('Indexing: dependencies');
+      notify('$/progress', { token: 2, value: { kind: 'report', message: 'dependencies', percentage: 40 } });
+      await expect.poll(() => bridge.status().activity).toEqual(['Indexing (40%): dependencies']);
+      await expect(bridge.hover({ ...pos, line: 1 })).rejects.toThrow('Indexing (40%): dependencies');
       notify('$/progress', { token: 2, value: { kind: 'end' } });
       await expect.poll(() => bridge.status().activity).toEqual([]);
       expect(await bridge.hover({ ...pos, line: 1 })).toEqual({ contents: null });

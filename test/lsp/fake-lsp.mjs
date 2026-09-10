@@ -53,12 +53,6 @@ function handle(msg) {
     // Document lifecycle goes to stderr so tests can observe what the bridge opened.
     case 'textDocument/didOpen':
       docs.set(msg.params.textDocument.uri, msg.params.textDocument.text);
-      // FAKE_LSP_INDEX mimics pyrefly's indexing log lines, split across writes like a real stderr stream.
-      if (process.env.FAKE_LSP_INDEX === '1' && docs.size === 1) {
-        log(' INFO Populating up to 2000 files in the workspace ("/repo").');
-        setTimeout(() => process.stderr.write(' INFO Populated all files in the '), 20);
-        setTimeout(() => log('workspace, prepare to recheck open files.'), 40);
-      }
       return log(`open ${base(msg.params.textDocument.uri)} v${msg.params.textDocument.version}`);
     case 'textDocument/didChange':
       docs.set(msg.params.textDocument.uri, msg.params.contentChanges[0].text);

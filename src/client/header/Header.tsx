@@ -96,11 +96,11 @@ export function Header() {
 
 /**
  * Every language server at a glance: the spinner runs while any of them starts or
- * indexes, and the tooltip lists them with the languages nothing serves.
+ * indexes. Expand it for workspace health, commands, and logs.
  */
 function LspIndicator({ lsp }: { lsp: LspStatus }) {
   const starting = lsp.servers.some((s) => s.state === 'starting');
-  const busy = starting || lsp.servers.some((s) => s.activity?.length || s.indexing);
+  const busy = starting || lsp.servers.some((s) => s.activity?.length);
   const broken = lsp.servers.some((s) => s.state === 'unavailable');
   const error = lsp.servers.some((s) => s.notice?.severity === 'error');
   const warning = lsp.servers.some((s) => s.notice?.severity === 'warning');
@@ -114,26 +114,31 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
     (busy && 'busy') ||
     (logs && 'logs') ||
     '';
-  const lines = [
-    ...lsp.servers.map((s) => `${s.name} (${s.languages.join(', ')}): ${serverLabel(s)}`),
-    ...lsp.missing
-      .filter((m) => m.tried.length)
-      .map((m) => `${m.language}: nothing on PATH, tried ${m.tried.join(', ')}`),
-  ];
   return (
-    <span
-      className={twMerge(
-        `inline-flex items-center gap-1.25 text-[0.75rem] whitespace-nowrap text-muted ${state === 'unavailable' ? 'text-warn' : ''}`,
-      )}
-      title={lines.join('\n') || 'No language server for the files in this diff'}
-    >
-      {busy ? (
-        <LoaderCircle size="0.875rem" className="animate-[spin_900ms_linear_infinite]" />
-      ) : (
-        <Compass size="0.875rem" />
-      )}
-      {label}
-    </span>
+    <details className={`lsp-details ${error || broken ? 'has-error' : ''}`}>
+      <summary className={`lsp ${state}`} aria-label={`Language servers${label ? `: ${label}` : ''}`}>
+        {busy ? <LoaderCircle size="0.875rem" className="spin" /> : <Compass size="0.875rem" />}
+        {label}
+      </summary>
+      <section className="lsp-panel" aria-label="Language server status">
+        <strong>Language servers</strong>
+        {lsp.servers.map((s) => (
+          <div key={s.command} className="lsp-server">
+            <strong>
+              {s.name} ({s.languages.join(', ')})
+            </strong>
+            <pre>{s.command}</pre>
+            <pre>{serverLabel(s)}</pre>
+          </div>
+        ))}
+        {!lsp.servers.length && <p>No language server for the files in this diff</p>}
+        {lsp.missing.map((m) => (
+          <p key={m.language}>
+            {m.language}: {m.tried.length ? `nothing on PATH, tried ${m.tried.join(', ')}` : 'disabled in config'}
+          </p>
+        ))}
+      </section>
+    </details>
   );
 }
 
@@ -145,9 +150,7 @@ function serverLabel(s: LspServerStatus): string {
         ? 'starting'
         : s.activity?.length
           ? s.activity.join('; ')
-          : s.indexing
-            ? 'indexing the repository, so references in unchanged files are incomplete'
-            : 'connected';
+          : 'connected; no active work reported';
   return [
     status,
     s.notice && `${s.notice.severity}: ${s.notice.message}`,
