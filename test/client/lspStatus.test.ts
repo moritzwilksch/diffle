@@ -106,4 +106,9 @@ describe('LSP status indicator', () => {
     expect(stderrOnly).toContain('Workspace configuration could not be read');
     expect(stderrOnly).toContain('>logs</summary>');
   });
+
+  it('caps the stderr log with its own scroll', () => {
+    const html = render({ stderr: 'long log' });
+    expect(html).toMatch(/<pre class="[^"]*max-h-\[40vh\][^"]*overflow-y-auto"[^>]*>long log<\/pre>/);
+  });
 });

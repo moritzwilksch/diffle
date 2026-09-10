@@ -225,7 +225,8 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
         {s.stderr && (
           <>
             <span>stderr</span>
-            <pre>{s.stderr}</pre>
+            {/* Bounded so a chatty server cannot stretch the popup past the viewport. */}
+            <pre className="max-h-[40vh] overflow-y-auto">{s.stderr}</pre>
           </>
         )}
       </details>
