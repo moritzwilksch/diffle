@@ -177,7 +177,7 @@ export function ModePicker() {
               }}
             >
               {pane === 'pr' && (
-                <div className="px-2.5 pt-1 pb-1.5 text-[0.6875rem] font-semibold text-muted">Pull request</div>
+                <div className="pt-1 pb-1.5 text-[0.6875rem] font-semibold text-muted">Pull request</div>
               )}
               {pane === 'refs' && (
                 <>
