@@ -9,8 +9,9 @@ import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { GithubError, listPrsForHead, viewPr, type GhRunner } from '../../src/server/github.js';
 import { discoverGithub, githubRepository, originRepository } from '../../src/server/GithubMetadata.js';
+import { Session } from '../../src/server/Session.js';
 import { Snapshotter } from '../../src/server/Snapshotter.js';
-import { resolveMode } from '../../src/server/mode.js';
+import { resolveReview } from '../../src/server/mode.js';
 
 /**
  * The temp root as git reports it: macOS reaches `os.tmpdir()` through a symlink
@@ -165,19 +166,20 @@ describe('viewPr', () => {
   });
 });
 
-describe("resolveMode({ kind: 'pr' })", () => {
+describe("resolveReview({ kind: 'pr' })", () => {
   it('fetches the pull request and pins both sides to commits', async () => {
-    const mode = await resolveMode({ kind: 'pr', pr: '7' }, repo, gh);
+    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, gh);
     expect(mode).toMatchObject({
       old: mergeBase,
       mergeBase: false,
       new: headSha,
       label: '#7 main...feat',
-      request: { kind: 'pr', pr: 'https://github.com/o/r/pull/7' },
       live: 'none',
       // The number, not a sha: comments outlive a force-push to the pull request.
       commentKey: 'pr:#7',
     });
+    expect(mode).not.toHaveProperty('request');
+    expect(prUrl).toBe('https://github.com/o/r/pull/7');
     expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/head`)).toBe(headSha);
     expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/base`)).toBe(mergeBase);
   });
@@ -186,14 +188,14 @@ describe("resolveMode({ kind: 'pr' })", () => {
     const forked = join(tmp, 'forked');
     execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     const forkRepo = await GitRepo.open(forked);
-    const mode = await resolveMode({ kind: 'pr', pr: '7' }, forkRepo, gh);
+    const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, gh);
     expect(mode.new).toBe(headSha);
   });
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
     const refs = git(local, 'show-ref');
     await expect(
-      resolveMode({ kind: 'pr', pr: '7' }, repo, async () =>
+      resolveReview({ kind: 'pr', pr: '7' }, repo, async () =>
         PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' }),
       ),
     ).rejects.toThrow(/foreign repository/);
@@ -202,7 +204,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
 
   it('cleans only this instance’s refs', async () => {
     const other = await GitRepo.open(local);
-    await resolveMode({ kind: 'pr', pr: '7' }, other, gh);
+    await resolveReview({ kind: 'pr', pr: '7' }, other, gh);
     await repo.cleanReviewRefs();
     expect(git(local, 'for-each-ref', repo.reviewRefs)).toBe('');
     expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head`)).toBe(headSha);
@@ -213,7 +215,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
     const missing: GhRunner = async () => {
       throw new GithubError('gh pr view failed: no pull requests found');
     };
-    await expect(resolveMode({ kind: 'pr', pr: '999' }, repo, missing)).rejects.toThrow(GithubError);
+    await expect(resolveReview({ kind: 'pr', pr: '999' }, repo, missing)).rejects.toThrow(GithubError);
   });
 });
 
@@ -232,7 +234,7 @@ describe('independent GitHub metadata', () => {
     }
   }
   const snapshot = async (args: string[]) =>
-    new Snapshotter(repo, await resolveMode({ kind: 'revspec', args }, repo), 1, 3).current();
+    new Snapshotter(repo, (await resolveReview({ kind: 'revspec', args }, repo)).mode, 1, 3).current();
   const found: GhRunner = async (args, opts) => {
     ghCalls.push(args);
     expect(opts.timeoutMs).toBe(5000);
@@ -245,7 +247,7 @@ describe('independent GitHub metadata', () => {
       try {
         const snap = await snapshot(['origin/main']);
         const before = structuredClone(snap.mode);
-        const metadata = await discoverGithub(repo, snap, found);
+        const metadata = await discoverGithub(repo, snap, { run: found });
         expect(metadata).toMatchObject({
           canExport: true,
           pullRequest: { repository: 'o/r', number: 7, title: 'Improve feature', state: 'OPEN', isDraft: false },
@@ -281,7 +283,7 @@ describe('independent GitHub metadata', () => {
   it('skips GitHub for a worktree or an expression on either endpoint', async () =>
     checkedOut(async () => {
       for (const args of [['origin/main..worktree'], ['worktree..HEAD'], ['HEAD~1..HEAD']]) {
-        const metadata = await discoverGithub(repo, await snapshot(args), found);
+        const metadata = await discoverGithub(repo, await snapshot(args), { run: found });
         expect(metadata.pullRequest).toBeNull();
       }
       expect(ghCalls).toEqual([]);
@@ -289,9 +291,9 @@ describe('independent GitHub metadata', () => {
 
   it('shows metadata for an unpushed branch but refuses export', async () =>
     checkedOut(async () => {
-      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), async () =>
-        JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: mergeBase }))]),
-      );
+      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), {
+        run: async () => JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: mergeBase }))]),
+      });
       expect(metadata.pullRequest?.number).toBe(7);
       expect(metadata.canExport).toBe(false);
       expect(metadata.reason).toMatch(/head/);
@@ -300,7 +302,7 @@ describe('independent GitHub metadata', () => {
   it('shows matching metadata even when the old commit differs from GitHub’s diff', async () =>
     checkedOut(async () => {
       const snap = await snapshot(['origin/main']);
-      const metadata = await discoverGithub(repo, { ...snap, oldSha: headSha }, found);
+      const metadata = await discoverGithub(repo, { ...snap, oldSha: headSha }, { run: found });
       expect(metadata.pullRequest?.number).toBe(7);
       expect(metadata.canExport).toBe(false);
       expect(metadata.reason).toMatch(/does not match/);
@@ -308,24 +310,52 @@ describe('independent GitHub metadata', () => {
 
   it('does not select an arbitrary PR when discovery is ambiguous', async () =>
     checkedOut(async () => {
-      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), async () =>
-        JSON.stringify([
-          JSON.parse(PR_VIEW({ headRefOid: headSha })),
-          JSON.parse(PR_VIEW({ number: 8, headRefOid: headSha })),
-        ]),
-      );
+      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), {
+        run: async () =>
+          JSON.stringify([
+            JSON.parse(PR_VIEW({ headRefOid: headSha })),
+            JSON.parse(PR_VIEW({ number: 8, headRefOid: headSha })),
+          ]),
+      });
       expect(metadata.pullRequest).toBeNull();
       expect(metadata.reason).toMatch(/Multiple/);
     }));
 
   it('keeps an explicit PR identity when neither commit has a branch', async () => {
-    const mode = await resolveMode({ kind: 'pr', pr: '7' }, repo, gh);
+    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, gh);
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
-    const metadata = await discoverGithub(repo, snap, async (args) => {
-      expect(args[2]).toBe('https://github.com/o/r/pull/7');
-      return PR_VIEW({ headRefOid: headSha, isDraft: true });
+    const metadata = await discoverGithub(repo, snap, {
+      prUrl,
+      run: async (args) => {
+        expect(args[2]).toBe('https://github.com/o/r/pull/7');
+        return PR_VIEW({ headRefOid: headSha, isDraft: true });
+      },
     });
     expect(metadata).toMatchObject({ canExport: true, pullRequest: { number: 7, isDraft: true } });
+  });
+
+  it('keeps explicit PR identity in the session across refreshes and clears it on a comparison switch', async () => {
+    const run = vi.fn<GhRunner>(async () => PR_VIEW({ headRefOid: headSha }));
+    const session = new Session(repo, { broadcast() {} }, { watch: false, context: 3, gh: run });
+    try {
+      const first = await session.start({ kind: 'pr', pr: '7' });
+      expect(first.mode).not.toHaveProperty('request');
+      expect(first.mode).not.toHaveProperty('prUrl');
+      expect((await session.github(first)).pullRequest?.number).toBe(7);
+      expect(run.mock.calls.at(-1)?.[0][2]).toBe('https://github.com/o/r/pull/7');
+      await session.refresh();
+      const refreshed = await session.snapshotter.current();
+      expect((await session.github(refreshed)).pullRequest?.number).toBe(7);
+      await session.setContext(9);
+      expect((await session.github(await session.snapshotter.current())).pullRequest?.number).toBe(7);
+      const next = await session.switchMode({ kind: 'working' });
+      run.mockClear();
+      expect((await session.github(next)).pullRequest).toBeNull();
+      expect(run).not.toHaveBeenCalled();
+      await expect(session.github(first)).rejects.toThrow('Comparison changed');
+    } finally {
+      await session.close();
+    }
   });
 
   it('reads origin locally and recognizes GitHub URL forms', async () =>
@@ -436,9 +466,9 @@ describe('openReviewRepository', () => {
           // Windows 8.3 short name or a macOS symlink would otherwise skew the prefix.
           const root = await realpath(review.repo.root);
           expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
-          const mode = await resolveMode(req, review.repo, foreign);
+          const { mode, prUrl } = await resolveReview(req, review.repo, foreign);
           expect(mode.new).toBe(headSha);
-          expect(mode.request).toEqual({ kind: 'pr', pr: 'https://github.com/foreign/repo/pull/7' });
+          expect(prUrl).toBe('https://github.com/foreign/repo/pull/7');
           expect(mode.old).toBe(mergeBase);
           expect(git(local, 'show-ref')).toBe(refs);
           expect(git(local, 'count-objects', '-v')).toBe(objects);

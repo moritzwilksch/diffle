@@ -72,7 +72,6 @@ function snap(changed: Snapshot['changed']): Snapshot {
   return {
     root: '/r',
     mode: {
-      request: { kind: 'working' },
       old: 'HEAD',
       mergeBase: false,
       new: 'worktree',

@@ -12,7 +12,6 @@ const { FileTreePane } = await import('../../src/client/tree/FileTreePane.js');
 const snapshot: Snapshot = {
   root: '/r',
   mode: {
-    request: { kind: 'working' },
     old: 'HEAD',
     mergeBase: false,
     new: 'worktree',

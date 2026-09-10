@@ -7,7 +7,6 @@ export type ModeRequest = { kind: 'working' } | { kind: 'pr'; pr?: string } | { 
 
 /** A comparison; both endpoints accept a Git revision or "worktree". */
 export interface ModeSpec {
-  request: ModeRequest;
   old: string;
   new: string;
   /** Compare merge-base(old, new) to new; worktree uses HEAD for the merge base. */
@@ -62,7 +61,7 @@ export interface Snapshot {
   version: number;
   /** Resolved endpoints; either can be the worktree sentinel. */
   oldSha: string;
-  newSha: string | 'worktree';
+  newSha: string;
   /** The checked-out commit; '' on an unborn branch. Symbol navigation needs newSha to be this or the worktree. */
   headSha: string;
   /** Context lines the patches were generated with. */

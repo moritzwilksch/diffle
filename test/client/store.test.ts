@@ -85,7 +85,6 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
   return {
     root: '/r',
     mode: {
-      request: { kind: 'working' },
       old: 'HEAD',
       mergeBase: false,
       new: 'worktree',

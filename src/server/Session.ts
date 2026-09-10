@@ -4,8 +4,8 @@ import { CommentStore, type QuoteFn } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
-import { type GhRunner } from './github.js';
-import { resolveMode } from './mode.js';
+import { GithubError, type GhRunner } from './github.js';
+import { resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
 
@@ -21,6 +21,7 @@ interface Broadcaster {
 }
 
 interface Active {
+  prUrl?: string;
   mode: ModeSpec;
   snapshotter: Snapshotter;
   comments: CommentStore;
@@ -84,9 +85,11 @@ export class Session {
 
   /** Cached independently of snapshot construction; callers never hold the transition queue. */
   github(snap: Snapshot, fresh = false): Promise<GithubMetadata> {
+    const active = this.require();
+    if (snap.mode !== active.mode) return Promise.reject(new GithubError('Comparison changed; try again'));
     const cached = this.githubCache.get(snap);
     if (!fresh && cached && cached.expires > Date.now()) return cached.promise;
-    const promise = discoverGithub(this.repo, snap, this.opts.gh);
+    const promise = discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
     const entry = { expires: Date.now() + 30_000, promise };
     this.githubCache.set(snap, entry);
     void promise.catch(() => {
@@ -158,7 +161,7 @@ export class Session {
   }
 
   private async transition(req: ModeRequest): Promise<Snapshot> {
-    const mode = await resolveMode(req, this.repo, this.opts.gh);
+    const { mode, prUrl } = await resolveReview(req, this.repo, this.opts.gh);
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([
@@ -166,7 +169,7 @@ export class Session {
       snapshotter.current(),
     ]);
     // Build the complete next state, then swap it in and retire the previous one.
-    const next: Active = { mode, snapshotter, comments, watcher: null };
+    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null };
     // The repository may have moved on while no server was watching it.
     await this.relocateComments(next, snap);
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);

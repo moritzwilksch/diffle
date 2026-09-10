@@ -22,8 +22,14 @@ async function mergeBaseOrExplain(repo: GitRepo, a: string, b: string): Promise<
   }
 }
 
-/** Resolves a request locally, except for an explicitly requested PR. */
-export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner = runGh): Promise<ModeSpec> {
+/** Server-only transition result; PR identity is separate from the comparison sent to the client. */
+export interface ResolvedReview {
+  mode: ModeSpec;
+  prUrl?: string;
+}
+
+/** Resolves an input command into a comparison and optional explicit PR identity. */
+export async function resolveReview(req: ModeRequest, repo: GitRepo, gh: GhRunner = runGh): Promise<ResolvedReview> {
   if (req.kind === 'pr') return resolvePr(req, repo, gh);
   const parsed =
     req.kind === 'working'
@@ -51,14 +57,15 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner 
     : old;
   const pinned = (rev: string, sha: string) => rev.length >= 7 && sha.startsWith(rev.toLowerCase());
   return {
-    ...parsed,
-    request: req,
-    live: [parsed.old, parsed.new].includes('worktree')
-      ? 'worktree'
-      : pinned(parsed.old, old) && pinned(parsed.new, next)
-        ? 'none'
-        : 'refs',
-    commentKey: req.kind === 'working' ? 'working' : `revspec:${oldKey}..${next}`,
+    mode: {
+      ...parsed,
+      live: [parsed.old, parsed.new].includes('worktree')
+        ? 'worktree'
+        : pinned(parsed.old, old) && pinned(parsed.new, next)
+          ? 'none'
+          : 'refs',
+      commentKey: req.kind === 'working' ? 'working' : `revspec:${oldKey}..${next}`,
+    },
   };
 }
 
@@ -69,12 +76,9 @@ export async function resolveMode(req: ModeRequest, repo: GitRepo, gh: GhRunner 
  * sides are pinned to commits, so the mode is static and the comment key follows
  * the PR number: comments survive a force-push.
  */
-async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: GhRunner): Promise<ModeSpec> {
+async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: GhRunner): Promise<ResolvedReview> {
   const pr = await viewPr(req.pr, repo.root, gh);
-  return resolveKnownPr(req, repo, pr);
-}
 
-async function resolveKnownPr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, pr: PullRequest): Promise<ModeSpec> {
   const head = `${repo.reviewRefs}/${pr.number}/head`;
   const base = `${repo.reviewRefs}/${pr.number}/base`;
   await repo.fetch(await fetchSource(repo, pr), [
@@ -83,13 +87,15 @@ async function resolveKnownPr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, p
   ]);
   const [headSha, mb] = await Promise.all([resolveOrExplain(repo, head), mergeBaseOrExplain(repo, base, head)]);
   return {
-    request: { ...req, pr: pr.url },
-    old: mb,
-    new: headSha,
-    mergeBase: false,
-    label: `#${pr.number} ${pr.baseRefName}...${pr.headRefName}`,
-    live: 'none',
-    commentKey: `pr:#${pr.number}`,
+    prUrl: pr.url,
+    mode: {
+      old: mb,
+      new: headSha,
+      mergeBase: false,
+      label: `#${pr.number} ${pr.baseRefName}...${pr.headRefName}`,
+      live: 'none',
+      commentKey: `pr:#${pr.number}`,
+    },
   };
 }
 

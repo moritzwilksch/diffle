@@ -20,7 +20,11 @@ export async function originRepository(repo: GitRepo): Promise<string | null> {
 }
 
 /** Enriches a comparison without fetching commits, changing its endpoints, or changing comment storage. */
-export async function discoverGithub(repo: GitRepo, snap: Snapshot, run: GhRunner = runGh): Promise<GithubMetadata> {
+export async function discoverGithub(
+  repo: GitRepo,
+  snap: Snapshot,
+  { run = runGh, prUrl }: { run?: GhRunner; prUrl?: string } = {},
+): Promise<GithubMetadata> {
   const absent = (reason: string): GithubMetadata => ({
     version: snap.version,
     pullRequest: null,
@@ -28,8 +32,8 @@ export async function discoverGithub(repo: GitRepo, snap: Snapshot, run: GhRunne
     reason,
   });
   let pr: PullRequest;
-  if (snap.mode.request.kind === 'pr') {
-    pr = await viewPr(snap.mode.request.pr, repo.root, run, LOOKUP_TIMEOUT_MS);
+  if (prUrl) {
+    pr = await viewPr(prUrl, repo.root, run, LOOKUP_TIMEOUT_MS);
   } else {
     const [old, next, remotes] = await Promise.all([
       repo.upstreamBranch(snap.mode.old),
