@@ -56,18 +56,18 @@ export function useHighlighted(
   theme: ThemeChoice,
   near = 0,
 ): Map<string, HlToken[]> {
-  const [map, setMap] = useState<Map<string, HlToken[]>>(new Map());
+  // The map is tagged with the item array it describes, so a render can never
+  // show highlights computed for a different result set.
+  const [state, setState] = useState<{ items: typeof items; map: Map<string, HlToken[]> }>(() => ({
+    items,
+    map: new Map(),
+  }));
   const nearRef = useRef(near);
   nearRef.current = near;
-  const shown = useRef(items);
-  const itemsChanged = shown.current !== items;
   useEffect(() => {
     let cancelled = false;
     // A new result set starts plain; a theme toggle keeps the old colors until each file is redone.
-    if (shown.current !== items) {
-      shown.current = items;
-      setMap(new Map());
-    }
+    setState((prev) => (prev.items === items ? prev : { items, map: new Map() }));
     const files: { path: string; lines: string[]; first: number; last: number }[] = [];
     items.forEach((it, i) => {
       const f = files[files.length - 1];
@@ -95,10 +95,12 @@ export function useHighlighted(
           await yieldToLoop();
         }
         if (cancelled) return;
-        setMap((prev) => {
-          const next = new Map(prev);
+        setState((prev) => {
+          // A result set that changed while this file was tokenizing must not resurface.
+          if (prev.items !== items) return prev;
+          const next = new Map(prev.map);
           rows.forEach((tokens, i) => next.set(`${path}\n${lines[i]}`, tokens));
-          return next;
+          return { items: prev.items, map: next };
         });
       }
     })();
@@ -107,7 +109,7 @@ export function useHighlighted(
     };
   }, [items, theme]);
   // Passive effects may run after paint; never expose stale highlights for a changed result set.
-  return itemsChanged ? new Map() : map;
+  return state.items === items ? state.map : new Map();
 }
 
 /**
