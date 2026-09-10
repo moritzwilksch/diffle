@@ -82,7 +82,8 @@ describe('LSP status indicator', () => {
     ];
     try {
       const html = render({});
-      expect(html).toContain('lucide-circle-off');
+      expect(html).not.toContain('lucide-circle-off');
+      expect(html.match(/lucide-x shrink-0/g)).toHaveLength(2);
       expect(html).toContain('>Not on PATH</span>');
       expect(html).toContain('>Disabled</span>');
       expect(html).toContain('title="rust-analyzer"');

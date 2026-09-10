@@ -5,7 +5,6 @@ import {
   X,
   Check,
   CircleAlert,
-  CircleOff,
   Columns2,
   Compass,
   GitCompareArrows,
@@ -179,7 +178,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
             key={m.language}
             title={m.tried.join(', ')}
           >
-            <CircleOff size="0.875rem" className="shrink-0" />
+            <X size="0.875rem" className="shrink-0" />
             <span className="min-w-0 flex-1 font-medium wrap-anywhere text-foreground">{m.language}</span>
             <span className="shrink-0 text-[0.6875rem]">{m.tried.length ? 'Not on PATH' : 'Disabled'}</span>
           </div>
