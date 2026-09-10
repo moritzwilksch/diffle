@@ -839,9 +839,10 @@ function FileHeaderMeta({ path }: { path: string }) {
       host?.shadowRoot?.querySelector<HTMLElement>('[data-diffs-header]') ??
       metadata?.closest<HTMLElement>('[data-diffs-header]');
     if (!header) return;
-    // Full-file view has no collapse action, so drop the pointer cue that would promise one.
+    // Full-file view has no collapse action, so drop the pointer cue that would promise one. `auto` keeps the
+    // text cursor over the filename while the surrounding band shows the plain arrow.
     if (full) {
-      header.style.cursor = 'default';
+      header.style.cursor = 'auto';
       return () => {
         header.style.cursor = '';
       };

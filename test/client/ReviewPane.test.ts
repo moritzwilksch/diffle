@@ -338,7 +338,7 @@ describe('ReviewPane scroller effects', () => {
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(0);
     expect(host.querySelector('[title="Collapse / expand"]')).toBeNull();
     const fullHeader = host.querySelector<HTMLElement>('[data-diffs-header]')!;
-    expect(fullHeader.style.cursor).toBe('default');
+    expect(fullHeader.style.cursor).toBe('auto');
     const collapsed = useStore.getState().collapsed;
     await act(() => host.querySelector<HTMLElement>('[data-diffs-header] .filename')!.click());
     expect(useStore.getState().collapsed).toBe(collapsed);
