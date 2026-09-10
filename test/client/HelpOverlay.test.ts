@@ -45,7 +45,7 @@ const BOUND = [
   'gy',
   'gA',
   'gs / gS',
-  'm, then 1–5',
+  'm, then 1–4',
   '⌘/Ctrl+b',
   '?',
   'Esc',

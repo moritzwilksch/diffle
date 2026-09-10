@@ -273,9 +273,9 @@ function isSubsequence(needle: string, hay: string): boolean {
   return false;
 }
 
-/** The revspec behind "Last N commits": the N commits leading up to HEAD. */
-export function lastCommitsRequest(n: number): ModeRequest {
-  return { kind: 'revspec', args: [`HEAD~${Math.max(1, Math.floor(n))}..HEAD`] };
+/** Compare two validated, nonnegative ancestor offsets from HEAD. */
+export function lastCommitsRequest(n: number, m: number): ModeRequest {
+  return { kind: 'revspec', args: [`HEAD~${n}..HEAD~${m}`] };
 }
 
 /** What an export did to the pending review: new comments, bodies rewritten in place, or nothing left to do. */

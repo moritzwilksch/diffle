@@ -1,7 +1,7 @@
 import {
+  ArrowLeftRight,
   ChevronDown,
-  ChevronUp,
-  GitBranch,
+  ChevronRight,
   GitCommitHorizontal,
   GitPullRequest,
   History,
@@ -12,270 +12,298 @@ import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { lastCommitsRequest } from '../model.js';
 import { useStore } from '../store.js';
+import { RefInput } from './RefInput.js';
+import { CommitOffsetInput, parseOffset } from './CommitOffsetInput.js';
+import { CommitPreview } from './CommitPreview.js';
 
-/**
- * Mode dropdown, ordered by how often a reviewer needs each:
- * PR · branch vs base · working · last N commits · two refs.
- */
+/** Comparison modes with configuration in an adjacent pane. */
 export function ModePicker() {
   const snapshot = useStore((s) => s.snapshot);
   const switchMode = useStore((s) => s.switchMode);
   const open = useStore((s) => s.modeMenuOpen);
   const setOpen = useStore((s) => s.setModeMenuOpen);
-  const twoRefsRequested = useStore((s) => s.twoRefsOpen);
-  const setTwoRefsOpen = useStore((s) => s.setTwoRefsOpen);
-  const lastCommits = useStore((s) => s.lastCommits);
-  const setLastCommits = useStore((s) => s.setLastCommits);
+  const pane = useStore((s) => s.modePane);
+  const pick = useStore((s) => s.pickModeEntry);
   const [refs, setRefs] = useState<RefsResponse | null>(null);
-  const [base, setBase] = useState('');
-  const [twoRefs, setTwoRefs] = useState(false);
   const [a, setA] = useState('');
   const [b, setB] = useState('HEAD');
-  const [dots, setDots] = useState<'..' | '...'>('...');
-  // Text mirror of lastCommits so the field can be emptied while retyping.
-  const [countText, setCountText] = useState(String(lastCommits));
-  const wrap = useRef<HTMLDivElement>(null);
+  const [dots, setDots] = useState<'..' | '...'>('..');
+  const [oldOffsetText, setOldOffsetText] = useState('1');
+  const [newOffsetText, setNewOffsetText] = useState('0');
+  const [pr, setPr] = useState('');
+  const [prPending, setPrPending] = useState(false);
+  const [prError, setPrError] = useState<string | null>(null);
+  const prInFlight = useRef(false);
+  const prView = useRef(0);
+  const prInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (twoRefsRequested) {
-      setTwoRefs(true);
-      setTwoRefsOpen(false);
-    }
-  }, [twoRefsRequested, setTwoRefsOpen]);
+    const view = ++prView.current;
+    return () => {
+      prView.current = view + 1;
+    };
+  }, [open, pane]);
+
+  const wrap = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const targetRef = useRef<HTMLInputElement>(null);
+  const comparisonToggle = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    void api.refs().then((r) => {
-      setRefs(r);
-      setBase((cur) => cur || r.defaultBranch || r.branches[0] || '');
-      setA((cur) => cur || r.defaultBranch || '');
-    });
+    let current = true;
+    void api
+      .refs()
+      .then((r) => {
+        if (!current) return;
+        setRefs(r);
+        setA((cur) => cur || r.defaultBranch || r.branches[0] || 'HEAD');
+      })
+      .catch((e) => {
+        if (current) useStore.getState().report('Loading refs', e);
+      });
     const onDoc = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) useStore.getState().setModeMenuOpen(false);
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    return () => {
+      current = false;
+      document.removeEventListener('mousedown', onDoc);
+    };
   }, [open, setOpen]);
 
   const choose = (req: ModeRequest) => {
     setOpen(false);
-    setTwoRefs(false);
+    trigger.current?.focus();
     void switchMode(req);
   };
-
-  const kind = snapshot?.mode.kind;
-  const label = snapshot?.mode.label ?? '…';
-  const refOptions = refs ? [...refs.branches, ...refs.remoteBranches, ...refs.tags] : [];
+  const openPr = async () => {
+    if (prInFlight.current) return;
+    prInFlight.current = true;
+    setPrPending(true);
+    setPrError(null);
+    const view = prView.current;
+    try {
+      const result = await switchMode(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
+      if (view !== prView.current) return;
+      if (result === 'applied') {
+        setOpen(false);
+        trigger.current?.focus();
+      } else if (typeof result === 'object') {
+        setPrError(result.error);
+        prInput.current?.focus();
+      }
+    } finally {
+      prInFlight.current = false;
+      setPrPending(false);
+    }
+  };
+  const oldOffset = parseOffset(oldOffsetText);
+  const newOffset = parseOffset(newOffsetText);
+  const validOffsets = oldOffset !== null && newOffset !== null;
+  const swapRefs = () => {
+    setA(b);
+    setB(a);
+  };
+  const entries = [
+    { label: 'Working', icon: PencilRuler, pane: null },
+    { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
+    { label: 'Last commits', icon: History, pane: 'commits' },
+    { label: 'PR', icon: GitPullRequest, pane: 'pr' },
+  ] as const;
 
   return (
     <div className="menu-wrap" ref={wrap}>
-      <button onClick={() => setOpen(!open)} title="Change what is compared (m)" style={{ fontFamily: 'var(--mono)' }}>
-        {label} <ChevronDown size="0.875rem" />
+      <button
+        ref={trigger}
+        onClick={() => setOpen(!open)}
+        title="Change what is compared (m)"
+        aria-expanded={open}
+        aria-controls="mode-picker"
+        style={{ fontFamily: 'var(--mono)' }}
+      >
+        {snapshot?.mode.label ?? '…'} <ChevronDown size="0.875rem" />
       </button>
       {open && (
-        <div className="menu mode-menu" role="menu">
-          <div className="menu-title">Compare</div>
-          <button className={`entry ${kind === 'pr' ? 'active' : ''}`} onClick={() => choose({ kind: 'pr' })}>
-            <GitPullRequest size="0.875rem" />
-            <span className="label">PR</span>
-            <span className="desc">this branch on GitHub</span>
-            <kbd>1</kbd>
-          </button>
-          <div className="entry static">
-            <GitBranch size="0.875rem" />
-            <span className="label">Branch vs base</span>
-            <span className="control">
-              <select value={base} onChange={(e) => setBase(e.target.value)} aria-label="Base branch">
-                {refOptions.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+        <div className="menu mode-menu" id="mode-picker" role="dialog" aria-label="Compare">
+          <div className="mode-entries">
+            <div className="menu-title">Compare</div>
+            {entries.map((entry, i) => (
               <button
-                className="primary"
-                disabled={!base}
-                onClick={() => choose({ kind: 'revspec', args: [`${base}...HEAD`] })}
+                key={entry.label}
+                className={`entry ${(entry.pane ? pane === entry.pane : !pane && snapshot?.mode.kind === 'working') ? 'active' : ''}`}
+                aria-expanded={entry.pane ? pane === entry.pane : undefined}
+                aria-controls={entry.pane ? 'mode-config' : undefined}
+                onClick={() => pick(i + 1)}
               >
-                Go
+                <entry.icon size="0.875rem" />
+                <span className="label">{entry.label}</span>
+                <kbd>{i + 1}</kbd>
+                {entry.pane ? <ChevronRight size="0.875rem" /> : <span />}
               </button>
-            </span>
-            <kbd>2</kbd>
+            ))}
           </div>
-          <button className={`entry ${kind === 'working' ? 'active' : ''}`} onClick={() => choose({ kind: 'working' })}>
-            <PencilRuler size="0.875rem" />
-            <span className="label">Working</span>
-            <span className="desc">HEAD → worktree</span>
-            <kbd>3</kbd>
-          </button>
-          <form
-            className="entry static"
-            onSubmit={(e) => {
-              e.preventDefault();
-              choose(lastCommitsRequest(lastCommits));
-            }}
-          >
-            <History size="0.875rem" />
-            <span className="label">Last commits</span>
-            <span className="control">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={countText}
-                onChange={(e) => {
-                  setCountText(e.target.value);
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 1) setLastCommits(n);
-                }}
-                onBlur={() => setCountText(String(lastCommits))}
-                aria-label="Number of commits"
-                className="count"
-                title={`HEAD~${lastCommits}..HEAD`}
-              />
-              <button className="primary" type="submit">
-                Go
-              </button>
-            </span>
-            <kbd>4</kbd>
-          </form>
-          <div className="sep" />
-          <button
-            className={`entry ${twoRefs ? 'active' : ''}`}
-            onClick={() => setTwoRefs((t) => !t)}
-            aria-expanded={twoRefs}
-          >
-            <GitCommitHorizontal size="0.875rem" />
-            <span className="label">Two refs…</span>
-            <span className="desc">{twoRefs ? <ChevronUp size="0.875rem" /> : <ChevronDown size="0.875rem" />}</span>
-            <kbd>5</kbd>
-          </button>
-          {twoRefs && (
+          {pane && (
             <form
-              className="two-refs"
+              className="mode-config"
+              id="mode-config"
+              aria-label={entries.find((e) => e.pane === pane)?.label}
+              onKeyDown={(e) => {
+                if (pane !== 'refs' || e.key !== 'x' || e.ctrlKey || e.metaKey || e.altKey) return;
+                if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (!e.repeat) swapRefs();
+              }}
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!a || !b) return;
-                choose({ kind: 'revspec', args: [`${a}${dots}${b}`] });
+                if (pane === 'refs' && a.trim() && b.trim())
+                  choose({ kind: 'revspec', args: [`${a.trim()}${dots}${b.trim()}`] });
+                if (pane === 'commits' && validOffsets) {
+                  choose(lastCommitsRequest(oldOffset, newOffset));
+                }
+                if (pane === 'pr') void openPr();
               }}
             >
-              <RefSelect label="Old" value={a} onChange={setA} refs={refs} />
-              <select
-                className="dots"
-                value={dots}
-                onChange={(e) => setDots(e.target.value as '..' | '...')}
-                title="… compares from the merge base, .. compares directly"
+              {pane === 'pr' && <div className="menu-title">Pull request</div>}
+              {pane === 'refs' && (
+                <>
+                  <div className="ref-range">
+                    <RefInput
+                      label="Base ref"
+                      value={a}
+                      onChange={setA}
+                      refs={refs}
+                      autoFocus
+                      onAccept={() => targetRef.current?.focus()}
+                    />
+                    <span>{dots}</span>
+                    <RefInput
+                      label="Target ref"
+                      value={b}
+                      onChange={setB}
+                      refs={refs}
+                      allowWorktree
+                      inputRef={targetRef}
+                      onAccept={() => comparisonToggle.current?.focus()}
+                    />
+                  </div>
+                  <div className="ref-actions">
+                    <div
+                      className="toggle ref-comparison"
+                      ref={comparisonToggle}
+                      role="group"
+                      aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!e.repeat) e.currentTarget.closest('form')?.requestSubmit();
+                          return;
+                        }
+                        if (e.key !== ' ') return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={dots === '..' ? 'on' : ''}
+                        tabIndex={-1}
+                        aria-pressed={dots === '..'}
+                        onClick={() => setDots('..')}
+                      >
+                        Direct
+                      </button>
+                      <button
+                        type="button"
+                        className={dots === '...' ? 'on' : ''}
+                        tabIndex={-1}
+                        aria-pressed={dots === '...'}
+                        onClick={() => setDots('...')}
+                      >
+                        Merge base
+                      </button>
+                    </div>
+                    <button
+                      id="swap-refs"
+                      className="swap-refs"
+                      type="button"
+                      tabIndex={-1}
+                      aria-label="Swap refs"
+                      aria-keyshortcuts="x"
+                      title="Swap refs (x)"
+                      onClick={swapRefs}
+                    >
+                      <ArrowLeftRight size="0.75rem" />
+                    </button>
+                  </div>
+                  <p className="mode-hint">
+                    {dots === '..' ? 'Compare these two revisions.' : 'Compare changes since their common ancestor.'}
+                  </p>
+                </>
+              )}
+              {pane === 'commits' && (
+                <div className="commit-config">
+                  <div className="commit-range">
+                    <span>HEAD~</span>
+                    <CommitOffsetInput
+                      label="Base offset"
+                      value={oldOffsetText}
+                      onChange={setOldOffsetText}
+                      autoFocus
+                    />
+                    <span>..HEAD~</span>
+                    <CommitOffsetInput label="Target offset" value={newOffsetText} onChange={setNewOffsetText} />
+                  </div>
+                  <CommitPreview oldOffset={oldOffset} newOffset={newOffset} version={snapshot?.version ?? 0} />
+                </div>
+              )}
+              {pane === 'pr' && (
+                <>
+                  <label className="ref-select">
+                    <span className="lbl">PR number or URL</span>
+                    <input
+                      ref={prInput}
+                      autoFocus
+                      autoComplete="off"
+                      spellCheck={false}
+                      readOnly={prPending}
+                      aria-describedby={prError ? 'pr-hint pr-error' : 'pr-hint'}
+                      aria-invalid={prError ? true : undefined}
+                      value={pr}
+                      onChange={(e) => {
+                        setPr(e.target.value);
+                        setPrError(null);
+                      }}
+                      placeholder="Current branch’s PR"
+                    />
+                  </label>
+                  <p className="mode-hint" id="pr-hint">
+                    Enter a PR number or URL, or leave blank for this branch.
+                  </p>
+                  {prError && (
+                    <p className="mode-error" id="pr-error" role="alert">
+                      {prError}
+                    </p>
+                  )}
+                </>
+              )}
+              <button
+                className="primary"
+                type="submit"
+                aria-live={pane === 'pr' ? 'polite' : undefined}
+                aria-busy={pane === 'pr' && prPending}
+                disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validOffsets}
               >
-                <option value="...">... merge-base</option>
-                <option value="..">.. direct</option>
-              </select>
-              <RefSelect label="New" value={b} onChange={setB} refs={refs} allowWorktree />
-              <button className="primary" type="submit" disabled={!a || !b}>
-                Compare
+                {pane === 'pr' ? (prPending ? 'Opening PR…' : 'Open PR') : 'Compare'}
               </button>
             </form>
           )}
         </div>
       )}
     </div>
-  );
-}
-
-const OTHER = '\u0000other';
-
-/** Grouped ref dropdown: branches, remotes, tags, recent commits, or free text. */
-function RefSelect({
-  label,
-  value,
-  onChange,
-  refs,
-  allowWorktree,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  refs: RefsResponse | null;
-  allowWorktree?: boolean;
-}) {
-  const known = new Set<string>([
-    'HEAD',
-    ...(allowWorktree ? ['worktree'] : []),
-    ...(refs?.branches ?? []),
-    ...(refs?.remoteBranches ?? []),
-    ...(refs?.tags ?? []),
-    ...(refs?.recent.map((c) => c.short) ?? []),
-  ]);
-  const [custom, setCustom] = useState(!known.has(value) && value !== '');
-  const selectValue = custom ? OTHER : value;
-  return (
-    <label className="ref-select">
-      <span className="lbl">{label}</span>
-      <select
-        value={selectValue}
-        onChange={(e) => {
-          if (e.target.value === OTHER) {
-            setCustom(true);
-            onChange('');
-          } else {
-            setCustom(false);
-            onChange(e.target.value);
-          }
-        }}
-      >
-        <option value="" disabled>
-          choose…
-        </option>
-        <optgroup label="Special">
-          <option value="HEAD">HEAD</option>
-          {allowWorktree && <option value="worktree">worktree (uncommitted)</option>}
-        </optgroup>
-        {refs && refs.branches.length > 0 && (
-          <optgroup label="Branches">
-            {refs.branches.map((r) => (
-              <option key={r} value={r}>
-                {r}
-                {r === refs.current ? ' (current)' : ''}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {refs && refs.remoteBranches.length > 0 && (
-          <optgroup label="Remote branches">
-            {refs.remoteBranches.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {refs && refs.tags.length > 0 && (
-          <optgroup label="Tags">
-            {refs.tags.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {refs && refs.recent.length > 0 && (
-          <optgroup label="Recent commits">
-            {refs.recent.map((c) => (
-              <option key={c.sha} value={c.short}>
-                {c.short} {c.subject.length > 60 ? c.subject.slice(0, 60) + '…' : c.subject}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        <option value={OTHER}>Other…</option>
-      </select>
-      {custom && (
-        <input
-          autoFocus
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="any revision, e.g. HEAD~3 or a sha"
-        />
-      )}
-    </label>
   );
 }
