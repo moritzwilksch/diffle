@@ -306,7 +306,7 @@ export function ModePicker() {
                 aria-busy={pane === 'pr' && prPending}
                 disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validOffsets}
               >
-                {pane === 'pr' ? (prPending ? 'Opening PR…' : 'Open PR') : 'Compare'}
+                {pane === 'pr' ? (prPending ? 'Loading PR…' : 'Show PR') : 'Compare'}
               </Button>
             </form>
           )}

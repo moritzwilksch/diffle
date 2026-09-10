@@ -60,10 +60,11 @@ async function type(value: string) {
 
 it('focuses the PR field and prevents duplicate submissions while opening the current branch PR', async () => {
   expect(document.activeElement).toBe(host.querySelector('input'));
+  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Show PR');
   await submit();
   await submit();
   expect(switchMode).toHaveBeenCalledExactlyOnceWith({ kind: 'pr' });
-  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Opening PR…');
+  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Loading PR…');
   expect(host.querySelector('button[type="submit"]')).toHaveProperty('disabled', true);
   expect(useStore.getState().modeMenuOpen).toBe(true);
   await act(() => finish('applied'));
