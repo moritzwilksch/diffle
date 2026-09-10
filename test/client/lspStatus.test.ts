@@ -27,18 +27,18 @@ describe('LSP status indicator', () => {
     const html = render({ activity: ['Loading workspace: dependencies'] });
     expect(html).toContain('Loading workspace: dependencies');
     expect(html).toContain('>busy</summary>');
-    expect(render({})).toContain('connected');
+    expect(render({})).toContain('Connected');
     expect(html).toContain('<details');
     expect(html).toContain('aria-label="Language server status"');
   });
 
   it('spins during initialization and standard reported work', () => {
-    expect(render({ state: 'starting' })).toContain('lucide-loader-circle spin');
-    expect(render({ activity: ['Loading workspace'] })).toContain('lucide-loader-circle spin');
-    expect(render({})).not.toContain('lucide-loader-circle spin');
+    expect(render({ state: 'starting' })).toContain('animate-spin');
+    expect(render({ activity: ['Loading workspace'] })).toContain('animate-spin');
+    expect(render({})).not.toContain('animate-spin');
     expect(render({})).toContain('lucide-check');
     expect(render({})).toContain('>Connected</span>');
-    expect(render({})).toContain('<details class="lsp-diagnostics">');
+    expect(render({})).toContain('>Details</summary>');
   });
 
   it('uses compact missing-server labels with install candidates in the tooltip', () => {

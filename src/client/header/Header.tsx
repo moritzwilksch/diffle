@@ -108,7 +108,6 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
   const error = lsp.servers.some((s) => s.notice?.severity === 'error');
   const warning = lsp.servers.some((s) => s.notice?.severity === 'warning');
   const logs = lsp.servers.some((s) => s.stderr);
-  const state = !lsp.servers.length ? 'off' : broken ? 'unavailable' : busy ? 'starting' : 'ready';
   const label =
     (broken && 'unavailable') ||
     (error && 'error') ||
@@ -118,22 +117,34 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
     (logs && 'logs') ||
     '';
   return (
-    <details className={`lsp-details ${error || broken ? 'has-error' : ''}`}>
-      <summary className={`lsp ${state}`} aria-label={`Language servers${label ? `: ${label}` : ''}`}>
-        {busy ? <LoaderCircle size="0.875rem" className="spin" /> : <Compass size="0.875rem" />}
+    <details className="relative">
+      <summary
+        className={twMerge(
+          `inline-flex cursor-pointer list-none items-center gap-1.25 text-xs whitespace-nowrap text-muted [&::-webkit-details-marker]:hidden ${error || broken ? 'text-warn' : ''}`,
+        )}
+        aria-label={`Language servers${label ? `: ${label}` : ''}`}
+      >
+        {busy ? <LoaderCircle size="0.875rem" className="animate-spin" /> : <Compass size="0.875rem" />}
         {label}
       </summary>
-      <section className="lsp-panel" aria-label="Language server status">
+      <section
+        className="absolute top-[calc(100%+0.75rem)] right-0 z-100 max-h-[65vh] w-[min(28rem,85vw)] overflow-auto rounded-lg border border-border bg-surface p-4 text-[0.8125rem] text-foreground shadow-lg"
+        aria-label="Language server status"
+      >
         <strong>Language servers</strong>
         {lsp.servers.map((s) => (
           <ServerStatus key={s.command} server={s} />
         ))}
-        {!lsp.servers.length && !lsp.missing.length && <p className="lsp-muted">No servers</p>}
+        {!lsp.servers.length && !lsp.missing.length && <p className="text-muted">No servers</p>}
         {lsp.missing.map((m) => (
-          <div className="lsp-server lsp-missing" key={m.language} title={m.tried.join(', ')}>
-            <CircleOff size="0.875rem" />
-            <span className="lsp-name">{m.language}</span>
-            <span className="lsp-badge">{m.tried.length ? 'Not on PATH' : 'Disabled'}</span>
+          <div
+            className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-muted"
+            key={m.language}
+            title={m.tried.join(', ')}
+          >
+            <CircleOff size="0.875rem" className="shrink-0" />
+            <span className="min-w-0 flex-1 font-medium wrap-anywhere text-foreground">{m.language}</span>
+            <span className="shrink-0 text-[0.6875rem]">{m.tried.length ? 'Not on PATH' : 'Disabled'}</span>
           </div>
         ))}
       </section>
@@ -147,37 +158,37 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
   const label =
     s.state === 'unavailable' ? 'Unavailable' : s.state === 'starting' ? 'Starting' : busy ? 'Working' : 'Connected';
   return (
-    <div className="lsp-server">
-      <div className={`lsp-server-row ${problem ? 'lsp-problem' : busy ? 'lsp-working' : 'lsp-connected'}`}>
+    <div className="mt-3 border-t border-border pt-3">
+      <div className="flex items-center gap-2">
         {busy ? (
-          <LoaderCircle size="0.875rem" className="spin" />
+          <LoaderCircle size="0.875rem" className="shrink-0 animate-spin text-accent" />
         ) : problem ? (
-          <CircleAlert size="0.875rem" />
+          <CircleAlert size="0.875rem" className="shrink-0 text-warn" />
         ) : (
-          <Check size="0.875rem" />
+          <Check size="0.875rem" className="shrink-0 text-add" />
         )}
-        <strong className="lsp-name">{s.name}</strong>
+        <strong className="min-w-0 flex-1 font-medium wrap-anywhere">{s.name}</strong>
         <span
-          className="lsp-badge"
+          className="shrink-0 text-[0.6875rem] text-muted"
           title={label === 'Connected' ? 'Initialized; workspace readiness is not reported by LSP' : undefined}
         >
           {label}
         </span>
       </div>
-      <div className="lsp-languages">{s.languages.join(', ')}</div>
+      <div className="mt-1 mb-1.5 ml-5.5 text-[0.6875rem] text-muted">{s.languages.join(', ')}</div>
       {s.activity?.map((activity, i) => (
-        <p className="lsp-activity" key={i}>
+        <p className="my-1.5 ml-5.5 wrap-anywhere" key={i}>
           {activity}
         </p>
       ))}
-      {s.message && <p className="lsp-problem lsp-message">{s.message}</p>}
-      {s.notice && <p className="lsp-problem lsp-message">{s.notice.message}</p>}
-      <details className="lsp-diagnostics">
-        <summary>Details</summary>
+      {s.message && <p className="my-1.5 ml-5.5 wrap-anywhere text-warn">{s.message}</p>}
+      {s.notice && <p className="my-1.5 ml-5.5 wrap-anywhere text-warn">{s.notice.message}</p>}
+      <details className="ml-5.5 text-[0.6875rem] text-muted [&_pre]:my-2 [&_pre]:font-mono [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap">
+        <summary className="cursor-pointer">Details</summary>
         <pre>{s.command}</pre>
         {s.stderr && (
           <>
-            <span className="lsp-muted">stderr</span>
+            <span>stderr</span>
             <pre>{s.stderr}</pre>
           </>
         )}
