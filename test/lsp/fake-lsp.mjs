@@ -46,16 +46,13 @@ function handle(msg) {
   switch (msg.method) {
     case 'initialize':
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);
+      if (!msg.params.capabilities.window?.workDoneProgress) process.exit(4);
       return reply(msg.id, { capabilities: {} });
+    case 'test/notification':
+      return send({ jsonrpc: '2.0', method: msg.params.method, params: msg.params.params });
     // Document lifecycle goes to stderr so tests can observe what the bridge opened.
     case 'textDocument/didOpen':
       docs.set(msg.params.textDocument.uri, msg.params.textDocument.text);
-      // FAKE_LSP_INDEX mimics pyrefly's indexing log lines, split across writes like a real stderr stream.
-      if (process.env.FAKE_LSP_INDEX === '1' && docs.size === 1) {
-        log(' INFO Populating up to 2000 files in the workspace ("/repo").');
-        setTimeout(() => process.stderr.write(' INFO Populated all files in the '), 20);
-        setTimeout(() => log('workspace, prepare to recheck open files.'), 40);
-      }
       return log(`open ${base(msg.params.textDocument.uri)} v${msg.params.textDocument.version}`);
     case 'textDocument/didChange':
       docs.set(msg.params.textDocument.uri, msg.params.contentChanges[0].text);
@@ -64,6 +61,14 @@ function handle(msg) {
       docs.delete(msg.params.textDocument.uri);
       return log(`close ${base(msg.params.textDocument.uri)}`);
     case 'textDocument/definition': {
+      if (process.env.FAKE_LSP_LOADING_DURING_QUERY === '1') {
+        send({
+          jsonrpc: '2.0',
+          method: '$/progress',
+          params: { token: 'reload', value: { kind: 'begin', title: 'Reloading workspace' } },
+        });
+        return reply(msg.id, null);
+      }
       // FAKE_LSP_REAL_ROOT mimics a server that canonicalizes symlinked roots.
       const uri = process.env.FAKE_LSP_REAL_ROOT
         ? msg.params.textDocument.uri.replace(

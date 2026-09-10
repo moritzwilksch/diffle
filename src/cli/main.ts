@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { Command, CommanderError, Option } from 'commander';
+import { Argument, Command, CommanderError, Option } from 'commander';
+import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
@@ -27,6 +28,7 @@ import {
   parsePort,
 } from './args.js';
 import { watchBrowserLifetime } from './browserLifetime.js';
+import { addCompletionCommand } from './completion.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
 import { Timing } from './timing.js';
@@ -63,7 +65,11 @@ const program = new Command()
   .name('diffle')
   .description('Review a git diff in the browser and export line comments as an agent prompt.')
   .version(pkg.version, '-v, --version', 'print the version and exit')
-  .option('-C <path>', 'run as if started in <path> (any directory inside a git worktree)')
+  .addOption(
+    completionHint(new Option('-C <path>', 'run as if started in <path> (any directory inside a git worktree)'), {
+      kind: 'directory',
+    }),
+  )
   .option(
     '-p, --port <port>',
     `port to listen on (default: ${DEFAULT_PORT}, or the next free one; 0 = random)`,
@@ -93,7 +99,15 @@ const program = new Command()
   .option('--no-lsp', 'do not start any language server')
   .option('--timing', 'print startup phase timings to stderr')
   .option('--dev', 'serve the client through Vite (development)', process.env.DIFFLE_DEV === '1' ? true : undefined)
-  .argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>')
+  .addArgument(
+    // The shorthands are hidden commands, so completion would never offer them; naming them
+    // here keeps the two most common invocations one Tab away. Revisions come from git, which
+    // a static completion script cannot ask.
+    completionHint(new Argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>'), {
+      kind: 'choices',
+      values: ['working', 'pr'],
+    }),
+  )
   .addHelpText(
     'after',
     `
@@ -164,7 +178,7 @@ config
 config
   .command('set-lsp')
   .description('set the language-server command for one language')
-  .argument('<language>', `one of: ${LANGUAGE_IDS.join(', ')}`, parseLanguage)
+  .addArgument(languageArgument('<language>', `one of: ${LANGUAGE_IDS.join(', ')}`).argParser(parseLanguage))
   .argument('<command>', 'shell command that starts a stdio language server, e.g. "pyrefly lsp"; "" to turn it off')
   .action(async (language: LanguageId, command: string) => {
     const store = await UserConfigStore.open();
@@ -174,7 +188,9 @@ config
 config
   .command('unset-lsp')
   .description('forget a language-server override, back to PATH')
-  .argument('<language...>', `one or more of: ${LANGUAGE_IDS.join(', ')}`, collectLanguage)
+  .addArgument(
+    languageArgument('<language...>', `one or more of: ${LANGUAGE_IDS.join(', ')}`).argParser(collectLanguage),
+  )
   .action(async (languages: LanguageId[]) => {
     const store = await UserConfigStore.open();
     const drop = new Set(languages);
@@ -213,8 +229,15 @@ program
     for (const language of LANGUAGE_IDS) console.log(`${language.padEnd(width)}  ${answer.get(language) ?? ''}`);
   });
 
+addCompletionCommand(program);
+
 function collect(value: string, prev: string[]): string[] {
   return [...prev, value];
+}
+
+/** A `<language>` argument, completing to the languages diffle knows. */
+function languageArgument(name: string, description: string): Argument {
+  return completionHint(new Argument(name, description), { kind: 'choices', values: LANGUAGE_IDS });
 }
 
 function printLspCommands(config: UserConfig): void {
@@ -371,8 +394,8 @@ function startLsp(
       : [];
     void lsp.track(paths);
   });
-  // The status carries every server, so a failure is announced once per server, not per change.
-  const reported = new Set<string>();
+  // Progress repeats the full status; print each changed warning or error once.
+  const reported = new Map<string, string>();
   const lsp = new LspPool({
     root: repo.root,
     overrides,
@@ -384,9 +407,14 @@ function startLsp(
     has: async (path) => session.hasSide(await session.snapshotter.current(), path, 'new'),
     onStatus: (status) => {
       for (const s of status.servers) {
-        if (s.state !== 'unavailable' || reported.has(s.command)) continue;
-        reported.add(s.command);
-        console.error(`${c.red('✖')} lsp ${s.name} unavailable: ${s.message}`);
+        const message = s.state === 'unavailable' ? (s.message ?? 'unavailable') : s.notice?.message;
+        if (!message) {
+          reported.delete(s.command);
+          continue;
+        }
+        if (reported.get(s.command) === message) continue;
+        reported.set(s.command, message);
+        console.error(`${c.red('✖')} lsp ${s.name}: ${message}`);
       }
       hub.broadcast({ type: 'lsp', payload: status });
     },

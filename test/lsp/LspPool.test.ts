@@ -95,7 +95,7 @@ describe('LspPool', () => {
     await settle();
     const status = pool.status();
     expect(status.enabled).toBe(true);
-    expect(status.servers).toEqual([
+    expect(status.servers).toMatchObject([
       { name: 'py-server', command: 'py-server', state: 'ready', languages: ['python'] },
     ]);
     expect(status.missing).toEqual([
@@ -113,7 +113,7 @@ describe('LspPool', () => {
     await settle();
     expect([...events.keys()]).toEqual(['clangd-ish']);
     expect(events.get('clangd-ish')?.sort()).toEqual(['open x.c v1', 'open y.cpp v1']);
-    expect(pool.status().servers).toEqual([
+    expect(pool.status().servers).toMatchObject([
       { name: 'clangd-ish', command: 'clangd-ish', state: 'ready', languages: ['c', 'cpp'] },
     ]);
   });

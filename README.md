@@ -55,6 +55,18 @@ Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktre
 
 Generated files and files matching auto-viewed globs start collapsed. There are no globs by default; configure them in settings or with `diffle config`.
 
+## Shell completions
+
+`diffle completion --shell <bash|zsh|fish>` prints a standalone completion script. Install it once for the current user and start a new shell:
+
+```bash
+diffle completion --shell bash > ~/.local/share/bash-completion/completions/diffle
+diffle completion --shell zsh > ~/.local/share/zsh/site-functions/_diffle   # a directory on fpath, before compinit
+diffle completion --shell fish > ~/.config/fish/completions/diffle.fish
+```
+
+Completion runs in the shell alone and never starts diffle, so it stays fast — and stays as it was: run the command again after upgrading to pick up new commands and flags. Commands, shorthands, flags, and their fixed values complete; revisions do not, because a static script cannot ask git for them.
+
 ## Shortcuts
 
 - `j` / `k`: next or previous line (`10j` / `10k`: ten lines down or up)
@@ -86,6 +98,8 @@ Exported comments carry a hidden thread ID. Adding the same thread again at the 
 If the pending review cannot be read completely, export stops before changing it. Reviews with more than 1,000 threads exceed the lookup limit.
 
 ## Language servers
+
+Language-server indexing can take a while, especially in large repositories.
 
 Definitions, references, hover details, and symbol search come from a language server. diffle looks for one on `PATH` for every language in the diff and starts it for the run:
 
