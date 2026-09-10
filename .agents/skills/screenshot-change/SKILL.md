@@ -15,7 +15,15 @@ Read back only the crops. A 500×200 crop costs a fraction of a 1440×900 frame,
 2. **Build the client once.** `npm run build:client` (or `buildClient()`). The server serves `dist/client`; server code rarely affects a screenshot.
 3. **Capture the after state** with a short scenario script that imports the harness (see [below](#harness)). Seed the state the server can hold (threads, viewed, resolved) over HTTP; drive only state that has no endpoint (menus, selections, the composer). Completion: every change has a crop named for it.
 4. **Capture the before state** by swapping the client build, not by rebuilding a second worktree from scratch. Add a worktree at the base commit, share this checkout's dependencies (`ln -s "$PWD/node_modules" <worktree>/node_modules`), build it there (`npm run build:client`), then `installClient('<worktree>/dist/client')` and re-run the scenario. Restore with `buildClient()`. Completion: each after crop has a before crop from the same selector.
-5. **Publish and attach.** The GitHub API cannot attach images to a PR body, and gists reject binaries. `publish.mjs` creates a `screenshots/<pr>` branch, commits the images (updating in place on re-runs), and prints their raw URLs. Embed each pair in a `| Before | After |` table with `alt` text and an explicit `width`, and tell the reader the branch exists so it is not mistaken for stray work. Completion: the PR body renders every pair.
+5. **Attach the crops.** Put local image paths in the PR body, for example in a `| Before | After |` table with alt text. Pass the body and every referenced image to `gh pr edit` (or `gh pr create`):
+
+   ```sh
+   gh pr edit PR-NUMBER --body-file pr-body.md \
+     --attach /tmp/shots/sidebar-before.png \
+     --attach /tmp/shots/sidebar-after.png
+   ```
+
+   GitHub CLI uploads the files and rewrites their local references to GitHub URLs. It can also append unreferenced attachments. See [Attaching files with GitHub CLI](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli). Completion: the PR body renders every pair.
 6. **Verify** by reading one crop per change. Completion: the pixels show the stated difference; re-capture rather than describe a mismatch.
 
 ## Efficiency rules
@@ -29,14 +37,6 @@ Read back only the crops. A 500×200 crop costs a fraction of a 1440×900 frame,
 ## Scripts
 
 - `scripts/harness.mjs` — browser, diffle server, seeding, diffle-specific interactions.
-- `scripts/publish.mjs` — create/update a screenshot branch and print raw URLs:
-
-  ```sh
-  node .agents/skills/screenshot-change/scripts/publish.mjs \
-    --dir /tmp/shots --repo owner/name --branch screenshots/123
-  ```
-
-  Optional: `--prefix <path>` (default `.github/assets/<branch name>`) and `--base <branch>` for a new branch (default `main`).
 
 ## Harness
 
@@ -90,7 +90,7 @@ The viewer renders into a shadow root, so `page.evaluate`'s `querySelector` miss
 
 ## Setup
 
-Install Playwright once and let the harness find it (`publish.mjs` needs `gh` authenticated with `repo` scope):
+Install Playwright once and let the harness find it. `gh pr create` and `gh pr edit --attach` require push access to the repository:
 
 ```sh
 npm install --global playwright && playwright install chromium --only-shell
