@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread } from '../../src/shared/protocol.js';
+import type { CommentThread, Snapshot } from '../../src/shared/protocol.js';
 
 vi.mock('../../src/client/api.js', () => ({ api: {} }));
 
@@ -88,5 +88,18 @@ describe('CommentPanel rows', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows the GitHub button only when the new side is the checked-out commit', async () => {
+    const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
+    const snapshot = (newSha: Snapshot['newSha']): Snapshot =>
+      ({ newSha, headSha: 'a'.repeat(40) }) as unknown as Snapshot;
+
+    useStore.setState({ snapshot: snapshot('worktree') });
+    await act(() => root.render(createElement(CommentPanel)));
+    expect(post()).toBeNull();
+
+    await act(() => useStore.setState({ snapshot: snapshot('a'.repeat(40)) }));
+    expect(post()).not.toBeNull();
   });
 });

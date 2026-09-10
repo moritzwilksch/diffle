@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread } from '../../src/shared/protocol.js';
+import type { CommentThread, Snapshot } from '../../src/shared/protocol.js';
 
 const api = { exportComment: vi.fn() };
 const copyText = vi.fn();
@@ -38,6 +38,24 @@ beforeEach(() => {
 afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
+});
+
+describe('CommentCard GitHub button', () => {
+  const snapshot = (newSha: Snapshot['newSha']): Snapshot =>
+    ({ newSha, headSha: 'a'.repeat(40) }) as unknown as Snapshot;
+  const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
+
+  it('is hidden while the new side is not the checked-out commit', async () => {
+    useStore.setState({ snapshot: snapshot('worktree') });
+    await act(() => root.render(createElement(CommentCard, { thread })));
+    expect(post()).toBeNull();
+  });
+
+  it('is shown when the new side is the checked-out commit', async () => {
+    useStore.setState({ snapshot: snapshot('a'.repeat(40)) });
+    await act(() => root.render(createElement(CommentCard, { thread })));
+    expect(post()).not.toBeNull();
+  });
 });
 
 describe('CommentCard copy buttons', () => {

@@ -18,7 +18,7 @@ import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
-import { exportLabel, type ExportOutcome } from '../model.js';
+import { canExportToGithub, exportLabel, type ExportOutcome } from '../model.js';
 import { useStore } from '../store.js';
 import { useConfirm } from '../useConfirm.js';
 
@@ -33,6 +33,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const setEditingId = useStore((s) => s.setEditingId);
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
+  const canExport = useStore((s) => canExportToGithub(s.snapshot));
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
   const del = useConfirm(() => void deleteThread(thread.id));
@@ -90,23 +91,25 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             {editingSolo ? <X size="0.875rem" /> : <Pencil size="0.875rem" />}
           </Button>
         )}
-        <Button
-          variant="ghost"
-          icon={!post.armed && !posted}
-          feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
-          disabled={posting || thread.stale}
-          onClick={post.fire}
-          title={
-            thread.stale
-              ? 'Stale threads cannot be added to a GitHub review'
-              : post.armed
-                ? 'Click again to add this thread to the pending review'
-                : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
-          }
-        >
-          {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Add?' : posted ? exportLabel(posted) : null}
-        </Button>
+        {canExport && (
+          <Button
+            variant="ghost"
+            icon={!post.armed && !posted}
+            feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
+            disabled={posting || thread.stale}
+            onClick={post.fire}
+            title={
+              thread.stale
+                ? 'Stale threads cannot be added to a GitHub review'
+                : post.armed
+                  ? 'Click again to add this thread to the pending review'
+                  : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
+            }
+          >
+            {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
+            {post.armed ? 'Add?' : posted ? exportLabel(posted) : null}
+          </Button>
+        )}
         <Button
           variant="ghost"
           icon

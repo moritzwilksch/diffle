@@ -2,6 +2,7 @@ import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
 import type { ChangedFile, CommentThread, Snapshot } from '../../src/shared/protocol.js';
 import {
+  canExportToGithub,
   compareTreeOrder,
   countViewed,
   currentPath,
@@ -191,6 +192,23 @@ describe('countViewed', () => {
     expect(countViewed({ viewed: [], config }, changed)).toBe(1);
     expect(countViewed({ viewed: [{ path: 'yarn.lock', blob: 'b', viewed: false }], config }, changed)).toBe(0);
     expect(countViewed({ viewed, config }, [])).toBe(0);
+  });
+});
+
+describe('canExportToGithub', () => {
+  const snap = (newSha: Snapshot['newSha'], headSha: string): Snapshot => ({ newSha, headSha }) as unknown as Snapshot;
+
+  it('allows a commit that is the checked-out HEAD', () => {
+    expect(canExportToGithub(snap('a'.repeat(40), 'a'.repeat(40)))).toBe(true);
+  });
+
+  it('refuses the worktree and a new side that is not HEAD', () => {
+    expect(canExportToGithub(snap('worktree', 'a'.repeat(40)))).toBe(false);
+    expect(canExportToGithub(snap('b'.repeat(40), 'a'.repeat(40)))).toBe(false);
+  });
+
+  it('refuses before the first snapshot', () => {
+    expect(canExportToGithub(null)).toBe(false);
   });
 });
 
