@@ -2,6 +2,7 @@ import { ToggleButton } from '../ui/ToggleButton.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
 import {
+  X,
   Check,
   CircleAlert,
   CircleOff,
@@ -18,7 +19,7 @@ import {
   Settings,
   Sun,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
 import { repoName } from '../model.js';
 import { useStore } from '../store.js';
@@ -102,6 +103,30 @@ export function Header() {
  * indexes. Expand it for workspace health, commands, and logs.
  */
 function LspIndicator({ lsp }: { lsp: LspStatus }) {
+  const popup = useRef<HTMLDetailsElement>(null);
+  const close = () => {
+    if (!popup.current) return;
+    popup.current.open = false;
+    popup.current.querySelector('summary')?.focus();
+  };
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      const el = popup.current;
+      if (el?.open && !el.contains(event.target as Node)) el.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !popup.current?.open) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape, true);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape, true);
+    };
+  }, []);
   const starting = lsp.servers.some((s) => s.state === 'starting');
   const busy = starting || lsp.servers.some((s) => s.activity?.length);
   const broken = lsp.servers.some((s) => s.state === 'unavailable');
@@ -117,7 +142,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
     (logs && 'logs') ||
     '';
   return (
-    <details className="relative">
+    <details ref={popup} className="relative">
       <summary
         className={twMerge(
           `inline-flex cursor-pointer list-none items-center gap-1.25 text-xs whitespace-nowrap text-muted [&::-webkit-details-marker]:hidden ${error || broken ? 'text-warn' : ''}`,
@@ -131,7 +156,17 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
         className="absolute top-[calc(100%+0.75rem)] right-0 z-100 max-h-[65vh] w-[min(28rem,85vw)] overflow-auto rounded-lg border border-border bg-surface p-4 text-[0.8125rem] text-foreground shadow-lg"
         aria-label="Language server status"
       >
-        <strong>Language servers</strong>
+        <div className="flex items-center justify-between gap-2">
+          <strong>Language servers</strong>
+          <button
+            type="button"
+            aria-label="Close language server status"
+            className="cursor-pointer rounded-sm p-1 text-muted hover:bg-hover hover:text-foreground"
+            onClick={close}
+          >
+            <X size="0.875rem" />
+          </button>
+        </div>
         {lsp.servers.map((s) => (
           <ServerStatus key={s.command} server={s} />
         ))}

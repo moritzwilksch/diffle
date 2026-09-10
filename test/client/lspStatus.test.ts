@@ -1,4 +1,6 @@
-import { createElement } from 'react';
+// @vitest-environment jsdom
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
@@ -23,6 +25,38 @@ function render(status: Partial<LspServerStatus>) {
 }
 
 describe('LSP status indicator', () => {
+  it('dismisses on outside click, Escape, and the close button', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(Header)));
+      const popup = container.querySelector('details')!;
+      const summary = popup.querySelector('summary')!;
+      popup.open = true;
+      popup.querySelector('section')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(popup.open).toBe(true);
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(popup.open).toBe(false);
+
+      popup.open = true;
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      document.dispatchEvent(escape);
+      expect(popup.open).toBe(false);
+      expect(escape.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(summary);
+
+      popup.open = true;
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[aria-label="Close language server status"]')!.click(),
+      );
+      expect(popup.open).toBe(false);
+      expect(document.activeElement).toBe(summary);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
   it('shows reported work instead of claiming workspace readiness', () => {
     const html = render({ activity: ['Loading workspace: dependencies'] });
     expect(html).toContain('Loading workspace: dependencies');
