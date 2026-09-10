@@ -833,13 +833,19 @@ function FileHeaderMeta({ path }: { path: string }) {
   const toggleCollapsed = useStore((s) => s.toggleCollapsed);
   const full = useStore((s) => s.fileView?.path === path);
   useEffect(() => {
-    if (full) return;
     const metadata = ref.current;
     const host = metadata && hostOf(metadata);
     const header =
       host?.shadowRoot?.querySelector<HTMLElement>('[data-diffs-header]') ??
       metadata?.closest<HTMLElement>('[data-diffs-header]');
     if (!header) return;
+    // Full-file view has no collapse action, so drop the pointer cue that would promise one.
+    if (full) {
+      header.style.cursor = 'default';
+      return () => {
+        header.style.cursor = '';
+      };
+    }
     const toggle = (event: MouseEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest('button, input, label, a, [role="button"]')) return;
