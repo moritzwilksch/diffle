@@ -52,7 +52,18 @@ function holdAt(n: number) {
     release = r;
   });
 }
-const flush = () => act(() => new Promise((r) => setTimeout(r, 40)));
+/**
+ * Drains the hook's queue: runs timers until tokenizing has been quiet for
+ * three turns. A fixed budget would race a loaded machine, where highlighting
+ * every file takes longer than any one wait.
+ */
+const flush = async () => {
+  for (let quiet = 0, turns = 0; quiet < 3 && turns < 200; turns++) {
+    const before = tokenized.length;
+    await act(() => new Promise((r) => setTimeout(r, 5)));
+    quiet = tokenized.length === before ? quiet + 1 : 0;
+  }
+};
 const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
 const firstLines = () => tokenized.filter((l) => l.endsWith(':0')).map((l) => l.split(':')[0]);
 

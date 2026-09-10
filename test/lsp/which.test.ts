@@ -47,11 +47,15 @@ describe('findOnPath', () => {
     expect(findOnPath('gopls', env)).toBe(join(bin, 'gopls'));
     expect(findOnPath('gopls --extra', env)).toBe(join(bin, 'gopls'));
     expect(findOnPath('missing-server', env)).toBeNull();
-    // A non-executable file and a directory are not programs, even under the right name.
-    expect(findOnPath('notexec', env)).toBeNull();
+    // A directory is not a program, even under the right name.
     expect(findOnPath('adirectory', env)).toBeNull();
     expect(findOnPath('', env)).toBeNull();
     expect(findOnPath('gopls', {})).toBeNull();
+  });
+
+  // Windows has no execute bit, so `runnable` accepts any regular file there by design.
+  it.skipIf(process.platform === 'win32')('skips a file that is not executable', () => {
+    expect(findOnPath('notexec', env)).toBeNull();
   });
 
   it('resolves a name with a separator against cwd instead of searching PATH', () => {

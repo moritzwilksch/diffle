@@ -1,9 +1,10 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { rmTmp } from '../tmp.js';
 
 /** True while the pid names a live process; EPERM means it exists but is someone else's. */
 function isAlive(pid: number): boolean {
@@ -56,36 +57,42 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((res) => blocker.close(() => res()));
-  await rm(dir, { recursive: true, force: true });
+  await rmTmp(dir);
 });
 
 describe('failed startup', () => {
-  it('leaves no LSP child behind when the requested port is taken', async () => {
-    // A server that survives its stdin closing: only a signal ends it.
-    const pidFile = join(dir, 'lsp.pid');
-    const lsp = `echo $$ > "${pidFile}"; exec "${process.execPath}" -e "setInterval(() => {}, 1e6)"`;
-    // A named `--lsp` language starts before the first snapshot, so it exists to leak here.
-    const run = await cli([
-      'working',
-      '--no-open',
-      '--no-watch',
-      '-C',
-      dir,
-      '-p',
-      String(port),
-      '--lsp',
-      `python=${lsp}`,
-    ]);
-    expect(run.code).toBe(1);
-    expect(run.stderr).toContain('EADDRINUSE');
+  // The probe is a POSIX shell one-liner (`$$`, process groups); the Windows teardown
+  // path in LspBridge kills the tree with taskkill instead and is not exercised here.
+  it.skipIf(process.platform === 'win32')(
+    'leaves no LSP child behind when the requested port is taken',
+    async () => {
+      // A server that survives its stdin closing: only a signal ends it.
+      const pidFile = join(dir, 'lsp.pid');
+      const lsp = `echo $$ > "${pidFile}"; exec "${process.execPath}" -e "setInterval(() => {}, 1e6)"`;
+      // A named `--lsp` language starts before the first snapshot, so it exists to leak here.
+      const run = await cli([
+        'working',
+        '--no-open',
+        '--no-watch',
+        '-C',
+        dir,
+        '-p',
+        String(port),
+        '--lsp',
+        `python=${lsp}`,
+      ]);
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain('EADDRINUSE');
 
-    // The shell writes its pid well within the bridge's shutdown grace, so the pid is always there.
-    const pid = Number((await readFile(pidFile, 'utf8')).trim());
-    expect(pid).toBeGreaterThan(0);
-    try {
-      expect(isAlive(pid)).toBe(false);
-    } finally {
-      if (isAlive(pid)) process.kill(pid, 'SIGKILL');
-    }
-  }, 30_000);
+      // The shell writes its pid well within the bridge's shutdown grace, so the pid is always there.
+      const pid = Number((await readFile(pidFile, 'utf8')).trim());
+      expect(pid).toBeGreaterThan(0);
+      try {
+        expect(isAlive(pid)).toBe(false);
+      } finally {
+        if (isAlive(pid)) process.kill(pid, 'SIGKILL');
+      }
+    },
+    30_000,
+  );
 });

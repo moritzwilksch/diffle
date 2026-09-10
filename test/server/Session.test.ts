@@ -3,6 +3,7 @@ import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { ServerMessage, Snapshot } from '../../src/shared/protocol.js';
@@ -50,8 +51,8 @@ beforeAll(async () => {
   repo = await GitRepo.open(dir);
 });
 afterAll(async () => {
-  await rm(dir, { recursive: true, force: true });
-  await rm(outside, { recursive: true, force: true });
+  await rmTmp(dir);
+  await rmTmp(outside);
 });
 
 describe('sidePath', () => {
@@ -290,7 +291,7 @@ describe('Session', () => {
       expect(committed.changed).toEqual([]);
       await session.close();
     } finally {
-      await rm(live, { recursive: true, force: true });
+      await rmTmp(live);
     }
   });
 

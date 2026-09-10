@@ -3,10 +3,14 @@ import { chmod, mkdir, mkdtemp, open, rm, symlink, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { rmTmp } from '../tmp.js';
 import { BIG_FILE_THRESHOLD, GitRepo } from '../../src/server/git/GitRepo.js';
 import { SNIFF_BYTES } from '../../src/server/generated.js';
 import { resolveMode } from '../../src/server/mode.js';
 import { Snapshotter } from '../../src/server/Snapshotter.js';
+
+// Windows rejects `\n` in a filename, so those fixtures only exist on POSIX.
+const NEWLINE_NAMES = process.platform !== 'win32';
 
 let dir: string;
 let repo: GitRepo;
@@ -47,7 +51,7 @@ beforeAll(async () => {
   await writeFile(join(dir, 'ignored.txt'), 'i\n');
   repo = await GitRepo.open(join(dir));
 });
-afterAll(() => rm(dir, { recursive: true, force: true }));
+afterAll(() => rmTmp(dir));
 
 describe('GitRepo', () => {
   it('previews both last-commit endpoints and reports missing ancestors', async () => {
@@ -97,9 +101,7 @@ describe('GitRepo', () => {
     expect(files.map((f) => f.blob)).toEqual([git('rev-parse', 'feat:a.txt'), git('rev-parse', 'feat:new.txt')]);
   });
 
-  it('numstat reports renames, binaries, and paths containing a newline', async () => {
-    const odd = 'odd\nname.txt';
-    await writeFile(join(dir, odd), 'odd\n');
+  it('numstat reports renames and binaries', async () => {
     await writeFile(join(dir, 'bin.dat'), Buffer.from([0, 1, 2]));
     git('mv', 'keep.txt', 'moved.txt');
     try {
@@ -107,13 +109,23 @@ describe('GitRepo', () => {
       const byPath = new Map(files.map((f) => [f.path, f]));
       expect(byPath.get('moved.txt')).toMatchObject({ status: 'R', oldPath: 'keep.txt', additions: 0, deletions: 0 });
       expect(byPath.get('bin.dat')).toMatchObject({ status: 'A', binary: true, additions: 0 });
-      expect(byPath.get(odd)).toMatchObject({ status: 'A', additions: 1, blob: git('hash-object', '--', odd) });
       expect(byPath.get('a.txt')?.blob).toBe(git('hash-object', '--', 'a.txt'));
       expect(files.every((f) => f.status === 'D' || f.blob.length === 40)).toBe(true);
     } finally {
       git('mv', 'moved.txt', 'keep.txt');
-      await rm(join(dir, odd));
       await rm(join(dir, 'bin.dat'));
+    }
+  });
+
+  it.skipIf(!NEWLINE_NAMES)('numstat reports a path containing a newline', async () => {
+    const odd = 'odd\nname.txt';
+    await writeFile(join(dir, odd), 'odd\n');
+    try {
+      const files = await repo.numstat('HEAD', 'worktree');
+      const byPath = new Map(files.map((f) => [f.path, f]));
+      expect(byPath.get(odd)).toMatchObject({ status: 'A', additions: 1, blob: git('hash-object', '--', odd) });
+    } finally {
+      await rm(join(dir, odd));
     }
   });
 
@@ -162,8 +174,9 @@ describe('GitRepo', () => {
     expect(await repo.patch('HEAD', 'worktree', u, 3, false)).toBe('');
   });
 
+  // Windows has no sparse `truncate`, so half a gigabyte is really written: well over the default budget.
   it('marks an untracked file at the big-file threshold binary without reading it', async () => {
-    // Sparse: the size is what matters, not the bytes.
+    // Sparse where the filesystem allows it: the size is what matters, not the bytes.
     const fh = await open(join(dir, 'huge.bin'), 'w');
     await fh.truncate(BIG_FILE_THRESHOLD);
     await fh.close();
@@ -174,7 +187,7 @@ describe('GitRepo', () => {
     } finally {
       await rm(join(dir, 'huge.bin'));
     }
-  });
+  }, 60_000);
 
   it('reads either side and refuses path traversal', async () => {
     expect((await repo.show('HEAD', 'a.txt'))?.toString()).toBe('one\ntwo\nthree\n');
@@ -242,7 +255,7 @@ describe('GitRepo', () => {
       const refs = await (await GitRepo.open(empty)).refs();
       expect(refs).toMatchObject({ branches: [], recent: [], current: null });
     } finally {
-      await rm(empty, { recursive: true, force: true });
+      await rmTmp(empty);
     }
   });
 });
@@ -287,7 +300,7 @@ describe('GitRepo under hostile config', () => {
     await writeFile(join(hostile, 'ü.txt'), 'neu\n');
     hrepo = await GitRepo.open(hostile);
   });
-  afterAll(() => rm(hostile, { recursive: true, force: true }));
+  afterAll(() => rmTmp(hostile));
 
   it('ignores diff prefix, external diff and colour settings in patches', async () => {
     const files = await hrepo.numstat('HEAD~1', 'HEAD');
@@ -316,18 +329,22 @@ describe('GitRepo under hostile config', () => {
     expect(all).not.toContain('\u001b[');
   });
 
-  it('mirrors the quoting of the new side when rewriting the /dev/null header', async () => {
-    const quoted = 'qu"ote.txt';
-    await writeFile(join(hostile, quoted), 'q\n');
-    try {
-      const file = (await hrepo.numstat('HEAD', 'worktree')).find((f) => f.path === quoted)!;
-      const p = await hrepo.patch('HEAD', 'worktree', file);
-      expect(p).toContain('diff --git "a/qu\\"ote.txt" "b/qu\\"ote.txt"\n');
-      expect(p).not.toContain('dev/null b/');
-    } finally {
-      await rm(join(hostile, quoted));
-    }
-  });
+  // Windows forbids `"` in a filename, so the quoting path is only reachable on POSIX.
+  it.skipIf(process.platform === 'win32')(
+    'mirrors the quoting of the new side when rewriting the /dev/null header',
+    async () => {
+      const quoted = 'qu"ote.txt';
+      await writeFile(join(hostile, quoted), 'q\n');
+      try {
+        const file = (await hrepo.numstat('HEAD', 'worktree')).find((f) => f.path === quoted)!;
+        const p = await hrepo.patch('HEAD', 'worktree', file);
+        expect(p).toContain('diff --git "a/qu\\"ote.txt" "b/qu\\"ote.txt"\n');
+        expect(p).not.toContain('dev/null b/');
+      } finally {
+        await rm(join(hostile, quoted));
+      }
+    },
+  );
 
   it('searches without colour escapes or a column field', async () => {
     const hits = await hrepo.grep('zwei', 'worktree', 10);
@@ -379,7 +396,7 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
     await writeFile(join(sup, 'nested', 'n.txt'), 'n\n');
     srepo = await GitRepo.open(sup);
   });
-  afterAll(() => rm(base, { recursive: true, force: true }));
+  afterAll(() => rmTmp(base));
 
   it('numstat still loads every ordinary file and marks the gitlink', async () => {
     const files = await srepo.numstat('HEAD', 'worktree');
@@ -421,19 +438,23 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
     expect(await srepo.readWorktree('sub')).toBeNull();
   });
 
-  it.skipIf(process.getuid?.() === 0)('an unreadable file keeps an empty blob without failing the batch', async () => {
-    await writeFile(join(sup, 'locked.txt'), 'x\n');
-    await chmod(join(sup, 'locked.txt'), 0o000);
-    try {
-      const files = await srepo.numstat('HEAD', 'worktree');
-      const byPath = new Map(files.map((f) => [f.path, f]));
-      expect(byPath.get('locked.txt')).toMatchObject({ status: 'A', blob: '' });
-      expect(byPath.get('a.txt')!.blob).toBe(sgit(sup, 'hash-object', '--', 'a.txt'));
-    } finally {
-      await chmod(join(sup, 'locked.txt'), 0o644);
-      await rm(join(sup, 'locked.txt'));
-    }
-  });
+  // `chmod 0` only sets the read-only bit on Windows, so nothing there makes the read fail.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'an unreadable file keeps an empty blob without failing the batch',
+    async () => {
+      await writeFile(join(sup, 'locked.txt'), 'x\n');
+      await chmod(join(sup, 'locked.txt'), 0o000);
+      try {
+        const files = await srepo.numstat('HEAD', 'worktree');
+        const byPath = new Map(files.map((f) => [f.path, f]));
+        expect(byPath.get('locked.txt')).toMatchObject({ status: 'A', blob: '' });
+        expect(byPath.get('a.txt')!.blob).toBe(sgit(sup, 'hash-object', '--', 'a.txt'));
+      } finally {
+        await chmod(join(sup, 'locked.txt'), 0o644);
+        await rm(join(sup, 'locked.txt'));
+      }
+    },
+  );
 });
 
 describe('resolveMode + Snapshotter', () => {
@@ -489,7 +510,7 @@ describe('working mode on an unborn branch', () => {
     execFileSync('git', ['add', 'staged.txt'], { cwd: fresh, env });
     await writeFile(join(fresh, 'loose.txt'), 'l\n');
   });
-  afterAll(() => rm(fresh, { recursive: true, force: true }));
+  afterAll(() => rmTmp(fresh));
 
   it('diffs the worktree against the empty tree instead of failing on HEAD', async () => {
     const urepo = await GitRepo.open(fresh);
@@ -538,7 +559,7 @@ describe('cat-file batch', () => {
     await writeFile(join(bdir, 'small.txt'), 'one\ntwo\n');
     // Large, textual, no generated marker: the sniff must not read it whole.
     await writeFile(join(bdir, 'big.txt'), 'x'.repeat(200_000) + '\n');
-    await writeFile(join(bdir, odd), 'odd\n');
+    if (NEWLINE_NAMES) await writeFile(join(bdir, odd), 'odd\n');
     await writeFile(join(bdir, 'has space.txt'), 'sp\n');
     await mkdir(join(bdir, 'dir'));
     await writeFile(join(bdir, 'dir', 'in.txt'), 'in\n');
@@ -551,7 +572,7 @@ describe('cat-file batch', () => {
     bgit('commit', '-q', '-m', 'feat');
     brepo = await GitRepo.open(bdir);
   });
-  afterAll(() => rm(bdir, { recursive: true, force: true }));
+  afterAll(() => rmTmp(bdir));
 
   it('answers a list of blob shas from one process, keeping only a prefix of each', async () => {
     const shas = [
@@ -584,17 +605,21 @@ describe('cat-file batch', () => {
     expect(bodies.map((b) => b?.length)).toEqual(Array.from({ length: 300 }, (_, i) => [14, 200_001, 3][i % 3]));
     // At most one new process: none when the previous test's is still within its idle grace.
     expect(brepo.catFileSpawns - before).toBeLessThanOrEqual(1);
-    expect((await brepo.show('HEAD', odd))?.toString()).toBe('odd\n');
     expect(await brepo.show('HEAD', 'dir')).toBeNull();
     expect(await brepo.show('HEAD', 'nope.txt')).toBeNull();
     expect(await brepo.show('0'.repeat(40), 'small.txt')).toBeNull();
   });
 
-  it('head on a commit resolves paths, including one with a newline, and reports non-files as absent', async () => {
+  it('head on a commit resolves paths and reports non-files as absent', async () => {
     expect((await brepo.head('HEAD', 'small.txt', 3))?.toString()).toBe('one');
-    expect((await brepo.head('HEAD', odd, 100))?.toString()).toBe('odd\n');
     expect(await brepo.head('HEAD', 'missing.txt', 10)).toBeNull();
     expect(await brepo.head('HEAD', 'dir', 10)).toBeNull();
+  });
+
+  // A name with a newline cannot ride the batch, so both reads fall back to a plain cat-file.
+  it.skipIf(!NEWLINE_NAMES)('reads a path containing a newline beside the batch', async () => {
+    expect((await brepo.show('HEAD', odd))?.toString()).toBe('odd\n');
+    expect((await brepo.head('HEAD', odd, 100))?.toString()).toBe('odd\n');
   });
 
   it('the snapshot sniffs each blob once across refreshes and only new blobs after a commit', async () => {

@@ -1,14 +1,15 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { rmTmp } from '../tmp.js';
 import { CommentStore, NotFoundError, UnquotableError } from '../../src/server/comments/CommentStore.js';
 
 let dir: string;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'diffle-store-'));
 });
-afterEach(() => rm(dir, { recursive: true, force: true }));
+afterEach(() => rmTmp(dir));
 
 const anchor = { path: 'a.py', side: 'new' as const, startLine: 2, endLine: 2, quoted: 'b' };
 const hello = { body: 'hello' };
@@ -26,7 +27,12 @@ describe('CommentStore', () => {
     const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8'));
     expect(raw.version).toBe(2);
     expect(Object.keys(raw.sets)).toEqual(['working']);
-    // Quoted source lines: owner-only.
+  });
+
+  // Quoted source lines are owner-only. Windows has no POSIX mode bits to check.
+  it.skipIf(process.platform === 'win32')('writes the comment file and its directory owner-only', async () => {
+    const store = await CommentStore.open(dir, 'working');
+    await store.addThread(anchor, hello);
     expect((await stat(join(dir, 'diffle', 'comments.json'))).mode & 0o777).toBe(0o600);
     expect((await stat(join(dir, 'diffle'))).mode & 0o777).toBe(0o700);
   });

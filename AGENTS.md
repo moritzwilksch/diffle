@@ -39,6 +39,8 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing.
 - Server tests use temporary real Git repositories. Client store tests mock `src/client/api.js` and exercise races with deferred promises.
 - Use `npm run dev -- working --no-open` for a local source run; restart after client changes because the server serves `dist/client`.
+- CI runs the tests and the build on Linux, macOS, and Windows, x64 and arm64. `skipIf` what Windows cannot express, with a note: a `"` or a newline in a filename, POSIX mode bits, a POSIX-shell probe.
+- Remove temp directories with `rmTmp` from `test/tmp.ts`: an idle `cat-file --batch` holds the repo root as its cwd, and Windows refuses to remove it until the child is reaped.
 - Comments explain why in one or two lines. Exported doc comments state contracts, not implementations.
 
 ## Conventional commits

@@ -1,12 +1,21 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { access, chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { access, chmod, mkdir, mkdtemp, readdir, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
 import { resolveMode } from '../../src/server/mode.js';
+
+/**
+ * The temp root as git reports it: macOS reaches `os.tmpdir()` through a symlink
+ * (`/var` → `/private/var`), and Windows hands out an 8.3 short name (`RUNNER~1`)
+ * that only libuv's realpath expands — the JS `realpathSync` keeps it.
+ */
+const TMP_ROOT = realpathSync.native(tmpdir());
 
 let tmp: string;
 /** Bare "GitHub": holds refs/pull/7/head. Its path ends in o/r so it matches the PR url's slug. */
@@ -26,6 +35,12 @@ const env = {
 };
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env }).trim();
 
+/**
+ * A local path as git sees a URL. Windows separators would be escapes inside a
+ * config value, and `remoteSlug` splits on `/`, so a `\` path never matches a slug.
+ */
+const asGitUrl = (p: string) => p.replaceAll('\\', '/');
+
 /** What `gh pr view` would say for PR 7 of o/r. */
 const PR_VIEW = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
@@ -44,7 +59,7 @@ const gh: GhRunner = async (args) => {
 };
 
 beforeAll(async () => {
-  tmp = await mkdtemp(join(tmpdir(), 'diffle-pr-'));
+  tmp = await mkdtemp(join(TMP_ROOT, 'diffle-pr-'));
   origin = join(tmp, 'o', 'r');
   await mkdir(origin, { recursive: true });
   git(origin, 'init', '-q', '-b', 'main');
@@ -63,10 +78,10 @@ beforeAll(async () => {
 
   // A clone that has never seen the PR head: only refs/heads/main.
   local = join(tmp, 'work');
-  execFileSync('git', ['clone', '-q', origin, local], { encoding: 'utf8', env });
+  execFileSync('git', ['clone', '-q', asGitUrl(origin), local], { encoding: 'utf8', env });
   repo = await GitRepo.open(local);
 });
-afterAll(() => rm(tmp, { recursive: true, force: true }));
+afterAll(() => rmTmp(tmp));
 beforeEach(() => {
   ghCalls = [];
 });
@@ -129,7 +144,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
 
   it('fetches from the remote that points at the base repository, whatever it is called', async () => {
     const forked = join(tmp, 'forked');
-    execFileSync('git', ['clone', '-q', '--origin', 'upstream', origin, forked], { encoding: 'utf8', env });
+    execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     const forkRepo = await GitRepo.open(forked);
     const mode = await resolveMode({ kind: 'pr', pr: '7' }, forkRepo, gh);
     expect(mode.newRev).toBe(headSha);
@@ -170,62 +185,68 @@ describe('openReviewRepository', () => {
     await access(local);
   });
 
-  it('removes foreign clones when the CLI receives SIGTERM', async () => {
-    const bin = join(tmp, 'bin');
-    await mkdir(bin);
-    const url = 'https://github.com/foreign/cli/pull/7';
-    await writeFile(join(bin, 'gh'), `#!/usr/bin/env node\nconsole.log(${JSON.stringify(PR_VIEW({ url }))});\n`);
-    await chmod(join(bin, 'gh'), 0o755);
-    const config = join(tmp, 'cli-gitconfig');
-    await writeFile(config, `[url "${origin}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
-    // Load TypeScript in-process so SIGTERM reaches diffle, not tsx's signal relay.
-    const child = spawn(
-      process.execPath,
-      [
-        '--import',
-        'tsx',
-        join(process.cwd(), 'src/cli/main.ts'),
-        '-C',
-        local,
-        'pr',
-        url,
-        '--no-open',
-        '--no-watch',
-        '--port',
-        '0',
-      ],
-      {
-        env: { ...env, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: config, NO_COLOR: '1' },
-        stdio: ['ignore', 'ignore', 'pipe'],
-      },
-    );
-    let stderr = '';
-    const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
-    try {
-      await new Promise<void>((resolve, reject) => {
-        child.stderr.on('data', (chunk) => {
-          stderr += chunk.toString();
-          if (stderr.includes('comparing')) resolve();
+  // POSIX-only: the fake `gh` is a shebang script made runnable with `chmod`, PATH is
+  // joined with `:`, and the assertion is on a graceful SIGTERM shutdown.
+  it.skipIf(process.platform === 'win32')(
+    'removes foreign clones when the CLI receives SIGTERM',
+    async () => {
+      const bin = join(tmp, 'bin');
+      await mkdir(bin);
+      const url = 'https://github.com/foreign/cli/pull/7';
+      await writeFile(join(bin, 'gh'), `#!/usr/bin/env node\nconsole.log(${JSON.stringify(PR_VIEW({ url }))});\n`);
+      await chmod(join(bin, 'gh'), 0o755);
+      const config = join(tmp, 'cli-gitconfig');
+      await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
+      // Load TypeScript in-process so SIGTERM reaches diffle, not tsx's signal relay.
+      const child = spawn(
+        process.execPath,
+        [
+          '--import',
+          'tsx',
+          join(process.cwd(), 'src/cli/main.ts'),
+          '-C',
+          local,
+          'pr',
+          url,
+          '--no-open',
+          '--no-watch',
+          '--port',
+          '0',
+        ],
+        {
+          env: { ...env, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: config, NO_COLOR: '1' },
+          stdio: ['ignore', 'ignore', 'pipe'],
+        },
+      );
+      let stderr = '';
+      const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
+      try {
+        await new Promise<void>((resolve, reject) => {
+          child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+            if (stderr.includes('comparing')) resolve();
+          });
+          child.on('error', reject);
+          child.on('exit', () => reject(new Error(stderr)));
         });
-        child.on('error', reject);
-        child.on('exit', () => reject(new Error(stderr)));
-      });
-      const root = /repo (.+)\n/.exec(stderr)?.[1];
-      expect(root).toBeTruthy();
-      expect(root).not.toBe(local);
-      child.kill('SIGTERM');
-      expect(await exited).toBe(0);
-      await expect(access(root!)).rejects.toThrow();
-    } finally {
-      child.kill('SIGKILL');
-    }
-  }, 15_000);
+        const root = /repo (.+)\n/.exec(stderr)?.[1];
+        expect(root).toBeTruthy();
+        expect(root).not.toBe(local);
+        child.kill('SIGTERM');
+        expect(await exited).toBe(0);
+        await expect(access(root!)).rejects.toThrow();
+      } finally {
+        child.kill('SIGKILL');
+      }
+    },
+    15_000,
+  );
 
   it('removes the temporary directory when cloning fails', async () => {
     const scratch = join(tmp, 'failed-clone');
     await mkdir(scratch);
     const config = join(tmp, 'missing-gitconfig');
-    await writeFile(config, `[url "${tmp}/missing"]\n\tinsteadOf = https://github.com/foreign/missing\n`);
+    await writeFile(config, `[url "${asGitUrl(tmp)}/missing"]\n\tinsteadOf = https://github.com/foreign/missing\n`);
     vi.stubEnv('GIT_CONFIG_GLOBAL', config);
     vi.stubEnv('TMPDIR', scratch);
     try {
@@ -239,7 +260,7 @@ describe('openReviewRepository', () => {
 
   it('clones foreign PRs into temp storage, including outside a git repository', async () => {
     const config = join(tmp, 'gitconfig');
-    await writeFile(config, `[url "${origin}"]\n\tinsteadOf = https://github.com/foreign/repo\n`);
+    await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/repo\n`);
     vi.stubEnv('GIT_CONFIG_GLOBAL', config);
     const foreign: GhRunner = async () => PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' });
     const refs = git(local, 'show-ref');
@@ -250,7 +271,10 @@ describe('openReviewRepository', () => {
         const review = await openReviewRepository(req, cwd, foreign);
         try {
           expect(review.repo.root).not.toBe(local);
-          expect(review.repo.root.startsWith(join(tmpdir(), 'diffle-pr-'))).toBe(true);
+          // The clone is made under the raw `os.tmpdir()`, so canonicalize both sides: a
+          // Windows 8.3 short name or a macOS symlink would otherwise skew the prefix.
+          const root = await realpath(review.repo.root);
+          expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
           const mode = await resolveMode(req, review.repo, foreign);
           expect(mode.newRev).toBe(headSha);
           expect(mode.pullRequest?.repository).toBe('foreign/repo');

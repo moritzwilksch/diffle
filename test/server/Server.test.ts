@@ -3,8 +3,9 @@ import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
+import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
 import { LspPool } from '../../src/server/lsp/LspPool.js';
@@ -79,7 +80,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await server.close();
-  await rm(dir, { recursive: true, force: true });
+  await rmTmp(dir);
 });
 
 describe('Server', () => {
@@ -135,8 +136,8 @@ describe('Server', () => {
     });
     expect(counts).toEqual([1]);
     ws.close();
-    await new Promise<void>((res) => ws.once('close', () => res()));
-    expect(counts).toEqual([1, 0]);
+    // The client's close event is not the server's; wait for the hub to see the disconnect.
+    await vi.waitFor(() => expect(counts).toEqual([1, 0]));
     unsubscribe();
   });
 
@@ -267,7 +268,7 @@ describe('Server', () => {
     }
   });
 
-  it('ignores lspCommands on PUT /api/config and writes the file owner-only', async () => {
+  it('ignores lspCommands on PUT /api/config', async () => {
     const before = config.get().lspCommands;
     const r = await send('PUT', '/api/config', {
       body: JSON.stringify({ lspCommands: { python: 'rm -rf /' }, contextLines: 7 }),
@@ -275,6 +276,11 @@ describe('Server', () => {
     expect(r.status).toBe(200);
     expect(JSON.parse(r.body).lspCommands).toEqual(before);
     expect(config.get()).toMatchObject({ lspCommands: before, contextLines: 7 });
+  });
+
+  // Windows has no POSIX mode bits to check.
+  it.skipIf(process.platform === 'win32')('writes the config file and its directory owner-only', async () => {
+    await send('PUT', '/api/config', { body: JSON.stringify({ contextLines: 7 }) });
     expect((await stat(config.file)).mode & 0o777).toBe(0o600);
     expect((await stat(join(dir, 'cfg'))).mode & 0o777).toBe(0o700);
   });

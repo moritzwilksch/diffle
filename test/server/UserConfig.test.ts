@@ -1,14 +1,15 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { rmTmp } from '../tmp.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
 
 let dir: string;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'diffle-config-'));
 });
-afterEach(() => rm(dir, { recursive: true, force: true }));
+afterEach(() => rmTmp(dir));
 
 describe('UserConfigStore', () => {
   it('serializes overlapping writes and leaves no temp files', async () => {
