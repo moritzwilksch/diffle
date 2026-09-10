@@ -40,6 +40,11 @@ export function ModePicker() {
   const prInFlight = useRef(false);
   const prView = useRef(0);
   const prInput = useRef<HTMLInputElement>(null);
+  const pointerPick = useRef(false);
+
+  useEffect(() => {
+    pointerPick.current = false;
+  }, [open, pane]);
 
   useEffect(() => {
     const view = ++prView.current;
@@ -145,7 +150,10 @@ export function ModePicker() {
                 )}
                 aria-expanded={entry.pane ? pane === entry.pane : undefined}
                 aria-controls={entry.pane ? 'mode-config' : undefined}
-                onClick={() => pick(i + 1)}
+                onClick={(e) => {
+                  pointerPick.current = e.detail > 0;
+                  pick(i + 1);
+                }}
               >
                 <entry.icon size="0.875rem" />
                 <span className="whitespace-nowrap">{entry.label}</span>
@@ -187,7 +195,7 @@ export function ModePicker() {
                       value={a}
                       onChange={setA}
                       refs={refs}
-                      autoFocus
+                      autoFocus={!pointerPick.current}
                       onAccept={() => targetRef.current?.focus()}
                     />
                     <span>{dots}</span>

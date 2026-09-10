@@ -154,6 +154,21 @@ it('defaults to HEAD~1..HEAD~0 and applies both editable offsets', async () => {
   expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~5..HEAD~2'] });
 });
 
+it('keeps ref suggestions closed on a pointer pick but opens them on a keyboard pick', async () => {
+  const twoRefs = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Two refs'))!;
+  await act(() => twoRefs.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })));
+  const base = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
+  expect(document.activeElement).not.toBe(base);
+  expect(host.querySelector('[role="listbox"]')).toBeNull();
+  await act(() => base.focus());
+  expect(host.querySelector('[role="listbox"]')).not.toBeNull();
+
+  await act(() => useStore.getState().pickModeEntry(3));
+  await act(() => useStore.getState().pickModeEntry(2));
+  expect(document.activeElement).toBe(host.querySelector('[aria-label="Base ref"]'));
+  expect(host.querySelector('[role="listbox"]')).not.toBeNull();
+});
+
 it('swaps refs by button and x without submitting or consuming typed x', async () => {
   await act(() => useStore.getState().pickModeEntry(2));
   const base = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
