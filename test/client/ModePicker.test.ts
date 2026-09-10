@@ -60,10 +60,11 @@ async function type(value: string) {
 
 it('focuses the PR field and prevents duplicate submissions while opening the current branch PR', async () => {
   expect(document.activeElement).toBe(host.querySelector('input'));
+  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Show PR');
   await submit();
   await submit();
   expect(switchMode).toHaveBeenCalledExactlyOnceWith({ kind: 'pr' });
-  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Opening PR…');
+  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Loading PR…');
   expect(host.querySelector('button[type="submit"]')).toHaveProperty('disabled', true);
   expect(useStore.getState().modeMenuOpen).toBe(true);
   await act(() => finish('applied'));
@@ -151,6 +152,28 @@ it('defaults to HEAD~1..HEAD~0 and applies both editable offsets', async () => {
   expect(target.value).toBe('2');
   await submit();
   expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~5..HEAD~2'] });
+});
+
+it('keeps ref suggestions closed on pointer and keyboard picks until input interaction', async () => {
+  const twoRefs = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Two refs'))!;
+  await act(() => twoRefs.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })));
+  const base = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
+  expect(document.activeElement).not.toBe(base);
+  expect(host.querySelector('[role="listbox"]')).toBeNull();
+  await act(() => base.focus());
+  expect(host.querySelector('[role="listbox"]')).toBeNull();
+  await act(() => base.click());
+  expect(host.querySelector('[role="listbox"]')).not.toBeNull();
+
+  await act(() => useStore.getState().pickModeEntry(3));
+  await act(() => useStore.getState().pickModeEntry(2));
+  const focused = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
+  expect(document.activeElement).toBe(focused);
+  expect(focused.selectionStart).toBe(0);
+  expect(focused.selectionEnd).toBe(focused.value.length);
+  expect(host.querySelector('[role="listbox"]')).toBeNull();
+  await act(() => focused.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+  expect(host.querySelector('[role="listbox"]')).not.toBeNull();
 });
 
 it('swaps refs by button and x without submitting or consuming typed x', async () => {

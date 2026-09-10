@@ -159,7 +159,7 @@ export function CommentPanel() {
         )}
         {groups.map(([path, list]) => (
           <section
-            className="[&+section]:border-t [&+section]:border-solid [&+section]:border-border [&+section]:pt-3"
+            className="border-0 [&+section]:border-t [&+section]:border-solid [&+section]:border-border [&+section]:pt-3"
             key={path}
           >
             <h4 className="m-0 mb-1.5 font-mono text-[0.75rem] leading-[1.4] text-muted">
