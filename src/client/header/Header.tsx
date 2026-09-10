@@ -153,19 +153,21 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
         {label}
       </summary>
       <section
-        className="absolute top-[calc(100%+0.75rem)] right-0 z-100 max-h-[65vh] w-[min(28rem,85vw)] overflow-auto rounded-lg border border-border bg-surface p-4 text-[0.8125rem] text-foreground shadow-lg"
+        className="absolute top-[calc(100%+0.75rem)] right-0 z-100 max-h-[65vh] w-[min(28rem,85vw)] overflow-auto rounded-lg border border-border bg-surface p-2.5 text-[0.8125rem] text-foreground shadow-lg"
         aria-label="Language server status"
       >
         <div className="flex items-center justify-between gap-2">
           <strong>Language servers</strong>
-          <button
+          <Button
+            variant="ghost"
+            icon
             type="button"
             aria-label="Close language server status"
-            className="cursor-pointer rounded-sm p-1 text-muted hover:bg-hover hover:text-foreground"
+            className="border-0 p-0.5 text-muted hover:text-foreground"
             onClick={close}
           >
             <X size="0.875rem" />
-          </button>
+          </Button>
         </div>
         {lsp.servers.map((s) => (
           <ServerStatus key={s.command} server={s} />
@@ -173,7 +175,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
         {!lsp.servers.length && !lsp.missing.length && <p className="text-muted">No servers</p>}
         {lsp.missing.map((m) => (
           <div
-            className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-muted"
+            className="mt-1.5 flex items-center gap-2 border-t border-border pt-1.5 text-muted"
             key={m.language}
             title={m.tried.join(', ')}
           >
@@ -193,7 +195,7 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
   const label =
     s.state === 'unavailable' ? 'Unavailable' : s.state === 'starting' ? 'Starting' : busy ? 'Working' : 'Connected';
   return (
-    <div className="mt-3 border-t border-border pt-3">
+    <div className="mt-1.5 border-t border-border pt-1.5">
       <div className="flex items-center gap-2">
         {busy ? (
           <LoaderCircle size="0.875rem" className="shrink-0 animate-spin text-accent" />
@@ -210,7 +212,7 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
           {label}
         </span>
       </div>
-      <div className="mt-1 mb-1.5 ml-5.5 text-[0.6875rem] text-muted">{s.languages.join(', ')}</div>
+      <div className="mt-0.5 mb-0.5 ml-5.5 text-[0.6875rem] text-muted">{s.languages.join(', ')}</div>
       {s.activity?.map((activity, i) => (
         <p className="my-1.5 ml-5.5 wrap-anywhere" key={i}>
           {activity}
