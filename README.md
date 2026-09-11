@@ -33,6 +33,7 @@ To run it without installing anything:
 ```bash
 pixi exec diffle working
 npx @moritzwilksch/diffle working
+nix run github:moritzwilksch/diffle -- working
 ```
 
 ## Usage
