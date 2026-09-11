@@ -121,6 +121,10 @@ rust      not on PATH (tried rust-analyzer)
 
 Languages served out of the box: C/C++ (`clangd`), Go (`gopls`), Haskell, Java, JavaScript/TypeScript (`typescript-language-server`, `vtsls`), Lua, Nix, OCaml, PHP, Python (`pyrefly`, `ty`, `basedpyright`, `pyright`, `pylsp`, `jedi`), Ruby, Rust (`rust-analyzer`), shell, Swift, Terraform, Zig.
 
+JSON/JSONC (`vscode-json-language-server` or `vscode-json-languageserver`), YAML (`yaml-language-server`), and TOML (`tombi`, falling back to `taplo`) also provide schema descriptions on hover. Install the corresponding server on `PATH`; common filenames are associated through SchemaStore, and explicit `$schema` declarations or the server's schema directives can select a schema. Schema downloads require network access; diffle caches the JSON catalog and reuses it offline. As with other LSP features, hover is available on the new side when the review follows the checkout.
+
+Configuration files (JSON/JSONC, YAML, and TOML) offer schema hover with the pointer or `gh`. Clicking a key selects its line; symbol menus and definition, type-definition, and reference navigation are disabled for these formats.
+
 A client-side Tree-sitter worker suppresses hover and symbol menus on reserved keywords and in comments and string text; identifiers, including keyword spellings used as property names, and interpolated expressions remain actionable. Grammars load on demand. Haskell, Nix, Terraform, files over one million UTF-16 code units, and parser failures fall back to language-server behavior.
 
 Override a command, or turn one language off with an empty command:

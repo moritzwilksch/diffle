@@ -18,6 +18,7 @@ export class JsonRpcConnection {
     { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> | null }
   >();
   private handlers = new Set<(method: string, params: unknown) => void>();
+  private requests = new Map<string, (params: unknown) => unknown | Promise<unknown>>();
   private buffer: Buffer = Buffer.alloc(0);
   private disposed: Error | null = null;
 
@@ -53,9 +54,14 @@ export class JsonRpcConnection {
     this.send({ jsonrpc: '2.0', method, params });
   }
 
-  /** Server → client notifications and requests (requests get an empty success reply). */
+  /** Observes server messages, including requests. */
   onNotification(handler: (method: string, params: unknown) => void): void {
     this.handlers.add(handler);
+  }
+
+  /** Handles a server request and returns its result, including asynchronous results. */
+  onRequest(method: string, handler: (params: unknown) => unknown | Promise<unknown>): void {
+    this.requests.set(method, handler);
   }
 
   /** Rejects every pending request and ignores further traffic. */
@@ -112,8 +118,24 @@ export class JsonRpcConnection {
     }
     if (msg.method != null) {
       for (const h of this.handlers) h(msg.method, msg.params);
-      // Server → client requests (e.g. workDoneProgress/create, client/registerCapability): acknowledge.
-      if (msg.id != null) this.send({ jsonrpc: '2.0', id: msg.id, result: null });
+      if (msg.id != null) {
+        const id = msg.id;
+        const handler = this.requests.get(msg.method);
+        void Promise.resolve()
+          .then(() => (handler ? handler(msg.params) : null))
+          .then(
+            (result) => this.send({ jsonrpc: '2.0', id, result: result ?? null }),
+            (error: unknown) =>
+              this.send({
+                jsonrpc: '2.0',
+                id,
+                error: {
+                  code: error instanceof JsonRpcError ? error.code : -32603,
+                  message: error instanceof Error ? error.message : 'Request failed',
+                },
+              }),
+          );
+      }
       return;
     }
     if (typeof msg.id !== 'number') return;

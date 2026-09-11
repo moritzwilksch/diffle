@@ -1,0 +1,13 @@
+{
+  "$schema": "./hover-example.schema.json",
+  // Hover over keys and values, including the hyphens in runner settings.
+  "name": "JSONC playground",
+  "environment": "development",
+  "enabled": true,
+  "runner": {
+    "runs-on": "macos",
+    "timeout-seconds": 60,
+    "retry-count": 0,
+  },
+  "tags": ["local", "experiment"],
+}

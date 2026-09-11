@@ -13,6 +13,8 @@ export const LanguageIdSchema = z.enum([
   'java',
   'javascript',
   'javascriptreact',
+  'json',
+  'jsonc',
   'lua',
   'nix',
   'ocaml',
@@ -23,8 +25,10 @@ export const LanguageIdSchema = z.enum([
   'shellscript',
   'swift',
   'terraform',
+  'toml',
   'typescript',
   'typescriptreact',
+  'yaml',
   'zig',
 ]);
 export type LanguageId = z.infer<typeof LanguageIdSchema>;
@@ -472,6 +476,8 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   java: 'java',
   js: 'javascript',
   jsx: 'javascriptreact',
+  json: 'json',
+  jsonc: 'jsonc',
   lua: 'lua',
   mjs: 'javascript',
   ml: 'ocaml',
@@ -487,8 +493,11 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   swift: 'swift',
   tf: 'terraform',
   tfvars: 'terraform',
+  toml: 'toml',
   ts: 'typescript',
   tsx: 'typescriptreact',
+  yaml: 'yaml',
+  yml: 'yaml',
   zig: 'zig',
 };
 

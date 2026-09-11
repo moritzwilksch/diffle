@@ -1,0 +1,11 @@
+#:schema ./hover-example.schema.json
+# Hover over keys, values, and the [runner] table header.
+name = "TOML playground"
+environment = "staging"
+enabled = true
+tags = ["preview", "frontend"]
+
+[runner]
+runs-on = "windows"
+timeout-seconds = 45
+retry-count = 1

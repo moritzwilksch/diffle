@@ -67,6 +67,7 @@ vi.mock('../../src/client/search/highlight.js', async (importOriginal) => ({
 
 const { useStore } = await import('../../src/client/store.js');
 const { ReviewPane } = await import('../../src/client/review/ReviewPane.js');
+const { hoverControl } = await import('../../src/client/lsp/HoverTooltip.js');
 
 function snap(changed: Snapshot['changed']): Snapshot {
   return {
@@ -136,6 +137,62 @@ afterEach(async () => {
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('targets punctuation within schema keys at its actual column', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: snap(changed),
+        lsp: {
+          enabled: true,
+          missing: [],
+          servers: [{ name: 'json', command: 'json', state: 'ready', languages: ['json'] }],
+        },
+      }),
+    );
+    const enter = vi.spyOn(hoverControl, 'enter').mockImplementation(() => {});
+    const createRange = document.createRange.bind(document);
+    const rangeSpy = vi.spyOn(document, 'createRange').mockImplementation(() => {
+      const range = createRange();
+      range.getBoundingClientRect = () =>
+        ({ left: range.startOffset * 10, right: (range.startOffset + 1) * 10 }) as DOMRect;
+      return range;
+    });
+    try {
+      const options = captureOptions.mock.calls.at(-1)![0];
+      const tokenElement = document.createElement('span');
+      tokenElement.textContent = '"runs-on"';
+      const callback = options.onTokenEnter as (props: unknown, event: unknown, ctx: unknown) => void;
+      callback(
+        { tokenElement, tokenText: '"runs-on"', lineNumber: 3, lineCharStart: 2 },
+        { clientX: 55, ctrlKey: true },
+        { item: { id: 'diff:config.json@0' } },
+      );
+      expect(enter).toHaveBeenCalledWith(
+        { path: 'config.json', side: 'new', line: 3, col: 7, text: '"runs-on"' },
+        tokenElement,
+      );
+      expect(tokenElement.classList.contains('lsp-hover')).toBe(false);
+      const cancel = vi.spyOn(hoverControl, 'cancel');
+      try {
+        const click = options.onTokenClick as (props: unknown, event: unknown, ctx: unknown) => void;
+        const preventDefault = vi.fn();
+        for (const modifiers of [{}, { ctrlKey: true }, { metaKey: true }]) {
+          click(
+            { tokenElement, tokenText: '"runs-on"', lineNumber: 3, lineCharStart: 2 },
+            { clientX: 55, preventDefault, ...modifiers },
+            { item: { id: 'diff:config.json@0' } },
+          );
+        }
+        expect(cancel).not.toHaveBeenCalled();
+        expect(preventDefault).not.toHaveBeenCalled();
+      } finally {
+        cancel.mockRestore();
+      }
+    } finally {
+      enter.mockRestore();
+      rangeSpy.mockRestore();
+    }
+  });
   it('uses the rendered header height for navigation and the same geometry for CSS and virtualization', async () => {
     document.documentElement.style.fontSize = '14.4px';
     await act(() => root.render(createElement(ReviewPane)));
