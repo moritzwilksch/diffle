@@ -37,16 +37,16 @@ function toThreadCreate(entry: unknown, where: string): ThreadCreate {
 
 /** True when `t` duplicates an open thread at the same anchor whose opening message has the same body. */
 export function isDuplicate(existing: readonly CommentThread[], t: ThreadCreate): boolean {
+  const body = t.body.trim();
+  const open = existing.filter((e) => !e.resolved && e.anchor.path === t.path && e.messages[0]?.body.trim() === body);
+  if (t.startLine == null) return open.some((e) => e.anchor.kind === 'file');
   const side = t.side ?? 'new';
   const endLine = t.endLine ?? t.startLine;
-  const body = t.body.trim();
-  return existing.some(
+  return open.some(
     (e) =>
-      !e.resolved &&
-      e.anchor.path === t.path &&
+      e.anchor.kind === 'line' &&
       e.anchor.side === side &&
       e.anchor.startLine === t.startLine &&
-      e.anchor.endLine === endLine &&
-      e.messages[0]?.body.trim() === body,
+      e.anchor.endLine === endLine,
   );
 }

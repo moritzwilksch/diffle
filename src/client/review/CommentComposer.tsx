@@ -8,6 +8,8 @@ export function CommentComposer({ lines }: { lines: string }) {
   const submitDraft = useStore((s) => s.submitDraft);
   const closeDraft = useStore((s) => s.closeDraft);
   const draftQuote = useStore((s) => s.draftQuote);
+  // A comment on the whole file has no lines to suggest a replacement for.
+  const fileLevel = useStore((s) => s.draft != null && s.draft.selection == null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -60,13 +62,15 @@ export function CommentComposer({ lines }: { lines: string }) {
         <span className="mr-auto text-[0.75rem] text-muted">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
         </span>
-        <Button
-          variant="ghost"
-          onClick={() => void suggest()}
-          title="Insert the selected lines as a suggestion block to edit"
-        >
-          <FileDiff size="0.8125rem" /> Suggest change
-        </Button>
+        {!fileLevel && (
+          <Button
+            variant="ghost"
+            onClick={() => void suggest()}
+            title="Insert the selected lines as a suggestion block to edit"
+          >
+            <FileDiff size="0.8125rem" /> Suggest change
+          </Button>
+        )}
         <Button onClick={closeDraft}>Cancel</Button>
         <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
           Comment

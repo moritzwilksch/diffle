@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { quoteLines, relocate } from '../../src/server/comments/anchor.js';
-import type { CommentAnchor } from '../../src/shared/protocol.js';
+import { compareThreads, quoteLines, relocate } from '../../src/server/comments/anchor.js';
+import type { CommentThread, LineAnchor } from '../../src/shared/protocol.js';
 
-const anchor = (startLine: number, quoted: string): CommentAnchor => ({
+const anchor = (startLine: number, quoted: string): LineAnchor => ({
+  kind: 'line',
   path: 'a.py',
   side: 'new',
   startLine,
@@ -37,5 +38,27 @@ describe('relocate', () => {
 
   it('requires all lines of a block to match contiguously', () => {
     expect(relocate(anchor(1, 'a\nc'), 'a\nb\nc\n')).toBeNull();
+  });
+});
+
+describe('compareThreads', () => {
+  const thread = (id: string, a: CommentThread['anchor'], createdAt = 1): CommentThread => ({
+    id,
+    anchor: a,
+    messages: [{ id: `${id}-m`, body: 'b', createdAt, updatedAt: createdAt }],
+    resolved: false,
+    stale: false,
+  });
+
+  it('orders by path, then line with the file thread first, then creation', () => {
+    const threads = [
+      thread('z', anchor(1, 'x')),
+      thread('later-file', { kind: 'file', path: 'a.py' }, 5),
+      thread('line', { ...anchor(3, 'x') }),
+      thread('file', { kind: 'file', path: 'a.py' }, 2),
+      thread('other', { kind: 'file', path: 'b.py' }),
+    ];
+    threads[0]!.anchor = { ...anchor(1, 'x'), path: 'z.py' };
+    expect([...threads].sort(compareThreads).map((t) => t.id)).toEqual(['file', 'later-file', 'line', 'other', 'z']);
   });
 });

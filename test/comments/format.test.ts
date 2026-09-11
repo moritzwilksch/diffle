@@ -18,8 +18,18 @@ const t = (
   resolved: false,
   stale: false,
   ...over,
-  anchor: { path: 'src/a.py', side: 'new', startLine: 3, endLine: 3, quoted: 'def foo():', ...over.anchor },
+  anchor: {
+    kind: 'line',
+    path: 'src/a.py',
+    side: 'new',
+    startLine: 3,
+    endLine: 3,
+    quoted: 'def foo():',
+    ...over.anchor,
+  },
 });
+
+const whole = { kind: 'file', path: 'src/a.py' } as const;
 
 describe('formatPrompt', () => {
   it('renders one block per thread in the agent format', () => {
@@ -45,6 +55,14 @@ describe('formatPrompt', () => {
     ]);
     expect(out.indexOf('first')).toBeLessThan(out.indexOf('second'));
     expect(out.indexOf('second')).toBeLessThan(out.indexOf('third'));
+  });
+
+  it('renders a thread on the whole file with a (file) prefix and no quote, its fences as written', () => {
+    const file = { ...t({ messages: [msg('Split this module.'), msg('```suggestion\nx\n```')] }), anchor: whole };
+    expect(formatPrompt([file])).toBe('(file) src/a.py\n\nSplit this module.\n\n```suggestion\nx\n```\n\n---\n');
+    expect(formatPrompt([{ ...file, stale: true }])).toMatch(/^\(file\) \(stale\) src\/a\.py\n/);
+    // Before the file's line threads.
+    expect(formatPrompt([t({}), file]).indexOf('(file)')).toBe(0);
   });
 
   it("joins a thread's messages with a blank line, unlabelled", () => {

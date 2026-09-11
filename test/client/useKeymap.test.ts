@@ -159,6 +159,23 @@ describe('useKeymap', () => {
     expect(moveCursor).not.toHaveBeenCalled();
   });
 
+  it('C comments on the current file as a whole, c on the selection', () => {
+    const openDraft = vi.fn();
+    const openFileDraft = vi.fn();
+    const sel = {
+      id: 'diff:b.py@0',
+      range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
+    };
+    useStore.setState({ openDraft, openFileDraft, selection: sel, activePath: 'b.py' });
+    press('C');
+    expect(openFileDraft).toHaveBeenCalledWith('b.py');
+    press('c');
+    expect(openDraft).toHaveBeenCalledWith(sel);
+    useStore.setState({ selection: null, activePath: null, snapshot: null, fileView: null });
+    press('C');
+    expect(openFileDraft).toHaveBeenCalledTimes(1);
+  });
+
   it('0 and $ focus the first / last symbol of the cursor line and say so when there is none', () => {
     useStore.setState({
       selection: { id: 'diff:a.py@0', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },

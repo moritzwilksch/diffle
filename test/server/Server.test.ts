@@ -13,6 +13,7 @@ import type { ApiDeps } from '../../src/server/routes.js';
 import { Session } from '../../src/server/Session.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
 import { WsHub } from '../../src/server/ws.js';
+import type { CommentThread } from '../../src/shared/protocol.js';
 import { connect } from 'node:net';
 
 let dir: string;
@@ -203,9 +204,25 @@ describe('Server', () => {
     expect(JSON.parse(response.body).error).toContain('API endpoint not found');
   });
 
+  it('creates a thread on the whole file from a payload without a line, and exports it without a quote', async () => {
+    const created = await send('POST', '/api/threads', { body: JSON.stringify({ path: 'a.txt', body: 'Rename it.' }) });
+    expect(created.status).toBe(201);
+    const [thread] = JSON.parse(created.body) as CommentThread[];
+    expect(thread).toMatchObject({ anchor: { kind: 'file', path: 'a.txt' }, stale: false });
+    try {
+      const r = await send('GET', '/api/threads/export');
+      expect(r).toEqual({ status: 200, body: '(file) a.txt\n\nRename it.\n\n---\n' });
+      const missing = await send('POST', '/api/threads', { body: JSON.stringify({ path: 'nope.txt', body: 'x' }) });
+      expect(missing.status).toBe(400);
+      expect(JSON.parse(missing.body).error).toContain('nope.txt');
+    } finally {
+      await session.comments.removeThread(thread!.id);
+    }
+  });
+
   it('exports one message with its thread context', async () => {
     const thread = await session.comments.addThread(
-      { path: 'a.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'a' },
+      { kind: 'line', path: 'a.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'a' },
       { body: 'Check this.' },
     );
     try {

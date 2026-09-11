@@ -43,6 +43,10 @@ const KEYMAP: Record<string, Action> = {
   G: (s) => s.moveFile('last'),
   V: (s) => s.toggleVisual(),
   c: (s) => s.selection && s.openDraft(s.selection),
+  C: (s) => {
+    const path = currentPath(s);
+    if (path) s.openFileDraft(path);
+  },
   e: (s) => s.editCommentAtCursor(),
   dd: (s) => s.deleteCommentAtCursor(),
   R: (s) => s.toggleResolvedAtCursor(),

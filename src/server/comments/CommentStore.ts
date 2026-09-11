@@ -7,6 +7,7 @@ import type {
   CommentAnchor,
   CommentMessage,
   CommentThread,
+  LineAnchor,
   ReplyCreate,
   Side,
   ThreadCreate,
@@ -23,14 +24,22 @@ interface SetData {
 }
 
 interface StoreFile {
-  version: 2;
+  version: 3;
   sets: Record<string, Partial<SetData>>;
+}
+
+/** v2 on disk: threads whose anchors are line ranges without a `kind`. Read only to migrate. */
+type V2Anchor = Omit<LineAnchor, 'kind'>;
+type V2Thread = Omit<CommentThread, 'anchor'> & { anchor: V2Anchor };
+interface V2File {
+  version: 2;
+  sets: Record<string, Partial<{ threads: V2Thread[]; viewed: ViewedEntry[] }>>;
 }
 
 /** v1 on disk: flat comments, one anchor each. Read only to migrate. */
 interface V1Comment {
   id: string;
-  anchor: CommentAnchor;
+  anchor: V2Anchor;
   body: string;
   createdAt: number;
   updatedAt: number;
@@ -41,13 +50,21 @@ interface V1File {
   version: 1;
   sets: Record<string, Partial<{ comments: V1Comment[]; viewed: ViewedEntry[] }>>;
 }
+type AnyStoreFile = StoreFile | V2File | V1File;
 
 /** Resolves the exact text of a range on one side, for `quoted`. Null when the range cannot be read. */
 export type QuoteFn = (path: string, side: Side, startLine: number, endLine: number) => Promise<string | null>;
 
+/** What an import checks its anchors against: the snapshot, behind the session's allowlist. */
+export interface AnchorSource {
+  quote: QuoteFn;
+  /** Whether the review has a file at `path` on either side. */
+  hasFile(path: string): Promise<boolean>;
+}
+
 export class NotFoundError extends Error {}
 
-/** A range the snapshot cannot quote: path absent on that side, or lines past the end. */
+/** An anchor the snapshot cannot place: path absent on that side, or lines past the end. */
 export class UnquotableError extends Error {}
 
 /** One side of a file as the review presents it. */
@@ -55,6 +72,14 @@ export interface SideView {
   contents: string;
   /** Line ranges on display (a diff's hunks); null when the whole side is shown. */
   shown: LineRange[] | null;
+}
+
+/** The review as relocation sees it. */
+export interface ReviewView {
+  /** One side of a path; null when the review has no such side. */
+  side(path: string, side: Side): Promise<SideView | null>;
+  /** Whether the review has a file at `path` on either side, which is all a file thread needs. */
+  hasFile(path: string): boolean;
 }
 
 /** Viewed marks kept per path: the current one plus the newest previous, so `restale` is derivable. */
@@ -74,14 +99,14 @@ export class CommentStore {
     readonly key: string,
   ) {}
 
-  /** Opens the store; a v1 file is backed up to `comments.v1.bak` and rewritten as v2 first. */
+  /** Opens the store; an older file is backed up to `comments.v<n>.bak` and rewritten in the current format first. */
   static async open(gitDir: string, modeKey: string): Promise<CommentStore> {
     const file = join(gitDir, 'diffle', 'comments.json');
     await withFileLock(file, async () => {
       const all = await readStoreFile(file);
-      if (all.version !== 1) return;
-      await copyFile(file, join(gitDir, 'diffle', 'comments.v1.bak'));
-      await writeStoreFile(file, migrateV1(all));
+      if (all.version === 3) return;
+      await copyFile(file, join(gitDir, 'diffle', `comments.v${all.version}.bak`));
+      await writeStoreFile(file, upgrade(all));
     });
     return new CommentStore(file, modeKey);
   }
@@ -165,12 +190,13 @@ export class CommentStore {
   }
 
   /**
-   * Adds each import that is not already an open duplicate. Every range is
-   * checked against the snapshot through `quote`; a payload's own `quoted` (the
-   * text the browser showed) is kept once the range is known to exist. Throws
-   * UnquotableError, adding nothing, when any range cannot be read.
+   * Adds each import that is not already an open duplicate. Every anchor is
+   * checked against the snapshot through `source`: a range is quoted (a payload's
+   * own `quoted`, the text the browser showed, is kept once the range is known to
+   * exist) and a file thread's path must be in the review. Throws UnquotableError,
+   * adding nothing, when any anchor cannot be placed.
    */
-  importThreads(imports: ThreadCreate[], quote: QuoteFn): Promise<{ added: CommentThread[]; skipped: number }> {
+  importThreads(imports: ThreadCreate[], source: AnchorSource): Promise<{ added: CommentThread[]; skipped: number }> {
     return this.mutate(
       async (set) => {
         const added: CommentThread[] = [];
@@ -182,15 +208,7 @@ export class CommentStore {
             skipped++;
             continue;
           }
-          const side = t.side ?? 'new';
-          const startLine = t.startLine;
-          const endLine = t.endLine ?? startLine;
-          const fromSnapshot = await quote(t.path, side, startLine, endLine);
-          if (fromSnapshot == null)
-            throw new UnquotableError(
-              `cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`,
-            );
-          const anchor: CommentAnchor = { path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
+          const anchor = await placeImport(t, source);
           pending.push({ anchor, t });
           // Later imports in the same batch may duplicate this one.
           existing.push({
@@ -264,17 +282,18 @@ export class CommentStore {
   }
 
   /**
-   * Re-anchor every thread against the current review. A thread is stale when
-   * its side is gone, its text is not found, or the relocated range falls
-   * outside what the review shows. Returns true if anything changed.
+   * Re-anchor every thread against the current review. A line thread is stale
+   * when its side is gone, its text is not found, or the relocated range falls
+   * outside what the review shows; a file thread when its file left the review.
+   * Returns true if anything changed.
    */
-  async relocateAll(view: (path: string, side: Side) => Promise<SideView | null>): Promise<boolean> {
+  async relocateAll(review: ReviewView): Promise<boolean> {
     const cache = new Map<string, Promise<SideView | null>>();
     const load = (path: string, side: Side) => {
       const k = `${side}:${path}`;
       let p = cache.get(k);
       if (!p) {
-        p = view(path, side);
+        p = review.side(path, side);
         cache.set(k, p);
       }
       return p;
@@ -284,6 +303,14 @@ export class CommentStore {
       async (set) => {
         let changed = false;
         for (const t of set.threads) {
+          if (t.anchor.kind === 'file') {
+            const stale = !review.hasFile(t.anchor.path);
+            if (stale !== t.stale) {
+              t.stale = stale;
+              changed = true;
+            }
+            continue;
+          }
           const v = await load(t.anchor.path, t.anchor.side);
           let moved = v == null ? null : relocate(t.anchor, v.contents);
           if (moved && v?.shown && !isShown(v.shown, moved.startLine, moved.endLine)) moved = null;
@@ -313,14 +340,14 @@ export class CommentStore {
 
   /** This key's set as on disk right now; empty when the file is absent. Malformed JSON propagates. */
   private read(): SetData {
-    let parsed: StoreFile | V1File;
+    let parsed: AnyStoreFile;
     try {
       parsed = parseStoreFile(readFileSync(this.file, 'utf8'));
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
       return { threads: [], viewed: [] };
     }
-    return ownSet(parsed.version === 2 ? parsed : migrateV1(parsed), this.key);
+    return ownSet(upgrade(parsed), this.key);
   }
 
   /**
@@ -331,11 +358,10 @@ export class CommentStore {
    */
   private mutate<R>(fn: (set: SetData) => R | Promise<R>, changed: (r: R) => boolean = () => true): Promise<R> {
     return withFileLock(this.file, async () => {
-      const onDisk = await readStoreFile(this.file);
-      const all = onDisk.version === 2 ? onDisk : migrateV1(onDisk);
+      const all = upgrade(await readStoreFile(this.file));
       const set = ownSet(all, this.key);
       const r = await fn(set);
-      if (changed(r)) await writeStoreFile(this.file, { version: 2, sets: { ...all.sets, [this.key]: set } });
+      if (changed(r)) await writeStoreFile(this.file, { version: 3, sets: { ...all.sets, [this.key]: set } });
       return r;
     });
   }
@@ -352,22 +378,49 @@ function findThread(set: SetData, id: string): CommentThread {
   return t;
 }
 
-/** The file as stored, or an empty v2 store when absent. Malformed JSON propagates. */
-async function readStoreFile(file: string): Promise<StoreFile | V1File> {
+/**
+ * The anchor an import lands on, checked against the snapshot. Throws
+ * UnquotableError for a range that cannot be quoted or a file the review lacks.
+ */
+async function placeImport(t: ThreadCreate, source: AnchorSource): Promise<CommentAnchor> {
+  if (t.startLine == null) {
+    if (!(await source.hasFile(t.path))) throw new UnquotableError(`${t.path} is not in the review`);
+    return { kind: 'file', path: t.path };
+  }
+  const side = t.side ?? 'new';
+  const startLine = t.startLine;
+  const endLine = t.endLine ?? startLine;
+  const fromSnapshot = await source.quote(t.path, side, startLine, endLine);
+  if (fromSnapshot == null)
+    throw new UnquotableError(
+      `cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`,
+    );
+  return { kind: 'line', path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
+}
+
+/** The file as stored, or an empty store when absent. Malformed JSON propagates. */
+async function readStoreFile(file: string): Promise<AnyStoreFile> {
   try {
     return parseStoreFile(await readFile(file, 'utf8'));
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
-  return { version: 2, sets: {} };
+  return { version: 3, sets: {} };
 }
 
-/** Unknown shapes read as an empty v2 store. */
-function parseStoreFile(text: string): StoreFile | V1File {
-  const parsed = JSON.parse(text) as Partial<StoreFile> | Partial<V1File>;
-  if (parsed.version === 2 && parsed.sets) return parsed as StoreFile;
+/** Unknown shapes read as an empty store. */
+function parseStoreFile(text: string): AnyStoreFile {
+  const parsed = JSON.parse(text) as Partial<AnyStoreFile>;
+  if (parsed.version === 3 && parsed.sets) return parsed as StoreFile;
+  if (parsed.version === 2 && parsed.sets) return parsed as V2File;
   if (parsed.version === 1 && parsed.sets) return parsed as V1File;
-  return { version: 2, sets: {} };
+  return { version: 3, sets: {} };
+}
+
+/** Any stored format as the current one. */
+function upgrade(all: AnyStoreFile): StoreFile {
+  if (all.version === 3) return all;
+  return migrateV2(all.version === 2 ? all : migrateV1(all));
 }
 
 /** Atomic write. Quoted source lines: owner-only. */
@@ -380,9 +433,21 @@ function newMessage(msg: Omit<CommentMessage, 'id' | 'createdAt' | 'updatedAt'>)
   return { id: randomUUID(), body: msg.body, createdAt: now, updatedAt: now };
 }
 
-/** Each v1 comment becomes a single-message, unresolved thread. */
-function migrateV1(v1: V1File): StoreFile {
+/** Every v2 anchor is a line range; v3 says so. */
+function migrateV2(v2: V2File): StoreFile {
   const sets: StoreFile['sets'] = {};
+  for (const [key, set] of Object.entries(v2.sets)) {
+    sets[key] = {
+      threads: (set.threads ?? []).map((t) => ({ ...t, anchor: { kind: 'line', ...t.anchor } })),
+      viewed: set.viewed ?? [],
+    };
+  }
+  return { version: 3, sets };
+}
+
+/** Each v1 comment becomes a single-message, unresolved thread. */
+function migrateV1(v1: V1File): V2File {
+  const sets: V2File['sets'] = {};
   for (const [key, set] of Object.entries(v1.sets)) {
     sets[key] = {
       threads: (set.comments ?? []).map((c) => ({

@@ -170,7 +170,7 @@ export function createApi(deps: ApiDeps): Hono {
   // One object or an array. Returns what was created; open duplicates are skipped.
   app.post('/api/threads', async (c) => {
     const imports = parseImports(await readJson(c));
-    const { added } = await session.comments.importThreads(imports, session.quoter());
+    const { added } = await session.comments.importThreads(imports, session.anchorSource());
     if (added.length) hub.broadcast({ type: 'threads' });
     return c.json(added, 201);
   });

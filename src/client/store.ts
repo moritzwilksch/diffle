@@ -63,9 +63,10 @@ export type Loaded =
   /** Not fetched yet: the review pane's header-only placeholder. The store never records this kind. */
   | { kind: 'loading' };
 
+/** The comment being composed: on a line selection, or on the file as a whole when `selection` is null. */
 export interface Draft {
   path: string;
-  selection: CodeViewLineSelection;
+  selection: CodeViewLineSelection | null;
 }
 
 export type DiffStyle = 'split' | 'unified';
@@ -360,9 +361,12 @@ export interface ReviewState {
   /** Back to the diff list, at the position the file view was entered from. */
   closeFullFile(): void;
   setSelection(sel: CodeViewLineSelection | null): void;
+  /** Compose a comment on the selected lines. */
   openDraft(sel: CodeViewLineSelection): Promise<void>;
+  /** Compose a comment on `path` as a whole; the composer sits above the file's first line. */
+  openFileDraft(path: string): void;
   closeDraft(): void;
-  /** The text the current draft would quote; feeds the "suggest change" button. */
+  /** The text the current draft would quote; feeds the "suggest change" button. Empty for a file draft. */
   draftQuote(): Promise<string>;
   submitDraft(body: string): Promise<void>;
   submitReply(threadId: string, body: string): Promise<void>;
@@ -536,7 +540,7 @@ export const useStore = create<ReviewState>((set, get) => {
     return {
       gens,
       selection: s.selection && moved(s.selection),
-      draft: s.draft && { ...s.draft, selection: moved(s.draft.selection) },
+      draft: s.draft && { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) },
       // A new object re-runs the scroll effect, so a jump in flight lands on the fresh renderer.
       scrollTarget: s.scrollTarget && moved(s.scrollTarget),
       reveal: s.reveal && moved(s.reveal),
@@ -1140,7 +1144,12 @@ export const useStore = create<ReviewState>((set, get) => {
     const side = sideOf(sel);
     const line = sel.range.end;
     return visibleThreads(s).find(
-      (t) => t.anchor.path === path && t.anchor.side === side && line >= t.anchor.startLine && line <= t.anchor.endLine,
+      (t) =>
+        t.anchor.kind === 'line' &&
+        t.anchor.path === path &&
+        t.anchor.side === side &&
+        line >= t.anchor.startLine &&
+        line <= t.anchor.endLine,
     );
   };
 
@@ -1979,7 +1988,8 @@ export const useStore = create<ReviewState>((set, get) => {
 
     setSelection(sel) {
       set({ selection: sel, visualAnchor: null, focusedThread: null });
-      if (sel == null && get().draft) set({ draft: null });
+      // A line draft goes with its selection; a file draft has none to lose.
+      if (sel == null && get().draft?.selection) set({ draft: null });
     },
 
     async openDraft(sel) {
@@ -1988,13 +1998,20 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ draft: { path, selection: sel }, selection: sel, activePath: path, replyTo: null });
     },
 
+    openFileDraft(path) {
+      if (get().fileView?.external) return get().flash('Comments go on repository files only');
+      // The file's composer is not on any line: the cursor leaves its line so the two composers never share it.
+      set({ draft: { path, selection: null }, selection: null, visualAnchor: null, activePath: path, replyTo: null });
+      ensureExpanded(path);
+    },
+
     closeDraft() {
       set({ draft: null, selection: null });
     },
 
     async draftQuote() {
       const d = get().draft;
-      if (!d) return '';
+      if (!d?.selection) return '';
       const l = get().loaded[d.path];
       const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
       const contents = await ensureContents(d.path, range.side);
@@ -2005,12 +2022,22 @@ export const useStore = create<ReviewState>((set, get) => {
     async submitDraft(body) {
       const d = get().draft;
       if (!d || !body.trim()) return;
+      if (!d.selection) {
+        try {
+          await api.addThread({ path: d.path, body });
+        } catch (e) {
+          return report('Posting the comment', e);
+        }
+        set({ draft: null });
+        await get().refreshThreads();
+        return;
+      }
       try {
         const l = get().loaded[d.path];
         const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
         const contents = await ensureContents(d.path, range.side);
-        const anchor = anchorFromRange(d.path, range, contents);
-        await api.addThread({ ...anchor, body });
+        const { path, side, startLine, endLine, quoted } = anchorFromRange(d.path, range, contents);
+        await api.addThread({ path, side, startLine, endLine, quoted, body });
       } catch (e) {
         return report('Posting the comment', e);
       }

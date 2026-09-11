@@ -145,7 +145,9 @@ export const FileResponseSchema = z.object({
 });
 export type FileResponse = z.infer<typeof FileResponseSchema>;
 
-export const CommentAnchorSchema = z.object({
+/** A thread on a line range of one side. */
+export const LineAnchorSchema = z.object({
+  kind: z.literal('line'),
   path: z.string(),
   /** Column the user selected in a diff; 'new' for file items. */
   side: SideSchema,
@@ -154,6 +156,17 @@ export const CommentAnchorSchema = z.object({
   /** Exact text of [startLine, endLine] at creation. */
   quoted: z.string(),
 });
+export type LineAnchor = z.infer<typeof LineAnchorSchema>;
+
+/** A thread on a file as a whole, with no line: GitHub's file-level comment. */
+export const FileAnchorSchema = z.object({
+  kind: z.literal('file'),
+  /** The changed file's path (its new path for a rename), or any tree path. */
+  path: z.string(),
+});
+export type FileAnchor = z.infer<typeof FileAnchorSchema>;
+
+export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
 export const CommentMessageSchema = z.object({
@@ -164,7 +177,7 @@ export const CommentMessageSchema = z.object({
 });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
-/** A conversation anchored to a line range. The thread owns the anchor; replies follow it. */
+/** A conversation anchored to a line range or a whole file. The thread owns the anchor; replies follow it. */
 export const CommentThreadSchema = z.object({
   id: z.string(),
   anchor: CommentAnchorSchema,
@@ -172,28 +185,36 @@ export const CommentThreadSchema = z.object({
   messages: CommentMessageSchema.array().min(1),
   resolved: z.boolean(),
   resolvedAt: z.number().optional(),
-  /** Relocation failed after a snapshot refresh. */
+  /** Relocation failed after a snapshot refresh: the lines left the diff, or the file left the review. */
   stale: z.boolean(),
-  /** Original startLine, shown in export when stale. */
+  /** Original startLine of a line thread, shown in export when stale. */
   staleFromLine: z.number().optional(),
 });
 export type CommentThread = z.infer<typeof CommentThreadSchema>;
 
-/** Create payload. `quoted` is optional: the server quotes the range from the snapshot. */
+/**
+ * Create payload. Without `startLine` the thread is on the file as a whole; then `side`,
+ * `endLine` and `quoted` are refused rather than ignored, so a payload that meant a line
+ * never lands on the file. `quoted` is optional: the server quotes the range from the snapshot.
+ */
 export const ThreadCreateSchema = z
   .object({
     path: z.string().min(1),
     /** Default 'new'. */
     side: SideSchema.optional(),
-    startLine: z.number().int().positive(),
+    startLine: z.number().int().positive().optional(),
     /** Default startLine. */
     endLine: z.number().int().positive().optional(),
     body: z.string().refine((body) => body.trim().length > 0, 'body required'),
     quoted: z.string().optional(),
   })
-  .refine((t) => t.endLine == null || t.endLine >= t.startLine, {
+  .refine((t) => t.startLine == null || t.endLine == null || t.endLine >= t.startLine, {
     path: ['endLine'],
     message: 'endLine must be ≥ startLine',
+  })
+  .refine((t) => t.startLine != null || (t.side == null && t.endLine == null && t.quoted == null), {
+    path: ['startLine'],
+    message: 'side, endLine and quoted need a startLine; leave all four out for a comment on the whole file',
   });
 export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
 

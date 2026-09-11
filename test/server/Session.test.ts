@@ -94,7 +94,7 @@ describe('Session', () => {
 
     await session.comments.clear();
     const c = await session.comments.addThread(
-      { path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' },
+      { kind: 'line', path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' },
       { body: 'old-side note' },
     );
     await session.refresh();
@@ -108,20 +108,20 @@ describe('Session', () => {
     await session.comments.clear();
     // Context 0 shows only `delta`; `alpha` exists on both sides but is outside every hunk.
     const outside = await session.comments.addThread(
-      { path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' },
+      { kind: 'line', path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' },
       { body: 'context line' },
     );
     const inside = await session.comments.addThread(
-      { path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' },
+      { kind: 'line', path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' },
       { body: 'added line' },
     );
     // `same.txt` is not part of the diff: nothing can display an old-side thread on it, the file view shows a new-side one.
     const unchangedOld = await session.comments.addThread(
-      { path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' },
+      { kind: 'line', path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' },
       { body: 'x' },
     );
     const unchangedNew = await session.comments.addThread(
-      { path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' },
+      { kind: 'line', path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' },
       { body: 'y' },
     );
     await session.refresh();
@@ -164,11 +164,31 @@ describe('Session', () => {
   it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
     await session.start({ kind: 'revspec', args: ['main..feat'] });
-    const quote = session.quoter();
+    const { quote, hasFile } = session.anchorSource();
     expect(await quote('new.txt', 'new', 2, 4)).toBe('beta\ngamma\ndelta');
     expect(await quote('new.txt', 'old', 1, 1)).toBe('alpha');
     expect(await quote('new.txt', 'new', 4, 5)).toBeNull();
     expect(await quote('secret.env', 'new', 1, 1)).toBeNull();
+    // File threads go on the review's files: a changed file by its new path, or any tree path.
+    expect(await hasFile('new.txt')).toBe(true);
+    expect(await hasFile('same.txt')).toBe(true);
+    for (const p of ['old.txt', 'secret.env', '.git/config', '../etc/passwd']) expect(await hasFile(p)).toBe(false);
+    await session.close();
+  });
+
+  it('keeps a file thread fresh while its file is in the review and flags it when the comparison drops the file', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 3 });
+    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.comments.clear();
+    const renamed = await session.comments.addThread({ kind: 'file', path: 'new.txt' }, { body: 'split this' });
+    const unchanged = await session.comments.addThread({ kind: 'file', path: 'same.txt' }, { body: 'fine' });
+    const oldName = await session.comments.addThread({ kind: 'file', path: 'old.txt' }, { body: 'gone' });
+    await session.refresh();
+    const stale = () => [renamed, unchanged, oldName].map((t) => session.comments.get(t.id)?.stale);
+    expect(stale()).toEqual([false, false, true]);
+    // A file thread never has a line to remember.
+    expect(session.comments.get(oldName.id)?.staleFromLine).toBeUndefined();
+    await session.comments.clear();
     await session.close();
   });
 

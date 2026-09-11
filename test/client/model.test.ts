@@ -8,6 +8,7 @@ import {
   type Snapshot,
 } from '../../src/shared/protocol.js';
 import {
+  anchorLabel,
   compareTreeOrder,
   countViewed,
   currentPath,
@@ -115,10 +116,20 @@ describe('orderedPaths', () => {
   });
 });
 
+describe('anchorLabel', () => {
+  it('names a line, a range, a removed range, or the whole file', () => {
+    const line = { kind: 'line', path: 'a.py', side: 'new', startLine: 3, endLine: 3, quoted: '' } as const;
+    expect(anchorLabel(line)).toBe('L3');
+    expect(anchorLabel({ ...line, endLine: 5 })).toBe('L3–5');
+    expect(anchorLabel({ ...line, side: 'old' })).toBe('removed L3');
+    expect(anchorLabel({ kind: 'file', path: 'a.py' })).toBe('whole file');
+  });
+});
+
 describe('reuseThreads', () => {
   const thread = (id: string, over: Partial<CommentThread> = {}): CommentThread => ({
     id,
-    anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x' },
+    anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x' },
     messages: [{ id: `${id}-m`, body: 'b', createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,

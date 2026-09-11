@@ -1,5 +1,5 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import type { CommentAnchor } from '../../shared/protocol.js';
+import type { LineAnchor } from '../../shared/protocol.js';
 import { pathFromItemId, visibleThreads } from '../model.js';
 import { useStore, type ReviewState } from '../store.js';
 import { isDeletionRow, watchRenderedRows } from './rows.js';
@@ -19,7 +19,7 @@ export const THREAD_LINE_ATTR = 'data-thread-line';
  * Each `code` column holds a gutter and a content element whose children pair up by index,
  * the same pairing the viewer uses to paint its selection.
  */
-export function markThreadRows(root: ParentNode, anchors: readonly CommentAnchor[]): void {
+export function markThreadRows(root: ParentNode, anchors: readonly LineAnchor[]): void {
   for (const code of root.querySelectorAll('code')) {
     const [gutter, content] = code.children;
     if (!gutter || !content) continue;
@@ -35,11 +35,14 @@ export function markThreadRows(root: ParentNode, anchors: readonly CommentAnchor
   }
 }
 
-/** The anchors to tint in `path`: those of the threads whose cards are shown, so a hidden resolved thread leaves no tint. */
-export function tintedAnchors(state: Pick<ReviewState, 'threads' | 'showResolved'>, path: string): CommentAnchor[] {
+/**
+ * The ranges to tint in `path`: those of the line threads whose cards are shown, so a hidden
+ * resolved thread leaves no tint. A file thread has no lines to tint.
+ */
+export function tintedAnchors(state: Pick<ReviewState, 'threads' | 'showResolved'>, path: string): LineAnchor[] {
   return visibleThreads(state)
-    .filter((t) => t.anchor.path === path)
-    .map((t) => t.anchor);
+    .map((t) => t.anchor)
+    .filter((a): a is LineAnchor => a.kind === 'line' && a.path === path);
 }
 
 export function installThreadHighlights(

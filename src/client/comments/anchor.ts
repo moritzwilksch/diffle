@@ -1,5 +1,5 @@
 import type { CodeViewLineSelection, FileDiffMetadata } from '@pierre/diffs';
-import type { CommentAnchor, Side } from '../../shared/protocol.js';
+import type { LineAnchor, Side } from '../../shared/protocol.js';
 
 export interface ResolvedRange {
   side: Side;
@@ -66,6 +66,6 @@ export function quoteLines(contents: string, startLine: number, endLine: number)
 }
 
 /** Builds the durable anchor for a resolved range, quoting from that side's contents. */
-export function anchorFromRange(path: string, range: ResolvedRange, contents: string): CommentAnchor {
-  return { path, ...range, quoted: quoteLines(contents, range.startLine, range.endLine) };
+export function anchorFromRange(path: string, range: ResolvedRange, contents: string): LineAnchor {
+  return { kind: 'line', path, ...range, quoted: quoteLines(contents, range.startLine, range.endLine) };
 }
