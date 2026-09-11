@@ -202,3 +202,14 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   expect(base.value).toBe('main');
   expect(switchMode).not.toHaveBeenCalled();
 });
+
+it('marks only the entry whose configuration pane is open', async () => {
+  const entry = (label: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>('#mode-picker button')].find((b) => b.textContent?.startsWith(label))!;
+  expect(entry('PR').className).toContain('font-semibold');
+  expect(entry('Working').className).not.toContain('font-semibold');
+  await act(() => useStore.setState({ modePane: null }));
+  for (const label of ['Working', 'Two refs', 'Last commits', 'PR']) {
+    expect(entry(label).className, label).not.toContain('font-semibold');
+  }
+});
