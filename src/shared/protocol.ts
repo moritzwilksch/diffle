@@ -1,20 +1,64 @@
-// Shared contract between server and client. Nothing else crosses that line.
+// Shared contract between server and client. Types are inferred from the wire schemas.
+import { z } from 'zod';
 
-export type Side = 'old' | 'new';
+/**
+ * A language diffle can start a server for. The value is the LSP `languageId` the
+ * server is told in `didOpen`, so it must be the spec's spelling, not ours.
+ */
+export const LanguageIdSchema = z.enum([
+  'c',
+  'cpp',
+  'go',
+  'haskell',
+  'java',
+  'javascript',
+  'javascriptreact',
+  'lua',
+  'nix',
+  'ocaml',
+  'php',
+  'python',
+  'ruby',
+  'rust',
+  'shellscript',
+  'swift',
+  'terraform',
+  'typescript',
+  'typescriptreact',
+  'zig',
+]);
+export type LanguageId = z.infer<typeof LanguageIdSchema>;
+
+export const SideSchema = z.enum(['old', 'new']);
+export type Side = z.infer<typeof SideSchema>;
 
 /** CLI and picker commands are translated into a comparison before rendering. */
-export type ModeRequest = { kind: 'working' } | { kind: 'pr'; pr?: string } | { kind: 'revspec'; args: string[] };
+export const ModeRequestSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('working'),
+  }),
+  z.object({
+    kind: z.literal('pr'),
+    pr: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal('revspec'),
+    args: z.string().array(),
+  }),
+]);
+export type ModeRequest = z.infer<typeof ModeRequestSchema>;
 
 /** A comparison; both endpoints accept a Git revision or "worktree". */
-export interface ModeSpec {
-  old: string;
-  new: string;
+export const ModeSpecSchema = z.object({
+  old: z.string(),
+  new: z.string(),
   /** Compare merge-base(old, new) to new; worktree uses HEAD for the merge base. */
-  mergeBase: boolean;
-  live: 'worktree' | 'refs' | 'none';
+  mergeBase: z.boolean(),
+  live: z.enum(['worktree', 'refs', 'none']),
   /** Fixed when the comparison is entered; discovery never changes comment storage. */
-  commentKey: string;
-}
+  commentKey: z.string(),
+});
+export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
 /** Display comparison endpoints with branch names instead of internal ref namespaces. */
 export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>): string {
@@ -23,205 +67,246 @@ export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'
   return `${name(mode.old)}${mode.mergeBase ? '...' : '..'}${name(mode.new)}`;
 }
 
-export interface GithubPullRequest {
-  repository: string;
-  number: number;
-  url: string;
-  title: string;
-  state: 'OPEN' | 'CLOSED' | 'MERGED';
-  isDraft: boolean;
-}
+export const GithubPullRequestSchema = z.object({
+  repository: z.string(),
+  number: z.number(),
+  url: z.string(),
+  title: z.string(),
+  state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+  isDraft: z.boolean(),
+});
+export type GithubPullRequest = z.infer<typeof GithubPullRequestSchema>;
 
 /** Optional enrichment for a snapshot, independent of its comparison. */
-export interface GithubMetadata {
+export const GithubMetadataSchema = z.object({
   /** Snapshot.version used for this lookup; the client discards results for a different snapshot version. */
-  version: number;
+  version: z.number(),
   /** GitHub repository identified by the local origin URL. */
-  repository: string | null;
-  pullRequest: GithubPullRequest | null;
+  repository: z.string().nullable(),
+  pullRequest: GithubPullRequestSchema.nullable(),
   /** Null when export is allowed; otherwise explains why it is blocked. */
-  reason: string | null;
-}
+  reason: z.string().nullable(),
+});
+export type GithubMetadata = z.infer<typeof GithubMetadataSchema>;
 
-export type ChangeStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
+export const ChangeStatusSchema = z.enum(['A', 'M', 'D', 'R', 'C', 'T', 'U']);
+export type ChangeStatus = z.infer<typeof ChangeStatusSchema>;
 
-export interface ChangedFile {
+export const ChangedFileSchema = z.object({
   /** New path (or old path for deletions). */
-  path: string;
+  path: z.string(),
   /** Set for R/C. */
-  oldPath?: string;
-  status: ChangeStatus;
-  additions: number;
-  deletions: number;
-  binary: boolean;
+  oldPath: z.string().optional(),
+  status: ChangeStatusSchema,
+  additions: z.number(),
+  deletions: z.number(),
+  binary: z.boolean(),
   /** New-side blob sha. '' for deletions. Keys the viewed state. */
-  blob: string;
+  blob: z.string(),
   /** A path pattern or a content sniff said this file is generated. Feeds auto-collapse and risk ranking. */
-  generated: boolean;
+  generated: z.boolean(),
   /** A gitlink (mode 160000): `blob` is the recorded commit, the patch shows the commit-id change, and there is no file to open. */
-  submodule?: true;
-}
+  submodule: z.literal(true).optional(),
+});
+export type ChangedFile = z.infer<typeof ChangedFileSchema>;
 
-export interface Snapshot {
-  root: string;
-  mode: ModeSpec;
+export const SnapshotSchema = z.object({
+  root: z.string(),
+  mode: ModeSpecSchema,
   /** Monotonic; bumps on every refresh and mode switch. */
-  version: number;
+  version: z.number(),
   /** Resolved endpoints; either can be the worktree sentinel. */
-  oldSha: string;
-  newSha: string;
+  oldSha: z.string(),
+  newSha: z.string(),
   /** The checked-out commit; '' on an unborn branch. Symbol navigation needs newSha to be this or the worktree. */
-  headSha: string;
+  headSha: z.string(),
   /** Context lines the patches were generated with. */
-  context: number;
-  changed: ChangedFile[];
+  context: z.number(),
+  changed: ChangedFileSchema.array(),
   /** All paths on the new side: the new commit's tree, or index ∪ untracked for the worktree. Sorted. */
-  tree: string[];
-}
+  tree: z.string().array(),
+});
+export type Snapshot = z.infer<typeof SnapshotSchema>;
 
 /** Body of `POST /api/patch`: the changed files whose patches to return, concatenated. Unknown paths are skipped. */
-export interface PatchRequest {
-  paths: string[];
-}
+export const PatchRequestSchema = z.object({
+  paths: z.string().array().max(200),
+});
+export type PatchRequest = z.infer<typeof PatchRequestSchema>;
 
-export interface FileResponse {
-  path: string;
-  contents: string;
-  binary: boolean;
-}
+export const FileResponseSchema = z.object({
+  path: z.string(),
+  contents: z.string(),
+  binary: z.boolean(),
+});
+export type FileResponse = z.infer<typeof FileResponseSchema>;
 
-export interface CommentAnchor {
-  path: string;
+export const CommentAnchorSchema = z.object({
+  path: z.string(),
   /** Column the user selected in a diff; 'new' for file items. */
-  side: Side;
-  startLine: number;
-  endLine: number;
+  side: SideSchema,
+  startLine: z.number(),
+  endLine: z.number(),
   /** Exact text of [startLine, endLine] at creation. */
-  quoted: string;
-}
+  quoted: z.string(),
+});
+export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
-export interface CommentMessage {
-  id: string;
-  body: string;
-  createdAt: number;
-  updatedAt: number;
-}
+export const CommentMessageSchema = z.object({
+  id: z.string(),
+  body: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
 /** A conversation anchored to a line range. The thread owns the anchor; replies follow it. */
-export interface CommentThread {
-  id: string;
-  anchor: CommentAnchor;
+export const CommentThreadSchema = z.object({
+  id: z.string(),
+  anchor: CommentAnchorSchema,
   /** At least one; [0] opened the thread. */
-  messages: CommentMessage[];
-  resolved: boolean;
-  resolvedAt?: number;
+  messages: CommentMessageSchema.array().min(1),
+  resolved: z.boolean(),
+  resolvedAt: z.number().optional(),
   /** Relocation failed after a snapshot refresh. */
-  stale: boolean;
+  stale: z.boolean(),
   /** Original startLine, shown in export when stale. */
-  staleFromLine?: number;
-}
+  staleFromLine: z.number().optional(),
+});
+export type CommentThread = z.infer<typeof CommentThreadSchema>;
 
 /** Create payload. `quoted` is optional: the server quotes the range from the snapshot. */
-export interface ThreadCreate {
-  path: string;
-  /** Default 'new'. */
-  side?: Side;
-  startLine: number;
-  /** Default startLine. */
-  endLine?: number;
-  body: string;
-  quoted?: string;
-}
+export const ThreadCreateSchema = z
+  .object({
+    path: z.string().min(1),
+    /** Default 'new'. */
+    side: SideSchema.optional(),
+    startLine: z.number().int().positive(),
+    /** Default startLine. */
+    endLine: z.number().int().positive().optional(),
+    body: z.string().refine((body) => body.trim().length > 0, 'body required'),
+    quoted: z.string().optional(),
+  })
+  .refine((t) => t.endLine == null || t.endLine >= t.startLine, {
+    path: ['endLine'],
+    message: 'endLine must be ≥ startLine',
+  });
+export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
 
-export interface ReplyCreate {
-  body: string;
-}
+export const ReplyCreateSchema = z.object({
+  body: z.string().refine((body) => body.trim().length > 0, 'body required'),
+});
+export type ReplyCreate = z.infer<typeof ReplyCreateSchema>;
 
-export type ThreadState = 'open' | 'resolved' | 'all';
+export const ThreadStateSchema = z.enum(['open', 'resolved', 'all']);
+export type ThreadState = z.infer<typeof ThreadStateSchema>;
 
 /** Body of `POST /api/github/export`. Without `threadIds`, every unresolved thread of the mode. */
-export interface GithubExportRequest {
-  threadIds?: string[];
-}
+export const GithubExportRequestSchema = z.object({
+  threadIds: z.string().array().optional(),
+});
+export type GithubExportRequest = z.infer<typeof GithubExportRequestSchema>;
 
-export interface GithubExportResponse {
+export const GithubExportResponseSchema = z.object({
   /** The pull request whose pending review the comments joined; the human submits the review there. */
-  url: string;
+  url: z.string(),
   /** Review comments added to the pending review. */
-  posted: number;
+  posted: z.number(),
   /** Comments already in the pending review at the same anchor whose body this call rewrote in place. */
-  updated: number;
+  updated: z.number(),
   /** Whether this call opened the pending review or added to one that was already waiting. */
-  review: 'created' | 'existing';
+  review: z.enum(['created', 'existing']),
   /** Threads left out, with why (stale, resolved, unknown id, an identical comment already in the review). */
-  skipped: { id: string; reason: string }[];
-}
+  skipped: z
+    .object({
+      id: z.string(),
+      reason: z.string(),
+    })
+    .array(),
+});
+export type GithubExportResponse = z.infer<typeof GithubExportResponseSchema>;
 
-export interface ThreadQuery {
+export const ThreadQuerySchema = z.object({
   /** Default 'open' for export, 'all' for list. */
-  state?: ThreadState;
-  path?: string;
-}
+  state: ThreadStateSchema.optional(),
+  path: z.string().optional(),
+});
+export type ThreadQuery = z.infer<typeof ThreadQuerySchema>;
 
-export interface MessagePatch {
-  body: string;
-}
+export const MessagePatchSchema = z.object({
+  body: z.string(),
+});
+export type MessagePatch = z.infer<typeof MessagePatchSchema>;
 
 /** Explicit viewed/unviewed mark for a path at a specific new-side content. */
-export interface ViewedEntry {
-  path: string;
-  blob: string;
-  viewed: boolean;
-}
+export const ViewedEntrySchema = z.object({
+  path: z.string(),
+  blob: z.string(),
+  viewed: z.boolean(),
+});
+export type ViewedEntry = z.infer<typeof ViewedEntrySchema>;
 
-export interface CommitInfo {
-  sha: string;
-  short: string;
-  message: string;
-}
+export const CommitInfoSchema = z.object({
+  sha: z.string(),
+  short: z.string(),
+  message: z.string(),
+});
+export type CommitInfo = z.infer<typeof CommitInfoSchema>;
 
 /** Endpoints of HEAD~oldOffset..HEAD~newOffset, resolved against the same HEAD. Null means the commit does not exist. */
-export interface LastCommitsPreview {
-  old: CommitInfo | null;
-  new: CommitInfo | null;
-}
+export const LastCommitsPreviewSchema = z.object({
+  old: CommitInfoSchema.nullable(),
+  new: CommitInfoSchema.nullable(),
+});
+export type LastCommitsPreview = z.infer<typeof LastCommitsPreviewSchema>;
 
-export interface RefsResponse {
-  defaultBranch: string | null;
-  current: string | null;
-  branches: string[];
-  remoteBranches: string[];
-  tags: string[];
-  recent: { sha: string; short: string; subject: string }[];
-}
+export const RefsResponseSchema = z.object({
+  defaultBranch: z.string().nullable(),
+  current: z.string().nullable(),
+  branches: z.string().array(),
+  remoteBranches: z.string().array(),
+  tags: z.string().array(),
+  recent: z
+    .object({
+      sha: z.string(),
+      short: z.string(),
+      subject: z.string(),
+    })
+    .array(),
+});
+export type RefsResponse = z.infer<typeof RefsResponseSchema>;
 
-export interface SearchMatch {
-  path: string;
+export const SearchMatchSchema = z.object({
+  path: z.string(),
   /** 1-based line on the new side. */
-  line: number;
-  text: string;
-}
+  line: z.number(),
+  text: z.string(),
+});
+export type SearchMatch = z.infer<typeof SearchMatchSchema>;
 
 /** Where `/api/search` looks: one file (`path`), the diff's changed files (default), or the whole new-side tree. */
-export type SearchScope = 'file' | 'diff' | 'repo';
+export const SearchScopeSchema = z.enum(['file', 'diff', 'repo']);
+export type SearchScope = z.infer<typeof SearchScopeSchema>;
 
-export interface SearchResponse {
-  query: string;
-  matches: SearchMatch[];
-  truncated: boolean;
-}
+export const SearchResponseSchema = z.object({
+  query: z.string(),
+  matches: SearchMatchSchema.array(),
+  truncated: z.boolean(),
+});
+export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 
-export interface UserConfig {
+export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
-  autoViewed: string[];
+  autoViewed: z.string().array(),
   /** Unchanged lines shown around each change (git -U). Default 5. */
-  contextLines: number;
+  contextLines: z.number(),
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
    */
-  lspCommands: Partial<Record<LanguageId, string>>;
-}
+  lspCommands: z.partialRecord(LanguageIdSchema, z.string()),
+});
+export type UserConfig = z.infer<typeof UserConfigSchema>;
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   autoViewed: [],
@@ -230,133 +315,144 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
 };
 
 /** A point in a new-side file. LSP semantics: the column counts UTF-16 units, like a JS string index. */
-export interface LspPosition {
-  path: string;
+export const LspPositionSchema = z.object({
+  path: z.string().min(1),
   /** 1-based. */
-  line: number;
+  line: z.number().int().positive(),
   /** 0-based UTF-16 offset in the line. */
-  col: number;
-}
+  col: z.number().int().nonnegative(),
+});
+export type LspPosition = z.infer<typeof LspPositionSchema>;
 
-export interface LspLocation extends LspPosition {
+export const LspLocationSchema = LspPositionSchema.extend({
   /** The target line's text, for result lists. */
-  text: string;
+  text: z.string(),
   /**
    * The file is not in the snapshot (stdlib, site-packages, an ignored venv) and `path` is absolute.
    * `/api/file` serves it on the new side, read-only, for as long as the language server keeps naming it.
    */
-  external?: true;
-}
+  external: z.literal(true).optional(),
+});
+export type LspLocation = z.infer<typeof LspLocationSchema>;
 
 /** One language server process, as its bridge sees it. */
-export interface LspProcessStatus {
+export const LspProcessStatusSchema = z.object({
   /** Program name, for messages: the basename of the command's first word, e.g. `pyrefly`. */
-  name: string;
+  name: z.string(),
   /** The command line it was started from. */
-  command: string;
+  command: z.string(),
   /** `ready` means initialized; LSP has no universal workspace-ready signal. */
-  state: 'starting' | 'ready' | 'unavailable';
-  message?: string;
+  state: z.enum(['starting', 'ready', 'unavailable']),
+  message: z.string().optional(),
   /** Active work reported through LSP work-done progress; absent when none is reported. */
-  activity?: string[];
+  activity: z.string().array().optional(),
   /** Last warning or error reported by the server, not a process failure. */
-  notice?: { severity: 'warning' | 'error'; message: string };
+  notice: z
+    .object({
+      severity: z.enum(['warning', 'error']),
+      message: z.string(),
+    })
+    .optional(),
   /** Bounded stderr tail for servers that report failures only through their process output. */
-  stderr?: string;
-}
+  stderr: z.string().optional(),
+});
+export type LspProcessStatus = z.infer<typeof LspProcessStatusSchema>;
 
 /** A process plus the languages the pool routes to it. */
-export interface LspServerStatus extends LspProcessStatus {
-  languages: LanguageId[];
-}
+export const LspServerStatusSchema = LspProcessStatusSchema.extend({
+  languages: LanguageIdSchema.array(),
+});
+export type LspServerStatus = z.infer<typeof LspServerStatusSchema>;
 
 /** A language in the diff with no server behind it. */
-export interface LspMissing {
-  language: LanguageId;
+export const LspMissingSchema = z.object({
+  language: LanguageIdSchema,
   /** Programs looked for on PATH, so the UI can name what to install. Empty when config turned the language off. */
-  tried: string[];
-}
+  tried: z.string().array(),
+});
+export type LspMissing = z.infer<typeof LspMissingSchema>;
 
-export interface LspStatus {
+export const LspStatusSchema = z.object({
   /** False with `--no-lsp`: no server will start for this run. */
-  enabled: boolean;
+  enabled: z.boolean(),
   /** One entry per started server. Empty until a snapshot names a language with a server on PATH. */
-  servers: LspServerStatus[];
-  missing: LspMissing[];
-}
+  servers: LspServerStatusSchema.array(),
+  missing: LspMissingSchema.array(),
+});
+export type LspStatus = z.infer<typeof LspStatusSchema>;
 
 /** Results the server could place: snapshot paths, or files it read from disk on the language server's word. */
-export interface LspLocationsResponse {
-  locations: LspLocation[];
-}
+export const LspLocationsResponseSchema = z.object({
+  locations: LspLocationSchema.array(),
+});
+export type LspLocationsResponse = z.infer<typeof LspLocationsResponseSchema>;
 
 /** What the language server says about a position, for the hover tooltip. */
-export interface LspHoverResponse {
+export const LspHoverResponseSchema = z.object({
   /** Markdown; null when the server has nothing for the position. */
-  contents: string | null;
+  contents: z.string().nullable(),
   /** The span the contents describe, when the server says. Same units as LspPosition. */
-  range?: { line: number; col: number; endLine: number; endCol: number };
-}
+  range: z
+    .object({
+      line: z.number(),
+      col: z.number(),
+      endLine: z.number(),
+      endCol: z.number(),
+    })
+    .optional(),
+});
+export type LspHoverResponse = z.infer<typeof LspHoverResponseSchema>;
 
 /** The semantic token class the server assigns a position: an LSP token type name such as `keyword` or `variable`. */
-export interface LspTokenKindResponse {
+export const LspTokenKindResponseSchema = z.object({
   /** Null when the position is not inside a token or the server does not classify tokens. */
-  kind: string | null;
-}
+  kind: z.string().nullable(),
+});
+export type LspTokenKindResponse = z.infer<typeof LspTokenKindResponseSchema>;
 
-export interface LspSymbol {
-  name: string;
+export const LspSymbolSchema = z.object({
+  name: z.string(),
   /** LSP SymbolKind number; the client maps it to a label. */
-  kind: number;
+  kind: z.number(),
   /** Enclosing class or function, when any. */
-  container?: string;
-  path: string;
-  line: number;
+  container: z.string().optional(),
+  path: z.string(),
+  line: z.number(),
   /** Last line of the declaration's full range. */
-  endLine: number;
-  col: number;
-}
+  endLine: z.number(),
+  col: z.number(),
+});
+export type LspSymbol = z.infer<typeof LspSymbolSchema>;
 
 /** Derived per changed file: 'restale' means viewed at an older blob. */
-export type ViewedState = 'unviewed' | 'viewed' | 'restale';
+export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
+export type ViewedState = z.infer<typeof ViewedStateSchema>;
 
-export type ServerMessage =
-  | { type: 'snapshot'; version: number }
-  | { type: 'threads' }
-  | { type: 'viewed' }
-  | { type: 'config' }
-  | { type: 'lsp'; payload: LspStatus };
+export const ServerMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('snapshot'),
+    version: z.number(),
+  }),
+  z.object({
+    type: z.literal('threads'),
+  }),
+  z.object({
+    type: z.literal('viewed'),
+  }),
+  z.object({
+    type: z.literal('config'),
+  }),
+  z.object({
+    type: z.literal('lsp'),
+    payload: LspStatusSchema,
+  }),
+]);
+export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 
 /** True when the language server's view of the disk matches the snapshot's new side. */
 export function followsCheckout(snap: Pick<Snapshot, 'newSha' | 'headSha'>): boolean {
   return snap.newSha === 'worktree' || (snap.headSha !== '' && snap.newSha === snap.headSha);
 }
-
-/**
- * A language diffle can start a server for. The value is the LSP `languageId` the
- * server is told in `didOpen`, so it must be the spec's spelling, not ours.
- */
-export type LanguageId =
-  | 'c'
-  | 'cpp'
-  | 'go'
-  | 'haskell'
-  | 'java'
-  | 'javascript'
-  | 'javascriptreact'
-  | 'lua'
-  | 'nix'
-  | 'ocaml'
-  | 'php'
-  | 'python'
-  | 'ruby'
-  | 'rust'
-  | 'shellscript'
-  | 'swift'
-  | 'terraform'
-  | 'typescript'
-  | 'typescriptreact'
-  | 'zig';
 
 /** Extension (no dot, lowercase) → language. `.h` goes to c because clangd serves both. */
 const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
@@ -442,3 +538,38 @@ function noServer(lsp: LspStatus, language?: LanguageId): string {
   if (off.length) return `The language server for ${off.join(', ')} is off in your diffle config`;
   return language == null ? 'No language server runs for this diff' : `No language server runs for ${language}`;
 }
+
+/** Writable HTTP config fields; unknown keys, including CLI-only lspCommands, are stripped. */
+export const ConfigUpdateSchema = z.object({
+  autoViewed: z.string().array().optional(),
+  contextLines: z.number().int().min(0).max(10_000).optional(),
+});
+export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
+export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });
+export const ViewedBulkRequestSchema = z.object({ entries: ViewedEntrySchema.array() });
+export const FileQuerySchema = z.object({ path: z.string().min(1), rev: SideSchema });
+const offsetSchema = z
+  .string()
+  .regex(/^[0-9]+$/)
+  .transform(Number)
+  .pipe(z.number().int().nonnegative());
+export const LastCommitsQuerySchema = z.object({ oldOffset: offsetSchema, newOffset: offsetSchema });
+const flagSchema = z
+  .enum(['0', '1'])
+  .optional()
+  .transform((value) => value === '1');
+export const SearchQuerySchema = z.object({
+  q: z.string().default(''),
+  scope: SearchScopeSchema.default('diff'),
+  path: z.string().optional(),
+  word: flagSchema,
+  i: flagSchema,
+  re: flagSchema,
+});
+export const SymbolsQuerySchema = z
+  .object({ path: z.string().min(1).optional(), q: z.string().optional() })
+  .refine((query) => query.path != null || query.q != null, 'path or q required');
+export type SymbolsQuery = z.infer<typeof SymbolsQuerySchema>;
+export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
+export const PatchQuerySchema = z.object({ path: z.string().optional() });
+export const ApiErrorSchema = z.object({ error: z.string() });

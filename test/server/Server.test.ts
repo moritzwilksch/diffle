@@ -84,6 +84,90 @@ afterAll(async () => {
 });
 
 describe('Server', () => {
+  it.each([
+    ['POST', '/api/mode'],
+    ['POST', '/api/patch'],
+    ['POST', '/api/threads'],
+    ['POST', '/api/threads/missing/replies'],
+    ['PATCH', '/api/threads/missing/messages/missing'],
+    ['PUT', '/api/threads/missing/resolved'],
+    ['PUT', '/api/viewed'],
+    ['PUT', '/api/viewed/bulk'],
+    ['PUT', '/api/config'],
+    ['POST', '/api/github/export'],
+    ...['definition', 'type-definition', 'hover', 'token-kind', 'references'].map((name) => [
+      'POST',
+      `/api/lsp/${name}`,
+    ]),
+  ])('rejects malformed JSON and null at %s %s before side effects', async (method, path) => {
+    const mode = session.mode;
+    const before = config.get();
+    const broadcast = vi.spyOn(hub, 'broadcast');
+    const exportGithub = vi.spyOn(session, 'exportGithub');
+    try {
+      for (const body of ['{broken', 'null', '']) {
+        const response = await send(method, path, { body });
+        expect(response.status).toBe(400);
+        expect(JSON.parse(response.body).error).toEqual(expect.any(String));
+      }
+      expect(session.mode).toEqual(mode);
+      expect(config.get()).toEqual(before);
+      expect(broadcast).not.toHaveBeenCalled();
+      expect(exportGithub).not.toHaveBeenCalled();
+    } finally {
+      broadcast.mockRestore();
+      exportGithub.mockRestore();
+    }
+  });
+
+  it.each([
+    ['POST', '/api/mode', { kind: 'revspec', args: [1] }],
+    ['POST', '/api/patch', { paths: Array(201).fill('a.txt') }],
+    ['PUT', '/api/config', { autoViewed: ['a', 1] }],
+    ['PUT', '/api/config', { contextLines: -1 }],
+    ['PUT', '/api/config', { contextLines: 1.5 }],
+    ['PUT', '/api/config', { contextLines: 10001 }],
+    ['PUT', '/api/viewed/bulk', { entries: [{ path: 'a', blob: '', viewed: true }, null] }],
+    ['PUT', '/api/viewed', { path: 'a', blob: '', viewed: 'true' }],
+    ['POST', '/api/github/export', { threadIds: [1] }],
+    ['POST', '/api/threads/missing/replies', { body: '  ' }],
+    ['PATCH', '/api/threads/missing/messages/missing', { body: 1 }],
+    ['PUT', '/api/threads/missing/resolved', { resolved: 'false' }],
+    ...['definition', 'type-definition', 'hover', 'token-kind', 'references'].flatMap((name) =>
+      [1.5, 0, 9007199254740992].map((line): [string, string, unknown] => [
+        'POST',
+        `/api/lsp/${name}`,
+        { path: 'a.ts', line, col: 0 },
+      ]),
+    ),
+  ])('validates fields at %s %s', async (method, path, body) => {
+    expect((await send(method, path, { body: JSON.stringify(body) })).status).toBe(400);
+  });
+
+  it.each([
+    '/api/file?path=a.txt&rev=other',
+    '/api/search?scope=other',
+    '/api/search?word=true',
+    '/api/threads?state=other',
+    '/api/threads/export?state=other',
+    '/api/lsp/symbols',
+  ])('validates query parameters at %s', async (path) => {
+    expect((await send('GET', path)).status).toBe(400);
+  });
+
+  it('does not clear threads for an invalid stale filter', async () => {
+    const clear = vi.spyOn(session.comments, 'clear');
+    const removeStale = vi.spyOn(session.comments, 'removeStale');
+    try {
+      expect((await send('DELETE', '/api/threads?stale=0')).status).toBe(400);
+      expect(clear).not.toHaveBeenCalled();
+      expect(removeStale).not.toHaveBeenCalled();
+    } finally {
+      clear.mockRestore();
+      removeStale.mockRestore();
+    }
+  });
+
   it('serves repository identity as GitHub metadata', async () => {
     const snap = await session.snapshotter.current();
     expect(snap).not.toHaveProperty('githubRepository');

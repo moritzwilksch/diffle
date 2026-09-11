@@ -1,21 +1,32 @@
 import { Hono } from 'hono';
-import type {
-  FileResponse,
-  GithubExportRequest,
-  LspPosition,
-  LspStatus,
-  MessagePatch,
-  ModeRequest,
-  PatchRequest,
-  ReplyCreate,
-  SearchResponse,
-  Side,
-  ThreadQuery,
-  ThreadState,
-  UserConfig,
-  ViewedEntry,
+import type { Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+import { z } from 'zod';
+import {
+  type FileResponse,
+  type SearchResponse,
+  type LspStatus,
+  type UserConfig,
+  ModeRequestSchema,
+  PatchRequestSchema,
+  FileQuerySchema,
+  LastCommitsQuerySchema,
+  SearchQuerySchema,
+  ThreadQuerySchema,
+  ReplyCreateSchema,
+  MessagePatchSchema,
+  ResolvedRequestSchema,
+  GithubExportRequestSchema,
+  ViewedBulkRequestSchema,
+  ViewedEntrySchema,
+  LspPositionSchema,
+  SymbolsQuerySchema,
+  ConfigUpdateSchema,
+  ClearThreadsQuerySchema,
+  PatchQuerySchema,
+  followsCheckout,
+  lspBlocker,
 } from '../shared/protocol.js';
-import { followsCheckout, lspBlocker } from '../shared/protocol.js';
 import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
@@ -28,8 +39,14 @@ import type { Session } from './Session.js';
 import type { UserConfigStore } from './UserConfig.js';
 import type { WsHub } from './ws.js';
 
-/** Paths ride git's argv; a client batch is far smaller than this. */
-const MAX_PATCH_PATHS = 200;
+/** Invalid JSON is a request error; failures after parsing still propagate. */
+async function readJson(c: Context): Promise<unknown> {
+  try {
+    return await c.req.json();
+  } catch {
+    throw new HTTPException(400, { message: 'invalid JSON body' });
+  }
+}
 
 export interface ApiDeps {
   session: Session;
@@ -46,6 +63,8 @@ export function createApi(deps: ApiDeps): Hono {
   const app = new Hono();
 
   app.onError((err, c) => {
+    if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+    if (err instanceof z.ZodError) return c.json({ error: z.prettifyError(err) }, 400);
     if (err instanceof NotFoundError) return c.json({ error: 'not found' }, 404);
     if (err instanceof RevspecError || err instanceof GitError) return c.json({ error: err.message }, 400);
     if (err instanceof ImportError || err instanceof UnquotableError) return c.json({ error: err.message }, 400);
@@ -64,8 +83,7 @@ export function createApi(deps: ApiDeps): Hono {
   app.get('/api/snapshot', async (c) => c.json(await session.snapshotter.current()));
 
   app.post('/api/mode', async (c) => {
-    const req = (await c.req.json()) as ModeRequest;
-    if (!isModeRequest(req)) return c.json({ error: 'invalid mode request' }, 400);
+    const req = ModeRequestSchema.parse(await readJson(c));
     return c.json(await session.switchMode(req));
   });
 
@@ -77,14 +95,12 @@ export function createApi(deps: ApiDeps): Hono {
   app.get('/api/refs', async (c) => c.json(await session.repo.refs()));
 
   app.get('/api/last-commits-preview', async (c) => {
-    const values = [c.req.query('oldOffset') ?? '', c.req.query('newOffset') ?? ''];
-    if (values.some((value) => !/^[0-9]+$/.test(value) || !Number.isSafeInteger(Number(value))))
-      return c.json({ error: 'offsets must be nonnegative whole numbers' }, 400);
-    return c.json(await session.repo.lastCommitsPreview(Number(values[0]), Number(values[1])));
+    const { oldOffset, newOffset } = LastCommitsQuerySchema.parse(c.req.query());
+    return c.json(await session.repo.lastCommitsPreview(oldOffset, newOffset));
   });
 
   app.get('/api/patch', async (c) => {
-    const path = c.req.query('path');
+    const { path } = PatchQuerySchema.parse(c.req.query());
     if (!path) return c.text(await session.snapshotter.patchAll());
     const patch = await session.snapshotter.patch(path);
     if (patch == null) return c.json({ error: 'not a changed file' }, 404);
@@ -93,17 +109,12 @@ export function createApi(deps: ApiDeps): Hono {
 
   // A path list in the body: a client loads a review in bounded batches, and a refresh only its changed files.
   app.post('/api/patch', async (c) => {
-    const body = (await c.req.json()) as Partial<PatchRequest>;
-    const paths = Array.isArray(body?.paths) && body.paths.every((p) => typeof p === 'string') ? body.paths : null;
-    if (!paths) return c.json({ error: 'paths (string list) required' }, 400);
-    if (paths.length > MAX_PATCH_PATHS) return c.json({ error: `at most ${MAX_PATCH_PATHS} paths per request` }, 400);
+    const { paths } = PatchRequestSchema.parse(await readJson(c));
     return c.text(await session.snapshotter.patchMany(paths));
   });
 
   app.get('/api/file', async (c) => {
-    const path = c.req.query('path');
-    const rev = c.req.query('rev') as Side | undefined;
-    if (!path || (rev !== 'old' && rev !== 'new')) return c.json({ error: 'path and rev=old|new required' }, 400);
+    const { path, rev } = FileQuerySchema.parse(c.req.query());
     const snap = await session.snapshotter.current();
     // Outside the snapshot only a file the language server named is readable (see LspBridge.readExternal).
     const buf =
@@ -115,50 +126,36 @@ export function createApi(deps: ApiDeps): Hono {
   });
 
   app.get('/api/search', async (c) => {
-    const q = c.req.query('q') ?? '';
+    const query = SearchQuerySchema.parse(c.req.query());
+    const { q, scope } = query;
     const snap = await session.snapshotter.current();
-    const flag = (k: string) => c.req.query(k) === '1';
     // Default scope is the diff's new side; `scope=repo` widens to the whole tree, `scope=file`
     // narrows to `path`, which must be on the new side (an unknown path matches nothing).
-    const scope = c.req.query('scope');
     const paths =
       scope === 'repo'
         ? undefined
         : scope === 'file'
-          ? snap.tree.filter((p) => p === c.req.query('path'))
+          ? snap.tree.filter((p) => p === query.path)
           : snap.changed.filter((f) => f.status !== 'D').map((f) => f.path);
     const { matches, truncated } = await session.repo.grep(q, snap.newSha, 500, {
-      word: flag('word'),
-      ignoreCase: flag('i'),
-      regex: flag('re'),
+      word: query.word,
+      ignoreCase: query.i,
+      regex: query.re,
       paths,
     });
     const body: SearchResponse = { query: q, matches, truncated };
     return c.json(body);
   });
 
-  const threadQuery = (
-    c: { req: { query(k: string): string | undefined } },
-    defaultState: ThreadState,
-  ): ThreadQuery | { error: string } => {
-    const state = c.req.query('state') ?? defaultState;
-    if (state !== 'open' && state !== 'resolved' && state !== 'all')
-      return { error: 'state must be open, resolved or all' };
-    const q: ThreadQuery = { state };
-    const path = c.req.query('path');
-    if (path) q.path = path;
-    return q;
-  };
-
   app.get('/api/threads', (c) => {
-    const q = threadQuery(c, 'all');
-    if ('error' in q) return c.json(q, 400);
+    const q = ThreadQuerySchema.parse(c.req.query());
+    q.state ??= 'all';
     return c.json(session.comments.threads(q));
   });
 
   app.get('/api/threads/export', (c) => {
-    const q = threadQuery(c, 'open');
-    if ('error' in q) return c.json(q, 400);
+    const q = ThreadQuerySchema.parse(c.req.query());
+    q.state ??= 'open';
     return c.text(formatPrompt(session.comments.threads(q)));
   });
 
@@ -172,23 +169,21 @@ export function createApi(deps: ApiDeps): Hono {
 
   // One object or an array. Returns what was created; open duplicates are skipped.
   app.post('/api/threads', async (c) => {
-    const imports = parseImports(await c.req.json());
+    const imports = parseImports(await readJson(c));
     const { added } = await session.comments.importThreads(imports, session.quoter());
     if (added.length) hub.broadcast({ type: 'threads' });
     return c.json(added, 201);
   });
 
   app.post('/api/threads/:id/replies', async (c) => {
-    const body = (await c.req.json()) as ReplyCreate;
-    if (typeof body?.body !== 'string' || !body.body.trim()) return c.json({ error: 'body required' }, 400);
+    const body = ReplyCreateSchema.parse(await readJson(c));
     const t = await session.comments.reply(c.req.param('id'), { body: body.body });
     hub.broadcast({ type: 'threads' });
     return c.json(t, 201);
   });
 
   app.patch('/api/threads/:id/messages/:mid', async (c) => {
-    const body = (await c.req.json()) as MessagePatch;
-    if (typeof body?.body !== 'string') return c.json({ error: 'body required' }, 400);
+    const body = MessagePatchSchema.parse(await readJson(c));
     const t = await session.comments.editMessage(c.req.param('id'), c.req.param('mid'), body.body);
     hub.broadcast({ type: 'threads' });
     return c.json(t);
@@ -201,8 +196,7 @@ export function createApi(deps: ApiDeps): Hono {
   });
 
   app.put('/api/threads/:id/resolved', async (c) => {
-    const body = (await c.req.json()) as { resolved?: unknown };
-    if (typeof body?.resolved !== 'boolean') return c.json({ error: 'resolved (boolean) required' }, 400);
+    const body = ResolvedRequestSchema.parse(await readJson(c));
     const t = await session.comments.setResolved(c.req.param('id'), body.resolved);
     hub.broadcast({ type: 'threads' });
     return c.json(t);
@@ -216,7 +210,8 @@ export function createApi(deps: ApiDeps): Hono {
 
   /** `?stale=1` deletes only stale threads; without it, every thread of this mode. */
   app.delete('/api/threads', async (c) => {
-    if (c.req.query('stale') != null) await session.comments.removeStale();
+    const { stale } = ClearThreadsQuerySchema.parse(c.req.query());
+    if (stale === '1') await session.comments.removeStale();
     else await session.comments.clear();
     hub.broadcast({ type: 'threads' });
     return c.body(null, 204);
@@ -224,29 +219,21 @@ export function createApi(deps: ApiDeps): Hono {
 
   // Adds threads to a pending review on the matching pull request through the local `gh`; the human submits it on GitHub.
   app.post('/api/github/export', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Partial<GithubExportRequest>;
-    const ids = body.threadIds;
-    if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
-      return c.json({ error: 'threadIds must be a string list' }, 400);
-    return c.json(await session.exportGithub({ threadIds: ids }));
+    const body = GithubExportRequestSchema.parse(await readJson(c));
+    return c.json(await session.exportGithub(body));
   });
 
   app.get('/api/viewed', (c) => c.json(session.comments.viewed()));
 
   app.put('/api/viewed/bulk', async (c) => {
-    const body = (await c.req.json()) as { entries?: unknown };
-    const entries = Array.isArray(body.entries) ? (body.entries as unknown[]) : null;
-    if (!entries || !entries.every(isViewedEntry)) return c.json({ error: 'entries required' }, 400);
+    const { entries } = ViewedBulkRequestSchema.parse(await readJson(c));
     const list = await session.comments.setViewedMany(entries);
     hub.broadcast({ type: 'viewed' });
     return c.json(list);
   });
 
   app.put('/api/viewed', async (c) => {
-    const body = (await c.req.json()) as { path?: unknown; blob?: unknown; viewed?: unknown };
-    if (typeof body.path !== 'string' || typeof body.blob !== 'string' || typeof body.viewed !== 'boolean') {
-      return c.json({ error: 'path, blob, viewed required' }, 400);
-    }
+    const body = ViewedEntrySchema.parse(await readJson(c));
     const list = await session.comments.setViewed(body.path, body.blob, body.viewed);
     hub.broadcast({ type: 'viewed' });
     return c.json(list);
@@ -266,49 +253,42 @@ export function createApi(deps: ApiDeps): Hono {
   };
 
   app.post('/api/lsp/definition', async (c) => {
-    const pos = (await c.req.json()) as LspPosition;
-    if (!isLspPosition(pos)) return c.json({ error: 'path, line, col required' }, 400);
+    const pos = LspPositionSchema.parse(await readJson(c));
     const r = await lspFor(pos.path);
     if ('error' in r) return c.json({ error: r.error }, 409);
     return c.json(await r.lsp.definition(pos));
   });
 
   app.post('/api/lsp/type-definition', async (c) => {
-    const pos = (await c.req.json()) as LspPosition;
-    if (!isLspPosition(pos)) return c.json({ error: 'path, line, col required' }, 400);
+    const pos = LspPositionSchema.parse(await readJson(c));
     const r = await lspFor(pos.path);
     if ('error' in r) return c.json({ error: r.error }, 409);
     return c.json(await r.lsp.typeDefinition(pos));
   });
 
   app.post('/api/lsp/hover', async (c) => {
-    const pos = (await c.req.json()) as LspPosition;
-    if (!isLspPosition(pos)) return c.json({ error: 'path, line, col required' }, 400);
+    const pos = LspPositionSchema.parse(await readJson(c));
     const r = await lspFor(pos.path);
     if ('error' in r) return c.json({ error: r.error }, 409);
     return c.json(await r.lsp.hover(pos));
   });
 
   app.post('/api/lsp/token-kind', async (c) => {
-    const pos = (await c.req.json()) as LspPosition;
-    if (!isLspPosition(pos)) return c.json({ error: 'path, line, col required' }, 400);
+    const pos = LspPositionSchema.parse(await readJson(c));
     const r = await lspFor(pos.path);
     if ('error' in r) return c.json({ error: r.error }, 409);
     return c.json(await r.lsp.tokenKind(pos));
   });
 
   app.post('/api/lsp/references', async (c) => {
-    const pos = (await c.req.json()) as LspPosition;
-    if (!isLspPosition(pos)) return c.json({ error: 'path, line, col required' }, 400);
+    const pos = LspPositionSchema.parse(await readJson(c));
     const r = await lspFor(pos.path);
     if ('error' in r) return c.json({ error: r.error }, 409);
     return c.json(await r.lsp.references(pos));
   });
 
   app.get('/api/lsp/symbols', async (c) => {
-    const path = c.req.query('path');
-    const query = c.req.query('q');
-    if (path == null && query == null) return c.json({ error: 'path or q required' }, 400);
+    const { path, q: query } = SymbolsQuerySchema.parse(c.req.query());
     const r = await lspFor(path);
     if ('error' in r) return c.json({ error: r.error }, 409);
     return c.json(path != null ? await r.lsp.documentSymbols(path) : await r.lsp.workspaceSymbols(query ?? ''));
@@ -317,14 +297,8 @@ export function createApi(deps: ApiDeps): Hono {
   app.get('/api/config', (c) => c.json(effectiveConfig(deps)));
 
   app.put('/api/config', async (c) => {
-    const body = (await c.req.json()) as Partial<UserConfig>;
-    if (body.autoViewed != null && !Array.isArray(body.autoViewed))
-      return c.json({ error: 'autoViewed must be a list' }, 400);
-    if (body.contextLines != null && typeof body.contextLines !== 'number')
-      return c.json({ error: 'contextLines must be a number' }, 400);
-    // lspCommands hold shell commands; only the CLI may write them (`diffle config set-lsp`).
-    const { lspCommands: _ignored, ...writable } = body;
-    await deps.config.set(writable);
+    const body = ConfigUpdateSchema.parse(await readJson(c));
+    await deps.config.set(body);
     hub.broadcast({ type: 'config' });
     // The session keeps its own context (`--context` or the config at startup); only an explicit change moves it.
     if (body.contextLines != null) await session.setContext(deps.config.get().contextLines);
@@ -346,33 +320,4 @@ function effectiveConfig(deps: ApiDeps): UserConfig {
 
 function lspStatus(deps: ApiDeps): LspStatus {
   return deps.lsp?.status() ?? { enabled: false, servers: [], missing: [] };
-}
-
-function isLspPosition(p: unknown): p is LspPosition {
-  if (typeof p !== 'object' || p == null) return false;
-  const x = p as Record<string, unknown>;
-  return (
-    typeof x.path === 'string' && typeof x.line === 'number' && x.line >= 1 && typeof x.col === 'number' && x.col >= 0
-  );
-}
-
-function isViewedEntry(e: unknown): e is ViewedEntry {
-  if (typeof e !== 'object' || e == null) return false;
-  const x = e as Record<string, unknown>;
-  return typeof x.path === 'string' && typeof x.blob === 'string' && typeof x.viewed === 'boolean';
-}
-
-function isModeRequest(r: unknown): r is ModeRequest {
-  if (typeof r !== 'object' || r == null) return false;
-  const x = r as Record<string, unknown>;
-  switch (x.kind) {
-    case 'working':
-      return true;
-    case 'pr':
-      return x.pr == null || typeof x.pr === 'string';
-    case 'revspec':
-      return Array.isArray(x.args) && x.args.every((a) => typeof a === 'string');
-    default:
-      return false;
-  }
 }
