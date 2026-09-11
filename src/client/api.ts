@@ -1,41 +1,61 @@
+import { z } from 'zod';
+import {
+  ConfigUpdateSchema,
+  GithubExportRequestSchema,
+  LspPositionSchema,
+  MessagePatchSchema,
+  ModeRequestSchema,
+  PatchRequestSchema,
+  ReplyCreateSchema,
+  ResolvedRequestSchema,
+  ThreadCreateSchema,
+  ViewedBulkRequestSchema,
+  ApiErrorSchema,
+  CommentThreadSchema,
+  FileResponseSchema,
+  GithubExportResponseSchema,
+  GithubMetadataSchema,
+  LastCommitsPreviewSchema,
+  LspHoverResponseSchema,
+  LspLocationsResponseSchema,
+  LspStatusSchema,
+  LspSymbolSchema,
+  LspTokenKindResponseSchema,
+  RefsResponseSchema,
+  SearchResponseSchema,
+  ServerMessageSchema,
+  SnapshotSchema,
+  UserConfigSchema,
+  ViewedEntrySchema,
+} from '../shared/protocol.js';
 import type {
-  CommentThread,
-  LastCommitsPreview,
-  FileResponse,
   GithubExportRequest,
-  GithubMetadata,
-  GithubExportResponse,
-  LspHoverResponse,
-  LspLocationsResponse,
   LspPosition,
-  LspStatus,
-  LspTokenKindResponse,
-  LspSymbol,
   ModeRequest,
-  PatchRequest,
-  RefsResponse,
   ReplyCreate,
-  SearchResponse,
   SearchScope,
   ServerMessage,
   Side,
-  Snapshot,
   ThreadCreate,
   ThreadQuery,
-  UserConfig,
   ViewedEntry,
+  ConfigUpdate,
+  SymbolsQuery,
 } from '../shared/protocol.js';
 
 // The only module that knows URLs.
 
-async function json<T>(input: string, init?: RequestInit): Promise<T> {
+function encode<S extends z.ZodType>(schema: S, value: z.input<S>): string {
+  return JSON.stringify(schema.parse(value));
+}
+
+async function json<T>(schema: z.ZodType<T>, input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, {
     ...init,
     headers: { 'content-type': 'application/json', ...init?.headers },
   });
   if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  return schema.parse(res.status === 204 ? undefined : await res.json());
 }
 
 async function text(input: string, init?: RequestInit): Promise<string> {
@@ -46,8 +66,8 @@ async function text(input: string, init?: RequestInit): Promise<string> {
 
 async function safeMessage(res: Response): Promise<string> {
   try {
-    const body = (await res.json()) as { error?: string };
-    return body.error ?? res.statusText;
+    const result = ApiErrorSchema.safeParse(await res.json());
+    return result.success ? result.data.error : res.statusText;
   } catch {
     return res.statusText;
   }
@@ -66,12 +86,14 @@ const q = (params: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
-  github: () => json<GithubMetadata>('/api/github'),
-  snapshot: () => json<Snapshot>('/api/snapshot'),
-  switchMode: (req: ModeRequest) => json<Snapshot>('/api/mode', { method: 'POST', body: JSON.stringify(req) }),
-  refs: () => json<RefsResponse>('/api/refs'),
+  github: () => json(GithubMetadataSchema, '/api/github'),
+  snapshot: () => json(SnapshotSchema, '/api/snapshot'),
+  switchMode: (req: ModeRequest) =>
+    json(SnapshotSchema, '/api/mode', { method: 'POST', body: encode(ModeRequestSchema, req) }),
+  refs: () => json(RefsResponseSchema, '/api/refs'),
   lastCommitsPreview: (oldOffset: number, newOffset: number, signal?: AbortSignal) =>
-    json<LastCommitsPreview>(
+    json(
+      LastCommitsPreviewSchema,
       `/api/last-commits-preview?${q({ oldOffset: String(oldOffset), newOffset: String(newOffset) })}`,
       { signal },
     ),
@@ -81,21 +103,22 @@ export const api = {
     text('/api/patch', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ paths } satisfies PatchRequest),
+      body: encode(PatchRequestSchema, { paths }),
     }),
   /** One side's full contents; `signal` aborts the request when its consumer no longer wants it. */
   file: (path: string, rev: Side, signal?: AbortSignal) =>
-    json<FileResponse>(`/api/file?${q({ path, rev })}`, { signal }),
+    json(FileResponseSchema, `/api/file?${q({ path, rev })}`, { signal }),
   /** `path` names the file a `scope: 'file'` search is confined to. */
   search: (
     query: string,
     opts: { word?: boolean; ignoreCase?: boolean; regex?: boolean; scope?: SearchScope; path?: string } = {},
   ) =>
-    json<SearchResponse>(
+    json(
+      SearchResponseSchema,
       `/api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, path: opts.path })}`,
     ),
   threads: (query: ThreadQuery = {}) =>
-    json<CommentThread[]>(`/api/threads?${q({ state: query.state, path: query.path })}`),
+    json(CommentThreadSchema.array(), `/api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`/api/threads/export?${q({ state: 'open' })}`),
   /** One message, with its thread's location and quote, as an agent prompt. */
@@ -103,52 +126,71 @@ export const api = {
     text(`/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
   /** Posts threads to the matching PR's pending review; all unresolved ones without `threadIds`. */
   exportToGithub: (req: GithubExportRequest) =>
-    json<GithubExportResponse>('/api/github/export', { method: 'POST', body: JSON.stringify(req) }),
-  addThread: (t: ThreadCreate) => json<CommentThread[]>('/api/threads', { method: 'POST', body: JSON.stringify(t) }),
+    json(GithubExportResponseSchema, '/api/github/export', {
+      method: 'POST',
+      body: encode(GithubExportRequestSchema, req),
+    }),
+  addThread: (t: ThreadCreate) =>
+    json(CommentThreadSchema.array(), '/api/threads', { method: 'POST', body: encode(ThreadCreateSchema, t) }),
   reply: (id: string, r: ReplyCreate) =>
-    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/replies`, { method: 'POST', body: JSON.stringify(r) }),
+    json(CommentThreadSchema, `/api/threads/${encodeURIComponent(id)}/replies`, {
+      method: 'POST',
+      body: encode(ReplyCreateSchema, r),
+    }),
   editMessage: (id: string, mid: string, body: string) =>
-    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, {
+    json(CommentThreadSchema, `/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ body }),
+      body: encode(MessagePatchSchema, { body }),
     }),
   deleteMessage: (id: string, mid: string) =>
-    json<CommentThread | void>(`/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`, {
-      method: 'DELETE',
-    }),
+    json(
+      CommentThreadSchema.or(z.undefined()),
+      `/api/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(mid)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
   setResolved: (id: string, resolved: boolean) =>
-    json<CommentThread>(`/api/threads/${encodeURIComponent(id)}/resolved`, {
+    json(CommentThreadSchema, `/api/threads/${encodeURIComponent(id)}/resolved`, {
       method: 'PUT',
-      body: JSON.stringify({ resolved }),
+      body: encode(ResolvedRequestSchema, { resolved }),
     }),
-  deleteThread: (id: string) => json<void>(`/api/threads/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  clearThreads: () => json<void>('/api/threads', { method: 'DELETE' }),
-  deleteStaleThreads: () => json<void>('/api/threads?stale=1', { method: 'DELETE' }),
-  viewed: () => json<ViewedEntry[]>('/api/viewed'),
+  deleteThread: (id: string) => json(z.undefined(), `/api/threads/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  clearThreads: () => json(z.undefined(), '/api/threads', { method: 'DELETE' }),
+  deleteStaleThreads: () => json(z.undefined(), '/api/threads?stale=1', { method: 'DELETE' }),
+  viewed: () => json(ViewedEntrySchema.array(), '/api/viewed'),
   setViewedBulk: (entries: ViewedEntry[]) =>
-    json<ViewedEntry[]>('/api/viewed/bulk', { method: 'PUT', body: JSON.stringify({ entries }) }),
+    json(ViewedEntrySchema.array(), '/api/viewed/bulk', {
+      method: 'PUT',
+      body: encode(ViewedBulkRequestSchema, { entries }),
+    }),
   setViewed: (path: string, blob: string, viewed: boolean) =>
-    json<ViewedEntry[]>('/api/viewed', { method: 'PUT', body: JSON.stringify({ path, blob, viewed }) }),
-  lspStatus: () => json<LspStatus>('/api/lsp/status'),
+    json(ViewedEntrySchema.array(), '/api/viewed', {
+      method: 'PUT',
+      body: encode(ViewedEntrySchema, { path, blob, viewed }),
+    }),
+  lspStatus: () => json(LspStatusSchema, '/api/lsp/status'),
   lspDefinition: (pos: LspPosition) =>
-    json<LspLocationsResponse>('/api/lsp/definition', { method: 'POST', body: JSON.stringify(pos) }),
+    json(LspLocationsResponseSchema, '/api/lsp/definition', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   lspTypeDefinition: (pos: LspPosition) =>
-    json<LspLocationsResponse>('/api/lsp/type-definition', { method: 'POST', body: JSON.stringify(pos) }),
+    json(LspLocationsResponseSchema, '/api/lsp/type-definition', {
+      method: 'POST',
+      body: encode(LspPositionSchema, pos),
+    }),
   /** What the server knows about the symbol at `pos`, as markdown. */
   lspHover: (pos: LspPosition) =>
-    json<LspHoverResponse>('/api/lsp/hover', { method: 'POST', body: JSON.stringify(pos) }),
+    json(LspHoverResponseSchema, '/api/lsp/hover', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspTokenKind: (pos: LspPosition) =>
-    json<LspTokenKindResponse>('/api/lsp/token-kind', { method: 'POST', body: JSON.stringify(pos) }),
+    json(LspTokenKindResponseSchema, '/api/lsp/token-kind', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   lspReferences: (pos: LspPosition) =>
-    json<LspLocationsResponse>('/api/lsp/references', { method: 'POST', body: JSON.stringify(pos) }),
+    json(LspLocationsResponseSchema, '/api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   /** Document symbols for a path, or workspace symbols matching a query. */
-  lspSymbols: (query: { path: string } | { q: string }) => json<LspSymbol[]>(`/api/lsp/symbols?${q(query)}`),
-  /** Changed declarations in a file with their call sites outside the diff. */
-  config: () => json<UserConfig>('/api/config'),
+  lspSymbols: (query: SymbolsQuery) => json(LspSymbolSchema.array(), `/api/lsp/symbols?${q(query)}`),
+  config: () => json(UserConfigSchema, '/api/config'),
   /** lspCommands is CLI-only; the server ignores it. */
-  saveConfig: (config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>) =>
-    json<UserConfig>('/api/config', { method: 'PUT', body: JSON.stringify(config) }),
+  saveConfig: (config: ConfigUpdate) =>
+    json(UserConfigSchema, '/api/config', { method: 'PUT', body: encode(ConfigUpdateSchema, config) }),
 };
 
 /**
@@ -170,7 +212,7 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
     };
     ws.onmessage = (e) => {
       try {
-        onMessage(JSON.parse(String(e.data)) as ServerMessage);
+        onMessage(ServerMessageSchema.parse(JSON.parse(String(e.data))));
       } catch {
         /* ignore malformed */
       }
