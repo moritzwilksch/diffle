@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <script>
+      // Relative assets and API URLs need the proxy mount to be a directory.
+      const url = new URL(location.href);
+      if (!url.pathname.endsWith('/') && !url.pathname.endsWith('/index.html')) {
+        url.pathname += '/';
+        location.replace(url.href);
+      }
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>diffle</title>
   </head>

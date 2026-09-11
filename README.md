@@ -55,6 +55,19 @@ Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktre
 
 Generated files and files matching auto-viewed globs start collapsed. There are no globs by default; configure them in settings or with `diffle config`.
 
+## Reverse proxies
+
+The built app supports a path prefix such as `https://my-reverse-proxy:8080/diffle/`.
+Opening `/diffle` redirects to `/diffle/`. Configure the proxy to strip that prefix
+when forwarding to diffle, including WebSocket upgrades at `/diffle/ws`. No build
+or CLI base-path setting is needed.
+
+Run diffle with `--no-open` for a proxy-managed session. Its Host/Origin checks also
+apply behind a proxy: when forwarding to the default loopback listener, use the
+upstream Host (for example `127.0.0.1:4966`). The proxy must validate any browser
+Origin against its public origin before rewriting it to the upstream origin for
+both HTTP requests and WebSocket upgrades.
+
 ## Shell completions
 
 `diffle completion --shell <bash|zsh|fish>` prints a standalone completion script. Install it once for the current user and start a new shell:

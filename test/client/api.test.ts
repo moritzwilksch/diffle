@@ -19,7 +19,7 @@ const { connectWs } = await import('../../src/client/api.js');
 beforeEach(() => {
   FakeWebSocket.instances = [];
   vi.stubGlobal('WebSocket', FakeWebSocket);
-  vi.stubGlobal('location', { protocol: 'http:', host: 'localhost:1' });
+  vi.stubGlobal('location', new URL('http://localhost:1/'));
   vi.useFakeTimers();
 });
 
@@ -53,6 +53,39 @@ describe('connectWs', () => {
     stop();
     vi.advanceTimersByTime(20_000);
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+});
+
+describe('proxy paths', () => {
+  it.each([
+    ['http://localhost:1/', 'http://localhost:1/', 'ws://localhost:1/ws'],
+    ['https://proxy:8080/diffle/', 'https://proxy:8080/diffle/', 'wss://proxy:8080/diffle/ws'],
+    ['https://proxy/review/diffle/?q=1#file', 'https://proxy/review/diffle/', 'wss://proxy/review/diffle/ws'],
+    ['https://proxy/diffle/index.html', 'https://proxy/diffle/', 'wss://proxy/diffle/ws'],
+  ])('keeps JSON, text, mutations and reconnects under %s', async (page, base, socket) => {
+    vi.stubGlobal('location', new URL(page));
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('[]'))
+      .mockResolvedValueOnce(new Response('patch'))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+    const { api } = await import('../../src/client/api.js');
+    await api.threads();
+    await api.patch('a & b.txt');
+    await api.deleteThread('id/with slash');
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      `${base}api/threads?`,
+      `${base}api/patch?path=a+%26+b.txt`,
+      `${base}api/threads/id%2Fwith%20slash`,
+    ]);
+    expect(fetch.mock.calls[2]![1]).toMatchObject({ method: 'DELETE' });
+    const stop = connectWs(vi.fn(), vi.fn());
+    expect(FakeWebSocket.instances[0]!.url).toBe(socket);
+    FakeWebSocket.instances[0]!.onclose?.();
+    vi.advanceTimersByTime(500);
+    expect(FakeWebSocket.instances[1]!.url).toBe(socket);
+    stop();
   });
 });
 
