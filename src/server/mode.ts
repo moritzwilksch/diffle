@@ -140,26 +140,27 @@ function branchKey(old: string, next: string, mergeBase: boolean): string {
 /**
  * A GitHub pull request, as GitHub shows it: merge-base(base tip, head) vs head.
  * `gh` names the PR, then one fetch brings the base tip and the PR head into
- * session-owned refs, so a PR nobody has checked out is reviewable. Both
- * sides are pinned to commits; review state uses the same branch identities as
- * ordinary comparisons, so comments survive pushes and reopening by branch.
+ * session-owned refs named after the branches, so a PR nobody has checked out
+ * is reviewable. These refs stay fixed until another fetch; review state uses
+ * the same branch identities as ordinary comparisons, so comments survive
+ * pushes and reopening by branch.
  */
 async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: GhRunner): Promise<ResolvedReview> {
   const pr = await viewPr(req.pr, repo.root, gh);
 
-  const head = `${repo.reviewRefs}/${pr.number}/head`;
-  const base = `${repo.reviewRefs}/${pr.number}/base`;
+  const head = `${repo.reviewRefs}/${pr.number}/head/${pr.headRefName}`;
+  const base = `${repo.reviewRefs}/${pr.number}/base/${pr.baseRefName}`;
   await repo.fetch(await fetchSource(repo, pr), [
     `+refs/pull/${pr.number}/head:${head}`,
     `+refs/heads/${pr.baseRefName}:${base}`,
   ]);
-  const { oldSha, newSha } = await resolveComparison(repo, { old: base, new: head, mergeBase: true });
+  await resolveComparison(repo, { old: base, new: head, mergeBase: true });
   return {
     prUrl: pr.url,
     mode: {
-      old: oldSha,
-      new: newSha,
-      mergeBase: false,
+      old: base,
+      new: head,
+      mergeBase: true,
       live: 'none',
       commentKey: branchKey(
         `${pr.repository.toLowerCase()}:${pr.baseRefName}`,

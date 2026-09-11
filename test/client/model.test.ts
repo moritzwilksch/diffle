@@ -1,6 +1,12 @@
 import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
-import type { ChangedFile, CommentThread, GithubMetadata, Snapshot } from '../../src/shared/protocol.js';
+import {
+  comparisonLabel,
+  type ChangedFile,
+  type CommentThread,
+  type GithubMetadata,
+  type Snapshot,
+} from '../../src/shared/protocol.js';
 import {
   compareTreeOrder,
   countViewed,
@@ -205,5 +211,18 @@ describe('documentTitle', () => {
   it('names the pull request by its base repository and number, not the checkout directory', () => {
     const github = { pullRequest: { repository: 'conda/rattler', number: 12345 } } as GithubMetadata;
     expect(documentTitle(snapshot({}, '/tmp/diffle-pr-lTXVEf'), github)).toBe('diffle: conda/rattler #12345');
+  });
+});
+
+describe('comparisonLabel', () => {
+  it('shows branch paths from fetched PR refs without the session namespace', () => {
+    expect(
+      comparisonLabel({
+        old: 'refs/diffle/session/42/base/main',
+        new: 'refs/diffle/session/42/head/feature/nested',
+        mergeBase: true,
+      }),
+    ).toBe('main...feature/nested');
+    expect(comparisonLabel({ old: 'HEAD', new: 'worktree', mergeBase: false })).toBe('HEAD..worktree');
   });
 });

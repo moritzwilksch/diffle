@@ -16,9 +16,11 @@ export interface ModeSpec {
   commentKey: string;
 }
 
-/** Display the comparison using the same revision syntax accepted by the CLI. */
+/** Display comparison endpoints with branch names instead of internal ref namespaces. */
 export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>): string {
-  return `${mode.old}${mode.mergeBase ? '...' : '..'}${mode.new}`;
+  const name = (rev: string) =>
+    rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
+  return `${name(mode.old)}${mode.mergeBase ? '...' : '..'}${name(mode.new)}`;
 }
 
 export interface GithubPullRequest {

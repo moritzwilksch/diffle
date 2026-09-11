@@ -137,12 +137,12 @@ describe('viewPr', () => {
 });
 
 describe("resolveReview({ kind: 'pr' })", () => {
-  it('fetches the pull request and pins both sides to commits', async () => {
+  it('fetches the pull request into fixed refs retaining both branch names', async () => {
     const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, gh);
     expect(mode).toMatchObject({
-      old: mergeBase,
-      mergeBase: false,
-      new: headSha,
+      old: `${repo.reviewRefs}/7/base/main`,
+      mergeBase: true,
+      new: `${repo.reviewRefs}/7/head/feat`,
 
       live: 'none',
       // Branch identities share review state with ordinary branch comparisons.
@@ -150,8 +150,8 @@ describe("resolveReview({ kind: 'pr' })", () => {
     });
     expect(mode).not.toHaveProperty('request');
     expect(prUrl).toBe('https://github.com/o/r/pull/7');
-    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/head`)).toBe(headSha);
-    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/base`)).toBe(mergeBase);
+    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/head/feat`)).toBe(headSha);
+    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/base/main`)).toBe(mergeBase);
   });
 
   it('fetches from the remote that points at the base repository, whatever it is called', async () => {
@@ -159,7 +159,7 @@ describe("resolveReview({ kind: 'pr' })", () => {
     execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     const forkRepo = await GitRepo.open(forked);
     const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, gh);
-    expect(mode.new).toBe(headSha);
+    expect(await forkRepo.resolve(mode.new)).toBe(headSha);
   });
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
@@ -177,7 +177,7 @@ describe("resolveReview({ kind: 'pr' })", () => {
     await resolveReview({ kind: 'pr', pr: '7' }, other, gh);
     await repo.cleanReviewRefs();
     expect(git(local, 'for-each-ref', repo.reviewRefs)).toBe('');
-    expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head`)).toBe(headSha);
+    expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head/feat`)).toBe(headSha);
     await other.cleanReviewRefs();
   });
 
@@ -288,9 +288,9 @@ describe('openReviewRepository', () => {
           const root = await realpath(review.repo.root);
           expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
           const { mode, prUrl } = await resolveReview(req, review.repo, foreign);
-          expect(mode.new).toBe(headSha);
+          expect(await review.repo.resolve(mode.new)).toBe(headSha);
           expect(prUrl).toBe('https://github.com/foreign/repo/pull/7');
-          expect(mode.old).toBe(mergeBase);
+          expect(await review.repo.resolve(mode.old)).toBe(mergeBase);
           expect(git(local, 'show-ref')).toBe(refs);
           expect(git(local, 'count-objects', '-v')).toBe(objects);
         } finally {
