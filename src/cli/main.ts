@@ -337,7 +337,11 @@ async function serve(
     // Bind and open the browser before any further git work.
     const url = await server.listen();
     timing.mark('listen');
-    if (opts.open) openBrowser(url.href);
+    if (opts.open) {
+      const browserUrl = new URL(url);
+      if (opts.host === '0.0.0.0' || opts.host === '::') browserUrl.hostname = 'localhost';
+      openBrowser(browserUrl.href);
+    }
     console.error(`🚀 diffle running at ${c.cyan(url.href)}`);
     console.error(`📂 ${c.dim('repo')} ${repo.root}`);
 
