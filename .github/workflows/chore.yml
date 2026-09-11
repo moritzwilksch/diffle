@@ -1,11 +1,12 @@
 name: Chore
 on:
-  pull_request:
+  # Runs with write permissions: process PR metadata only; never execute PR code.
+  pull_request_target:
     branches: [main]
     types: [opened, reopened, edited, synchronize]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
