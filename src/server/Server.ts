@@ -130,7 +130,7 @@ export class Server {
         this.http!.off('error', onError);
         const addr = this.http!.address();
         const bound = typeof addr === 'object' && addr ? addr.port : port;
-        const host = this.opts.host === '0.0.0.0' || this.opts.host === '::' ? 'localhost' : this.opts.host;
+        const host = this.opts.host;
         resolve(new URL(`http://${host.includes(':') ? `[${host}]` : host}:${bound}/`));
       });
     });
