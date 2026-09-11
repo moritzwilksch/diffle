@@ -71,6 +71,7 @@ const KEYMAP: Record<string, Action> = {
     const path = currentPath(s);
     if (!s.fileView && path) void s.openFullFile(path);
   },
+  o: (s) => s.setGithubMenuOpen(!s.githubMenuOpen),
   m: (s) => s.setModeMenuOpen(!s.modeMenuOpen),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
 };

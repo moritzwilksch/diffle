@@ -46,6 +46,7 @@ const BOUND = [
   'gA',
   'gs / gS',
   'm, then 1–4',
+  'o',
   '⌘/Ctrl+b',
   '?',
   'Esc',

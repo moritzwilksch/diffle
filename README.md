@@ -91,7 +91,9 @@ Use the pull request icon to add one thread or all open threads to a pending Git
 
 Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
 
-Posting works for `pr` on the checked-out branch, or any revspec ending at HEAD on a pushed branch. GitHub cannot anchor comments from `working` because those lines are not committed. Stale threads are skipped.
+The GitHub button next to the comparison menu (`o`) shows the repository from your GitHub `origin`, even without `gh`. Pull request details load in the background by matching the old and new branches' upstreams; an explicit `diffle pr` supplies the PR directly. Discovery never changes your comparison.
+
+Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped.
 
 Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
 

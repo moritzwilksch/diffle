@@ -13,6 +13,7 @@ import { Session } from '../server/Session.js';
 import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
 import {
+  comparisonLabel,
   followsCheckout,
   LANGUAGE_IDS,
   type LanguageId,
@@ -345,7 +346,7 @@ async function serve(
     const n = snap.changed.length;
     const adds = snap.changed.reduce((a, f) => a + f.additions, 0);
     const dels = snap.changed.reduce((a, f) => a + f.deletions, 0);
-    console.error(`🔍 ${c.dim('comparing')} ${c.bold(snap.mode.label)}`);
+    console.error(`🔍 ${c.dim('comparing')} ${c.bold(comparisonLabel(snap.mode))}`);
     if (n === 0) console.error(`${c.yellow('!')} No differences. Open any file from the tree to comment on it.`);
     else console.error(`📝 ${n} changed file${n === 1 ? '' : 's'}  ${c.green(`+${adds}`)} ${c.red(`−${dels}`)}`);
     if (snap.mode.live !== 'none')

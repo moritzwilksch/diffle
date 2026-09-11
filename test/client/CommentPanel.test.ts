@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread } from '../../src/shared/protocol.js';
+import type { CommentThread, GithubMetadata } from '../../src/shared/protocol.js';
 
 vi.mock('../../src/client/api.js', () => ({ api: {} }));
 
@@ -34,7 +34,13 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   rendered.length = 0;
-  useStore.setState({ threads, showResolved: false, activePath: null, deleteThread: () => Promise.resolve() });
+  useStore.setState({
+    threads,
+    showResolved: false,
+    activePath: null,
+    github: { status: 'idle' },
+    deleteThread: () => Promise.resolve(),
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -88,5 +94,17 @@ describe('CommentPanel rows', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows the GitHub button only when export is eligible', async () => {
+    const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
+    const metadata = (reason: string | null): GithubMetadata => ({ reason }) as GithubMetadata;
+
+    useStore.setState({ github: { status: 'ready', data: metadata('No matching pull request') } });
+    await act(() => root.render(createElement(CommentPanel)));
+    expect(post()).toBeNull();
+
+    await act(() => useStore.setState({ github: { status: 'ready', data: metadata(null) } }));
+    expect(post()).not.toBeNull();
   });
 });

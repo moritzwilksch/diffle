@@ -8,6 +8,7 @@ import type { LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
 const { state } = vi.hoisted(() => ({
   state: {
     snapshot: null,
+    github: { status: 'idle' },
     lsp: { enabled: true, servers: [], missing: [] } as LspStatus,
     layout: { treeVisible: true, panelVisible: true },
     theme: 'dark',

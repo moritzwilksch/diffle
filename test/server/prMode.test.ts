@@ -8,7 +8,7 @@ import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
-import { resolveMode } from '../../src/server/mode.js';
+import { resolveReview } from '../../src/server/mode.js';
 
 /**
  * The temp root as git reports it: macOS reaches `os.tmpdir()` through a symlink
@@ -44,11 +44,17 @@ const asGitUrl = (p: string) => p.replaceAll('\\', '/');
 /** What `gh pr view` would say for PR 7 of o/r. */
 const PR_VIEW = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
+    title: 'Improve feature',
+    state: 'OPEN',
+    isDraft: false,
+    baseRefOid: mergeBase,
     number: 7,
     url: 'https://github.com/o/r/pull/7',
     baseRefName: 'main',
     headRefName: 'feat',
     headRefOid: 'unused-here',
+    headRepository: { name: 'r' },
+    headRepositoryOwner: { login: 'o' },
     ...over,
   });
 
@@ -101,15 +107,20 @@ describe('viewPr', () => {
         'view',
         expected,
         '--json',
-        'number,url,baseRefName,headRefName,headRefOid',
+        'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
       ]);
     }
     await viewPr(undefined, local, gh);
-    expect(ghCalls.pop()).toEqual(['pr', 'view', '--json', 'number,url,baseRefName,headRefName,headRefOid']);
+    expect(ghCalls.pop()).toEqual([
+      'pr',
+      'view',
+      '--json',
+      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
+    ]);
   });
 
   it('reads the base repository off the pull request url', async () => {
-    expect((await viewPr('7', local, gh)).baseRepo).toBe('o/r');
+    expect((await viewPr('7', local, gh)).repository).toBe('o/r');
   });
 
   it('refuses an option-shaped selector before gh sees it', async () => {
@@ -125,35 +136,36 @@ describe('viewPr', () => {
   });
 });
 
-describe("resolveMode({ kind: 'pr' })", () => {
-  it('fetches the pull request and pins both sides to commits', async () => {
-    const mode = await resolveMode({ kind: 'pr', pr: '7' }, repo, gh);
+describe("resolveReview({ kind: 'pr' })", () => {
+  it('fetches the pull request into fixed refs retaining both branch names', async () => {
+    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, gh);
     expect(mode).toMatchObject({
-      kind: 'pr',
-      old: { kind: 'rev', rev: mergeBase },
-      newRev: headSha,
-      label: '#7 main...feat',
-      pullRequest: { repository: 'o/r', number: 7 },
+      old: `${repo.reviewRefs}/7/base/main`,
+      mergeBase: true,
+      new: `${repo.reviewRefs}/7/head/feat`,
+
       live: 'none',
-      // The number, not a sha: comments outlive a force-push to the pull request.
-      commentKey: 'pr:#7',
+      // Branch identities share review state with ordinary branch comparisons.
+      commentKey: 'branches:["o/r:main","o/r:feat",true]',
     });
-    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/head`)).toBe(headSha);
-    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/base`)).toBe(mergeBase);
+    expect(mode).not.toHaveProperty('request');
+    expect(prUrl).toBe('https://github.com/o/r/pull/7');
+    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/head/feat`)).toBe(headSha);
+    expect(git(local, 'rev-parse', `${repo.reviewRefs}/7/base/main`)).toBe(mergeBase);
   });
 
   it('fetches from the remote that points at the base repository, whatever it is called', async () => {
     const forked = join(tmp, 'forked');
     execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     const forkRepo = await GitRepo.open(forked);
-    const mode = await resolveMode({ kind: 'pr', pr: '7' }, forkRepo, gh);
-    expect(mode.newRev).toBe(headSha);
+    const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, gh);
+    expect(await forkRepo.resolve(mode.new)).toBe(headSha);
   });
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
     const refs = git(local, 'show-ref');
     await expect(
-      resolveMode({ kind: 'pr', pr: '7' }, repo, async () =>
+      resolveReview({ kind: 'pr', pr: '7' }, repo, async () =>
         PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' }),
       ),
     ).rejects.toThrow(/foreign repository/);
@@ -162,10 +174,10 @@ describe("resolveMode({ kind: 'pr' })", () => {
 
   it('cleans only this instance’s refs', async () => {
     const other = await GitRepo.open(local);
-    await resolveMode({ kind: 'pr', pr: '7' }, other, gh);
+    await resolveReview({ kind: 'pr', pr: '7' }, other, gh);
     await repo.cleanReviewRefs();
     expect(git(local, 'for-each-ref', repo.reviewRefs)).toBe('');
-    expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head`)).toBe(headSha);
+    expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head/feat`)).toBe(headSha);
     await other.cleanReviewRefs();
   });
 
@@ -173,7 +185,7 @@ describe("resolveMode({ kind: 'pr' })", () => {
     const missing: GhRunner = async () => {
       throw new GithubError('gh pr view failed: no pull requests found');
     };
-    await expect(resolveMode({ kind: 'pr', pr: '999' }, repo, missing)).rejects.toThrow(GithubError);
+    await expect(resolveReview({ kind: 'pr', pr: '999' }, repo, missing)).rejects.toThrow(GithubError);
   });
 });
 
@@ -275,10 +287,10 @@ describe('openReviewRepository', () => {
           // Windows 8.3 short name or a macOS symlink would otherwise skew the prefix.
           const root = await realpath(review.repo.root);
           expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
-          const mode = await resolveMode(req, review.repo, foreign);
-          expect(mode.newRev).toBe(headSha);
-          expect(mode.pullRequest?.repository).toBe('foreign/repo');
-          expect(mode.old).toEqual({ kind: 'rev', rev: mergeBase });
+          const { mode, prUrl } = await resolveReview(req, review.repo, foreign);
+          expect(await review.repo.resolve(mode.new)).toBe(headSha);
+          expect(prUrl).toBe('https://github.com/foreign/repo/pull/7');
+          expect(await review.repo.resolve(mode.old)).toBe(mergeBase);
           expect(git(local, 'show-ref')).toBe(refs);
           expect(git(local, 'count-objects', '-v')).toBe(objects);
         } finally {
