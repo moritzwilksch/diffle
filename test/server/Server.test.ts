@@ -74,7 +74,7 @@ beforeAll(async () => {
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3 });
   deps = { session, config, extraAutoViewed: [], hub, lsp: null };
-  server = new Server(deps, { port: 0, host: '127.0.0.1', dev: false });
+  server = new Server(deps, { port: 0, host: '127.0.0.1', allowedOrigin: 'https://proxy.example', dev: false });
   base = await server.listen();
   await session.start({ kind: 'working' });
 });
@@ -222,6 +222,24 @@ describe('Server', () => {
     expect((await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } })).status).toBe(403);
     expect((await send('GET', '/api/snapshot', { headers: { origin: base.origin } })).status).toBe(200);
+  });
+
+  it.each(['proxy.example', '127.0.0.1:4966'])('accepts proxied HTTP and WebSockets with Host %s', async (host) => {
+    const headers = { host, origin: 'https://proxy.example' };
+    expect((await send('GET', '/api/snapshot', { headers })).status).toBe(200);
+    expect(
+      (await send('GET', '/api/snapshot', { headers: { ...headers, origin: 'https://evil.example' } })).status,
+    ).toBe(403);
+    const ws = new WebSocket(base.href.replace('http:', 'ws:') + 'ws', { headers });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        ws.once('open', resolve);
+        ws.once('error', reject);
+      });
+    } finally {
+      ws.close();
+      await vi.waitFor(() => expect(hub.clientCount).toBe(0));
+    }
   });
 
   it('reports WebSocket clients joining and leaving', async () => {

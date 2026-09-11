@@ -96,3 +96,9 @@ describe('failed startup', () => {
     30_000,
   );
 });
+
+it('rejects a public origin containing a path with usage exit code 2', async () => {
+  const run = await cli(['--allowed-origin', 'https://proxy.example/prefix/']);
+  expect(run.code).toBe(2);
+  expect(run.stderr).toContain('without a path');
+});

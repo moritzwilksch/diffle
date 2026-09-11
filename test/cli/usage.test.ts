@@ -32,24 +32,24 @@ describe('usage errors', () => {
     const run = await cli(['config', 'unset-lsp', 'python', 'nope']);
     expect(run.stderr).toContain("command-argument value 'nope' is invalid");
     expect(run.stderr).toContain('unknown language "nope"');
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
   }, 30_000);
 
   it('names the unknown language for config set-lsp', async () => {
     const run = await cli(['config', 'set-lsp', 'nope', 'x']);
     expect(run.stderr).toContain('unknown language "nope"');
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
   }, 30_000);
 
   it('rejects --lsp without a value rather than dropping the overrides before it', async () => {
     const run = await cli(['working', '--no-open', '--no-watch', '--lsp', 'python=x', '--lsp']);
     expect(run.stderr).toContain("option '--lsp <language=command>' argument missing");
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
   }, 30_000);
 
   it('names the language whose --lsp value is malformed', async () => {
     const run = await cli(['working', '--no-open', '--no-watch', '--lsp', 'nope=x']);
     expect(run.stderr).toContain('unknown language "nope"');
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
   }, 30_000);
 });

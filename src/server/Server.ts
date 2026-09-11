@@ -14,6 +14,7 @@ export interface ServerOptions {
   /** When the port is taken, try the following ones (up to PROBE_PORTS) instead of failing. */
   probe?: boolean;
   host: string;
+  allowedOrigin?: string;
   dev: boolean;
 }
 
@@ -41,7 +42,7 @@ export class Server {
 
   async listen(): Promise<URL> {
     const app = new Hono();
-    const guard = requestGuard(this.opts.host);
+    const guard = requestGuard(this.opts.host, undefined, this.opts.allowedOrigin);
     app.use('/api/*', async (c, next) => {
       if (!guard({ host: c.req.header('host'), origin: c.req.header('origin') }))
         return c.json({ error: 'forbidden origin' }, 403);
