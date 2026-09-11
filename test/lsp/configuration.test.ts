@@ -9,6 +9,7 @@ import {
   settingsFor,
 } from '../../src/server/lsp/configuration.js';
 import { rmTmp } from '../tmp.js';
+import { JsonRpcError } from '../../src/server/lsp/JsonRpc.js';
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -19,10 +20,31 @@ const schemas = [{ url: 'https://example.com/schema.json', fileMatch: ['package.
 it('filters malformed catalog entries and preserves filename patterns', () => {
   expect(
     schemaAssociations({
-      schemas: [...schemas, null, { url: 'file:///secret', fileMatch: ['*'] }, { url: 'https://example.com' }],
+      schemas: [
+        ...schemas,
+        null,
+        { url: 'file:///secret', fileMatch: ['*'] },
+        { url: 'https://example.com' },
+        { url: 'https://', fileMatch: ['*'] },
+        { url: 'https://example.com', fileMatch: [] },
+        { url: 'https://example.com', fileMatch: [null] },
+      ],
     }),
   ).toEqual(schemas);
 });
+
+it.each([null, [], {}, { schemas: null }])('ignores malformed catalogs: %j', (catalog) => {
+  expect(schemaAssociations(catalog)).toEqual([]);
+});
+
+it.each([null, {}, { items: null }, { items: [null] }, { items: [42] }, { items: [{ section: false }] }])(
+  'rejects malformed configuration requests: %j',
+  (params) => {
+    expect(() => configurationItems({}, params)).toThrowError(
+      new JsonRpcError(-32602, 'Invalid workspace/configuration parameters'),
+    );
+  },
+);
 
 it('caches discovery, avoids fresh downloads, and falls back to stale data offline', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'diffle-schema-'));

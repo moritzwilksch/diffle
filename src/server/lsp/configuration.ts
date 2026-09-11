@@ -1,34 +1,32 @@
 import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { z } from 'zod';
 import type { LanguageId } from '../../shared/protocol.js';
 import { writeFileAtomic } from '../persist.js';
 import { argv0 } from './which.js';
+import { JsonRpcError } from './JsonRpc.js';
 
 export const SCHEMA_CATALOG = 'https://www.schemastore.org/api/json/catalog.json';
 const MAX_AGE = 24 * 60 * 60 * 1000;
-interface Association {
-  url: string;
-  fileMatch: string[];
-}
+const AssociationSchema = z.object({
+  url: z.url({ protocol: /^https?$/ }),
+  fileMatch: z.array(z.string()).nonempty(),
+});
+type Association = z.infer<typeof AssociationSchema>;
+const SchemaCatalogSchema = z.object({ schemas: z.array(z.unknown()) });
+const ConfigurationParamsSchema = z.object({
+  items: z.array(z.object({ section: z.string().optional() })),
+});
 export type LspSettings = Record<string, unknown>;
 
 /** Valid catalog entries, in the association format understood by the JSON server. */
 export function schemaAssociations(value: unknown): Association[] {
-  if (!value || typeof value !== 'object' || !('schemas' in value) || !Array.isArray(value.schemas)) return [];
-  return value.schemas.flatMap((entry: unknown) => {
-    if (
-      !entry ||
-      typeof entry !== 'object' ||
-      !('url' in entry) ||
-      typeof entry.url !== 'string' ||
-      !/^https?:\/\//.test(entry.url) ||
-      !('fileMatch' in entry) ||
-      !Array.isArray(entry.fileMatch)
-    )
-      return [];
-    const fileMatch = entry.fileMatch.filter((p: unknown): p is string => typeof p === 'string');
-    return fileMatch.length ? [{ url: entry.url, fileMatch }] : [];
+  const catalog = SchemaCatalogSchema.safeParse(value);
+  if (!catalog.success) return [];
+  return catalog.data.schemas.flatMap((entry) => {
+    const association = AssociationSchema.safeParse(entry);
+    return association.success ? [association.data] : [];
   });
 }
 
@@ -75,12 +73,13 @@ export async function settingsFor(languages: LanguageId[], command: string): Pro
  * Used by LspBridge to answer language servers' `workspace/configuration` requests.
  * Returns settings for each requested section in order, or null for unknown sections;
  * an omitted section requests all settings. Params are untrusted JSON from the server.
+ * Malformed requests throw JSON-RPC Invalid Params before any settings are returned.
  */
 export function configurationItems(settings: LspSettings, params: unknown): unknown[] {
-  if (!params || typeof params !== 'object' || !('items' in params) || !Array.isArray(params.items)) return [];
-  return params.items.map((item: { section?: string }) => {
-    if (!item?.section) return settings;
-    if (typeof item.section !== 'string') return null;
+  const request = ConfigurationParamsSchema.safeParse(params);
+  if (!request.success) throw new JsonRpcError(-32602, 'Invalid workspace/configuration parameters');
+  return request.data.items.map((item) => {
+    if (!item.section) return settings;
     let value: unknown = settings;
     for (const part of item.section.split('.')) {
       if (!value || typeof value !== 'object' || !Object.hasOwn(value, part)) return null;
