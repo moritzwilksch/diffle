@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Columns2,
   Compass,
+  Copy,
   GitCompareArrows,
   Keyboard,
   LoaderCircle,
@@ -21,8 +22,10 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
 import { repoName } from '../model.js';
+import { copyText } from '../clipboard.js';
 import { useStore } from '../store.js';
 import { nextTheme, type ThemeChoice } from '../theme.js';
+import { GithubMenu } from './GithubMenu.js';
 import { ModePicker } from './ModePicker.js';
 import { SettingsDialog } from './SettingsDialog.js';
 
@@ -54,13 +57,11 @@ export function Header() {
       <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em]">
         <GitCompareArrows size="1rem" /> diffle
       </span>
-      <span
-        className="truncate font-mono text-[0.75rem] text-muted"
-        title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}
-      >
+      <span className="truncate font-mono text-[0.75rem] text-muted" title={snapshot?.root}>
         {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
+      <GithubMenu />
       <span className="text-muted">
         {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>
       </span>
@@ -219,16 +220,48 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
       ))}
       {s.message && <p className="my-1.5 ml-5.5 wrap-anywhere text-warn">{s.message}</p>}
       {s.notice && <p className="my-1.5 ml-5.5 wrap-anywhere text-warn">{s.notice.message}</p>}
-      <details className="ml-5.5 text-[0.6875rem] text-muted [&_pre]:my-2 [&_pre]:font-mono [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap">
+      <details className="ml-5.5 text-[0.6875rem] text-muted">
         <summary className="cursor-pointer">Details</summary>
-        <pre>{s.command}</pre>
-        {s.stderr && (
-          <>
-            <span>stderr</span>
-            <pre>{s.stderr}</pre>
-          </>
-        )}
+        <pre className="my-2 font-mono wrap-anywhere whitespace-pre-wrap">{s.command}</pre>
+        {s.stderr && <StderrLog text={s.stderr} />}
       </details>
+    </div>
+  );
+}
+
+function StderrLog({ text }: { text: string }) {
+  const [result, setResult] = useState<'copied' | 'failed' | null>(null);
+  useEffect(() => {
+    if (!result) return;
+    const timer = setTimeout(() => setResult(null), 3000);
+    return () => clearTimeout(timer);
+  }, [result]);
+  return (
+    <div className="my-2">
+      <div className="flex items-center justify-between py-1">
+        <span>stderr</span>
+        <Button
+          variant="ghost"
+          type="button"
+          aria-label="Copy stderr"
+          onClick={async () => setResult((await copyText(text)) ? 'copied' : 'failed')}
+        >
+          {result === 'copied' ? <Check size="0.75rem" /> : <Copy size="0.75rem" />}
+          <span aria-live="polite">{result === 'copied' ? 'Copied' : 'Copy'}</span>
+        </Button>
+      </div>
+      {result === 'failed' && (
+        <p role="status" className="m-2 text-warn">
+          Copy failed. Select the log and press Ctrl/⌘+C.
+        </p>
+      )}
+      <pre
+        aria-label="stderr log"
+        tabIndex={0}
+        className="m-0 max-h-[min(12rem,25vh)] overflow-auto overscroll-contain p-2 font-mono whitespace-pre text-foreground"
+      >
+        {text}
+      </pre>
     </div>
   );
 }

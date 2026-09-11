@@ -23,7 +23,7 @@ export async function openReviewRepository(
   }
   if (req.kind !== 'pr') return { repo: local!, close: () => local!.cleanReviewRefs() };
   const pr = await viewPr(req.pr, cwd, gh);
-  const matches = local && (await local.remotes()).some((r) => remoteSlug(r.url) === pr.baseRepo.toLowerCase());
+  const matches = local && (await local.remotes()).some((r) => remoteSlug(r.url) === pr.repository.toLowerCase());
   if (matches) return { repo: local!, close: () => local!.cleanReviewRefs() };
 
   const dir = await mkdtemp(join(tmpdir(), 'diffle-pr-'));

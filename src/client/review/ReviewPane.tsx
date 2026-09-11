@@ -14,7 +14,7 @@ import type {
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
 import { ArrowLeft, ChevronDown, ChevronRight, Download, FileText, MessageSquare, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
+import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
 import { FilePath } from '../FilePath.js';
 import { lineBounds, sideOf } from '../comments/anchor.js';
 import { SearchBar } from '../keyboard/SearchBar.js';
@@ -685,7 +685,7 @@ export function ReviewPane() {
     return (
       <main className="relative flex min-h-0 min-w-0 flex-col outline-none">
         <div className="p-10 text-center text-muted">
-          No changes for <code>{snapshot.mode.label}</code>. Open any file from the tree to comment on it.
+          No changes for <code>{comparisonLabel(snapshot.mode)}</code>. Open any file from the tree to comment on it.
         </div>
       </main>
     );

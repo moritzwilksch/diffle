@@ -8,7 +8,6 @@ export function RefInput({
   onChange,
   refs,
   autoFocus,
-  allowWorktree,
   inputRef,
   onAccept,
 }: {
@@ -17,7 +16,6 @@ export function RefInput({
   onChange: (value: string) => void;
   refs: RefsResponse | null;
   autoFocus?: boolean;
-  allowWorktree?: boolean;
   inputRef?: Ref<HTMLInputElement>;
   onAccept(): void;
 }) {
@@ -28,7 +26,7 @@ export function RefInput({
   const list = useRef<HTMLDivElement>(null);
   const options = [
     { value: 'HEAD', detail: 'Current commit', section: 'special' },
-    ...(allowWorktree ? [{ value: 'worktree', detail: 'Uncommitted changes', section: 'special' }] : []),
+    { value: 'worktree', detail: 'Uncommitted changes', section: 'special' },
     ...(refs?.branches ?? []).map((value) => ({
       value,
       detail: value === refs?.current ? 'Current branch' : 'Branch',

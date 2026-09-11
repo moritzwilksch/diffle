@@ -84,6 +84,20 @@ afterAll(async () => {
 });
 
 describe('Server', () => {
+  it('serves repository identity as GitHub metadata', async () => {
+    const snap = await session.snapshotter.current();
+    expect(snap).not.toHaveProperty('githubRepository');
+    const response = await send('GET', '/api/github');
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      version: snap.version,
+      repository: null,
+      pullRequest: null,
+      reason: expect.any(String),
+    });
+    expect(session.mode).not.toHaveProperty('kind');
+  });
+
   it('validates preview counts and returns the available endpoint messages', async () => {
     for (const count of ['', '-1', '1.5', 'nope', '9007199254740992']) {
       expect((await send('GET', '/api/last-commits-preview?newOffset=0&oldOffset=' + count)).status).toBe(400);
@@ -96,7 +110,7 @@ describe('Server', () => {
   it('serves the API to loopback hosts', async () => {
     const r = await send('GET', '/api/snapshot');
     expect(r.status).toBe(200);
-    expect(JSON.parse(r.body).mode.kind).toBe('working');
+    expect(JSON.parse(r.body).mode.new).toBe('worktree');
   });
 
   it('returns a JSON error for unknown API routes instead of the app page', async () => {

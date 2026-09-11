@@ -2,27 +2,45 @@
 
 export type Side = 'old' | 'new';
 
-/** How the old side is resolved. Kept symbolic so live modes can re-resolve. */
-export type OldSpec = { kind: 'rev'; rev: string } | { kind: 'merge-base'; a: string; b: string };
-
-/** What the user asks for. Resolved by the server into a ModeSpec. */
+/** CLI and picker commands are translated into a comparison before rendering. */
 export type ModeRequest = { kind: 'working' } | { kind: 'pr'; pr?: string } | { kind: 'revspec'; args: string[] };
 
+/** A comparison; both endpoints accept a Git revision or "worktree". */
 export interface ModeSpec {
-  kind: 'working' | 'pr' | 'revspec';
-  /** The request that produced this spec. */
-  request: ModeRequest;
-  old: OldSpec;
-  /** Symbolic rev (e.g. "HEAD", "feat") or the worktree. */
-  newRev: string | 'worktree';
-  /** Shown in the UI header. */
-  label: string;
-  /** The reviewed pull request; its base repository names the tab and header instead of the root directory. */
-  pullRequest?: { repository: string; number: number };
-  /** worktree: fs watch; refs: watch .git refs; none: static. */
+  old: string;
+  new: string;
+  /** Compare merge-base(old, new) to new; worktree uses HEAD for the merge base. */
+  mergeBase: boolean;
   live: 'worktree' | 'refs' | 'none';
-  /** Comment set key, fixed when the mode is entered. */
+  /** Fixed when the comparison is entered; discovery never changes comment storage. */
   commentKey: string;
+}
+
+/** Display comparison endpoints with branch names instead of internal ref namespaces. */
+export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>): string {
+  const name = (rev: string) =>
+    rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
+  return `${name(mode.old)}${mode.mergeBase ? '...' : '..'}${name(mode.new)}`;
+}
+
+export interface GithubPullRequest {
+  repository: string;
+  number: number;
+  url: string;
+  title: string;
+  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  isDraft: boolean;
+}
+
+/** Optional enrichment for a snapshot, independent of its comparison. */
+export interface GithubMetadata {
+  /** Snapshot.version used for this lookup; the client discards results for a different snapshot version. */
+  version: number;
+  /** GitHub repository identified by the local origin URL. */
+  repository: string | null;
+  pullRequest: GithubPullRequest | null;
+  /** Null when export is allowed; otherwise explains why it is blocked. */
+  reason: string | null;
 }
 
 export type ChangeStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
@@ -49,8 +67,9 @@ export interface Snapshot {
   mode: ModeSpec;
   /** Monotonic; bumps on every refresh and mode switch. */
   version: number;
+  /** Resolved endpoints; either can be the worktree sentinel. */
   oldSha: string;
-  newSha: string | 'worktree';
+  newSha: string;
   /** The checked-out commit; '' on an unborn branch. Symbol navigation needs newSha to be this or the worktree. */
   headSha: string;
   /** Context lines the patches were generated with. */

@@ -24,6 +24,7 @@ export function CommentPanel() {
   const focusThread = useStore((s) => s.focusThread);
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
+  const canExport = useStore((s) => s.github.data?.reason === null);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
@@ -86,26 +87,28 @@ export function CommentPanel() {
           title="Copy all open threads as a prompt (yy)"
           onCopy={() => copy()}
         />
-        <Button
-          variant="ghost"
-          icon={!post.armed && !posted}
-          feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
-          disabled={posting || (open.length === 0 && !posted)}
-          title={
-            post.armed
-              ? 'Click again to add all open threads to the pending review'
-              : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'
-          }
-          aria-label={
-            post.armed
-              ? 'Add all open threads to the pending review? Click again to confirm'
-              : 'Add all open threads to a pending review on the GitHub pull request'
-          }
-          onClick={post.fire}
-        >
-          {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-          {post.armed ? 'Add all?' : posted ? exportLabel(posted) : null}
-        </Button>
+        {canExport && (
+          <Button
+            variant="ghost"
+            icon={!post.armed && !posted}
+            feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
+            disabled={posting || (open.length === 0 && !posted)}
+            title={
+              post.armed
+                ? 'Click again to add all open threads to the pending review'
+                : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'
+            }
+            aria-label={
+              post.armed
+                ? 'Add all open threads to the pending review? Click again to confirm'
+                : 'Add all open threads to a pending review on the GitHub pull request'
+            }
+            onClick={post.fire}
+          >
+            {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
+            {post.armed ? 'Add all?' : posted ? exportLabel(posted) : null}
+          </Button>
+        )}
         <Button
           variant="ghost"
           danger

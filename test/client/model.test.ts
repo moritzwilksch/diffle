@@ -1,6 +1,12 @@
 import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
-import type { ChangedFile, CommentThread, Snapshot } from '../../src/shared/protocol.js';
+import {
+  comparisonLabel,
+  type ChangedFile,
+  type CommentThread,
+  type GithubMetadata,
+  type Snapshot,
+} from '../../src/shared/protocol.js';
 import {
   compareTreeOrder,
   countViewed,
@@ -196,18 +202,27 @@ describe('countViewed', () => {
 
 describe('documentTitle', () => {
   const snapshot = (mode: Partial<Snapshot['mode']>, root = '/home/me/rattler/'): Snapshot =>
-    ({ root, mode: { kind: 'working', ...mode } }) as Snapshot;
+    ({ root, mode }) as Snapshot;
 
   it('names the root directory', () => {
     expect(documentTitle(snapshot({}))).toBe('diffle: rattler');
   });
 
   it('names the pull request by its base repository and number, not the checkout directory', () => {
-    const mode = { kind: 'pr' as const, pullRequest: { repository: 'conda/rattler', number: 12345 } };
-    expect(documentTitle(snapshot(mode, '/tmp/diffle-pr-lTXVEf'))).toBe('diffle: conda/rattler #12345');
+    const github = { pullRequest: { repository: 'conda/rattler', number: 12345 } } as GithubMetadata;
+    expect(documentTitle(snapshot({}, '/tmp/diffle-pr-lTXVEf'), github)).toBe('diffle: conda/rattler #12345');
   });
+});
 
-  it('falls back before the first snapshot', () => {
-    expect(documentTitle(null)).toBe('diffle');
+describe('comparisonLabel', () => {
+  it('shows branch paths from fetched PR refs without the session namespace', () => {
+    expect(
+      comparisonLabel({
+        old: 'refs/diffle/session/42/base/main',
+        new: 'refs/diffle/session/42/head/feature/nested',
+        mergeBase: true,
+      }),
+    ).toBe('main...feature/nested');
+    expect(comparisonLabel({ old: 'HEAD', new: 'worktree', mergeBase: false })).toBe('HEAD..worktree');
   });
 });

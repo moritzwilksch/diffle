@@ -1,7 +1,8 @@
 import type { ChangedFile, ModeSpec, Snapshot } from '../shared/protocol.js';
 import { mapLimit } from './concurrency.js';
 import { looksGenerated, SNIFF_BYTES } from './generated.js';
-import { GitError, type GitRepo } from './git/GitRepo.js';
+import type { GitRepo } from './git/GitRepo.js';
+import { resolveComparison } from './mode.js';
 
 const PREWARM = 3;
 /** Concurrent worktree reads while flagging generated files. */
@@ -100,15 +101,18 @@ export class Snapshotter {
   }
 
   private async compute(version: number): Promise<Snapshot> {
-    const [oldSha, newSha, headSha] = await Promise.all([
-      this.resolveOld(),
-      this.resolveNew(),
+    const [{ oldSha, newSha }, headSha] = await Promise.all([
+      resolveComparison(this.repo, this.mode),
       this.repo.resolve('HEAD').catch(() => ''),
     ]);
     // The tree belongs to the selected new side: a commit's own listing, or the
     // index plus untracked files (added below via `changed`) for the worktree.
     const [tracked, changed] = await Promise.all([
-      newSha === 'worktree' ? this.repo.lsFiles() : this.repo.lsTree(newSha),
+      newSha === 'worktree'
+        ? Promise.all([this.repo.lsFiles(), this.repo.untracked()]).then((lists) =>
+            lists.flat().filter((p) => !p.endsWith('/')),
+          )
+        : this.repo.lsTree(newSha),
       this.repo.numstat(oldSha, newSha),
     ]);
     await this.fillGenerated(changed, newSha);
@@ -167,22 +171,5 @@ export class Snapshotter {
     if (head == null || !f.blob) return;
     if (this.sniffed.size >= SNIFF_CACHE_MAX) this.sniffed.clear();
     this.sniffed.set(f.blob, f.generated);
-  }
-
-  private async resolveOld(): Promise<string> {
-    const o = this.mode.old;
-    if (o.kind !== 'rev') return this.repo.mergeBase(o.a, o.b);
-    try {
-      return await this.repo.resolve(o.rev);
-    } catch (e) {
-      // A fresh `git init` has no commit yet (`rev-parse --verify` exits 1), so
-      // working mode diffs everything against the empty tree instead of failing.
-      if (o.rev === 'HEAD' && e instanceof GitError && e.code === 1) return this.repo.emptyTree();
-      throw e;
-    }
-  }
-
-  private resolveNew(): Promise<string | 'worktree'> {
-    return this.mode.newRev === 'worktree' ? Promise.resolve('worktree') : this.repo.resolve(this.mode.newRev);
   }
 }
