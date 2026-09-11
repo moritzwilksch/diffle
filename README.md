@@ -36,6 +36,17 @@ npx @moritzwilksch/diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
 
+The default Nix package includes `gh`; use `#minimal` for Diffle alone, or run a
+variant with bundled language-server support:
+
+```bash
+nix run github:moritzwilksch/diffle#minimal -- working
+nix run github:moritzwilksch/diffle#web -- working
+nix run github:moritzwilksch/diffle#rust -- working
+nix run github:moritzwilksch/diffle#python -- working
+nix shell nixpkgs#nil github:moritzwilksch/diffle --command diffle -- working
+```
+
 ## Usage
 
 ```bash
