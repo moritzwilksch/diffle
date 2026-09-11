@@ -42,6 +42,11 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: ['haskell'], command: 'haskell-language-server-wrapper --lsp' },
   { languages: ['ocaml'], command: 'ocamllsp' },
   { languages: ['terraform'], command: 'terraform-ls serve' },
+  { languages: ['json', 'jsonc'], command: 'vscode-json-language-server --stdio' },
+  { languages: ['json', 'jsonc'], command: 'vscode-json-languageserver --stdio' },
+  { languages: ['yaml'], command: 'yaml-language-server --stdio' },
+  { languages: ['toml'], command: 'tombi lsp' },
+  { languages: ['toml'], command: 'taplo lsp stdio' },
 ];
 
 /** One process to start: its command and every language routed to it. */

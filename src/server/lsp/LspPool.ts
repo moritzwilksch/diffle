@@ -13,6 +13,7 @@ import {
 } from '../../shared/protocol.js';
 import { LspBridge, LspUnavailableError } from './LspBridge.js';
 import { resolveServers } from './registry.js';
+import { settingsFor } from './configuration.js';
 
 export interface LspPoolOptions {
   /** Repository root; becomes every server's workspace folder and cwd. */
@@ -169,7 +170,7 @@ export class LspPool {
     this.missing.push(...missing);
     for (const server of servers) {
       // A process already up for one of its languages (clangd for c) takes the next one (cpp).
-      const entry = this.entries.get(server.command) ?? this.spawn(server.command);
+      const entry = this.entries.get(server.command) ?? this.spawn(server.command, server.languages);
       for (const l of server.languages) {
         if (!entry.languages.includes(l)) entry.languages.push(l);
         this.byLanguage.set(l, entry.bridge);
@@ -178,10 +179,11 @@ export class LspPool {
     if (servers.length || missing.length) this.publish();
   }
 
-  private spawn(command: string): Entry {
+  private spawn(command: string, languages: LanguageId[]): Entry {
     const entry: Entry = {
       bridge: LspBridge.start({
         command,
+        settings: settingsFor(languages, command),
         root: this.opts.root,
         read: this.opts.read,
         has: this.opts.has,

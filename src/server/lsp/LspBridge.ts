@@ -17,8 +17,11 @@ import { mapLimit } from '../concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
 import { argv0 } from './which.js';
+import { configurationItems, type LspSettings } from './configuration.js';
 
 export interface LspBridgeOptions {
+  /** Settings sent after initialization and returned for workspace/configuration requests. */
+  settings?: Promise<LspSettings>;
   /** Shell command line that starts a stdio language server, e.g. `pyrefly lsp`. */
   command: string;
   /** Repository root; becomes the workspace folder and the process cwd. */
@@ -468,6 +471,9 @@ export class LspBridge {
     const rpc = new JsonRpcConnection(child.stdout, child.stdin);
     this.rpc = rpc;
     rpc.onNotification((method, params) => this.noteWorkspace(method, params));
+    rpc.onRequest('workspace/configuration', async (params) =>
+      configurationItems((await this.opts.settings) ?? {}, params),
+    );
     const rootUri = pathToFileURL(this.opts.root).href;
     try {
       const init = await rpc.request<{
@@ -496,7 +502,7 @@ export class LspBridge {
                 formats: ['relative'],
               },
             },
-            workspace: { symbol: {}, workspaceFolders: true },
+            workspace: { symbol: {}, workspaceFolders: true, configuration: true },
           },
         },
         INIT_TIMEOUT_MS,
@@ -504,6 +510,10 @@ export class LspBridge {
       const legend = init?.capabilities?.semanticTokensProvider?.legend?.tokenTypes;
       if (legend?.length) this.tokenTypes = legend;
       rpc.notify('initialized', {});
+      if (this.opts.settings) {
+        const settings = await this.opts.settings;
+        if (!this.closing) rpc.notify('workspace/didChangeConfiguration', { settings });
+      }
     } catch (e) {
       this.fail(`initialize failed: ${(e as Error).message}`);
       throw e;

@@ -1,4 +1,10 @@
-import type { Side } from '../../shared/protocol.js';
+import { languageOf, type Side } from '../../shared/protocol.js';
+
+/** Configuration tokens offer schema hover, without symbol menus or navigation. */
+export function schemaHoverOnly(path: string): boolean {
+  const language = languageOf(path);
+  return language === 'json' || language === 'jsonc' || language === 'yaml' || language === 'toml';
+}
 
 /** The token `gd` / `gA` act on: keyboard-focused (w / b) first, else under the pointer. */
 export interface TokenTarget {

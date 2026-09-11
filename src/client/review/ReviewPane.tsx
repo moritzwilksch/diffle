@@ -22,7 +22,7 @@ import { HoverTooltip, hoverControl } from '../lsp/HoverTooltip.js';
 import { ReferencesList } from '../lsp/ReferencesList.js';
 import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
-import { lspTarget, type TokenTarget } from '../lsp/target.js';
+import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
 import {
   isCollapsed,
   itemDeps,
@@ -147,7 +147,8 @@ function targetOf(
   // No server for this language means no hover, no menu: a target would only produce blockers.
   if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX);
+  const config = schemaHoverOnly(path);
+  const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX, config);
   if (clientX != null && !word) return null;
   let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
   let line = props.lineNumber;
@@ -172,7 +173,7 @@ function served(path: string): boolean {
 }
 
 /** The identifier under `clientX` inside a token span: its text and its offset within the token, or null on punctuation or space. */
-function wordAtPoint(el: HTMLElement, clientX: number): { start: number; text: string } | null {
+function wordAtPoint(el: HTMLElement, clientX: number, config = false): { start: number; text: string } | null {
   const node = el.firstChild;
   if (!node || node.nodeType !== Node.TEXT_NODE || el.childNodes.length !== 1) return null;
   const text = node.textContent ?? '';
@@ -187,6 +188,8 @@ function wordAtPoint(el: HTMLElement, clientX: number): { start: number; text: s
       break;
     }
   }
+  // Schema hovers describe keys and values, including quotes, hyphens, and numeric literals.
+  if (config) return at >= 0 && /\S/.test(text[at]!) ? { start: at, text } : null;
   return wordsIn(text).find((word) => at >= word.start && at < word.start + word.text.length) ?? null;
 }
 
@@ -618,7 +621,7 @@ export function ReviewPane() {
         lspTarget.set(t, props.tokenElement);
         if (t) hoverControl.enter(t, props.tokenElement);
         else hoverControl.leave();
-        if (t && (event.ctrlKey || event.metaKey)) markHover(props.tokenElement, true);
+        if (t && !schemaHoverOnly(t.path) && (event.ctrlKey || event.metaKey)) markHover(props.tokenElement, true);
       },
       onTokenLeave: (props: TokenEventBase | DiffTokenEventBaseProps) => {
         lspTarget.set(null);
@@ -641,7 +644,7 @@ export function ReviewPane() {
         ctx: { item: { id: string } },
       ) => {
         const target = targetOf(props, ctx.item.id, event.clientX);
-        if (!target) return;
+        if (!target || schemaHoverOnly(target.path)) return;
         markHover(props.tokenElement, false);
         hoverControl.cancel();
         if (event.ctrlKey || event.metaKey) {

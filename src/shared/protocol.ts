@@ -344,6 +344,8 @@ export type LanguageId =
   | 'java'
   | 'javascript'
   | 'javascriptreact'
+  | 'json'
+  | 'jsonc'
   | 'lua'
   | 'nix'
   | 'ocaml'
@@ -354,8 +356,10 @@ export type LanguageId =
   | 'shellscript'
   | 'swift'
   | 'terraform'
+  | 'toml'
   | 'typescript'
   | 'typescriptreact'
+  | 'yaml'
   | 'zig';
 
 /** Extension (no dot, lowercase) → language. `.h` goes to c because clangd serves both. */
@@ -376,6 +380,8 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   java: 'java',
   js: 'javascript',
   jsx: 'javascriptreact',
+  json: 'json',
+  jsonc: 'jsonc',
   lua: 'lua',
   mjs: 'javascript',
   ml: 'ocaml',
@@ -391,8 +397,11 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   swift: 'swift',
   tf: 'terraform',
   tfvars: 'terraform',
+  toml: 'toml',
   ts: 'typescript',
   tsx: 'typescriptreact',
+  yaml: 'yaml',
+  yml: 'yaml',
   zig: 'zig',
 };
 

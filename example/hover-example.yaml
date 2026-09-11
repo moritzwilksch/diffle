@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=./hover-example.schema.json
+# Hover over keys, values, and the hyphens in runner settings.
+name: YAML playground
+environment: production
+enabled: true
+runner:
+  runs-on: linux
+  timeout-seconds: 120
+  retry-count: 3
+tags:
+  - release
+  - backend

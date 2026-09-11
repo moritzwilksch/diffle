@@ -1,0 +1,12 @@
+{
+  "$schema": "./hover-example.schema.json",
+  "name": "JSON playground",
+  "environment": "staging",
+  "enabled": true,
+  "runner": {
+    "runs-on": "linux",
+    "timeout-seconds": 30,
+    "retry-count": 2
+  },
+  "tags": ["review", "preview"]
+}

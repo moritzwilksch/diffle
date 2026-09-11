@@ -971,6 +971,32 @@ describe('mode picker', () => {
 });
 
 describe('symbol navigation', () => {
+  it.each(['json', 'jsonc', 'yaml', 'toml'] as const)(
+    '%s keeps hover but does not offer symbol navigation',
+    async (language) => {
+      const path = `config.${language}`;
+      const target = { path, side: 'new' as const, line: 1, col: 2, text: 'name' };
+      useStore.setState({
+        snapshot: snap(1, 'working', [path]),
+        lsp: lspStatus('ready', { languages: [language] }),
+        symbolMenu: null,
+        hover: null,
+      });
+      const state = useStore.getState();
+      await state.openSymbolMenu(target, 10, 20);
+      await state.goToDefinition(target);
+      await state.goToTypeDefinition(target);
+      await state.findReferences(target);
+      expect(useStore.getState().symbolMenu).toBeNull();
+      expect(api.lspTokenKind).not.toHaveBeenCalled();
+      expect(api.lspDefinition).not.toHaveBeenCalled();
+      expect(api.lspTypeDefinition).not.toHaveBeenCalled();
+      expect(api.lspReferences).not.toHaveBeenCalled();
+      api.lspHover.mockResolvedValue({ contents: 'Schema description' });
+      await state.requestHover(target, { left: 0, top: 0, bottom: 0 });
+      expect(useStore.getState().hover?.contents).toBe('Schema description');
+    },
+  );
   const target = { path: 'a.py', side: 'new' as const, line: 3, col: 4, text: 'foo' };
   const ready = () => {
     useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), lsp: lspStatus('ready') });

@@ -35,7 +35,7 @@ import {
   type LineRange,
   type NavItem,
 } from './keyboard/nav.js';
-import { lspTarget, type TokenTarget } from './lsp/target.js';
+import { lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome } from './model.js';
 import {
@@ -1080,6 +1080,7 @@ export const useStore = create<ReviewState>((set, get) => {
   /** gd / gy: ask the language server where `target` (or its type) lives and jump to the first answer. */
   const jumpToLspLocation = async (target: TokenTarget | null | undefined, kind: 'definition' | 'type definition') => {
     get().closeSymbolMenu();
+    if (target && schemaHoverOnly(target.path)) return get().flash('Configuration files support schema hover (gh)');
     const pos = lspPosition(target);
     if (!pos) return;
     // The answer names lines of the snapshot the question was asked about.
@@ -1392,6 +1393,10 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {
+      if (schemaHoverOnly(target.path)) {
+        get().closeSymbolMenu();
+        return;
+      }
       // With language servers off every action would only flash why: no menu to offer.
       if (!get().lsp.enabled) return;
       get().closeHover();
@@ -1476,6 +1481,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     async findReferences(target = get().symbolMenu?.target ?? lspTarget.get()) {
       get().closeSymbolMenu();
+      if (target && schemaHoverOnly(target.path)) return get().flash('Configuration files support schema hover (gh)');
       const pos = lspPosition(target);
       if (!pos) return;
       const g = generation;

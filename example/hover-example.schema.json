@@ -1,0 +1,53 @@
+{
+  "title": "Diffle hover playground",
+  "description": "A local schema for trying configuration tooltips without downloading a schema.",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": {
+      "type": "string",
+      "description": "A human-readable name for this deployment. Shown in the deployment dashboard."
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "staging", "production"],
+      "description": "The target environment: development for local experiments, staging for pre-release checks, or production for live traffic."
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this deployment accepts new jobs. Disable it to pause processing without losing queued work."
+    },
+    "runner": {
+      "type": "object",
+      "description": "Settings for the machine that executes each job.",
+      "properties": {
+        "runs-on": {
+          "type": "string",
+          "enum": ["linux", "macos", "windows"],
+          "description": "The operating system used to execute jobs. Try hovering directly over the hyphen in this key."
+        },
+        "timeout-seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30,
+          "description": "Maximum runtime in seconds before a job is cancelled. The default is 30 seconds."
+        },
+        "retry-count": { "$ref": "#/$defs/retries" }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "description": "Labels attached to each job for filtering and reporting.",
+      "items": { "type": "string", "description": "A single searchable job label." }
+    }
+  },
+  "$defs": {
+    "retries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "description": "How many times a failed job is retried (0–5). This description comes through a schema $ref."
+    }
+  }
+}
