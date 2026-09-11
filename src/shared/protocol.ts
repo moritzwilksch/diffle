@@ -32,6 +32,7 @@ export interface GithubPullRequest {
 
 /** Optional enrichment for a snapshot, independent of its comparison. */
 export interface GithubMetadata {
+  /** Snapshot.version used for this lookup; the client discards results for a different snapshot version. */
   version: number;
   /** GitHub repository identified by the local origin URL. */
   repository: string | null;
