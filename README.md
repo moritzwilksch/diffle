@@ -62,21 +62,18 @@ Opening `/diffle` redirects to `/diffle/`. Configure the proxy to strip that pre
 when forwarding to diffle, including WebSocket upgrades at `/diffle/ws`. No build
 or CLI base-path setting is needed.
 
-For a proxy-managed session, delegate Host/Origin validation to the proxy:
+Run diffle with `--no-open` for a proxy-managed session. If the proxy preserves its
+public Host or Origin headers, explicitly trust its public origin (without the path):
 
 ```bash
-diffle working -H 0.0.0.0 --no-open --behind-proxy
+diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
 ```
 
-`--behind-proxy` disables Diffle's Host/Origin checks for both API requests and
-WebSocket upgrades. The proxy must authenticate users and protect against cross-origin
-requests, including WebSockets. Restrict access to Diffle's upstream port so clients
-cannot bypass the proxy; use a loopback bind for a proxy on the same machine, or
-container/network isolation when binding to `0.0.0.0`.
-
-Without this flag, Diffle keeps its local Host/Origin checks. The proxy must use an
-allowed upstream Host and validate any browser Origin against its public origin
-before rewriting it to the upstream origin.
+This applies to both HTTP requests and WebSocket upgrades. The proxy can preserve
+the public Host or rewrite it to an allowed upstream Host, such as `127.0.0.1:4966`.
+Other browser origins remain rejected; forwarded headers do not grant trust.
+Without this setting, the proxy must use an allowed upstream Host and validate any
+browser Origin against its public origin before rewriting it to the upstream origin.
 
 ## Shell completions
 

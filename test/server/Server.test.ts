@@ -41,13 +41,12 @@ function send(
   method: string,
   path: string,
   opts: { headers?: Record<string, string>; body?: string } = {},
-  target: URL = base,
 ): Promise<Res> {
   return new Promise((res, rej) => {
     const req = request(
       {
-        host: target.hostname,
-        port: target.port,
+        host: base.hostname,
+        port: base.port,
         method,
         path,
         headers: { 'content-type': 'application/json', connection: 'close', ...opts.headers },
@@ -75,7 +74,7 @@ beforeAll(async () => {
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3 });
   deps = { session, config, extraAutoViewed: [], hub, lsp: null };
-  server = new Server(deps, { port: 0, host: '127.0.0.1', dev: false });
+  server = new Server(deps, { port: 0, host: '127.0.0.1', allowedOrigin: 'https://proxy.example', dev: false });
   base = await server.listen();
   await session.start({ kind: 'working' });
 });
@@ -225,35 +224,21 @@ describe('Server', () => {
     expect((await send('GET', '/api/snapshot', { headers: { origin: base.origin } })).status).toBe(200);
   });
 
-  it('delegates HTTP and WebSocket Host/Origin checks in proxy mode', async () => {
-    const proxyHub = new WsHub();
-    const proxyServer = new Server(
-      { ...deps, hub: proxyHub },
-      {
-        port: 0,
-        host: '127.0.0.1',
-        behindProxy: true,
-        dev: false,
-      },
-    );
+  it.each(['proxy.example', '127.0.0.1:4966'])('accepts proxied HTTP and WebSockets with Host %s', async (host) => {
+    const headers = { host, origin: 'https://proxy.example' };
+    expect((await send('GET', '/api/snapshot', { headers })).status).toBe(200);
+    expect(
+      (await send('GET', '/api/snapshot', { headers: { ...headers, origin: 'https://evil.example' } })).status,
+    ).toBe(403);
+    const ws = new WebSocket(base.href.replace('http:', 'ws:') + 'ws', { headers });
     try {
-      const url = await proxyServer.listen();
-      // Proxies may preserve the browser Origin while independently rewriting Host.
-      const headers = { host: 'internal-proxy:4966', origin: 'https://public.example' };
-      expect((await send('GET', '/api/snapshot', { headers }, url)).status).toBe(200);
-      expect((await send('GET', '/api/snapshot', { headers: { host: 'public.example' } }, url)).status).toBe(200);
-      const ws = new WebSocket(url.href.replace('http:', 'ws:') + 'ws', { headers });
-      try {
-        await new Promise<void>((resolve, reject) => {
-          ws.once('open', resolve);
-          ws.once('error', reject);
-        });
-      } finally {
-        ws.close();
-        await vi.waitFor(() => expect(proxyHub.clientCount).toBe(0));
-      }
+      await new Promise<void>((resolve, reject) => {
+        ws.once('open', resolve);
+        ws.once('error', reject);
+      });
     } finally {
-      await proxyServer.close();
+      ws.close();
+      await vi.waitFor(() => expect(hub.clientCount).toBe(0));
     }
   });
 

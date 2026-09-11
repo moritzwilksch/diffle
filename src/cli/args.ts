@@ -14,6 +14,26 @@ function intArg(min: number, max: number): (raw: string) => number {
 export const parsePort = intArg(0, 65_535);
 export const parseContext = intArg(0, 10_000);
 
+/** Accepts an HTTP(S) origin without credentials, a path prefix, query, or fragment. */
+export function parseAllowedOrigin(raw: string): string {
+  try {
+    const url = new URL(raw);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash ||
+      !/^https?:\/\/[^/?#]+\/?$/i.test(raw)
+    )
+      throw new Error('invalid origin');
+    return url.origin;
+  } catch {
+    throw new InvalidArgumentError('expected an HTTP(S) origin, e.g. https://proxy.example (without a path)');
+  }
+}
+
 /** Commander parser for a language diffle knows; anything else lists the ones it does. */
 export function parseLanguage(raw: string): LanguageId {
   const language = raw.trim().toLowerCase();
