@@ -95,7 +95,6 @@ describe('Server', () => {
       pullRequest: null,
       reason: expect.any(String),
     });
-    expect((await send('POST', '/api/github/export', { body: JSON.stringify({ version: 0 }) })).status).toBe(409);
     expect(session.mode).not.toHaveProperty('kind');
   });
 

@@ -2047,7 +2047,7 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!snap) return null;
       let res;
       try {
-        res = await api.exportToGithub({ version: snap.version, ...(threadIds ? { threadIds } : {}) });
+        res = await api.exportToGithub({ threadIds });
       } catch (e) {
         report('Adding to the GitHub review', e);
         return null;

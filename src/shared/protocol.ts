@@ -138,8 +138,6 @@ export type ThreadState = 'open' | 'resolved' | 'all';
 
 /** Body of `POST /api/github/export`. Without `threadIds`, every unresolved thread of the mode. */
 export interface GithubExportRequest {
-  /** The snapshot whose comments the user approved for export. */
-  version: number;
   threadIds?: string[];
 }
 

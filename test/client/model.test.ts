@@ -206,8 +206,4 @@ describe('documentTitle', () => {
     const github = { pullRequest: { repository: 'conda/rattler', number: 12345 } } as GithubMetadata;
     expect(documentTitle(snapshot({}, '/tmp/diffle-pr-lTXVEf'), github)).toBe('diffle: conda/rattler #12345');
   });
-
-  it('falls back before the first snapshot', () => {
-    expect(documentTitle(null)).toBe('diffle');
-  });
 });

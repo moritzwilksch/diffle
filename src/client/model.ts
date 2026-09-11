@@ -294,10 +294,9 @@ export function repoName(snapshot: Snapshot): string {
 
 /** Browser tab title; the PR number tells tabs of one repository apart. */
 export function documentTitle(
-  snapshot: Snapshot | null,
+  snapshot: Snapshot,
   github: import('../shared/protocol.js').GithubMetadata | null = null,
 ): string {
-  if (!snapshot) return 'diffle';
   const pr = github?.pullRequest;
   return pr ? `diffle: ${pr.repository} #${pr.number}` : `diffle: ${repoName(snapshot)}`;
 }

@@ -108,12 +108,12 @@ export class Session {
     return promise;
   }
 
-  /** Validate fresh PR data inside the export queue, against the snapshot the user approved. */
-  exportGithub({ version, threadIds }: GithubExportRequest): Promise<GithubExportResponse> {
+  /** Validate fresh PR data inside the export queue against the current comparison. */
+  exportGithub({ threadIds }: GithubExportRequest): Promise<GithubExportResponse> {
     return this.exporter.export(async () => {
       const active = this.require();
       const snap = await active.snapshotter.current();
-      if (snap.version !== version || active !== this.active) throw new GithubError('Comparison changed; try again');
+      if (active !== this.active) throw new GithubError('Comparison changed; try again');
       const metadata = await discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
       if (!metadata.pullRequest || metadata.reason !== null)
         throw new GithubError(metadata.reason ?? 'No matching pull request');

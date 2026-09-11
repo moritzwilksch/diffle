@@ -228,8 +228,7 @@ export function createApi(deps: ApiDeps): Hono {
     const ids = body.threadIds;
     if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
       return c.json({ error: 'threadIds must be a string list' }, 400);
-    if (!Number.isSafeInteger(body.version)) return c.json({ error: 'snapshot version required' }, 400);
-    return c.json(await session.exportGithub({ version: body.version!, threadIds: ids }));
+    return c.json(await session.exportGithub({ threadIds: ids }));
   });
 
   app.get('/api/viewed', (c) => c.json(session.comments.viewed()));
