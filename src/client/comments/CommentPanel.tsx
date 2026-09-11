@@ -7,7 +7,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
-import { canExportToGithub, exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
+import { exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
@@ -24,7 +24,7 @@ export function CommentPanel() {
   const focusThread = useStore((s) => s.focusThread);
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
-  const canExport = useStore((s) => canExportToGithub(s.github));
+  const canExport = useStore((s) => s.github.data?.reason === null);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);

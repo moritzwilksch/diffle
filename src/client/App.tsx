@@ -19,7 +19,7 @@ export function App() {
   const toast = useStore((s) => s.toast);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
-  const title = useStore((s) => documentTitle(s.snapshot, s.github));
+  const title = useStore((s) => documentTitle(s.snapshot, s.github.data));
   useKeymap();
 
   useEffect(() => {

@@ -278,11 +278,6 @@ export function lastCommitsRequest(n: number, m: number): ModeRequest {
   return { kind: 'revspec', args: [`HEAD~${n}..HEAD~${m}`] };
 }
 
-/** Export eligibility is independent of how the comparison was opened. */
-export function canExportToGithub(metadata: import('../shared/protocol.js').GithubMetadata | null): boolean {
-  return metadata?.canExport === true;
-}
-
 /** What an export did to the pending review: new comments, bodies rewritten in place, or nothing left to do. */
 export type ExportOutcome = 'added' | 'updated' | 'unchanged';
 

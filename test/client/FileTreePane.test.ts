@@ -15,7 +15,7 @@ const snapshot: Snapshot = {
     old: 'HEAD',
     mergeBase: false,
     new: 'worktree',
-    label: 'working',
+
     live: 'none',
     commentKey: 'working',
   },

@@ -11,7 +11,7 @@ import {
   PencilRuler,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { ModeRequest, RefsResponse } from '../../shared/protocol.js';
+import { comparisonLabel, type ModeRequest, type RefsResponse } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { focusReview } from '../keyboard/useKeymap.js';
 import { lastCommitsRequest } from '../model.js';
@@ -131,7 +131,7 @@ export function ModePicker() {
         aria-controls="mode-picker"
         className="font-mono"
       >
-        {snapshot?.mode.label ?? '…'} <ChevronDown size="0.875rem" />
+        {snapshot ? comparisonLabel(snapshot.mode) : '…'} <ChevronDown size="0.875rem" />
       </Button>
       {open && (
         <div

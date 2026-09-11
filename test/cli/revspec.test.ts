@@ -7,7 +7,6 @@ describe('parseRevspec', () => {
       old: 'main',
       mergeBase: true,
       new: 'HEAD',
-      label: 'main...HEAD',
     });
     expect(parseRevspec(['main'])).toEqual(parseRevspec(['main...HEAD']));
   });
@@ -18,7 +17,6 @@ describe('parseRevspec', () => {
       old: 'HEAD~3',
       mergeBase: true,
       new: 'HEAD',
-      label: 'HEAD~3...HEAD',
     });
   });
 
@@ -27,21 +25,18 @@ describe('parseRevspec', () => {
       old: 'main',
       mergeBase: false,
       new: 'worktree',
-      label: 'main..worktree',
     });
     // A merge base needs a commit, and the worktree sits on HEAD.
     expect(parseRevspec(['main...worktree'])).toEqual({
       old: 'main',
       mergeBase: true,
       new: 'worktree',
-      label: 'main...worktree',
     });
     expect(parseRevspec(['main', 'worktree']).new).toBe('worktree');
     expect(parseRevspec(['worktree'])).toEqual({
       old: 'HEAD',
       mergeBase: false,
       new: 'worktree',
-      label: 'HEAD..worktree',
     });
   });
 
@@ -50,7 +45,6 @@ describe('parseRevspec', () => {
       old: 'main',
       mergeBase: false,
       new: 'feat',
-      label: 'main..feat',
     });
   });
 
@@ -59,7 +53,6 @@ describe('parseRevspec', () => {
       old: 'main',
       mergeBase: true,
       new: 'feat',
-      label: 'main...feat',
     });
   });
 

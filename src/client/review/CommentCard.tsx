@@ -18,7 +18,7 @@ import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
-import { canExportToGithub, exportLabel, type ExportOutcome } from '../model.js';
+import { exportLabel, type ExportOutcome } from '../model.js';
 import { useStore } from '../store.js';
 import { useConfirm } from '../useConfirm.js';
 
@@ -33,7 +33,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const setEditingId = useStore((s) => s.setEditingId);
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
-  const canExport = useStore((s) => canExportToGithub(s.github));
+  const canExport = useStore((s) => s.github.data?.reason === null);
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
   const del = useConfirm(() => void deleteThread(thread.id));

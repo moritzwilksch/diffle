@@ -1,5 +1,11 @@
 import { execFile } from 'node:child_process';
-import type { CommentMessage, CommentThread, GithubExportResponse, Snapshot } from '../shared/protocol.js';
+import type {
+  CommentMessage,
+  CommentThread,
+  GithubExportResponse,
+  GithubPullRequest,
+  Snapshot,
+} from '../shared/protocol.js';
 import { compareThreads } from './comments/anchor.js';
 
 /** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
@@ -93,12 +99,6 @@ export function formatBody(messages: CommentMessage[]): string {
   return messages.map((m) => m.body.trim()).join('\n\n---\n\n');
 }
 
-interface PrInfo {
-  number: number;
-  url: string;
-  headRefOid: string;
-}
-
 /** The base repository the pull request lives in, taken from its url (a fork's own remote is not it). */
 export function repoOfPrUrl(url: string): { owner: string; repo: string } {
   const m = /^\/([^/]+)\/([^/]+)\/pull\/\d+/.exec(new URL(url).pathname);
@@ -108,18 +108,18 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
 
 export interface ExportInput {
   snap: Pick<Snapshot, 'root' | 'newSha'>;
-  pullRequest: { repository: string; number: number };
+  pullRequest: GithubPullRequest;
   threads: CommentThread[];
   threadIds?: string[];
   run?: GhRunner;
 }
 
-/** Owns one server's export queue so overlapping requests cannot add the same thread twice. */
+/** Serializes validation and writes so overlapping exports cannot add the same thread twice. */
 export class GithubExporter {
   private queue: Promise<unknown> = Promise.resolve();
 
-  export(input: ExportInput): Promise<GithubExportResponse> {
-    const result = this.queue.then(() => exportToGithub(input));
+  export(prepare: () => Promise<ExportInput>): Promise<GithubExportResponse> {
+    const result = this.queue.then(async () => exportToGithub(await prepare()));
     this.queue = result.catch(() => {});
     return result;
   }
@@ -128,7 +128,7 @@ export class GithubExporter {
 /**
  * Adds the threads to a *pending* review on the active PR, creating the pending review
  * when there is none. The review is never submitted: the human opens the PR and submits
- * it themselves. The active mode names the PR and pins its reviewed head commit.
+ * it themselves. The caller validates the comparison inside the export queue before posting.
  *
  * Re-exporting matches a hidden thread ID and its anchor in the pending review.
  * A matching comment is left alone when its body matches and rewritten when it does not, so
@@ -137,7 +137,7 @@ export class GithubExporter {
  */
 async function exportToGithub({
   snap,
-  pullRequest: selected,
+  pullRequest: pr,
   threads,
   threadIds,
   run = runGh,
@@ -147,23 +147,12 @@ async function exportToGithub({
   if (review.comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
-  const pr = parsePr(
-    await run(
-      ['pr', 'view', String(selected.number), '--repo', selected.repository, '--json', 'number,url,headRefOid'],
-      { cwd: snap.root },
-    ),
-  );
-  if (pr.headRefOid !== snap.newSha)
-    throw new GithubError(
-      `the pull request head moved from ${snap.newSha.slice(0, 7)} to ${pr.headRefOid.slice(0, 7)}; reopen the pull request comparison`,
-    );
-
   for (const [i, comment] of review.comments.entries()) {
     comment.body += `\n\n${threadMarker(ids[i]!)}`;
   }
   const pending = await findPendingReview(run, snap.root, pr);
   if (!pending) {
-    await createPendingReview(run, snap.root, selected.repository, pr.number, review);
+    await createPendingReview(run, snap.root, pr.repository, pr.number, review);
     return { url: pr.url, posted: review.comments.length, updated: 0, review: 'created', skipped };
   }
 
@@ -231,7 +220,7 @@ interface PendingQueryData {
  * reviews, and the login check makes sure of it: appending to someone else's draft would
  * put our comments in their review.
  */
-async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<{ id: string } | null> {
+async function findPendingReview(run: GhRunner, cwd: string, pr: GithubPullRequest): Promise<{ id: string } | null> {
   const { owner, repo } = repoOfPrUrl(pr.url);
   const data = await graphql<PendingQueryData>(run, cwd, PENDING_QUERY, { owner, repo, number: pr.number });
   const login = data.viewer?.login;
@@ -282,7 +271,7 @@ interface ThreadsQueryData {
 async function pendingComments(
   run: GhRunner,
   cwd: string,
-  pr: PrInfo,
+  pr: GithubPullRequest,
   reviewId: string,
 ): Promise<Map<string, PendingComment[]>> {
   const by = new Map<string, PendingComment[]>();
@@ -374,19 +363,6 @@ function describe(skipped: GithubExportResponse['skipped']): string {
   return [...counts].map(([reason, n]) => `${n} ${reason}`).join(', ');
 }
 
-function parsePr(out: string): PrInfo {
-  let pr: Partial<PrInfo>;
-  try {
-    pr = JSON.parse(out) as Partial<PrInfo>;
-  } catch {
-    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
-  }
-  if (typeof pr.number !== 'number' || typeof pr.url !== 'string' || typeof pr.headRefOid !== 'string') {
-    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
-  }
-  return pr as PrInfo;
-}
-
 /** Spawns the local `gh`. A missing binary or a failing command becomes a GithubError carrying gh's own message. */
 export const runGh: GhRunner = (args, { cwd, input, timeoutMs }) =>
   new Promise((resolve, reject) => {
@@ -410,22 +386,17 @@ export const runGh: GhRunner = (args, { cwd, input, timeoutMs }) =>
   });
 
 /** A pull request as `gh pr view` reports it, plus the base repository derived from its URL. */
-export interface PullRequest {
-  number: number;
-  /** `https://github.com/<owner>/<repo>/pull/<number>` */
-  url: string;
-  title: string;
-  state: 'OPEN' | 'CLOSED' | 'MERGED';
-  isDraft: boolean;
+export interface PullRequest extends GithubPullRequest {
   baseRefOid: string;
   baseRefName: string;
   headRefName: string;
   headRefOid: string;
-  /** `<owner>/<repo>` of the base repository: where `refs/pull/<number>/head` lives. */
-  baseRepo: string;
+  /** Source repository; null when GitHub no longer exposes the deleted fork. */
+  headRepository: string | null;
 }
 
-const PR_FIELDS = 'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid';
+const PR_FIELDS =
+  'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner';
 
 /**
  * `gh pr view` for a PR named by number, `#number`, URL or branch. Without a
@@ -440,10 +411,8 @@ export async function viewPr(
 ): Promise<PullRequest> {
   const arg = selector == null ? [] : [normalizeSelector(selector)];
   const out = await run(['pr', 'view', ...arg, '--json', PR_FIELDS], { cwd, timeoutMs });
-  return parsePrView(out);
+  return parsePullRequest(parseJson(out, 'view'));
 }
-
-const PR_LIST_FIELDS = `${PR_FIELDS},headRepository,headRepositoryOwner`;
 
 /** Open pull requests whose head is the named branch in the named remote repository. */
 export async function listPrsForHead(
@@ -470,19 +439,14 @@ export async function listPrsForHead(
       '--limit',
       '100',
       '--json',
-      PR_LIST_FIELDS,
+      PR_FIELDS,
     ],
     {
       cwd,
       timeoutMs,
     },
   );
-  let values: unknown;
-  try {
-    values = JSON.parse(out);
-  } catch {
-    throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
-  }
+  const values = parseJson(out, 'list');
   if (!Array.isArray(values)) throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
   return values.flatMap((value) => {
     const candidate = value as {
@@ -494,7 +458,7 @@ export async function listPrsForHead(
     if (typeof owner !== 'string' || typeof name !== 'string')
       throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
     if (`${owner}/${name}`.toLowerCase() !== headRepo.toLowerCase()) return [];
-    return [parsePrView(JSON.stringify(value))];
+    return [parsePullRequest(value)];
   });
 }
 
@@ -505,13 +469,16 @@ function normalizeSelector(selector: string): string {
   return num ? num[1]! : s;
 }
 
-function parsePrView(out: string): PullRequest {
-  let pr: Partial<PullRequest>;
+function parseJson(out: string, command: string): unknown {
   try {
-    pr = JSON.parse(out) as Partial<PullRequest>;
+    return JSON.parse(out);
   } catch {
-    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+    throw new GithubError(`unexpected output from gh pr ${command}: ${out.slice(0, 200)}`, 502);
   }
+}
+
+function parsePullRequest(value: unknown): PullRequest {
+  const pr = value as Partial<PullRequest>;
   const ok =
     pr != null &&
     typeof pr.title === 'string' &&
@@ -523,8 +490,26 @@ function parsePrView(out: string): PullRequest {
     typeof pr.baseRefName === 'string' &&
     typeof pr.headRefName === 'string' &&
     typeof pr.headRefOid === 'string';
-  if (!ok) throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+  if (!ok) throw new GithubError('unexpected pull request data from gh', 502);
   const slug = /^https?:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+/.exec(pr.url!);
   if (!slug) throw new GithubError(`cannot read the repository from the pull request url: ${pr.url}`, 502);
-  return { ...(pr as Omit<PullRequest, 'baseRepo'>), baseRepo: slug[1]! };
+  const source = value as {
+    headRepository?: { name?: string } | null;
+    headRepositoryOwner?: { login?: string } | null;
+  };
+  const owner = source.headRepositoryOwner?.login;
+  const name = source.headRepository?.name;
+  return {
+    headRepository: typeof owner === 'string' && typeof name === 'string' ? `${owner}/${name}` : null,
+    number: pr.number!,
+    url: pr.url!,
+    title: pr.title!,
+    state: pr.state!,
+    isDraft: pr.isDraft!,
+    repository: slug[1]!,
+    baseRefOid: pr.baseRefOid!,
+    baseRefName: pr.baseRefName!,
+    headRefName: pr.headRefName!,
+    headRefOid: pr.headRefOid!,
+  };
 }

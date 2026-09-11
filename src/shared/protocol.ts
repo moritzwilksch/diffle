@@ -11,10 +11,14 @@ export interface ModeSpec {
   new: string;
   /** Compare merge-base(old, new) to new; worktree uses HEAD for the merge base. */
   mergeBase: boolean;
-  label: string;
   live: 'worktree' | 'refs' | 'none';
   /** Fixed when the comparison is entered; discovery never changes comment storage. */
   commentKey: string;
+}
+
+/** Display the comparison using the same revision syntax accepted by the CLI. */
+export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>): string {
+  return `${mode.old}${mode.mergeBase ? '...' : '..'}${mode.new}`;
 }
 
 export interface GithubPullRequest {
@@ -24,14 +28,15 @@ export interface GithubPullRequest {
   title: string;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   isDraft: boolean;
-  headSha: string;
 }
 
 /** Optional enrichment for a snapshot, independent of its comparison. */
 export interface GithubMetadata {
   version: number;
+  /** GitHub repository identified by the local origin URL. */
+  repository: string | null;
   pullRequest: GithubPullRequest | null;
-  canExport: boolean;
+  /** Null when export is allowed; otherwise explains why it is blocked. */
   reason: string | null;
 }
 

@@ -1,7 +1,8 @@
 import type { ChangedFile, ModeSpec, Snapshot } from '../shared/protocol.js';
 import { mapLimit } from './concurrency.js';
 import { looksGenerated, SNIFF_BYTES } from './generated.js';
-import { GitError, type GitRepo } from './git/GitRepo.js';
+import type { GitRepo } from './git/GitRepo.js';
+import { resolveComparison } from './mode.js';
 
 const PREWARM = 3;
 /** Concurrent worktree reads while flagging generated files. */
@@ -100,9 +101,8 @@ export class Snapshotter {
   }
 
   private async compute(version: number): Promise<Snapshot> {
-    const [oldSha, newSha, headSha] = await Promise.all([
-      this.resolveOld(),
-      this.resolveNew(),
+    const [{ oldSha, newSha }, headSha] = await Promise.all([
+      resolveComparison(this.repo, this.mode),
       this.repo.resolve('HEAD').catch(() => ''),
     ]);
     // The tree belongs to the selected new side: a commit's own listing, or the
@@ -171,34 +171,5 @@ export class Snapshotter {
     if (head == null || !f.blob) return;
     if (this.sniffed.size >= SNIFF_CACHE_MAX) this.sniffed.clear();
     this.sniffed.set(f.blob, f.generated);
-  }
-
-  private async resolveOld(): Promise<string> {
-    if (this.mode.mergeBase)
-      return this.repo.mergeBase(
-        this.mode.old === 'worktree' ? 'HEAD' : this.mode.old,
-        this.mode.new === 'worktree' ? 'HEAD' : this.mode.new,
-      );
-    return this.resolveSide(this.mode.old);
-  }
-
-  private resolveNew(): Promise<string> {
-    return this.resolveSide(this.mode.new);
-  }
-
-  private async resolveSide(rev: string): Promise<string> {
-    if (rev === 'worktree') return rev;
-    try {
-      return await this.repo.resolve(rev);
-    } catch (e) {
-      if (
-        rev === 'HEAD' &&
-        [this.mode.old, this.mode.new].includes('worktree') &&
-        e instanceof GitError &&
-        e.code === 1
-      )
-        return this.repo.emptyTree();
-      throw e;
-    }
   }
 }

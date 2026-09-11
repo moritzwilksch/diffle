@@ -7,10 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
-import { GithubError, listPrsForHead, viewPr, type GhRunner } from '../../src/server/github.js';
-import { discoverGithub, githubRepository, originRepository } from '../../src/server/GithubMetadata.js';
-import { Session } from '../../src/server/Session.js';
-import { Snapshotter } from '../../src/server/Snapshotter.js';
+import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
 import { resolveReview } from '../../src/server/mode.js';
 
 /**
@@ -110,7 +107,7 @@ describe('viewPr', () => {
         'view',
         expected,
         '--json',
-        'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid',
+        'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
       ]);
     }
     await viewPr(undefined, local, gh);
@@ -118,39 +115,12 @@ describe('viewPr', () => {
       'pr',
       'view',
       '--json',
-      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid',
+      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
     ]);
   });
 
   it('reads the base repository off the pull request url', async () => {
-    expect((await viewPr('7', local, gh)).baseRepo).toBe('o/r');
-  });
-
-  it('lists open pull requests for an explicit remote branch', async () => {
-    const prs = await listPrsForHead('o/r', 'main', 'feat', 'o/r', local, async (args) => {
-      ghCalls.push(args);
-      return JSON.stringify([
-        JSON.parse(PR_VIEW()),
-        JSON.parse(PR_VIEW({ number: 8, headRepositoryOwner: { login: 'other' } })),
-      ]);
-    });
-    expect(prs.map((pr) => pr.number)).toEqual([7]);
-    expect(ghCalls[0]).toEqual([
-      'pr',
-      'list',
-      '--repo',
-      'o/r',
-      '--base',
-      'main',
-      '--head',
-      'feat',
-      '--state',
-      'open',
-      '--limit',
-      '100',
-      '--json',
-      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
-    ]);
+    expect((await viewPr('7', local, gh)).repository).toBe('o/r');
   });
 
   it('refuses an option-shaped selector before gh sees it', async () => {
@@ -173,10 +143,10 @@ describe("resolveReview({ kind: 'pr' })", () => {
       old: mergeBase,
       mergeBase: false,
       new: headSha,
-      label: '#7 main...feat',
+
       live: 'none',
-      // The number, not a sha: comments outlive a force-push to the pull request.
-      commentKey: 'pr:#7',
+      // Branch identities share review state with ordinary branch comparisons.
+      commentKey: 'branches:["o/r:main","o/r:feat",true]',
     });
     expect(mode).not.toHaveProperty('request');
     expect(prUrl).toBe('https://github.com/o/r/pull/7');
@@ -217,155 +187,6 @@ describe("resolveReview({ kind: 'pr' })", () => {
     };
     await expect(resolveReview({ kind: 'pr', pr: '999' }, repo, missing)).rejects.toThrow(GithubError);
   });
-});
-
-describe('independent GitHub metadata', () => {
-  async function checkedOut<T>(fn: () => Promise<T>): Promise<T> {
-    git(local, 'update-ref', 'refs/remotes/origin/feat', headSha);
-    git(local, 'checkout', '-q', '-B', 'feat', '--track', 'origin/feat');
-    const remotes = vi.spyOn(repo, 'remotes').mockResolvedValue([{ name: 'origin', url: 'git@github.com:o/r.git' }]);
-    try {
-      return await fn();
-    } finally {
-      remotes.mockRestore();
-      git(local, 'checkout', '-q', 'main');
-      git(local, 'branch', '-q', '-D', 'feat');
-      git(local, 'update-ref', '-d', 'refs/remotes/origin/feat');
-    }
-  }
-  const snapshot = async (args: string[]) =>
-    new Snapshotter(repo, (await resolveReview({ kind: 'revspec', args }, repo)).mode, 1, 3).current();
-  const found: GhRunner = async (args, opts) => {
-    ghCalls.push(args);
-    expect(opts.timeoutMs).toBe(5000);
-    return JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: headSha }))]);
-  };
-
-  it('discovers both upstreams without promoting, pinning, or fetching the comparison', async () =>
-    checkedOut(async () => {
-      const fetch = vi.spyOn(repo, 'fetch');
-      try {
-        const snap = await snapshot(['origin/main']);
-        const before = structuredClone(snap.mode);
-        const metadata = await discoverGithub(repo, snap, { run: found });
-        expect(metadata).toMatchObject({
-          canExport: true,
-          pullRequest: { repository: 'o/r', number: 7, title: 'Improve feature', state: 'OPEN', isDraft: false },
-        });
-        expect(snap.mode).toEqual(before);
-        expect(snap.mode).toMatchObject({ old: 'origin/main', new: 'HEAD', mergeBase: true, live: 'refs' });
-        expect(snap.mode).not.toHaveProperty('kind');
-        expect(fetch).not.toHaveBeenCalled();
-        expect(ghCalls[0]?.slice(0, 8)).toEqual(['pr', 'list', '--repo', 'o/r', '--base', 'main', '--head', 'feat']);
-      } finally {
-        fetch.mockRestore();
-      }
-    }));
-
-  it('resolves exact local and remote branches, but never expressions or tags', async () =>
-    checkedOut(async () => {
-      expect(await repo.upstreamBranch('HEAD')).toEqual({ remote: 'origin', branch: 'feat' });
-      expect(await repo.upstreamBranch('feat')).toEqual({ remote: 'origin', branch: 'feat' });
-      expect(await repo.upstreamBranch('origin/main')).toEqual({ remote: 'origin', branch: 'main' });
-      expect(await repo.upstreamBranch('HEAD~1')).toBeNull();
-      expect(await repo.upstreamBranch(headSha)).toBeNull();
-      expect(await repo.upstreamBranch('worktree')).toBeNull();
-      git(local, 'tag', 'metadata-tag', headSha);
-      try {
-        expect(await repo.upstreamBranch('metadata-tag')).toBeNull();
-      } finally {
-        git(local, 'tag', '-d', 'metadata-tag');
-      }
-      git(local, 'checkout', '-q', '--detach', headSha);
-      expect(await repo.upstreamBranch('HEAD')).toBeNull();
-    }));
-
-  it('skips GitHub for a worktree or an expression on either endpoint', async () =>
-    checkedOut(async () => {
-      for (const args of [['origin/main..worktree'], ['worktree..HEAD'], ['HEAD~1..HEAD']]) {
-        const metadata = await discoverGithub(repo, await snapshot(args), { run: found });
-        expect(metadata.pullRequest).toBeNull();
-      }
-      expect(ghCalls).toEqual([]);
-    }));
-
-  it('shows metadata for an unpushed branch but refuses export', async () =>
-    checkedOut(async () => {
-      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), {
-        run: async () => JSON.stringify([JSON.parse(PR_VIEW({ headRefOid: mergeBase }))]),
-      });
-      expect(metadata.pullRequest?.number).toBe(7);
-      expect(metadata.canExport).toBe(false);
-      expect(metadata.reason).toMatch(/head/);
-    }));
-
-  it('shows matching metadata even when the old commit differs from GitHub’s diff', async () =>
-    checkedOut(async () => {
-      const snap = await snapshot(['origin/main']);
-      const metadata = await discoverGithub(repo, { ...snap, oldSha: headSha }, { run: found });
-      expect(metadata.pullRequest?.number).toBe(7);
-      expect(metadata.canExport).toBe(false);
-      expect(metadata.reason).toMatch(/does not match/);
-    }));
-
-  it('does not select an arbitrary PR when discovery is ambiguous', async () =>
-    checkedOut(async () => {
-      const metadata = await discoverGithub(repo, await snapshot(['origin/main']), {
-        run: async () =>
-          JSON.stringify([
-            JSON.parse(PR_VIEW({ headRefOid: headSha })),
-            JSON.parse(PR_VIEW({ number: 8, headRefOid: headSha })),
-          ]),
-      });
-      expect(metadata.pullRequest).toBeNull();
-      expect(metadata.reason).toMatch(/Multiple/);
-    }));
-
-  it('keeps an explicit PR identity when neither commit has a branch', async () => {
-    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, gh);
-    const snap = await new Snapshotter(repo, mode, 1, 3).current();
-    const metadata = await discoverGithub(repo, snap, {
-      prUrl,
-      run: async (args) => {
-        expect(args[2]).toBe('https://github.com/o/r/pull/7');
-        return PR_VIEW({ headRefOid: headSha, isDraft: true });
-      },
-    });
-    expect(metadata).toMatchObject({ canExport: true, pullRequest: { number: 7, isDraft: true } });
-  });
-
-  it('keeps explicit PR identity in the session across refreshes and clears it on a comparison switch', async () => {
-    const run = vi.fn<GhRunner>(async () => PR_VIEW({ headRefOid: headSha }));
-    const session = new Session(repo, { broadcast() {} }, { watch: false, context: 3, gh: run });
-    try {
-      const first = await session.start({ kind: 'pr', pr: '7' });
-      expect(first.mode).not.toHaveProperty('request');
-      expect(first.mode).not.toHaveProperty('prUrl');
-      expect((await session.github(first)).pullRequest?.number).toBe(7);
-      expect(run.mock.calls.at(-1)?.[0][2]).toBe('https://github.com/o/r/pull/7');
-      await session.refresh();
-      const refreshed = await session.snapshotter.current();
-      expect((await session.github(refreshed)).pullRequest?.number).toBe(7);
-      await session.setContext(9);
-      expect((await session.github(await session.snapshotter.current())).pullRequest?.number).toBe(7);
-      const next = await session.switchMode({ kind: 'working' });
-      run.mockClear();
-      expect((await session.github(next)).pullRequest).toBeNull();
-      expect(run).not.toHaveBeenCalled();
-      await expect(session.github(first)).rejects.toThrow('Comparison changed');
-    } finally {
-      await session.close();
-    }
-  });
-
-  it('reads origin locally and recognizes GitHub URL forms', async () =>
-    checkedOut(async () => {
-      expect(await originRepository(repo)).toBe('o/r');
-      for (const url of ['https://github.com/o/r.git', 'git@github.com:o/r.git', 'ssh://git@github.com/o/r.git'])
-        expect(githubRepository(url)).toBe('o/r');
-      expect(githubRepository('https://notgithub.com/o/r')).toBeNull();
-      expect(githubRepository('/local/o/r')).toBeNull();
-    }));
 });
 
 describe('openReviewRepository', () => {

@@ -20,8 +20,7 @@ import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
-import { originRepository } from './GithubMetadata.js';
-import { GithubExporter, GithubError } from './github.js';
+import { GithubError } from './github.js';
 import { LspUnavailableError } from './lsp/LspBridge.js';
 import type { LspPool } from './lsp/LspPool.js';
 import { RevspecError } from './revspec.js';
@@ -45,7 +44,6 @@ export interface ApiDeps {
 export function createApi(deps: ApiDeps): Hono {
   const { session, hub } = deps;
   const app = new Hono();
-  const github = new GithubExporter();
 
   app.onError((err, c) => {
     if (err instanceof NotFoundError) return c.json({ error: 'not found' }, 404);
@@ -71,10 +69,8 @@ export function createApi(deps: ApiDeps): Hono {
     return c.json(await session.switchMode(req));
   });
 
-  app.get('/api/github/repository', async (c) => c.json({ repository: await originRepository(session.repo) }));
   app.get('/api/github', async (c) => {
     const snap = await session.snapshotter.current();
-    if (c.req.query('version') !== String(snap.version)) return c.json({ error: 'comparison changed' }, 409);
     return c.json(await session.github(snap));
   });
 
@@ -232,21 +228,8 @@ export function createApi(deps: ApiDeps): Hono {
     const ids = body.threadIds;
     if (ids != null && !(Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
       return c.json({ error: 'threadIds must be a string list' }, 400);
-    const snap = await session.snapshotter.current();
-    if (body.version !== snap.version) throw new GithubError('Comparison changed; try again');
-    const comments = session.comments;
-    const metadata = await session.github(snap, true);
-    if (!metadata.pullRequest || !metadata.canExport)
-      throw new GithubError(metadata.reason ?? 'No matching pull request');
-    if (snap !== (await session.snapshotter.current())) throw new GithubError('Comparison changed; try again');
-    return c.json(
-      await github.export({
-        snap,
-        pullRequest: metadata.pullRequest,
-        threads: comments.threads({ state: 'all' }),
-        threadIds: ids,
-      }),
-    );
+    if (!Number.isSafeInteger(body.version)) return c.json({ error: 'snapshot version required' }, 400);
+    return c.json(await session.exportGithub({ version: body.version!, threadIds: ids }));
   });
 
   app.get('/api/viewed', (c) => c.json(session.comments.viewed()));

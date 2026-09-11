@@ -187,6 +187,11 @@ export interface FileView {
   from: { position: JumpPosition | null; activePath: string | null };
 }
 
+export type GithubState =
+  | { status: 'idle' | 'loading'; data?: never }
+  | { status: 'ready'; data: GithubMetadata }
+  | { status: 'error'; error: string; data?: never };
+
 export interface ReviewState {
   layout: LayoutState;
   setLayout(patch: Partial<LayoutState>): void;
@@ -210,10 +215,7 @@ export interface ReviewState {
   closeReply(): void;
   githubMenuOpen: boolean;
   setGithubMenuOpen(open: boolean): void;
-  githubRepository: string | null;
-  github: GithubMetadata | null;
-  githubLoading: boolean;
-  githubError: string | null;
+  github: GithubState;
   refreshGithub(): Promise<void>;
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
@@ -1215,10 +1217,7 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().replyTo) set({ replyTo: null });
     },
     githubMenuOpen: false,
-    githubRepository: null,
-    github: null,
-    githubLoading: false,
-    githubError: null,
+    github: { status: 'idle' },
     setGithubMenuOpen(open) {
       set({ githubMenuOpen: open, ...(open ? { modeMenuOpen: false } : {}) });
       if (open) void get().refreshGithub();
@@ -1229,26 +1228,13 @@ export const useStore = create<ReviewState>((set, get) => {
       const g = generation;
       const request = ++githubRequest;
       const current = () => g === generation && get().snapshot === snap && githubRequest === request;
-      set({ github: null, githubLoading: true, githubError: null });
-      await Promise.all([
-        (async () => {
-          try {
-            const result = await api.githubRepository();
-            if (current()) set({ githubRepository: result.repository });
-          } catch {
-            /* PR lookup reports connection failures; the origin is optional. */
-          }
-        })(),
-        (async () => {
-          try {
-            const result = await api.github(snap.version);
-            if (current() && result.version === snap.version) set({ github: result });
-          } catch (e) {
-            if (current()) set({ githubError: e instanceof Error ? e.message : String(e) });
-          }
-        })(),
-      ]);
-      if (current()) set({ githubLoading: false });
+      set({ github: { status: 'loading' } });
+      try {
+        const data = await api.github();
+        if (current()) set({ github: data.version === snap.version ? { status: 'ready', data } : { status: 'idle' } });
+      } catch (e) {
+        if (current()) set({ github: { status: 'error', error: errorMessage(e) } });
+      }
     },
     modeMenuOpen: false,
     modePane: null,

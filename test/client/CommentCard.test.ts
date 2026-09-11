@@ -30,7 +30,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   api.exportComment.mockReset();
   copyText.mockReset();
-  useStore.setState({ editingId: null, replyTo: null, focusedThread: null, github: null });
+  useStore.setState({ editingId: null, replyTo: null, focusedThread: null, github: { status: 'idle' } });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -41,17 +41,17 @@ afterEach(async () => {
 });
 
 describe('CommentCard GitHub button', () => {
-  const metadata = (canExport: boolean): GithubMetadata => ({ canExport }) as GithubMetadata;
+  const metadata = (reason: string | null): GithubMetadata => ({ reason }) as GithubMetadata;
   const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
 
   it('is hidden without export eligibility', async () => {
-    useStore.setState({ github: metadata(false) });
+    useStore.setState({ github: { status: 'ready', data: metadata('No matching pull request') } });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).toBeNull();
   });
 
   it('is shown when export is eligible', async () => {
-    useStore.setState({ github: metadata(true) });
+    useStore.setState({ github: { status: 'ready', data: metadata(null) } });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).not.toBeNull();
   });

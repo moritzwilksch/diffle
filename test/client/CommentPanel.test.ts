@@ -38,7 +38,7 @@ beforeEach(() => {
     threads,
     showResolved: false,
     activePath: null,
-    github: null,
+    github: { status: 'idle' },
     deleteThread: () => Promise.resolve(),
   });
   host = document.createElement('div');
@@ -98,13 +98,13 @@ describe('CommentPanel rows', () => {
 
   it('shows the GitHub button only when export is eligible', async () => {
     const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
-    const metadata = (canExport: boolean): GithubMetadata => ({ canExport }) as GithubMetadata;
+    const metadata = (reason: string | null): GithubMetadata => ({ reason }) as GithubMetadata;
 
-    useStore.setState({ github: metadata(false) });
+    useStore.setState({ github: { status: 'ready', data: metadata('No matching pull request') } });
     await act(() => root.render(createElement(CommentPanel)));
     expect(post()).toBeNull();
 
-    await act(() => useStore.setState({ github: metadata(true) }));
+    await act(() => useStore.setState({ github: { status: 'ready', data: metadata(null) } }));
     expect(post()).not.toBeNull();
   });
 });

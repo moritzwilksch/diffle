@@ -313,7 +313,7 @@ describe('Session', () => {
     const b = session.switchMode({ kind: 'revspec', args: ['main'] });
     const [snapA, snapB] = await Promise.all([a, b]);
     expect(snapB.version).toBeGreaterThan(snapA.version);
-    expect(session.mode.label).toBe('main...HEAD');
+    expect(session.mode).toMatchObject({ old: 'main', new: 'HEAD', mergeBase: true });
     expect(session.comments.key).toBe(session.mode.commentKey);
     expect(watchers.map((w) => w.state)).toEqual(['closed', 'closed', 'open']);
     await session.close();

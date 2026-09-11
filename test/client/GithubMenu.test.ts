@@ -2,9 +2,9 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { GithubMetadata } from '../../src/shared/protocol.js';
+import type { GithubMetadata, Snapshot } from '../../src/shared/protocol.js';
 
-vi.mock('../../src/client/api.js', () => ({ api: {} }));
+vi.mock('../../src/client/api.js', () => ({ api: { github: () => new Promise(() => {}) } }));
 const { useStore } = await import('../../src/client/store.js');
 const { GithubMenu } = await import('../../src/client/header/GithubMenu.js');
 const { useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
@@ -17,12 +17,9 @@ let root: Root;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   useStore.setState({
-    snapshot: null,
+    snapshot: {} as Snapshot,
     githubMenuOpen: false,
-    githubRepository: 'alice/fork',
-    github: null,
-    githubLoading: true,
-    githubError: null,
+    github: { status: 'loading' },
     modeMenuOpen: false,
     helpOpen: false,
   });
@@ -41,9 +38,8 @@ it('o opens repository information during lookup; Escape and outside clicks dism
   await act(() => root.render(createElement(App)));
   await act(() => press('o'));
   expect(host.querySelector('[role="dialog"]')).not.toBeNull();
-  expect(host.textContent).toContain('alice/fork');
   expect(host.textContent).toContain('Loading…');
-  expect(host.querySelector('a')?.href).toBe('https://github.com/alice/fork');
+  expect(host.textContent).not.toContain('No GitHub origin');
   await act(() => press('Escape'));
   expect(host.querySelector('[role="dialog"]')).toBeNull();
   await act(() => host.querySelector('button')!.click());
@@ -54,7 +50,7 @@ it('o opens repository information during lookup; Escape and outside clicks dism
 it('shows PR metadata from another repository and separates draft, open, closed, and merged', async () => {
   const metadata: GithubMetadata = {
     version: 1,
-    canExport: false,
+    repository: 'alice/fork',
     reason: 'The comparison does not match the pull request diff',
     pullRequest: {
       repository: 'upstream/project',
@@ -63,10 +59,9 @@ it('shows PR metadata from another repository and separates draft, open, closed,
       url: 'https://github.com/upstream/project/pull/42',
       state: 'OPEN',
       isDraft: true,
-      headSha: 'abc',
     },
   };
-  useStore.setState({ githubMenuOpen: true, githubLoading: false, github: metadata });
+  useStore.setState({ githubMenuOpen: true, github: { status: 'ready', data: metadata } });
   await act(() => root.render(createElement(App)));
   expect(host.textContent).toContain('#42 Improve parsing');
   expect(host.textContent).toContain('upstream/project');
@@ -78,11 +73,24 @@ it('shows PR metadata from another repository and separates draft, open, closed,
     ['MERGED', 'Merged'],
   ] as const) {
     await act(() =>
-      useStore.setState({ github: { ...metadata, pullRequest: { ...metadata.pullRequest!, state, isDraft: false } } }),
+      useStore.setState({
+        github: {
+          status: 'ready',
+          data: { ...metadata, pullRequest: { ...metadata.pullRequest!, state, isDraft: false } },
+        },
+      }),
     );
     expect(host.textContent).toContain(label);
   }
-  await act(() => useStore.setState({ github: null, githubError: 'gh is not installed' }));
+  await act(() =>
+    useStore.setState({
+      github: {
+        status: 'ready',
+        data: { ...metadata, pullRequest: null, reason: 'Lookup failed: gh is not installed' },
+      },
+    }),
+  );
   expect(host.textContent).toContain('Lookup failed: gh is not installed');
   expect(host.textContent).toContain('alice/fork');
+  expect(host.querySelector('a')?.href).toBe('https://github.com/alice/fork');
 });

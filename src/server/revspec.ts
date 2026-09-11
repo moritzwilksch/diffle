@@ -1,6 +1,6 @@
 import type { ModeSpec } from '../shared/protocol.js';
 
-export type ParsedRevspec = Pick<ModeSpec, 'old' | 'new' | 'mergeBase' | 'label'>;
+export type ParsedRevspec = Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>;
 
 /** The uncommitted tree, accepted on either side of a comparison. */
 const WORKTREE = 'worktree';
@@ -19,24 +19,24 @@ export function parseRevspec(args: string[]): ParsedRevspec {
   if (args.length === 2) {
     const [a, b] = args as [string, string];
     if (a.includes('..') || b.includes('..')) throw new RevspecError('cannot combine ".." with two revisions');
-    return { old: a, new: b, mergeBase: false, label: `${a}..${b}` };
+    return { old: a, new: b, mergeBase: false };
   }
   const arg = args[0]!;
   const three = arg.indexOf('...');
   if (three !== -1) {
     const a = arg.slice(0, three) || 'HEAD';
     const b = arg.slice(three + 3) || 'HEAD';
-    return { old: a, new: b, mergeBase: true, label: `${a}...${b}` };
+    return { old: a, new: b, mergeBase: true };
   }
   const two = arg.indexOf('..');
   if (two !== -1) {
     const a = arg.slice(0, two) || 'HEAD';
     const b = arg.slice(two + 2) || 'HEAD';
-    return { old: a, new: b, mergeBase: false, label: `${a}..${b}` };
+    return { old: a, new: b, mergeBase: false };
   }
   // A lone revision reviews what it and HEAD diverged into: the everyday "my branch" diff.
-  if (arg === WORKTREE) return { old: 'HEAD', new: WORKTREE, mergeBase: false, label: `HEAD..${WORKTREE}` };
-  return { old: arg, new: 'HEAD', mergeBase: true, label: `${arg}...HEAD` };
+  if (arg === WORKTREE) return { old: 'HEAD', new: WORKTREE, mergeBase: false };
+  return { old: arg, new: 'HEAD', mergeBase: true };
 }
 
 export class RevspecError extends Error {}

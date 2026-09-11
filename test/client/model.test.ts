@@ -2,7 +2,6 @@ import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
 import type { ChangedFile, CommentThread, GithubMetadata, Snapshot } from '../../src/shared/protocol.js';
 import {
-  canExportToGithub,
   compareTreeOrder,
   countViewed,
   currentPath,
@@ -192,14 +191,6 @@ describe('countViewed', () => {
     expect(countViewed({ viewed: [], config }, changed)).toBe(1);
     expect(countViewed({ viewed: [{ path: 'yarn.lock', blob: 'b', viewed: false }], config }, changed)).toBe(0);
     expect(countViewed({ viewed, config }, [])).toBe(0);
-  });
-});
-
-describe('canExportToGithub', () => {
-  it('uses export eligibility independently of the comparison', () => {
-    expect(canExportToGithub({ canExport: true } as GithubMetadata)).toBe(true);
-    expect(canExportToGithub({ canExport: false } as GithubMetadata)).toBe(false);
-    expect(canExportToGithub(null)).toBe(false);
   });
 });
 

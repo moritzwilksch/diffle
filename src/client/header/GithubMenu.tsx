@@ -3,14 +3,13 @@ import { useEffect, useRef } from 'react';
 import { useStore } from '../store.js';
 import { Button } from '../ui/Button.js';
 
-/** Repository identity is local; the PR section loads independently of the diff. */
+/** GitHub metadata loads independently of the diff. */
 export function GithubMenu() {
   const open = useStore((s) => s.githubMenuOpen);
   const setOpen = useStore((s) => s.setGithubMenuOpen);
-  const repository = useStore((s) => s.githubRepository);
-  const metadata = useStore((s) => s.github);
-  const loading = useStore((s) => s.githubLoading);
-  const error = useStore((s) => s.githubError);
+  const github = useStore((s) => s.github);
+  const metadata = github.data;
+  const repository = metadata?.repository;
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -65,15 +64,17 @@ export function GithubMenu() {
                 <ExternalLink size="0.75rem" />
               </a>
             ) : (
-              <span className="text-muted">No GitHub origin</span>
+              <span className="text-muted">
+                {github.status === 'loading' ? 'Loading…' : metadata ? 'No GitHub origin' : 'Unavailable'}
+              </span>
             )}
           </p>
           <strong>Pull request</strong>
           <div aria-live="polite" className="mt-1">
-            {loading ? (
+            {github.status === 'loading' ? (
               <p className="text-muted">Loading…</p>
-            ) : error ? (
-              <p className="text-warn">Lookup failed: {error}</p>
+            ) : github.status === 'error' ? (
+              <p className="text-warn">Lookup failed: {github.error}</p>
             ) : pr ? (
               <>
                 <a className="text-accent hover:underline" href={pr.url} target="_blank" rel="noreferrer">
@@ -83,7 +84,7 @@ export function GithubMenu() {
                   {pr.state === 'OPEN' ? (pr.isDraft ? 'Draft' : 'Open') : pr.state === 'MERGED' ? 'Merged' : 'Closed'}
                 </p>
                 {pr.repository !== repository && <p className="text-muted">{pr.repository}</p>}
-                {metadata.reason && <p className="mt-2 text-muted">{metadata.reason}</p>}
+                {metadata?.reason && <p className="mt-2 text-muted">{metadata?.reason}</p>}
               </>
             ) : (
               <p className="text-muted">{metadata?.reason ?? 'No matching pull request'}</p>

@@ -1,10 +1,19 @@
-import type { GithubMetadata, ModeRequest, ModeSpec, ServerMessage, Side, Snapshot } from '../shared/protocol.js';
+import type {
+  GithubExportRequest,
+  GithubExportResponse,
+  GithubMetadata,
+  ModeRequest,
+  ModeSpec,
+  ServerMessage,
+  Side,
+  Snapshot,
+} from '../shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type QuoteFn } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
-import { GithubError, type GhRunner } from './github.js';
+import { GithubExporter, GithubError, type GhRunner } from './github.js';
 import { resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -21,6 +30,7 @@ interface Broadcaster {
 }
 
 interface Active {
+  github?: { snapshot: Snapshot; expires: number; promise: Promise<GithubMetadata> };
   prUrl?: string;
   mode: ModeSpec;
   snapshotter: Snapshotter;
@@ -48,7 +58,7 @@ export interface SessionOptions {
  */
 export class Session {
   private active: Active | null = null;
-  private githubCache = new WeakMap<Snapshot, { expires: number; promise: Promise<GithubMetadata> }>();
+  private readonly exporter = new GithubExporter();
   private readyPromise: Promise<void>;
   private resolveReady!: () => void;
   private rejectReady!: (e: unknown) => void;
@@ -84,18 +94,39 @@ export class Session {
   }
 
   /** Cached independently of snapshot construction; callers never hold the transition queue. */
-  github(snap: Snapshot, fresh = false): Promise<GithubMetadata> {
+  github(snap: Snapshot): Promise<GithubMetadata> {
     const active = this.require();
     if (snap.mode !== active.mode) return Promise.reject(new GithubError('Comparison changed; try again'));
-    const cached = this.githubCache.get(snap);
-    if (!fresh && cached && cached.expires > Date.now()) return cached.promise;
+    const cached = active.github;
+    if (cached?.snapshot === snap && cached.expires > Date.now()) return cached.promise;
     const promise = discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
-    const entry = { expires: Date.now() + 30_000, promise };
-    this.githubCache.set(snap, entry);
+    const entry = { snapshot: snap, expires: Date.now() + 30_000, promise };
+    active.github = entry;
     void promise.catch(() => {
-      if (this.githubCache.get(snap) === entry) this.githubCache.delete(snap);
+      if (active.github === entry) active.github = undefined;
     });
     return promise;
+  }
+
+  /** Validate fresh PR data inside the export queue, against the snapshot the user approved. */
+  exportGithub({ version, threadIds }: GithubExportRequest): Promise<GithubExportResponse> {
+    return this.exporter.export(async () => {
+      const active = this.require();
+      const snap = await active.snapshotter.current();
+      if (snap.version !== version || active !== this.active) throw new GithubError('Comparison changed; try again');
+      const metadata = await discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
+      if (!metadata.pullRequest || metadata.reason !== null)
+        throw new GithubError(metadata.reason ?? 'No matching pull request');
+      if (active !== this.active || snap !== (await active.snapshotter.current()))
+        throw new GithubError('Comparison changed; try again');
+      return {
+        snap,
+        pullRequest: metadata.pullRequest,
+        threads: active.comments.threads({ state: 'all' }),
+        threadIds,
+        run: this.opts.gh,
+      };
+    });
   }
 
   get comments(): CommentStore {

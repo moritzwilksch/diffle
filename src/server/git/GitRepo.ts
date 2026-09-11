@@ -181,8 +181,8 @@ export class GitRepo {
     throw new GitError('cannot determine default branch; pass a base explicitly', [], null, '');
   }
 
-  /** Remote branch identity for an exact local/remote branch; expressions and detached HEAD have none. */
-  async upstreamBranch(rev: string): Promise<{ remote: string; branch: string } | null> {
+  /** Full ref for an exact branch; expressions, worktree, and detached HEAD have none. */
+  async branchRef(rev: string): Promise<string | null> {
     if (rev === 'worktree') return null;
     let ref: string;
     try {
@@ -197,6 +197,13 @@ export class GitRepo {
       if (e instanceof GitError) return null;
       throw e;
     }
+    return ref.startsWith('refs/heads/') || ref.startsWith('refs/remotes/') ? ref : null;
+  }
+
+  /** Remote branch identity for an exact local/remote branch; expressions and detached HEAD have none. */
+  async upstreamBranch(rev: string): Promise<{ remote: string; branch: string } | null> {
+    const ref = await this.branchRef(rev);
+    if (!ref) return null;
     if (ref.startsWith('refs/heads/')) {
       const out = await this.text(['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)%00', ref]);
       const [remote, upstream] = out.split('\0');

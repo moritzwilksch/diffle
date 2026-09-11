@@ -84,13 +84,17 @@ afterAll(async () => {
 });
 
 describe('Server', () => {
-  it('serves local repository identity and independently resolved metadata', async () => {
+  it('serves repository identity as GitHub metadata', async () => {
     const snap = await session.snapshotter.current();
-    expect(JSON.parse((await send('GET', '/api/github/repository')).body)).toEqual({ repository: null });
-    const response = await send('GET', `/api/github?version=${snap.version}`);
+    expect(snap).not.toHaveProperty('githubRepository');
+    const response = await send('GET', '/api/github');
     expect(response.status).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({ version: snap.version, pullRequest: null, canExport: false });
-    expect((await send('GET', '/api/github?version=0')).status).toBe(409);
+    expect(JSON.parse(response.body)).toMatchObject({
+      version: snap.version,
+      repository: null,
+      pullRequest: null,
+      reason: expect.any(String),
+    });
     expect((await send('POST', '/api/github/export', { body: JSON.stringify({ version: 0 }) })).status).toBe(409);
     expect(session.mode).not.toHaveProperty('kind');
   });

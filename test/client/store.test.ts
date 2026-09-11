@@ -31,7 +31,6 @@ function deferred<T>(): Deferred<T> {
 
 const api = {
   github: vi.fn(),
-  githubRepository: vi.fn(),
   snapshot: vi.fn(),
   threads: vi.fn(async (): Promise<CommentThread[]> => []),
   viewed: vi.fn(async (): Promise<ViewedEntry[]> => []),
@@ -88,7 +87,7 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
       old: 'HEAD',
       mergeBase: false,
       new: 'worktree',
-      label: key,
+
       live: 'none',
       commentKey: key,
     },
@@ -104,13 +103,12 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.github.mockReset().mockImplementation(async (version: number) => ({
-    version,
+  api.github.mockReset().mockImplementation(async () => ({
+    version: useStore.getState().snapshot?.version,
+    repository: 'o/r',
     pullRequest: null,
-    canExport: false,
     reason: 'No matching pull request',
   }));
-  api.githubRepository.mockReset().mockResolvedValue({ repository: 'o/r' });
   blocksSymbol.mockReset().mockResolvedValue(false);
   useStore.setState({
     snapshot: null,
@@ -1992,10 +1990,9 @@ describe('asynchronous GitHub metadata', () => {
     api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
     await useStore.getState().boot();
     expect(useStore.getState().snapshot?.version).toBe(1);
-    expect(useStore.getState().githubRepository).toBe('o/r');
-    expect(useStore.getState().githubLoading).toBe(true);
-    lookup.resolve({ version: 1, pullRequest: null, canExport: false, reason: 'No PR' });
-    await vi.waitFor(() => expect(useStore.getState().githubLoading).toBe(false));
+    expect(useStore.getState().github.status).toBe('loading');
+    lookup.resolve({ version: 1, repository: 'o/r', pullRequest: null, reason: 'No PR' });
+    await vi.waitFor(() => expect(useStore.getState().github.status).toBe('ready'));
   });
 
   it('discards a slow lookup after another comparison has loaded', async () => {
@@ -2005,10 +2002,10 @@ describe('asynchronous GitHub metadata', () => {
     await useStore.getState().boot();
     api.switchMode.mockResolvedValueOnce(snap(2, 'second'));
     await useStore.getState().switchMode({ kind: 'revspec', args: ['main'] });
-    await vi.waitFor(() => expect(useStore.getState().github?.version).toBe(2));
-    old.resolve({ version: 1, pullRequest: null, canExport: true, reason: null });
+    await vi.waitFor(() => expect(useStore.getState().github.data?.version).toBe(2));
+    old.resolve({ version: 1, repository: 'o/r', pullRequest: null, reason: null });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(useStore.getState().github).toMatchObject({ version: 2, canExport: false });
+    expect(useStore.getState().github.data).toMatchObject({ version: 2, reason: 'No matching pull request' });
   });
 });
 
@@ -2017,12 +2014,21 @@ it('recovers GitHub lookup for the existing comparison after a failed switch', a
   api.github.mockReturnValueOnce(pending.promise);
   api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
   await useStore.getState().boot();
-  expect(useStore.getState().githubLoading).toBe(true);
+  expect(useStore.getState().github.status).toBe('loading');
   api.switchMode.mockRejectedValueOnce(new Error('unknown revision'));
   await useStore.getState().switchMode({ kind: 'revspec', args: ['missing'] });
-  await vi.waitFor(() => expect(useStore.getState().githubLoading).toBe(false));
-  expect(useStore.getState().github?.version).toBe(1);
-  pending.resolve({ version: 1, pullRequest: null, canExport: true, reason: null });
+  await vi.waitFor(() => expect(useStore.getState().github.status).toBe('ready'));
+  expect(useStore.getState().github.data?.version).toBe(1);
+  pending.resolve({ version: 1, repository: 'o/r', pullRequest: null, reason: null });
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  expect(useStore.getState().github?.canExport).toBe(false);
+  expect(useStore.getState().github.data?.reason).toBe('No matching pull request');
+});
+
+it('discards metadata for a newer server snapshot without changing the displayed comparison', async () => {
+  api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
+  api.github.mockResolvedValueOnce({ version: 2, repository: 'o/r', pullRequest: null, reason: null });
+  await useStore.getState().boot();
+  await vi.waitFor(() => expect(useStore.getState().github.status).toBe('idle'));
+  expect(useStore.getState().snapshot?.version).toBe(1);
+  expect(useStore.getState().github.data).toBeUndefined();
 });

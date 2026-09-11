@@ -66,8 +66,7 @@ const q = (params: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
-  githubRepository: () => json<{ repository: string | null }>('/api/github/repository'),
-  github: (version: number) => json<GithubMetadata>(`/api/github?version=${version}`),
+  github: () => json<GithubMetadata>('/api/github'),
   snapshot: () => json<Snapshot>('/api/snapshot'),
   switchMode: (req: ModeRequest) => json<Snapshot>('/api/mode', { method: 'POST', body: JSON.stringify(req) }),
   refs: () => json<RefsResponse>('/api/refs'),

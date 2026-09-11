@@ -461,8 +461,8 @@ describe('resolveReview + Snapshotter', () => {
   it('a lone revision diffs its merge-base with HEAD against HEAD', async () => {
     const { mode } = await resolveReview({ kind: 'revspec', args: ['main'] }, repo);
     const mb = await repo.mergeBase('main', 'feat');
-    expect(mode.label).toBe('main...HEAD');
-    expect(mode.commentKey).toBe(`revspec:${mb}..${await repo.resolve('HEAD')}`);
+    expect(mode).toMatchObject({ old: 'main', new: 'HEAD', mergeBase: true });
+    expect(mode.commentKey).toBe('branches:["refs/heads/main","refs/heads/feat",true]');
     expect(mode.live).toBe('refs');
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
     expect(snap.oldSha).toBe(mb);
