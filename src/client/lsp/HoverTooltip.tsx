@@ -1,13 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { Markdown } from '../Markdown.js';
 import { useStore, type HoverState } from '../store.js';
+import { TooltipSurface } from '../ui/Tooltip.js';
 import type { TokenTarget } from './target.js';
 
 /** Pointer rest before the server is asked; moving across tokens asks nothing. */
 const SHOW_MS = 300;
 /** Grace after leaving the token, so the pointer can travel into the tooltip. */
 const LINGER_MS = 150;
-const GAP = 4;
 
 // Module state: token enter / leave fire constantly and must not re-render.
 let showTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,30 +76,19 @@ export function HoverTooltip() {
     };
   }, []);
   if (!hover) return null;
-  return <Tip hover={hover} ref={ref} />;
+  return <Tip hover={hover} boxRef={ref} />;
 }
 
-function Tip({ hover, ref }: { hover: HoverState; ref: RefObject<HTMLDivElement | null> }) {
-  // Place after measuring, before paint: below the token, above it when the bottom edge is near,
-  // clamped to the viewport's right edge.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const { left, top, bottom } = hover.anchor;
-    const below = bottom + GAP + height <= window.innerHeight;
-    el.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`;
-    el.style.top = `${below ? bottom + GAP : Math.max(8, top - GAP - height)}px`;
-  }, [hover, ref]);
+function Tip({ hover, boxRef }: { hover: HoverState; boxRef: RefObject<HTMLDivElement | null> }) {
   return (
-    <div
-      ref={ref}
-      className="hover-markdown fixed z-40 max-h-[45vh] max-w-[min(40rem,_90vw)] overflow-auto rounded-lg border border-border bg-canvas px-3 py-2 text-[0.75rem] shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
-      role="tooltip"
+    <TooltipSurface
+      boxRef={boxRef}
+      anchor={hover.anchor}
+      className="hover-markdown max-h-[45vh] max-w-[min(40rem,_90vw)] overflow-auto"
       onPointerEnter={hoverControl.hold}
       onPointerLeave={hoverControl.leave}
     >
       <Markdown text={hover.contents} path={hover.target.path} highlight />
-    </div>
+    </TooltipSurface>
   );
 }
