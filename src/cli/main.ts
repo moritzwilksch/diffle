@@ -27,7 +27,6 @@ import {
   parseContext,
   parseLanguage,
   parsePort,
-  parseAllowedOrigin,
 } from './args.js';
 import { watchBrowserLifetime } from './browserLifetime.js';
 import { addCompletionCommand } from './completion.js';
@@ -52,7 +51,7 @@ interface GlobalOpts {
   /** Unset: DEFAULT_PORT, or the next free one. */
   port?: number;
   host: string;
-  allowedOrigin?: string;
+  behindProxy: boolean;
   open: boolean;
   keepAlive: boolean;
   watch: boolean;
@@ -80,11 +79,7 @@ const program = new Command()
     parsePort,
   )
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
-  .option(
-    '--allowed-origin <origin>',
-    'trusted public HTTP(S) origin behind a reverse proxy (without a path)',
-    parseAllowedOrigin,
-  )
+  .option('--behind-proxy', 'delegate Host/Origin checks to a reverse proxy; requires an isolated upstream port')
   .option('--no-open', 'do not open a browser')
   .option('--keep-alive', 'keep the server running after all browser tabs close')
   .option('--no-watch', 'do not watch for changes')
@@ -310,7 +305,7 @@ async function serve(
       port: opts.port ?? DEFAULT_PORT,
       probe: opts.port == null,
       host: opts.host,
-      allowedOrigin: opts.allowedOrigin,
+      behindProxy: opts.behindProxy,
       dev: opts.dev || !hasClientBuild(),
     },
   );

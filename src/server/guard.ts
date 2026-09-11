@@ -6,28 +6,31 @@ export type RequestGuard = (headers: { host?: string; origin?: string }) => bool
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 
 /**
- * Restricts API and WebSocket requests to local hosts and the configured public origin.
- * Proxies may preserve the public Host or rewrite it to an allowed upstream Host.
- * Forwarded headers never grant trust; a public Origin must be explicitly configured.
+ * Host/Origin policy for API and WebSocket requests. Pure given its inputs;
+ * `bindHost` is the `--host` value. An Origin, when sent, must name the same
+ * host:port as Host (blocks cross-site pages). On a loopback bind, Host must be
+ * loopback too. On any other bind, Host must be an IP literal, loopback, the
+ * bind host, or one of `names` (the machine's own hostnames by default). Both
+ * rules block DNS rebinding: an attacker's domain is never an IP literal and
+ * never one of ours.
  */
-export function requestGuard(bindHost: string, names: string[] = ownNames(), allowedOrigin?: string): RequestGuard {
+export function requestGuard(bindHost: string, names: string[] = ownNames()): RequestGuard {
   const loopback = LOOPBACK.has(bindHost);
   const allowed = new Set([...LOOPBACK, bindHost.toLowerCase(), ...names.map((n) => n.toLowerCase())]);
-  const publicHost = allowedOrigin == null ? undefined : new URL(allowedOrigin).host;
   return ({ host, origin }) => {
     if (!host) return false;
-    const name = hostnameOf(host).toLowerCase();
-    const localHost = loopback ? LOOPBACK.has(name) : isIP(name) !== 0 || allowed.has(name);
-    const proxyHost = publicHost != null && host.toLowerCase() === publicHost;
-    if (!localHost && !proxyHost) return false;
-    if (origin == null || (allowedOrigin != null && origin === allowedOrigin)) return true;
-    // A public Host must not make another scheme or port on that origin trusted.
-    if (proxyHost) return false;
-    try {
-      return new URL(origin).host === host;
-    } catch {
-      return false;
+    if (origin != null) {
+      let originHost: string;
+      try {
+        originHost = new URL(origin).host;
+      } catch {
+        return false;
+      }
+      if (originHost !== host) return false;
     }
+    const name = hostnameOf(host).toLowerCase();
+    if (loopback) return LOOPBACK.has(name);
+    return isIP(name) !== 0 || allowed.has(name);
   };
 }
 

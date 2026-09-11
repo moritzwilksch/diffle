@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  collectLanguage,
-  collectLspOverride,
-  parseContext,
-  parsePort,
-  parseAllowedOrigin,
-} from '../../src/cli/args.js';
+import { collectLanguage, collectLspOverride, parseContext, parsePort } from '../../src/cli/args.js';
 
 describe('CLI numeric arguments', () => {
   it('accepts integers in range', () => {
@@ -46,28 +40,5 @@ describe('--lsp collection', () => {
     expect(() => collectLspOverride('', true)).toThrow(/expected <language>=<command>/);
     expect(() => collectLspOverride('pyrefly lsp', true)).toThrow(/expected <language>=<command>/);
     expect(() => collectLspOverride('nope=x', true)).toThrow(/unknown language "nope"/);
-  });
-});
-
-describe('--allowed-origin', () => {
-  it('normalizes HTTP(S) origins', () => {
-    expect(parseAllowedOrigin('https://Proxy.example:443/')).toBe('https://proxy.example');
-    expect(parseAllowedOrigin('http://proxy.example:8080')).toBe('http://proxy.example:8080');
-  });
-
-  it.each([
-    'null',
-    '*',
-    'proxy.example',
-    'ftp://proxy.example',
-    'https://u:p@proxy.example',
-    'https://proxy.example/prefix/',
-    'https://proxy.example/?q=1',
-    'https://proxy.example/#x',
-    'https://proxy.example/prefix/..',
-    'https://proxy.example?',
-    'https://proxy.example#',
-  ])('rejects %s', (value) => {
-    expect(() => parseAllowedOrigin(value)).toThrow(/expected an HTTP\(S\) origin/);
   });
 });

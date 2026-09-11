@@ -44,21 +44,3 @@ describe('requestGuard', () => {
     expect(named({ host: 'other.example:4966' })).toBe(false);
   });
 });
-
-describe('reverse proxy origin', () => {
-  const origin = 'https://proxy.example:8443';
-  it.each(['127.0.0.1', '0.0.0.0'])('accepts public or upstream Host on %s', (bind) => {
-    const guard = requestGuard(bind, [], origin);
-    for (const host of ['proxy.example:8443', '127.0.0.1:4966']) {
-      expect(guard({ host })).toBe(true);
-      expect(guard({ host, origin })).toBe(true);
-      for (const foreign of ['https://evil.example', 'null', 'http://proxy.example:8443', 'https://proxy.example']) {
-        expect(guard({ host, origin: foreign })).toBe(false);
-      }
-    }
-    expect(guard({ host: 'evil.example', origin })).toBe(false);
-    expect(guard({ host: 'proxy.example:8444', origin })).toBe(false);
-    expect(guard({ origin })).toBe(false);
-    expect(guard({ host: '127.0.0.1:4966', origin: 'http://127.0.0.1:4966' })).toBe(true);
-  });
-});
