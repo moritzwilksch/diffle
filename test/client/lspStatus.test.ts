@@ -18,6 +18,8 @@ const { state } = vi.hoisted(() => ({
 vi.mock('../../src/client/store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
 vi.mock('../../src/client/header/ModePicker.js', () => ({ ModePicker: () => null }));
 vi.mock('../../src/client/header/SettingsDialog.js', () => ({ SettingsDialog: () => null }));
+vi.mock('../../src/client/clipboard.js', () => ({ copyText: vi.fn() }));
+import { copyText } from '../../src/client/clipboard.js';
 import { Header } from '../../src/client/header/Header.js';
 
 function render(status: Partial<LspServerStatus>) {
@@ -108,8 +110,34 @@ describe('LSP status indicator', () => {
     expect(stderrOnly).toContain('>logs</summary>');
   });
 
-  it('caps the stderr log with its own scroll', () => {
-    const html = render({ stderr: 'long log' });
-    expect(html).toMatch(/<pre class="[^"]*max-h-\[40vh\][^"]*overflow-y-auto"[^>]*>long log<\/pre>/);
+  it('bounds an unwrapped stderr code block with scrolling on both axes', () => {
+    const container = document.createElement('div');
+    container.innerHTML = render({ stderr: 'long log\nsecond line' });
+    const log = container.querySelector('pre[aria-label="stderr log"]')!;
+    expect(log.textContent).toBe('long log\nsecond line');
+    expect(log.classList.contains('max-h-[min(12rem,25vh)]')).toBe(true);
+    expect(log.classList.contains('overflow-auto')).toBe(true);
+    expect(log.classList.contains('whitespace-pre')).toBe(true);
+    expect(log.parentElement!.classList.contains('bg-canvas')).toBe(false);
+    expect(log.parentElement!.classList.contains('border')).toBe(false);
+    expect(log.getAttribute('tabindex')).toBe('0');
+    expect(render({})).not.toContain('Copy stderr');
+  });
+
+  it.each([true, false])('reports clipboard success=%s and copies the full log', async (success) => {
+    const text = 'first line\n' + 'long line '.repeat(200);
+    render({ stderr: text });
+    vi.mocked(copyText).mockResolvedValue(success);
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(Header)));
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Copy stderr"]')!.click());
+      expect(copyText).toHaveBeenLastCalledWith(text);
+      expect(container.textContent).toContain(success ? 'Copied' : 'Copy failed. Select the log');
+      expect(container.querySelector('pre[aria-label="stderr log"]')!.textContent).toBe(text);
+    } finally {
+      await act(async () => root.unmount());
+    }
   });
 });
