@@ -27,6 +27,7 @@ import {
   parseContext,
   parseLanguage,
   parsePort,
+  parseAllowedOrigin,
 } from './args.js';
 import { watchBrowserLifetime } from './browserLifetime.js';
 import { addCompletionCommand } from './completion.js';
@@ -51,6 +52,7 @@ interface GlobalOpts {
   /** Unset: DEFAULT_PORT, or the next free one. */
   port?: number;
   host: string;
+  allowedOrigin?: string;
   open: boolean;
   keepAlive: boolean;
   watch: boolean;
@@ -63,6 +65,7 @@ interface GlobalOpts {
 }
 
 const program = new Command()
+  .exitOverride()
   .name('diffle')
   .description('Review a git diff in the browser and export line comments as an agent prompt.')
   .version(pkg.version, '-v, --version', 'print the version and exit')
@@ -77,6 +80,11 @@ const program = new Command()
     parsePort,
   )
   .option('-H, --host <host>', 'address to bind; use 0.0.0.0 to expose on the network', '127.0.0.1')
+  .option(
+    '--allowed-origin <origin>',
+    'trusted public HTTP(S) origin behind a reverse proxy (without a path)',
+    parseAllowedOrigin,
+  )
   .option('--no-open', 'do not open a browser')
   .option('--keep-alive', 'keep the server running after all browser tabs close')
   .option('--no-watch', 'do not watch for changes')
@@ -298,7 +306,13 @@ async function serve(
         );
   const server = new Server(
     { session, config, extraAutoViewed: opts.autoViewed, hub, lsp },
-    { port: opts.port ?? DEFAULT_PORT, probe: opts.port == null, host: opts.host, dev: opts.dev || !hasClientBuild() },
+    {
+      port: opts.port ?? DEFAULT_PORT,
+      probe: opts.port == null,
+      host: opts.host,
+      allowedOrigin: opts.allowedOrigin,
+      dev: opts.dev || !hasClientBuild(),
+    },
   );
   let stopBrowserWatch = () => {};
   // Every long-lived resource goes through one release, whatever ends the run: a
@@ -427,9 +441,8 @@ function startLsp(
   return lsp;
 }
 
-program.exitOverride();
 program.parseAsync(process.argv).catch((e) => {
-  if (e instanceof CommanderError) process.exit(e.exitCode);
+  if (e instanceof CommanderError) process.exit(e.exitCode === 0 ? 0 : 2);
   console.error(`${c.red('✖')} ${e instanceof Error ? e.message : e}`);
   process.exit(e instanceof RevspecError || e instanceof GitError || e instanceof GithubError ? 2 : 1);
 });
