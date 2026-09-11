@@ -1,6 +1,6 @@
 {
   "name": "@moritzwilksch/diffle",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local git diff reviewer in the browser with line comments exported as agent prompts",
   "keywords": [
     "agent",
