@@ -1,6 +1,6 @@
 {
   "name": "@moritzwilksch/diffle",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local git diff reviewer in the browser with line comments exported as agent prompts",
   "keywords": [
     "agent",
@@ -59,6 +59,7 @@
     "tailwind-merge": "^3.6.0",
     "web-tree-sitter": "^0.25.10",
     "ws": "^8.21.3",
+    "zod": "^4.6.2",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

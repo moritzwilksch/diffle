@@ -8,6 +8,7 @@ import { documentTitle } from './model.js';
 import { ReviewPane } from './review/ReviewPane.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
+import { TooltipHost } from './ui/Tooltip.js';
 
 export function App() {
   const boot = useStore((s) => s.boot);
@@ -116,6 +117,7 @@ export function App() {
         </>
       )}
       <HelpOverlay />
+      <TooltipHost />
       {toast && (
         <div className="fixed bottom-6 left-[50%] z-60 max-w-[min(48rem,_90vw)] [transform:translateX(-50%)] [animation:flash-in_160ms_ease] rounded-lg bg-foreground px-5 py-3 text-[1rem] leading-[1.4] wrap-anywhere text-canvas shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.35)]">
           {toast}
