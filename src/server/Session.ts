@@ -1,9 +1,20 @@
-import type { ModeRequest, ModeSpec, ServerMessage, Side, Snapshot } from '../shared/protocol.js';
+import type {
+  GithubExportRequest,
+  GithubExportResponse,
+  GithubMetadata,
+  ModeRequest,
+  ModeSpec,
+  ServerMessage,
+  Side,
+  Snapshot,
+} from '../shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type QuoteFn } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
-import { resolveMode } from './mode.js';
+import { discoverGithub } from './GithubMetadata.js';
+import { GithubExporter, GithubError, type GhRunner } from './github.js';
+import { resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
 
@@ -19,6 +30,8 @@ interface Broadcaster {
 }
 
 interface Active {
+  github?: { snapshot: Snapshot; expires: number; promise: Promise<GithubMetadata> };
+  prUrl?: string;
   mode: ModeSpec;
   snapshotter: Snapshotter;
   comments: CommentStore;
@@ -27,6 +40,7 @@ interface Active {
 
 export interface SessionOptions {
   watch: boolean;
+  gh?: GhRunner;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
   /** Replaces the chokidar-backed Watcher. Test seam. */
@@ -44,6 +58,7 @@ export interface SessionOptions {
  */
 export class Session {
   private active: Active | null = null;
+  private readonly exporter = new GithubExporter();
   private readyPromise: Promise<void>;
   private resolveReady!: () => void;
   private rejectReady!: (e: unknown) => void;
@@ -76,6 +91,42 @@ export class Session {
 
   get snapshotter(): Snapshotter {
     return this.require().snapshotter;
+  }
+
+  /** Cached independently of snapshot construction; callers never hold the transition queue. */
+  github(snap: Snapshot): Promise<GithubMetadata> {
+    const active = this.require();
+    if (snap.mode !== active.mode) return Promise.reject(new GithubError('Comparison changed; try again'));
+    const cached = active.github;
+    if (cached?.snapshot === snap && cached.expires > Date.now()) return cached.promise;
+    const promise = discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
+    const entry = { snapshot: snap, expires: Date.now() + 30_000, promise };
+    active.github = entry;
+    void promise.catch(() => {
+      if (active.github === entry) active.github = undefined;
+    });
+    return promise;
+  }
+
+  /** Validate fresh PR data inside the export queue against the current comparison. */
+  exportGithub({ threadIds }: GithubExportRequest): Promise<GithubExportResponse> {
+    return this.exporter.export(async () => {
+      const active = this.require();
+      const snap = await active.snapshotter.current();
+      if (active !== this.active) throw new GithubError('Comparison changed; try again');
+      const metadata = await discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
+      if (!metadata.pullRequest || metadata.reason !== null)
+        throw new GithubError(metadata.reason ?? 'No matching pull request');
+      if (active !== this.active || snap !== (await active.snapshotter.current()))
+        throw new GithubError('Comparison changed; try again');
+      return {
+        snap,
+        pullRequest: metadata.pullRequest,
+        threads: active.comments.threads({ state: 'all' }),
+        threadIds,
+        run: this.opts.gh,
+      };
+    });
   }
 
   get comments(): CommentStore {
@@ -141,7 +192,7 @@ export class Session {
   }
 
   private async transition(req: ModeRequest): Promise<Snapshot> {
-    const mode = await resolveMode(req, this.repo);
+    const { mode, prUrl } = await resolveReview(req, this.repo, this.opts.gh);
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([
@@ -149,7 +200,7 @@ export class Session {
       snapshotter.current(),
     ]);
     // Build the complete next state, then swap it in and retire the previous one.
-    const next: Active = { mode, snapshotter, comments, watcher: null };
+    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null };
     // The repository may have moved on while no server was watching it.
     await this.relocateComments(next, snap);
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);
@@ -228,7 +279,7 @@ export class Session {
     if (side === 'new') {
       return snap.newSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.newSha, target);
     }
-    return this.repo.show(snap.oldSha, target);
+    return snap.oldSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.oldSha, target);
   }
 
   /** Whether `readSide` would find `path` on `side`: the allowlist alone, no read. */

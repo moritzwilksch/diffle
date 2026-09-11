@@ -1,9 +1,15 @@
 import { execFile } from 'node:child_process';
-import type { CommentMessage, CommentThread, GithubExportResponse, Snapshot } from '../shared/protocol.js';
+import type {
+  CommentMessage,
+  CommentThread,
+  GithubExportResponse,
+  GithubPullRequest,
+  Snapshot,
+} from '../shared/protocol.js';
 import { compareThreads } from './comments/anchor.js';
 
 /** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
-export type GhRunner = (args: string[], opts: { cwd: string; input?: string }) => Promise<string>;
+export type GhRunner = (args: string[], opts: { cwd: string; input?: string; timeoutMs?: number }) => Promise<string>;
 
 /** A precondition the user can fix (no gh, no PR, wrong mode, unpushed head): the route answers 4xx. */
 export class GithubError extends Error {
@@ -93,12 +99,6 @@ export function formatBody(messages: CommentMessage[]): string {
   return messages.map((m) => m.body.trim()).join('\n\n---\n\n');
 }
 
-interface PrInfo {
-  number: number;
-  url: string;
-  headRefOid: string;
-}
-
 /** The base repository the pull request lives in, taken from its url (a fork's own remote is not it). */
 export function repoOfPrUrl(url: string): { owner: string; repo: string } {
   const m = /^\/([^/]+)\/([^/]+)\/pull\/\d+/.exec(new URL(url).pathname);
@@ -107,58 +107,52 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
 }
 
 export interface ExportInput {
-  snap: Pick<Snapshot, 'root' | 'newSha' | 'headSha'>;
+  snap: Pick<Snapshot, 'root' | 'newSha'>;
+  pullRequest: GithubPullRequest;
   threads: CommentThread[];
   threadIds?: string[];
   run?: GhRunner;
 }
 
-/** Owns one server's export queue so overlapping requests cannot add the same thread twice. */
+/** Serializes validation and writes so overlapping exports cannot add the same thread twice. */
 export class GithubExporter {
   private queue: Promise<unknown> = Promise.resolve();
 
-  export(input: ExportInput): Promise<GithubExportResponse> {
-    const result = this.queue.then(() => exportToGithub(input));
+  export(prepare: () => Promise<ExportInput>): Promise<GithubExportResponse> {
+    const result = this.queue.then(async () => exportToGithub(await prepare()));
     this.queue = result.catch(() => {});
     return result;
   }
 }
 
 /**
- * Adds the threads to a *pending* review on the PR of the checked-out branch, creating
- * the pending review when there is none. The review is never submitted: the human opens
- * the PR and submits it themselves. Refuses when the new side is not the checked-out
- * commit: GitHub anchors comments to a commit, and only HEAD is what the PR shows.
+ * Adds the threads to a *pending* review on the active PR, creating the pending review
+ * when there is none. The review is never submitted: the human opens the PR and submits
+ * it themselves. The caller validates the comparison inside the export queue before posting.
  *
  * Re-exporting matches a hidden thread ID and its anchor in the pending review.
  * A matching comment is left alone when its body matches and rewritten when it does not, so
  * editing a thread and exporting again does not stack a second comment on the line. Comments
  * of an already-submitted review are out of reach — those would have to be replied to.
  */
-async function exportToGithub({ snap, threads, threadIds, run = runGh }: ExportInput): Promise<GithubExportResponse> {
-  if (snap.newSha === 'worktree')
-    throw new GithubError(
-      'GitHub cannot anchor comments to uncommitted lines; commit and review the commit (pr or a revspec ending at HEAD)',
-    );
-  if (snap.headSha === '' || snap.newSha !== snap.headSha)
-    throw new GithubError('the new side must be the checked-out commit (HEAD) to post to its pull request');
+async function exportToGithub({
+  snap,
+  pullRequest: pr,
+  threads,
+  threadIds,
+  run = runGh,
+}: ExportInput): Promise<GithubExportResponse> {
+  if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to the worktree');
   const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
   if (review.comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
-
-  const pr = parsePr(await run(['pr', 'view', '--json', 'number,url,headRefOid'], { cwd: snap.root }));
-  if (pr.headRefOid !== snap.newSha) {
-    throw new GithubError(
-      `the pull request head is ${pr.headRefOid.slice(0, 7)} but HEAD is ${snap.newSha.slice(0, 7)}; push first`,
-    );
-  }
 
   for (const [i, comment] of review.comments.entries()) {
     comment.body += `\n\n${threadMarker(ids[i]!)}`;
   }
   const pending = await findPendingReview(run, snap.root, pr);
   if (!pending) {
-    await createPendingReview(run, snap.root, pr.number, review);
+    await createPendingReview(run, snap.root, pr.repository, pr.number, review);
     return { url: pr.url, posted: review.comments.length, updated: 0, review: 'created', skipped };
   }
 
@@ -226,7 +220,7 @@ interface PendingQueryData {
  * reviews, and the login check makes sure of it: appending to someone else's draft would
  * put our comments in their review.
  */
-async function findPendingReview(run: GhRunner, cwd: string, pr: PrInfo): Promise<{ id: string } | null> {
+async function findPendingReview(run: GhRunner, cwd: string, pr: GithubPullRequest): Promise<{ id: string } | null> {
   const { owner, repo } = repoOfPrUrl(pr.url);
   const data = await graphql<PendingQueryData>(run, cwd, PENDING_QUERY, { owner, repo, number: pr.number });
   const login = data.viewer?.login;
@@ -277,7 +271,7 @@ interface ThreadsQueryData {
 async function pendingComments(
   run: GhRunner,
   cwd: string,
-  pr: PrInfo,
+  pr: GithubPullRequest,
   reviewId: string,
 ): Promise<Map<string, PendingComment[]>> {
   const by = new Map<string, PendingComment[]>();
@@ -319,8 +313,14 @@ async function pendingComments(
 const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){updatePullRequestReviewComment(input:$input){pullRequestReviewComment{id}}}`;
 
 /** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */
-async function createPendingReview(run: GhRunner, cwd: string, number: number, review: ReviewPayload): Promise<void> {
-  await run(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--input', '-'], {
+async function createPendingReview(
+  run: GhRunner,
+  cwd: string,
+  repository: string,
+  number: number,
+  review: ReviewPayload,
+): Promise<void> {
+  await run(['api', '--method', 'POST', `repos/${repository}/pulls/${number}/reviews`, '--input', '-'], {
     cwd,
     input: JSON.stringify(review),
   });
@@ -363,57 +363,103 @@ function describe(skipped: GithubExportResponse['skipped']): string {
   return [...counts].map(([reason, n]) => `${n} ${reason}`).join(', ');
 }
 
-function parsePr(out: string): PrInfo {
-  let pr: Partial<PrInfo>;
-  try {
-    pr = JSON.parse(out) as Partial<PrInfo>;
-  } catch {
-    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
-  }
-  if (typeof pr.number !== 'number' || typeof pr.url !== 'string' || typeof pr.headRefOid !== 'string') {
-    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
-  }
-  return pr as PrInfo;
-}
-
 /** Spawns the local `gh`. A missing binary or a failing command becomes a GithubError carrying gh's own message. */
-export const runGh: GhRunner = (args, { cwd, input }) =>
+export const runGh: GhRunner = (args, { cwd, input, timeoutMs }) =>
   new Promise((resolve, reject) => {
-    const child = execFile('gh', args, { cwd, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (!err) return resolve(stdout);
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT')
-        return reject(new GithubError('gh is not installed; see https://cli.github.com'));
-      const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
-      // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
-      reject(new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409));
-    });
+    const child = execFile(
+      'gh',
+      args,
+      { cwd, maxBuffer: 16 * 1024 * 1024, timeout: timeoutMs },
+      (err, stdout, stderr) => {
+        if (!err) return resolve(stdout);
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT')
+          return reject(new GithubError('gh is not installed; see https://cli.github.com'));
+        const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
+        // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
+        reject(
+          new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409),
+        );
+      },
+    );
     if (input != null) child.stdin?.end(input);
     else child.stdin?.end();
   });
 
 /** A pull request as `gh pr view` reports it, plus the base repository derived from its URL. */
-export interface PullRequest {
-  number: number;
-  /** `https://github.com/<owner>/<repo>/pull/<number>` */
-  url: string;
+export interface PullRequest extends GithubPullRequest {
+  baseRefOid: string;
   baseRefName: string;
   headRefName: string;
   headRefOid: string;
-  /** `<owner>/<repo>` of the base repository: where `refs/pull/<number>/head` lives. */
-  baseRepo: string;
+  /** Source repository; null when GitHub no longer exposes the deleted fork. */
+  headRepository: string | null;
 }
 
-const PR_FIELDS = 'number,url,baseRefName,headRefName,headRefOid';
+const PR_FIELDS =
+  'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner';
 
 /**
  * `gh pr view` for a PR named by number, `#number`, URL or branch. Without a
  * selector, the PR of the checked-out branch. Option-shaped selectors are
  * refused so a stray flag never reaches gh.
  */
-export async function viewPr(selector: string | undefined, cwd: string, run: GhRunner = runGh): Promise<PullRequest> {
+export async function viewPr(
+  selector: string | undefined,
+  cwd: string,
+  run: GhRunner = runGh,
+  timeoutMs?: number,
+): Promise<PullRequest> {
   const arg = selector == null ? [] : [normalizeSelector(selector)];
-  const out = await run(['pr', 'view', ...arg, '--json', PR_FIELDS], { cwd });
-  return parsePrView(out);
+  const out = await run(['pr', 'view', ...arg, '--json', PR_FIELDS], { cwd, timeoutMs });
+  return parsePullRequest(parseJson(out, 'view'));
+}
+
+/** Open pull requests whose head is the named branch in the named remote repository. */
+export async function listPrsForHead(
+  baseRepo: string,
+  base: string,
+  head: string,
+  headRepo: string,
+  cwd: string,
+  run: GhRunner = runGh,
+  timeoutMs?: number,
+): Promise<PullRequest[]> {
+  const out = await run(
+    [
+      'pr',
+      'list',
+      '--repo',
+      baseRepo,
+      '--base',
+      base,
+      '--head',
+      head,
+      '--state',
+      'open',
+      '--limit',
+      '100',
+      '--json',
+      PR_FIELDS,
+    ],
+    {
+      cwd,
+      timeoutMs,
+    },
+  );
+  const values = parseJson(out, 'list');
+  if (!Array.isArray(values)) throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
+  return values.flatMap((value) => {
+    const candidate = value as {
+      headRepository?: { name?: unknown };
+      headRepositoryOwner?: { login?: unknown };
+    };
+    const owner = candidate?.headRepositoryOwner?.login;
+    const name = candidate?.headRepository?.name;
+    if (typeof owner !== 'string' || typeof name !== 'string')
+      throw new GithubError(`unexpected output from gh pr list: ${out.slice(0, 200)}`, 502);
+    if (`${owner}/${name}`.toLowerCase() !== headRepo.toLowerCase()) return [];
+    return [parsePullRequest(value)];
+  });
 }
 
 function normalizeSelector(selector: string): string {
@@ -423,21 +469,47 @@ function normalizeSelector(selector: string): string {
   return num ? num[1]! : s;
 }
 
-function parsePrView(out: string): PullRequest {
-  let pr: Partial<PullRequest>;
+function parseJson(out: string, command: string): unknown {
   try {
-    pr = JSON.parse(out) as Partial<PullRequest>;
+    return JSON.parse(out);
   } catch {
-    throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+    throw new GithubError(`unexpected output from gh pr ${command}: ${out.slice(0, 200)}`, 502);
   }
+}
+
+function parsePullRequest(value: unknown): PullRequest {
+  const pr = value as Partial<PullRequest>;
   const ok =
+    pr != null &&
+    typeof pr.title === 'string' &&
+    ['OPEN', 'CLOSED', 'MERGED'].includes(pr.state ?? '') &&
+    typeof pr.isDraft === 'boolean' &&
+    typeof pr.baseRefOid === 'string' &&
     typeof pr.number === 'number' &&
     typeof pr.url === 'string' &&
     typeof pr.baseRefName === 'string' &&
     typeof pr.headRefName === 'string' &&
     typeof pr.headRefOid === 'string';
-  if (!ok) throw new GithubError(`unexpected output from gh pr view: ${out.slice(0, 200)}`, 502);
+  if (!ok) throw new GithubError('unexpected pull request data from gh', 502);
   const slug = /^https?:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+/.exec(pr.url!);
   if (!slug) throw new GithubError(`cannot read the repository from the pull request url: ${pr.url}`, 502);
-  return { ...(pr as Omit<PullRequest, 'baseRepo'>), baseRepo: slug[1]! };
+  const source = value as {
+    headRepository?: { name?: string } | null;
+    headRepositoryOwner?: { login?: string } | null;
+  };
+  const owner = source.headRepositoryOwner?.login;
+  const name = source.headRepository?.name;
+  return {
+    headRepository: typeof owner === 'string' && typeof name === 'string' ? `${owner}/${name}` : null,
+    number: pr.number!,
+    url: pr.url!,
+    title: pr.title!,
+    state: pr.state!,
+    isDraft: pr.isDraft!,
+    repository: slug[1]!,
+    baseRefOid: pr.baseRefOid!,
+    baseRefName: pr.baseRefName!,
+    headRefName: pr.headRefName!,
+    headRefOid: pr.headRefOid!,
+  };
 }

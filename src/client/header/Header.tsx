@@ -23,6 +23,7 @@ import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
 import { repoName } from '../model.js';
 import { useStore } from '../store.js';
 import { nextTheme, type ThemeChoice } from '../theme.js';
+import { GithubMenu } from './GithubMenu.js';
 import { ModePicker } from './ModePicker.js';
 import { SettingsDialog } from './SettingsDialog.js';
 
@@ -54,13 +55,11 @@ export function Header() {
       <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em]">
         <GitCompareArrows size="1rem" /> diffle
       </span>
-      <span
-        className="truncate font-mono text-[0.75rem] text-muted"
-        title={snapshot?.mode.pullRequest?.repository ?? snapshot?.root}
-      >
+      <span className="truncate font-mono text-[0.75rem] text-muted" title={snapshot?.root}>
         {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
+      <GithubMenu />
       <span className="text-muted">
         {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>
       </span>

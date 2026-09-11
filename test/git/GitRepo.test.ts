@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { BIG_FILE_THRESHOLD, GitRepo } from '../../src/server/git/GitRepo.js';
 import { SNIFF_BYTES } from '../../src/server/generated.js';
-import { resolveMode } from '../../src/server/mode.js';
+import { resolveReview } from '../../src/server/mode.js';
 import { Snapshotter } from '../../src/server/Snapshotter.js';
 
 // Windows rejects `\n` in a filename, so those fixtures only exist on POSIX.
@@ -423,7 +423,7 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
   });
 
   it('renders a gitlink as a commit-id change and leaves it out of hydration and sniffing', async () => {
-    const mode = await resolveMode({ kind: 'working' }, srepo);
+    const { mode } = await resolveReview({ kind: 'working' }, srepo);
     const snapshotter = new Snapshotter(srepo, mode, 1, 3);
     const snap = await snapshotter.current();
     expect(snap.changed.map((f) => f.path)).toEqual(['a.txt', 'broken.lnk', 'sub']);
@@ -457,12 +457,12 @@ describe('GitRepo on a worktree with a submodule, a broken symlink and a nested 
   );
 });
 
-describe('resolveMode + Snapshotter', () => {
+describe('resolveReview + Snapshotter', () => {
   it('a lone revision diffs its merge-base with HEAD against HEAD', async () => {
-    const mode = await resolveMode({ kind: 'revspec', args: ['main'] }, repo);
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['main'] }, repo);
     const mb = await repo.mergeBase('main', 'feat');
-    expect(mode.label).toBe('main...HEAD');
-    expect(mode.commentKey).toBe(`revspec:${mb}..${await repo.resolve('HEAD')}`);
+    expect(mode).toMatchObject({ old: 'main', new: 'HEAD', mergeBase: true });
+    expect(mode.commentKey).toBe('branches:["refs/heads/main","refs/heads/feat",true]');
     expect(mode.live).toBe('refs');
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
     expect(snap.oldSha).toBe(mb);
@@ -472,7 +472,7 @@ describe('resolveMode + Snapshotter', () => {
 
   it('the tree belongs to the selected new revision, not the checked-out index', async () => {
     // Index (feat) has new.txt; main does not.
-    const mode = await resolveMode({ kind: 'revspec', args: ['feat..main'] }, repo);
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['feat..main'] }, repo);
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
     expect(snap.tree).toEqual(['a.txt', 'keep.txt']);
     expect(snap.changed.map((f) => [f.path, f.status])).toEqual([
@@ -483,7 +483,7 @@ describe('resolveMode + Snapshotter', () => {
   });
 
   it('working mode is live on the worktree', async () => {
-    const mode = await resolveMode({ kind: 'working' }, repo);
+    const { mode } = await resolveReview({ kind: 'working' }, repo);
     expect(mode.live).toBe('worktree');
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
     expect(snap.newSha).toBe('worktree');
@@ -493,10 +493,10 @@ describe('resolveMode + Snapshotter', () => {
 
   it('revspec: pinned shas are static, symbolic refs are live', async () => {
     const sha = await repo.resolve('main');
-    expect((await resolveMode({ kind: 'revspec', args: [`${sha}..${sha}`] }, repo)).live).toBe('none');
-    expect((await resolveMode({ kind: 'revspec', args: ['main..feat'] }, repo)).live).toBe('refs');
-    expect((await resolveMode({ kind: 'revspec', args: ['main'] }, repo)).live).toBe('refs');
-    expect((await resolveMode({ kind: 'revspec', args: ['main..worktree'] }, repo)).live).toBe('worktree');
+    expect((await resolveReview({ kind: 'revspec', args: [`${sha}..${sha}`] }, repo)).mode.live).toBe('none');
+    expect((await resolveReview({ kind: 'revspec', args: ['main..feat'] }, repo)).mode.live).toBe('refs');
+    expect((await resolveReview({ kind: 'revspec', args: ['main'] }, repo)).mode.live).toBe('refs');
+    expect((await resolveReview({ kind: 'revspec', args: ['main..worktree'] }, repo)).mode.live).toBe('worktree');
   });
 });
 
@@ -514,7 +514,7 @@ describe('working mode on an unborn branch', () => {
 
   it('diffs the worktree against the empty tree instead of failing on HEAD', async () => {
     const urepo = await GitRepo.open(fresh);
-    const mode = await resolveMode({ kind: 'working' }, urepo);
+    const { mode } = await resolveReview({ kind: 'working' }, urepo);
     const snapshotter = new Snapshotter(urepo, mode, 1, 3);
     const snap = await snapshotter.current();
     expect(snap.oldSha).toBe(await urepo.emptyTree());
@@ -530,7 +530,7 @@ describe('working mode on an unborn branch', () => {
 
   it('still reports an unknown revision as a revspec error', async () => {
     const urepo = await GitRepo.open(fresh);
-    await expect(resolveMode({ kind: 'revspec', args: ['HEAD'] }, urepo)).rejects.toThrow('unknown revision: HEAD');
+    await expect(resolveReview({ kind: 'revspec', args: ['HEAD'] }, urepo)).rejects.toThrow('unknown revision: HEAD');
   });
 });
 
@@ -623,7 +623,7 @@ describe('cat-file batch', () => {
   });
 
   it('the snapshot sniffs each blob once across refreshes and only new blobs after a commit', async () => {
-    const mode = await resolveMode({ kind: 'revspec', args: ['main..feat'] }, brepo);
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['main..feat'] }, brepo);
     const snapshotter = new Snapshotter(brepo, mode, 1, 3);
     const spy = vi.spyOn(brepo, 'blobHeads');
     const first = await snapshotter.current();
@@ -655,5 +655,38 @@ describe('cat-file batch', () => {
     expect(await brepo.show('HEAD', 'no such.txt')).toBeNull();
     expect(await brepo.head('HEAD', 'also missing.txt', 4)).toBeNull();
     expect((await brepo.show('main', 'small.txt'))?.toString()).toBe('one\ntwo\n');
+  });
+});
+
+describe('worktree on either side', () => {
+  it('reverses modifications and untracked additions consistently in all patch APIs', async () => {
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['worktree..HEAD'] }, repo);
+    const snapshotter = new Snapshotter(repo, mode, 1, 3);
+    const snap = await snapshotter.current();
+    expect(snap.oldSha).toBe('worktree');
+    expect(mode.live).toBe('worktree');
+    expect(snap.tree).not.toContain('untracked.txt');
+    expect(snap.changed.find((f) => f.path === 'a.txt')).toMatchObject({ status: 'M', additions: 0, deletions: 1 });
+    const untracked = snap.changed.find((f) => f.path === 'untracked.txt')!;
+    expect(untracked).toMatchObject({ status: 'D', additions: 0, deletions: 1 });
+    const single = await snapshotter.patch('untracked.txt');
+    expect(single).toContain('diff --git a/untracked.txt b/untracked.txt');
+    expect(single).toContain('--- a/untracked.txt');
+    expect(single).toContain('+++ /dev/null');
+    expect(single).toContain('-u');
+    const all = await snapshotter.patchAll();
+    const batch = await snapshotter.patchMany(['a.txt', 'untracked.txt']);
+    expect(all).toContain(single!);
+    expect(batch).toContain(single!);
+    expect(batch).toContain('-four');
+  });
+
+  it('an identical worktree comparison is empty but still exposes untracked files', async () => {
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['worktree', 'worktree'] }, repo);
+    const snapshotter = new Snapshotter(repo, mode, 1, 3);
+    const snap = await snapshotter.current();
+    expect(snap.changed).toEqual([]);
+    expect(snap.tree).toContain('untracked.txt');
+    expect(await snapshotter.patchAll()).toBe('');
   });
 });
