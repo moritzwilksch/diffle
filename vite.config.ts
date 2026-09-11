@@ -8,6 +8,7 @@ const outDir = fileURLToPath(new URL('./dist/client', import.meta.url));
 
 export default defineConfig({
   root: clientRoot,
+  base: './',
   plugins: [react(), tailwindcss()],
   appType: 'spa',
   build: {
