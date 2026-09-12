@@ -7,7 +7,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
-import { exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
+import { anchorLabel, exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
@@ -154,7 +154,7 @@ export function CommentPanel() {
         {groups.length === 0 && (
           <div className="px-3 py-6 text-center text-muted [&>p]:mt-0 [&>p]:mr-0 [&>p]:mb-1.5 [&>p]:ml-0">
             <p>{threads.length ? 'Every thread is resolved.' : 'No comments yet.'}</p>
-            <p>Click a line number to comment, or drag across line numbers for a block.</p>
+            <p>Click a line number to comment, drag across line numbers for a block, or press C for a whole file.</p>
           </div>
         )}
         {groups.map(([path, list]) => (
@@ -210,14 +210,16 @@ const ThreadRow = memo(function ThreadRow({
   deleteThread,
 }: {
   thread: CommentThread;
-  openFile: (path: string, line: number, side: Side) => Promise<void>;
+  openFile: (path: string, line?: number, side?: Side) => Promise<void>;
   focusThread: (id: string | null) => void;
   deleteThread: (id: string) => Promise<void>;
 }) {
   const first = t.messages[0];
   const del = useConfirm(() => void deleteThread(t.id));
   const open = () => {
-    void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
+    // A file thread's card sits above the file's first line, where opening the file lands.
+    if (t.anchor.kind === 'line') void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
+    else void openFile(t.anchor.path);
     // Set after the jump: moving the cursor or selecting lines clears the ring again.
     focusThread(t.id);
   };
@@ -240,10 +242,7 @@ const ThreadRow = memo(function ThreadRow({
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
-        <span className="font-mono font-semibold text-foreground">
-          {t.anchor.side === 'old' ? 'removed ' : ''}L{t.anchor.startLine}
-          {t.anchor.endLine !== t.anchor.startLine ? `–${t.anchor.endLine}` : ''}
-        </span>
+        <span className="font-mono font-semibold text-foreground">{anchorLabel(t.anchor)}</span>
         {t.messages.length > 1 && (
           <span className="text-muted">
             {t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}
@@ -278,9 +277,11 @@ const ThreadRow = memo(function ThreadRow({
         </Button>
       </div>
       <div className="px-2.5 pt-1.5 pb-2 [&>.markdown]:font-sans [&>.markdown]:text-[0.8125rem] [&>.markdown]:leading-[1.4] [&>.markdown]:[word-break:break-word]">
-        <div className="m-0 mb-1.5 overflow-hidden font-mono text-[0.75rem] leading-[1.4] text-ellipsis whitespace-nowrap text-muted">
-          {firstLine(t.anchor.quoted)}
-        </div>
+        {t.anchor.kind === 'line' && (
+          <div className="m-0 mb-1.5 overflow-hidden font-mono text-[0.75rem] leading-[1.4] text-ellipsis whitespace-nowrap text-muted">
+            {firstLine(t.anchor.quoted)}
+          </div>
+        )}
         <Markdown text={first?.body ?? ''} path={t.anchor.path} />
       </div>
     </div>
@@ -326,9 +327,11 @@ function CopyButton({
   );
 }
 
+/** Review order: by path, then line with the file thread first, then creation. */
 function cmp(a: CommentThread, b: CommentThread): number {
   if (a.anchor.path !== b.anchor.path) return a.anchor.path < b.anchor.path ? -1 : 1;
-  return a.anchor.startLine - b.anchor.startLine || (a.messages[0]?.createdAt ?? 0) - (b.messages[0]?.createdAt ?? 0);
+  const line = (x: CommentThread) => (x.anchor.kind === 'line' ? x.anchor.startLine : 0);
+  return line(a) - line(b) || (a.messages[0]?.createdAt ?? 0) - (b.messages[0]?.createdAt ?? 0);
 }
 
 function firstLine(s: string): string {

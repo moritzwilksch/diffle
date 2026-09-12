@@ -18,7 +18,7 @@ import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
-import { exportLabel, type ExportOutcome } from '../model.js';
+import { anchorLabel, exportLabel, type ExportOutcome } from '../model.js';
 import { useStore } from '../store.js';
 import { useConfirm } from '../useConfirm.js';
 
@@ -53,7 +53,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const editingSolo = solo != null && editingId === solo.id;
 
   const a = thread.anchor;
-  const range = a.startLine === a.endLine ? `${a.startLine}` : `${a.startLine}–${a.endLine}`;
 
   return (
     <div
@@ -63,13 +62,15 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
-        <span className="font-mono font-semibold text-foreground">
-          {a.side === 'old' ? 'removed ' : ''}L{range}
-        </span>
+        <span className="font-mono font-semibold text-foreground">{anchorLabel(a)}</span>
         {thread.stale && (
           <span
             className="inline-flex items-center gap-0.75 text-warn"
-            title="Not found in the current diff: the text changed or left the changed lines"
+            title={
+              a.kind === 'file'
+                ? 'Not in the current diff: the file left the review'
+                : 'Not found in the current diff: the text changed or left the changed lines'
+            }
           >
             <AlertTriangle size="0.75rem" /> stale
           </span>

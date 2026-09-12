@@ -9,7 +9,7 @@ import type {
   Snapshot,
 } from '../shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
-import { CommentStore, type QuoteFn } from './comments/CommentStore.js';
+import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
@@ -254,16 +254,19 @@ export class Session {
   /**
    * Re-anchors threads against what `snap` shows. A changed file shows its
    * hunks; an unchanged tree file shows its new side whole (the file view) and
-   * nothing of its old side.
+   * nothing of its old side. A file thread only needs its file in the review.
    */
   private async relocateComments(a: Active, snap: Snapshot): Promise<void> {
-    await a.comments.relocateAll(async (path, side) => {
-      const buf = await this.readSide(snap, path, side);
-      if (buf == null) return null;
-      const contents = buf.toString('utf8');
-      if (!snap.changed.some((f) => f.path === path)) return side === 'new' ? { contents, shown: null } : null;
-      const patch = await a.snapshotter.patch(path);
-      return { contents, shown: shownRanges(patch ?? '', side) };
+    await a.comments.relocateAll({
+      side: async (path, side) => {
+        const buf = await this.readSide(snap, path, side);
+        if (buf == null) return null;
+        const contents = buf.toString('utf8');
+        if (!snap.changed.some((f) => f.path === path)) return side === 'new' ? { contents, shown: null } : null;
+        const patch = await a.snapshotter.patch(path);
+        return { contents, shown: shownRanges(patch ?? '', side) };
+      },
+      hasFile: (path) => this.hasFile(snap, path),
     });
   }
 
@@ -287,15 +290,25 @@ export class Session {
     return sidePath(this.readablePaths(snap), path, side) != null;
   }
 
+  /** Whether `path` is a file of the review: a changed file (by its new path) or a tree path. A rename's old path is not. */
+  hasFile(snap: Snapshot, path: string): boolean {
+    const r = this.readablePaths(snap);
+    return r.tree.has(path) || r.changed.has(path);
+  }
+
   /**
-   * Quotes a line range from the current snapshot, for imports that carry no
-   * `quoted`. Goes through `readSide`, so the allowlist applies.
+   * Places imported anchors against the current snapshot: quotes a line range for
+   * imports that carry no `quoted`, and says whether a file thread's file is in the
+   * review. Goes through `readSide`, so the allowlist applies.
    */
-  quoter(): QuoteFn {
-    return async (path, side, startLine, endLine) => {
-      const snap = await this.snapshotter.current();
-      const buf = await this.readSide(snap, path, side);
-      return buf == null ? null : quoteRange(buf.toString('utf8'), startLine, endLine);
+  anchorSource(): AnchorSource {
+    return {
+      quote: async (path, side, startLine, endLine) => {
+        const snap = await this.snapshotter.current();
+        const buf = await this.readSide(snap, path, side);
+        return buf == null ? null : quoteRange(buf.toString('utf8'), startLine, endLine);
+      },
+      hasFile: async (path) => this.hasFile(await this.snapshotter.current(), path),
     };
   }
 

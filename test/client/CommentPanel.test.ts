@@ -21,7 +21,7 @@ const { CommentPanel } = await import('../../src/client/comments/CommentPanel.js
 function thread(id: string, path: string, body: string): CommentThread {
   return {
     id,
-    anchor: { path, side: 'new', startLine: 1, endLine: 1, quoted: 'q' },
+    anchor: { kind: 'line', path, side: 'new', startLine: 1, endLine: 1, quoted: 'q' },
     messages: [{ id: `${id}-m`, body, createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
@@ -51,6 +51,20 @@ afterEach(async () => {
 });
 
 describe('CommentPanel rows', () => {
+  it('list a file thread before the lines of its file, labelled and without a quote, and open its file', async () => {
+    const openFile = vi.fn(() => Promise.resolve());
+    const file: CommentThread = { ...thread('t0', 'a.md', 'about the file'), anchor: { kind: 'file', path: 'a.md' } };
+    useStore.setState({ threads: [threads[0]!, file], openFile });
+    await act(() => root.render(createElement(CommentPanel)));
+    const rows = [...host.querySelectorAll<HTMLElement>('[role="button"]')];
+    expect(rows.map((r) => r.querySelector('.font-mono')!.textContent)).toEqual(['whole file', 'L1']);
+    expect(rows[0]!.textContent).not.toContain('q');
+    expect(rows[1]!.textContent).toContain('q');
+    await act(() => rows[0]!.click());
+    expect(openFile).toHaveBeenCalledWith('a.md');
+    expect(useStore.getState().focusedThread).toBe('t0');
+  });
+
   it('do not rerender on unrelated store changes', async () => {
     await act(() => root.render(createElement(CommentPanel)));
     expect(rendered.sort()).toEqual(['body a', 'body b', 'body c']);

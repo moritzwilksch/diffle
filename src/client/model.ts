@@ -1,6 +1,7 @@
 import picomatch from 'picomatch/posix';
 import type {
   ChangedFile,
+  CommentAnchor,
   CommentThread,
   LspSymbol,
   ModeRequest,
@@ -192,6 +193,13 @@ export function isCollapsed(
 /** Threads the UI shows: open ones, plus resolved when the user asked for them. */
 export function visibleThreads(state: Pick<ReviewState, 'threads' | 'showResolved'>): CommentThread[] {
   return state.showResolved ? state.threads : state.threads.filter((t) => !t.resolved);
+}
+
+/** The header label of a thread: its line range and side, or the whole file. */
+export function anchorLabel(a: CommentAnchor): string {
+  if (a.kind === 'file') return 'whole file';
+  const range = a.startLine === a.endLine ? `${a.startLine}` : `${a.startLine}–${a.endLine}`;
+  return `${a.side === 'old' ? 'removed ' : ''}L${range}`;
 }
 
 export function threadOfMessage(threads: CommentThread[], messageId: string): CommentThread | undefined {

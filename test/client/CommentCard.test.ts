@@ -15,7 +15,7 @@ const { CommentCard } = await import('../../src/client/review/CommentCard.js');
 
 const thread: CommentThread = {
   id: 'thread-1',
-  anchor: { path: 'src/a.ts', side: 'new', startLine: 4, endLine: 4, quoted: 'const a = 1;' },
+  anchor: { kind: 'line', path: 'src/a.ts', side: 'new', startLine: 4, endLine: 4, quoted: 'const a = 1;' },
   messages: [
     { id: 'message-1', body: 'First', createdAt: 1, updatedAt: 1 },
     { id: 'message-2', body: 'Second', createdAt: 2, updatedAt: 2 },
@@ -54,6 +54,16 @@ describe('CommentCard GitHub button', () => {
     useStore.setState({ github: { status: 'ready', data: metadata(null) } });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).not.toBeNull();
+  });
+});
+
+describe('CommentCard header', () => {
+  it('names the line range of a line thread and the whole file for a file thread', async () => {
+    await act(() => root.render(createElement(CommentCard, { thread })));
+    expect(host.querySelector('.font-mono')!.textContent).toBe('L4');
+    const file: CommentThread = { ...thread, anchor: { kind: 'file', path: 'src/a.ts' } };
+    await act(() => root.render(createElement(CommentCard, { thread: file })));
+    expect(host.querySelector('.font-mono')!.textContent).toBe('whole file');
   });
 });
 

@@ -12,7 +12,16 @@ import type {
   TokenEventBase,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
-import { ArrowLeft, ChevronDown, ChevronRight, Download, FileText, MessageSquare, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileText,
+  MessageSquare,
+  MessageSquarePlus,
+  RefreshCw,
+} from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
 import { FilePath } from '../FilePath.js';
@@ -765,19 +774,32 @@ function toItem(
   collapsed: boolean,
 ): CodeViewItem<Annot> | null {
   const id = itemId(changed != null, path, gen);
+  // Threads on the file as a whole, and a draft of one, sit above the first line (the viewer's line 0).
+  const fileLevel: LineAnnotation<Annot>[] = mine
+    .filter((t) => t.anchor.kind === 'file')
+    .map((t) => ({ lineNumber: FILE_LINE, metadata: { kind: 'thread', thread: t } }));
+  if (draft?.path === path && draft.selection == null)
+    fileLevel.push({ lineNumber: FILE_LINE, metadata: { kind: 'draft' } });
   if (changed) {
-    const annotations: DiffLineAnnotation<Annot>[] = mine.map((t) => ({
-      side: t.anchor.side === 'old' ? 'deletions' : 'additions',
-      lineNumber: t.anchor.endLine,
-      metadata: { kind: 'thread', thread: t },
-    }));
-    if (draft?.path === path) {
+    // The viewer drops file-level annotations on the side a deleted or added file does not have.
+    const fileSide = changed.status === 'D' ? 'deletions' : 'additions';
+    const annotations: DiffLineAnnotation<Annot>[] = fileLevel.map((a) => ({ ...a, side: fileSide }));
+    for (const t of mine) {
+      if (t.anchor.kind !== 'line') continue;
+      annotations.push({
+        side: t.anchor.side === 'old' ? 'deletions' : 'additions',
+        lineNumber: t.anchor.endLine,
+        metadata: { kind: 'thread', thread: t },
+      });
+    }
+    if (draft?.path === path && draft.selection) {
       const { endLine } = lineBounds(draft.selection);
       const s = draft.selection.range.endSide ?? draft.selection.range.side ?? 'additions';
       annotations.push({ side: s, lineNumber: endLine, metadata: { kind: 'draft' } });
     }
     if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
-    // Binary, oversized or failed: header-only placeholder via an empty file item under the diff id.
+    // Binary, oversized or failed: header-only placeholder via a one-line file item under the diff id. The
+    // line gives file threads a place to hang; the viewer shows nothing above an empty file.
     const note =
       loaded.kind === 'oversized'
         ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
@@ -785,30 +807,38 @@ function toItem(
           ? `// ${loaded.message}`
           : loaded.kind === 'loading'
             ? '// loading…'
-            : '';
+            : '// binary file';
     return {
       id,
       type: 'file',
       file: { name: path, contents: note },
+      annotations: fileLevel,
       version,
       collapsed: loaded.kind === 'binary' || collapsed,
     };
   }
-  // The file view shows the new side whole: only new-side threads have a line to sit on.
   if (loaded.kind !== 'file') {
     const note = loaded.kind === 'binary' ? '// binary file' : loaded.kind === 'error' ? `// ${loaded.message}` : '';
-    return { id, type: 'file', file: { name: path, contents: note }, version, collapsed };
+    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
   }
-  const annotations: LineAnnotation<Annot>[] = mine
-    .filter((t) => t.anchor.side !== 'old')
-    .map((t) => ({ lineNumber: t.anchor.endLine, metadata: { kind: 'thread', thread: t } }));
-  if (draft?.path === path && sideOf(draft.selection) === 'new') {
+  // The file view shows the new side whole: only new-side threads have a line to sit on.
+  const annotations: LineAnnotation<Annot>[] = fileLevel;
+  for (const t of mine) {
+    if (t.anchor.kind === 'line' && t.anchor.side !== 'old')
+      annotations.push({ lineNumber: t.anchor.endLine, metadata: { kind: 'thread', thread: t } });
+  }
+  if (draft?.path === path && draft.selection && sideOf(draft.selection) === 'new') {
     annotations.push({ lineNumber: lineBounds(draft.selection).endLine, metadata: { kind: 'draft' } });
   }
   return { id, type: 'file', file: loaded.file, annotations, version, collapsed };
 }
 
+/** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
+const FILE_LINE = 0;
+
+/** What the composer says it comments on: the selected lines, or the file. */
 function describeSelection(d: Draft): string {
+  if (!d.selection) return 'this file';
   const { startLine, endLine } = lineBounds(d.selection);
   const side = sideOf(d.selection) === 'old' ? 'removed ' : '';
   return `${side}L${startLine}${endLine !== startLine ? `–${endLine}` : ''}`;
@@ -865,6 +895,8 @@ function FileHeaderMeta({ path }: { path: string }) {
   const openFullFile = useStore((s) => s.openFullFile);
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');
   const loadPatch = useStore((s) => s.loadPatch);
+  const openFileDraft = useStore((s) => s.openFileDraft);
+  const external = useStore((s) => s.fileView?.external === true && s.fileView.path === path);
   return (
     <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
       {count > 0 && (
@@ -900,6 +932,11 @@ function FileHeaderMeta({ path }: { path: string }) {
         >
           <RefreshCw size="0.75rem" /> changed since viewed
         </span>
+      )}
+      {!external && (
+        <Button variant="ghost" icon onClick={() => openFileDraft(path)} title="Comment on this file as a whole (C)">
+          <MessageSquarePlus size="0.875rem" />
+        </Button>
       )}
       {/* In the file view the bar above already carries the way back, so the header offers no second button. */}
       {!full && (!file || (!file.binary && !file.submodule && file.status !== 'D')) && (

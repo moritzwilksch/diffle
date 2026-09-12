@@ -52,6 +52,7 @@ const api = {
   patches: vi.fn(),
   setResolved: vi.fn(),
   reply: vi.fn(),
+  addThread: vi.fn(),
   search: vi.fn(),
   setViewed: vi.fn(),
   setViewedBulk: vi.fn(),
@@ -245,6 +246,32 @@ describe('client transitions', () => {
     useStore.getState().moveFile(-1);
     useStore.getState().moveFile(-1);
     expect(useStore.getState().activePath).toBe('a.gif');
+  });
+
+  it('hunk motions start from the active file header when no line is selected', async () => {
+    const changed = ['a.py', 'b.py'].map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: 'b1',
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.py', 'b.py']));
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.py', 'b.py']), changed });
+    await useStore.getState().refreshSnapshot();
+    // After a whole-file comment on b.py the reader is in b.py without a cursor line.
+    useStore.setState({ selection: null, activePath: 'b.py' });
+    useStore.getState().moveHunk(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:a\.py@/);
+    useStore.setState({ selection: null, activePath: 'b.py' });
+    useStore.getState().moveHunk(1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:b\.py@/);
+    // Without any file to start from, the motions still enter the diff from either end.
+    useStore.setState({ selection: null, activePath: null });
+    useStore.getState().moveHunk(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:b\.py@/);
   });
 
   it('a watcher refresh keeps the open draft, cursor and search; a mode switch drops them', async () => {
@@ -1480,7 +1507,7 @@ const thread = (
   over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> },
 ): CommentThread => ({
   id: over.id ?? 't',
-  anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
+  anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
   messages: [{ id: 'm', body: 'b', createdAt: 1, updatedAt: 1 }],
   resolved: over.resolved ?? false,
   stale: false,
@@ -1848,6 +1875,51 @@ describe('threads', () => {
     expect(useStore.getState().draft).toBeNull();
     expect(version(again).version).toBe(again.version + 1);
     useStore.getState().setDiffStyle('split');
+  });
+
+  it('a file draft has no selection, posts a thread without a line, and closes on Escape', async () => {
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [], replyTo: 't1' });
+    const sel = {
+      id: 'diff:a.py@0',
+      range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
+    };
+    useStore.setState({ selection: { ...sel, id: 'diff:b.py@0' } });
+    useStore.getState().openFileDraft('a.py');
+    let s = useStore.getState();
+    expect(s.draft).toEqual({ path: 'a.py', selection: null });
+    // A cursor in another file gives way; one inside the file stays put.
+    expect(s.selection).toBeNull();
+    expect(s.replyTo).toBeNull();
+    expect(s.activePath).toBe('a.py');
+    useStore.setState({ selection: sel });
+    useStore.getState().openFileDraft('a.py');
+    expect(useStore.getState().selection).toEqual(sel);
+    useStore.setState({ selection: null });
+    // The item re-renders for the composer, and again once it is gone.
+    const version = (prev?: ReturnType<typeof itemVersion>) =>
+      itemVersion(prev, itemDeps(useStore.getState(), 'a.py', [], false));
+    const open = version();
+    expect(await useStore.getState().draftQuote()).toBe('');
+    api.addThread.mockResolvedValue([]);
+    api.threads.mockResolvedValueOnce([thread({ id: 'f', anchor: { kind: 'file', path: 'a.py' } as never })]);
+    await useStore.getState().submitDraft('Split this module.');
+    expect(api.addThread).toHaveBeenCalledWith({ path: 'a.py', body: 'Split this module.' });
+    s = useStore.getState();
+    expect(s.draft).toBeNull();
+    expect(s.threads.map((t) => t.anchor.kind)).toEqual(['file']);
+    expect(version(open).version).toBe(open.version + 1);
+
+    useStore.getState().openFileDraft('a.py');
+    useStore.getState().escape();
+    expect(useStore.getState().draft).toBeNull();
+    // Not on a file outside the repository.
+    useStore.setState({
+      fileView: { path: '/usr/lib/os.py', external: true, item: null, from: { position: null, activePath: null } },
+    });
+    useStore.getState().openFileDraft('/usr/lib/os.py');
+    expect(useStore.getState().draft).toBeNull();
+    expect(useStore.getState().toast).toMatch(/repository files only/);
+    useStore.setState({ fileView: null });
   });
 
   it('opens one composer at a time: a reply closes the draft and vice versa', () => {
