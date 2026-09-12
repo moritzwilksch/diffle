@@ -150,6 +150,8 @@ describe('useHighlighted', () => {
     release();
     await flush();
     expect(host.querySelector('.hl span')).toHaveProperty('style.color', 'rgb(221, 238, 255)');
+    // Held: act yields a task before resolving, and on a slow loop the tokenizer recolors the rows in that gap.
+    holdAt(calls);
     await act(() => root.render(createElement(List, { near: 0, theme: 'light', rows: items.slice(0, 3) })));
     expect(host.querySelectorAll('.plain')).toHaveLength(3);
   });
