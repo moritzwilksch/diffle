@@ -168,7 +168,7 @@ describe('ReviewPane scroller effects', () => {
         { item: { id: 'diff:config.json@0' } },
       );
       expect(enter).toHaveBeenCalledWith(
-        { path: 'config.json', side: 'new', line: 3, col: 7, text: '"runs-on"' },
+        { path: 'config.json', side: 'new', line: 3, col: 7, text: '"runs-on"', tokenType: null },
         tokenElement,
       );
       expect(tokenElement.classList.contains('lsp-hover')).toBe(false);

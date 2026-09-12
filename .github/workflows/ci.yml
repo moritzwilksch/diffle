@@ -101,9 +101,10 @@ jobs:
       # The `npm ci` in the other jobs only checks the dependency tree, so drift in
       # the lockfile's own metadata (name, version, bin, engines) passes it silently.
       # `--package-lock-only` needs no install, so this job does not run `npm ci`.
+      # It installs nothing, so `prepare` would call a patch-package that is not there.
       - name: Check package-lock.json is up to date
         run: |
-          npm install --package-lock-only --no-audit --no-fund
+          npm install --package-lock-only --no-audit --no-fund --ignore-scripts
           git diff --exit-code -- package-lock.json || {
             echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
             exit 1

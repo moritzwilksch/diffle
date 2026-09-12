@@ -1400,6 +1400,11 @@ export const useStore = create<ReviewState>((set, get) => {
       // With language servers off every action would only flash why: no menu to offer.
       if (!get().lsp.enabled) return;
       get().closeHover();
+      // The highlighter classified this span as it rendered it: no parse, no await.
+      if (target.tokenType) {
+        get().closeSymbolMenu();
+        return;
+      }
       const t = ++menuSeq;
       const generationAtClick = generation;
       const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
@@ -1432,7 +1437,7 @@ export const useStore = create<ReviewState>((set, get) => {
     hover: null,
     async requestHover(target, anchor) {
       const t = ++hoverSeq;
-      if (get().symbolMenu || targetBlocker(target)) return;
+      if (get().symbolMenu || targetBlocker(target) || target.tokenType) return;
       const g = generation;
       try {
         const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>

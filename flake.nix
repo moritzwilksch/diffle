@@ -36,7 +36,7 @@
               # docker run --rm -v "$PWD:/src:ro" -w /src nixos/nix nix build 'path:/src#default' --no-link --extra-experimental-features 'nix-command flakes' 2>&1
               # or in one:
               # hash=$(docker run --rm -v "$PWD:/src:ro" -w /src nixos/nix nix build 'path:/src#default' --no-link --extra-experimental-features 'nix-command flakes' 2>&1 | sed -n 's/.*got: *//p' | tail -1) && test -n "$hash" && sed -i "s|npmDepsHash = \".*\";|npmDepsHash = \"$hash\";|" flake.nix
-              npmDepsHash = "sha256-YiLHOz0zELiDCcglFSYuN1SaEFKFf8T2AJBUVQT81BU=";
+              npmDepsHash = "sha256-HfkDRjgaMo+tOT5JEwS8fDuEAEH+bzb+/fafQyWrtSc=";
 
               nativeBuildInputs = [ pkgs.makeWrapper ];
               postInstall = ''
