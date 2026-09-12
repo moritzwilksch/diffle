@@ -161,6 +161,19 @@ describe('Session', () => {
     await session.close();
   });
 
+  it("patches the GitHub diff with GitHub's three context lines, whatever the session shows", async () => {
+    const session = new Session(repo, hub, { watch: false, context: 0 });
+    const snap = await session.start({ kind: 'revspec', args: ['main..feat'] });
+    const diff = session.githubDiff(snap);
+    expect([...diff.changed]).toEqual(['new.txt']);
+    // Context 0 shows only `delta`; GitHub's hunk reaches three lines up, to `alpha`.
+    expect(await session.snapshotter.patch('new.txt')).toMatch(/@@ -3,0 \+4 @@/);
+    expect(await diff.patch('new.txt')).toMatch(/@@ -1,3 \+1,4 @@/);
+    // A file outside the diff has no hunks to comment on.
+    expect(await diff.patch('same.txt')).toBe('');
+    await session.close();
+  });
+
   it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
     await session.start({ kind: 'revspec', args: ['main..feat'] });

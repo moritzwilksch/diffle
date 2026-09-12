@@ -241,7 +241,7 @@ export const GithubExportResponseSchema = z.object({
   updated: z.number(),
   /** Whether this call opened the pending review or added to one that was already waiting. */
   review: z.enum(['created', 'existing']),
-  /** Threads left out, with why (stale, outside the diff, unknown id, an identical comment already in the review). */
+  /** Threads left out, with why (stale, outside the diff or its hunks, unknown id, an identical comment already in the review). */
   skipped: z
     .object({
       id: z.string(),

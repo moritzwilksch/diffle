@@ -13,7 +13,7 @@ import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
-import { GithubExporter, GithubError, type GhRunner } from './github.js';
+import { GITHUB_CONTEXT, GithubExporter, GithubError, type GhRunner, type GithubDiff } from './github.js';
 import { resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -121,12 +121,29 @@ export class Session {
         throw new GithubError('Comparison changed; try again');
       return {
         snap,
+        diff: this.githubDiff(snap),
         pullRequest: metadata.pullRequest,
         threads: active.comments.threads({ state: 'all' }),
         threadIds,
         run: this.opts.gh,
       };
     });
+  }
+
+  /**
+   * The comparison as GitHub renders it: the snapshot's changed files, each patched with
+   * GitHub's context rather than the session's, so export checks a line against the hunks
+   * GitHub shows and not against the ones the reader saw.
+   */
+  githubDiff(snap: Snapshot): GithubDiff {
+    const files = new Map(snap.changed.map((f) => [f.path, f]));
+    return {
+      changed: new Set(files.keys()),
+      patch: (path) => {
+        const file = files.get(path);
+        return file ? this.repo.patch(snap.oldSha, snap.newSha, file, GITHUB_CONTEXT) : Promise.resolve('');
+      },
+    };
   }
 
   get comments(): CommentStore {
