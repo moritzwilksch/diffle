@@ -248,6 +248,32 @@ describe('client transitions', () => {
     expect(useStore.getState().activePath).toBe('a.gif');
   });
 
+  it('hunk motions start from the active file header when no line is selected', async () => {
+    const changed = ['a.py', 'b.py'].map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: 'b1',
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.py', 'b.py']));
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.py', 'b.py']), changed });
+    await useStore.getState().refreshSnapshot();
+    // After a whole-file comment on b.py the reader is in b.py without a cursor line.
+    useStore.setState({ selection: null, activePath: 'b.py' });
+    useStore.getState().moveHunk(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:a\.py@/);
+    useStore.setState({ selection: null, activePath: 'b.py' });
+    useStore.getState().moveHunk(1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:b\.py@/);
+    // Without any file to start from, the motions still enter the diff from either end.
+    useStore.setState({ selection: null, activePath: null });
+    useStore.getState().moveHunk(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:b\.py@/);
+  });
+
   it('a watcher refresh keeps the open draft, cursor and search; a mode switch drops them', async () => {
     const changed = [
       { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
@@ -1857,13 +1883,18 @@ describe('threads', () => {
       id: 'diff:a.py@0',
       range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
     };
-    useStore.setState({ selection: sel });
+    useStore.setState({ selection: { ...sel, id: 'diff:b.py@0' } });
     useStore.getState().openFileDraft('a.py');
     let s = useStore.getState();
     expect(s.draft).toEqual({ path: 'a.py', selection: null });
+    // A cursor in another file gives way; one inside the file stays put.
     expect(s.selection).toBeNull();
     expect(s.replyTo).toBeNull();
     expect(s.activePath).toBe('a.py');
+    useStore.setState({ selection: sel });
+    useStore.getState().openFileDraft('a.py');
+    expect(useStore.getState().selection).toEqual(sel);
+    useStore.setState({ selection: null });
     // The item re-renders for the composer, and again once it is gone.
     const version = (prev?: ReturnType<typeof itemVersion>) =>
       itemVersion(prev, itemDeps(useStore.getState(), 'a.py', [], false));

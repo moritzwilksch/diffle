@@ -1699,7 +1699,8 @@ export const useStore = create<ReviewState>((set, get) => {
       set((s) => ({ scrollTarget: { id: item.id, align: 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 } }));
     },
     moveHunk(delta) {
-      placeCursor(stepHunk(nav(), currentCursor(), delta), false, 'eye');
+      // From the active file's header (no line selected), ] enters that file and [ leaves it backwards.
+      placeCursor(stepHunk(nav(), currentNavCursor(), delta), false, 'eye');
     },
     toggleVisual() {
       const cur = currentCursor();
@@ -2000,8 +2001,11 @@ export const useStore = create<ReviewState>((set, get) => {
 
     openFileDraft(path) {
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
-      // The file's composer is not on any line: the cursor leaves its line so the two composers never share it.
-      set({ draft: { path, selection: null }, selection: null, visualAnchor: null, activePath: path, replyTo: null });
+      // The cursor stays where the reader is when that is inside this file, so `]` and `e` carry on from
+      // there; a cursor in another file gives way to this file's header as the motion stop.
+      const sel = get().selection;
+      const kept = sel && pathFromItemId(sel.id) === path ? sel : null;
+      set({ draft: { path, selection: null }, selection: kept, visualAnchor: null, activePath: path, replyTo: null });
       ensureExpanded(path);
     },
 
