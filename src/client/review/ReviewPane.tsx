@@ -22,7 +22,7 @@ import { HoverTooltip, hoverControl } from '../lsp/HoverTooltip.js';
 import { ReferencesList } from '../lsp/ReferencesList.js';
 import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
-import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
+import { lspTarget, schemaHoverOnly, tokenTypeAt, type TokenTarget } from '../lsp/target.js';
 import {
   isCollapsed,
   itemDeps,
@@ -160,9 +160,11 @@ function targetOf(
       line = alt;
     }
   }
+  // The highlighter already classified this span while rendering it.
+  const tokenType = tokenTypeAt(props.tokenElement);
   return word
-    ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
-    : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+    ? { path, side, line, col: props.lineCharStart + word.start, text: word.text, tokenType }
+    : { path, side, line, col: props.lineCharStart, text: props.tokenText, tokenType };
 }
 
 /** Whether some running language server claims this file's language. */
