@@ -31,7 +31,7 @@ export function ModePicker() {
   const [refs, setRefs] = useState<RefsResponse | null>(null);
   const [a, setA] = useState('');
   const [b, setB] = useState('HEAD');
-  const [dots, setDots] = useState<'..' | '...'>('..');
+  const [dots, setDots] = useState<'..' | '...'>('...');
   const [oldOffsetText, setOldOffsetText] = useState('1');
   const [newOffsetText, setNewOffsetText] = useState('0');
   const [pr, setPr] = useState('');
@@ -229,9 +229,6 @@ export function ModePicker() {
                         if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
                       }}
                     >
-                      <ToggleButton type="button" selected={dots === '..'} tabIndex={-1} onClick={() => setDots('..')}>
-                        Direct
-                      </ToggleButton>
                       <ToggleButton
                         type="button"
                         selected={dots === '...'}
@@ -239,6 +236,9 @@ export function ModePicker() {
                         onClick={() => setDots('...')}
                       >
                         Merge base
+                      </ToggleButton>
+                      <ToggleButton type="button" selected={dots === '..'} tabIndex={-1} onClick={() => setDots('..')}>
+                        Direct
                       </ToggleButton>
                     </div>
                     <Button
