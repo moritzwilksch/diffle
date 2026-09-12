@@ -34,6 +34,8 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
+  // GitHub accepts a review comment on an unchanged file but never shows it, so the button says so instead of posting.
+  const inDiff = useStore((s) => s.snapshot?.changed.some((f) => f.path === thread.anchor.path) ?? false);
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
   const del = useConfirm(() => void deleteThread(thread.id));
@@ -97,14 +99,16 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             variant="ghost"
             icon={!post.armed && !posted}
             feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
-            disabled={posting || thread.stale}
+            disabled={posting || thread.stale || !inDiff}
             onClick={post.fire}
             title={
               thread.stale
                 ? 'Stale threads cannot be added to a GitHub review'
-                : post.armed
-                  ? 'Click again to add this thread to the pending review'
-                  : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
+                : !inDiff
+                  ? 'GitHub shows review comments only on files in the pull request diff'
+                  : post.armed
+                    ? 'Click again to add this thread to the pending review'
+                    : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
             }
           >
             {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
