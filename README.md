@@ -65,7 +65,7 @@ Closing the last browser tab that diffle opened stops the server and prints open
 
 Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
 
-Generated files and files matching auto-viewed globs start collapsed. There are no globs by default; configure them in settings or with `diffle config`.
+Generated files and files matching auto-viewed globs start collapsed. A file is generated when `.gitattributes` marks it `linguist-generated`, as on GitHub, or when its path or header looks generated; `linguist-generated=false` opts a file out. There are no globs by default; configure them in settings or with `diffle config`.
 
 ## Reverse proxies
 

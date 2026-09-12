@@ -107,7 +107,7 @@ export const ChangedFileSchema = z.object({
   binary: z.boolean(),
   /** New-side blob sha. '' for deletions. Keys the viewed state. */
   blob: z.string(),
-  /** A path pattern or a content sniff said this file is generated. Feeds auto-collapse and risk ranking. */
+  /** The `linguist-generated` gitattribute, a path pattern or a content sniff said this file is generated. Feeds auto-collapse and risk ranking. */
   generated: z.boolean(),
   /** A gitlink (mode 160000): `blob` is the recorded commit, the patch shows the commit-id change, and there is no file to open. */
   submodule: z.literal(true).optional(),

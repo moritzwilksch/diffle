@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, open, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -688,5 +688,103 @@ describe('worktree on either side', () => {
     expect(snap.changed).toEqual([]);
     expect(snap.tree).toContain('untracked.txt');
     expect(await snapshotter.patchAll()).toBe('');
+  });
+});
+
+describe('linguist-generated attribute', () => {
+  let adir: string;
+  let arepo: GitRepo;
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 't',
+    GIT_AUTHOR_EMAIL: 't@t',
+    GIT_COMMITTER_NAME: 't',
+    GIT_COMMITTER_EMAIL: 't@t',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+  };
+  const agit = (...args: string[]) => execFileSync('git', args, { cwd: adir, encoding: 'utf8', env }).trim();
+  const odd = 'completions/odd\nname.bash';
+
+  beforeAll(async () => {
+    adir = await mkdtemp(join(tmpdir(), 'diffle-attr-'));
+    agit('init', '-q', '-b', 'main');
+    await mkdir(join(adir, 'completions'));
+    await mkdir(join(adir, 'src'));
+    await writeFile(
+      join(adir, '.gitattributes'),
+      [
+        // The shape from GitHub's docs; `**` is plain gitattributes globbing.
+        'completions/** merge=binary linguist-generated=true',
+        'src/bare.ts linguist-generated',
+        'src/off.ts -linguist-generated',
+        'package-lock.json linguist-generated=false',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(join(adir, 'completions', 'x.bash'), 'complete -F _x x\n');
+    if (NEWLINE_NAMES) await writeFile(join(adir, odd), 'odd\n');
+    await writeFile(join(adir, 'src', 'bare.ts'), 'export {};\n');
+    await writeFile(join(adir, 'src', 'off.ts'), 'export {};\n');
+    await writeFile(join(adir, 'src', 'main.ts'), 'export {};\n');
+    await writeFile(join(adir, 'package-lock.json'), '{}\n');
+    agit('add', '.');
+    agit('commit', '-q', '-m', 'base');
+    agit('checkout', '-q', '-b', 'feat');
+    for (const p of ['completions/x.bash', 'src/bare.ts', 'src/off.ts', 'src/main.ts', 'package-lock.json']) {
+      await writeFile(join(adir, p), `${await readFile(join(adir, p), 'utf8')}// more\n`);
+    }
+    if (NEWLINE_NAMES) await writeFile(join(adir, odd), 'odd\nmore\n');
+    agit('commit', '-q', '-am', 'feat');
+    arepo = await GitRepo.open(adir);
+  });
+  afterAll(() => rmTmp(adir));
+
+  it('reads set, unset and valued forms and leaves unspecified paths out', async () => {
+    const paths = ['completions/x.bash', 'src/bare.ts', 'src/off.ts', 'src/main.ts', 'package-lock.json'];
+    if (NEWLINE_NAMES) paths.push(odd);
+    const expected = new Map([
+      ['completions/x.bash', true],
+      ['src/bare.ts', true],
+      ['src/off.ts', false],
+      ['package-lock.json', false],
+    ]);
+    if (NEWLINE_NAMES) expected.set(odd, true);
+    expect(await arepo.attr('linguist-generated', paths, 'worktree')).toEqual(expected);
+    expect(await arepo.attr('linguist-generated', paths, 'feat')).toEqual(expected);
+    expect(await arepo.attr('linguist-generated', [], 'worktree')).toEqual(new Map());
+  });
+
+  it('the attribute decides generated before path and content heuristics', async () => {
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['main..feat'] }, arepo);
+    const snap = await new Snapshotter(arepo, mode, 1, 3).current();
+    const flags = Object.fromEntries(snap.changed.map((f) => [f.path, f.generated]));
+    const expected: Record<string, boolean> = {
+      'completions/x.bash': true,
+      'src/bare.ts': true,
+      'src/off.ts': false,
+      'src/main.ts': false,
+      // `=false` opts a lockfile out of the built-in path convention.
+      'package-lock.json': false,
+    };
+    if (NEWLINE_NAMES) expected[odd] = true;
+    expect(flags).toMatchObject(expected);
+  });
+
+  it('a committed comparison reads attributes from the new revision, the worktree from the checkout', async () => {
+    // Flip the checkout copy only: `feat` still carries the original. (A deleted
+    // copy would not do: check-attr falls back to the index.)
+    await writeFile(join(adir, '.gitattributes'), 'completions/** -linguist-generated\n');
+    try {
+      const committed = await resolveReview({ kind: 'revspec', args: ['main..feat'] }, arepo);
+      const snap = await new Snapshotter(arepo, committed.mode, 1, 3).current();
+      expect(snap.changed.find((f) => f.path === 'completions/x.bash')?.generated).toBe(true);
+      expect(snap.changed.find((f) => f.path === 'package-lock.json')?.generated).toBe(false);
+      await writeFile(join(adir, 'completions', 'x.bash'), 'edited\n');
+      const working = await resolveReview({ kind: 'working' }, arepo);
+      const live = await new Snapshotter(arepo, working.mode, 1, 3).current();
+      expect(live.changed.find((f) => f.path === 'completions/x.bash')?.generated).toBe(false);
+    } finally {
+      agit('checkout', '-q', '--', '.');
+    }
   });
 });
