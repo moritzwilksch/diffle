@@ -186,11 +186,15 @@ it('defaults two refs to the merge base and lists it before direct', async () =>
   expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['main...HEAD'] });
 });
 
-it('does not attach a title tooltip to the autofocused offset input', async () => {
+it('does not attach a title tooltip to the autofocused ref and offset inputs', async () => {
+  await act(() => useStore.getState().pickModeEntry(2));
+  const ref = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
+  expect(document.activeElement).toBe(ref);
+  expect(ref.hasAttribute('title')).toBe(false);
   await act(() => useStore.getState().pickModeEntry(3));
-  const base = host.querySelector<HTMLInputElement>('[aria-label="Base offset"]')!;
-  expect(document.activeElement).toBe(base);
-  expect(base.hasAttribute('title')).toBe(false);
+  const offset = host.querySelector<HTMLInputElement>('[aria-label="Base offset"]')!;
+  expect(document.activeElement).toBe(offset);
+  expect(offset.hasAttribute('title')).toBe(false);
 });
 
 it('swaps refs by button and x without submitting or consuming typed x', async () => {

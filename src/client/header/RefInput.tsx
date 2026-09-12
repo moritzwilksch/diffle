@@ -65,7 +65,6 @@ export function RefInput({
         autoComplete="off"
         spellCheck={false}
         placeholder={label}
-        title={value || label}
         value={value}
         onFocus={(e) => {
           e.currentTarget.select();
