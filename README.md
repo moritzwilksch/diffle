@@ -126,7 +126,7 @@ Nothing is submitted for you: open the pull request on GitHub and submit the rev
 
 The GitHub button next to the comparison menu (`o`) shows the repository from your GitHub `origin`, even without `gh`. Pull request details load in the background by matching the old and new branches' upstreams; an explicit `diffle pr` supplies the PR directly. Discovery never changes your comparison.
 
-Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped. Threads on a whole file become GitHub file-level comments.
+Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped, and so are threads on files outside the diff: GitHub shows review comments only on the pull request's changed files. Threads on a whole file become GitHub file-level comments.
 
 Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
 

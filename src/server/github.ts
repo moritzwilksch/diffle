@@ -67,12 +67,19 @@ export interface BuiltReview {
 
 /**
  * Threads → the comments of one pending GitHub review, one per thread. Stale threads are skipped:
- * their lines no longer sit in the diff, and GitHub would refuse them anyway. With
- * `threadIds`, only those (resolved included, the user asked for them by hand);
- * without, every unresolved thread. `review.comments` holds the line comments REST can
- * create; the file comments are appended afterwards, but `ids` counts both, in review order.
+ * their lines no longer sit in the diff, and GitHub would refuse them anyway. So are threads on
+ * files outside `changed`, the paths of the PR's diff: GitHub accepts a review comment on an
+ * unchanged file but never shows it, so the reviewer would lose it. With `threadIds`, only
+ * those (resolved included, the user asked for them by hand); without, every unresolved thread.
+ * `review.comments` holds the line comments REST can create; the file comments are appended
+ * afterwards, but `ids` counts both, in review order.
  */
-export function buildReview(threads: CommentThread[], commitId: string, threadIds?: string[]): BuiltReview {
+export function buildReview(
+  threads: CommentThread[],
+  commitId: string,
+  changed: ReadonlySet<string>,
+  threadIds?: string[],
+): BuiltReview {
   const skipped: BuiltReview['skipped'] = [];
   let chosen: CommentThread[];
   if (threadIds) {
@@ -91,6 +98,10 @@ export function buildReview(threads: CommentThread[], commitId: string, threadId
   for (const t of [...chosen].sort(compareThreads)) {
     if (t.stale) {
       skipped.push({ id: t.id, reason: 'stale' });
+      continue;
+    }
+    if (!changed.has(t.anchor.path)) {
+      skipped.push({ id: t.id, reason: 'outside the diff' });
       continue;
     }
     comments.push(toReviewComment(t));
@@ -129,7 +140,7 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
 }
 
 export interface ExportInput {
-  snap: Pick<Snapshot, 'root' | 'newSha'>;
+  snap: Pick<Snapshot, 'root' | 'newSha' | 'changed'>;
   pullRequest: GithubPullRequest;
   threads: CommentThread[];
   threadIds?: string[];
@@ -165,7 +176,8 @@ async function exportToGithub({
   run = runGh,
 }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to the worktree');
-  const { review, comments, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
+  const changed = new Set(snap.changed.map((f) => f.path));
+  const { review, comments, ids, skipped } = buildReview(threads, snap.newSha, changed, threadIds);
   if (comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 

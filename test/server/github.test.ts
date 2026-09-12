@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CommentThread } from '../../src/shared/protocol.js';
+import type { ChangedFile, CommentThread } from '../../src/shared/protocol.js';
 import {
   buildReview,
   GithubExporter,
@@ -13,6 +13,13 @@ import {
 const PR_URL = 'https://github.com/o/r/pull/7';
 
 const HEAD = 'a'.repeat(40);
+
+/** The diff's changed files by path; every fixture thread sits on `a.txt`. */
+const CHANGED = new Set(['a.txt']);
+
+function changedFile(path: string): ChangedFile {
+  return { path, status: 'M', additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false };
+}
 
 function thread(
   over: Partial<CommentThread> & {
@@ -44,6 +51,7 @@ describe('buildReview', () => {
     const { review, skipped } = buildReview(
       [thread({ id: 'n', line: 3 }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' })],
       HEAD,
+      CHANGED,
     );
     expect(skipped).toEqual([]);
     expect(review.commit_id).toBe(HEAD);
@@ -56,7 +64,7 @@ describe('buildReview', () => {
   });
 
   it('keeps file threads out of the REST payload but in the comment list, in review order', () => {
-    const { review, comments, ids } = buildReview([thread({ id: 'n', line: 3 }), fileThread('f')], HEAD);
+    const { review, comments, ids } = buildReview([thread({ id: 'n', line: 3 }), fileThread('f')], HEAD, CHANGED);
     expect(review.comments).toEqual([{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' }]);
     expect(comments).toEqual([
       { path: 'a.txt', subject_type: 'file', body: 'whole file' },
@@ -69,6 +77,7 @@ describe('buildReview', () => {
     const { review, skipped } = buildReview(
       [thread({ id: 's', stale: true }), thread({ id: 'r', resolved: true }), thread({ id: 'k' })],
       HEAD,
+      CHANGED,
     );
     expect(review.comments.map((c) => c.body)).toEqual(['hi']);
     expect(skipped).toEqual([{ id: 's', reason: 'stale' }]);
@@ -78,10 +87,25 @@ describe('buildReview', () => {
     const { review, skipped } = buildReview(
       [thread({ id: 'r', resolved: true, body: 'done' }), thread({ id: 'k' })],
       HEAD,
+      CHANGED,
       ['r', 'nope'],
     );
     expect(review.comments.map((c) => c.body)).toEqual(['done']);
     expect(skipped).toEqual([{ id: 'nope', reason: 'unknown thread' }]);
+  });
+
+  it('skips line and file threads on files outside the diff: GitHub would take them but never show them', () => {
+    const { comments, ids, skipped } = buildReview(
+      [thread({ id: 'k' }), thread({ id: 'u', path: 'unchanged.txt' }), fileThread('uf', 'whole', 'unchanged.txt')],
+      HEAD,
+      CHANGED,
+    );
+    expect(ids).toEqual(['k']);
+    expect(comments).toHaveLength(1);
+    expect(skipped).toEqual([
+      { id: 'uf', reason: 'outside the diff' },
+      { id: 'u', reason: 'outside the diff' },
+    ]);
   });
 });
 
@@ -168,6 +192,7 @@ describe('GithubExporter', () => {
   const snap = {
     root: '/r',
     newSha: HEAD,
+    changed: ['a.txt', 'b.txt', 'c.txt'].map(changedFile),
   };
 
   beforeEach(() => {
@@ -178,7 +203,7 @@ describe('GithubExporter', () => {
   it('refuses worktree export', async () => {
     const threads = [thread({ id: 'k' })];
     await expect(
-      exportToGithub({ pullRequest, snap: { root: '/r', newSha: 'worktree' }, threads, run: gh }),
+      exportToGithub({ pullRequest, snap: { ...snap, newSha: 'worktree' }, threads, run: gh }),
     ).rejects.toThrow(/worktree/);
     expect(calls).toEqual([]);
   });
@@ -648,5 +673,14 @@ describe('GithubExporter', () => {
       status: 400,
       message: /1 stale/,
     });
+  });
+
+  it('never posts a thread on an unchanged tree file, and says why', async () => {
+    const threads = [thread({ id: 'u', path: 'unchanged.txt' }), fileThread('uf', 'whole', 'unchanged.txt')];
+    await expect(exportToGithub({ pullRequest, snap, threads, run: gh })).rejects.toMatchObject({
+      status: 400,
+      message: /2 outside the diff/,
+    });
+    expect(calls).toEqual([]);
   });
 });
