@@ -46,7 +46,6 @@ export function CommitOffsetInput({
         required
         aria-label={label}
         aria-invalid={parseOffset(value) === null}
-        title={`${label} (0 is HEAD)`}
         autoFocus={autoFocus}
         onFocus={(e) => e.currentTarget.select()}
         onKeyDown={(e) => {

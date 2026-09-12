@@ -176,6 +176,23 @@ it('keeps ref suggestions closed on pointer and keyboard picks until input inter
   expect(host.querySelector('[role="listbox"]')).not.toBeNull();
 });
 
+it('defaults two refs to the merge base and lists it before direct', async () => {
+  await act(() => useStore.getState().pickModeEntry(2));
+  const toggle = host.querySelector<HTMLElement>('[role="group"][aria-label^="Comparison:"]')!;
+  const buttons = [...toggle.querySelectorAll('button')].map((button) => button.textContent);
+  expect(buttons).toEqual(['Merge base', 'Direct']);
+  expect(toggle.getAttribute('aria-label')).toContain('Merge base');
+  await submit();
+  expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['main...HEAD'] });
+});
+
+it('does not attach a title tooltip to the autofocused offset input', async () => {
+  await act(() => useStore.getState().pickModeEntry(3));
+  const base = host.querySelector<HTMLInputElement>('[aria-label="Base offset"]')!;
+  expect(document.activeElement).toBe(base);
+  expect(base.hasAttribute('title')).toBe(false);
+});
+
 it('swaps refs by button and x without submitting or consuming typed x', async () => {
   await act(() => useStore.getState().pickModeEntry(2));
   const base = host.querySelector<HTMLInputElement>('[aria-label="Base ref"]')!;
