@@ -16,8 +16,11 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
+/** Skill directory that contains this script. */
+export const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 /** Diffle checkout that contains this script. */
-export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+export const REPO_ROOT = resolve(SKILL_ROOT, '../../..');
 
 /** Dist client the server serves. Swap it to screenshot a different client build. */
 export const CLIENT_DIR = join(REPO_ROOT, 'dist/client');
@@ -36,9 +39,9 @@ function libPath() {
 
 function resolvePlaywright() {
   if (process.env.PLAYWRIGHT_MODULE) return pathToFileURL(resolve(process.env.PLAYWRIGHT_MODULE)).href;
-  // The checkout first, so a scenario run from anywhere finds the devDependency; then cwd, for a
-  // scenario that installed its own copy; then the global root.
-  for (const from of [REPO_ROOT, process.cwd()]) {
+  // The skill's own install first, so the app's dependencies stay out of it; then the checkout, for
+  // a machine that installed it there; then cwd, for a scenario that carries its own; then global.
+  for (const from of [SKILL_ROOT, REPO_ROOT, process.cwd()]) {
     const require = createRequire(join(from, 'package.json'));
     for (const name of ['playwright', 'playwright-core']) {
       try {
@@ -316,11 +319,21 @@ export async function filePaths(page) {
   return paths;
 }
 
-/** The rendered file, a `diffs-container` holding the header and the viewed and collapse controls. */
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The rendered file, a `diffs-container` holding the header and the viewed and collapse controls.
+ * Found by the path in its header title, not by position, so a file the viewer skips does not shift
+ * the mapping for the ones after it.
+ */
 async function fileItem(page, path) {
-  const at = (await filePaths(page)).indexOf(path);
-  if (at === -1) throw new Error(`not a changed file: ${path}`);
-  return page.locator('diffs-container').nth(at);
+  if (!(await filePaths(page)).includes(path)) throw new Error(`not a changed file: ${path}`);
+  const item = page
+    .locator('diffs-container')
+    .filter({ has: page.locator('[data-title]', { hasText: new RegExp(`^${escapeRegExp(path)}$`) }) })
+    .first();
+  await item.waitFor({ state: 'attached', timeout: 5000 });
+  return item;
 }
 
 /** The file header, for scrolling to or clicking. */
@@ -334,21 +347,20 @@ export async function viewed(page, path) {
 }
 
 /**
- * The file the cursor is in. The active viewer host is flagged `data-active`; before the first
- * navigation none is, so this falls back to the first changed file, the cursor's default home.
+ * The file the cursor is in, read from the tree's selected row. Before the first navigation nothing
+ * is selected, so this falls back to the first changed file, the cursor's default home. Reading the
+ * tree rather than the viewer means it also reports files with no diff container (binary, oversized).
  */
 export async function activePath(page) {
-  const hosts = page.locator('diffs-container');
-  const paths = await filePaths(page);
-  for (let i = 0; i < (await hosts.count()); i++) {
-    if ((await hosts.nth(i).getAttribute('data-active')) !== null) return paths[i] ?? null;
-  }
-  return paths[0] ?? null;
+  const row = page.locator('file-tree-container [data-item-type="file"][aria-selected="true"]').first();
+  if (await row.count()) return row.getAttribute('data-item-path');
+  return (await filePaths(page))[0] ?? null;
 }
 
 /**
  * Move the cursor to `path` by clicking its file-tree row: the app selects the file, expands it if
  * collapsed, and hands focus to the review pane. Deterministic where counting `J` presses is not.
+ * Needs the tree visible (`Ctrl+B` toggles it); a hidden tree has no row to click.
  */
 export async function gotoFile(page, path) {
   const row = page.locator(`file-tree-container [data-item-type="file"][data-item-path=${JSON.stringify(path)}]`);
@@ -361,10 +373,9 @@ export async function gotoFile(page, path) {
   throw new Error(`did not move the cursor to ${path}`);
 }
 
-/** Whether the file's diff is collapsed. */
+/** Whether the file's diff is collapsed. A collapsed file renders no line-number rows. */
 export async function collapsed(page, path) {
-  const cls = await (await fileItem(page, path)).locator('button[title="Collapse / expand"] svg').getAttribute('class');
-  return cls?.includes('chevron-right') ?? false;
+  return (await (await fileItem(page, path)).locator('[data-column-number]').count()) === 0;
 }
 
 /**

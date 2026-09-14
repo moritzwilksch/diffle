@@ -30,7 +30,7 @@ Record behavior that unfolds over time: key presses, cursor jumps, collapses. St
 - **Wait on a signal.** `locator.waitFor()` beats `waitForTimeout`; keep timeouts for animations only.
 - **Locators pierce the shadow DOM, `page.evaluate` does not.** The viewer and file tree render into shadow roots, so reach for Playwright locators (or the verbs) instead of `querySelector` inside `evaluate`.
 - **Viewing moves the cursor.** `setViewed` and `v` collapse the file and land on the next unviewed file, so read `activePath` after them. `setViewed` clicks the checkbox and blurs it so later keys still land; a raw checkbox click would leave focus on the `INPUT` and swallow the keymap.
-- Diffle verbs index files by tree order (`pkg/` before root files), not flat alphabetical, so pass the exact changed path. `gotoFile(page, path)` moves the cursor there deterministically; `filePaths(page)` returns the order when you need it.
+- Diffle verbs index files by tree order (`pkg/` before root files), not flat alphabetical, so pass the exact changed path. `gotoFile(page, path)` moves the cursor there deterministically; `filePaths(page)` returns the order when you need it. These read the file tree, so they need it visible (`Ctrl+B` toggles it).
 - Review state (viewed, collapsed, threads) persists under the demo repo's `<git-dir>/diffle/`; call `resetReviewState(repo)` before a take so the run starts clean.
 - `selectLines(page, path, from, to)` selects a line range in one file and opens the composer; `openModePicker` opens the compare menu. Line numbers repeat across files, so always pass the path the cursor is in.
 - Read state back with `readThreads(url)` and `activePath(page)` instead of scraping the DOM. A thread's path is `anchor.path`, not a top-level `path`.
