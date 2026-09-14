@@ -389,7 +389,7 @@ describe('ReviewPane scroller effects', () => {
     expect(item()).toMatchObject({
       type: 'file',
       collapsed: false,
-      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string },
+      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string, lang: 'text' },
     });
 
     await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
@@ -458,6 +458,8 @@ describe('ReviewPane scroller effects', () => {
       }),
     );
     expect(host.querySelector('.contents')?.textContent).toBe('// moved from a.txt without changes');
+    // The note must not pick up a grammar from the renamed file's extension.
+    expect(captureItems.mock.lastCall![0][0]).toMatchObject({ file: { name: 'b.txt', lang: 'text' } });
     expect(host.querySelector('[title="Collapse / expand"]')).not.toBeNull();
   });
 });
