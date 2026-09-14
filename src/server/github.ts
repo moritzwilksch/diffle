@@ -8,6 +8,9 @@ import type {
 } from '../shared/protocol.js';
 import { compareThreads } from './comments/anchor.js';
 
+/** Context lines around each change in the pull request diff GitHub renders; comments must land inside them. */
+export const GITHUB_CONTEXT_LINES = 3;
+
 /** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
 export type GhRunner = (args: string[], opts: { cwd: string; input?: string; timeoutMs?: number }) => Promise<string>;
 
@@ -66,8 +69,9 @@ export interface BuiltReview {
 }
 
 /**
- * Threads → the comments of one pending GitHub review, one per thread. Stale threads are skipped:
- * their lines no longer sit in the diff, and GitHub would refuse them anyway. With
+ * Threads → the comments of one pending GitHub review, one per thread. A thread GitHub cannot
+ * show (`githubBlocker`: stale, on an unchanged file, or outside the diff's context) is skipped
+ * with that reason, never posted into the void. With
  * `threadIds`, only those (resolved included, the user asked for them by hand);
  * without, every unresolved thread. `review.comments` holds the line comments REST can
  * create; the file comments are appended afterwards, but `ids` counts both, in review order.
@@ -89,8 +93,8 @@ export function buildReview(threads: CommentThread[], commitId: string, threadId
   const comments: ReviewComment[] = [];
   const ids: string[] = [];
   for (const t of [...chosen].sort(compareThreads)) {
-    if (t.stale) {
-      skipped.push({ id: t.id, reason: 'stale' });
+    if (t.githubBlocker) {
+      skipped.push({ id: t.id, reason: t.githubBlocker });
       continue;
     }
     comments.push(toReviewComment(t));

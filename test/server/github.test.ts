@@ -30,6 +30,8 @@ function thread(
     messages: [{ id: `${rest.id}-m`, body, createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
+    // Relocation marks every stale thread as one GitHub cannot show.
+    ...(rest.stale ? { githubBlocker: 'lines outside the pull request diff' } : {}),
     ...rest,
   };
 }
@@ -65,13 +67,22 @@ describe('buildReview', () => {
     expect(ids).toEqual(['f', 'n']);
   });
 
-  it('skips stale threads and, without ids, resolved ones', () => {
-    const { review, skipped } = buildReview(
-      [thread({ id: 's', stale: true }), thread({ id: 'r', resolved: true }), thread({ id: 'k' })],
+  it('skips threads GitHub cannot show, naming why, and, without ids, resolved ones', () => {
+    const { review, comments, skipped } = buildReview(
+      [
+        thread({ id: 's', stale: true, githubBlocker: 'lines outside the pull request diff' }),
+        { ...fileThread('u', 'whole', 'unchanged.txt'), githubBlocker: 'file not in the pull request diff' },
+        thread({ id: 'r', resolved: true }),
+        thread({ id: 'k' }),
+      ],
       HEAD,
     );
     expect(review.comments.map((c) => c.body)).toEqual(['hi']);
-    expect(skipped).toEqual([{ id: 's', reason: 'stale' }]);
+    expect(comments).toHaveLength(1);
+    expect(skipped).toEqual([
+      { id: 's', reason: 'lines outside the pull request diff' },
+      { id: 'u', reason: 'file not in the pull request diff' },
+    ]);
   });
 
   it('with ids posts the named threads, resolved included, and reports unknown ids', () => {
@@ -195,7 +206,7 @@ describe('GithubExporter', () => {
       posted: 1,
       updated: 0,
       review: 'created',
-      skipped: [{ id: 's', reason: 'stale' }],
+      skipped: [{ id: 's', reason: 'lines outside the pull request diff' }],
     });
     expect(calls.map((c) => c.args)).toEqual([
       ['api', 'graphql', '--input', '-'],
@@ -646,7 +657,7 @@ describe('GithubExporter', () => {
       exportToGithub({ pullRequest, snap, threads: [thread({ id: 's', stale: true })], run: gh }),
     ).rejects.toMatchObject({
       status: 400,
-      message: /1 stale/,
+      message: /1 lines outside the pull request diff/,
     });
   });
 });
