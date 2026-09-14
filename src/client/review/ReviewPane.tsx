@@ -798,8 +798,8 @@ function toItem(
       annotations.push({ side: s, lineNumber: endLine, metadata: { kind: 'draft' } });
     }
     if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
-    // Binary, oversized or failed: header-only placeholder via a one-line file item under the diff id. The
-    // line gives file threads a place to hang; the viewer shows nothing above an empty file.
+    // Binary, oversized or failed: a one-line placeholder file item under the diff id, so the header's
+    // collapse toggle has a body to show. The line also gives file threads a place to hang.
     const note =
       loaded.kind === 'oversized'
         ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
@@ -807,18 +807,11 @@ function toItem(
           ? `// ${loaded.message}`
           : loaded.kind === 'loading'
             ? '// loading…'
-            : '// binary file';
-    return {
-      id,
-      type: 'file',
-      file: { name: path, contents: note },
-      annotations: fileLevel,
-      version,
-      collapsed: loaded.kind === 'binary' || collapsed,
-    };
+            : BINARY_NOTE;
+    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
   }
   if (loaded.kind !== 'file') {
-    const note = loaded.kind === 'binary' ? '// binary file' : loaded.kind === 'error' ? `// ${loaded.message}` : '';
+    const note = loaded.kind === 'binary' ? BINARY_NOTE : loaded.kind === 'error' ? `// ${loaded.message}` : '';
     return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
@@ -835,6 +828,9 @@ function toItem(
 
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
 const FILE_LINE = 0;
+
+/** What a binary file's body shows in place of a diff. */
+const BINARY_NOTE = '// Binary file not shown';
 
 /** What the composer says it comments on: the selected lines, or the file. */
 function describeSelection(d: Draft): string {

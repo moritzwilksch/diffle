@@ -26,6 +26,7 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 type Rendered = { id: string; element: HTMLElement; type: 'diff' };
 let rendered: Rendered[] = [];
 const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
+const captureItems = vi.fn<(items: unknown[]) => void>();
 vi.mock('@pierre/diffs/react', () => ({
   CodeView: forwardRef(function CodeView(
     props: {
@@ -38,6 +39,7 @@ vi.mock('@pierre/diffs/react', () => ({
     ref,
   ) {
     captureOptions(props.options);
+    captureItems(props.items);
     useImperativeHandle(ref, () => ({
       getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
@@ -369,6 +371,27 @@ describe('ReviewPane scroller effects', () => {
     await act(() => header.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
     expect(useStore.getState().viewed).toMatchObject([{ path: 'a.txt', blob: 'b1', viewed: true }]);
+  });
+
+  it('expands a binary file to a placeholder line and collapses it again from the header', async () => {
+    const binary = [
+      { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
+    ];
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'img.png': { kind: 'binary' } } }));
+    const item = () => captureItems.mock.lastCall![0][0];
+    expect(item()).toMatchObject({
+      type: 'file',
+      collapsed: false,
+      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string },
+    });
+
+    await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
+    expect(useStore.getState().collapsed['img.png']).toBe(true);
+    expect(item()).toMatchObject({ collapsed: true });
+
+    await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
+    expect(item()).toMatchObject({ collapsed: false });
   });
 
   it('shows the viewed shortcut in the file header tooltip', async () => {
