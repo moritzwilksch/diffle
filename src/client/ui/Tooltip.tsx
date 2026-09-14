@@ -120,6 +120,13 @@ export function TooltipHost() {
     // node entered. Every shadow root the pointer or focus enters gets the same listeners.
     const roots = new Set<ShadowRoot>();
     const adopt = (e: Event) => {
+      // Diff views remount per theme and drop their shadow trees without notice; the listeners
+      // here would otherwise keep each removed tree alive for as long as the app runs.
+      for (const root of roots) {
+        if (root.host.isConnected) continue;
+        unlisten(root);
+        roots.delete(root);
+      }
       for (const node of e.composedPath()) {
         if (!(node instanceof ShadowRoot) || roots.has(node)) continue;
         roots.add(node);

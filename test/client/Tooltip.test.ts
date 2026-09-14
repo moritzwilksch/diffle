@@ -125,3 +125,34 @@ it('follows titles inside a shadow root', async () => {
     host.remove();
   }
 });
+
+it('lets go of a shadow root whose host left the document', async () => {
+  const shadowHost = (title: string) => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const node = document.createElement('button');
+    node.setAttribute('title', title);
+    el.attachShadow({ mode: 'open' }).append(node);
+    return { el, node };
+  };
+  const over = (node: Element) =>
+    act(() => node.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true })));
+  const a = shadowHost('detached');
+  const b = shadowHost('live');
+  try {
+    await over(a.node);
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('detached');
+    a.el.remove();
+    await over(b.node);
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('live');
+    // Entering the detached tree would have swapped the tip to it had its listeners survived.
+    await over(a.node);
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('live');
+  } finally {
+    a.el.remove();
+    b.el.remove();
+  }
+});
