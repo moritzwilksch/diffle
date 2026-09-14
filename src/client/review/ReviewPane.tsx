@@ -46,7 +46,7 @@ import {
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
-import { rowOf } from './rows.js';
+import { rowOf, topRow } from './rows.js';
 import { reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
@@ -379,6 +379,31 @@ export function ReviewPane() {
     };
   }, [scroller, geometry]);
 
+  // A display toggle re-lays the rows out (split / unified) or remounts the viewer (theme). Neither is
+  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
+  // renders the change, and the request to land it at the same pixel goes out in the same update, so
+  // the jump effect below places it before anything paints. No row on screen means nothing to hold.
+  useEffect(
+    () =>
+      useStore.subscribe((s, prev) => {
+        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle) return;
+        const scroller = containerRef.current;
+        const items = viewerRef.current?.getInstance()?.getRenderedItems();
+        if (!scroller || !items) return;
+        const box = scroller.getBoundingClientRect();
+        const held = topRow(
+          items.map((r) => ({ id: r.id, root: r.element.shadowRoot ?? r.element })),
+          box.top + geometry.itemMetrics.diffHeaderHeight,
+          box.bottom,
+        );
+        if (held)
+          useStore.setState((s) => ({
+            scrollTarget: { ...held, align: 'keep', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+          }));
+      }),
+    [geometry],
+  );
+
   // Reveal a line hidden in collapsed context: bring the item into the virtual window,
   // ask its instance to expand around the line, then center it.
   useEffect(() => {
@@ -424,12 +449,12 @@ export function ReviewPane() {
       cancelled = true;
     };
   }, [reveal]);
-  // The scroll request for a target: eye/top/bottom pin the line at a fixed height ('start' plus an
+  // The scroll request for a target: eye/top/bottom/keep pin the line at a fixed height ('start' plus an
   // offset below the sticky header); the landing in the effect below measures the row and makes it exact.
   const scrollPlan = useCallback(
     (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
       const requested = scrollTarget.align ?? 'center';
-      const eye = requested === 'eye' || requested === 'top' || requested === 'bottom';
+      const eye = requested === 'eye' || requested === 'top' || requested === 'bottom' || requested === 'keep';
       const height = containerRef.current?.clientHeight ?? 800;
       const header = geometry.itemMetrics.diffHeaderHeight;
       const edge = geometry.edge;
@@ -440,7 +465,9 @@ export function ReviewPane() {
             ? edge
             : requested === 'bottom'
               ? Math.max(edge, height - header - edge - geometry.itemMetrics.lineHeight)
-              : 0;
+              : requested === 'keep'
+                ? (scrollTarget.offset ?? 0)
+                : 0;
       const align = eye ? 'start' : requested;
       const target = scrollTarget.line
         ? {

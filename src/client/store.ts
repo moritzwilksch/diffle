@@ -328,14 +328,17 @@ export interface ReviewState {
   /** Context lines the viewer has expanded, by item id, so the cursor can walk them. */
   revealed: Record<string, LineRange[]>;
   addRevealed(id: string, start: number, end: number): void;
-  /** Bumped when the user wants CodeView to scroll to `scrollTarget`. */
-  /** align 'eye' pins the line at the vertical center of the viewport for jump navigation. */
-  /** 'top' / 'bottom' pin the line near the edges of the viewport (zt / zb), the same way 'eye' pins it at the gaze point. */
+  /**
+   * Where the viewer scrolls next; a new object (nonce) lands it. 'eye' pins the line at the gaze
+   * point for jump navigation and 'top' / 'bottom' near the edges (zt / zb). 'keep' pins it `offset`
+   * pixels below the sticky header: the pane issues it to hold the viewport across a re-layout.
+   */
   scrollTarget: {
     id: string;
     line?: number;
     side?: Side;
-    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom';
+    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
+    offset?: number;
     nonce: number;
   } | null;
 
@@ -1204,9 +1207,7 @@ export const useStore = create<ReviewState>((set, get) => {
     setTheme(theme) {
       storeTheme(theme);
       applyTheme(theme);
-      // One update: the viewer remounts per theme and would come back scrolled to the top, so the
-      // cursor line goes back to the gaze point in the same render, before anything paints.
-      set((s) => ({ theme, ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}) }));
+      set({ theme });
     },
     visualAnchor: null,
     editingId: null,
@@ -1775,13 +1776,8 @@ export const useStore = create<ReviewState>((set, get) => {
       } catch {
         /* ignore */
       }
-      // The cursor survives the re-layout; its line goes back to the gaze point, since row heights change.
-      set((s) => ({
-        diffStyle: style,
-        draft: null,
-        visualAnchor: null,
-        ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}),
-      }));
+      // The cursor survives the re-layout; the pane holds the viewport in place.
+      set({ diffStyle: style, draft: null, visualAnchor: null });
     },
     snapshot: null,
     error: null,
