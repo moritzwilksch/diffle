@@ -968,7 +968,8 @@ export const useStore = create<ReviewState>((set, get) => {
     const items = nav();
     const item = items.find((i) => i.path === path);
     if (!snapshot || !item) return;
-    const nextIndex = items.findIndex((i) => i.path === nextFileAfter(snapshot, path, accept)?.path);
+    const target = nextFileAfter(snapshot, path, accept);
+    const nextIndex = target ? items.findIndex((i) => i.path === target.path) : -1;
     const next = items[nextIndex];
     let sel: CodeViewLineSelection | null = null;
     if (next && !next.collapsed && next.rows.length > 0) {
