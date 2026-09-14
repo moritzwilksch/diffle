@@ -10,6 +10,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -20,12 +21,15 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..
 export const CLIENT_DIR = join(REPO_ROOT, 'dist/client');
 
 /**
- * Extra shared libraries for Chromium. A headless shell needs libnspr4/libnss3 and friends,
- * which a minimal Linux image lacks; `PLAYWRIGHT_LIBS` points at a directory that has them.
+ * Chromium's shared libraries. A headless shell needs libnspr4/libnss3 and friends, which a
+ * minimal Linux image lacks. `PLAYWRIGHT_LIBS` overrides; otherwise a local pixi env that
+ * provides them is used when present.
  */
 function libPath() {
-  const dir = process.env.PLAYWRIGHT_LIBS;
-  return dir && existsSync(dir) ? dir : null;
+  const explicit = process.env.PLAYWRIGHT_LIBS;
+  if (explicit && existsSync(explicit)) return explicit;
+  const fallback = join(homedir(), '.pixi/envs/chromelibs/lib');
+  return existsSync(join(fallback, 'libnspr4.so')) ? fallback : null;
 }
 
 function resolvePlaywright() {
@@ -53,7 +57,7 @@ function resolvePlaywright() {
   );
 }
 
-/** Launch Chromium, prepending `PLAYWRIGHT_LIBS` to the loader path when it is set. */
+/** Launch Chromium, adding Chromium's shared libraries to the loader path when found. */
 export async function openBrowser() {
   const libs = libPath();
   if (libs) process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH ? `${libs}:${process.env.LD_LIBRARY_PATH}` : libs;
@@ -185,7 +189,11 @@ export async function newVideoPage(browser, url, { width = 1280, height = 800, c
   const page = await context.newPage();
   await page.goto(url);
   await page.locator('.codeview').waitFor({ timeout: 15000 });
-  await page.locator('[data-column-number]').first().waitFor({ timeout: 15000 }).catch(() => {});
+  await page
+    .locator('[data-column-number]')
+    .first()
+    .waitFor({ timeout: 15000 })
+    .catch(() => {});
   return { page, context, video: page.video() };
 }
 
@@ -197,9 +205,13 @@ export async function saveVideo(context, video, mp4Path) {
   const webm = await video.path();
   await context.close();
   await mkdir(dirname(mp4Path), { recursive: true });
-  execFileSync('ffmpeg', ['-y', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4Path], {
-    stdio: 'inherit',
-  });
+  execFileSync(
+    'ffmpeg',
+    ['-y', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4Path],
+    {
+      stdio: 'inherit',
+    },
+  );
   return mp4Path;
 }
 
