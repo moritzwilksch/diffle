@@ -12,6 +12,7 @@ import {
   viewed,
   collapsed,
   activePath,
+  gotoFile,
   resetReviewState,
 } from '/path/to/diffle/.agents/skills/screenshot-change/scripts/harness.mjs';
 
@@ -30,11 +31,11 @@ await withDiffle({ repo: REPO, revs: ['HEAD~1..HEAD'] }, async ({ url }) => {
     await crop(page, 'aside >> nth=-1', `${OUT}/sidebar-after.png`);
 
     // A video: record the viewport, drive keys, then assert what the tape should show.
+    // Place the cursor before the tape with gotoFile, then let keys carry the beats.
     const { page: rec, context, video } = await newVideoPage(browser, url, { dir: OUT });
-    await rec.keyboard.press('g');
-    await rec.keyboard.press('g');
+    await gotoFile(rec, 'pkg/b.py');
     await rec.waitForTimeout(600);
-    if ((await activePath(rec)) !== 'pkg/b.py') throw new Error('gg should land on b.py');
+    if ((await activePath(rec)) !== 'pkg/b.py') throw new Error('gotoFile should land on b.py');
     await rec.keyboard.press('v');
     await rec.waitForTimeout(600);
     if (!(await viewed(rec, 'pkg/b.py'))) throw new Error('b.py should be viewed');

@@ -5,8 +5,9 @@
 //     '<repo>/.agents/skills/screenshot-change/scripts/harness.mjs';
 //
 // The diffle-specific helpers (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`,
-// `activePath`, `selectLines`, `openModePicker`) encode where the UI lives; the rest is generic.
+// `activePath`, `gotoFile`, `selectLines`, `openModePicker`) encode where the UI lives; the rest is generic.
 // Verbs that take a path index files by tree order; `filePaths` returns that order.
+// `frame`/`videoDuration` read a recording back.
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, rmSync, symlinkSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -35,12 +36,16 @@ function libPath() {
 
 function resolvePlaywright() {
   if (process.env.PLAYWRIGHT_MODULE) return pathToFileURL(resolve(process.env.PLAYWRIGHT_MODULE)).href;
-  const require = createRequire(join(process.cwd(), 'package.json'));
-  for (const name of ['playwright', 'playwright-core']) {
-    try {
-      return pathToFileURL(require.resolve(name)).href;
-    } catch {
-      // keep looking
+  // The checkout first, so a scenario run from anywhere finds the devDependency; then cwd, for a
+  // scenario that installed its own copy; then the global root.
+  for (const from of [REPO_ROOT, process.cwd()]) {
+    const require = createRequire(join(from, 'package.json'));
+    for (const name of ['playwright', 'playwright-core']) {
+      try {
+        return pathToFileURL(require.resolve(name)).href;
+      } catch {
+        // keep looking
+      }
     }
   }
   try {
@@ -53,8 +58,8 @@ function resolvePlaywright() {
     // npm missing or failed; fall through to the error below
   }
   throw new Error(
-    'Playwright not found. Install it once with `npm install --global playwright && playwright install chromium --only-shell`, ' +
-      'or point PLAYWRIGHT_MODULE at a playwright `index.mjs`.',
+    'Playwright not found. Install dependencies in the checkout (`npm install`) and a browser ' +
+      '(`npx playwright install chromium --only-shell`), or point PLAYWRIGHT_MODULE at a playwright `index.mjs`.',
   );
 }
 
@@ -62,7 +67,10 @@ function resolvePlaywright() {
 export async function openBrowser() {
   const libs = libPath();
   if (libs) process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH ? `${libs}:${process.env.LD_LIBRARY_PATH}` : libs;
-  const { chromium } = await import(resolvePlaywright());
+  // The local `playwright` resolves to its CommonJS entry, whose exports land under `default`.
+  const mod = await import(resolvePlaywright());
+  const chromium = mod.chromium ?? mod.default?.chromium;
+  if (!chromium) throw new Error(`Playwright at ${resolvePlaywright()} exposes no chromium export`);
   return chromium.launch();
 }
 
@@ -263,6 +271,25 @@ export async function saveVideo(context, video, mp4Path) {
   return mp4Path;
 }
 
+/** One video frame at `seconds` as a png. Cheaper than reading whole frames when verifying a take. */
+export async function frame(mp4Path, seconds, pngPath) {
+  await mkdir(dirname(pngPath), { recursive: true });
+  execFileSync('ffmpeg', ['-y', '-v', 'error', '-ss', String(seconds), '-i', mp4Path, '-frames:v', '1', pngPath], {
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
+  return pngPath;
+}
+
+/** Duration of a recorded mp4 in seconds, for picking a frame to probe. */
+export function videoDuration(mp4Path) {
+  const out = execFileSync(
+    'ffprobe',
+    ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', mp4Path],
+    { encoding: 'utf8' },
+  );
+  return Number(out.trim());
+}
+
 /**
  * Screenshot one element. Cropping at capture time keeps the image (and its read-back
  * cost) to the changed surface instead of a full frame.
@@ -319,16 +346,38 @@ export async function activePath(page) {
   return paths[0] ?? null;
 }
 
+/**
+ * Move the cursor to `path` by clicking its file-tree row: the app selects the file, expands it if
+ * collapsed, and hands focus to the review pane. Deterministic where counting `J` presses is not.
+ */
+export async function gotoFile(page, path) {
+  const row = page.locator(`file-tree-container [data-item-type="file"][data-item-path=${JSON.stringify(path)}]`);
+  if ((await row.count()) === 0) throw new Error(`not a changed file: ${path}`);
+  await row.first().click();
+  for (let i = 0; i < 50; i++) {
+    if ((await activePath(page)) === path) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`did not move the cursor to ${path}`);
+}
+
 /** Whether the file's diff is collapsed. */
 export async function collapsed(page, path) {
   const cls = await (await fileItem(page, path)).locator('button[title="Collapse / expand"] svg').getAttribute('class');
   return cls?.includes('chevron-right') ?? false;
 }
 
-/** Mark the file viewed or unviewed, the same toggle the header label drives. */
+/**
+ * Mark the file viewed or unviewed, the same toggle the header label drives. Viewing also collapses
+ * the file and moves the cursor to the next unviewed file. Blurs the checkbox afterwards: it is an
+ * `INPUT`, and the keymap ignores keys while one has focus, so a later `J`/`v` would silently no-op.
+ */
 export async function setViewed(page, path, on) {
   const box = (await fileItem(page, path)).locator('input[type="checkbox"]');
-  if ((await box.isChecked()) !== on) await box.click();
+  if ((await box.isChecked()) !== on) {
+    await box.click();
+    await box.blur();
+  }
 }
 
 /** Collapse or expand the file's diff. Moves the cursor, like a header click. */
