@@ -6,6 +6,7 @@ import type {
   DiffTokenEventBaseProps,
   FileDiffLoadedFiles,
   FileDiffMetadata,
+  FileContents,
   LineAnnotation,
   OnDiffLineClickProps,
   OnLineClickProps,
@@ -858,11 +859,11 @@ function toItem(
             : loaded.kind === 'loading'
               ? '// loading…'
               : BINARY_NOTE;
-    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+    return { id, type: 'file', file: placeholderFile(path, note), annotations: fileLevel, version, collapsed };
   }
   if (loaded.kind !== 'file') {
     const note = loaded.kind === 'binary' ? BINARY_NOTE : loaded.kind === 'error' ? `// ${loaded.message}` : '';
-    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+    return { id, type: 'file', file: placeholderFile(path, note), annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   const annotations: LineAnnotation<Annot>[] = fileLevel;
@@ -881,6 +882,12 @@ const FILE_LINE = 0;
 
 /** What a binary file's body shows in place of a diff. */
 const BINARY_NOTE = '// Binary file not shown';
+
+/** A one-line note standing in for a body that has no diff: forced to `text` so the
+ * real filename does not pick a grammar the note was never written in. */
+function placeholderFile(name: string, contents: string): FileContents {
+  return { name, contents, lang: 'text' };
+}
 
 /** The viewer element hosting `el`: its shadow root's host, or the nearest ancestor that owns a shadow root. */
 function hostOf(el: HTMLElement): HTMLElement | null {
