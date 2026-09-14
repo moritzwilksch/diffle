@@ -1,16 +1,17 @@
 // Screenshot harness for diffle UI changes. Import the helpers from a short scenario
 // script instead of re-deriving the browser, server, and shadow-DOM boilerplate.
 //
-//   import { withDiffle, openBrowser, newPage, seedThreads, crop, selectLines } from
+//   import { withDiffle, openBrowser, newPage, seedThreads, crop, viewed } from
 //     '<repo>/.agents/skills/screenshot-change/scripts/harness.mjs';
 //
-// The diffle-specific selectors (`selectLines`, `openModePicker`) encode where the UI
-// lives; the rest is generic.
+// The diffle-specific helpers (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`,
+// `activePath`, `selectLines`, `openModePicker`) encode where the UI lives; the rest is generic.
+// Verbs that take a path index files by tree order; `filePaths` returns that order.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { existsSync, rmSync, symlinkSync } from 'node:fs';
+import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -65,18 +66,22 @@ export async function openBrowser() {
   return chromium.launch();
 }
 
-/** Open a page on `url` at a desktop viewport, the default screenshot frame. */
-export async function newPage(browser, url, { width = 1440, height = 900, colorScheme = 'light' } = {}) {
-  const context = await browser.newContext({ colorScheme, deviceScaleFactor: 1, viewport: { width, height } });
-  const page = await context.newPage();
-  await page.goto(url);
-  // Diffs load after the container exists; wait for a rendered line so captures are not blank.
+/** Wait until the viewer has rendered a line, so captures are not blank. */
+export async function waitForViewer(page) {
   await page.locator('.codeview').waitFor({ timeout: 15000 });
   await page
     .locator('[data-column-number]')
     .first()
     .waitFor({ timeout: 15000 })
     .catch(() => {});
+}
+
+/** Open a page on `url` at a desktop viewport, the default screenshot frame. */
+export async function newPage(browser, url, { width = 1440, height = 900, colorScheme = 'light' } = {}) {
+  const context = await browser.newContext({ colorScheme, deviceScaleFactor: 1, viewport: { width, height } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await waitForViewer(page);
   return page;
 }
 
@@ -160,6 +165,22 @@ export async function seedThreads(url, threads) {
   return response.json();
 }
 
+/** Threads as the client sees them, for asserting that a comment landed where the script meant it to. */
+export async function readThreads(url) {
+  const response = await fetch(new URL('api/threads', url));
+  if (!response.ok) throw new Error(`reading threads failed: HTTP ${response.status} ${await response.text()}`);
+  return response.json();
+}
+
+/**
+ * Delete the review state (viewed, collapsed, threads) that diffle keeps under `<git-dir>/diffle/`.
+ * Call before a take: a stale viewed or collapsed flag silently changes what the recording shows.
+ */
+export function resetReviewState(repo) {
+  const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: repo, encoding: 'utf8' }).trim();
+  rmSync(join(resolve(repo, gitDir), 'diffle'), { recursive: true, force: true });
+}
+
 /** Install a client build (e.g. the base branch's `dist/client`) into the served directory. */
 export async function installClient(sourceDir) {
   await rm(CLIENT_DIR, { recursive: true, force: true });
@@ -172,6 +193,38 @@ export function buildClient() {
     cwd: REPO_ROOT,
     stdio: 'inherit',
   });
+}
+
+/**
+ * Run `fn` with the served client built from `rev`, then restore this checkout's build and drop
+ * the temporary worktree. `rev` reuses this checkout's `node_modules` through a symlink.
+ */
+export async function withBaseClient(rev, fn) {
+  const dir = await mkdtemp(join(tmpdir(), 'diffle-base-'));
+  try {
+    execFileSync('git', ['worktree', 'add', '--detach', dir, rev], { cwd: REPO_ROOT });
+    const deps = join(REPO_ROOT, 'node_modules');
+    if (existsSync(deps)) {
+      symlinkSync(deps, join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+    }
+    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:client'], {
+      cwd: dir,
+      stdio: 'inherit',
+    });
+    await installClient(join(dir, 'dist/client'));
+    return await fn();
+  } finally {
+    try {
+      buildClient();
+    } finally {
+      try {
+        execFileSync('git', ['worktree', 'remove', '--force', dir], { cwd: REPO_ROOT });
+      } catch {
+        // The worktree may never have been added; the directory removal below still cleans up.
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
 }
 
 /**
@@ -188,12 +241,7 @@ export async function newVideoPage(browser, url, { width = 1280, height = 800, c
   });
   const page = await context.newPage();
   await page.goto(url);
-  await page.locator('.codeview').waitFor({ timeout: 15000 });
-  await page
-    .locator('[data-column-number]')
-    .first()
-    .waitFor({ timeout: 15000 })
-    .catch(() => {});
+  await waitForViewer(page);
   return { page, context, video: page.video() };
 }
 
@@ -232,8 +280,64 @@ export async function clip(page, box, path) {
   return path;
 }
 
-async function cellBox(page, number, side) {
-  const cells = page.locator('[data-column-number]');
+/** Changed files in the order the diff renders them, the order the verbs below index by. */
+export async function filePaths(page) {
+  const rows = page.locator('file-tree-container [data-item-type="file"]');
+  const count = await rows.count();
+  const paths = [];
+  for (let i = 0; i < count; i++) paths.push(await rows.nth(i).getAttribute('data-item-path'));
+  return paths;
+}
+
+/** The rendered file, a `diffs-container` holding the header and the viewed and collapse controls. */
+async function fileItem(page, path) {
+  const at = (await filePaths(page)).indexOf(path);
+  if (at === -1) throw new Error(`not a changed file: ${path}`);
+  return page.locator('diffs-container').nth(at);
+}
+
+/** The file header, for scrolling to or clicking. */
+export async function header(page, path) {
+  return (await fileItem(page, path)).locator('[data-diffs-header]');
+}
+
+/** Whether the file is marked viewed. */
+export async function viewed(page, path) {
+  return (await fileItem(page, path)).locator('input[type="checkbox"]').isChecked();
+}
+
+/**
+ * The file the cursor is in. The active viewer host is flagged `data-active`; before the first
+ * navigation none is, so this falls back to the first changed file, the cursor's default home.
+ */
+export async function activePath(page) {
+  const hosts = page.locator('diffs-container');
+  const paths = await filePaths(page);
+  for (let i = 0; i < (await hosts.count()); i++) {
+    if ((await hosts.nth(i).getAttribute('data-active')) !== null) return paths[i] ?? null;
+  }
+  return paths[0] ?? null;
+}
+
+/** Whether the file's diff is collapsed. */
+export async function collapsed(page, path) {
+  const cls = await (await fileItem(page, path)).locator('button[title="Collapse / expand"] svg').getAttribute('class');
+  return cls?.includes('chevron-right') ?? false;
+}
+
+/** Mark the file viewed or unviewed, the same toggle the header label drives. */
+export async function setViewed(page, path, on) {
+  const box = (await fileItem(page, path)).locator('input[type="checkbox"]');
+  if ((await box.isChecked()) !== on) await box.click();
+}
+
+/** Collapse or expand the file's diff. Moves the cursor, like a header click. */
+export async function toggleCollapse(page, path) {
+  await (await fileItem(page, path)).locator('button[title="Collapse / expand"]').click();
+}
+
+async function cellBox(root, number, side) {
+  const cells = root.locator('[data-column-number]');
   const wantRight = side !== 'old';
   let best = null;
   for (let i = 0; i < (await cells.count()); i++) {
@@ -248,13 +352,16 @@ async function cellBox(page, number, side) {
 }
 
 /**
- * Select a line range by dragging the number column, which opens the comment composer.
- * The number cells live in the viewer's shadow DOM; Playwright locators pierce it.
+ * Select `path`'s line range by dragging its number column, which opens the comment composer.
+ * `path` scopes the drag: line numbers repeat across files, and an unscoped search picks the
+ * first file that has the line rather than the one the cursor is in. The number cells live in the
+ * viewer's shadow DOM; Playwright locators pierce it.
  */
-export async function selectLines(page, from, to, side = 'new') {
-  await page.locator('[data-column-number]').first().waitFor({ timeout: 15000 });
-  const start = await cellBox(page, from, side);
-  const end = await cellBox(page, to, side);
+export async function selectLines(page, path, from, to, side = 'new') {
+  const root = await fileItem(page, path);
+  await root.locator('[data-column-number]').first().waitFor({ timeout: 15000 });
+  const start = await cellBox(root, from, side);
+  const end = await cellBox(root, to, side);
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();
   await page.mouse.move(end.x + end.width / 2, end.y + end.height - 4, { steps: 8 });
