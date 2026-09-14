@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
+import { UnquotableError } from '../../src/server/comments/CommentStore.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { WatchTarget } from '../../src/server/Watcher.js';
@@ -146,6 +147,31 @@ describe('Session', () => {
     const again = new Session(repo, hub, { watch: false, context: 3 });
     await again.start({ kind: 'revspec', args: ['main..feat'] });
     expect(again.comments.get(outside.id)?.stale).toBe(false);
+    await again.comments.clear();
+    await again.close();
+  });
+
+  it('refuses a posted line thread the diff does not show, so a restart cannot turn it stale', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 0 });
+    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.comments.clear();
+    // Context 0 shows only `delta`; `alpha` is in the file but in no hunk.
+    await expect(
+      session.comments.importThreads([{ path: 'new.txt', startLine: 1, body: 'context line' }], await session.review()),
+    ).rejects.toBeInstanceOf(UnquotableError);
+    const { added } = await session.comments.importThreads(
+      [{ path: 'new.txt', startLine: 4, body: 'added line' }],
+      await session.review(),
+    );
+    expect(added[0]).toMatchObject({ stale: false });
+    expect(added[0]!.githubBlocker).toBeUndefined();
+    await session.close();
+
+    const again = new Session(repo, hub, { watch: false, context: 0 });
+    await again.start({ kind: 'revspec', args: ['main..feat'] });
+    const t = again.comments.get(added[0]!.id);
+    expect(t).toMatchObject({ stale: false });
+    expect(t?.githubBlocker).toBeUndefined();
     await again.comments.clear();
     await again.close();
   });

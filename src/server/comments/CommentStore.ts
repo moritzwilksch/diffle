@@ -55,7 +55,7 @@ type AnyStoreFile = StoreFile | V2File | V1File;
 
 export class NotFoundError extends Error {}
 
-/** An anchor the snapshot cannot place: path absent on that side, or lines past the end. */
+/** An anchor the review cannot place: path absent on that side, lines past the end or outside the diff, or a file the review lacks. */
 export class UnquotableError extends Error {}
 
 /** One side of a file as the review presents it. */
@@ -193,10 +193,11 @@ export class CommentStore {
 
   /**
    * Adds each import that is not already an open duplicate. Every anchor is
-   * checked against the snapshot through `review`: a range is quoted (a payload's
-   * own `quoted`, the text the browser showed, is kept once the range is known to
-   * exist) and a file thread's path must be in the review. Throws UnquotableError,
-   * adding nothing, when any anchor cannot be placed.
+   * placed by `review` as `relocateAll` would place it: a range must exist and be
+   * shown (a payload's own `quoted`, the text the browser showed, is kept once
+   * the range is known to exist) and a file thread's path must be in the review.
+   * Throws UnquotableError, adding nothing, when any anchor cannot be placed, so
+   * no thread starts out where the next relocation would flag it stale.
    */
   importThreads(imports: ThreadCreate[], review: ReviewView): Promise<{ added: CommentThread[]; skipped: number }> {
     return this.mutate(
@@ -383,8 +384,8 @@ function findThread(set: SetData, id: string): CommentThread {
 type Placed = Pick<CommentThread, 'anchor' | 'githubBlocker'>;
 
 /**
- * The anchor an import lands on, checked against the review. Throws
- * UnquotableError for a range that cannot be quoted or a file the review lacks.
+ * The anchor an import lands on, placed by the review. Throws UnquotableError for
+ * a file the review lacks, or a range that cannot be quoted or that the review does not show.
  */
 async function placeImport(t: ThreadCreate, review: ReviewView): Promise<Placed> {
   if (t.startLine == null) {
@@ -395,12 +396,11 @@ async function placeImport(t: ThreadCreate, review: ReviewView): Promise<Placed>
   const side = t.side ?? 'new';
   const startLine = t.startLine;
   const endLine = t.endLine ?? startLine;
+  const where = `${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''}`;
   const view = await review.side(t.path, side);
   const fromSnapshot = view && quoteRange(view.contents, startLine, endLine);
-  if (view == null || fromSnapshot == null)
-    throw new UnquotableError(
-      `cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`,
-    );
+  if (view == null || fromSnapshot == null) throw new UnquotableError(`cannot quote ${where} on the ${side} side`);
+  if (!shows(view, startLine, endLine)) throw new UnquotableError(`${where} is outside the diff on the ${side} side`);
   const anchor: LineAnchor = { kind: 'line', path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
   return withBlocker(anchor, lineBlocker(review, anchor, view));
 }
@@ -412,8 +412,15 @@ function withBlocker(anchor: CommentAnchor, githubBlocker: string | undefined): 
 /** Where a line thread's text sits in `view` now, or null when it is gone or the review does not show it. */
 function placeLine(anchor: LineAnchor, view: SideView): LineAnchor | null {
   const moved = relocate(anchor, view.contents);
-  if (moved && view.shown && !isShown(view.shown, moved.startLine, moved.endLine)) return null;
-  return moved;
+  return moved && shows(view, moved.startLine, moved.endLine) ? moved : null;
+}
+
+/**
+ * Whether the review shows every line of the range: a diff its hunks, a file view everything.
+ * The one place that decides a line thread's `stale`, for imports and relocation alike.
+ */
+function shows(view: SideView, startLine: number, endLine: number): boolean {
+  return view.shown == null || isShown(view.shown, startLine, endLine);
 }
 
 /**

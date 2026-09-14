@@ -318,6 +318,31 @@ describe('CommentStore', () => {
     expect(onDiff.added[0]).toMatchObject({ githubBlocker: 'lines outside the pull request diff' });
   });
 
+  it('refuses a line import the diff does not show, where relocation would flag it stale', async () => {
+    const s = await CommentStore.open(dir, 'working');
+    const contents = 'a\nb\nc\nd\ne\n';
+    // The diff shows lines 1–5 with wide context; GitHub's narrower one only line 3.
+    const review = whole(contents, [[1, 5]], [[3, 3]]);
+    await expect(
+      s.importThreads(
+        [
+          { path: 'a.py', startLine: 1, body: 'shown' },
+          { path: 'a.py', startLine: 6, body: 'x' },
+        ],
+        review,
+      ),
+    ).rejects.toBeInstanceOf(UnquotableError);
+    await expect(
+      s.importThreads([{ path: 'a.py', startLine: 5, body: 'x' }], whole(contents, [[1, 4]])),
+    ).rejects.toThrow(/a\.py:5 .*outside the diff/);
+    expect(s.threads()).toEqual([]);
+    // Inside the diff, outside GitHub's context: the import and a later relocation agree.
+    const { added } = await s.importThreads([{ path: 'a.py', startLine: 5, body: 'shown' }], review);
+    expect(added[0]).toMatchObject({ stale: false, githubBlocker: 'lines outside the pull request diff' });
+    expect(await s.relocateAll(review)).toBe(false);
+    expect(s.get(added[0]!.id)).toMatchObject({ stale: false, githubBlocker: 'lines outside the pull request diff' });
+  });
+
   it('removes stale threads only', async () => {
     const s = await CommentStore.open(dir, 'working');
     const gone = await s.addThread({ ...anchor, quoted: 'missing' }, hello);

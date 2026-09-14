@@ -63,7 +63,7 @@ diffle --help           # list all commands and flags
 
 Closing the last browser tab that diffle opened stops the server and prints open comments to stdout. Pass `--keep-alive` to keep it running, or use `--no-open` and press Ctrl+C when done.
 
-Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff. A comment on a whole file (`C`, or the speech-bubble button in the file header) sits above the file's first line and only goes stale when the file leaves the comparison.
+Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. A line comment needs a line the diff shows at the current context. Comments follow changed text where possible and become stale when their text leaves the diff. A comment on a whole file (`C`, or the speech-bubble button in the file header) sits above the file's first line and only goes stale when the file leaves the comparison.
 
 Generated files and files matching auto-viewed globs start collapsed. A file is generated when `.gitattributes` marks it `linguist-generated`, as on GitHub, or when its path or header looks generated; `linguist-generated=false` opts a file out. There are no globs by default; configure them in settings or with `diffle config`.
 
