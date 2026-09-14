@@ -81,6 +81,8 @@ export interface ReviewView {
 const FILE_OFF_DIFF = 'file not in the pull request diff';
 /** `CommentThread.githubBlocker` for a line thread the pull request diff does not show. */
 const LINES_OFF_DIFF = 'lines outside the pull request diff';
+/** `CommentThread.githubBlocker` for a stale thread: it has no place in the review at all. */
+const STALE = 'stale';
 
 /** Viewed marks kept per path: the current one plus the newest previous, so `restale` is derivable. */
 const VIEWED_HISTORY = 2;
@@ -285,8 +287,8 @@ export class CommentStore {
    * Re-anchor every thread against the current review. A line thread is stale
    * when its side is gone, its text is not found, or the relocated range falls
    * outside what the review shows; a file thread when its file left the review.
-   * `githubBlocker` follows: set for every stale thread and for a fresh one the
-   * pull request diff does not show. Returns true if anything changed.
+   * `githubBlocker` follows: `'stale'` for a stale thread, the reason for a fresh
+   * one the pull request diff does not show. Returns true if anything changed.
    */
   async relocateAll(review: ReviewView): Promise<boolean> {
     const cache = new Map<string, Promise<SideView | null>>();
@@ -308,13 +310,12 @@ export class CommentStore {
           let blocker: string | undefined;
           if (t.anchor.kind === 'file') {
             stale = !review.hasFile(t.anchor.path);
-            blocker = githubBlocker(review, t.anchor, null);
+            blocker = stale ? STALE : fileBlocker(review, t.anchor.path);
           } else {
             const v = await load(t.anchor.path, t.anchor.side);
-            let moved = v == null ? null : relocate(t.anchor, v.contents);
-            if (moved && v?.shown && !isShown(v.shown, moved.startLine, moved.endLine)) moved = null;
+            const moved = v && placeLine(t.anchor, v);
             stale = moved == null;
-            blocker = githubBlocker(review, moved ?? t.anchor, moved ? v : null);
+            blocker = v && moved ? lineBlocker(review, moved, v) : STALE;
             if (moved && (moved.startLine !== t.anchor.startLine || moved.endLine !== t.anchor.endLine)) {
               t.anchor = moved;
               changed = true;
@@ -389,34 +390,47 @@ async function placeImport(t: ThreadCreate, review: ReviewView): Promise<Placed>
   if (t.startLine == null) {
     if (!review.hasFile(t.path)) throw new UnquotableError(`${t.path} is not in the review`);
     const anchor: FileAnchor = { kind: 'file', path: t.path };
-    return withBlocker(anchor, githubBlocker(review, anchor, null));
+    return withBlocker(anchor, fileBlocker(review, t.path));
   }
   const side = t.side ?? 'new';
   const startLine = t.startLine;
   const endLine = t.endLine ?? startLine;
   const view = await review.side(t.path, side);
   const fromSnapshot = view && quoteRange(view.contents, startLine, endLine);
-  if (fromSnapshot == null)
+  if (view == null || fromSnapshot == null)
     throw new UnquotableError(
       `cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`,
     );
   const anchor: LineAnchor = { kind: 'line', path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
-  return withBlocker(anchor, githubBlocker(review, anchor, view));
+  return withBlocker(anchor, lineBlocker(review, anchor, view));
 }
 
 function withBlocker(anchor: CommentAnchor, githubBlocker: string | undefined): Placed {
   return githubBlocker ? { anchor, githubBlocker } : { anchor };
 }
 
+/** Where a line thread's text sits in `view` now, or null when it is gone or the review does not show it. */
+function placeLine(anchor: LineAnchor, view: SideView): LineAnchor | null {
+  const moved = relocate(anchor, view.contents);
+  if (moved && view.shown && !isShown(view.shown, moved.startLine, moved.endLine)) return null;
+  return moved;
+}
+
 /**
- * Why the pull request review on GitHub cannot show a thread at `anchor`, or undefined: the
- * pull request diff has only the changed files, with a few context lines around each change.
- * `view` is the side that places a line anchor; null when none does, so the thread is stale.
+ * Why the pull request review on GitHub cannot show a fresh thread on `path`, or undefined:
+ * the pull request diff has only the changed files.
  */
-function githubBlocker(review: ReviewView, anchor: CommentAnchor, view: SideView | null): string | undefined {
+function fileBlocker(review: ReviewView, path: string): string | undefined {
+  return review.inDiff(path) ? undefined : FILE_OFF_DIFF;
+}
+
+/**
+ * Why the pull request review on GitHub cannot show a fresh line thread at `anchor`, placed by
+ * `view`, or undefined: its file, or lines beyond the few context lines around each change.
+ */
+function lineBlocker(review: ReviewView, anchor: LineAnchor, view: SideView): string | undefined {
   if (!review.inDiff(anchor.path)) return FILE_OFF_DIFF;
-  if (anchor.kind === 'file') return undefined;
-  return view && isShown(view.onGithub, anchor.startLine, anchor.endLine) ? undefined : LINES_OFF_DIFF;
+  return isShown(view.onGithub, anchor.startLine, anchor.endLine) ? undefined : LINES_OFF_DIFF;
 }
 
 /** The file as stored, or an empty store when absent. Malformed JSON propagates. */

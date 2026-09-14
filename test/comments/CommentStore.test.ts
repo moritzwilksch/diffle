@@ -272,7 +272,7 @@ describe('CommentStore', () => {
     expect(s.get(t.id)?.stale).toBe(false);
   });
 
-  it('marks what GitHub cannot show: every stale thread, and a fresh one off the pull request diff', async () => {
+  it('marks what GitHub cannot show: a stale thread as such, a fresh one by what the pull request diff lacks', async () => {
     const s = await CommentStore.open(dir, 'working');
     const line = await s.addThread(anchor, hello);
     const file = await s.addThread(fileAnchor, hello);
@@ -284,10 +284,10 @@ describe('CommentStore', () => {
     await s.relocateAll(whole('a\nb\nc\n', [[1, 3]], [[3, 3]]));
     expect(s.get(line.id)?.stale).toBe(false);
     expect(blockers()).toEqual(['lines outside the pull request diff', undefined]);
-    // Stale: the text is gone.
+    // Stale: the text is gone, so no GitHub diagnosis applies.
     await s.relocateAll(whole('x\n', [[1, 1]]));
     expect(s.get(line.id)?.stale).toBe(true);
-    expect(blockers()).toEqual(['lines outside the pull request diff', undefined]);
+    expect(blockers()).toEqual(['stale', undefined]);
     // An unchanged file: the file view places the line thread, GitHub has no such file.
     await s.relocateAll(fileView('a\nb\n'));
     expect(s.get(line.id)?.stale).toBe(false);

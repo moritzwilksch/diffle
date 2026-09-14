@@ -101,7 +101,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             onClick={post.fire}
             title={
               thread.githubBlocker
-                ? `GitHub cannot show this thread: ${thread.githubBlocker}`
+                ? `Cannot add to the GitHub review: ${thread.githubBlocker}`
                 : post.armed
                   ? 'Click again to add this thread to the pending review'
                   : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'

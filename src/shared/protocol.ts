@@ -190,9 +190,9 @@ export const CommentThreadSchema = z.object({
   /** Original startLine of a line thread, shown in export when stale. */
   staleFromLine: z.number().optional(),
   /**
-   * Why the pull request review on GitHub cannot show the thread — its file is not in the diff,
-   * or its lines lie outside the three context lines GitHub renders — absent when it can.
-   * Derived with `stale` from the snapshot; every stale thread has one.
+   * Why the pull request review on GitHub cannot show the thread — `'stale'` for a stale thread;
+   * for a fresh one, its file is not in the diff, or its lines lie outside the three context
+   * lines GitHub renders — absent when it can. Derived with `stale` from the snapshot.
    */
   githubBlocker: z.string().optional(),
 });

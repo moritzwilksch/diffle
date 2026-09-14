@@ -132,22 +132,12 @@ describe('Session', () => {
     // GitHub shows none of these but `inside`: the file view's thread on `same.txt` is fresh here, not there.
     const blockers = () =>
       [outside, inside, unchangedOld, unchangedNew].map((t) => session.comments.get(t.id)?.githubBlocker);
-    expect(blockers()).toEqual([
-      'lines outside the pull request diff',
-      undefined,
-      'file not in the pull request diff',
-      'file not in the pull request diff',
-    ]);
+    expect(blockers()).toEqual(['stale', undefined, 'stale', 'file not in the pull request diff']);
 
     // Three lines of context bring `alpha` back into the hunk, and into GitHub's diff.
     await session.setContext(3);
     expect(stale()).toEqual([false, false, true, false]);
-    expect(blockers()).toEqual([
-      undefined,
-      undefined,
-      'file not in the pull request diff',
-      'file not in the pull request diff',
-    ]);
+    expect(blockers()).toEqual([undefined, undefined, 'stale', 'file not in the pull request diff']);
     await session.setContext(0);
     expect(stale()).toEqual([true, false, true, false]);
     await session.close();
@@ -215,7 +205,7 @@ describe('Session', () => {
     expect(session.comments.get(oldName.id)?.staleFromLine).toBeUndefined();
     // GitHub shows only the changed files: a fresh thread on an unchanged one has nowhere to go.
     const blockers = [renamed, unchanged, oldName].map((t) => session.comments.get(t.id)?.githubBlocker);
-    expect(blockers).toEqual([undefined, 'file not in the pull request diff', 'file not in the pull request diff']);
+    expect(blockers).toEqual([undefined, 'file not in the pull request diff', 'stale']);
     await session.comments.clear();
     await session.close();
   });

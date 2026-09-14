@@ -61,9 +61,9 @@ describe('CommentCard GitHub button', () => {
     useStore.setState({ github: { status: 'ready', data: metadata(null) } });
     const blocked = { ...thread, githubBlocker: 'file not in the pull request diff' };
     await act(() => root.render(createElement(CommentCard, { thread: blocked })));
-    const button = host.querySelector<HTMLButtonElement>('button[title^="GitHub cannot show"]');
+    const button = host.querySelector<HTMLButtonElement>('button[title^="Cannot add"]');
     expect(button?.disabled).toBe(true);
-    expect(button?.title).toBe('GitHub cannot show this thread: file not in the pull request diff');
+    expect(button?.title).toBe('Cannot add to the GitHub review: file not in the pull request diff');
   });
 });
 

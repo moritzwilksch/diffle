@@ -70,8 +70,8 @@ export interface BuiltReview {
 
 /**
  * Threads → the comments of one pending GitHub review, one per thread. A thread GitHub cannot
- * show (`githubBlocker`: stale, on an unchanged file, or outside the diff's context) is skipped
- * with that reason, never posted into the void. With
+ * show is skipped with its `githubBlocker` as the reason — `stale`, or why the pull request
+ * diff lacks its file or lines — never posted into the void. With
  * `threadIds`, only those (resolved included, the user asked for them by hand);
  * without, every unresolved thread. `review.comments` holds the line comments REST can
  * create; the file comments are appended afterwards, but `ids` counts both, in review order.
