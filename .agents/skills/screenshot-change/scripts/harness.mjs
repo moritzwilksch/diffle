@@ -20,8 +20,8 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..
 export const CLIENT_DIR = join(REPO_ROOT, 'dist/client');
 
 /**
- * Extra shared libraries for Chromium. Minimal Linux images lack libnspr4/libnss3 and friends,
- * which live in a package manager prefix; point PLAYWRIGHT_LIBS at its `lib` directory.
+ * Extra shared libraries for Chromium. A headless shell needs libnspr4/libnss3 and friends,
+ * which a minimal Linux image lacks; `PLAYWRIGHT_LIBS` points at a directory that has them.
  */
 function libPath() {
   const dir = process.env.PLAYWRIGHT_LIBS;
@@ -53,7 +53,7 @@ function resolvePlaywright() {
   );
 }
 
-/** Launch Chromium with the library path Chromium needs on minimal Linux images. */
+/** Launch Chromium, prepending `PLAYWRIGHT_LIBS` to the loader path when it is set. */
 export async function openBrowser() {
   const libs = libPath();
   if (libs) process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH ? `${libs}:${process.env.LD_LIBRARY_PATH}` : libs;
@@ -168,6 +168,39 @@ export function buildClient() {
     cwd: REPO_ROOT,
     stdio: 'inherit',
   });
+}
+
+/**
+ * Open a page on `url` that records video at the viewport size, so frames map 1:1 to CSS pixels.
+ * Save the recording with `saveVideo`; the webm only exists once the context closes.
+ */
+export async function newVideoPage(browser, url, { width = 1280, height = 800, colorScheme = 'light', dir } = {}) {
+  if (!dir) throw new Error('newVideoPage needs a `dir` for the video files');
+  const context = await browser.newContext({
+    colorScheme,
+    deviceScaleFactor: 1,
+    viewport: { width, height },
+    recordVideo: { dir, size: { width, height } },
+  });
+  const page = await context.newPage();
+  await page.goto(url);
+  await page.locator('.codeview').waitFor({ timeout: 15000 });
+  await page.locator('[data-column-number]').first().waitFor({ timeout: 15000 }).catch(() => {});
+  return { page, context, video: page.video() };
+}
+
+/**
+ * Close the recording context and convert the webm to mp4 (GitHub plays mp4 inline, not webm).
+ * Needs a system ffmpeg with libx264; Playwright's bundled ffmpeg cannot do this.
+ */
+export async function saveVideo(context, video, mp4Path) {
+  const webm = await video.path();
+  await context.close();
+  await mkdir(dirname(mp4Path), { recursive: true });
+  execFileSync('ffmpeg', ['-y', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4Path], {
+    stdio: 'inherit',
+  });
+  return mp4Path;
 }
 
 /**

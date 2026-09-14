@@ -1,6 +1,6 @@
 ---
 name: screenshot-change
-description: Capture cropped before/after screenshots of diffle UI changes and attach them to a PR. Use when asked to screenshot the UI, add screenshots to a PR or description, or demonstrate a client change visually.
+description: Capture cropped before/after screenshots or record a video of diffle UI changes and attach them to a PR. Use when asked to screenshot or record the UI, add screenshots or a video to a PR or description, or demonstrate a client change visually.
 ---
 
 # Screenshot a UI change
@@ -15,7 +15,7 @@ Read back only the crops. A 500×200 crop costs a fraction of a 1440×900 frame,
 2. **Build the client once.** `npm run build:client` (or `buildClient()`). The server serves `dist/client`; server code rarely affects a screenshot.
 3. **Capture the after state** with a short scenario script that imports the harness (see [below](#harness)). Seed the state the server can hold (threads, viewed, resolved) over HTTP; drive only state that has no endpoint (menus, selections, the composer). Completion: every change has a crop named for it.
 4. **Capture the before state** by swapping the client build, not by rebuilding a second worktree from scratch. Add a worktree at the base commit, share this checkout's dependencies (`ln -s "$PWD/node_modules" <worktree>/node_modules`), build it there (`npm run build:client`), then `installClient('<worktree>/dist/client')` and re-run the scenario. Restore with `buildClient()`. Completion: each after crop has a before crop from the same selector.
-5. **Attach the crops.** Put local image paths in the PR body, for example in a `| Before | After |` table with alt text. Pass the body and every referenced image to `gh pr edit` (or `gh pr create`):
+5. **Attach the crops.** Put local image paths in the PR body, for example in a `| Before | After |` table, and pass them to `gh pr edit` (or `gh pr create`):
 
    ```sh
    gh pr edit PR-NUMBER --body-file pr-body.md \
@@ -26,6 +26,15 @@ Read back only the crops. A 500×200 crop costs a fraction of a 1440×900 frame,
    GitHub CLI uploads the files and rewrites their local references to GitHub URLs. It can also append unreferenced attachments. See [Attaching files with GitHub CLI](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli). Completion: the PR body renders every pair.
 
 6. **Verify** by reading one crop per change. Completion: the pixels show the stated difference; re-capture rather than describe a mismatch.
+
+## Record a video
+
+For behavior that unfolds over time — key presses, cursor jumps, collapses — record the viewport instead of framing stills. Steps 1–2 are the screenshots workflow's.
+
+1. **Record the setup and the keystrokes.** `newVideoPage(browser, url, { dir })` records at the viewport size, so frames map 1:1 to CSS pixels. Drive the scenario with `page.keyboard` and `pause()` between beats so a reader can follow; the vim keys are document-level (`gg` first file, `J`/`K` move file, `v` toggle viewed, `zc` collapse).
+2. **Assert programmatically.** A recording that asserts is a test; one that only shows is a hope. Viewed checkboxes, collapsed chevrons, and tree rows are all queryable with pierce-shadow locators (see [Selectors](#selectors)). Assert the setup state too: stale persisted state can silently flip the scenario's meaning.
+3. **Save and verify.** `saveVideo(context, video, path)` closes the context, converts the webm to mp4 (GitHub does not inline-play webm), and writes the mp4. Read one frame before and one after the change (`ffmpeg -ss <t> -i clip.mp4 -frames:v 1 f.png`) to confirm the transition is on tape; re-record rather than describe a mismatch.
+4. **Attach.** Reference the local mp4 path in the PR body and pass it to `gh pr edit --attach`; GitHub uploads it and rewrites the reference to an inline-playable URL.
 
 ## Efficiency rules
 
@@ -52,6 +61,8 @@ Read back only the crops. A 500×200 crop costs a fraction of a 1440×900 frame,
 | `seedThreads(url, threads)`                            | `POST /api/threads`, one request for many threads.                             |
 | `buildClient()` / `installClient(dir)`                 | Build this checkout; copy a build into the served `dist/client`.               |
 | `crop(page, selector, path)` / `clip(page, box, path)` | Write a cropped PNG.                                                           |
+| `newVideoPage(browser, url, { dir })`                  | Open a page that records video at the viewport size; returns `{ page, context, video }`. |
+| `saveVideo(context, video, path)`                      | Close the recording context and convert the webm to mp4 (needs system ffmpeg with libx264). |
 | `selectLines(page, from, to, side?)`                   | Drag the number column to select lines and open the composer.                  |
 | `openModePicker(page, entry?)`                         | Open the compare menu and pick `Working`, `Two refs`, `Last commits`, or `PR`. |
 
@@ -88,14 +99,25 @@ The viewer renders into a shadow root, so `page.evaluate`'s `querySelector` miss
 - `#mode-picker` and `#mode-config` — the compare menu and its side pane.
 - `button[title="View full file (F)"]`, `button[title="Collapse / expand"]` — header actions.
 - `aside >> nth=-1` — the threads sidebar (`aside` alone matches the file tree first); `.panel .item` — one thread.
+- `label` with text `Viewed` and `button[title="Collapse / expand"]` sit **outside** `[data-diffs-header]`, as siblings of it in one band. Index them by file order (the diff list's) and read collapse state from the chevron's class: `lucide-chevron-right` collapsed, `lucide-chevron-down` open.
+- `file-tree-container` shadow root: `[role="treeitem"][data-item-path]` — one row per file or folder, path in `data-item-path`.
 
-## Setup
+### State gotchas
 
-Install Playwright once and let the harness find it. `gh pr create` and `gh pr edit --attach` require push access to the repository:
+- Review state (viewed, collapsed) persists under `.git/diffle/` of the demo repo. Delete it before a take and assert a clean slate on load — a stale "viewed" flips what `v` does.
+- Clicking a file header toggles collapse **and moves the cursor** (`afterCollapse`). Set up collapse state first, then place the cursor with keys.
+- File order is the file tree's order (`pkg/` entries before root files), not flat alphabetical; `gg` lands on the first changed file.
+
+## Prerequisites
+
+Install Playwright once, globally, and fetch its Chromium build. Verify with `playwright --version` and `ffmpeg -hide_banner -encoders | grep libx264`:
 
 ```sh
-npm install --global playwright && playwright install chromium --only-shell
+npm install --global playwright
+playwright install chromium --only-shell
 ```
 
-- `PLAYWRIGHT_MODULE` points at a specific playwright `index.mjs`.
-- `PLAYWRIGHT_LIBS` prepends a `lib` directory with Chromium's shared libraries (`libnspr4`, `libnss3`) on minimal Linux images.
+- The harness resolves the module through `npm root -g`; bare `import 'playwright'` in a scenario does **not** see global installs.
+- Chromium needs its shared libraries (`libnspr4`, `libnss3`, and friends). Where the base image lacks them, launch fails with `cannot open shared object file`; point `PLAYWRIGHT_LIBS` at a directory that provides them (a package manager prefix's `lib`, for example).
+- A system `ffmpeg` with `libx264` converts the recording to mp4. Playwright's bundled ffmpeg lacks the encoder and cannot.
+- `gh pr create` and `gh pr edit --attach` require push access to the repository.
