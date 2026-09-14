@@ -147,6 +147,34 @@ export function FileTreePane() {
     };
   }, []);
 
+  // The tree ellipsizes a long name in the middle and offers no tooltip of its own. On entry into
+  // a row, its full name becomes the row's `title` while an ellipsis marker shows (the tree's own
+  // truncation signal), and `TooltipHost` reads it right after: this capture listener on the
+  // shadow root runs before the host's. Rows are recycled across paths, so nothing is cached.
+  useEffect(() => {
+    const shadow = bodyRef.current?.firstElementChild?.shadowRoot;
+    if (!shadow) return;
+    const onEnter = (e: Event) => {
+      const row = (e.composedPath() as HTMLElement[]).find(
+        (n) => n instanceof HTMLElement && n.dataset.itemPath != null,
+      );
+      const from = (e as PointerEvent | FocusEvent).relatedTarget;
+      // Crossing between a row's own parts changes nothing.
+      if (!row || (from instanceof Node && row.contains(from))) return;
+      const ellipsized = Array.from(row.querySelectorAll('[data-truncate-marker]')).some(
+        (m) => getComputedStyle(m).opacity !== '0',
+      );
+      if (ellipsized) row.title = row.getAttribute('aria-label') ?? '';
+      else row.removeAttribute('title');
+    };
+    shadow.addEventListener('pointerover', onEnter, true);
+    shadow.addEventListener('focusin', onEnter, true);
+    return () => {
+      shadow.removeEventListener('pointerover', onEnter, true);
+      shadow.removeEventListener('focusin', onEnter, true);
+    };
+  }, []);
+
   // The selected row follows the file under the cursor, so the tree always shows where the reader is.
   const activePath = useStore((s) => s.activePath);
   useEffect(() => {
