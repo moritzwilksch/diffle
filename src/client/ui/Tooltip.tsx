@@ -109,19 +109,35 @@ export function TooltipHost() {
       el.removeAttribute('title');
       show(el, text, delay);
     };
-    const target = (node: EventTarget | null): HTMLElement | null =>
-      node instanceof Element ? node.closest<HTMLElement>('[title]') : null;
+    // `e.target` is retargeted to the shadow host for a node inside a shadow root; the composed path keeps the node.
+    const target = (e: Event): HTMLElement | null => {
+      const node = e.composedPath()[0];
+      return node instanceof Element ? node.closest<HTMLElement>('[title]') : null;
+    };
     const leaving = (node: EventTarget | null) => !(node instanceof Node) || !active?.contains(node);
+    // An over/out/focus event between two nodes of one shadow tree stops at the shadow host, where
+    // its target and related target coincide, so the document alone would keep a tip on the first
+    // node entered. Every shadow root the pointer or focus enters gets the same listeners.
+    const roots = new Set<ShadowRoot>();
+    const adopt = (e: Event) => {
+      for (const node of e.composedPath()) {
+        if (!(node instanceof ShadowRoot) || roots.has(node)) continue;
+        roots.add(node);
+        listen(node);
+      }
+    };
 
     const onOver = (e: Event) => {
-      const el = target(e.target);
+      adopt(e);
+      const el = target(e);
       if (el) activate(el, SHOW_MS);
     };
     const onOut = (e: Event) => {
       if (active && leaving((e as PointerEvent).relatedTarget)) deactivate();
     };
     const onFocusIn = (e: Event) => {
-      const el = target(e.target);
+      adopt(e);
+      const el = target(e);
       // `:focus-visible` is false when a click focuses a control, so clicking does not leave a tip behind.
       if (el?.matches(':focus-visible')) activate(el, 0);
     };
@@ -143,24 +159,33 @@ export function TooltipHost() {
     const onDown = () => deactivate();
     const onScroll = () => deactivate();
 
-    document.addEventListener('pointerover', onOver);
-    document.addEventListener('pointerout', onOut);
+    // A scroll inside a shadow root never reaches the document either.
+    const listen = (root: Document | ShadowRoot) => {
+      root.addEventListener('pointerover', onOver);
+      root.addEventListener('pointerout', onOut);
+      root.addEventListener('focusin', onFocusIn);
+      root.addEventListener('focusout', onFocusOut);
+      root.addEventListener('scroll', onScroll, true);
+    };
+    const unlisten = (root: Document | ShadowRoot) => {
+      root.removeEventListener('pointerover', onOver);
+      root.removeEventListener('pointerout', onOut);
+      root.removeEventListener('focusin', onFocusIn);
+      root.removeEventListener('focusout', onFocusOut);
+      root.removeEventListener('scroll', onScroll, true);
+    };
+
+    listen(document);
     document.addEventListener('pointermove', onMove);
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('scroll', onScroll, true);
     return () => {
       stop();
-      document.removeEventListener('pointerover', onOver);
-      document.removeEventListener('pointerout', onOut);
+      unlisten(document);
+      for (const root of roots) unlisten(root);
       document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('scroll', onScroll, true);
     };
   }, []);
 

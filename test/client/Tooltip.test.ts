@@ -95,3 +95,33 @@ it('picks up a title a re-render puts back while the tip is up', async () => {
   expect(tip()?.textContent).toBe('Swap refs (x)');
   expect(button.hasAttribute('title')).toBe(false);
 });
+
+it('follows titles inside a shadow root', async () => {
+  // Pointer events between two nodes of one shadow tree never reach the document.
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+  const a = document.createElement('button');
+  a.setAttribute('title', 'first');
+  const b = document.createElement('button');
+  b.setAttribute('title', 'second');
+  shadow.append(a, b);
+  try {
+    await act(() => a.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true })));
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('first');
+    await act(() =>
+      b.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true, relatedTarget: a })),
+    );
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('second');
+    expect(a.getAttribute('title')).toBe('first');
+    await act(() =>
+      b.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, composed: true, relatedTarget: button })),
+    );
+    expect(tip()).toBeNull();
+    expect(b.getAttribute('title')).toBe('second');
+  } finally {
+    host.remove();
+  }
+});
