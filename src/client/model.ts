@@ -83,6 +83,23 @@ export function orderedPaths(snapshot: Snapshot): string[] {
   return snapshot.changed.map((f) => f.path).sort(compareTreeOrder);
 }
 
+/** The first changed file after `path` in tree order that `accept` admits, or null when none follows. */
+export function nextFileAfter(
+  snapshot: Snapshot,
+  path: string,
+  accept: (file: ChangedFile) => boolean,
+): ChangedFile | null {
+  const byPath = new Map(snapshot.changed.map((f) => [f.path, f]));
+  const paths = orderedPaths(snapshot);
+  const at = paths.indexOf(path);
+  if (at === -1) return null;
+  for (const p of paths.slice(at + 1)) {
+    const f = byPath.get(p)!;
+    if (accept(f)) return f;
+  }
+  return null;
+}
+
 /**
  * The file the reader is in: the one the cursor landed on, else the open whole-file view,
  * else the first file in the list, which is the one in view before the cursor has landed anywhere.
