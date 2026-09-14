@@ -97,11 +97,11 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             variant="ghost"
             icon={!post.armed && !posted}
             feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
-            disabled={posting || thread.stale}
+            disabled={posting || thread.githubBlocker != null}
             onClick={post.fire}
             title={
-              thread.stale
-                ? 'Stale threads cannot be added to a GitHub review'
+              thread.githubBlocker
+                ? `GitHub cannot show this thread: ${thread.githubBlocker}`
                 : post.armed
                   ? 'Click again to add this thread to the pending review'
                   : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
