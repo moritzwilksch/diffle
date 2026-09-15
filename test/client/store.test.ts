@@ -52,6 +52,7 @@ const api = {
   patches: vi.fn(),
   setResolved: vi.fn(),
   reply: vi.fn(),
+  addThread: vi.fn(),
   search: vi.fn(),
   setViewed: vi.fn(),
   setViewedBulk: vi.fn(),
@@ -245,6 +246,32 @@ describe('client transitions', () => {
     useStore.getState().moveFile(-1);
     useStore.getState().moveFile(-1);
     expect(useStore.getState().activePath).toBe('a.gif');
+  });
+
+  it('hunk motions start from the active file header when no line is selected', async () => {
+    const changed = ['a.py', 'b.py'].map((path) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: 'b1',
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.py', 'b.py']));
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.py', 'b.py']), changed });
+    await useStore.getState().refreshSnapshot();
+    // After a whole-file comment on b.py the reader is in b.py without a cursor line.
+    useStore.setState({ selection: null, activePath: 'b.py' });
+    useStore.getState().moveHunk(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:a\.py@/);
+    useStore.setState({ selection: null, activePath: 'b.py' });
+    useStore.getState().moveHunk(1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:b\.py@/);
+    // Without any file to start from, the motions still enter the diff from either end.
+    useStore.setState({ selection: null, activePath: null });
+    useStore.getState().moveHunk(-1);
+    expect(useStore.getState().selection?.id).toMatch(/^diff:b\.py@/);
   });
 
   it('a watcher refresh keeps the open draft, cursor and search; a mode switch drops them', async () => {
@@ -719,6 +746,49 @@ describe('client transitions', () => {
     expect(useStore.getState().selection).toBeNull();
     useStore.getState().moveCursor(-1);
     expect(useStore.getState().activePath).toBe('a.txt');
+  });
+
+  it('v moves to the next unviewed file, a collapsed one included; zc moves to the next open file', async () => {
+    const changed = ['a.txt', 'b.txt', 'c.txt', 'd.txt'].map((path, i) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b${i}`,
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt', 'd.txt']));
+    api.setViewed.mockImplementation(async (path: string, blob: string, viewed: boolean) => [
+      ...useStore.getState().viewed.filter((v) => v.path !== path),
+      { path, blob, viewed },
+    ]);
+    api.viewed.mockResolvedValueOnce([{ path: 'c.txt', blob: 'b2', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt', 'd.txt']), changed });
+    await useStore.getState().boot();
+    // b.txt is folded but not viewed: v from a.txt stops on its header instead of skipping to d.txt.
+    useStore.setState({ collapsed: { 'b.txt': true }, diffStyle: 'unified' });
+    useStore.getState().moveFile('first');
+    await useStore.getState().toggleViewedAtCursor();
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    // From b.txt, viewed c.txt is skipped and open d.txt takes the cursor on its first hunk.
+    await useStore.getState().toggleViewedAtCursor();
+    expect(useStore.getState().activePath).toBe('d.txt');
+    expect(useStore.getState().selection).toEqual(
+      expect.objectContaining({ id: expect.stringMatching(/^diff:d\.txt@/) }),
+    );
+    // The last unviewed file stays current once nothing unviewed follows it.
+    await useStore.getState().toggleViewedAtCursor();
+    expect(useStore.getState().activePath).toBe('d.txt');
+    expect(useStore.getState().selection).toBeNull();
+
+    // zc skips collapsed files whatever their viewed state.
+    useStore.getState().unviewAll();
+    useStore.setState({ collapsed: { 'b.txt': true, 'c.txt': true } });
+    useStore.getState().moveFile('first');
+    useStore.getState().setCollapsedAtCursor(true);
+    expect(useStore.getState().activePath).toBe('d.txt');
   });
 
   it('a slow first refresh never overwrites a faster second one', async () => {
@@ -1480,7 +1550,7 @@ const thread = (
   over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> },
 ): CommentThread => ({
   id: over.id ?? 't',
-  anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
+  anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
   messages: [{ id: 'm', body: 'b', createdAt: 1, updatedAt: 1 }],
   resolved: over.resolved ?? false,
   stale: false,
@@ -1850,6 +1920,51 @@ describe('threads', () => {
     useStore.getState().setDiffStyle('split');
   });
 
+  it('a file draft has no selection, posts a thread without a line, and closes on Escape', async () => {
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [], replyTo: 't1' });
+    const sel = {
+      id: 'diff:a.py@0',
+      range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
+    };
+    useStore.setState({ selection: { ...sel, id: 'diff:b.py@0' } });
+    useStore.getState().openFileDraft('a.py');
+    let s = useStore.getState();
+    expect(s.draft).toEqual({ path: 'a.py', selection: null });
+    // A cursor in another file gives way; one inside the file stays put.
+    expect(s.selection).toBeNull();
+    expect(s.replyTo).toBeNull();
+    expect(s.activePath).toBe('a.py');
+    useStore.setState({ selection: sel });
+    useStore.getState().openFileDraft('a.py');
+    expect(useStore.getState().selection).toEqual(sel);
+    useStore.setState({ selection: null });
+    // The item re-renders for the composer, and again once it is gone.
+    const version = (prev?: ReturnType<typeof itemVersion>) =>
+      itemVersion(prev, itemDeps(useStore.getState(), 'a.py', [], false));
+    const open = version();
+    expect(await useStore.getState().draftQuote()).toBe('');
+    api.addThread.mockResolvedValue([]);
+    api.threads.mockResolvedValueOnce([thread({ id: 'f', anchor: { kind: 'file', path: 'a.py' } as never })]);
+    await useStore.getState().submitDraft('Split this module.');
+    expect(api.addThread).toHaveBeenCalledWith({ path: 'a.py', body: 'Split this module.' });
+    s = useStore.getState();
+    expect(s.draft).toBeNull();
+    expect(s.threads.map((t) => t.anchor.kind)).toEqual(['file']);
+    expect(version(open).version).toBe(open.version + 1);
+
+    useStore.getState().openFileDraft('a.py');
+    useStore.getState().escape();
+    expect(useStore.getState().draft).toBeNull();
+    // Not on a file outside the repository.
+    useStore.setState({
+      fileView: { path: '/usr/lib/os.py', external: true, item: null, from: { position: null, activePath: null } },
+    });
+    useStore.getState().openFileDraft('/usr/lib/os.py');
+    expect(useStore.getState().draft).toBeNull();
+    expect(useStore.getState().toast).toMatch(/repository files only/);
+    useStore.setState({ fileView: null });
+  });
+
   it('opens one composer at a time: a reply closes the draft and vice versa', () => {
     useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [thread({ id: 't1' })] });
     void useStore
@@ -1890,7 +2005,7 @@ describe('scrollCursorTo', () => {
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(useStore.getState().toast).toBe('No line under the cursor');
   });
-  it('switching split / unified keeps the cursor and re-pins its line', () => {
+  it('switching split / unified keeps the cursor and issues no jump: the pane holds the viewport', () => {
     const selection = {
       id: 'diff:a.py@1',
       range: { start: 3, side: 'additions' as const, end: 3, endSide: 'additions' as const },
@@ -1900,7 +2015,7 @@ describe('scrollCursorTo', () => {
     const s = useStore.getState();
     expect(s.diffStyle).toBe('unified');
     expect(s.selection).toEqual(selection);
-    expect(s.scrollTarget).toEqual(expect.objectContaining({ id: 'diff:a.py@1', line: 3, align: 'eye' }));
+    expect(s.scrollTarget).toBeNull();
   });
 });
 

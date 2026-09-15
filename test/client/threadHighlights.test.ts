@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import type { CommentAnchor, CommentThread } from '../../src/shared/protocol.js';
+import type { CommentAnchor, CommentThread, LineAnchor } from '../../src/shared/protocol.js';
 import { THREAD_LINE_ATTR, markThreadRows, tintedAnchors } from '../../src/client/review/threadHighlights.js';
 
-const anchor = (side: 'old' | 'new', startLine: number, endLine: number): CommentAnchor => ({
+const anchor = (side: 'old' | 'new', startLine: number, endLine: number): LineAnchor => ({
+  kind: 'line',
   path: 'a.ts',
   side,
   startLine,

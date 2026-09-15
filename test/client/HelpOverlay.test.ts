@@ -21,6 +21,7 @@ const BOUND = [
   '{n}gg / {n}G',
   'V, then j / k',
   'c',
+  'C',
   'e',
   'dd',
   'R',

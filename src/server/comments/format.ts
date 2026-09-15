@@ -4,15 +4,16 @@ import { compareThreads } from './anchor.js';
 /**
  * Agent-prompt format, one block per thread:
  *
- *   path:line            (or path:start-end)
+ *   path:line            (or path:start-end; `(file) path` for a thread on the whole file)
  *
- *   > quoted line
+ *   > quoted line        (absent for a file thread)
  *
  *   body                 (a thread's messages joined by a blank line)
  *
  *   ---
  *
- * A ```suggestion fence in a body expands to ORIGINAL / SUGGESTED fences.
+ * A ```suggestion fence in a body expands to ORIGINAL / SUGGESTED fences; a file
+ * thread has no original, so its fences stay as written.
  */
 export function formatPrompt(threads: CommentThread[]): string {
   return [...threads].sort(compareThreads).map(formatOne).join('\n');
@@ -20,6 +21,11 @@ export function formatPrompt(threads: CommentThread[]): string {
 
 function formatOne(t: CommentThread): string {
   const { anchor } = t;
+  if (anchor.kind === 'file') {
+    const header = `(file) ${t.stale ? '(stale) ' : ''}${anchor.path}`;
+    const body = t.messages.map((m) => m.body.trim()).join('\n\n');
+    return `${header}\n\n${body}\n\n---\n`;
+  }
   const range = anchor.startLine === anchor.endLine ? `${anchor.startLine}` : `${anchor.startLine}-${anchor.endLine}`;
   const prefixes: string[] = [];
   if (anchor.side === 'old') prefixes.push('(removed)');

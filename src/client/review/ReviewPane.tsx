@@ -12,7 +12,16 @@ import type {
   TokenEventBase,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
-import { ArrowLeft, ChevronDown, ChevronRight, Download, FileText, MessageSquare, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileText,
+  MessageSquare,
+  MessageSquarePlus,
+  RefreshCw,
+} from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
 import { FilePath } from '../FilePath.js';
@@ -37,7 +46,7 @@ import {
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
-import { rowOf } from './rows.js';
+import { rowOf, topRow } from './rows.js';
 import { reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
@@ -372,6 +381,31 @@ export function ReviewPane() {
     };
   }, [scroller, geometry]);
 
+  // A display toggle re-lays the rows out (split / unified) or remounts the viewer (theme). Neither is
+  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
+  // renders the change, and the request to land it at the same pixel goes out in the same update, so
+  // the jump effect below places it before anything paints. No row on screen means nothing to hold.
+  useEffect(
+    () =>
+      useStore.subscribe((s, prev) => {
+        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle) return;
+        const scroller = containerRef.current;
+        const items = viewerRef.current?.getInstance()?.getRenderedItems();
+        if (!scroller || !items) return;
+        const box = scroller.getBoundingClientRect();
+        const held = topRow(
+          items.map((r) => ({ id: r.id, root: r.element.shadowRoot ?? r.element })),
+          box.top + geometry.itemMetrics.diffHeaderHeight,
+          box.bottom,
+        );
+        if (held)
+          useStore.setState((s) => ({
+            scrollTarget: { ...held, align: 'keep', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+          }));
+      }),
+    [geometry],
+  );
+
   // Reveal a line hidden in collapsed context: bring the item into the virtual window,
   // ask its instance to expand around the line, then center it.
   useEffect(() => {
@@ -417,12 +451,12 @@ export function ReviewPane() {
       cancelled = true;
     };
   }, [reveal]);
-  // The scroll request for a target: eye/top/bottom pin the line at a fixed height ('start' plus an
+  // The scroll request for a target: eye/top/bottom/keep pin the line at a fixed height ('start' plus an
   // offset below the sticky header); the landing in the effect below measures the row and makes it exact.
   const scrollPlan = useCallback(
     (scrollTarget: NonNullable<ReviewState['scrollTarget']>) => {
       const requested = scrollTarget.align ?? 'center';
-      const eye = requested === 'eye' || requested === 'top' || requested === 'bottom';
+      const eye = requested === 'eye' || requested === 'top' || requested === 'bottom' || requested === 'keep';
       const height = containerRef.current?.clientHeight ?? 800;
       const header = geometry.itemMetrics.diffHeaderHeight;
       const edge = geometry.edge;
@@ -433,7 +467,9 @@ export function ReviewPane() {
             ? edge
             : requested === 'bottom'
               ? Math.max(edge, height - header - edge - geometry.itemMetrics.lineHeight)
-              : 0;
+              : requested === 'keep'
+                ? (scrollTarget.offset ?? 0)
+                : 0;
       const align = eye ? 'start' : requested;
       const target = scrollTarget.line
         ? {
@@ -767,19 +803,32 @@ function toItem(
   collapsed: boolean,
 ): CodeViewItem<Annot> | null {
   const id = itemId(changed != null, path, gen);
+  // Threads on the file as a whole, and a draft of one, sit above the first line (the viewer's line 0).
+  const fileLevel: LineAnnotation<Annot>[] = mine
+    .filter((t) => t.anchor.kind === 'file')
+    .map((t) => ({ lineNumber: FILE_LINE, metadata: { kind: 'thread', thread: t } }));
+  if (draft?.path === path && draft.selection == null)
+    fileLevel.push({ lineNumber: FILE_LINE, metadata: { kind: 'draft' } });
   if (changed) {
-    const annotations: DiffLineAnnotation<Annot>[] = mine.map((t) => ({
-      side: t.anchor.side === 'old' ? 'deletions' : 'additions',
-      lineNumber: t.anchor.endLine,
-      metadata: { kind: 'thread', thread: t },
-    }));
-    if (draft?.path === path) {
+    // The viewer drops file-level annotations on the side a deleted or added file does not have.
+    const fileSide = changed.status === 'D' ? 'deletions' : 'additions';
+    const annotations: DiffLineAnnotation<Annot>[] = fileLevel.map((a) => ({ ...a, side: fileSide }));
+    for (const t of mine) {
+      if (t.anchor.kind !== 'line') continue;
+      annotations.push({
+        side: t.anchor.side === 'old' ? 'deletions' : 'additions',
+        lineNumber: t.anchor.endLine,
+        metadata: { kind: 'thread', thread: t },
+      });
+    }
+    if (draft?.path === path && draft.selection) {
       const { endLine } = lineBounds(draft.selection);
       const s = draft.selection.range.endSide ?? draft.selection.range.side ?? 'additions';
       annotations.push({ side: s, lineNumber: endLine, metadata: { kind: 'draft' } });
     }
     if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
-    // Binary, oversized or failed: header-only placeholder via an empty file item under the diff id.
+    // Binary, oversized or failed: a one-line placeholder file item under the diff id, so the header's
+    // collapse toggle has a body to show. The line also gives file threads a place to hang.
     const note =
       loaded.kind === 'oversized'
         ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
@@ -787,30 +836,34 @@ function toItem(
           ? `// ${loaded.message}`
           : loaded.kind === 'loading'
             ? '// loading…'
-            : '';
-    return {
-      id,
-      type: 'file',
-      file: { name: path, contents: note },
-      version,
-      collapsed: loaded.kind === 'binary' || collapsed,
-    };
+            : BINARY_NOTE;
+    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+  }
+  if (loaded.kind !== 'file') {
+    const note = loaded.kind === 'binary' ? BINARY_NOTE : loaded.kind === 'error' ? `// ${loaded.message}` : '';
+    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
-  if (loaded.kind !== 'file') {
-    const note = loaded.kind === 'binary' ? '// binary file' : loaded.kind === 'error' ? `// ${loaded.message}` : '';
-    return { id, type: 'file', file: { name: path, contents: note }, version, collapsed };
+  const annotations: LineAnnotation<Annot>[] = fileLevel;
+  for (const t of mine) {
+    if (t.anchor.kind === 'line' && t.anchor.side !== 'old')
+      annotations.push({ lineNumber: t.anchor.endLine, metadata: { kind: 'thread', thread: t } });
   }
-  const annotations: LineAnnotation<Annot>[] = mine
-    .filter((t) => t.anchor.side !== 'old')
-    .map((t) => ({ lineNumber: t.anchor.endLine, metadata: { kind: 'thread', thread: t } }));
-  if (draft?.path === path && sideOf(draft.selection) === 'new') {
+  if (draft?.path === path && draft.selection && sideOf(draft.selection) === 'new') {
     annotations.push({ lineNumber: lineBounds(draft.selection).endLine, metadata: { kind: 'draft' } });
   }
   return { id, type: 'file', file: loaded.file, annotations, version, collapsed };
 }
 
+/** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
+const FILE_LINE = 0;
+
+/** What a binary file's body shows in place of a diff. */
+const BINARY_NOTE = '// Binary file not shown';
+
+/** What the composer says it comments on: the selected lines, or the file. */
 function describeSelection(d: Draft): string {
+  if (!d.selection) return 'this file';
   const { startLine, endLine } = lineBounds(d.selection);
   const side = sideOf(d.selection) === 'old' ? 'removed ' : '';
   return `${side}L${startLine}${endLine !== startLine ? `–${endLine}` : ''}`;
@@ -867,6 +920,8 @@ function FileHeaderMeta({ path }: { path: string }) {
   const openFullFile = useStore((s) => s.openFullFile);
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');
   const loadPatch = useStore((s) => s.loadPatch);
+  const openFileDraft = useStore((s) => s.openFileDraft);
+  const external = useStore((s) => s.fileView?.external === true && s.fileView.path === path);
   return (
     <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
       {count > 0 && (
@@ -902,6 +957,11 @@ function FileHeaderMeta({ path }: { path: string }) {
         >
           <RefreshCw size="0.75rem" /> changed since viewed
         </span>
+      )}
+      {!external && (
+        <Button variant="ghost" icon onClick={() => openFileDraft(path)} title="Comment on this file as a whole (C)">
+          <MessageSquarePlus size="0.875rem" />
+        </Button>
       )}
       {/* In the file view the bar above already carries the way back, so the header offers no second button. */}
       {!full && (!file || (!file.binary && !file.submodule && file.status !== 'D')) && (

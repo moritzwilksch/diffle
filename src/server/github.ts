@@ -21,8 +21,8 @@ export class GithubError extends Error {
   }
 }
 
-/** One entry of the REST review payload's `comments[]`. */
-export interface ReviewComment {
+/** A review comment on a line range, as the REST review payload's `comments[]` takes it. */
+export interface LineReviewComment {
   path: string;
   line: number;
   side: 'LEFT' | 'RIGHT';
@@ -32,17 +32,35 @@ export interface ReviewComment {
 }
 
 /**
+ * A review comment on a file as a whole. REST's review payload has no place for it,
+ * so it always reaches the pending review through GraphQL (`subjectType: FILE`).
+ */
+export interface FileReviewComment {
+  path: string;
+  subject_type: 'file';
+  body: string;
+}
+
+export type ReviewComment = LineReviewComment | FileReviewComment;
+
+export function isFileComment(c: ReviewComment): c is FileReviewComment {
+  return 'subject_type' in c;
+}
+
+/**
  * The REST review payload. `event` is deliberately absent: a review created without
  * one stays PENDING, which is the whole point — the human submits it on github.com.
  */
 export interface ReviewPayload {
   commit_id: string;
-  comments: ReviewComment[];
+  comments: LineReviewComment[];
 }
 
 export interface BuiltReview {
   review: ReviewPayload;
-  /** The thread each `review.comments[i]` came from, so a per-comment outcome can name its thread. */
+  /** Every comment to post, line and file alike, in review order. */
+  comments: ReviewComment[];
+  /** The thread each `comments[i]` came from, so a per-comment outcome can name its thread. */
   ids: string[];
   skipped: GithubExportResponse['skipped'];
 }
@@ -51,7 +69,8 @@ export interface BuiltReview {
  * Threads → the comments of one pending GitHub review, one per thread. Stale threads are skipped:
  * their lines no longer sit in the diff, and GitHub would refuse them anyway. With
  * `threadIds`, only those (resolved included, the user asked for them by hand);
- * without, every unresolved thread.
+ * without, every unresolved thread. `review.comments` holds the line comments REST can
+ * create; the file comments are appended afterwards, but `ids` counts both, in review order.
  */
 export function buildReview(threads: CommentThread[], commitId: string, threadIds?: string[]): BuiltReview {
   const skipped: BuiltReview['skipped'] = [];
@@ -77,13 +96,16 @@ export function buildReview(threads: CommentThread[], commitId: string, threadId
     comments.push(toReviewComment(t));
     ids.push(t.id);
   }
-  return { review: { commit_id: commitId, comments }, ids, skipped };
+  const lines = comments.filter((c): c is LineReviewComment => !isFileComment(c));
+  return { review: { commit_id: commitId, comments: lines }, comments, ids, skipped };
 }
 
 function toReviewComment(t: CommentThread): ReviewComment {
   const { anchor } = t;
+  const body = formatBody(t.messages);
+  if (anchor.kind === 'file') return { path: anchor.path, subject_type: 'file', body };
   const side = anchor.side === 'old' ? 'LEFT' : 'RIGHT';
-  const c: ReviewComment = { path: anchor.path, line: anchor.endLine, side, body: formatBody(t.messages) };
+  const c: LineReviewComment = { path: anchor.path, line: anchor.endLine, side, body };
   if (anchor.startLine !== anchor.endLine) {
     c.start_line = anchor.startLine;
     c.start_side = side;
@@ -143,17 +165,31 @@ async function exportToGithub({
   run = runGh,
 }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to the worktree');
-  const { review, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
-  if (review.comments.length === 0)
+  const { review, comments, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
+  if (comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
-  for (const [i, comment] of review.comments.entries()) {
+  for (const [i, comment] of comments.entries()) {
     comment.body += `\n\n${threadMarker(ids[i]!)}`;
   }
   const pending = await findPendingReview(run, snap.root, pr);
   if (!pending) {
-    await createPendingReview(run, snap.root, pr.repository, pr.number, review);
-    return { url: pr.url, posted: review.comments.length, updated: 0, review: 'created', skipped };
+    // REST creates the review with the line comments in one call; file comments only exist in GraphQL.
+    const created = await createPendingReview(run, snap.root, pr.repository, pr.number, review);
+    let appended = 0;
+    try {
+      for (const c of comments.filter(isFileComment)) {
+        await addToPendingReview(run, snap.root, created.id, c);
+        appended++;
+      }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new GithubError(
+        `created the pending review with ${review.comments.length + appended} comments, then ${detail}`,
+        502,
+      );
+    }
+    return { url: pr.url, posted: comments.length, updated: 0, review: 'created', skipped };
   }
 
   // A second export of the same threads must not stack duplicates on the line: an
@@ -163,7 +199,7 @@ async function exportToGithub({
   let updated = 0;
   let posted = 0;
   try {
-    for (const [i, c] of review.comments.entries()) {
+    for (const [i, c] of comments.entries()) {
       const id = ids[i]!;
       // An anchor alone cannot distinguish our thread from another draft on the same lines.
       const at = existing.get(anchorKey(c));
@@ -199,7 +235,8 @@ function threadMarker(id: string): string {
 }
 
 /** The anchor must still match before we rewrite an exported thread. */
-function anchorKey(c: Pick<ReviewComment, 'path' | 'side' | 'line' | 'start_line'>): string {
+function anchorKey(c: ReviewComment): string {
+  if (isFileComment(c)) return [c.path, 'FILE'].join('\0');
   return [c.path, c.side, c.start_line ?? c.line, c.line].join('\0');
 }
 
@@ -239,7 +276,7 @@ interface PendingComment {
 const THREADS_QUERY = `query($owner:String!,$repo:String!,$number:Int!,$after:String){
   repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$after){
     pageInfo{hasNextPage endCursor}
-    nodes{path line startLine diffSide comments(first:1){nodes{id body pullRequestReview{id}}}}
+    nodes{path line startLine diffSide subjectType comments(first:1){nodes{id body pullRequestReview{id}}}}
   }}}
 }`;
 
@@ -248,6 +285,8 @@ interface ThreadNode {
   line?: number | null;
   startLine?: number | null;
   diffSide?: string | null;
+  /** `FILE` for a comment on the whole file, whose `line` is null. */
+  subjectType?: string | null;
   comments?: { nodes?: ({ id?: string; body?: string; pullRequestReview?: { id?: string } | null } | null)[] };
 }
 
@@ -293,10 +332,8 @@ async function pendingComments(
       const c = t?.comments?.nodes?.[0];
       // Only this pending review's own comments: a submitted comment must not be rewritten.
       if (!t?.path || !c?.id || c.pullRequestReview?.id !== reviewId) continue;
-      const line = t.line;
-      if (line == null) continue;
-      const side = t.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT';
-      const key = anchorKey({ path: t.path, side, line, start_line: t.startLine ?? undefined });
+      const key = pendingKey(t);
+      if (key == null) continue;
       const at = by.get(key);
       if (at) at.push({ nodeId: c.id, body: c.body ?? '' });
       else by.set(key, [{ nodeId: c.id, body: c.body ?? '' }]);
@@ -310,36 +347,56 @@ async function pendingComments(
   throw new GithubError('pending review exceeds the 1000-thread lookup limit; export stopped without changes', 502);
 }
 
+/** The anchor key of a thread already in the review, or null for one GitHub reports without a position. */
+function pendingKey(t: ThreadNode): string | null {
+  const path = t.path!;
+  if (t.subjectType === 'FILE') return anchorKey({ path, subject_type: 'file', body: '' });
+  if (t.line == null) return null;
+  const side = t.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT';
+  return anchorKey({ path, side, line: t.line, start_line: t.startLine ?? undefined, body: '' });
+}
+
 const UPDATE_COMMENT = `mutation($input:UpdatePullRequestReviewCommentInput!){updatePullRequestReviewComment(input:$input){pullRequestReviewComment{id}}}`;
 
-/** No `event` in the body, so GitHub keeps the new review pending with all of its comments. */
+/**
+ * No `event` in the body, so GitHub keeps the new review pending with all of its comments.
+ * Resolves the review's node id, for the comments REST cannot carry.
+ */
 async function createPendingReview(
   run: GhRunner,
   cwd: string,
   repository: string,
   number: number,
   review: ReviewPayload,
-): Promise<void> {
-  await run(['api', '--method', 'POST', `repos/${repository}/pulls/${number}/reviews`, '--input', '-'], {
+): Promise<{ id: string }> {
+  const out = await run(['api', '--method', 'POST', `repos/${repository}/pulls/${number}/reviews`, '--input', '-'], {
     cwd,
     input: JSON.stringify(review),
   });
+  let id: unknown;
+  try {
+    id = (JSON.parse(out) as { node_id?: unknown }).node_id;
+  } catch {
+    throw new GithubError(`unexpected output from gh api: ${out.slice(0, 200)}`, 502);
+  }
+  if (typeof id !== 'string') throw new GithubError(`unexpected output from gh api: ${out.slice(0, 200)}`, 502);
+  return { id };
 }
 
 const ADD_THREAD = `mutation($input:AddPullRequestReviewThreadInput!){addPullRequestReviewThread(input:$input){thread{id}}}`;
 
-/** Appends one thread through GraphQL; REST cannot extend a pending review. */
+/** Appends one thread through GraphQL; REST cannot extend a pending review, nor place a file comment. */
 async function addToPendingReview(run: GhRunner, cwd: string, reviewId: string, c: ReviewComment): Promise<void> {
-  const input: Record<string, unknown> = {
-    pullRequestReviewId: reviewId,
-    path: c.path,
-    line: c.line,
-    side: c.side,
-    body: c.body,
-  };
-  if (c.start_line != null) {
-    input.startLine = c.start_line;
-    input.startSide = c.start_side;
+  const input: Record<string, unknown> = { pullRequestReviewId: reviewId, path: c.path, body: c.body };
+  if (isFileComment(c)) {
+    input.subjectType = 'FILE';
+  } else {
+    input.line = c.line;
+    input.side = c.side;
+    if (c.start_line != null) {
+      input.startLine = c.start_line;
+      input.startSide = c.start_side;
+    }
   }
   await graphql(run, cwd, ADD_THREAD, { input });
 }

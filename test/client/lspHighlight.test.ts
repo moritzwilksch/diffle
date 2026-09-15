@@ -86,10 +86,12 @@ afterEach(async () => {
 
 describe('useHighlighted', () => {
   it('shows plain text at once and highlights the file around the selected index first', async () => {
+    // Held: the highlighter has not answered, so every row is readable as plain text.
+    holdAt(0);
     await act(() => root.render(createElement(List, { near: 7 })));
-    // Nothing has been awaited yet: every row is readable as plain text.
     expect(host.querySelectorAll('.plain')).toHaveLength(items.length);
     expect(host.textContent).toContain('c.ts:1');
+    release();
     await flush();
     expect(host.querySelectorAll('.hl')).toHaveLength(items.length);
     expect(firstLines()).toEqual(['c.ts', 'b.ts', 'd.ts', 'a.ts']);
@@ -150,8 +152,15 @@ describe('useHighlighted', () => {
     release();
     await flush();
     expect(host.querySelector('.hl span')).toHaveProperty('style.color', 'rgb(221, 238, 255)');
+    // Held again: a new result set stays plain until its first file is tokenized. Without the hold,
+    // the hook's yield to the event loop can fire before act's flush and the rows are already colored.
+    holdAt(calls);
     await act(() => root.render(createElement(List, { near: 0, theme: 'light', rows: items.slice(0, 3) })));
     expect(host.querySelectorAll('.plain')).toHaveLength(3);
+    release();
+    await flush();
+    expect(host.querySelectorAll('.hl')).toHaveLength(3);
+    expect(host.querySelector('.hl span')).toHaveProperty('style.color', 'rgb(221, 238, 255)');
   });
 });
 

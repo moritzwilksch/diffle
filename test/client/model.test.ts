@@ -8,10 +8,13 @@ import {
   type Snapshot,
 } from '../../src/shared/protocol.js';
 import {
+  anchorLabel,
   compareTreeOrder,
   countViewed,
   currentPath,
   documentTitle,
+  isViewed,
+  nextFileAfter,
   nextSearchScope,
   orderedPaths,
   reuseThreads,
@@ -115,10 +118,20 @@ describe('orderedPaths', () => {
   });
 });
 
+describe('anchorLabel', () => {
+  it('names a line, a range, a removed range, or the whole file', () => {
+    const line = { kind: 'line', path: 'a.py', side: 'new', startLine: 3, endLine: 3, quoted: '' } as const;
+    expect(anchorLabel(line)).toBe('L3');
+    expect(anchorLabel({ ...line, endLine: 5 })).toBe('L3–5');
+    expect(anchorLabel({ ...line, side: 'old' })).toBe('removed L3');
+    expect(anchorLabel({ kind: 'file', path: 'a.py' })).toBe('whole file');
+  });
+});
+
 describe('reuseThreads', () => {
   const thread = (id: string, over: Partial<CommentThread> = {}): CommentThread => ({
     id,
-    anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x' },
+    anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x' },
     messages: [{ id: `${id}-m`, body: 'b', createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
@@ -197,6 +210,34 @@ describe('countViewed', () => {
     expect(countViewed({ viewed: [], config }, changed)).toBe(1);
     expect(countViewed({ viewed: [{ path: 'yarn.lock', blob: 'b', viewed: false }], config }, changed)).toBe(0);
     expect(countViewed({ viewed, config }, [])).toBe(0);
+  });
+});
+
+describe('nextFileAfter', () => {
+  const file = (path: string, blob = 'b'): ChangedFile => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob,
+    generated: false,
+  });
+  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
+  const snapshot = {
+    changed: [file('c.ts', 'new'), file('yarn.lock'), file('a.ts'), file('b.ts'), file('d.ts')],
+  } as Snapshot;
+
+  it('finds the next unviewed file in tree order, counting a restale file as unviewed and skipping auto-viewed ones', () => {
+    const viewed = [
+      { path: 'b.ts', blob: 'b', viewed: true },
+      { path: 'c.ts', blob: 'old', viewed: true },
+    ];
+    const unviewed = (f: ChangedFile) => !isViewed({ viewed, config }, f);
+    expect(nextFileAfter(snapshot, 'a.ts', unviewed)?.path).toBe('c.ts');
+    expect(nextFileAfter(snapshot, 'c.ts', unviewed)?.path).toBe('d.ts');
+    expect(nextFileAfter(snapshot, 'd.ts', unviewed)).toBeNull();
+    expect(nextFileAfter(snapshot, 'missing.ts', unviewed)).toBeNull();
   });
 });
 

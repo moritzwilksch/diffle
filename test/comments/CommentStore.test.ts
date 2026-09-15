@@ -3,7 +3,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
-import { CommentStore, NotFoundError, UnquotableError } from '../../src/server/comments/CommentStore.js';
+import {
+  CommentStore,
+  NotFoundError,
+  UnquotableError,
+  type AnchorSource,
+  type ReviewView,
+} from '../../src/server/comments/CommentStore.js';
+import { anchorLine } from '../../src/server/comments/anchor.js';
+import type { LineRange } from '../../src/server/comments/hunks.js';
 
 let dir: string;
 beforeEach(async () => {
@@ -11,8 +19,15 @@ beforeEach(async () => {
 });
 afterEach(() => rmTmp(dir));
 
-const anchor = { path: 'a.py', side: 'new' as const, startLine: 2, endLine: 2, quoted: 'b' };
+const anchor = { kind: 'line' as const, path: 'a.py', side: 'new' as const, startLine: 2, endLine: 2, quoted: 'b' };
+const fileAnchor = { kind: 'file' as const, path: 'a.py' };
 const hello = { body: 'hello' };
+
+/** A review where every file exists and each side reads as `contents`, shown whole. */
+const whole = (contents: string, shown: LineRange[] | null = null): ReviewView => ({
+  side: async () => ({ contents, shown }),
+  hasFile: () => true,
+});
 
 describe('CommentStore', () => {
   it('persists threads per mode key and reloads them', async () => {
@@ -25,7 +40,7 @@ describe('CommentStore', () => {
     const other = await CommentStore.open(dir, 'pr:abc');
     expect(other.threads()).toEqual([]);
     const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8'));
-    expect(raw.version).toBe(2);
+    expect(raw.version).toBe(3);
     expect(Object.keys(raw.sets)).toEqual(['working']);
   });
 
@@ -58,8 +73,40 @@ describe('CommentStore', () => {
     expect(JSON.parse(await readFile(join(dir, 'diffle', 'comments.v1.bak'), 'utf8'))).toEqual(v1);
     await s.reply('c1', { body: 'reply' });
     const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8'));
-    expect(raw.version).toBe(2);
+    expect(raw.version).toBe(3);
     expect(raw.sets.working.threads[0].messages).toHaveLength(2);
+  });
+
+  it('migrates a v2 file once, stamping its line anchors and keeping a backup', async () => {
+    await mkdir(join(dir, 'diffle'), { recursive: true });
+    const { kind: _kind, ...v2Anchor } = anchor;
+    const v2 = {
+      version: 2,
+      sets: {
+        working: {
+          threads: [
+            {
+              id: 't1',
+              anchor: v2Anchor,
+              messages: [{ id: 'm1', body: 'note', createdAt: 5, updatedAt: 6 }],
+              resolved: true,
+              resolvedAt: 7,
+              stale: false,
+            },
+          ],
+          viewed: [{ path: 'a.py', blob: 'sha', viewed: true }],
+        },
+        'pr:abc': { threads: [] },
+      },
+    };
+    await writeFile(join(dir, 'diffle', 'comments.json'), JSON.stringify(v2));
+    const s = await CommentStore.open(dir, 'working');
+    expect(s.threads()).toEqual([{ ...v2.sets.working.threads[0], anchor }]);
+    expect(s.viewed()).toEqual([{ path: 'a.py', blob: 'sha', viewed: true }]);
+    expect(JSON.parse(await readFile(join(dir, 'diffle', 'comments.v2.bak'), 'utf8'))).toEqual(v2);
+    const raw = JSON.parse(await readFile(join(dir, 'diffle', 'comments.json'), 'utf8'));
+    expect(raw.version).toBe(3);
+    expect(Object.keys(raw.sets).sort()).toEqual(['pr:abc', 'working']);
   });
 
   it('replies, edits, removes messages and threads, resolves, and clears', async () => {
@@ -93,18 +140,20 @@ describe('CommentStore', () => {
     await s.addThread({ ...anchor, path: 'z.py', startLine: 1, endLine: 1 }, { body: 'z' });
     await s.addThread({ ...anchor, startLine: 9, endLine: 9 }, hello);
     await s.addThread(anchor, { body: 'a' });
-    expect(s.threads().map((t) => `${t.anchor.path}:${t.anchor.startLine}`)).toEqual(['a.py:2', 'a.py:9', 'z.py:1']);
+    expect(s.threads().map((t) => `${t.anchor.path}:${anchorLine(t.anchor)}`)).toEqual(['a.py:2', 'a.py:9', 'z.py:1']);
     expect(s.threads({ path: 'z.py' })).toHaveLength(1);
   });
 
   it('imports payloads, quoting from the snapshot and skipping open duplicates', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const quote = async (path: string, _side: string, start: number, end: number) =>
-      path === 'a.py' && end <= 3 ? `L${start}-${end}` : null;
+    const quote: AnchorSource = {
+      quote: async (path, _side, start, end) => (path === 'a.py' && end <= 3 ? `L${start}-${end}` : null),
+      hasFile: async (path) => path === 'a.py',
+    };
     const first = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one' }], quote);
     expect(first.skipped).toBe(0);
     expect(first.added[0]).toMatchObject({
-      anchor: { path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'L1-1' },
+      anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'L1-1' },
     });
     expect(first.added[0]!.messages[0]).toMatchObject({ body: 'one' });
     const second = await s.importThreads(
@@ -116,7 +165,7 @@ describe('CommentStore', () => {
       quote,
     );
     expect(second).toMatchObject({ skipped: 2 });
-    expect(second.added.map((t) => t.anchor.quoted)).toEqual(['given']);
+    expect(second.added.map((t) => t.anchor.kind === 'line' && t.anchor.quoted)).toEqual(['given']);
     // A resolved thread no longer counts as a duplicate.
     await s.setResolved(first.added[0]!.id, true);
     expect((await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one' }], quote)).added).toHaveLength(1);
@@ -131,6 +180,26 @@ describe('CommentStore', () => {
       ),
     ).rejects.toBeInstanceOf(UnquotableError);
     expect(s.threads().some((t) => t.messages[0]!.body === 'new')).toBe(false);
+  });
+
+  it('imports a payload without a line as a thread on the whole file, when the review has the file', async () => {
+    const s = await CommentStore.open(dir, 'working');
+    const source: AnchorSource = { quote: async () => null, hasFile: async (path) => path === 'a.py' };
+    const { added } = await s.importThreads([{ path: 'a.py', body: 'Split this module.' }], source);
+    expect(added[0]).toMatchObject({ anchor: fileAnchor, stale: false });
+    // The same finding on the same file is a duplicate; on a line of it, it is not.
+    const again = await s.importThreads(
+      [
+        { path: 'a.py', body: 'Split this module.' },
+        { path: 'a.py', startLine: 1, body: 'Split this module.' },
+      ],
+      { ...source, quote: async () => 'L1' },
+    );
+    expect(again.skipped).toBe(1);
+    expect(again.added.map((t) => t.anchor.kind)).toEqual(['line']);
+    await expect(s.importThreads([{ path: 'gone.py', body: 'x' }], source)).rejects.toBeInstanceOf(UnquotableError);
+    // A file thread sorts before the file's line threads.
+    expect(s.threads().map((t) => t.anchor.kind)).toEqual(['file', 'line']);
   });
 
   it('keeps the newest previous viewed mark per path and caps the history', async () => {
@@ -152,15 +221,14 @@ describe('CommentStore', () => {
     const s = await CommentStore.open(dir, 'working');
     const t = await s.addThread(anchor, hello);
     await s.reply(t.id, { body: 'follows the anchor' });
-    const whole = (contents: string) => async () => ({ contents, shown: null });
     expect(await s.relocateAll(whole('z\na\nb\n'))).toBe(true);
-    expect(s.get(t.id)?.anchor.startLine).toBe(3);
+    expect(s.get(t.id)?.anchor).toMatchObject({ startLine: 3 });
     expect(await s.relocateAll(whole('nothing here\n'))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(true);
     expect(s.get(t.id)?.staleFromLine).toBe(3);
     expect(await s.relocateAll(whole('b\n'))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(false);
-    expect(s.get(t.id)?.anchor.startLine).toBe(1);
+    expect(s.get(t.id)?.anchor).toMatchObject({ startLine: 1 });
     expect(await s.relocateAll(whole('b\n'))).toBe(false);
   });
 
@@ -168,20 +236,33 @@ describe('CommentStore', () => {
     const s = await CommentStore.open(dir, 'working');
     const t = await s.addThread(anchor, hello);
     const contents = 'a\nb\nc\nd\ne\n';
-    expect(await s.relocateAll(async () => ({ contents, shown: [[4, 5]] }))).toBe(true);
+    expect(await s.relocateAll(whole(contents, [[4, 5]]))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(true);
-    expect(s.get(t.id)?.anchor.startLine).toBe(2);
-    expect(await s.relocateAll(async () => ({ contents, shown: [[1, 3]] }))).toBe(true);
+    expect(s.get(t.id)?.anchor).toMatchObject({ startLine: 2 });
+    expect(await s.relocateAll(whole(contents, [[1, 3]]))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(false);
-    expect(await s.relocateAll(async () => ({ contents, shown: [] }))).toBe(true);
+    expect(await s.relocateAll(whole(contents, []))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(true);
+  });
+
+  it('a file thread is stale while its file is out of the review, whatever the contents say', async () => {
+    const s = await CommentStore.open(dir, 'working');
+    const t = await s.addThread(fileAnchor, hello);
+    const review = (present: boolean): ReviewView => ({ side: async () => null, hasFile: () => present });
+    expect(await s.relocateAll(review(true))).toBe(false);
+    expect(s.get(t.id)).toMatchObject({ anchor: fileAnchor, stale: false });
+    expect(await s.relocateAll(review(false))).toBe(true);
+    expect(s.get(t.id)?.stale).toBe(true);
+    expect(s.get(t.id)?.staleFromLine).toBeUndefined();
+    expect(await s.relocateAll(review(true))).toBe(true);
+    expect(s.get(t.id)?.stale).toBe(false);
   });
 
   it('removes stale threads only', async () => {
     const s = await CommentStore.open(dir, 'working');
     const gone = await s.addThread({ ...anchor, quoted: 'missing' }, hello);
     const kept = await s.addThread(anchor, hello);
-    await s.relocateAll(async () => ({ contents: 'a\nb\n', shown: null }));
+    await s.relocateAll(whole('a\nb\n'));
     expect(s.get(gone.id)?.stale).toBe(true);
     expect(await s.removeStale()).toBe(1);
     expect(await s.removeStale()).toBe(0);
@@ -284,12 +365,15 @@ describe('CommentStore', () => {
 
   it("checks a payload's own quoted range against the snapshot before keeping it", async () => {
     const s = await CommentStore.open(dir, 'working');
-    const quote = async (path: string) => (path === 'a.py' ? 'from snapshot' : null);
+    const quote: AnchorSource = {
+      quote: async (path) => (path === 'a.py' ? 'from snapshot' : null),
+      hasFile: async () => false,
+    };
     await expect(
       s.importThreads([{ path: '../../etc/passwd', startLine: 1, body: 'x', quoted: 'root:x:0:0' }], quote),
     ).rejects.toBeInstanceOf(UnquotableError);
     const { added } = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'x', quoted: 'as shown' }], quote);
-    expect(added[0]!.anchor.quoted).toBe('as shown');
+    expect(added[0]!.anchor).toMatchObject({ quoted: 'as shown' });
   });
 
   it('a failed write is not acknowledged and does not block the next one', async () => {

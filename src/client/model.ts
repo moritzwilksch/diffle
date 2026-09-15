@@ -1,6 +1,7 @@
 import picomatch from 'picomatch/posix';
 import type {
   ChangedFile,
+  CommentAnchor,
   CommentThread,
   LspSymbol,
   ModeRequest,
@@ -80,6 +81,23 @@ export function patchBatches(
 /** Changed files in the order the file tree pane shows them: the order the review pane and the cursor share. */
 export function orderedPaths(snapshot: Snapshot): string[] {
   return snapshot.changed.map((f) => f.path).sort(compareTreeOrder);
+}
+
+/** The first changed file after `path` in tree order that `accept` admits, or null when none follows. */
+export function nextFileAfter(
+  snapshot: Snapshot,
+  path: string,
+  accept: (file: ChangedFile) => boolean,
+): ChangedFile | null {
+  const byPath = new Map(snapshot.changed.map((f) => [f.path, f]));
+  const paths = orderedPaths(snapshot);
+  const at = paths.indexOf(path);
+  if (at === -1) return null;
+  for (const p of paths.slice(at + 1)) {
+    const f = byPath.get(p)!;
+    if (accept(f)) return f;
+  }
+  return null;
 }
 
 /**
@@ -192,6 +210,13 @@ export function isCollapsed(
 /** Threads the UI shows: open ones, plus resolved when the user asked for them. */
 export function visibleThreads(state: Pick<ReviewState, 'threads' | 'showResolved'>): CommentThread[] {
   return state.showResolved ? state.threads : state.threads.filter((t) => !t.resolved);
+}
+
+/** The header label of a thread: its line range and side, or the whole file. */
+export function anchorLabel(a: CommentAnchor): string {
+  if (a.kind === 'file') return 'whole file';
+  const range = a.startLine === a.endLine ? `${a.startLine}` : `${a.startLine}–${a.endLine}`;
+  return `${a.side === 'old' ? 'removed ' : ''}L${range}`;
 }
 
 export function threadOfMessage(threads: CommentThread[], messageId: string): CommentThread | undefined {

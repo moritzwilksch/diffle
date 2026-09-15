@@ -25,6 +25,39 @@ export interface RenderedRoot {
   root: ParentNode;
 }
 
+/** A rendered row and how far its top sits below a reference edge, in pixels. */
+export interface RowAnchor {
+  id: string;
+  line: number;
+  side: 'old' | 'new';
+  offset: number;
+}
+
+/**
+ * The topmost row still visible between `top` (the pane's edge under the sticky header) and `bottom`,
+ * with its distance below `top`; null when the viewport shows no row. Of a split diff's two columns
+ * the new side wins, so the anchor survives a switch to unified, where the columns unstack.
+ */
+export function topRow(items: RenderedRoot[], top: number, bottom: number): RowAnchor | null {
+  let best: { id: string; row: HTMLElement; top: number } | null = null;
+  for (const { id, root } of items)
+    for (const row of root.querySelectorAll<HTMLElement>('[data-line]')) {
+      const rect = row.getBoundingClientRect();
+      if (rect.height === 0 || rect.bottom <= top || rect.top >= bottom) continue;
+      const better =
+        !best || rect.top < best.top || (rect.top === best.top && isDeletionRow(best.row) && !isDeletionRow(row));
+      if (better) best = { id, row, top: rect.top };
+    }
+  return (
+    best && {
+      id: best.id,
+      line: Number(best.row.dataset.line),
+      side: isDeletionRow(best.row) ? 'old' : 'new',
+      offset: best.top - top,
+    }
+  );
+}
+
 /**
  * Re-run `apply` over the rendered items whenever their rows can have changed: on scroll
  * (virtualization hands out fresh row elements), on mutations inside each item's shadow root,

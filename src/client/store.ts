@@ -43,6 +43,7 @@ import {
   filterSymbols,
   isCollapsed,
   isViewed,
+  nextFileAfter,
   itemIdOf,
   linesOf,
   OVERSIZED_LINES,
@@ -63,9 +64,10 @@ export type Loaded =
   /** Not fetched yet: the review pane's header-only placeholder. The store never records this kind. */
   | { kind: 'loading' };
 
+/** The comment being composed: on a line selection, or on the file as a whole when `selection` is null. */
 export interface Draft {
   path: string;
-  selection: CodeViewLineSelection;
+  selection: CodeViewLineSelection | null;
 }
 
 export type DiffStyle = 'split' | 'unified';
@@ -327,14 +329,17 @@ export interface ReviewState {
   /** Context lines the viewer has expanded, by item id, so the cursor can walk them. */
   revealed: Record<string, LineRange[]>;
   addRevealed(id: string, start: number, end: number): void;
-  /** Bumped when the user wants CodeView to scroll to `scrollTarget`. */
-  /** align 'eye' pins the line at the vertical center of the viewport for jump navigation. */
-  /** 'top' / 'bottom' pin the line near the edges of the viewport (zt / zb), the same way 'eye' pins it at the gaze point. */
+  /**
+   * Where the viewer scrolls next; a new object (nonce) lands it. 'eye' pins the line at the gaze
+   * point for jump navigation and 'top' / 'bottom' near the edges (zt / zb). 'keep' pins it `offset`
+   * pixels below the sticky header: the pane issues it to hold the viewport across a re-layout.
+   */
   scrollTarget: {
     id: string;
     line?: number;
     side?: Side;
-    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom';
+    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
+    offset?: number;
     nonce: number;
   } | null;
 
@@ -360,9 +365,12 @@ export interface ReviewState {
   /** Back to the diff list, at the position the file view was entered from. */
   closeFullFile(): void;
   setSelection(sel: CodeViewLineSelection | null): void;
+  /** Compose a comment on the selected lines. */
   openDraft(sel: CodeViewLineSelection): Promise<void>;
+  /** Compose a comment on `path` as a whole; the composer sits above the file's first line. */
+  openFileDraft(path: string): void;
   closeDraft(): void;
-  /** The text the current draft would quote; feeds the "suggest change" button. */
+  /** The text the current draft would quote; feeds the "suggest change" button. Empty for a file draft. */
   draftQuote(): Promise<string>;
   submitDraft(body: string): Promise<void>;
   submitReply(threadId: string, body: string): Promise<void>;
@@ -536,7 +544,7 @@ export const useStore = create<ReviewState>((set, get) => {
     return {
       gens,
       selection: s.selection && moved(s.selection),
-      draft: s.draft && { ...s.draft, selection: moved(s.draft.selection) },
+      draft: s.draft && { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) },
       // A new object re-runs the scroll effect, so a jump in flight lands on the fresh renderer.
       scrollTarget: s.scrollTarget && moved(s.scrollTarget),
       reveal: s.reveal && moved(s.reveal),
@@ -954,31 +962,36 @@ export const useStore = create<ReviewState>((set, get) => {
 
   /**
    * After a file collapses (viewed / zc): keep its header at the top of the view
-   * and move the cursor to the first hunk of the next open file, so the eye has
-   * an anchor instead of content silently vanishing.
+   * and move the cursor to the next file `accept` admits, so the eye has an anchor
+   * instead of content silently vanishing. An open, loaded file takes the cursor on
+   * its first hunk; a collapsed or unloaded one on its header.
    */
-  const afterCollapse = (path: string) => {
+  const afterCollapse = (path: string, accept: (file: ChangedFile) => boolean) => {
+    const snapshot = get().snapshot;
     const items = nav();
-    const idx = items.findIndex((i) => i.path === path);
-    if (idx === -1) return;
-    const item = items[idx]!;
-    let next: Cursor | null = null;
-    for (let i = idx + 1; i < items.length; i++) {
-      const it = items[i]!;
-      if (it.collapsed || it.rows.length === 0) continue;
-      const hunk = it.rows.findIndex((r) => r.hunkStart);
-      next = { itemIndex: i, rowIndex: hunk === -1 ? 0 : hunk };
-      break;
+    const item = items.find((i) => i.path === path);
+    if (!snapshot || !item) return;
+    const target = nextFileAfter(snapshot, path, accept);
+    const nextIndex = target ? items.findIndex((i) => i.path === target.path) : -1;
+    const next = items[nextIndex];
+    let sel: CodeViewLineSelection | null = null;
+    if (next && !next.collapsed && next.rows.length > 0) {
+      const hunk = next.rows.findIndex((r) => r.hunkStart);
+      sel = selectionFor(items, { itemIndex: nextIndex, rowIndex: hunk === -1 ? 0 : hunk });
     }
-    const sel = next ? selectionFor(items, next) : null;
     set((s) => ({
       selection: sel,
       visualAnchor: null,
       draft: null,
-      activePath: next ? items[next.itemIndex]!.path : path,
+      activePath: next ? next.path : path,
       scrollTarget: { id: item.id, align: 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
     }));
   };
+
+  /** After `v`, review continues at the next file still to be viewed, collapsed or not. */
+  const notViewed = (f: ChangedFile) => !isViewed(get(), f);
+  /** After zc, review continues at the next open file. */
+  const notCollapsed = (f: ChangedFile) => !isCollapsed(get(), f.path);
 
   /** Place the cursor: update selection, active path, and scroll into view. */
   /** A scroll request that pins the cursor line at `edge`; the caller checks that a selection exists. */
@@ -1140,7 +1153,12 @@ export const useStore = create<ReviewState>((set, get) => {
     const side = sideOf(sel);
     const line = sel.range.end;
     return visibleThreads(s).find(
-      (t) => t.anchor.path === path && t.anchor.side === side && line >= t.anchor.startLine && line <= t.anchor.endLine,
+      (t) =>
+        t.anchor.kind === 'line' &&
+        t.anchor.path === path &&
+        t.anchor.side === side &&
+        line >= t.anchor.startLine &&
+        line <= t.anchor.endLine,
     );
   };
 
@@ -1195,9 +1213,7 @@ export const useStore = create<ReviewState>((set, get) => {
     setTheme(theme) {
       storeTheme(theme);
       applyTheme(theme);
-      // One update: the viewer remounts per theme and would come back scrolled to the top, so the
-      // cursor line goes back to the gaze point in the same render, before anything paints.
-      set((s) => ({ theme, ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}) }));
+      set({ theme });
     },
     visualAnchor: null,
     editingId: null,
@@ -1695,7 +1711,8 @@ export const useStore = create<ReviewState>((set, get) => {
       set((s) => ({ scrollTarget: { id: item.id, align: 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 } }));
     },
     moveHunk(delta) {
-      placeCursor(stepHunk(nav(), currentCursor(), delta), false, 'eye');
+      // From the active file's header (no line selected), ] enters that file and [ leaves it backwards.
+      placeCursor(stepHunk(nav(), currentNavCursor(), delta), false, 'eye');
     },
     toggleVisual() {
       const cur = currentCursor();
@@ -1737,7 +1754,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const path = get().activePath;
       if (!path) return;
       set((s) => ({ collapsed: { ...s.collapsed, [path]: collapsed } }));
-      if (collapsed) afterCollapse(path);
+      if (collapsed) afterCollapse(path, notCollapsed);
       else void get().loadPatch(path);
     },
     setAllCollapsed(collapsed) {
@@ -1770,13 +1787,8 @@ export const useStore = create<ReviewState>((set, get) => {
       } catch {
         /* ignore */
       }
-      // The cursor survives the re-layout; its line goes back to the gaze point, since row heights change.
-      set((s) => ({
-        diffStyle: style,
-        draft: null,
-        visualAnchor: null,
-        ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}),
-      }));
+      // The cursor survives the re-layout; the pane holds the viewport in place.
+      set({ diffStyle: style, draft: null, visualAnchor: null });
     },
     snapshot: null,
     error: null,
@@ -1984,7 +1996,8 @@ export const useStore = create<ReviewState>((set, get) => {
 
     setSelection(sel) {
       set({ selection: sel, visualAnchor: null, focusedThread: null });
-      if (sel == null && get().draft) set({ draft: null });
+      // A line draft goes with its selection; a file draft has none to lose.
+      if (sel == null && get().draft?.selection) set({ draft: null });
     },
 
     async openDraft(sel) {
@@ -1993,13 +2006,23 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ draft: { path, selection: sel }, selection: sel, activePath: path, replyTo: null });
     },
 
+    openFileDraft(path) {
+      if (get().fileView?.external) return get().flash('Comments go on repository files only');
+      // The cursor stays where the reader is when that is inside this file, so `]` and `e` carry on from
+      // there; a cursor in another file gives way to this file's header as the motion stop.
+      const sel = get().selection;
+      const kept = sel && pathFromItemId(sel.id) === path ? sel : null;
+      set({ draft: { path, selection: null }, selection: kept, visualAnchor: null, activePath: path, replyTo: null });
+      ensureExpanded(path);
+    },
+
     closeDraft() {
       set({ draft: null, selection: null });
     },
 
     async draftQuote() {
       const d = get().draft;
-      if (!d) return '';
+      if (!d?.selection) return '';
       const l = get().loaded[d.path];
       const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
       const contents = await ensureContents(d.path, range.side);
@@ -2010,12 +2033,22 @@ export const useStore = create<ReviewState>((set, get) => {
     async submitDraft(body) {
       const d = get().draft;
       if (!d || !body.trim()) return;
+      if (!d.selection) {
+        try {
+          await api.addThread({ path: d.path, body });
+        } catch (e) {
+          return report('Posting the comment', e);
+        }
+        set({ draft: null });
+        await get().refreshThreads();
+        return;
+      }
       try {
         const l = get().loaded[d.path];
         const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
         const contents = await ensureContents(d.path, range.side);
-        const anchor = anchorFromRange(d.path, range, contents);
-        await api.addThread({ ...anchor, body });
+        const { path, side, startLine, endLine, quoted } = anchorFromRange(d.path, range, contents);
+        await api.addThread({ path, side, startLine, endLine, quoted, body });
       } catch (e) {
         return report('Posting the comment', e);
       }
@@ -2082,7 +2115,7 @@ export const useStore = create<ReviewState>((set, get) => {
         viewed: [...s.viewed.filter((v) => !(v.path === path && v.blob === f.blob)), { path, blob: f.blob, viewed }],
         collapsed: { ...s.collapsed, [path]: viewed },
       }));
-      if (viewed) afterCollapse(path);
+      if (viewed) afterCollapse(path, notViewed);
       await persistViewed('Marking viewed', () => api.setViewed(path, f.blob, viewed));
     },
 
@@ -2098,7 +2131,7 @@ export const useStore = create<ReviewState>((set, get) => {
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);
       set((s) => ({ collapsed: { ...s.collapsed, [path]: !cur } }));
-      if (!cur) afterCollapse(path);
+      if (!cur) afterCollapse(path, notCollapsed);
       else void get().loadPatch(path);
     },
 

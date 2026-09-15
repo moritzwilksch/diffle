@@ -596,6 +596,28 @@ export class GitRepo {
     }
   }
 
+  /**
+   * Boolean value of a gitattribute per path: `attr` or `attr=true` reads
+   * true, `-attr` or `attr=false` false; unspecified paths are absent. A
+   * revision reads `.gitattributes` from that tree, the worktree from the
+   * checkout. `--source` needs git 2.40.
+   */
+  async attr(name: string, paths: string[], rev: string | 'worktree'): Promise<Map<string, boolean>> {
+    const out = new Map<string, boolean>();
+    if (paths.length === 0) return out;
+    const source = rev === 'worktree' ? [] : [`--source=${rev}`];
+    const fields = splitZ(
+      await this.exec(['check-attr', '-z', '--stdin', ...source, name, '--'], { input: paths.join('\0') }),
+    );
+    // Records are `path NUL attr NUL value NUL`.
+    for (let i = 0; i + 2 < fields.length; i += 3) {
+      const value = fields[i + 2]!;
+      if (value === 'set' || value === 'true') out.set(fields[i]!, true);
+      else if (value === 'unset' || value === 'false') out.set(fields[i]!, false);
+    }
+    return out;
+  }
+
   /** Paths git ignores, from a candidate list. */
   async ignored(paths: string[]): Promise<Set<string>> {
     if (paths.length === 0) return new Set();

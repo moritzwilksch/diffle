@@ -44,8 +44,8 @@ export class Server {
     const app = new Hono();
     const guard = requestGuard(this.opts.host, undefined, this.opts.allowedOrigin);
     app.use('/api/*', async (c, next) => {
-      if (!guard({ host: c.req.header('host'), origin: c.req.header('origin') }))
-        return c.json({ error: 'forbidden origin' }, 403);
+      const rejected = guard({ host: c.req.header('host'), origin: c.req.header('origin') });
+      if (rejected != null) return c.json({ error: rejected }, 403);
       await next();
     });
     app.use('/api/*', async (c, next) => {

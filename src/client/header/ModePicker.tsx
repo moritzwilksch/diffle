@@ -31,7 +31,7 @@ export function ModePicker() {
   const [refs, setRefs] = useState<RefsResponse | null>(null);
   const [a, setA] = useState('');
   const [b, setB] = useState('HEAD');
-  const [dots, setDots] = useState<'..' | '...'>('..');
+  const [dots, setDots] = useState<'..' | '...'>('...');
   const [oldOffsetText, setOldOffsetText] = useState('1');
   const [newOffsetText, setNewOffsetText] = useState('0');
   const [pr, setPr] = useState('');
@@ -142,11 +142,12 @@ export function ModePicker() {
         >
           <div className="w-60 shrink-0 max-[640px]:w-44">
             <div className="px-2.5 pt-1 pb-1.5 text-[0.6875rem] font-semibold text-muted">Compare</div>
+            {/* The accent marks an expanded configuration pane; Working has none and acts on click. */}
             {entries.map((entry, i) => (
               <Button
                 key={entry.label}
                 className={twMerge(
-                  `grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted ${pane === entry.pane ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
+                  `grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted ${entry.pane && pane === entry.pane ? '[&>span:first-of-type]:font-semibold [&>svg]:text-accent' : ''}`,
                 )}
                 aria-expanded={entry.pane ? pane === entry.pane : undefined}
                 aria-controls={entry.pane ? 'mode-config' : undefined}
@@ -228,9 +229,6 @@ export function ModePicker() {
                         if (!e.repeat) setDots((current) => (current === '..' ? '...' : '..'));
                       }}
                     >
-                      <ToggleButton type="button" selected={dots === '..'} tabIndex={-1} onClick={() => setDots('..')}>
-                        Direct
-                      </ToggleButton>
                       <ToggleButton
                         type="button"
                         selected={dots === '...'}
@@ -238,6 +236,9 @@ export function ModePicker() {
                         onClick={() => setDots('...')}
                       >
                         Merge base
+                      </ToggleButton>
+                      <ToggleButton type="button" selected={dots === '..'} tabIndex={-1} onClick={() => setDots('..')}>
+                        Direct
                       </ToggleButton>
                     </div>
                     <Button

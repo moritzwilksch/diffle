@@ -17,6 +17,13 @@ describe('parseImports', () => {
     ]);
   });
 
+  it('reads a payload without a line as a comment on the whole file, and refuses line fields without one', () => {
+    expect(parseImports({ path: 'a.py', body: 'Split this.' })).toEqual([{ path: 'a.py', body: 'Split this.' }]);
+    for (const extra of [{ side: 'new' }, { endLine: 2 }, { quoted: 'q' }]) {
+      expect(() => parseImports({ path: 'a.py', body: 'x', ...extra })).toThrow(/startLine/);
+    }
+  });
+
   it('rejects malformed payloads with the offending index', () => {
     expect(() => parseImports('{not json')).toThrow(ImportError);
     expect(() =>
@@ -36,19 +43,32 @@ describe('isDuplicate', () => {
   const existing: CommentThread[] = [
     {
       id: '1',
-      anchor: { path: 'a.py', side: 'new', startLine: 3, endLine: 4, quoted: 'q' },
+      anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 3, endLine: 4, quoted: 'q' },
       messages: [{ id: 'm', body: 'Same finding ', createdAt: 0, updatedAt: 0 }],
       resolved: false,
       stale: false,
     },
     {
       id: '2',
-      anchor: { path: 'a.py', side: 'new', startLine: 8, endLine: 8, quoted: 'q' },
+      anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 8, endLine: 8, quoted: 'q' },
       messages: [{ id: 'm', body: 'Resolved finding', createdAt: 0, updatedAt: 0 }],
       resolved: true,
       stale: false,
     },
   ];
+
+  it('matches a file comment by path and body, never against a line thread', () => {
+    const file: CommentThread = {
+      ...existing[0]!,
+      id: '3',
+      anchor: { kind: 'file', path: 'a.py' },
+      messages: [{ id: 'm', body: 'Whole file', createdAt: 0, updatedAt: 0 }],
+    };
+    expect(isDuplicate([...existing, file], { path: 'a.py', body: ' Whole file' })).toBe(true);
+    expect(isDuplicate([...existing, file], { path: 'b.py', body: 'Whole file' })).toBe(false);
+    expect(isDuplicate([...existing, file], { path: 'a.py', body: 'Same finding' })).toBe(false);
+    expect(isDuplicate([...existing, file], { path: 'a.py', startLine: 1, body: 'Whole file' })).toBe(false);
+  });
 
   it('matches path, side, range and trimmed opening body on open threads only', () => {
     expect(isDuplicate(existing, { path: 'a.py', startLine: 3, endLine: 4, body: 'Same finding' })).toBe(true);

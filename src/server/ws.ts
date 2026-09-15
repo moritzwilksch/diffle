@@ -12,11 +12,15 @@ export class WsHub {
   private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
   private readonly clientListeners = new Set<(count: number) => void>();
 
-  attach(server: HttpServer, guard: RequestGuard = () => true): void {
+  attach(server: HttpServer, guard: RequestGuard = () => null): void {
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
       if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/ws') return;
-      if (!guard({ host: req.headers.host, origin: req.headers.origin })) {
-        socket.destroy();
+      const rejected = guard({ host: req.headers.host, origin: req.headers.origin });
+      if (rejected != null) {
+        // Name the failing header, as the API does: a bare hangup leaves the browser log blank.
+        // Once written, close outright: the HTTP server's timeouts no longer cover an upgraded socket.
+        socket.once('finish', () => socket.destroy());
+        socket.end(`HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n${rejected}\n`);
         return;
       }
       this.wss.handleUpgrade(req, socket, head, (ws) => {

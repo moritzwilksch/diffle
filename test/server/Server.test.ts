@@ -13,6 +13,7 @@ import type { ApiDeps } from '../../src/server/routes.js';
 import { Session } from '../../src/server/Session.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
 import { WsHub } from '../../src/server/ws.js';
+import type { CommentThread } from '../../src/shared/protocol.js';
 import { connect } from 'node:net';
 
 let dir: string;
@@ -203,9 +204,25 @@ describe('Server', () => {
     expect(JSON.parse(response.body).error).toContain('API endpoint not found');
   });
 
+  it('creates a thread on the whole file from a payload without a line, and exports it without a quote', async () => {
+    const created = await send('POST', '/api/threads', { body: JSON.stringify({ path: 'a.txt', body: 'Rename it.' }) });
+    expect(created.status).toBe(201);
+    const [thread] = JSON.parse(created.body) as CommentThread[];
+    expect(thread).toMatchObject({ anchor: { kind: 'file', path: 'a.txt' }, stale: false });
+    try {
+      const r = await send('GET', '/api/threads/export');
+      expect(r).toEqual({ status: 200, body: '(file) a.txt\n\nRename it.\n\n---\n' });
+      const missing = await send('POST', '/api/threads', { body: JSON.stringify({ path: 'nope.txt', body: 'x' }) });
+      expect(missing.status).toBe(400);
+      expect(JSON.parse(missing.body).error).toContain('nope.txt');
+    } finally {
+      await session.comments.removeThread(thread!.id);
+    }
+  });
+
   it('exports one message with its thread context', async () => {
     const thread = await session.comments.addThread(
-      { path: 'a.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'a' },
+      { kind: 'line', path: 'a.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'a' },
       { body: 'Check this.' },
     );
     try {
@@ -218,10 +235,20 @@ describe('Server', () => {
     }
   });
 
-  it('rejects foreign Host and mismatched Origin with 403', async () => {
-    expect((await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } })).status).toBe(403);
-    expect((await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } })).status).toBe(403);
+  it('rejects foreign Host and mismatched Origin with a 403 naming the header', async () => {
+    const host = await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } });
+    expect(host.status).toBe(403);
+    expect(JSON.parse(host.body).error).toMatch(/^forbidden Host "evil.example"; .*--allowed-origin/);
+    const origin = await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } });
+    expect(origin.status).toBe(403);
+    expect(JSON.parse(origin.body).error).toMatch(/^forbidden Origin "http:\/\/evil.example" for Host "/);
     expect((await send('GET', '/api/snapshot', { headers: { origin: base.origin } })).status).toBe(200);
+  });
+
+  it('answers a rejected WebSocket upgrade with a 403 naming the header', async () => {
+    const ws = new WebSocket(base.href.replace('http:', 'ws:') + 'ws', { headers: { origin: 'https://evil.example' } });
+    const error = await new Promise<Error>((resolve) => ws.once('error', resolve));
+    expect(error.message).toContain('403');
   });
 
   it.each(['proxy.example', '127.0.0.1:4966'])('accepts proxied HTTP and WebSockets with Host %s', async (host) => {

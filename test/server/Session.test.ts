@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
+import type { WatchTarget } from '../../src/server/Watcher.js';
 import type { ServerMessage, Snapshot } from '../../src/shared/protocol.js';
 
 let dir: string;
@@ -94,7 +95,7 @@ describe('Session', () => {
 
     await session.comments.clear();
     const c = await session.comments.addThread(
-      { path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' },
+      { kind: 'line', path: 'new.txt', side: 'old', startLine: 2, endLine: 2, quoted: 'beta' },
       { body: 'old-side note' },
     );
     await session.refresh();
@@ -108,20 +109,20 @@ describe('Session', () => {
     await session.comments.clear();
     // Context 0 shows only `delta`; `alpha` exists on both sides but is outside every hunk.
     const outside = await session.comments.addThread(
-      { path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' },
+      { kind: 'line', path: 'new.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'alpha' },
       { body: 'context line' },
     );
     const inside = await session.comments.addThread(
-      { path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' },
+      { kind: 'line', path: 'new.txt', side: 'new', startLine: 4, endLine: 4, quoted: 'delta' },
       { body: 'added line' },
     );
     // `same.txt` is not part of the diff: nothing can display an old-side thread on it, the file view shows a new-side one.
     const unchangedOld = await session.comments.addThread(
-      { path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' },
+      { kind: 'line', path: 'same.txt', side: 'old', startLine: 1, endLine: 1, quoted: 'same' },
       { body: 'x' },
     );
     const unchangedNew = await session.comments.addThread(
-      { path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' },
+      { kind: 'line', path: 'same.txt', side: 'new', startLine: 1, endLine: 1, quoted: 'same' },
       { body: 'y' },
     );
     await session.refresh();
@@ -164,11 +165,31 @@ describe('Session', () => {
   it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
     await session.start({ kind: 'revspec', args: ['main..feat'] });
-    const quote = session.quoter();
+    const { quote, hasFile } = session.anchorSource();
     expect(await quote('new.txt', 'new', 2, 4)).toBe('beta\ngamma\ndelta');
     expect(await quote('new.txt', 'old', 1, 1)).toBe('alpha');
     expect(await quote('new.txt', 'new', 4, 5)).toBeNull();
     expect(await quote('secret.env', 'new', 1, 1)).toBeNull();
+    // File threads go on the review's files: a changed file by its new path, or any tree path.
+    expect(await hasFile('new.txt')).toBe(true);
+    expect(await hasFile('same.txt')).toBe(true);
+    for (const p of ['old.txt', 'secret.env', '.git/config', '../etc/passwd']) expect(await hasFile(p)).toBe(false);
+    await session.close();
+  });
+
+  it('keeps a file thread fresh while its file is in the review and flags it when the comparison drops the file', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 3 });
+    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.comments.clear();
+    const renamed = await session.comments.addThread({ kind: 'file', path: 'new.txt' }, { body: 'split this' });
+    const unchanged = await session.comments.addThread({ kind: 'file', path: 'same.txt' }, { body: 'fine' });
+    const oldName = await session.comments.addThread({ kind: 'file', path: 'old.txt' }, { body: 'gone' });
+    await session.refresh();
+    const stale = () => [renamed, unchanged, oldName].map((t) => session.comments.get(t.id)?.stale);
+    expect(stale()).toEqual([false, false, true]);
+    // A file thread never has a line to remember.
+    expect(session.comments.get(oldName.id)?.staleFromLine).toBeUndefined();
+    await session.comments.clear();
     await session.close();
   });
 
@@ -242,8 +263,8 @@ describe('Session', () => {
     await session.close();
   });
 
-  it('refreshes the live worktree snapshot when only the index changes', async () => {
-    // Own repo: the real chokidar watcher must see a `git add -f` of an ignored file that never changed on disk.
+  it('refreshes the worktree snapshot on a dirty signal when only the index changed', async () => {
+    // Own repo: `git add -f` and a commit change the index and HEAD that the shared fixture's tests read.
     const live = await mkdtemp(join(tmpdir(), 'diffle-live-'));
     const liveGit = (...args: string[]) =>
       execFileSync('git', args, {
@@ -264,7 +285,17 @@ describe('Session', () => {
       await writeFile(join(live, 'secret.env'), 'TOKEN=1\n');
       liveGit('add', '.gitignore');
       liveGit('commit', '-q', '-m', 'base');
-      const session = new Session(await GitRepo.open(live), hub, { watch: true, context: 3 });
+      const liveRepo = await GitRepo.open(live);
+      const targets: WatchTarget[] = [];
+      const watcher = new FakeWatcher(0);
+      const session = new Session(liveRepo, hub, {
+        watch: true,
+        context: 3,
+        createWatcher: (target) => {
+          targets.push(target);
+          return watcher;
+        },
+      });
       const nextSnapshot = () =>
         new Promise<Snapshot>((resolve) => {
           const off = session.onSnapshot((snap) => {
@@ -275,21 +306,33 @@ describe('Session', () => {
       const first = await session.start({ kind: 'working' });
       expect(first.changed).toEqual([]);
       expect(first.tree).toEqual(['.gitignore']);
+      // Worktree mode watches the worktree with git's ignores; `metaPaths` adds the index to the polled set.
+      expect(targets).toHaveLength(1);
+      const target = targets[0]!;
+      expect(target).toMatchObject({ kind: 'worktree', root: liveRepo.root, gitDir: liveRepo.gitDir });
+      if (target.kind !== 'worktree') throw new Error('unreachable');
+      expect(target.ignored().has('secret.env')).toBe(true);
 
+      // The file never changed on disk; only the index did.
       let next = nextSnapshot();
       liveGit('add', '-f', 'secret.env');
+      watcher.dirty();
       const staged = await next;
       expect(staged.version).toBeGreaterThan(first.version);
       expect(staged.changed.map((f) => f.path)).toEqual(['secret.env']);
       expect(staged.tree).toEqual(['.gitignore', 'secret.env']);
 
-      // HEAD moves without any worktree write: the index watcher shares its instance with the refs.
+      // HEAD moves without any worktree write.
       next = nextSnapshot();
       liveGit('commit', '-q', '-m', 'force-added');
+      watcher.dirty();
       const committed = await next;
       expect(committed.headSha).not.toBe(staged.headSha);
       expect(committed.changed).toEqual([]);
+      // close() drains the queue, including the ignore refresh behind each dirty signal: the file is tracked now, so
+      // the worktree watcher must stop ignoring it.
       await session.close();
+      expect(target.ignored().has('secret.env')).toBe(false);
     } finally {
       await rmTmp(live);
     }
@@ -353,9 +396,15 @@ function gatedRepo() {
 
 class FakeWatcher implements WatcherLike {
   state: 'new' | 'open' | 'closed' = 'new';
+  private readonly listeners: (() => void)[] = [];
   constructor(private readonly startDelay: number) {}
-  on(): this {
+  on(_event: 'dirty', listener: () => void): this {
+    this.listeners.push(listener);
     return this;
+  }
+  /** What the debounced fs events would have produced. */
+  dirty(): void {
+    for (const l of this.listeners) l();
   }
   async start(): Promise<void> {
     await new Promise((r) => setTimeout(r, this.startDelay));

@@ -5,7 +5,7 @@
 [![conda-forge-platforms](https://img.shields.io/conda/pn/conda-forge/diffle?style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![npm](https://img.shields.io/npm/v/%40moritzwilksch%2Fdiffle?logo=npm&logoColor=white&style=flat-square)](https://npmx.dev/package/@moritzwilksch/diffle)
 
-Review a git diff in the browser, comment on lines or blocks, then copy the
+Review a git diff in the browser, comment on lines, blocks, or whole files, then copy the
 comments as a prompt for an agent.
 
 <picture>
@@ -63,9 +63,9 @@ diffle --help           # list all commands and flags
 
 Closing the last browser tab that diffle opened stops the server and prints open comments to stdout. Pass `--keep-alive` to keep it running, or use `--no-open` and press Ctrl+C when done.
 
-Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff.
+Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff. A comment on a whole file (`C`, or the speech-bubble button in the file header) sits above the file's first line and only goes stale when the file leaves the comparison.
 
-Generated files and files matching auto-viewed globs start collapsed. There are no globs by default; configure them in settings or with `diffle config`.
+Generated files and files matching auto-viewed globs start collapsed. A file is generated when `.gitattributes` marks it `linguist-generated`, as on GitHub, or when its path or header looks generated; `linguist-generated=false` opts a file out. There are no globs by default; configure them in settings or with `diffle config`.
 
 ## Reverse proxies
 
@@ -75,7 +75,10 @@ when forwarding to diffle, including WebSocket upgrades at `/diffle/ws`. No buil
 or CLI base-path setting is needed.
 
 Run diffle with `--no-open` for a proxy-managed session. If the proxy preserves its
-public Host or Origin headers, explicitly trust its public origin (without the path):
+public Host or Origin headers, explicitly trust its public origin (without the path).
+Some proxies instead rewrite both headers to the upstream address they use for diffle,
+such as a Kubernetes service name; then trust that address. A rejected request gets a
+403 naming the header and value that failed, so the browser's network tab shows which.
 
 ```bash
 diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
@@ -105,6 +108,7 @@ Completion runs in the shell alone and never starts diffle, so it stays fast —
 - `J` / `K`: next or previous file
 - `]` / `[`: next or previous hunk
 - `c`: comment
+- `C`: comment on the whole file
 - `R`: resolve
 - `V`: select a block
 - `v`: mark viewed
@@ -125,7 +129,7 @@ Nothing is submitted for you: open the pull request on GitHub and submit the rev
 
 The GitHub button next to the comparison menu (`o`) shows the repository from your GitHub `origin`, even without `gh`. Pull request details load in the background by matching the old and new branches' upstreams; an explicit `diffle pr` supplies the PR directly. Discovery never changes your comparison.
 
-Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped.
+Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped. Threads on a whole file become GitHub file-level comments.
 
 Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
 

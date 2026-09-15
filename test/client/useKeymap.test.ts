@@ -159,6 +159,23 @@ describe('useKeymap', () => {
     expect(moveCursor).not.toHaveBeenCalled();
   });
 
+  it('C comments on the current file as a whole, c on the selection', () => {
+    const openDraft = vi.fn();
+    const openFileDraft = vi.fn();
+    const sel = {
+      id: 'diff:b.py@0',
+      range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
+    };
+    useStore.setState({ openDraft, openFileDraft, selection: sel, activePath: 'b.py' });
+    press('C');
+    expect(openFileDraft).toHaveBeenCalledWith('b.py');
+    press('c');
+    expect(openDraft).toHaveBeenCalledWith(sel);
+    useStore.setState({ selection: null, activePath: null, snapshot: null, fileView: null });
+    press('C');
+    expect(openFileDraft).toHaveBeenCalledTimes(1);
+  });
+
   it('0 and $ focus the first / last symbol of the cursor line and say so when there is none', () => {
     useStore.setState({
       selection: { id: 'diff:a.py@0', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },
@@ -224,18 +241,15 @@ describe('useKeymap', () => {
     expect(moveCursorBy).toHaveBeenCalledTimes(4);
   });
 
-  it('t re-anchors the cursor line after the theme change remounts the viewer', () => {
+  it('t changes the theme without jumping to the cursor line', () => {
     useStore.setState({
       selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },
       scrollTarget: null,
       toast: null,
     });
+    const before = useStore.getState().theme;
     press('t');
-    expect(useStore.getState().scrollTarget).toEqual(
-      expect.objectContaining({ id: 'diff:a.py@1', line: 3, align: 'eye' }),
-    );
-    useStore.setState({ selection: null, scrollTarget: null });
-    press('t');
+    expect(useStore.getState().theme).not.toBe(before);
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(useStore.getState().toast).toBeNull();
   });

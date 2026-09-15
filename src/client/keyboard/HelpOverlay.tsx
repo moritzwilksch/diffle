@@ -40,6 +40,7 @@ export const COLUMNS: HelpSection[][] = [
       title: 'Comments',
       rows: [
         ['c', 'comment on the current line or selection'],
+        ['C', 'comment on the current file as a whole'],
         ['e', 'edit the newest message of the thread under the cursor'],
         ['dd', 'delete the thread under the cursor'],
         ['R', 'resolve / reopen the thread under the cursor'],

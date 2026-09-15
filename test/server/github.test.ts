@@ -26,12 +26,17 @@ function thread(
 ): CommentThread {
   const { path = 'a.txt', line = 3, endLine = line, side = 'new', body = 'hi', ...rest } = over;
   return {
-    anchor: { path, side, startLine: line, endLine, quoted: 'x' },
+    anchor: { kind: 'line', path, side, startLine: line, endLine, quoted: 'x' },
     messages: [{ id: `${rest.id}-m`, body, createdAt: 1, updatedAt: 1 }],
     resolved: false,
     stale: false,
     ...rest,
   };
+}
+
+/** A thread on the file as a whole. */
+function fileThread(id: string, body = 'whole file', path = 'a.txt'): CommentThread {
+  return { ...thread({ id, body }), anchor: { kind: 'file', path } };
 }
 
 describe('buildReview', () => {
@@ -48,6 +53,16 @@ describe('buildReview', () => {
       { path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' },
       { path: 'a.txt', line: 8, side: 'LEFT', start_line: 5, start_side: 'LEFT', body: 'gone' },
     ]);
+  });
+
+  it('keeps file threads out of the REST payload but in the comment list, in review order', () => {
+    const { review, comments, ids } = buildReview([thread({ id: 'n', line: 3 }), fileThread('f')], HEAD);
+    expect(review.comments).toEqual([{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' }]);
+    expect(comments).toEqual([
+      { path: 'a.txt', subject_type: 'file', body: 'whole file' },
+      { path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' },
+    ]);
+    expect(ids).toEqual(['f', 'n']);
   });
 
   it('skips stale threads and, without ids, resolved ones', () => {
@@ -92,12 +107,12 @@ describe('GithubExporter', () => {
   let exporter: GithubExporter;
   const exportToGithub = (input: ExportInput) => exporter.export(async () => input);
   const calls: { args: string[]; input?: string }[] = [];
-  /** One comment already in the pending review, as a review thread reports it. */
+  /** One comment already in the pending review, as a review thread reports it. A file comment has no line. */
   type Existing = {
     node_id: string;
     path: string;
-    side: 'LEFT' | 'RIGHT';
-    line: number;
+    side?: 'LEFT' | 'RIGHT';
+    line?: number;
     start_line?: number;
     body: string;
   };
@@ -106,9 +121,10 @@ describe('GithubExporter', () => {
   const threadNodes = (existing: Existing[], reviewId: string) =>
     existing.map((c) => ({
       path: c.path,
-      line: c.line,
-      startLine: c.start_line ?? c.line,
-      diffSide: c.side,
+      line: c.line ?? null,
+      startLine: c.start_line ?? c.line ?? null,
+      diffSide: c.side ?? 'RIGHT',
+      subjectType: c.line == null ? 'FILE' : 'LINE',
       comments: { nodes: [{ id: c.node_id, body: c.body, pullRequestReview: { id: reviewId } }] },
     }));
 
@@ -119,7 +135,8 @@ describe('GithubExporter', () => {
   function runner(pending: string | null = null, existing: Existing[] = []): GhRunner {
     return async (args, { input }) => {
       calls.push({ args, input });
-      if (args[1] !== 'graphql') return '{}';
+      // REST answers with the created review; its node id is what file comments are appended to.
+      if (args[1] !== 'graphql') return JSON.stringify({ node_id: 'PRR_NEW' });
       const query = (JSON.parse(input!) as { query: string }).query;
       if (query.includes('reviewThreads')) {
         const reviewThreads = {
@@ -189,6 +206,67 @@ describe('GithubExporter', () => {
       commit_id: HEAD,
       comments: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->' }],
     });
+  });
+
+  it('creates the pending review over REST, then appends its file comments through GraphQL', async () => {
+    const res = await exportToGithub({
+      pullRequest,
+      snap,
+      threads: [thread({ id: 'k' }), fileThread('f')],
+      run: gh,
+    });
+    expect(res).toEqual({ url: PR_URL, posted: 2, updated: 0, review: 'created', skipped: [] });
+    expect(calls.map((c) => c.args)).toEqual([
+      ['api', 'graphql', '--input', '-'],
+      ['api', '--method', 'POST', 'repos/o/r/pulls/7/reviews', '--input', '-'],
+      ['api', 'graphql', '--input', '-'],
+    ]);
+    expect(JSON.parse(calls[1]!.input!)).toEqual({
+      commit_id: HEAD,
+      comments: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->' }],
+    });
+    expect(JSON.parse(calls[2]!.input!).variables.input).toEqual({
+      pullRequestReviewId: 'PRR_NEW',
+      path: 'a.txt',
+      subjectType: 'FILE',
+      body: 'whole file\n\n<!-- diffle-thread:f -->',
+    });
+  });
+
+  it('says how far it got when a file comment cannot be appended to the review it just created', async () => {
+    const failing: GhRunner = async (args, opts) => {
+      if (args[1] === 'graphql' && JSON.parse(opts.input!).query.includes('addPullRequestReviewThread'))
+        throw new GithubError('gh api graphql failed: boom', 502);
+      return gh(args, opts);
+    };
+    await expect(
+      exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' }), fileThread('f')], run: failing }),
+    ).rejects.toThrow(/created the pending review with 1 comments, then .*boom/);
+  });
+
+  it('matches, updates and appends file comments in an existing pending review by path', async () => {
+    const existing: Existing[] = [
+      { node_id: 'C_F', path: 'a.txt', body: 'old text\n\n<!-- diffle-thread:f -->' },
+      { node_id: 'C_S', path: 'b.txt', body: 'same\n\n<!-- diffle-thread:s -->' },
+      { node_id: 'C_L', path: 'a.txt', side: 'RIGHT', line: 3, body: 'line\n\n<!-- diffle-thread:f -->' },
+    ];
+    const threads = [fileThread('f', 'new text'), fileThread('s', 'same', 'b.txt'), fileThread('n', 'added', 'c.txt')];
+    const res = await exportToGithub({ pullRequest, snap, threads, run: runner('PRR_1', existing) });
+    expect(res).toEqual({
+      url: PR_URL,
+      posted: 1,
+      updated: 1,
+      review: 'existing',
+      skipped: [{ id: 's', reason: 'already in the review' }],
+    });
+    const inputs = calls
+      .slice(2)
+      .map((c) => (JSON.parse(c.input!) as { variables: { input: unknown } }).variables.input);
+    // The line comment carrying f's marker is another anchor: only the file comment is rewritten.
+    expect(inputs).toEqual([
+      { pullRequestReviewCommentId: 'C_F', body: 'new text\n\n<!-- diffle-thread:f -->' },
+      { pullRequestReviewId: 'PRR_1', path: 'c.txt', subjectType: 'FILE', body: 'added\n\n<!-- diffle-thread:n -->' },
+    ]);
   });
 
   it('adds a thread per comment to the pending review the viewer already has', async () => {

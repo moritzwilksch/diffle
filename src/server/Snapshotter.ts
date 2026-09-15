@@ -5,6 +5,8 @@ import type { GitRepo } from './git/GitRepo.js';
 import { resolveComparison } from './mode.js';
 
 const PREWARM = 3;
+/** The gitattribute GitHub reads to collapse generated files; `=false` opts a file out of the heuristics. */
+const GENERATED_ATTR = 'linguist-generated';
 /** Concurrent worktree reads while flagging generated files. */
 const SNIFF_CONCURRENCY = 8;
 /** Sniff verdicts remembered by blob sha; the map is emptied, not evicted, past this. */
@@ -138,15 +140,29 @@ export class Snapshotter {
   }
 
   /**
-   * Sets `generated` on each non-binary changed file: by path first, then by a
-   * SNIFF_BYTES content sniff. Blobs already classified are not read again;
-   * commit-side blobs go through one `cat-file --batch`, worktree files through
-   * a bounded read each. Never fails the snapshot: a read error means false.
+   * Sets `generated` on each non-binary changed file. A `linguist-generated`
+   * gitattribute on the new side decides outright, as on GitHub; otherwise a
+   * path convention, then a SNIFF_BYTES content sniff. Blobs already sniffed
+   * are not read again; commit-side blobs go through one `cat-file --batch`,
+   * worktree files through a bounded read each. Never fails the snapshot: a
+   * failed attribute lookup or read means the next heuristic, then false.
    * Submodules have no contents to sniff.
    */
   private async fillGenerated(files: ChangedFile[], newSha: string | 'worktree'): Promise<void> {
     const textual = files.filter((f) => f.status !== 'D' && !f.binary && !f.submodule);
-    const sniff = textual.filter((f) => !(f.generated = looksGenerated(f.path, null)));
+    const marked = await this.repo
+      .attr(
+        GENERATED_ATTR,
+        textual.map((f) => f.path),
+        newSha,
+      )
+      .catch(() => new Map<string, boolean>());
+    const sniff: ChangedFile[] = [];
+    for (const f of textual) {
+      const attr = marked.get(f.path);
+      if (attr != null) f.generated = attr;
+      else if (!(f.generated = looksGenerated(f.path, null))) sniff.push(f);
+    }
     const unknown: ChangedFile[] = [];
     for (const f of sniff) {
       const known = f.blob ? this.sniffed.get(f.blob) : undefined;
