@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread, GithubMetadata } from '../../src/shared/protocol.js';
+import type { ChangedFile, CommentThread, GithubMetadata, Snapshot } from '../../src/shared/protocol.js';
 
 const api = { exportComment: vi.fn() };
 const copyText = vi.fn();
@@ -24,13 +24,33 @@ const thread: CommentThread = {
   stale: false,
 };
 
+/** A snapshot whose diff changes exactly `paths`; the card only reads `changed`. */
+function snapshotOf(...paths: string[]): Snapshot {
+  const changed: ChangedFile[] = paths.map((path) => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob: 'b1',
+    generated: false,
+  }));
+  return { changed } as Snapshot;
+}
+
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   api.exportComment.mockReset();
   copyText.mockReset();
-  useStore.setState({ editingId: null, replyTo: null, focusedThread: null, github: { status: 'idle' } });
+  useStore.setState({
+    editingId: null,
+    replyTo: null,
+    focusedThread: null,
+    github: { status: 'idle' },
+    snapshot: snapshotOf('src/a.ts'),
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -54,6 +74,16 @@ describe('CommentCard GitHub button', () => {
     useStore.setState({ github: { status: 'ready', data: metadata(null) } });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).not.toBeNull();
+    expect(post()!.disabled).toBe(false);
+  });
+
+  it('is disabled on a file outside the diff: GitHub would take the comment but never show it', async () => {
+    useStore.setState({ github: { status: 'ready', data: metadata(null) }, snapshot: snapshotOf('src/other.ts') });
+    await act(() => root.render(createElement(CommentCard, { thread })));
+    const button = host.querySelector<HTMLButtonElement>('button[title*="pull request diff"]');
+    expect(button).not.toBeNull();
+    expect(button!.disabled).toBe(true);
+    expect(post()).toBeNull();
   });
 });
 

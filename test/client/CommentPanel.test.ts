@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread, GithubMetadata } from '../../src/shared/protocol.js';
+import type { ChangedFile, CommentThread, GithubMetadata, Snapshot } from '../../src/shared/protocol.js';
 
 vi.mock('../../src/client/api.js', () => ({ api: {} }));
 
@@ -29,6 +29,21 @@ function thread(id: string, path: string, body: string): CommentThread {
 }
 const threads = [thread('t1', 'a.md', 'body a'), thread('t2', 'b.md', 'body b'), thread('t3', 'c.md', 'body c')];
 
+/** A snapshot whose diff changes exactly `paths`; the panel only reads `changed`. */
+function snapshotOf(...paths: string[]): Snapshot {
+  const changed: ChangedFile[] = paths.map((path) => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob: 'b1',
+    generated: false,
+  }));
+  return { changed } as Snapshot;
+}
+const metadata = (reason: string | null): GithubMetadata => ({ reason }) as GithubMetadata;
+
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
@@ -39,6 +54,7 @@ beforeEach(() => {
     showResolved: false,
     activePath: null,
     github: { status: 'idle' },
+    snapshot: snapshotOf('a.md', 'b.md', 'c.md'),
     deleteThread: () => Promise.resolve(),
   });
   host = document.createElement('div');
@@ -112,7 +128,6 @@ describe('CommentPanel rows', () => {
 
   it('shows the GitHub button only when export is eligible', async () => {
     const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
-    const metadata = (reason: string | null): GithubMetadata => ({ reason }) as GithubMetadata;
 
     useStore.setState({ github: { status: 'ready', data: metadata('No matching pull request') } });
     await act(() => root.render(createElement(CommentPanel)));
@@ -120,5 +135,27 @@ describe('CommentPanel rows', () => {
 
     await act(() => useStore.setState({ github: { status: 'ready', data: metadata(null) } }));
     expect(post()).not.toBeNull();
+    expect(post()!.disabled).toBe(false);
+    expect(post()!.title).not.toMatch(/skipped/);
+  });
+
+  it('counts threads on files outside the diff out of "All" and marks their rows', async () => {
+    useStore.setState({ github: { status: 'ready', data: metadata(null) }, snapshot: snapshotOf('a.md') });
+    await act(() => root.render(createElement(CommentPanel)));
+    const post = host.querySelector<HTMLButtonElement>('button[title*="pending review"]')!;
+    expect(post.disabled).toBe(false);
+    expect(post.title).toMatch(/2 stale or outside the diff will be skipped/);
+    const marks = [...host.querySelectorAll('span[title*="pull request diff"]')].map((m) => m.textContent?.trim());
+    expect(marks).toEqual(['outside the diff', 'outside the diff']);
+
+    // No open thread GitHub would show: the button says so and stays put.
+    await act(() => useStore.setState({ snapshot: snapshotOf('other.md') }));
+    const none = host.querySelector<HTMLButtonElement>('button[title*="pending review"]')!;
+    expect(none.disabled).toBe(true);
+    expect(none.title).toMatch(/^Nothing to add/);
+
+    // Without export the marks are noise: a prompt export takes every thread.
+    await act(() => useStore.setState({ github: { status: 'ready', data: metadata('No matching pull request') } }));
+    expect(host.querySelectorAll('span[title*="pull request diff"]')).toHaveLength(0);
   });
 });
