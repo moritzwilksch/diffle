@@ -43,6 +43,7 @@ import {
   filterSymbols,
   isCollapsed,
   isViewed,
+  nextFileAfter,
   itemIdOf,
   linesOf,
   OVERSIZED_LINES,
@@ -328,14 +329,17 @@ export interface ReviewState {
   /** Context lines the viewer has expanded, by item id, so the cursor can walk them. */
   revealed: Record<string, LineRange[]>;
   addRevealed(id: string, start: number, end: number): void;
-  /** Bumped when the user wants CodeView to scroll to `scrollTarget`. */
-  /** align 'eye' pins the line at the vertical center of the viewport for jump navigation. */
-  /** 'top' / 'bottom' pin the line near the edges of the viewport (zt / zb), the same way 'eye' pins it at the gaze point. */
+  /**
+   * Where the viewer scrolls next; a new object (nonce) lands it. 'eye' pins the line at the gaze
+   * point for jump navigation and 'top' / 'bottom' near the edges (zt / zb). 'keep' pins it `offset`
+   * pixels below the sticky header: the pane issues it to hold the viewport across a re-layout.
+   */
   scrollTarget: {
     id: string;
     line?: number;
     side?: Side;
-    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom';
+    align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
+    offset?: number;
     nonce: number;
   } | null;
 
@@ -958,31 +962,36 @@ export const useStore = create<ReviewState>((set, get) => {
 
   /**
    * After a file collapses (viewed / zc): keep its header at the top of the view
-   * and move the cursor to the first hunk of the next open file, so the eye has
-   * an anchor instead of content silently vanishing.
+   * and move the cursor to the next file `accept` admits, so the eye has an anchor
+   * instead of content silently vanishing. An open, loaded file takes the cursor on
+   * its first hunk; a collapsed or unloaded one on its header.
    */
-  const afterCollapse = (path: string) => {
+  const afterCollapse = (path: string, accept: (file: ChangedFile) => boolean) => {
+    const snapshot = get().snapshot;
     const items = nav();
-    const idx = items.findIndex((i) => i.path === path);
-    if (idx === -1) return;
-    const item = items[idx]!;
-    let next: Cursor | null = null;
-    for (let i = idx + 1; i < items.length; i++) {
-      const it = items[i]!;
-      if (it.collapsed || it.rows.length === 0) continue;
-      const hunk = it.rows.findIndex((r) => r.hunkStart);
-      next = { itemIndex: i, rowIndex: hunk === -1 ? 0 : hunk };
-      break;
+    const item = items.find((i) => i.path === path);
+    if (!snapshot || !item) return;
+    const target = nextFileAfter(snapshot, path, accept);
+    const nextIndex = target ? items.findIndex((i) => i.path === target.path) : -1;
+    const next = items[nextIndex];
+    let sel: CodeViewLineSelection | null = null;
+    if (next && !next.collapsed && next.rows.length > 0) {
+      const hunk = next.rows.findIndex((r) => r.hunkStart);
+      sel = selectionFor(items, { itemIndex: nextIndex, rowIndex: hunk === -1 ? 0 : hunk });
     }
-    const sel = next ? selectionFor(items, next) : null;
     set((s) => ({
       selection: sel,
       visualAnchor: null,
       draft: null,
-      activePath: next ? items[next.itemIndex]!.path : path,
+      activePath: next ? next.path : path,
       scrollTarget: { id: item.id, align: 'start', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
     }));
   };
+
+  /** After `v`, review continues at the next file still to be viewed, collapsed or not. */
+  const notViewed = (f: ChangedFile) => !isViewed(get(), f);
+  /** After zc, review continues at the next open file. */
+  const notCollapsed = (f: ChangedFile) => !isCollapsed(get(), f.path);
 
   /** Place the cursor: update selection, active path, and scroll into view. */
   /** A scroll request that pins the cursor line at `edge`; the caller checks that a selection exists. */
@@ -1204,9 +1213,7 @@ export const useStore = create<ReviewState>((set, get) => {
     setTheme(theme) {
       storeTheme(theme);
       applyTheme(theme);
-      // One update: the viewer remounts per theme and would come back scrolled to the top, so the
-      // cursor line goes back to the gaze point in the same render, before anything paints.
-      set((s) => ({ theme, ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}) }));
+      set({ theme });
     },
     visualAnchor: null,
     editingId: null,
@@ -1742,7 +1749,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const path = get().activePath;
       if (!path) return;
       set((s) => ({ collapsed: { ...s.collapsed, [path]: collapsed } }));
-      if (collapsed) afterCollapse(path);
+      if (collapsed) afterCollapse(path, notCollapsed);
       else void get().loadPatch(path);
     },
     setAllCollapsed(collapsed) {
@@ -1775,13 +1782,8 @@ export const useStore = create<ReviewState>((set, get) => {
       } catch {
         /* ignore */
       }
-      // The cursor survives the re-layout; its line goes back to the gaze point, since row heights change.
-      set((s) => ({
-        diffStyle: style,
-        draft: null,
-        visualAnchor: null,
-        ...(s.selection ? { scrollTarget: cursorTarget(s, 'eye') } : {}),
-      }));
+      // The cursor survives the re-layout; the pane holds the viewport in place.
+      set({ diffStyle: style, draft: null, visualAnchor: null });
     },
     snapshot: null,
     error: null,
@@ -2108,7 +2110,7 @@ export const useStore = create<ReviewState>((set, get) => {
         viewed: [...s.viewed.filter((v) => !(v.path === path && v.blob === f.blob)), { path, blob: f.blob, viewed }],
         collapsed: { ...s.collapsed, [path]: viewed },
       }));
-      if (viewed) afterCollapse(path);
+      if (viewed) afterCollapse(path, notViewed);
       await persistViewed('Marking viewed', () => api.setViewed(path, f.blob, viewed));
     },
 
@@ -2124,7 +2126,7 @@ export const useStore = create<ReviewState>((set, get) => {
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);
       set((s) => ({ collapsed: { ...s.collapsed, [path]: !cur } }));
-      if (!cur) afterCollapse(path);
+      if (!cur) afterCollapse(path, notCollapsed);
       else void get().loadPatch(path);
     },
 

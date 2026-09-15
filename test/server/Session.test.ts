@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
+import type { WatchTarget } from '../../src/server/Watcher.js';
 import type { ServerMessage, Snapshot } from '../../src/shared/protocol.js';
 
 let dir: string;
@@ -262,8 +263,8 @@ describe('Session', () => {
     await session.close();
   });
 
-  it('refreshes the live worktree snapshot when only the index changes', async () => {
-    // Own repo: the real chokidar watcher must see a `git add -f` of an ignored file that never changed on disk.
+  it('refreshes the worktree snapshot on a dirty signal when only the index changed', async () => {
+    // Own repo: `git add -f` and a commit change the index and HEAD that the shared fixture's tests read.
     const live = await mkdtemp(join(tmpdir(), 'diffle-live-'));
     const liveGit = (...args: string[]) =>
       execFileSync('git', args, {
@@ -284,7 +285,17 @@ describe('Session', () => {
       await writeFile(join(live, 'secret.env'), 'TOKEN=1\n');
       liveGit('add', '.gitignore');
       liveGit('commit', '-q', '-m', 'base');
-      const session = new Session(await GitRepo.open(live), hub, { watch: true, context: 3 });
+      const liveRepo = await GitRepo.open(live);
+      const targets: WatchTarget[] = [];
+      const watcher = new FakeWatcher(0);
+      const session = new Session(liveRepo, hub, {
+        watch: true,
+        context: 3,
+        createWatcher: (target) => {
+          targets.push(target);
+          return watcher;
+        },
+      });
       const nextSnapshot = () =>
         new Promise<Snapshot>((resolve) => {
           const off = session.onSnapshot((snap) => {
@@ -295,21 +306,33 @@ describe('Session', () => {
       const first = await session.start({ kind: 'working' });
       expect(first.changed).toEqual([]);
       expect(first.tree).toEqual(['.gitignore']);
+      // Worktree mode watches the worktree with git's ignores; `metaPaths` adds the index to the polled set.
+      expect(targets).toHaveLength(1);
+      const target = targets[0]!;
+      expect(target).toMatchObject({ kind: 'worktree', root: liveRepo.root, gitDir: liveRepo.gitDir });
+      if (target.kind !== 'worktree') throw new Error('unreachable');
+      expect(target.ignored().has('secret.env')).toBe(true);
 
+      // The file never changed on disk; only the index did.
       let next = nextSnapshot();
       liveGit('add', '-f', 'secret.env');
+      watcher.dirty();
       const staged = await next;
       expect(staged.version).toBeGreaterThan(first.version);
       expect(staged.changed.map((f) => f.path)).toEqual(['secret.env']);
       expect(staged.tree).toEqual(['.gitignore', 'secret.env']);
 
-      // HEAD moves without any worktree write: the index watcher shares its instance with the refs.
+      // HEAD moves without any worktree write.
       next = nextSnapshot();
       liveGit('commit', '-q', '-m', 'force-added');
+      watcher.dirty();
       const committed = await next;
       expect(committed.headSha).not.toBe(staged.headSha);
       expect(committed.changed).toEqual([]);
+      // close() drains the queue, including the ignore refresh behind each dirty signal: the file is tracked now, so
+      // the worktree watcher must stop ignoring it.
       await session.close();
+      expect(target.ignored().has('secret.env')).toBe(false);
     } finally {
       await rmTmp(live);
     }
@@ -373,9 +396,15 @@ function gatedRepo() {
 
 class FakeWatcher implements WatcherLike {
   state: 'new' | 'open' | 'closed' = 'new';
+  private readonly listeners: (() => void)[] = [];
   constructor(private readonly startDelay: number) {}
-  on(): this {
+  on(_event: 'dirty', listener: () => void): this {
+    this.listeners.push(listener);
     return this;
+  }
+  /** What the debounced fs events would have produced. */
+  dirty(): void {
+    for (const l of this.listeners) l();
   }
   async start(): Promise<void> {
     await new Promise((r) => setTimeout(r, this.startDelay));

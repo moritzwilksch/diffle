@@ -241,18 +241,15 @@ describe('useKeymap', () => {
     expect(moveCursorBy).toHaveBeenCalledTimes(4);
   });
 
-  it('t re-anchors the cursor line after the theme change remounts the viewer', () => {
+  it('t changes the theme without jumping to the cursor line', () => {
     useStore.setState({
       selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },
       scrollTarget: null,
       toast: null,
     });
+    const before = useStore.getState().theme;
     press('t');
-    expect(useStore.getState().scrollTarget).toEqual(
-      expect.objectContaining({ id: 'diff:a.py@1', line: 3, align: 'eye' }),
-    );
-    useStore.setState({ selection: null, scrollTarget: null });
-    press('t');
+    expect(useStore.getState().theme).not.toBe(before);
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(useStore.getState().toast).toBeNull();
   });
