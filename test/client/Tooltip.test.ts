@@ -95,3 +95,64 @@ it('picks up a title a re-render puts back while the tip is up', async () => {
   expect(tip()?.textContent).toBe('Swap refs (x)');
   expect(button.hasAttribute('title')).toBe(false);
 });
+
+it('follows titles inside a shadow root', async () => {
+  // Pointer events between two nodes of one shadow tree never reach the document.
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+  const a = document.createElement('button');
+  a.setAttribute('title', 'first');
+  const b = document.createElement('button');
+  b.setAttribute('title', 'second');
+  shadow.append(a, b);
+  try {
+    await act(() => a.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true })));
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('first');
+    await act(() =>
+      b.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true, relatedTarget: a })),
+    );
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('second');
+    expect(a.getAttribute('title')).toBe('first');
+    await act(() =>
+      b.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, composed: true, relatedTarget: button })),
+    );
+    expect(tip()).toBeNull();
+    expect(b.getAttribute('title')).toBe('second');
+  } finally {
+    host.remove();
+  }
+});
+
+it('lets go of a shadow root whose host left the document', async () => {
+  const shadowHost = (title: string) => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const node = document.createElement('button');
+    node.setAttribute('title', title);
+    el.attachShadow({ mode: 'open' }).append(node);
+    return { el, node };
+  };
+  const over = (node: Element) =>
+    act(() => node.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true })));
+  const a = shadowHost('detached');
+  const b = shadowHost('live');
+  try {
+    await over(a.node);
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('detached');
+    a.el.remove();
+    await over(b.node);
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('live');
+    // Entering the detached tree would have swapped the tip to it had its listeners survived.
+    await over(a.node);
+    await act(() => vi.advanceTimersByTime(250));
+    expect(tip()?.textContent).toBe('live');
+  } finally {
+    a.el.remove();
+    b.el.remove();
+  }
+});

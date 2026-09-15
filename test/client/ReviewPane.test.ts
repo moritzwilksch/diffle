@@ -26,6 +26,8 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 type Rendered = { id: string; element: HTMLElement; type: 'diff' };
 let rendered: Rendered[] = [];
 const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
+const captureItems = vi.fn<(items: unknown[]) => void>();
+const scrollTo = vi.fn();
 vi.mock('@pierre/diffs/react', () => ({
   CodeView: forwardRef(function CodeView(
     props: {
@@ -38,10 +40,11 @@ vi.mock('@pierre/diffs/react', () => ({
     ref,
   ) {
     captureOptions(props.options);
+    captureItems(props.items);
     useImperativeHandle(ref, () => ({
       getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
-      scrollTo: () => {},
+      scrollTo,
     }));
     // Each item's header metadata renders in the light DOM so tests can see the header's buttons.
     return createElement(
@@ -125,6 +128,8 @@ beforeEach(() => {
     gens: {},
     collapsed: {},
     viewed: [],
+    diffStyle: 'split',
+    theme: 'light',
   });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -217,6 +222,65 @@ describe('ReviewPane scroller effects', () => {
       useStore.setState({ scrollTarget: { id: 'diff:a.txt@0', line: 62, side: 'new', align: 'nearest', nonce: 1 } }),
     );
     expect(scroller.scrollTop).toBe(497);
+  });
+
+  it('holds the row under the top edge across a split / unified toggle and a theme remount', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(changed), diffStyle: 'split', theme: 'light' }));
+    const header = captureOptions.mock.calls.at(-1)![0].itemMetrics!.diffHeaderHeight!;
+    const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
+    box(scroller, 0, 800);
+    // Line 9 has scrolled under the sticky header; line 10 still pokes out from under it by 13px. The
+    // deletion column of line 10 sits at the same height and must not win over the new side.
+    const card = document.createElement('div');
+    const row = (line: number, top: number, type?: string) => {
+      const el = document.createElement('div');
+      el.dataset.line = String(line);
+      if (type) el.dataset.lineType = type;
+      box(el, top, top + 18);
+      card.appendChild(el);
+    };
+    row(9, header - 30);
+    row(8, header - 5, 'change-deletion');
+    row(10, header - 5);
+    row(11, header + 13);
+    rendered = [{ id: 'diff:a.txt@0', element: card, type: 'diff' }];
+    // The cursor sits on a line far below the viewport; a display toggle must not scroll to it.
+    useStore.setState({
+      selection: { id: 'diff:a.txt@0', range: { start: 62, side: 'additions', end: 62, endSide: 'additions' } },
+    });
+
+    scrollTo.mockClear();
+    await act(() => useStore.getState().setDiffStyle('unified'));
+    expect(useStore.getState().scrollTarget).toEqual(
+      expect.objectContaining({ id: 'diff:a.txt@0', line: 10, side: 'new', align: 'keep', offset: -5 }),
+    );
+    expect(scrollTo).toHaveBeenCalledWith({
+      type: 'line',
+      id: 'diff:a.txt@0',
+      lineNumber: 10,
+      side: 'additions',
+      align: 'start',
+      offset: -5,
+      behavior: 'instant',
+    });
+    const nonce = useStore.getState().scrollTarget!.nonce;
+
+    scrollTo.mockClear();
+    await act(() => useStore.getState().setTheme('dark'));
+    expect(host.querySelector('.codeview')).not.toBe(scroller);
+    expect(useStore.getState().scrollTarget).toEqual(
+      expect.objectContaining({ line: 10, align: 'keep', offset: -5, nonce: nonce + 1 }),
+    );
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ lineNumber: 10, offset: -5 }));
+
+    // Nothing to hold when the viewport shows no row: the toggle issues no scroll at all.
+    rendered = [];
+    scrollTo.mockClear();
+    await act(() => useStore.setState({ scrollTarget: null }));
+    await act(() => useStore.getState().setDiffStyle('split'));
+    expect(useStore.getState().scrollTarget).toBeNull();
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it('bind to the viewer that mounts after the empty-changes branch, and again after a theme remount', async () => {
@@ -369,6 +433,27 @@ describe('ReviewPane scroller effects', () => {
     await act(() => header.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
     expect(useStore.getState().viewed).toMatchObject([{ path: 'a.txt', blob: 'b1', viewed: true }]);
+  });
+
+  it('expands a binary file to a placeholder line and collapses it again from the header', async () => {
+    const binary = [
+      { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
+    ];
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'img.png': { kind: 'binary' } } }));
+    const item = () => captureItems.mock.lastCall![0][0];
+    expect(item()).toMatchObject({
+      type: 'file',
+      collapsed: false,
+      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string },
+    });
+
+    await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
+    expect(useStore.getState().collapsed['img.png']).toBe(true);
+    expect(item()).toMatchObject({ collapsed: true });
+
+    await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
+    expect(item()).toMatchObject({ collapsed: false });
   });
 
   it('shows the viewed shortcut in the file header tooltip', async () => {

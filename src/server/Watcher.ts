@@ -98,12 +98,13 @@ export class Watcher extends EventEmitter<{ dirty: [] }> {
 }
 
 /**
- * Git metadata the snapshot depends on. HEAD and refs move the old side in
- * every live mode; in worktree mode the index also decides the tree and the
- * changed set (`git add -f`, `git rm --cached`), and it is replaced atomically
- * via `index.lock`. Polling keeps observing the path across replacements.
+ * Git metadata the snapshot depends on, polled by the meta watcher. HEAD and
+ * refs move the old side in every live mode; in worktree mode the index also
+ * decides the tree and the changed set (`git add -f`, `git rm --cached`), and
+ * it is replaced atomically via `index.lock`. Polling keeps observing the path
+ * across replacements.
  */
-function metaPaths(t: WatchTarget): string[] {
+export function metaPaths(t: WatchTarget): string[] {
   const paths = refPaths(t.gitDir, t.commonDir);
   if (t.kind === 'worktree') paths.push(join(t.gitDir, 'index'));
   return paths;
