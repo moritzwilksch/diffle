@@ -6,6 +6,7 @@ import type {
   DiffTokenEventBaseProps,
   FileDiffLoadedFiles,
   FileDiffMetadata,
+  FileContents,
   LineAnnotation,
   OnDiffLineClickProps,
   OnLineClickProps,
@@ -797,22 +798,28 @@ function toItem(
       const s = draft.selection.range.endSide ?? draft.selection.range.side ?? 'additions';
       annotations.push({ side: s, lineNumber: endLine, metadata: { kind: 'draft' } });
     }
-    if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
-    // Binary, oversized or failed: a one-line placeholder file item under the diff id, so the header's
-    // collapse toggle has a body to show. The line also gives file threads a place to hang.
+    if (loaded.kind === 'diff' && loaded.fileDiff.hunks.length > 0)
+      return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
+    // Binary, hunkless (a pure rename, a mode change), oversized or failed: a one-line placeholder file item
+    // under the diff id, so the header's collapse toggle has a body to show. The line also gives file threads
+    // a place to hang and says why there is nothing to expand.
     const note =
-      loaded.kind === 'oversized'
-        ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
-        : loaded.kind === 'error'
-          ? `// ${loaded.message}`
-          : loaded.kind === 'loading'
-            ? '// loading…'
-            : BINARY_NOTE;
-    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+      loaded.kind === 'diff'
+        ? changed.status === 'R'
+          ? `// moved from ${changed.oldPath} without changes`
+          : '// no changed lines'
+        : loaded.kind === 'oversized'
+          ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
+          : loaded.kind === 'error'
+            ? `// ${loaded.message}`
+            : loaded.kind === 'loading'
+              ? '// loading…'
+              : BINARY_NOTE;
+    return { id, type: 'file', file: placeholderFile(path, note), annotations: fileLevel, version, collapsed };
   }
   if (loaded.kind !== 'file') {
     const note = loaded.kind === 'binary' ? BINARY_NOTE : loaded.kind === 'error' ? `// ${loaded.message}` : '';
-    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+    return { id, type: 'file', file: placeholderFile(path, note), annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   const annotations: LineAnnotation<Annot>[] = fileLevel;
@@ -831,6 +838,12 @@ const FILE_LINE = 0;
 
 /** What a binary file's body shows in place of a diff. */
 const BINARY_NOTE = '// Binary file not shown';
+
+/** A one-line note standing in for a body that has no diff: forced to `text` so the
+ * real filename does not pick a grammar the note was never written in. */
+function placeholderFile(name: string, contents: string): FileContents {
+  return { name, contents, lang: 'text' };
+}
 
 /** What the composer says it comments on: the selected lines, or the file. */
 function describeSelection(d: Draft): string {
