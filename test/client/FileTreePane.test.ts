@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement } from 'react';
+import { Fragment, act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
@@ -8,6 +8,7 @@ vi.mock('../../src/client/api.js', () => ({ api: {} }));
 
 const { useStore } = await import('../../src/client/store.js');
 const { FileTreePane } = await import('../../src/client/tree/FileTreePane.js');
+const { TooltipHost } = await import('../../src/client/ui/Tooltip.js');
 
 const snapshot: Snapshot = {
   root: '/r',
@@ -54,7 +55,7 @@ beforeEach(() => {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() => root.render(createElement(FileTreePane)));
+  act(() => root.render(createElement(Fragment, null, createElement(FileTreePane), createElement(TooltipHost))));
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -87,5 +88,55 @@ describe('FileTreePane clicks', () => {
     click('b.txt');
     expect(useStore.getState().collapsed['b.txt']).toBe(false);
     expect(openFile.mock.calls).toEqual([['b.txt']]);
+  });
+});
+
+describe('FileTreePane name tooltips', () => {
+  // The row's name the pointer rests on, so a hover can leave it the way a browser reports.
+  let under: Element | null = null;
+  // jsdom lays nothing out; the tree reveals its ellipsis marker through a container query, so
+  // the computed opacity stands in for "this name is truncated".
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, 'getComputedStyle').mockImplementation(
+      (el) => ({ opacity: row('a.txt').contains(el) ? '1' : '0' }) as CSSStyleDeclaration,
+    );
+  });
+  afterEach(() => {
+    under = null;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  const tip = () => document.querySelector('[role="tooltip"]');
+  const hover = (path: string) => {
+    const content = row(path).querySelector('[data-item-section="content"]')!;
+    act(() => {
+      under?.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, composed: true, relatedTarget: content }));
+      content.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true, relatedTarget: under }));
+      under = content;
+    });
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+  };
+
+  it('shows the full name of an ellipsized row', () => {
+    hover('a.txt');
+    expect(tip()?.textContent).toBe('a.txt');
+  });
+
+  it('shows nothing for a row whose name fits', () => {
+    hover('b.txt');
+    expect(tip()).toBeNull();
+    expect(row('b.txt').hasAttribute('title')).toBe(false);
+  });
+
+  it('moves the tip along with the pointer between rows', () => {
+    hover('a.txt');
+    hover('b.txt');
+    expect(tip()).toBeNull();
+    hover('a.txt');
+    expect(tip()?.textContent).toBe('a.txt');
   });
 });
