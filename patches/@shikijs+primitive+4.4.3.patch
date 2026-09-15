@@ -1,0 +1,12 @@
+diff --git a/node_modules/@shikijs/primitive/dist/index.mjs b/node_modules/@shikijs/primitive/dist/index.mjs
+index 5c954ae..3bdaa9a 100644
+--- a/node_modules/@shikijs/primitive/dist/index.mjs
++++ b/node_modules/@shikijs/primitive/dist/index.mjs
+@@ -774,6 +774,7 @@ function codeToTokensWithThemes(primitive, code, options, codeToTokensBaseFn = c
+ 			offset: _token.offset
+ 		};
+ 		if ("includeExplanation" in options && options.includeExplanation) mergedToken.explanation = _token.explanation;
++		if (_token.type != null) mergedToken.type = _token.type;
+ 		tokens.forEach((t, themeIdx) => {
+ 			const { content: _, explanation: __, offset: ___, ...styles } = t[lineIdx][tokenIdx];
+ 			mergedToken.variants[themes[themeIdx].color] = styles;

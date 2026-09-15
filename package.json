@@ -40,6 +40,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "test": "vitest run",
+    "prepare": "patch-package",
     "prepack": "npm run build"
   },
   "dependencies": {
@@ -75,6 +76,7 @@
     "jsdom": "^30.0.1",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
+    "patch-package": "^8.0.1",
     "tailwindcss": "^4.3.3",
     "tree-sitter-wasms": "^0.1.13",
     "tsdown": "^0.22.14",
