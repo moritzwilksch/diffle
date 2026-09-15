@@ -7,7 +7,6 @@ import {
   CommentStore,
   NotFoundError,
   UnquotableError,
-  type AnchorSource,
   type ReviewView,
 } from '../../src/server/comments/CommentStore.js';
 import { anchorLine } from '../../src/server/comments/anchor.js';
@@ -23,10 +22,19 @@ const anchor = { kind: 'line' as const, path: 'a.py', side: 'new' as const, star
 const fileAnchor = { kind: 'file' as const, path: 'a.py' };
 const hello = { body: 'hello' };
 
-/** A review where every file exists and each side reads as `contents`, shown whole. */
-const whole = (contents: string, shown: LineRange[] | null = null): ReviewView => ({
-  side: async () => ({ contents, shown }),
+/** A review where every file is changed and each side reads as `contents`, shown whole and, on GitHub, in `onGithub`. */
+const whole = (contents: string, shown: LineRange[] | null = null, onGithub = shown ?? [[1, 1e9]]): ReviewView => ({
+  side: async () => ({ contents, shown, onGithub }),
   hasFile: () => true,
+  inDiff: () => true,
+});
+
+/** A review whose only file is `a.py`, unchanged: its new side is the file view, nothing is on GitHub. */
+const fileView = (contents: string | null): ReviewView => ({
+  side: async (path, side) =>
+    path === 'a.py' && side === 'new' && contents != null ? { contents, shown: null, onGithub: [] } : null,
+  hasFile: (path) => path === 'a.py',
+  inDiff: () => false,
 });
 
 describe('CommentStore', () => {
@@ -146,14 +154,16 @@ describe('CommentStore', () => {
 
   it('imports payloads, quoting from the snapshot and skipping open duplicates', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const quote: AnchorSource = {
-      quote: async (path, _side, start, end) => (path === 'a.py' && end <= 3 ? `L${start}-${end}` : null),
-      hasFile: async (path) => path === 'a.py',
-    };
+    // Three lines exist; the diff, and GitHub, show all of them.
+    const quote = whole('l1\nl2\nl3\n', [[1, 3]]);
     const first = await s.importThreads([{ path: 'a.py', startLine: 1, body: 'one' }], quote);
     expect(first.skipped).toBe(0);
-    expect(first.added[0]).toMatchObject({
-      anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'L1-1' },
+    expect(first.added[0]).toEqual({
+      id: expect.any(String),
+      anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'l1' },
+      messages: [expect.objectContaining({ body: 'one' })],
+      resolved: false,
+      stale: false,
     });
     expect(first.added[0]!.messages[0]).toMatchObject({ body: 'one' });
     const second = await s.importThreads(
@@ -184,7 +194,7 @@ describe('CommentStore', () => {
 
   it('imports a payload without a line as a thread on the whole file, when the review has the file', async () => {
     const s = await CommentStore.open(dir, 'working');
-    const source: AnchorSource = { quote: async () => null, hasFile: async (path) => path === 'a.py' };
+    const source = fileView(null);
     const { added } = await s.importThreads([{ path: 'a.py', body: 'Split this module.' }], source);
     expect(added[0]).toMatchObject({ anchor: fileAnchor, stale: false });
     // The same finding on the same file is a duplicate; on a line of it, it is not.
@@ -193,7 +203,7 @@ describe('CommentStore', () => {
         { path: 'a.py', body: 'Split this module.' },
         { path: 'a.py', startLine: 1, body: 'Split this module.' },
       ],
-      { ...source, quote: async () => 'L1' },
+      fileView('L1\n'),
     );
     expect(again.skipped).toBe(1);
     expect(again.added.map((t) => t.anchor.kind)).toEqual(['line']);
@@ -248,7 +258,11 @@ describe('CommentStore', () => {
   it('a file thread is stale while its file is out of the review, whatever the contents say', async () => {
     const s = await CommentStore.open(dir, 'working');
     const t = await s.addThread(fileAnchor, hello);
-    const review = (present: boolean): ReviewView => ({ side: async () => null, hasFile: () => present });
+    const review = (present: boolean): ReviewView => ({
+      side: async () => null,
+      hasFile: () => present,
+      inDiff: () => present,
+    });
     expect(await s.relocateAll(review(true))).toBe(false);
     expect(s.get(t.id)).toMatchObject({ anchor: fileAnchor, stale: false });
     expect(await s.relocateAll(review(false))).toBe(true);
@@ -256,6 +270,77 @@ describe('CommentStore', () => {
     expect(s.get(t.id)?.staleFromLine).toBeUndefined();
     expect(await s.relocateAll(review(true))).toBe(true);
     expect(s.get(t.id)?.stale).toBe(false);
+  });
+
+  it('marks what GitHub cannot show: a stale thread as such, a fresh one by what the pull request diff lacks', async () => {
+    const s = await CommentStore.open(dir, 'working');
+    const line = await s.addThread(anchor, hello);
+    const file = await s.addThread(fileAnchor, hello);
+    const blockers = () => [line, file].map((t) => s.get(t.id)?.githubBlocker);
+    // On the diff, inside GitHub's context: nothing blocks.
+    await s.relocateAll(whole('a\nb\nc\n', [[1, 3]]));
+    expect(blockers()).toEqual([undefined, undefined]);
+    // The diff shows lines 1–3 with wide context, GitHub's narrower one only line 3.
+    await s.relocateAll(whole('a\nb\nc\n', [[1, 3]], [[3, 3]]));
+    expect(s.get(line.id)?.stale).toBe(false);
+    expect(blockers()).toEqual(['lines outside the pull request diff', undefined]);
+    // Stale: the text is gone, so no GitHub diagnosis applies.
+    await s.relocateAll(whole('x\n', [[1, 1]]));
+    expect(s.get(line.id)?.stale).toBe(true);
+    expect(blockers()).toEqual(['stale', undefined]);
+    // An unchanged file: the file view places the line thread, GitHub has no such file.
+    await s.relocateAll(fileView('a\nb\n'));
+    expect(s.get(line.id)?.stale).toBe(false);
+    expect(blockers()).toEqual(['file not in the pull request diff', 'file not in the pull request diff']);
+    // Back on the diff, the marks go, and the store sees the change.
+    expect(await s.relocateAll(whole('a\nb\nc\n', [[1, 3]]))).toBe(true);
+    expect(blockers()).toEqual([undefined, undefined]);
+    expect(Object.keys(s.get(line.id)!)).not.toContain('githubBlocker');
+  });
+
+  it('imports carry the GitHub mark from the start', async () => {
+    const s = await CommentStore.open(dir, 'working');
+    const { added } = await s.importThreads(
+      [
+        { path: 'a.py', body: 'file' },
+        { path: 'a.py', startLine: 1, body: 'line' },
+      ],
+      fileView('a\n'),
+    );
+    expect(added.map((t) => t.githubBlocker)).toEqual([
+      'file not in the pull request diff',
+      'file not in the pull request diff',
+    ]);
+    const onDiff = await s.importThreads(
+      [{ path: 'a.py', startLine: 1, body: 'context' }],
+      whole('a\nb\n', [[1, 2]], [[2, 2]]),
+    );
+    expect(onDiff.added[0]).toMatchObject({ githubBlocker: 'lines outside the pull request diff' });
+  });
+
+  it('refuses a line import the diff does not show, where relocation would flag it stale', async () => {
+    const s = await CommentStore.open(dir, 'working');
+    const contents = 'a\nb\nc\nd\ne\n';
+    // The diff shows lines 1–5 with wide context; GitHub's narrower one only line 3.
+    const review = whole(contents, [[1, 5]], [[3, 3]]);
+    await expect(
+      s.importThreads(
+        [
+          { path: 'a.py', startLine: 1, body: 'shown' },
+          { path: 'a.py', startLine: 6, body: 'x' },
+        ],
+        review,
+      ),
+    ).rejects.toBeInstanceOf(UnquotableError);
+    await expect(
+      s.importThreads([{ path: 'a.py', startLine: 5, body: 'x' }], whole(contents, [[1, 4]])),
+    ).rejects.toThrow(/a\.py:5 .*outside the diff/);
+    expect(s.threads()).toEqual([]);
+    // Inside the diff, outside GitHub's context: the import and a later relocation agree.
+    const { added } = await s.importThreads([{ path: 'a.py', startLine: 5, body: 'shown' }], review);
+    expect(added[0]).toMatchObject({ stale: false, githubBlocker: 'lines outside the pull request diff' });
+    expect(await s.relocateAll(review)).toBe(false);
+    expect(s.get(added[0]!.id)).toMatchObject({ stale: false, githubBlocker: 'lines outside the pull request diff' });
   });
 
   it('removes stale threads only', async () => {
@@ -365,10 +450,7 @@ describe('CommentStore', () => {
 
   it("checks a payload's own quoted range against the snapshot before keeping it", async () => {
     const s = await CommentStore.open(dir, 'working');
-    const quote: AnchorSource = {
-      quote: async (path) => (path === 'a.py' ? 'from snapshot' : null),
-      hasFile: async () => false,
-    };
+    const quote = fileView('from snapshot\n');
     await expect(
       s.importThreads([{ path: '../../etc/passwd', startLine: 1, body: 'x', quoted: 'root:x:0:0' }], quote),
     ).rejects.toBeInstanceOf(UnquotableError);

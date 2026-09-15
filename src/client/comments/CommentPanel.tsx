@@ -44,6 +44,8 @@ export function CommentPanel() {
 
   const shown = useMemo(() => visibleThreads({ threads, showResolved }), [threads, showResolved]);
   const open = threads.filter((t) => !t.resolved);
+  // Only these reach the pending review; the rest are skipped and reported.
+  const postable = open.filter((t) => t.githubBlocker == null);
   const resolvedCount = threads.length - open.length;
   const staleCount = threads.filter((t) => t.stale).length;
   const groups = useMemo(() => {
@@ -92,11 +94,13 @@ export function CommentPanel() {
             variant="ghost"
             icon={!post.armed && !posted}
             feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
-            disabled={posting || (open.length === 0 && !posted)}
+            disabled={posting || (postable.length === 0 && !posted)}
             title={
-              post.armed
-                ? 'Click again to add all open threads to the pending review'
-                : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'
+              open.length > 0 && postable.length === 0
+                ? 'GitHub cannot show any open thread'
+                : post.armed
+                  ? 'Click again to add all open threads to the pending review'
+                  : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'
             }
             aria-label={
               post.armed

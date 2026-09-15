@@ -290,10 +290,14 @@ describe('GitRepo under hostile config', () => {
     hgit('config', 'color.grep', 'always');
     hgit('config', 'grep.column', 'true');
     hgit('config', 'core.quotePath', 'true');
+    hgit('config', 'diff.suppressBlankEmpty', 'true');
     await writeFile(join(hostile, 'ä.txt'), 'eins\n');
     await writeFile(join(hostile, 'plain.txt'), 'p\n');
+    await writeFile(join(hostile, 'blank.txt'), 'a\n\nb\n');
     hgit('add', '.');
     hgit('commit', '-q', '-m', 'base');
+    await writeFile(join(hostile, 'blank.txt'), 'a\n\nc\n');
+    hgit('commit', '-q', '-am', 'blank');
     await writeFile(join(hostile, 'ä.txt'), 'eins\nzwei\n');
     hgit('commit', '-q', '-am', 'edit');
     await writeFile(join(hostile, 'ä.txt'), 'eins\nzwei\ndrei\n');
@@ -311,6 +315,13 @@ describe('GitRepo under hostile config', () => {
     expect(p).toContain('+zwei');
     expect(p).not.toContain('\u001b[');
     expect(await hrepo.patchAll('HEAD~1', 'HEAD', files)).toBe(p);
+  });
+
+  it('writes an empty context line as a space, so hunk bodies keep their line counts', async () => {
+    const files = await hrepo.numstat('HEAD~2', 'HEAD~1');
+    expect(files.map((f) => f.path)).toEqual(['blank.txt']);
+    const p = await hrepo.patch('HEAD~2', 'HEAD~1', files[0]!);
+    expect(p).toContain('@@ -1,3 +1,3 @@\n a\n \n-b\n+c\n');
   });
 
   it('names non-ASCII paths verbatim in worktree patches, including untracked files', async () => {

@@ -7,6 +7,7 @@ import type {
   CommentAnchor,
   CommentMessage,
   CommentThread,
+  FileAnchor,
   LineAnchor,
   ReplyCreate,
   Side,
@@ -14,7 +15,7 @@ import type {
   ThreadQuery,
   ViewedEntry,
 } from '../../shared/protocol.js';
-import { compareThreads, relocate } from './anchor.js';
+import { compareThreads, quoteRange, relocate } from './anchor.js';
 import { isShown, type LineRange } from './hunks.js';
 import { isDuplicate } from './import.js';
 
@@ -52,19 +53,9 @@ interface V1File {
 }
 type AnyStoreFile = StoreFile | V2File | V1File;
 
-/** Resolves the exact text of a range on one side, for `quoted`. Null when the range cannot be read. */
-export type QuoteFn = (path: string, side: Side, startLine: number, endLine: number) => Promise<string | null>;
-
-/** What an import checks its anchors against: the snapshot, behind the session's allowlist. */
-export interface AnchorSource {
-  quote: QuoteFn;
-  /** Whether the review has a file at `path` on either side. */
-  hasFile(path: string): Promise<boolean>;
-}
-
 export class NotFoundError extends Error {}
 
-/** An anchor the snapshot cannot place: path absent on that side, or lines past the end. */
+/** An anchor the review cannot place: path absent on that side, lines past the end or outside the diff, or a file the review lacks. */
 export class UnquotableError extends Error {}
 
 /** One side of a file as the review presents it. */
@@ -72,15 +63,26 @@ export interface SideView {
   contents: string;
   /** Line ranges on display (a diff's hunks); null when the whole side is shown. */
   shown: LineRange[] | null;
+  /** Line ranges the pull request diff on GitHub shows: its context around each change. Empty for a file outside the diff. */
+  onGithub: LineRange[];
 }
 
-/** The review as relocation sees it. */
+/** The review as relocation and import see it: the snapshot, behind the session's allowlist. */
 export interface ReviewView {
   /** One side of a path; null when the review has no such side. */
   side(path: string, side: Side): Promise<SideView | null>;
   /** Whether the review has a file at `path` on either side, which is all a file thread needs. */
   hasFile(path: string): boolean;
+  /** Whether the diff changes `path`: the pull request on GitHub shows those files and no others. */
+  inDiff(path: string): boolean;
 }
+
+/** `CommentThread.githubBlocker` for a thread whose file the pull request diff does not have. */
+const FILE_OFF_DIFF = 'file not in the pull request diff';
+/** `CommentThread.githubBlocker` for a line thread the pull request diff does not show. */
+const LINES_OFF_DIFF = 'lines outside the pull request diff';
+/** `CommentThread.githubBlocker` for a stale thread: it has no place in the review at all. */
+const STALE = 'stale';
 
 /** Viewed marks kept per path: the current one plus the newest previous, so `restale` is derivable. */
 const VIEWED_HISTORY = 2;
@@ -191,16 +193,17 @@ export class CommentStore {
 
   /**
    * Adds each import that is not already an open duplicate. Every anchor is
-   * checked against the snapshot through `source`: a range is quoted (a payload's
-   * own `quoted`, the text the browser showed, is kept once the range is known to
-   * exist) and a file thread's path must be in the review. Throws UnquotableError,
-   * adding nothing, when any anchor cannot be placed.
+   * placed by `review` as `relocateAll` would place it: a range must exist and be
+   * shown (a payload's own `quoted`, the text the browser showed, is kept once
+   * the range is known to exist) and a file thread's path must be in the review.
+   * Throws UnquotableError, adding nothing, when any anchor cannot be placed, so
+   * no thread starts out where the next relocation would flag it stale.
    */
-  importThreads(imports: ThreadCreate[], source: AnchorSource): Promise<{ added: CommentThread[]; skipped: number }> {
+  importThreads(imports: ThreadCreate[], review: ReviewView): Promise<{ added: CommentThread[]; skipped: number }> {
     return this.mutate(
       async (set) => {
         const added: CommentThread[] = [];
-        const pending: Array<{ anchor: CommentAnchor; t: ThreadCreate }> = [];
+        const pending: Array<{ placed: Placed; t: ThreadCreate }> = [];
         let skipped = 0;
         const existing = [...set.threads];
         for (const t of imports) {
@@ -208,21 +211,21 @@ export class CommentStore {
             skipped++;
             continue;
           }
-          const anchor = await placeImport(t, source);
-          pending.push({ anchor, t });
+          const placed = await placeImport(t, review);
+          pending.push({ placed, t });
           // Later imports in the same batch may duplicate this one.
           existing.push({
             id: '',
-            anchor,
+            anchor: placed.anchor,
             messages: [{ id: '', body: t.body, createdAt: 0, updatedAt: 0 }],
             resolved: false,
             stale: false,
           });
         }
-        for (const { anchor, t } of pending) {
+        for (const { placed, t } of pending) {
           const thread: CommentThread = {
             id: randomUUID(),
-            anchor,
+            ...placed,
             messages: [newMessage({ body: t.body })],
             resolved: false,
             stale: false,
@@ -285,7 +288,8 @@ export class CommentStore {
    * Re-anchor every thread against the current review. A line thread is stale
    * when its side is gone, its text is not found, or the relocated range falls
    * outside what the review shows; a file thread when its file left the review.
-   * Returns true if anything changed.
+   * `githubBlocker` follows: `'stale'` for a stale thread, the reason for a fresh
+   * one the pull request diff does not show. Returns true if anything changed.
    */
   async relocateAll(review: ReviewView): Promise<boolean> {
     const cache = new Map<string, Promise<SideView | null>>();
@@ -303,32 +307,30 @@ export class CommentStore {
       async (set) => {
         let changed = false;
         for (const t of set.threads) {
+          let stale: boolean;
+          let blocker: string | undefined;
           if (t.anchor.kind === 'file') {
-            const stale = !review.hasFile(t.anchor.path);
-            if (stale !== t.stale) {
-              t.stale = stale;
+            stale = !review.hasFile(t.anchor.path);
+            blocker = stale ? STALE : fileBlocker(review, t.anchor.path);
+          } else {
+            const v = await load(t.anchor.path, t.anchor.side);
+            const moved = v && placeLine(t.anchor, v);
+            stale = moved == null;
+            blocker = v && moved ? lineBlocker(review, moved, v) : STALE;
+            if (moved && (moved.startLine !== t.anchor.startLine || moved.endLine !== t.anchor.endLine)) {
+              t.anchor = moved;
               changed = true;
             }
-            continue;
           }
-          const v = await load(t.anchor.path, t.anchor.side);
-          let moved = v == null ? null : relocate(t.anchor, v.contents);
-          if (moved && v?.shown && !isShown(v.shown, moved.startLine, moved.endLine)) moved = null;
-          if (moved == null) {
-            if (!t.stale) {
-              t.stale = true;
-              t.staleFromLine = t.anchor.startLine;
-              changed = true;
-            }
-            continue;
-          }
-          if (t.stale) {
-            t.stale = false;
-            delete t.staleFromLine;
+          if (stale !== t.stale) {
+            t.stale = stale;
+            if (stale && t.anchor.kind === 'line') t.staleFromLine = t.anchor.startLine;
+            else delete t.staleFromLine;
             changed = true;
           }
-          if (moved.startLine !== t.anchor.startLine || moved.endLine !== t.anchor.endLine) {
-            t.anchor = moved;
+          if (blocker !== t.githubBlocker) {
+            if (blocker) t.githubBlocker = blocker;
+            else delete t.githubBlocker;
             changed = true;
           }
         }
@@ -378,24 +380,64 @@ function findThread(set: SetData, id: string): CommentThread {
   return t;
 }
 
+/** What the review says about a new thread's anchor. */
+type Placed = Pick<CommentThread, 'anchor' | 'githubBlocker'>;
+
 /**
- * The anchor an import lands on, checked against the snapshot. Throws
- * UnquotableError for a range that cannot be quoted or a file the review lacks.
+ * The anchor an import lands on, placed by the review. Throws UnquotableError for
+ * a file the review lacks, or a range that cannot be quoted or that the review does not show.
  */
-async function placeImport(t: ThreadCreate, source: AnchorSource): Promise<CommentAnchor> {
+async function placeImport(t: ThreadCreate, review: ReviewView): Promise<Placed> {
   if (t.startLine == null) {
-    if (!(await source.hasFile(t.path))) throw new UnquotableError(`${t.path} is not in the review`);
-    return { kind: 'file', path: t.path };
+    if (!review.hasFile(t.path)) throw new UnquotableError(`${t.path} is not in the review`);
+    const anchor: FileAnchor = { kind: 'file', path: t.path };
+    return withBlocker(anchor, fileBlocker(review, t.path));
   }
   const side = t.side ?? 'new';
   const startLine = t.startLine;
   const endLine = t.endLine ?? startLine;
-  const fromSnapshot = await source.quote(t.path, side, startLine, endLine);
-  if (fromSnapshot == null)
-    throw new UnquotableError(
-      `cannot quote ${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''} on the ${side} side`,
-    );
-  return { kind: 'line', path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
+  const where = `${t.path}:${startLine}${endLine !== startLine ? `-${endLine}` : ''}`;
+  const view = await review.side(t.path, side);
+  const fromSnapshot = view && quoteRange(view.contents, startLine, endLine);
+  if (view == null || fromSnapshot == null) throw new UnquotableError(`cannot quote ${where} on the ${side} side`);
+  if (!shows(view, startLine, endLine)) throw new UnquotableError(`${where} is outside the diff on the ${side} side`);
+  const anchor: LineAnchor = { kind: 'line', path: t.path, side, startLine, endLine, quoted: t.quoted ?? fromSnapshot };
+  return withBlocker(anchor, lineBlocker(review, anchor, view));
+}
+
+function withBlocker(anchor: CommentAnchor, githubBlocker: string | undefined): Placed {
+  return githubBlocker ? { anchor, githubBlocker } : { anchor };
+}
+
+/** Where a line thread's text sits in `view` now, or null when it is gone or the review does not show it. */
+function placeLine(anchor: LineAnchor, view: SideView): LineAnchor | null {
+  const moved = relocate(anchor, view.contents);
+  return moved && shows(view, moved.startLine, moved.endLine) ? moved : null;
+}
+
+/**
+ * Whether the review shows every line of the range: a diff its hunks, a file view everything.
+ * The one place that decides a line thread's `stale`, for imports and relocation alike.
+ */
+function shows(view: SideView, startLine: number, endLine: number): boolean {
+  return view.shown == null || isShown(view.shown, startLine, endLine);
+}
+
+/**
+ * Why the pull request review on GitHub cannot show a fresh thread on `path`, or undefined:
+ * the pull request diff has only the changed files.
+ */
+function fileBlocker(review: ReviewView, path: string): string | undefined {
+  return review.inDiff(path) ? undefined : FILE_OFF_DIFF;
+}
+
+/**
+ * Why the pull request review on GitHub cannot show a fresh line thread at `anchor`, placed by
+ * `view`, or undefined: its file, or lines beyond the few context lines around each change.
+ */
+function lineBlocker(review: ReviewView, anchor: LineAnchor, view: SideView): string | undefined {
+  if (!review.inDiff(anchor.path)) return FILE_OFF_DIFF;
+  return isShown(view.onGithub, anchor.startLine, anchor.endLine) ? undefined : LINES_OFF_DIFF;
 }
 
 /** The file as stored, or an empty store when absent. Malformed JSON propagates. */

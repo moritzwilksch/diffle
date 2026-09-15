@@ -18,9 +18,10 @@ export const BIG_FILE_THRESHOLD = 512 * 1024 * 1024;
 /**
  * `diff`, `log` and `grep` are porcelain and honour the user's config. These
  * overrides keep their output in the shape the parsers expect: no colour, `a/`
- * `b/` prefixes, and non-ASCII paths written verbatim instead of C-quoted.
- * `color.ui` does not beat a per-command `color.diff`/`color.grep=always`, so
- * those are pinned too.
+ * `b/` prefixes, non-ASCII paths written verbatim instead of C-quoted, and an
+ * empty context line as ` ` so a hunk-body walk keeps its count. `color.ui`
+ * does not beat a per-command `color.diff`/`color.grep=always`, so those are
+ * pinned too.
  */
 const CONFIG_ARGS = [
   '-c',
@@ -35,6 +36,8 @@ const CONFIG_ARGS = [
   'diff.mnemonicPrefix=false',
   '-c',
   'core.quotePath=false',
+  '-c',
+  'diff.suppressBlankEmpty=false',
 ];
 /** Fixed header prefixes and no `diff.external`, so a patch is always a unified diff. */
 function patchArgs(oldRev: string): string[] {
