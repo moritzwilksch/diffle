@@ -1,9 +1,11 @@
 import { isIP } from 'node:net';
 import { hostname as osHostname } from 'node:os';
 
-export type RequestGuard = (headers: { host?: string; origin?: string }) => boolean;
+/** Returns null for an accepted request, or a message naming the header that failed and how to trust it. */
+export type RequestGuard = (headers: { host?: string; origin?: string }) => string | null;
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
+const HINT = 'if a reverse proxy sent it, trust that origin with --allowed-origin';
 
 /**
  * Restricts API and WebSocket requests to local hosts and the configured public origin.
@@ -15,20 +17,25 @@ export function requestGuard(bindHost: string, names: string[] = ownNames(), all
   const allowed = new Set([...LOOPBACK, bindHost.toLowerCase(), ...names.map((n) => n.toLowerCase())]);
   const publicHost = allowedOrigin == null ? undefined : new URL(allowedOrigin).host;
   return ({ host, origin }) => {
-    if (!host) return false;
+    if (!host) return 'missing Host header';
     const name = hostnameOf(host).toLowerCase();
     const localHost = loopback ? LOOPBACK.has(name) : isIP(name) !== 0 || allowed.has(name);
     const proxyHost = publicHost != null && host.toLowerCase() === publicHost;
-    if (!localHost && !proxyHost) return false;
-    if (origin == null || (allowedOrigin != null && origin === allowedOrigin)) return true;
+    if (!localHost && !proxyHost) return `forbidden Host "${host}"; ${HINT}`;
+    if (origin == null || (allowedOrigin != null && origin === allowedOrigin)) return null;
     // A public Host must not make another scheme or port on that origin trusted.
-    if (proxyHost) return false;
-    try {
-      return new URL(origin).host === host;
-    } catch {
-      return false;
-    }
+    if (!proxyHost && parseHost(origin) === host) return null;
+    return `forbidden Origin "${origin}" for Host "${host}"; ${HINT}`;
   };
+}
+
+/** The host of a syntactically valid origin; undefined for `null` and other non-URLs. */
+function parseHost(origin: string): string | undefined {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The machine's hostname, its short form, and its mDNS name, so LAN visitors can use any of them. */

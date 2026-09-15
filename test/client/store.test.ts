@@ -748,6 +748,49 @@ describe('client transitions', () => {
     expect(useStore.getState().activePath).toBe('a.txt');
   });
 
+  it('v moves to the next unviewed file, a collapsed one included; zc moves to the next open file', async () => {
+    const changed = ['a.txt', 'b.txt', 'c.txt', 'd.txt'].map((path, i) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b${i}`,
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt', 'd.txt']));
+    api.setViewed.mockImplementation(async (path: string, blob: string, viewed: boolean) => [
+      ...useStore.getState().viewed.filter((v) => v.path !== path),
+      { path, blob, viewed },
+    ]);
+    api.viewed.mockResolvedValueOnce([{ path: 'c.txt', blob: 'b2', viewed: true }]);
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt', 'd.txt']), changed });
+    await useStore.getState().boot();
+    // b.txt is folded but not viewed: v from a.txt stops on its header instead of skipping to d.txt.
+    useStore.setState({ collapsed: { 'b.txt': true }, diffStyle: 'unified' });
+    useStore.getState().moveFile('first');
+    await useStore.getState().toggleViewedAtCursor();
+    expect(useStore.getState().activePath).toBe('b.txt');
+    expect(useStore.getState().selection).toBeNull();
+    // From b.txt, viewed c.txt is skipped and open d.txt takes the cursor on its first hunk.
+    await useStore.getState().toggleViewedAtCursor();
+    expect(useStore.getState().activePath).toBe('d.txt');
+    expect(useStore.getState().selection).toEqual(
+      expect.objectContaining({ id: expect.stringMatching(/^diff:d\.txt@/) }),
+    );
+    // The last unviewed file stays current once nothing unviewed follows it.
+    await useStore.getState().toggleViewedAtCursor();
+    expect(useStore.getState().activePath).toBe('d.txt');
+    expect(useStore.getState().selection).toBeNull();
+
+    // zc skips collapsed files whatever their viewed state.
+    useStore.getState().unviewAll();
+    useStore.setState({ collapsed: { 'b.txt': true, 'c.txt': true } });
+    useStore.getState().moveFile('first');
+    useStore.getState().setCollapsedAtCursor(true);
+    expect(useStore.getState().activePath).toBe('d.txt');
+  });
+
   it('a slow first refresh never overwrites a faster second one', async () => {
     const slow = deferred<Snapshot>();
     const fast = deferred<Snapshot>();

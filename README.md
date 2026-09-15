@@ -75,7 +75,10 @@ when forwarding to diffle, including WebSocket upgrades at `/diffle/ws`. No buil
 or CLI base-path setting is needed.
 
 Run diffle with `--no-open` for a proxy-managed session. If the proxy preserves its
-public Host or Origin headers, explicitly trust its public origin (without the path):
+public Host or Origin headers, explicitly trust its public origin (without the path).
+Some proxies instead rewrite both headers to the upstream address they use for diffle,
+such as a Kubernetes service name; then trust that address. A rejected request gets a
+403 naming the header and value that failed, so the browser's network tab shows which.
 
 ```bash
 diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
