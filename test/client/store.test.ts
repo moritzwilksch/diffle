@@ -2005,7 +2005,7 @@ describe('scrollCursorTo', () => {
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(useStore.getState().toast).toBe('No line under the cursor');
   });
-  it('switching split / unified keeps the cursor and re-pins its line', () => {
+  it('switching split / unified keeps the cursor and issues no jump: the pane holds the viewport', () => {
     const selection = {
       id: 'diff:a.py@1',
       range: { start: 3, side: 'additions' as const, end: 3, endSide: 'additions' as const },
@@ -2015,7 +2015,7 @@ describe('scrollCursorTo', () => {
     const s = useStore.getState();
     expect(s.diffStyle).toBe('unified');
     expect(s.selection).toEqual(selection);
-    expect(s.scrollTarget).toEqual(expect.objectContaining({ id: 'diff:a.py@1', line: 3, align: 'eye' }));
+    expect(s.scrollTarget).toBeNull();
   });
 });
 
