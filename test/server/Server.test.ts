@@ -235,10 +235,20 @@ describe('Server', () => {
     }
   });
 
-  it('rejects foreign Host and mismatched Origin with 403', async () => {
-    expect((await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } })).status).toBe(403);
-    expect((await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } })).status).toBe(403);
+  it('rejects foreign Host and mismatched Origin with a 403 naming the header', async () => {
+    const host = await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } });
+    expect(host.status).toBe(403);
+    expect(JSON.parse(host.body).error).toMatch(/^forbidden Host "evil.example"; .*--allowed-origin/);
+    const origin = await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } });
+    expect(origin.status).toBe(403);
+    expect(JSON.parse(origin.body).error).toMatch(/^forbidden Origin "http:\/\/evil.example" for Host "/);
     expect((await send('GET', '/api/snapshot', { headers: { origin: base.origin } })).status).toBe(200);
+  });
+
+  it('answers a rejected WebSocket upgrade with a 403 naming the header', async () => {
+    const ws = new WebSocket(base.href.replace('http:', 'ws:') + 'ws', { headers: { origin: 'https://evil.example' } });
+    const error = await new Promise<Error>((resolve) => ws.once('error', resolve));
+    expect(error.message).toContain('403');
   });
 
   it.each(['proxy.example', '127.0.0.1:4966'])('accepts proxied HTTP and WebSockets with Host %s', async (host) => {
