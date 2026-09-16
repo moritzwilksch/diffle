@@ -98,7 +98,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           ))}
         </p>
       )}
-      <div className="mt-2.5 flex justify-end gap-1.5">
+      <div className="mt-2.5 flex items-center gap-1.5">
+        <span className="text-[0.75rem] text-muted" title="Installed diffle version">
+          diffle v{__DIFFLE_VERSION__}
+        </span>
+        <span className="flex-1" />
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={save} disabled={saving}>
           Save
