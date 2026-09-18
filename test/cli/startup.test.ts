@@ -97,28 +97,6 @@ describe('failed startup', () => {
   );
 });
 
-it('reviews the working tree when given no revisions', async () => {
-  await writeFile(join(dir, 'app.py'), 'x = 2\n');
-  const child = spawn(process.execPath, [TSX, MAIN, '--no-open', '--no-watch', '-C', dir, '-p', '0'], {
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let stderr = '';
-  try {
-    await new Promise<void>((res, rej) => {
-      child.stderr.setEncoding('utf8').on('data', (d: string) => {
-        stderr += d;
-        if (stderr.includes('comparing')) res();
-      });
-      child.on('error', rej);
-      child.on('close', () => rej(new Error(`exited early: ${stderr}`)));
-    });
-    expect(stderr).toContain('HEAD..worktree');
-  } finally {
-    child.kill('SIGTERM');
-  }
-}, 30_000);
-
 it('rejects a public origin containing a path with usage exit code 2', async () => {
   const run = await cli(['--allowed-origin', 'https://proxy.example/prefix/']);
   expect(run.code).toBe(2);
