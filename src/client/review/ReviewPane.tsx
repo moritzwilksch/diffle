@@ -33,12 +33,14 @@ import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
 import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
 import {
+  draftRange,
   isCollapsed,
   itemDeps,
   itemId,
   itemVersion,
   orderedPaths,
   pathFromItemId,
+  rangeLabel,
   viewedState,
   visibleThreads,
   type ItemVersion,
@@ -50,7 +52,7 @@ import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
-import { installThreadHighlights } from './threadHighlights.js';
+import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 
@@ -131,9 +133,9 @@ const HEADER_CSS = `
 /* Collapsed-context bars run edge to edge: inset rounded pills next to a full-width file header read as misaligned. */
 [data-separator='line-info'] [data-separator-wrapper] { padding-inline: 0 !important; margin-inline: 0 !important; }
 [data-separator='line-info'] :is([data-separator-wrapper], [data-separator-content], [data-expand-up], [data-expand-down], [data-expand-both]) { border-radius: 0 !important; }
-/* Lines a saved comment refers to (see threadHighlights.ts): the selection tint, fainter, so the cursor's
-   own selection still stands out on top of it. Feeds the library's line-background chain like its own rule. */
-[data-thread-line]:not([data-selected-line]):is([data-line], [data-column-number]) {
+/* Lines a saved or draft comment refers to (see commentHighlights.ts): the selection tint, fainter, so the
+   cursor's own selection still stands out on top of it. Feeds the library's line-background chain like its own rule. */
+[data-comment-line]:not([data-selected-line]):is([data-line], [data-column-number]) {
   --diffs-computed-selected-line-bg: light-dark(
     color-mix(in lab, var(--diffs-computed-diff-line-bg) 90%, var(--diffs-selection-base)),
     color-mix(in lab, var(--diffs-computed-diff-line-bg) 84%, var(--diffs-selection-base))
@@ -144,21 +146,21 @@ const HEADER_CSS = `
 `;
 
 /**
- * Token under the pointer → LSP target. Diff tokens carry a side; file items are new-side only.
- * A context line is the same text on both sides, so its old-side column resolves to the new-side line.
+ * Word under the pointer → LSP target; null on punctuation or space. Diff tokens carry a side; file items
+ * are new-side only. A context line is the same text on both sides, so its old-side column resolves to the
+ * new-side line.
  */
 function targetOf(
   props: TokenEventBase | DiffTokenEventBaseProps,
   itemId: string,
-  clientX?: number,
+  clientX: number,
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
   // No server for this language means no hover, no menu: a target would only produce blockers.
   if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const config = schemaHoverOnly(path);
-  const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX, config);
-  if (clientX != null && !word) return null;
+  const word = wordAtPoint(props.tokenElement, clientX, schemaHoverOnly(path));
+  if (!word) return null;
   let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
   let line = props.lineNumber;
   if (side === 'old') {
@@ -169,9 +171,7 @@ function targetOf(
       line = alt;
     }
   }
-  return word
-    ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
-    : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+  return { path, side, line, col: props.lineCharStart + word.start, text: word.text };
 }
 
 /** Whether some running language server claims this file's language. */
@@ -329,10 +329,10 @@ export function ReviewPane() {
     if (!scroller) return;
     return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
   }, [scroller]);
-  // So do the tints on the lines saved comments refer to.
+  // So do the tints on the lines saved and draft comments refer to.
   useEffect(() => {
     if (!scroller) return;
-    return installThreadHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
   }, [scroller]);
   useEffect(() => {
     onSelectionChanged();
@@ -585,6 +585,13 @@ export function ReviewPane() {
         if (Math.abs(d) <= 1) break;
         viewer.scrollTo({ ...target, offset: (target.offset ?? 0) - d });
         instance.render(true);
+        // Past the document's end the viewer clamps and reports the mark as reached, even when a
+        // re-layout left the scroller short of that clamp. If the reissue moved nothing, the scroller
+        // closes the residue itself, before paint; what lies past the document's end stays out of reach.
+        if (drift() !== d || !containerRef.current) continue;
+        containerRef.current.scrollTop += d;
+        instance.render(true);
+        if (drift() === d) break;
       }
       return true;
     };
@@ -630,6 +637,8 @@ export function ReviewPane() {
     [setSelection, setActivePath],
   );
 
+  /** Stops following the pointer inside the hovered token; the viewer's leave for that token calls it. */
+  const untrackToken = useRef<() => void>(() => {});
   const options = useMemo(
     () => ({
       ...codeViewOptions,
@@ -648,14 +657,26 @@ export function ReviewPane() {
         event: PointerEvent,
         ctx: { item: { id: string } },
       ) => {
-        // The word under the pointer when it entered; the whole token if the pointer sits on punctuation.
-        const t = targetOf(props, ctx.item.id, event.clientX) ?? targetOf(props, ctx.item.id);
-        lspTarget.set(t, props.tokenElement);
-        if (t) hoverControl.enter(t, props.tokenElement);
-        else hoverControl.leave();
-        if (t && !schemaHoverOnly(t.path) && (event.ctrlKey || event.metaKey)) markHover(props.tokenElement, true);
+        // The viewer reports one enter per token, but a token can hold several words (`a.b.c`): the pointer
+        // moving from one to another inside it targets the new word as if it had crossed tokens. The leave
+        // of the previous token already ran, so nothing is targeted when the pointer arrives.
+        let shown: TokenTarget | null = null;
+        const point = (e: PointerEvent) => {
+          const t = targetOf(props, ctx.item.id, e.clientX);
+          if (t?.col === shown?.col) return;
+          shown = t;
+          lspTarget.set(t, props.tokenElement);
+          if (t) hoverControl.enter(t, props.tokenElement);
+          else hoverControl.leave();
+          markHover(props.tokenElement, !!t && !schemaHoverOnly(t.path) && (e.ctrlKey || e.metaKey));
+        };
+        point(event);
+        props.tokenElement.addEventListener('pointermove', point);
+        untrackToken.current = () => props.tokenElement.removeEventListener('pointermove', point);
       },
       onTokenLeave: (props: TokenEventBase | DiffTokenEventBaseProps) => {
+        untrackToken.current();
+        untrackToken.current = () => {};
         lspTarget.set(null);
         hoverControl.leave();
         markHover(props.tokenElement, false);
@@ -693,8 +714,8 @@ export function ReviewPane() {
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {
     const meta = annotation.metadata;
     if (meta.kind === 'draft') {
-      const d = useStore.getState().draft;
-      return <CommentComposer lines={d ? describeSelection(d) : ''} />;
+      const range = draftRange(useStore.getState());
+      return <CommentComposer label={range ? rangeLabel(range) : 'whole file'} />;
     }
     return <CommentCard thread={meta.thread} />;
   }, []);
@@ -854,14 +875,6 @@ const FILE_LINE = 0;
 
 /** What a binary file's body shows in place of a diff. */
 const BINARY_NOTE = '// Binary file not shown';
-
-/** What the composer says it comments on: the selected lines, or the file. */
-function describeSelection(d: Draft): string {
-  if (!d.selection) return 'this file';
-  const { startLine, endLine } = lineBounds(d.selection);
-  const side = sideOf(d.selection) === 'old' ? 'removed ' : '';
-  return `${side}L${startLine}${endLine !== startLine ? `–${endLine}` : ''}`;
-}
 
 /** The viewer element hosting `el`: its shadow root's host, or the nearest ancestor that owns a shadow root. */
 function hostOf(el: HTMLElement): HTMLElement | null {
