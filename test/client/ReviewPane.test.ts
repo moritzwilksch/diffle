@@ -198,6 +198,67 @@ describe('ReviewPane scroller effects', () => {
       rangeSpy.mockRestore();
     }
   });
+  it('targets the word under the pointer as it moves inside a multi-word token', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: snap(changed),
+        lsp: {
+          enabled: true,
+          missing: [],
+          servers: [{ name: 'pyright', command: 'pyright', state: 'ready', languages: ['python'] }],
+        },
+      }),
+    );
+    const enter = vi.spyOn(hoverControl, 'enter').mockImplementation(() => {});
+    const leave = vi.spyOn(hoverControl, 'leave').mockImplementation(() => {});
+    const createRange = document.createRange.bind(document);
+    const rangeSpy = vi.spyOn(document, 'createRange').mockImplementation(() => {
+      const range = createRange();
+      range.getBoundingClientRect = () =>
+        ({ left: range.startOffset * 10, right: (range.startOffset + 1) * 10 }) as DOMRect;
+      return range;
+    });
+    try {
+      const options = captureOptions.mock.calls.at(-1)![0];
+      // One highlighter token: the theme colors `self` alone, the rest of the call shares one style.
+      const tokenElement = document.createElement('span');
+      const tokenText = '._version_prefetcher.schedule(';
+      tokenElement.textContent = tokenText;
+      const props = { tokenElement, tokenText, lineNumber: 1033, lineCharStart: 20 };
+      const ctx = { item: { id: 'diff:app.py@0' } };
+      const target = (text: string) => ({
+        path: 'app.py',
+        side: 'new',
+        line: 1033,
+        col: 20 + tokenText.indexOf(text),
+        text,
+      });
+      const move = (clientX: number) => tokenElement.dispatchEvent(new MouseEvent('pointermove', { clientX }));
+      const onTokenEnter = options.onTokenEnter as (props: unknown, event: unknown, ctx: unknown) => void;
+      // Entering on `(` names no word: the token's first column would resolve to the neighbour before the dot.
+      onTokenEnter(props, { clientX: 295 }, ctx);
+      expect(enter).not.toHaveBeenCalled();
+      move(255);
+      expect(enter).toHaveBeenLastCalledWith(target('schedule'), tokenElement);
+      // Staying on the same word asks nothing new.
+      move(215);
+      expect(enter).toHaveBeenCalledTimes(1);
+      move(55);
+      expect(enter).toHaveBeenLastCalledWith(target('_version_prefetcher'), tokenElement);
+      // Back onto punctuation lets the tooltip go, like leaving the token.
+      move(205);
+      expect(leave).toHaveBeenCalledTimes(1);
+      const onTokenLeave = options.onTokenLeave as (props: unknown) => void;
+      onTokenLeave(props);
+      move(255);
+      expect(enter).toHaveBeenCalledTimes(2);
+    } finally {
+      enter.mockRestore();
+      leave.mockRestore();
+      rangeSpy.mockRestore();
+    }
+  });
   it('uses the rendered header height for navigation and the same geometry for CSS and virtualization', async () => {
     document.documentElement.style.fontSize = '14.4px';
     await act(() => root.render(createElement(ReviewPane)));

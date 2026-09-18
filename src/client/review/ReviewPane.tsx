@@ -146,21 +146,21 @@ const HEADER_CSS = `
 `;
 
 /**
- * Token under the pointer → LSP target. Diff tokens carry a side; file items are new-side only.
- * A context line is the same text on both sides, so its old-side column resolves to the new-side line.
+ * Word under the pointer → LSP target; null on punctuation or space. Diff tokens carry a side; file items
+ * are new-side only. A context line is the same text on both sides, so its old-side column resolves to the
+ * new-side line.
  */
 function targetOf(
   props: TokenEventBase | DiffTokenEventBaseProps,
   itemId: string,
-  clientX?: number,
+  clientX: number,
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
   // No server for this language means no hover, no menu: a target would only produce blockers.
   if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const config = schemaHoverOnly(path);
-  const word = clientX == null ? null : wordAtPoint(props.tokenElement, clientX, config);
-  if (clientX != null && !word) return null;
+  const word = wordAtPoint(props.tokenElement, clientX, schemaHoverOnly(path));
+  if (!word) return null;
   let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
   let line = props.lineNumber;
   if (side === 'old') {
@@ -171,9 +171,7 @@ function targetOf(
       line = alt;
     }
   }
-  return word
-    ? { path, side, line, col: props.lineCharStart + word.start, text: word.text }
-    : { path, side, line, col: props.lineCharStart, text: props.tokenText };
+  return { path, side, line, col: props.lineCharStart + word.start, text: word.text };
 }
 
 /** Whether some running language server claims this file's language. */
@@ -643,6 +641,8 @@ export function ReviewPane() {
     [setSelection, setActivePath],
   );
 
+  /** Stops following the pointer inside the hovered token; the viewer's leave for that token calls it. */
+  const untrackToken = useRef<() => void>(() => {});
   const options = useMemo(
     () => ({
       ...codeViewOptions,
@@ -661,14 +661,26 @@ export function ReviewPane() {
         event: PointerEvent,
         ctx: { item: { id: string } },
       ) => {
-        // The word under the pointer when it entered; the whole token if the pointer sits on punctuation.
-        const t = targetOf(props, ctx.item.id, event.clientX) ?? targetOf(props, ctx.item.id);
-        lspTarget.set(t, props.tokenElement);
-        if (t) hoverControl.enter(t, props.tokenElement);
-        else hoverControl.leave();
-        if (t && !schemaHoverOnly(t.path) && (event.ctrlKey || event.metaKey)) markHover(props.tokenElement, true);
+        // The viewer reports one enter per token, but a token can hold several words (`a.b.c`): the pointer
+        // moving from one to another inside it targets the new word as if it had crossed tokens. The leave
+        // of the previous token already ran, so nothing is targeted when the pointer arrives.
+        let shown: TokenTarget | null = null;
+        const point = (e: PointerEvent) => {
+          const t = targetOf(props, ctx.item.id, e.clientX);
+          if (t?.col === shown?.col) return;
+          shown = t;
+          lspTarget.set(t, props.tokenElement);
+          if (t) hoverControl.enter(t, props.tokenElement);
+          else hoverControl.leave();
+          markHover(props.tokenElement, !!t && !schemaHoverOnly(t.path) && (e.ctrlKey || e.metaKey));
+        };
+        point(event);
+        props.tokenElement.addEventListener('pointermove', point);
+        untrackToken.current = () => props.tokenElement.removeEventListener('pointermove', point);
       },
       onTokenLeave: (props: TokenEventBase | DiffTokenEventBaseProps) => {
+        untrackToken.current();
+        untrackToken.current = () => {};
         lspTarget.set(null);
         hoverControl.leave();
         markHover(props.tokenElement, false);
