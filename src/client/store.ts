@@ -96,10 +96,13 @@ export interface SearchState {
   regex: boolean;
   /** 'file' searches the file the reader is in; 'diff' only the changed files; 'repo' the whole codebase. */
   scope: SearchScope;
-  /** The file a 'file'-scoped result set came from; the bar names it while the query has run. */
+  /** The file owning the local search bar and its results, pinned when search opens. */
   path: string | null;
   /** Bumped by `g/` so the box takes focus again after `n` / `N` blurred it. */
   focusNonce: number;
+  /** Unsubmitted text survives the file header being virtualized away. */
+  input: string;
+  editing: boolean;
   query: string;
   matches: Match[];
   index: number;
@@ -235,6 +238,9 @@ export interface ReviewState {
   search: SearchState;
   /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → widened). */
   openSearch(scope?: SearchScope): void;
+  setSearchInput(value: string): void;
+  blurSearchInput(): void;
+  typeSearchInput(key: string): void;
   closeSearch(): void;
   runSearch(query: string): Promise<void>;
   /** Flip a text-search option and rerun the current query. */
@@ -342,6 +348,8 @@ export interface ReviewState {
     side?: Side;
     align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
     offset?: number;
+    /** Leave the viewport alone if this item's search form is already fully visible. */
+    revealSearch?: boolean;
     nonce: number;
   } | null;
 
@@ -1298,6 +1306,8 @@ export const useStore = create<ReviewState>((set, get) => {
       scope: 'diff',
       path: null,
       focusNonce: 0,
+      input: '',
+      editing: false,
       query: '',
       matches: [],
       index: -1,
@@ -1305,19 +1315,68 @@ export const useStore = create<ReviewState>((set, get) => {
       truncated: false,
     },
     openSearch(scope) {
+      set((s) => {
+        const nextScope = scope ?? s.search.scope;
+        const path = nextScope === 'file' ? currentPath(s) : null;
+        return {
+          search: {
+            ...s.search,
+            open: true,
+            kind: 'text',
+            direction: 1,
+            scope: nextScope,
+            input: s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query,
+            editing: true,
+            path,
+            focusNonce: s.search.focusNonce + 1,
+          },
+          ...(path
+            ? {
+                scrollTarget: {
+                  id: itemIdOf(s, path),
+                  align: 'start' as const,
+                  revealSearch: true,
+                  nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+                },
+              }
+            : {}),
+        };
+      });
+    },
+    setSearchInput(input) {
+      set((s) => ({ search: { ...s.search, input, editing: true } }));
+    },
+    blurSearchInput() {
+      set((s) => ({ search: { ...s.search, editing: false } }));
+    },
+    typeSearchInput(key) {
       set((s) => ({
         search: {
           ...s.search,
-          open: true,
-          kind: 'text',
-          direction: 1,
-          scope: scope ?? s.search.scope,
+          input: key === 'Backspace' ? Array.from(s.search.input).slice(0, -1).join('') : s.search.input + key,
+          editing: true,
           focusNonce: s.search.focusNonce + 1,
         },
+        ...(s.search.scope === 'file' && s.search.path
+          ? {
+              scrollTarget: {
+                id: itemIdOf(s, s.search.path),
+                align: 'start' as const,
+                revealSearch: true,
+                nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+              },
+            }
+          : {}),
       }));
     },
     setSearchOptions(opts) {
-      set((s) => ({ search: { ...s.search, ...opts } }));
+      set((s) => ({
+        search: {
+          ...s.search,
+          ...opts,
+          path: opts.scope === undefined ? s.search.path : opts.scope === 'file' ? currentPath(s) : null,
+        },
+      }));
       const { query, kind } = get().search;
       if (kind === 'text' && query) void get().runSearch(query);
     },
@@ -1325,15 +1384,26 @@ export const useStore = create<ReviewState>((set, get) => {
       // Escape cancels a search in flight: its matches would move the cursor for a bar no longer shown.
       searchSeq.start();
       set((s) => ({
-        search: { ...s.search, open: false, kind: 'text', direction: 1, matches: [], index: -1, loading: false },
+        search: {
+          ...s.search,
+          open: false,
+          editing: false,
+          kind: 'text',
+          direction: 1,
+          matches: [],
+          index: -1,
+          loading: false,
+        },
       }));
     },
     async runSearch(query) {
       const g = generation;
       const t = searchSeq.start();
-      // A file-scoped search is pinned to the file the reader is in when it runs; `/` again re-pins.
-      const path = get().search.scope === 'file' ? currentPath(get()) : null;
-      set((s) => ({ search: { ...s.search, kind: 'text', direction: 1, query, path, loading: true } }));
+      // Keep edits and option changes tied to the header owning the search; `/` again re-pins.
+      const path = get().search.scope === 'file' ? get().search.path : null;
+      set((s) => ({
+        search: { ...s.search, kind: 'text', direction: 1, query, input: query, editing: false, path, loading: true },
+      }));
       try {
         const { ignoreCase, regex, scope } = get().search;
         if (scope === 'file' && !path) {

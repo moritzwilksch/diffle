@@ -468,7 +468,13 @@ export function ReviewPane() {
       const requested = scrollTarget.align ?? 'center';
       const eye = requested === 'eye' || requested === 'top' || requested === 'bottom' || requested === 'keep';
       const height = containerRef.current?.clientHeight ?? 800;
-      const header = geometry.itemMetrics.diffHeaderHeight;
+      const rendered = viewerRef.current
+        ?.getInstance()
+        ?.getRenderedItems()
+        .find((r) => r.id === scrollTarget.id);
+      const header =
+        rendered?.element.shadowRoot?.querySelector('[data-diffs-header]')?.getBoundingClientRect().height ??
+        geometry.itemMetrics.diffHeaderHeight;
       const edge = geometry.edge;
       const offset =
         requested === 'eye'
@@ -529,6 +535,16 @@ export function ReviewPane() {
   // the row afterwards; the deferred checks catch that without a visible hunt.
   useEffect(() => {
     if (!scrollTarget || !viewerRef.current) return;
+    if (scrollTarget.revealSearch && containerRef.current) {
+      const item = viewerRef.current
+        .getInstance()
+        ?.getRenderedItems()
+        .find((r) => r.id === scrollTarget.id);
+      const form = item?.element.querySelector('[data-content-search]')?.closest('form');
+      const rect = form?.getBoundingClientRect();
+      const view = containerRef.current.getBoundingClientRect();
+      if (rect && rect.height > 0 && rect.top >= view.top && rect.bottom <= view.bottom) return;
+    }
     const { eye, offset, header, target } = scrollPlan(scrollTarget);
     const pinned = eye && scrollTarget.line != null;
     jumping.current = true;
@@ -570,7 +586,14 @@ export function ReviewPane() {
       const scroller = containerRef.current;
       const row = renderedRow(scrollTarget);
       if (!scroller || !row) return NaN;
-      return overflow(scroller.getBoundingClientRect(), row.getBoundingClientRect(), header);
+      const item = viewerRef.current
+        ?.getInstance()
+        ?.getRenderedItems()
+        .find((r) => r.id === scrollTarget.id);
+      const measuredHeader = item?.element.shadowRoot
+        ?.querySelector('[data-diffs-header]')
+        ?.getBoundingClientRect().height;
+      return overflow(scroller.getBoundingClientRect(), row.getBoundingClientRect(), measuredHeader ?? header);
     };
     // One synchronous landing; false when the item is not in the viewer yet.
     const land = (): boolean => {
@@ -733,9 +756,30 @@ export function ReviewPane() {
     return <CommentCard thread={meta.thread} />;
   }, []);
 
-  const renderHeaderMetadata = useCallback(
-    (item: CodeViewItem<Annot>) => <FileHeaderMeta path={pathFromItemId(item.id)} />,
-    [],
+  const resizeHeader = useCallback(
+    (id: string, height: number) => {
+      const viewer = viewerRef.current?.getInstance();
+      const item = viewer?.getRenderedItems().find((r) => r.id === id);
+      if (!viewer || !item) return;
+      const scroller = containerRef.current;
+      const scrollTop = scroller?.scrollTop;
+      // CodeView's default metrics assume equal headers; local search enlarges only its owning file.
+      item.instance.setMetrics({ ...geometry.itemMetrics, diffHeaderHeight: height });
+      viewer.instanceChanged(item.instance, true);
+      viewer.render(true);
+      // Header toggles aren't navigation. Its line anchor can skip a collapsed hunk on each resize.
+      // Restore the viewport synchronously; an explicit offscreen-search jump runs separately.
+      if (scroller && scrollTop !== undefined && scroller.scrollTop !== scrollTop) {
+        scroller.scrollTop = scrollTop;
+        scroller.dispatchEvent(new Event('scroll'));
+        viewer.render(true);
+      }
+    },
+    [geometry],
+  );
+  const renderCustomHeader = useCallback(
+    (item: CodeViewItem<Annot>) => <FileHeader id={item.id} resizeHeader={resizeHeader} />,
+    [resizeHeader],
   );
 
   if (error)
@@ -785,7 +829,7 @@ export function ReviewPane() {
         selectedLines={selection}
         onSelectedLinesChange={onSelectedLinesChange}
         renderAnnotation={renderAnnotation}
-        renderHeaderMetadata={renderHeaderMetadata}
+        renderCustomHeader={renderCustomHeader}
       />
     </main>
   );
@@ -918,6 +962,52 @@ function toItem(
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
 const FILE_LINE = 0;
 
+function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: string, height: number) => void }) {
+  const path = pathFromItemId(id);
+  const ref = useRef<HTMLDivElement>(null);
+  const localSearch = useStore(
+    (s) => s.search.open && s.search.kind === 'text' && s.search.scope === 'file' && s.search.path === path,
+  );
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    let previous = 0;
+    const measure = () => {
+      const height = element.getBoundingClientRect().height + 1; // the header's bottom border
+      if (height <= 1 || height === previous) return;
+      previous = height;
+      resizeHeader(id, height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [id, resizeHeader, localSearch]);
+  const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
+  return (
+    <div ref={ref}>
+      <div className="flex h-[calc(var(--diffle-header-height)-1px)] items-center gap-2 px-2.5 py-1.5">
+        <FileText size="0.875rem" className="shrink-0 text-muted" />
+        {file?.oldPath && file.oldPath !== path && (
+          <>
+            <FilePath path={file.oldPath} nowrap />
+            <span className="text-muted">→</span>
+          </>
+        )}
+        <FilePath path={path} nowrap className="mr-auto" />
+        {file && (
+          <span className="flex shrink-0 gap-2 font-mono text-[0.75rem]">
+            <span className="text-del">−{file.deletions}</span>
+            <span className="text-add">+{file.additions}</span>
+          </span>
+        )}
+        <FileHeaderMeta path={path} />
+      </div>
+      <SearchBar path={path} />
+    </div>
+  );
+}
+
 function FileHeaderMeta({ path }: { path: string }) {
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   const active = useStore((s) => s.activePath === path);
@@ -951,7 +1041,7 @@ function FileHeaderMeta({ path }: { path: string }) {
     // an empty file has no lines to click, and the pane must not wander off to another file (issue #151).
     const toggle = (event: MouseEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest('button, input, label, a, [role="button"]')) return;
+      if (target instanceof Element && target.closest('button, input, label, a, form, [role="button"]')) return;
       selectFile(path);
       toggleCollapsed(path);
     };

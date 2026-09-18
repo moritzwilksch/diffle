@@ -59,6 +59,79 @@ describe('hasModifier', () => {
 });
 
 describe('useKeymap', () => {
+  it('releases local search when a diff line is clicked, preserving its draft for /', () => {
+    const previous = useStore.getState().search;
+    const diffStyle = useStore.getState().diffStyle;
+    const input = document.createElement('input');
+    input.setAttribute('data-content-search', '');
+    const diff = document.createElement('div');
+    const line = document.createElement('span');
+    diff.attachShadow({ mode: 'open' }).appendChild(line);
+    document.body.append(input, diff);
+    useStore.setState({
+      search: { ...previous, open: true, kind: 'text', scope: 'file', editing: true, input: 'draft' },
+    });
+    try {
+      input.focus();
+      input.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+      expect(useStore.getState().search.editing).toBe(true);
+      line.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+      expect(useStore.getState().search.editing).toBe(false);
+      expect(document.activeElement).not.toBe(input);
+      press('s');
+      expect(useStore.getState().search.input).toBe('draft');
+      expect(useStore.getState().diffStyle).not.toBe(diffStyle);
+      press('/');
+      expect(useStore.getState().search.editing).toBe(true);
+      expect(useStore.getState().search.input).toBe('draft');
+    } finally {
+      input.remove();
+      diff.remove();
+      useStore.setState({ search: previous, diffStyle, scrollTarget: null });
+    }
+  });
+
+  it('routes typing back to an unmounted local search instead of running diff shortcuts', () => {
+    const previous = useStore.getState().search;
+    const diffStyle = useStore.getState().diffStyle;
+    useStore.setState({
+      search: { ...previous, open: true, kind: 'text', scope: 'file', path: 'a.py', editing: true, input: 'term' },
+    });
+    try {
+      expect(press('s').defaultPrevented).toBe(true);
+      expect(useStore.getState().search.input).toBe('terms');
+      expect(useStore.getState().search.path).toBe('a.py');
+      expect(useStore.getState().search.focusNonce).toBe(previous.focusNonce + 1);
+      expect(useStore.getState().diffStyle).toBe(diffStyle);
+      expect(useStore.getState().scrollTarget?.align).toBe('start');
+      press('Backspace');
+      expect(useStore.getState().search.input).toBe('term');
+      press('g');
+      press('s');
+      expect(useStore.getState().search.input).toBe('termgs');
+    } finally {
+      useStore.setState({ search: previous, scrollTarget: null });
+    }
+  });
+
+  it('does not take typing away from other editable fields while local search is active', () => {
+    const previous = useStore.getState().search;
+    useStore.setState({
+      search: { ...previous, open: true, kind: 'text', scope: 'file', editing: true, input: 'term' },
+    });
+    const input = document.createElement('textarea');
+    document.body.appendChild(input);
+    try {
+      const event = new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true });
+      input.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(useStore.getState().search.input).toBe('term');
+    } finally {
+      input.remove();
+      useStore.setState({ search: previous });
+    }
+  });
+
   it('runs a key typed through AltGr (Windows Ctrl+Alt, Linux AltGraph) like an unmodified one', () => {
     const moveHunk = vi.fn();
     useStore.setState({ moveHunk });
@@ -95,7 +168,7 @@ describe('useKeymap', () => {
 
   it('/ opens the file-scoped search, g/ the widened one, and gf the tree filter', () => {
     const openSearch = vi.fn();
-    const tree = { openSearch: vi.fn() };
+    const tree = { openSearch: vi.fn(), getSearchValue: () => '' };
     useStore.setState({ openSearch, treeModel: tree as never });
     try {
       press('/');
@@ -115,6 +188,39 @@ describe('useKeymap', () => {
     } finally {
       useStore.setState({ treeModel: null });
     }
+  });
+
+  it('⌘/Ctrl+p opens filename search from an input and captures browser printing', () => {
+    const tree = { openSearch: vi.fn(), getSearchValue: () => 'retained.txt' };
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    const reached = vi.fn();
+    input.addEventListener('keydown', reached);
+    useStore.setState({ treeModel: tree as never, layout: { ...useStore.getState().layout, treeVisible: true } });
+    try {
+      for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+        const event = new KeyboardEvent('keydown', { key: 'p', ...modifier, bubbles: true, cancelable: true });
+        input.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(tree.openSearch).toHaveBeenCalledTimes(2);
+      expect(tree.openSearch).toHaveBeenLastCalledWith('retained.txt');
+      expect(reached).not.toHaveBeenCalled();
+    } finally {
+      input.remove();
+      useStore.setState({ treeModel: null });
+    }
+  });
+
+  it('⌘+p waits for the hidden tree to mount before opening its search', async () => {
+    useStore.setState({ treeModel: null, layout: { ...useStore.getState().layout, treeVisible: false } });
+    expect(press('p', { metaKey: true }).defaultPrevented).toBe(true);
+    expect(useStore.getState().layout.treeVisible).toBe(true);
+    const tree = { openSearch: vi.fn(), getSearchValue: () => '' };
+    useStore.setState({ treeModel: tree as never });
+    await new Promise(requestAnimationFrame);
+    expect(tree.openSearch).toHaveBeenCalledOnce();
+    useStore.setState({ treeModel: null });
   });
 
   it('⌘/Ctrl+Shift+e focuses the file tree on the active file, showing the tree first when it is hidden', async () => {

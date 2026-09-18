@@ -12,6 +12,8 @@ const base: SearchState = {
   scope: 'diff',
   path: null,
   focusNonce: 0,
+  input: 'a.b',
+  editing: false,
   query: 'a.b',
   matches: [{ path: 'x', line: 1, text: '' }],
   index: 0,
