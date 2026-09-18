@@ -78,6 +78,47 @@ function click(path: string) {
 }
 
 describe('FileTreePane clicks', () => {
+  it('keeps a typed filename filter when focus moves to the diff', () => {
+    const model = useStore.getState().treeModel!;
+    act(() => model.openSearch());
+    const tree = host.querySelector('file-tree-container')!;
+    const input = tree.shadowRoot!.querySelector<HTMLInputElement>('[data-file-tree-search-input]')!;
+    act(() => {
+      input.focus();
+      input.value = 'b.txt';
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    });
+    expect(model.getSearchValue()).toBe('b.txt');
+    const diff = document.createElement('main');
+    diff.tabIndex = 0;
+    host.appendChild(diff);
+    act(() => diff.focus());
+    expect(model.getSearchValue()).toBe('b.txt');
+    expect(model.isSearchOpen()).toBe(true);
+    expect(input.value).toBe('b.txt');
+    act(() => model.closeSearch());
+    expect(model.getSearchValue()).toBe('');
+    diff.remove();
+  });
+
+  it('hides the directory fallback for a query with no matches', () => {
+    const model = useStore.getState().treeModel!;
+    act(() => model.resetPaths(['src/a.txt', 'test/b.txt']));
+    act(() => model.openSearch('does-not-exist'));
+    const tree = host.querySelector('file-tree-container')!;
+    expect(tree.hasAttribute('data-search-empty')).toBe(true);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe('No matching files');
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true, cancelable: true });
+    act(() => tree.shadowRoot!.querySelector('input')!.dispatchEvent(enter));
+    expect(enter.defaultPrevented).toBe(true);
+    expect(model.getSearchValue()).toBe('does-not-exist');
+    expect(openFile).not.toHaveBeenCalled();
+    act(() => model.setSearch('a.txt'));
+    expect(tree.hasAttribute('data-search-empty')).toBe(false);
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(model.getSearchMatchingPaths()).toEqual(['src/a.txt']);
+  });
+
   it('clicking the already-active collapsed file expands and opens it', () => {
     click('a.txt');
     expect(useStore.getState().collapsed['a.txt']).toBe(false);

@@ -95,7 +95,7 @@ describe('useKeymap', () => {
 
   it('/ opens the file-scoped search, g/ the widened one, and gf the tree filter', () => {
     const openSearch = vi.fn();
-    const tree = { openSearch: vi.fn() };
+    const tree = { openSearch: vi.fn(), getSearchValue: () => '' };
     useStore.setState({ openSearch, treeModel: tree as never });
     try {
       press('/');
@@ -118,7 +118,7 @@ describe('useKeymap', () => {
   });
 
   it('⌘/Ctrl+p opens filename search from an input and captures browser printing', () => {
-    const tree = { openSearch: vi.fn() };
+    const tree = { openSearch: vi.fn(), getSearchValue: () => 'retained.txt' };
     const input = document.createElement('input');
     document.body.appendChild(input);
     const reached = vi.fn();
@@ -131,6 +131,7 @@ describe('useKeymap', () => {
         expect(event.defaultPrevented).toBe(true);
       }
       expect(tree.openSearch).toHaveBeenCalledTimes(2);
+      expect(tree.openSearch).toHaveBeenLastCalledWith('retained.txt');
       expect(reached).not.toHaveBeenCalled();
     } finally {
       input.remove();
@@ -142,7 +143,7 @@ describe('useKeymap', () => {
     useStore.setState({ treeModel: null, layout: { ...useStore.getState().layout, treeVisible: false } });
     expect(press('p', { metaKey: true }).defaultPrevented).toBe(true);
     expect(useStore.getState().layout.treeVisible).toBe(true);
-    const tree = { openSearch: vi.fn() };
+    const tree = { openSearch: vi.fn(), getSearchValue: () => '' };
     useStore.setState({ treeModel: tree as never });
     await new Promise(requestAnimationFrame);
     expect(tree.openSearch).toHaveBeenCalledOnce();

@@ -64,7 +64,7 @@ const KEYMAP: Record<string, Action> = {
   Y: () => void copyComments(),
   '/': (s) => s.openSearch('file'),
   'g/': (s) => s.openSearch(widenSearchScope(s.search.scope)),
-  gf: (s) => s.treeModel?.openSearch(),
+  gf: () => focusFileSearch(),
   gd: (s) => s.goToDefinition(),
   gy: (s) => s.goToTypeDefinition(),
   gh: (s) => s.showHover(),
@@ -154,8 +154,8 @@ export function useKeymap(): void {
         clearPending();
         if (!s.layout.treeVisible) {
           s.setLayout({ treeVisible: true });
-          requestAnimationFrame(() => useStore.getState().treeModel?.openSearch());
-        } else s.treeModel?.openSearch();
+          requestAnimationFrame(focusFileSearch);
+        } else focusFileSearch();
         return;
       }
       // The references overlay owns the keys while open, wherever focus sits.
@@ -272,6 +272,16 @@ export function useKeymap(): void {
       count.current = '';
     };
   }, []);
+}
+
+/** Re-focus filename search without discarding its current filter. */
+function focusFileSearch(): void {
+  const model = useStore.getState().treeModel;
+  model?.openSearch(model.getSearchValue());
+  document
+    .querySelector('file-tree-container')
+    ?.shadowRoot?.querySelector<HTMLInputElement>('[data-file-tree-search-input]')
+    ?.focus({ preventScroll: true });
 }
 
 /** Focus the file tree on the active file so its own arrow keys walk the files. */

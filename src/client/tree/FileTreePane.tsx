@@ -1,7 +1,7 @@
 import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
 import { Button } from '../ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
-import { FileTree, useFileTree } from '@pierre/trees/react';
+import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangedFile, ViewedState } from '../../shared/protocol.js';
@@ -32,6 +32,7 @@ const LANE_CSS = `
 [data-item-section="decoration"] > span > span:last-child { min-width: 1ch; text-align: center; }
 /* The library butts the search box against the toolbar above; give it the toolbar's own vertical rhythm. */
 [data-file-tree-search-container] { padding-top: 0.5rem; }
+:host([data-search-empty]) [data-file-tree-virtualized-scroll] { display: none; }
 `;
 
 function rowDecoration(f: ChangedFile, state: ViewedState) {
@@ -96,11 +97,45 @@ export function FileTreePane() {
     },
   });
 
+  const search = useFileTreeSearch(model);
+  const searchEmpty = search.value.trim().length > 0 && search.matchingPaths.length === 0;
+
   // A click on the decoration toggles viewed without selecting the row. The tree renders in
   // a shadow root, so the hit test walks the composed path from the pointer target. Only the
   // decoration's own <span>s count: the lane stretches to the row's end, and a click in that
   // empty space must select the row, not toggle viewed.
   const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bodyRef.current?.firstElementChild?.toggleAttribute('data-search-empty', searchEmpty);
+  }, [searchEmpty]);
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    // The library clears search on blur, even with its 'retain' option after typing.
+    // Keep the filter while reading the diff; Escape still explicitly closes it.
+    const retainSearch = (event: Event) => {
+      const target = event.composedPath()[0];
+      if (target instanceof Element && target.matches('[data-file-tree-search-input]')) event.stopPropagation();
+    };
+    const guardEmptySearch = (event: KeyboardEvent) => {
+      if (
+        model.getSearchValue().trim() &&
+        model.getSearchMatchingPaths().length === 0 &&
+        ['Enter', 'ArrowUp', 'ArrowDown'].includes(event.key)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    body.addEventListener('blur', retainSearch, true);
+    body.addEventListener('keydown', guardEmptySearch, true);
+    return () => {
+      body.removeEventListener('blur', retainSearch, true);
+      body.removeEventListener('keydown', guardEmptySearch, true);
+    };
+  }, [model]);
+
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
@@ -255,12 +290,17 @@ export function FileTreePane() {
           {unview.armed && 'Un-view all?'}
         </Button>
       </div>
-      <div className="min-h-0 flex-1" ref={bodyRef}>
+      <div className="relative min-h-0 flex-1" ref={bodyRef}>
         <FileTree
           model={model}
           className="h-full"
           renderContextMenu={(item, ctx) => <TreeMenu path={item.path} kind={item.kind} close={ctx.close} />}
         />
+        {searchEmpty && (
+          <div role="status" className="absolute inset-x-0 top-14 pr-2.5 pl-[calc(1.5rem+1px)] text-muted">
+            No matching files
+          </div>
+        )}
       </div>
     </aside>
   );
