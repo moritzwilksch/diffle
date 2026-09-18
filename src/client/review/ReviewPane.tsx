@@ -591,6 +591,13 @@ export function ReviewPane() {
         if (Math.abs(d) <= 1) break;
         viewer.scrollTo({ ...target, offset: (target.offset ?? 0) - d });
         instance.render(true);
+        // Past the document's end the viewer clamps and reports the mark as reached, even when a
+        // re-layout left the scroller short of that clamp. If the reissue moved nothing, the scroller
+        // closes the residue itself, before paint; what lies past the document's end stays out of reach.
+        if (drift() !== d || !containerRef.current) continue;
+        containerRef.current.scrollTop += d;
+        instance.render(true);
+        if (drift() === d) break;
       }
       return true;
     };
