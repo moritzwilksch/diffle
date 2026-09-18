@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { CommentAnchor, CommentThread, LineAnchor } from '../../src/shared/protocol.js';
-import { THREAD_LINE_ATTR, markThreadRows, tintedAnchors } from '../../src/client/review/threadHighlights.js';
+import type { Draft, Loaded } from '../../src/client/store.js';
+import { COMMENT_LINE_ATTR, markCommentRows, tintedRanges } from '../../src/client/review/commentHighlights.js';
 
 const anchor = (side: 'old' | 'new', startLine: number, endLine: number): LineAnchor => ({
   kind: 'line',
@@ -36,14 +37,16 @@ function column(rows: { line?: number; type?: string }[], side?: 'deletions' | '
   return code;
 }
 
+const noDraft = { draft: null, loaded: {} };
+
 const marked = (root: ParentNode): string[] =>
-  [...root.querySelectorAll(`[${THREAD_LINE_ATTR}]`)].map((el) => {
+  [...root.querySelectorAll(`[${COMMENT_LINE_ATTR}]`)].map((el) => {
     const e = el as HTMLElement;
     const col = e.closest('code')!.hasAttribute('data-deletions') ? 'old' : 'new';
     return `${col}:${e.dataset.line ?? e.dataset.columnNumber}${e.dataset.line != null ? '' : '#'}`;
   });
 
-describe('markThreadRows', () => {
+describe('markCommentRows', () => {
   it('tints content and gutter cells of every line in a unified range, on the anchored side only', () => {
     const pre = document.createElement('pre');
     pre.append(
@@ -56,15 +59,15 @@ describe('markThreadRows', () => {
         { line: 4, type: 'context' },
       ]),
     );
-    markThreadRows(pre, [anchor('new', 2, 3)]);
+    markCommentRows(pre, [anchor('new', 2, 3)]);
     expect(marked(pre)).toEqual(['new:2#', 'new:3#', 'new:2', 'new:3']);
     // The card row under the range stays as it is.
-    expect(pre.querySelector('[data-line-annotation]')!.hasAttribute(THREAD_LINE_ATTR)).toBe(false);
+    expect(pre.querySelector('[data-line-annotation]')!.hasAttribute(COMMENT_LINE_ATTR)).toBe(false);
   });
   it('follows the deleted side in a split diff', () => {
     const pre = document.createElement('pre');
     pre.append(column([{ line: 5 }, { line: 6 }], 'deletions'), column([{ line: 5 }, { line: 6 }], 'additions'));
-    markThreadRows(pre, [anchor('old', 6, 6), anchor('new', 5, 5)]);
+    markCommentRows(pre, [anchor('old', 6, 6), anchor('new', 5, 5)]);
     expect(marked(pre)).toEqual(['old:6#', 'old:6', 'new:5#', 'new:5']);
   });
   it('leaves a resolved thread untinted while resolved cards are hidden', () => {
@@ -78,19 +81,34 @@ describe('markThreadRows', () => {
     const threads = [thread('t1', anchor('new', 1, 1), true), thread('t2', anchor('new', 2, 2), false)];
     const pre = document.createElement('pre');
     pre.append(column([{ line: 1 }, { line: 2 }]));
-    markThreadRows(pre, tintedAnchors({ threads, showResolved: false }, 'a.ts'));
+    markCommentRows(pre, tintedRanges({ threads, showResolved: false, ...noDraft }, 'a.ts'));
     expect(marked(pre)).toEqual(['new:2#', 'new:2']);
-    markThreadRows(pre, tintedAnchors({ threads, showResolved: true }, 'a.ts'));
+    markCommentRows(pre, tintedRanges({ threads, showResolved: true, ...noDraft }, 'a.ts'));
     expect(marked(pre)).toEqual(['new:1#', 'new:2#', 'new:1', 'new:2']);
-    expect(tintedAnchors({ threads, showResolved: true }, 'b.ts')).toEqual([]);
+    expect(tintedRanges({ threads, showResolved: true, ...noDraft }, 'b.ts')).toEqual([]);
+  });
+  it('tints the lines of the open draft in its file, whatever the cursor selects meanwhile', () => {
+    const draft: Draft = {
+      path: 'a.ts',
+      selection: { id: 'diff:a.ts@0', range: { start: 75, side: 'additions', end: 70, endSide: 'additions' } },
+    };
+    const loaded: Record<string, Loaded> = {};
+    // The tint reads only the draft: the store's own `selection` is not an input, so a cursor move elsewhere cannot clear it.
+    expect(tintedRanges({ threads: [], showResolved: false, draft, loaded }, 'a.ts')).toEqual([
+      { side: 'new', startLine: 70, endLine: 75 },
+    ]);
+    expect(tintedRanges({ threads: [], showResolved: false, draft, loaded }, 'b.ts')).toEqual([]);
+    expect(
+      tintedRanges({ threads: [], showResolved: false, draft: { path: 'a.ts', selection: null }, loaded }, 'a.ts'),
+    ).toEqual([]);
   });
   it('clears the marks of a thread that is gone', () => {
     const pre = document.createElement('pre');
     pre.append(column([{ line: 1 }, { line: 2 }]));
-    markThreadRows(pre, [anchor('new', 1, 2)]);
-    markThreadRows(pre, [anchor('new', 2, 2)]);
+    markCommentRows(pre, [anchor('new', 1, 2)]);
+    markCommentRows(pre, [anchor('new', 2, 2)]);
     expect(marked(pre)).toEqual(['new:2#', 'new:2']);
-    markThreadRows(pre, []);
+    markCommentRows(pre, []);
     expect(marked(pre)).toEqual([]);
   });
 });

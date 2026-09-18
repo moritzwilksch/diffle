@@ -1,10 +1,13 @@
 import { Button } from '../ui/Button.js';
-import { FileDiff } from 'lucide-react';
+import { FileDiff, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '../store.js';
 
-/** Inline comment editor rendered as an annotation at the selection's last line. */
-export function CommentComposer({ lines }: { lines: string }) {
+/**
+ * Inline comment editor rendered as an annotation at the selection's last line. Its header names the
+ * lines the comment will attach to, as the saved card's does, since the cursor may have moved on.
+ */
+export function CommentComposer({ label }: { label: string }) {
   const submitDraft = useStore((s) => s.submitDraft);
   const closeDraft = useStore((s) => s.closeDraft);
   const draftQuote = useStore((s) => s.draftQuote);
@@ -46,35 +49,41 @@ export function CommentComposer({ lines }: { lines: string }) {
   };
 
   return (
-    <div className="mx-2 my-1 rounded-md border border-accent bg-surface p-2 font-sans text-[0.8125rem]">
-      <textarea
-        className="max-h-[60vh] min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
-        ref={ref}
-        value={text}
-        placeholder={`Comment on ${lines}…`}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') closeDraft();
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
-        }}
-      />
-      <div className="mt-1.5 flex items-center justify-end gap-1.5">
-        <span className="mr-auto text-[0.75rem] text-muted">
-          <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
-        </span>
-        {!fileLevel && (
-          <Button
-            variant="ghost"
-            onClick={() => void suggest()}
-            title="Insert the selected lines as a suggestion block to edit"
-          >
-            <FileDiff size="0.8125rem" /> Suggest change
+    <div className="mx-2 my-1 overflow-hidden rounded-md border border-accent bg-surface font-sans text-[0.8125rem]">
+      <div className="flex items-center gap-2 border-b border-b-border bg-hover px-2.5 py-1 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
+        <MessageSquare size="0.8125rem" />
+        <span className="font-mono font-semibold text-foreground">{label}</span>
+      </div>
+      <div className="p-2">
+        <textarea
+          className="max-h-[60vh] min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
+          ref={ref}
+          value={text}
+          placeholder="Leave a comment…"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') closeDraft();
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
+          }}
+        />
+        <div className="mt-1.5 flex items-center justify-end gap-1.5">
+          <span className="mr-auto text-[0.75rem] text-muted">
+            <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
+          </span>
+          {!fileLevel && (
+            <Button
+              variant="ghost"
+              onClick={() => void suggest()}
+              title="Insert the selected lines as a suggestion block to edit"
+            >
+              <FileDiff size="0.8125rem" /> Suggest change
+            </Button>
+          )}
+          <Button onClick={closeDraft}>Cancel</Button>
+          <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
+            Comment
           </Button>
-        )}
-        <Button onClick={closeDraft}>Cancel</Button>
-        <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
-          Comment
-        </Button>
+        </div>
       </div>
     </div>
   );

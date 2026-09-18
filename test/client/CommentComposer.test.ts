@@ -18,7 +18,7 @@ beforeEach(async () => {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  await act(() => root.render(createElement(CommentComposer, { lines: 'L1–L6' })));
+  await act(() => root.render(createElement(CommentComposer, { label: 'L1–6' })));
 });
 
 afterEach(async () => {
@@ -26,6 +26,10 @@ afterEach(async () => {
   host.remove();
   useStore.setState({ draftQuote: originalDraftQuote });
   vi.restoreAllMocks();
+});
+
+it('names the lines the comment attaches to in its header', () => {
+  expect(host.querySelector('span.font-mono')!.textContent).toBe('L1–6');
 });
 
 it('grows for an inserted multiline suggestion and shrinks when text is removed', async () => {
