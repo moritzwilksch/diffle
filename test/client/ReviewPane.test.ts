@@ -26,6 +26,7 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 type Rendered = { id: string; element: HTMLElement; type: 'diff'; instance?: { setMetrics: ReturnType<typeof vi.fn> } };
 let rendered: Rendered[] = [];
 const instanceChanged = vi.fn();
+const renderViewer = vi.fn();
 const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 const captureItems = vi.fn<(items: unknown[]) => void>();
 const scrollTo = vi.fn();
@@ -45,7 +46,7 @@ vi.mock('@pierre/diffs/react', () => ({
     useImperativeHandle(
       ref,
       () => ({
-        getInstance: () => ({ getRenderedItems: () => rendered, render: () => {}, instanceChanged }),
+        getInstance: () => ({ getRenderedItems: () => rendered, render: renderViewer, instanceChanged }),
         getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
         scrollTo,
       }),
@@ -125,6 +126,7 @@ const flush = () => act(() => new Promise((r) => setTimeout(r, 30)));
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
+  renderViewer.mockReset();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -161,6 +163,49 @@ afterEach(async () => {
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('does not accumulate scroll drift when local search repeatedly opens and closes', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    const scroller = host.querySelector<HTMLElement>('.codeview')!;
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+    const content = header.lastElementChild as HTMLElement;
+    const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+    box(scroller, 0, 800);
+    let resized = false;
+    const instance = {
+      setMetrics: vi.fn(() => {
+        resized = true;
+      }),
+    };
+    rendered = [{ id, type: 'diff', element: header, instance }];
+    // A library resize can choose a line beyond collapsed context and advance the viewport.
+    renderViewer.mockImplementation(() => {
+      if (resized) {
+        scroller.scrollTop += 120;
+        resized = false;
+      }
+    });
+    const measure = vi.spyOn(content, 'getBoundingClientRect');
+    measure.mockImplementation(() => {
+      const form = content.querySelector('form');
+      if (form) box(form, 44, 84);
+      return { height: form ? 83 : 43 } as DOMRect;
+    });
+    scroller.scrollTop = 600;
+    scrollTo.mockClear();
+    for (let i = 0; i < 4; i++) {
+      await act(() => useStore.getState().openSearch('file'));
+      expect(scroller.scrollTop).toBe(600);
+      await act(() => useStore.getState().closeSearch());
+      expect(scroller.scrollTop).toBe(600);
+    }
+    expect(instance.setMetrics).toHaveBeenCalledTimes(8);
+    expect(scrollTo).not.toHaveBeenCalled();
+    measure.mockRestore();
+  });
+
   it.each([
     { top: 44, bottom: 84, visible: true },
     { top: 780, bottom: 820, visible: false },

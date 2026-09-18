@@ -761,10 +761,19 @@ export function ReviewPane() {
       const viewer = viewerRef.current?.getInstance();
       const item = viewer?.getRenderedItems().find((r) => r.id === id);
       if (!viewer || !item) return;
+      const scroller = containerRef.current;
+      const scrollTop = scroller?.scrollTop;
       // CodeView's default metrics assume equal headers; local search enlarges only its owning file.
       item.instance.setMetrics({ ...geometry.itemMetrics, diffHeaderHeight: height });
       viewer.instanceChanged(item.instance, true);
       viewer.render(true);
+      // Header toggles aren't navigation. Its line anchor can skip a collapsed hunk on each resize.
+      // Restore the viewport synchronously; an explicit offscreen-search jump runs separately.
+      if (scroller && scrollTop !== undefined && scroller.scrollTop !== scrollTop) {
+        scroller.scrollTop = scrollTop;
+        scroller.dispatchEvent(new Event('scroll'));
+        viewer.render(true);
+      }
     },
     [geometry],
   );
