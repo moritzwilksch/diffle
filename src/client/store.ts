@@ -239,6 +239,7 @@ export interface ReviewState {
   /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → widened). */
   openSearch(scope?: SearchScope): void;
   setSearchInput(value: string): void;
+  blurSearchInput(): void;
   typeSearchInput(key: string): void;
   closeSearch(): void;
   runSearch(query: string): Promise<void>;
@@ -1322,7 +1323,7 @@ export const useStore = create<ReviewState>((set, get) => {
             kind: 'text',
             direction: 1,
             scope: nextScope,
-            input: s.search.editing && s.search.kind === 'text' ? s.search.input : s.search.query,
+            input: s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query,
             editing: true,
             path,
             focusNonce: s.search.focusNonce + 1,
@@ -1341,6 +1342,9 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     setSearchInput(input) {
       set((s) => ({ search: { ...s.search, input, editing: true } }));
+    },
+    blurSearchInput() {
+      set((s) => ({ search: { ...s.search, editing: false } }));
     },
     typeSearchInput(key) {
       set((s) => ({

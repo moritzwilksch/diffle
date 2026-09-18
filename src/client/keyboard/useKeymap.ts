@@ -273,6 +273,16 @@ export function useKeymap(): void {
       dispatch(e);
       if (e.defaultPrevented) e.stopPropagation();
     };
+    // A deliberate click elsewhere releases search ownership; virtualization removing the input does not.
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0 || realTarget(e)?.closest('[data-content-search]')) return;
+      const s = useStore.getState();
+      if (!s.search.open || !s.search.editing) return;
+      s.blurSearchInput();
+      document.querySelector<HTMLInputElement>('[data-content-search]')?.blur();
+      clearPending();
+      count.current = '';
+    };
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && realTarget(e)?.getAttribute('role') !== 'combobox') setTimeout(focusReview, 0);
@@ -280,9 +290,11 @@ export function useKeymap(): void {
     // Capture phase: the tree stops propagation of keys it handles (arrows), and we
     // need ArrowRight to hand focus back. Editable targets are skipped early.
     document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keyup', onKeyUp);
     return () => {
       document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keyup', onKeyUp);
       clearPending();
       count.current = '';

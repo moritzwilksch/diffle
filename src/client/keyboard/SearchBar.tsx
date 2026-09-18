@@ -72,6 +72,7 @@ function SearchForm() {
     >
       <Search size="0.875rem" />
       <input
+        data-content-search=""
         className="min-w-0 flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
         ref={ref}
         value={search.input}

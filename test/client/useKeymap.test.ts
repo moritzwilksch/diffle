@@ -59,6 +59,38 @@ describe('hasModifier', () => {
 });
 
 describe('useKeymap', () => {
+  it('releases local search when a diff line is clicked, preserving its draft for /', () => {
+    const previous = useStore.getState().search;
+    const diffStyle = useStore.getState().diffStyle;
+    const input = document.createElement('input');
+    input.setAttribute('data-content-search', '');
+    const diff = document.createElement('div');
+    const line = document.createElement('span');
+    diff.attachShadow({ mode: 'open' }).appendChild(line);
+    document.body.append(input, diff);
+    useStore.setState({
+      search: { ...previous, open: true, kind: 'text', scope: 'file', editing: true, input: 'draft' },
+    });
+    try {
+      input.focus();
+      input.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+      expect(useStore.getState().search.editing).toBe(true);
+      line.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+      expect(useStore.getState().search.editing).toBe(false);
+      expect(document.activeElement).not.toBe(input);
+      press('s');
+      expect(useStore.getState().search.input).toBe('draft');
+      expect(useStore.getState().diffStyle).not.toBe(diffStyle);
+      press('/');
+      expect(useStore.getState().search.editing).toBe(true);
+      expect(useStore.getState().search.input).toBe('draft');
+    } finally {
+      input.remove();
+      diff.remove();
+      useStore.setState({ search: previous, diffStyle, scrollTarget: null });
+    }
+  });
+
   it('routes typing back to an unmounted local search instead of running diff shortcuts', () => {
     const previous = useStore.getState().search;
     const diffStyle = useStore.getState().diffStyle;
