@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
-import type { CodeViewOptions } from '@pierre/diffs';
+import { parsePatchFiles, type CodeViewOptions } from '@pierre/diffs';
 import { reviewGeometry } from '../../src/client/review/geometry.js';
 
 const api = {
@@ -33,7 +33,7 @@ vi.mock('@pierre/diffs/react', () => ({
     props: {
       containerRef: (el: HTMLDivElement | null) => void;
       className: string;
-      items: { id: string }[];
+      items: ({ id: string; type: 'diff' } | { id: string; type: 'file'; file: { contents: string } })[];
       options: CodeViewOptions<unknown>;
       renderHeaderMetadata: (item: { id: string }) => unknown;
     },
@@ -46,16 +46,22 @@ vi.mock('@pierre/diffs/react', () => ({
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
       scrollTo,
     }));
-    // Each item's header metadata renders in the light DOM so tests can see the header's buttons.
+    // Each item's header metadata renders in the light DOM so tests can see the header's buttons; a file
+    // item's contents render as text.
     return createElement(
       'div',
       { ref: props.containerRef, className: props.className },
       props.items.map((it) =>
         createElement(
           'div',
-          { key: it.id, className: 'header', 'data-diffs-header': 'default' },
-          createElement('span', { className: 'filename' }, it.id),
-          props.renderHeaderMetadata(it) as never,
+          { key: it.id, className: 'item' },
+          createElement(
+            'div',
+            { className: 'header', 'data-diffs-header': 'default' },
+            createElement('span', { className: 'filename' }, it.id),
+            props.renderHeaderMetadata(it) as never,
+          ),
+          it.type === 'file' ? createElement('pre', { className: 'contents' }, it.file.contents) : null,
         ),
       ),
     );
@@ -552,17 +558,19 @@ describe('ReviewPane scroller effects', () => {
     expect(useStore.getState().scrollTarget).toBe(scrollTarget);
   });
 
-  it('expands a binary file to a placeholder line and collapses it again from the header', async () => {
+  it('expands a binary file to a placeholder banner and collapses it again from the header', async () => {
     const binary = [
       { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'img.png': { kind: 'binary' } } }));
     const item = () => captureItems.mock.lastCall![0][0];
+    // The banner is the whole body: an empty file plus one file-level annotation, never a note line.
     expect(item()).toMatchObject({
       type: 'file',
       collapsed: false,
-      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string },
+      file: { name: 'img.png', contents: '' },
+      annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', placeholder: 'binary' } }],
     });
 
     await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
@@ -606,5 +614,35 @@ describe('ReviewPane scroller effects', () => {
     expect(host.querySelector<HTMLElement>('[data-diffs-header]')!.style.cursor).toBe('');
     await act(() => host.querySelector<HTMLElement>('[data-diffs-header] .filename')!.click());
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
+  });
+
+  it('renders a pure rename as a placeholder that keeps the old path for the header arrow', async () => {
+    const moved = [
+      {
+        path: 'b.txt',
+        oldPath: 'a.txt',
+        status: 'R' as const,
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        generated: false,
+      },
+    ];
+    const patch = 'diff --git a/a.txt b/b.txt\nsimilarity index 100%\nrename from a.txt\nrename to b.txt\n';
+    const fileDiff = parsePatchFiles(patch, 'k')[0]!.files[0]!;
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: { ...snap(moved), tree: ['b.txt'] },
+        loaded: { 'b.txt': { kind: 'diff', fileDiff } },
+      }),
+    );
+    // The header draws `a.txt -> b.txt` from `prevName`; the banner explains the empty body.
+    expect(captureItems.mock.lastCall![0][0]).toMatchObject({
+      type: 'file',
+      file: { name: 'b.txt', contents: '', prevName: 'a.txt' },
+      annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', message: 'No content changes' } }],
+    });
   });
 });

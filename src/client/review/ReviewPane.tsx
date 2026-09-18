@@ -6,6 +6,7 @@ import type {
   DiffTokenEventBaseProps,
   FileDiffLoadedFiles,
   FileDiffMetadata,
+  FileContents,
   LineAnnotation,
   OnDiffLineClickProps,
   OnLineClickProps,
@@ -55,8 +56,13 @@ import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
+import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
+import { hostOf } from './host.js';
 
-export type Annot = { kind: 'thread'; thread: CommentThread } | { kind: 'draft' };
+export type Annot =
+  | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
+  | { kind: 'thread'; thread: CommentThread }
+  | { kind: 'draft' };
 
 /** Where jump navigation parks the target line, as a fraction of the viewport height. */
 const EYE_FRACTION = 0.5;
@@ -143,6 +149,12 @@ const HEADER_CSS = `
 }
 ::highlight(diffle-search) { background: var(--search-match); }
 ::highlight(diffle-search-current) { background: var(--search-current); color: var(--search-current-fg); }
+/* A placeholder replaces the body (binary, empty, moved, oversized, failed): the banner alone fills the width.
+   The viewer still lays out a gutter, an empty row and, in split view, an old-side column; drop them all.
+   The banner marks its host (see PlaceholderBanner). */
+:host([data-placeholder]) :is(pre, [data-code]) { grid-template-columns: minmax(0, 1fr); padding-block: 0; }
+:host([data-placeholder]) :is([data-gutter], [data-deletions], [data-line], [data-column-number]) { display: none; }
+:host([data-placeholder]) [data-content] { grid-column: 1; }
 `;
 
 /**
@@ -713,6 +725,7 @@ export function ReviewPane() {
 
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {
     const meta = annotation.metadata;
+    if (meta.kind === 'placeholder') return <PlaceholderBanner kind={meta.placeholder} message={meta.message} />;
     if (meta.kind === 'draft') {
       const range = draftRange(useStore.getState());
       return <CommentComposer label={range ? rangeLabel(range) : 'whole file'} />;
@@ -841,22 +854,54 @@ function toItem(
       const s = draft.selection.range.endSide ?? draft.selection.range.side ?? 'additions';
       annotations.push({ side: s, lineNumber: endLine, metadata: { kind: 'draft' } });
     }
-    if (loaded.kind === 'diff') return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
-    // Binary, oversized or failed: a one-line placeholder file item under the diff id, so the header's
-    // collapse toggle has a body to show. The line also gives file threads a place to hang.
-    const note =
-      loaded.kind === 'oversized'
-        ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
-        : loaded.kind === 'error'
-          ? `// ${loaded.message}`
-          : loaded.kind === 'loading'
-            ? '// loading…'
-            : BINARY_NOTE;
-    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+    // A pure rename keeps the `oldPath -> newPath` arrow by carrying `prevName` on the placeholder: the
+    // library renders the same rename header for file items, and the banner says why there is no body.
+    if (loaded.kind === 'diff' && loaded.fileDiff.hunks.length > 0)
+      return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
+    // Binary, hunkless (a pure rename, a mode change), oversized or failed: an empty file item under the
+    // diff id whose line-0 annotation carries a banner saying why there is nothing to expand. The banner
+    // also gives file threads a place to hang.
+    const [placeholder, message] =
+      loaded.kind === 'diff'
+        ? changed.status === 'R'
+          ? // The header's arrow already names the old path; the banner only explains the empty body.
+            (['empty', 'No content changes'] as const)
+          : (['empty', 'No changed lines'] as const)
+        : loaded.kind === 'oversized'
+          ? ([
+              'oversized',
+              `${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`,
+            ] as const)
+          : loaded.kind === 'error'
+            ? (['error', loaded.message] as const)
+            : loaded.kind === 'loading'
+              ? (['loading', 'Loading…'] as const)
+              : (['binary', 'Binary file'] as const);
+    fileLevel.unshift({ lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } });
+    return {
+      id,
+      type: 'file',
+      // `prevName` is not in FileContents' type, but the library's header renderer picks it up with an
+      // `in` check and draws the rename arrow.
+      file: {
+        name: path,
+        contents: '',
+        prevName: changed.status === 'R' ? changed.oldPath : undefined,
+      } as FileContents,
+      annotations: fileLevel,
+      version,
+      collapsed,
+    };
   }
   if (loaded.kind !== 'file') {
-    const note = loaded.kind === 'binary' ? BINARY_NOTE : loaded.kind === 'error' ? `// ${loaded.message}` : '';
-    return { id, type: 'file', file: { name: path, contents: note }, annotations: fileLevel, version, collapsed };
+    const [placeholder, message] =
+      loaded.kind === 'binary'
+        ? (['binary', 'Binary file'] as const)
+        : loaded.kind === 'error'
+          ? (['error', loaded.message] as const)
+          : (['loading', 'Loading…'] as const);
+    fileLevel.unshift({ lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } });
+    return { id, type: 'file', file: { name: path, contents: '' }, annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   const annotations: LineAnnotation<Annot>[] = fileLevel;
@@ -872,17 +917,6 @@ function toItem(
 
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
 const FILE_LINE = 0;
-
-/** What a binary file's body shows in place of a diff. */
-const BINARY_NOTE = '// Binary file not shown';
-
-/** The viewer element hosting `el`: its shadow root's host, or the nearest ancestor that owns a shadow root. */
-function hostOf(el: HTMLElement): HTMLElement | null {
-  const root = el.getRootNode();
-  if (root instanceof ShadowRoot) return root.host as HTMLElement;
-  for (let p = el.parentElement; p; p = p.parentElement) if (p.shadowRoot) return p;
-  return null;
-}
 
 function FileHeaderMeta({ path }: { path: string }) {
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
