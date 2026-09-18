@@ -650,7 +650,8 @@ export const useStore = create<ReviewState>((set, get) => {
   ) => {
     for (const p of paths) {
       const f = files.get(p);
-      // A diff without hunks (a pure rename, a mode change) renders as a placeholder note, not as a diff.
+      // Pure renames and mode changes have no hunks to hydrate, and hydratePartialDiff rejects a pure
+      // rename's old file, so queueing them wastes two fetches and swallows an error.
       if (f?.isPartial && f.hunks.length > 0 && (f.type === 'change' || f.type === 'rename-changed')) {
         hydrationQueue.push({ path: p, file: f, replaces: committed[p]!, g });
       }

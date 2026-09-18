@@ -614,7 +614,7 @@ describe('ReviewPane scroller effects', () => {
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
   });
 
-  it('renders a pure rename as a note naming the old path instead of an empty diff body', async () => {
+  it('renders a pure rename as a diff item so the header keeps the old-path arrow', async () => {
     const moved = [
       {
         path: 'b.txt',
@@ -636,9 +636,7 @@ describe('ReviewPane scroller effects', () => {
         loaded: { 'b.txt': { kind: 'diff', fileDiff } },
       }),
     );
-    expect(host.querySelector('.contents')?.textContent).toBe('// moved from a.txt without changes');
-    // The note must not pick up a grammar from the renamed file's extension.
-    expect(captureItems.mock.lastCall![0][0]).toMatchObject({ file: { name: 'b.txt', lang: 'text' } });
-    expect(host.querySelector('[title="Collapse / expand"]')).not.toBeNull();
+    // A placeholder file item has no way to show `a.txt -> b.txt`; only a diff item does.
+    expect(captureItems.mock.lastCall![0][0]).toMatchObject({ type: 'diff', fileDiff });
   });
 });

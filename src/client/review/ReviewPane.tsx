@@ -842,16 +842,16 @@ function toItem(
       const s = draft.selection.range.endSide ?? draft.selection.range.side ?? 'additions';
       annotations.push({ side: s, lineNumber: endLine, metadata: { kind: 'draft' } });
     }
-    if (loaded.kind === 'diff' && loaded.fileDiff.hunks.length > 0)
+    // A pure rename keeps its diff item even without hunks: the viewer's header then shows the
+    // `oldPath -> newPath` arrow, which a placeholder file item cannot express.
+    if (loaded.kind === 'diff' && (loaded.fileDiff.hunks.length > 0 || changed.status === 'R'))
       return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
-    // Binary, hunkless (a pure rename, a mode change), oversized or failed: a one-line placeholder file item
-    // under the diff id, so the header's collapse toggle has a body to show. The line also gives file threads
-    // a place to hang and says why there is nothing to expand.
+    // Binary, hunkless (a mode change), oversized or failed: a one-line placeholder file item under the
+    // diff id, so the header's collapse toggle has a body to show. The line also gives file threads a
+    // place to hang and says why there is nothing to expand.
     const note =
       loaded.kind === 'diff'
-        ? changed.status === 'R'
-          ? `// moved from ${changed.oldPath} without changes`
-          : '// no changed lines'
+        ? '// no changed lines'
         : loaded.kind === 'oversized'
           ? `// ${loaded.lines.toLocaleString()} changed lines: not loaded. Press zo or the header's load button to load the diff.`
           : loaded.kind === 'error'
