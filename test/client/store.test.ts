@@ -1513,6 +1513,7 @@ describe('symbol navigation', () => {
     useStore.getState().openSearch('file');
     expect(useStore.getState().search.scope).toBe('file');
     expect(useStore.getState().search.path).toBe('b.py');
+    expect(useStore.getState().search.editing).toBe(true);
     // Scrolling to another file must not retarget the search living in b.py's header.
     useStore.setState({ activePath: 'a.py' });
     await useStore.getState().runSearch('y');
@@ -1520,6 +1521,8 @@ describe('symbol navigation', () => {
     expect(api.search).toHaveBeenCalledWith('y', { ignoreCase: true, regex: false, scope: 'file', path: 'b.py' });
     let s = useStore.getState();
     expect(s.search.path).toBe('b.py');
+    expect(s.search.input).toBe('y');
+    expect(s.search.editing).toBe(false);
     expect(s.search.index).toBe(0);
     expect(s.selection?.range.end).toBe(2);
 

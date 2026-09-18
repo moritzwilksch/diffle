@@ -59,6 +59,47 @@ describe('hasModifier', () => {
 });
 
 describe('useKeymap', () => {
+  it('routes typing back to an unmounted local search instead of running diff shortcuts', () => {
+    const previous = useStore.getState().search;
+    const diffStyle = useStore.getState().diffStyle;
+    useStore.setState({
+      search: { ...previous, open: true, kind: 'text', scope: 'file', path: 'a.py', editing: true, input: 'term' },
+    });
+    try {
+      expect(press('s').defaultPrevented).toBe(true);
+      expect(useStore.getState().search.input).toBe('terms');
+      expect(useStore.getState().search.path).toBe('a.py');
+      expect(useStore.getState().search.focusNonce).toBe(previous.focusNonce + 1);
+      expect(useStore.getState().diffStyle).toBe(diffStyle);
+      expect(useStore.getState().scrollTarget?.align).toBe('start');
+      press('Backspace');
+      expect(useStore.getState().search.input).toBe('term');
+      press('g');
+      press('s');
+      expect(useStore.getState().search.input).toBe('termgs');
+    } finally {
+      useStore.setState({ search: previous, scrollTarget: null });
+    }
+  });
+
+  it('does not take typing away from other editable fields while local search is active', () => {
+    const previous = useStore.getState().search;
+    useStore.setState({
+      search: { ...previous, open: true, kind: 'text', scope: 'file', editing: true, input: 'term' },
+    });
+    const input = document.createElement('textarea');
+    document.body.appendChild(input);
+    try {
+      const event = new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true });
+      input.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(useStore.getState().search.input).toBe('term');
+    } finally {
+      input.remove();
+      useStore.setState({ search: previous });
+    }
+  });
+
   it('runs a key typed through AltGr (Windows Ctrl+Alt, Linux AltGraph) like an unmodified one', () => {
     const moveHunk = vi.fn();
     useStore.setState({ moveHunk });

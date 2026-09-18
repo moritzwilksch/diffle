@@ -149,6 +149,22 @@ export function useKeymap(): void {
         clearPending();
         return;
       }
+      if (
+        !isEditable(target) &&
+        !e.metaKey &&
+        !hasModifier(e) &&
+        ([...e.key].length === 1 || e.key === 'Backspace' || e.key === 'Enter') &&
+        s.search.open &&
+        s.search.kind === 'text' &&
+        s.search.editing &&
+        s.search.scope === 'file'
+      ) {
+        e.preventDefault();
+        clearPending();
+        if ([...e.key].length === 1 || e.key === 'Backspace') s.typeSearchInput(e.key);
+        else if (e.key === 'Enter') void s.runSearch(s.search.input);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         clearPending();

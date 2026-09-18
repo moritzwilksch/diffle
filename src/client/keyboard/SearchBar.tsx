@@ -1,7 +1,7 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
 import { FileDiff, FileSearch, FolderSearch, Link2, Search, WholeWord, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { SearchScope } from '../../shared/protocol.js';
 import { nextSearchScope } from '../model.js';
 import { useStore } from '../store.js';
@@ -27,12 +27,12 @@ function SearchForm() {
   const runSearch = useStore((s) => s.runSearch);
   const closeSearch = useStore((s) => s.closeSearch);
   const setSearchOptions = useStore((s) => s.setSearchOptions);
-  const [q, setQ] = useState(search.query);
+  const setSearchInput = useStore((s) => s.setSearchInput);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (search.open) ref.current?.focus();
-  }, [search.open, search.focusNonce]);
+    if (search.editing) ref.current?.focus();
+  }, [search.editing, search.focusNonce]);
 
   const n = search.matches.length;
   if (search.kind !== 'text') {
@@ -63,7 +63,7 @@ function SearchForm() {
       onClick={(e) => e.stopPropagation()}
       onSubmit={(e) => {
         e.preventDefault();
-        void runSearch(q).then(() => {
+        void runSearch(search.input).then(() => {
           ref.current?.blur();
           document.querySelector<HTMLElement>('main[tabindex]')?.focus({ preventScroll: true });
         });
@@ -73,8 +73,11 @@ function SearchForm() {
       <input
         className="min-w-0 flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
         ref={ref}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
+        value={search.input}
+        onFocus={() => {
+          if (!search.editing) setSearchInput(search.input);
+        }}
+        onChange={(e) => setSearchInput(e.target.value)}
         placeholder={
           search.scope === 'file' ? 'Search this file… (Enter, then n / N)' : 'Search all files… (Enter, then n / N)'
         }

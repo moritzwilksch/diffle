@@ -100,6 +100,9 @@ export interface SearchState {
   path: string | null;
   /** Bumped by `g/` so the box takes focus again after `n` / `N` blurred it. */
   focusNonce: number;
+  /** Unsubmitted text survives the file header being virtualized away. */
+  input: string;
+  editing: boolean;
   query: string;
   matches: Match[];
   index: number;
@@ -235,6 +238,8 @@ export interface ReviewState {
   search: SearchState;
   /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → widened). */
   openSearch(scope?: SearchScope): void;
+  setSearchInput(value: string): void;
+  typeSearchInput(key: string): void;
   closeSearch(): void;
   runSearch(query: string): Promise<void>;
   /** Flip a text-search option and rerun the current query. */
@@ -1298,6 +1303,8 @@ export const useStore = create<ReviewState>((set, get) => {
       scope: 'diff',
       path: null,
       focusNonce: 0,
+      input: '',
+      editing: false,
       query: '',
       matches: [],
       index: -1,
@@ -1312,9 +1319,33 @@ export const useStore = create<ReviewState>((set, get) => {
           kind: 'text',
           direction: 1,
           scope: scope ?? s.search.scope,
+          input: s.search.editing && s.search.kind === 'text' ? s.search.input : s.search.query,
+          editing: true,
           path: (scope ?? s.search.scope) === 'file' ? currentPath(s) : null,
           focusNonce: s.search.focusNonce + 1,
         },
+      }));
+    },
+    setSearchInput(input) {
+      set((s) => ({ search: { ...s.search, input, editing: true } }));
+    },
+    typeSearchInput(key) {
+      set((s) => ({
+        search: {
+          ...s.search,
+          input: key === 'Backspace' ? Array.from(s.search.input).slice(0, -1).join('') : s.search.input + key,
+          editing: true,
+          focusNonce: s.search.focusNonce + 1,
+        },
+        ...(s.search.scope === 'file' && s.search.path
+          ? {
+              scrollTarget: {
+                id: itemIdOf(s, s.search.path),
+                align: 'start' as const,
+                nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+              },
+            }
+          : {}),
       }));
     },
     setSearchOptions(opts) {
@@ -1332,7 +1363,16 @@ export const useStore = create<ReviewState>((set, get) => {
       // Escape cancels a search in flight: its matches would move the cursor for a bar no longer shown.
       searchSeq.start();
       set((s) => ({
-        search: { ...s.search, open: false, kind: 'text', direction: 1, matches: [], index: -1, loading: false },
+        search: {
+          ...s.search,
+          open: false,
+          editing: false,
+          kind: 'text',
+          direction: 1,
+          matches: [],
+          index: -1,
+          loading: false,
+        },
       }));
     },
     async runSearch(query) {
@@ -1340,7 +1380,9 @@ export const useStore = create<ReviewState>((set, get) => {
       const t = searchSeq.start();
       // Keep edits and option changes tied to the header owning the search; `/` again re-pins.
       const path = get().search.scope === 'file' ? get().search.path : null;
-      set((s) => ({ search: { ...s.search, kind: 'text', direction: 1, query, path, loading: true } }));
+      set((s) => ({
+        search: { ...s.search, kind: 'text', direction: 1, query, input: query, editing: false, path, loading: true },
+      }));
       try {
         const { ignoreCase, regex, scope } = get().search;
         if (scope === 'file' && !path) {
