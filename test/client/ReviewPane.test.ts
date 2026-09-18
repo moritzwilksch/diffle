@@ -344,6 +344,37 @@ describe('ReviewPane scroller effects', () => {
     expect(scrollTo).not.toHaveBeenCalled();
   });
 
+  it('closes the gap the viewer leaves at the document end in the same act, not from a later timer', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(changed), diffStyle: 'split' }));
+    const header = captureOptions.mock.calls.at(-1)![0].itemMetrics!.diffHeaderHeight!;
+    const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
+    box(scroller, 0, 800);
+    scroller.scrollTop = 1500;
+    // Line 10 sits 10px below the sticky header. The viewer's scrollTo stands in for a hold past the
+    // document's end: the re-layout lands the row 108px below its mark, and no further request moves it.
+    const card = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.line = '10';
+    let rowTop = header + 10;
+    row.getBoundingClientRect = () => ({ top: rowTop, bottom: rowTop + 18, height: 18 }) as DOMRect;
+    card.appendChild(row);
+    rendered = [{ id: 'diff:a.txt@0', element: card, type: 'diff' }];
+    scrollTo.mockImplementation(() => {
+      rowTop = header + 118;
+    });
+    try {
+      await act(() => useStore.getState().setDiffStyle('unified'));
+      expect(useStore.getState().scrollTarget).toEqual(
+        expect.objectContaining({ line: 10, align: 'keep', offset: 10 }),
+      );
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ lineNumber: 10, offset: -98 }));
+      expect(scroller.scrollTop).toBe(1608);
+    } finally {
+      scrollTo.mockReset();
+    }
+  });
+
   it('bind to the viewer that mounts after the empty-changes branch, and again after a theme remount', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     await act(() => useStore.setState({ snapshot: snap([]) }));
