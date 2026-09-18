@@ -535,6 +535,16 @@ export function ReviewPane() {
   // the row afterwards; the deferred checks catch that without a visible hunt.
   useEffect(() => {
     if (!scrollTarget || !viewerRef.current) return;
+    if (scrollTarget.revealSearch && containerRef.current) {
+      const item = viewerRef.current
+        .getInstance()
+        ?.getRenderedItems()
+        .find((r) => r.id === scrollTarget.id);
+      const form = item?.element.querySelector('[data-content-search]')?.closest('form');
+      const rect = form?.getBoundingClientRect();
+      const view = containerRef.current.getBoundingClientRect();
+      if (rect && rect.height > 0 && rect.top >= view.top && rect.bottom <= view.bottom) return;
+    }
     const { eye, offset, header, target } = scrollPlan(scrollTarget);
     const pinned = eye && scrollTarget.line != null;
     jumping.current = true;

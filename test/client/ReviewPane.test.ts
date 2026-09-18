@@ -161,6 +161,42 @@ afterEach(async () => {
 });
 
 describe('ReviewPane scroller effects', () => {
+  it.each([
+    { top: 44, bottom: 84, visible: true },
+    { top: 780, bottom: 820, visible: false },
+    { top: -40, bottom: 0, visible: false },
+  ])(
+    'only scrolls on search refocus when its form is outside the viewport ($top, $bottom)',
+    async ({ top, bottom, visible }) => {
+      await act(() => {
+        useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+        root.render(createElement(ReviewPane));
+      });
+      await act(() => useStore.getState().openSearch('file'));
+      const scroller = host.querySelector<HTMLElement>('.codeview')!;
+      const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+      const input = header.querySelector<HTMLInputElement>('[data-content-search]')!;
+      box(scroller, 0, 800);
+      box(header, 12, 100);
+      box(input.closest('form')!, top, bottom);
+      const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+      rendered = [{ id, type: 'diff', element: header }];
+      await act(() => {
+        useStore.getState().blurSearchInput();
+        input.blur();
+      });
+      scroller.scrollTop = 400;
+      scrollTo.mockClear();
+      await act(() => useStore.getState().openSearch('file'));
+      expect(document.activeElement).toBe(input);
+      expect(
+        scrollTo.mock.calls.map(([target]) => ({ id: target.id, type: target.type, align: target.align })),
+      ).toEqual(visible ? [] : [{ id, type: 'item', align: 'start' }]);
+      expect(scroller.scrollTop).toBe(400);
+      await act(() => useStore.getState().closeSearch());
+    },
+  );
+
   it('restores search focus without scrolling when its header reappears during scrolling', async () => {
     await act(() => {
       useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });

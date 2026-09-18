@@ -348,6 +348,8 @@ export interface ReviewState {
     side?: Side;
     align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
     offset?: number;
+    /** Leave the viewport alone if this item's search form is already fully visible. */
+    revealSearch?: boolean;
     nonce: number;
   } | null;
 
@@ -1333,6 +1335,7 @@ export const useStore = create<ReviewState>((set, get) => {
                 scrollTarget: {
                   id: itemIdOf(s, path),
                   align: 'start' as const,
+                  revealSearch: true,
                   nonce: (s.scrollTarget?.nonce ?? 0) + 1,
                 },
               }
@@ -1359,6 +1362,7 @@ export const useStore = create<ReviewState>((set, get) => {
               scrollTarget: {
                 id: itemIdOf(s, s.search.path),
                 align: 'start' as const,
+                revealSearch: true,
                 nonce: (s.scrollTarget?.nonce ?? 0) + 1,
               },
             }
