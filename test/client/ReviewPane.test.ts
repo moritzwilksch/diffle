@@ -23,8 +23,9 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 
 // The real viewer needs a layout engine; a stub that hands out the scroller and a fixed set of rendered
 // rows is enough to see which element the pane's effects bound to.
-type Rendered = { id: string; element: HTMLElement; type: 'diff' };
+type Rendered = { id: string; element: HTMLElement; type: 'diff'; instance?: { setMetrics: ReturnType<typeof vi.fn> } };
 let rendered: Rendered[] = [];
+const instanceChanged = vi.fn();
 const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 const captureItems = vi.fn<(items: unknown[]) => void>();
 const scrollTo = vi.fn();
@@ -35,14 +36,14 @@ vi.mock('@pierre/diffs/react', () => ({
       className: string;
       items: ({ id: string; type: 'diff' } | { id: string; type: 'file'; file: { contents: string } })[];
       options: CodeViewOptions<unknown>;
-      renderHeaderMetadata: (item: { id: string }) => unknown;
+      renderCustomHeader: (item: { id: string }) => unknown;
     },
     ref,
   ) {
     captureOptions(props.options);
     captureItems(props.items);
     useImperativeHandle(ref, () => ({
-      getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
+      getInstance: () => ({ getRenderedItems: () => rendered, render: () => {}, instanceChanged }),
       getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
       scrollTo,
     }));
@@ -59,7 +60,7 @@ vi.mock('@pierre/diffs/react', () => ({
             'div',
             { className: 'header', 'data-diffs-header': 'default' },
             createElement('span', { className: 'filename' }, it.id),
-            props.renderHeaderMetadata(it) as never,
+            props.renderCustomHeader(it) as never,
           ),
           it.type === 'file' ? createElement('pre', { className: 'contents' }, it.file.contents) : null,
         ),
@@ -120,6 +121,13 @@ const flush = () => act(() => new Promise((r) => setTimeout(r, 30)));
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   installSearchHighlights.mockClear();
   rendered = [];
@@ -145,9 +153,51 @@ afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
   document.documentElement.style.removeProperty('font-size');
+  vi.unstubAllGlobals();
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('keeps local search inside its file header and global search above the scroller', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    await act(() => useStore.getState().openSearch('file'));
+    const input = host.querySelector<HTMLInputElement>('input[placeholder^="Search this file"]')!;
+    expect(input).not.toBeNull();
+    expect(input.closest('[data-diffs-header]')).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    await act(() => input.closest('form')!.click());
+    expect(useStore.getState().collapsed['a.txt']).not.toBe(true);
+    await act(() => useStore.getState().openSearch('diff'));
+    const globalInput = host.querySelector<HTMLInputElement>('input[placeholder^="Search all files"]')!;
+    expect(globalInput).not.toBeNull();
+    expect(globalInput.closest('.codeview')).toBeNull();
+    expect(host.querySelector('input[placeholder^="Search this file"]')).toBeNull();
+    await act(() => useStore.getState().closeSearch());
+  });
+
+  it('reserves the local search height in its file and restores the header size on close', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+    const content = header.lastElementChild as HTMLElement;
+    const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+    const instance = { setMetrics: vi.fn() };
+    rendered = [{ id, type: 'diff', element: header, instance }];
+    const rect = vi.spyOn(content, 'getBoundingClientRect');
+    rect.mockReturnValue({ height: 83 } as DOMRect);
+    await act(() => useStore.getState().openSearch('file'));
+    expect(instance.setMetrics).toHaveBeenLastCalledWith(expect.objectContaining({ diffHeaderHeight: 84 }));
+    expect(instanceChanged).toHaveBeenLastCalledWith(instance, true);
+    rect.mockReturnValue({ height: 43 } as DOMRect);
+    await act(() => useStore.getState().closeSearch());
+    expect(instance.setMetrics).toHaveBeenLastCalledWith(expect.objectContaining({ diffHeaderHeight: 44 }));
+    rect.mockRestore();
+  });
+
   it('targets punctuation within schema keys at its actual column', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     await act(() =>

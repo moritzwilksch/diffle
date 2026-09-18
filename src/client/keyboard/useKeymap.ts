@@ -149,6 +149,15 @@ export function useKeymap(): void {
         clearPending();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        clearPending();
+        if (!s.layout.treeVisible) {
+          s.setLayout({ treeVisible: true });
+          requestAnimationFrame(() => useStore.getState().treeModel?.openSearch());
+        } else s.treeModel?.openSearch();
+        return;
+      }
       // The references overlay owns the keys while open, wherever focus sits.
       if (s.references.open) {
         e.preventDefault();
@@ -192,10 +201,6 @@ export function useKeymap(): void {
           e.preventDefault();
           e.stopPropagation(); // otherwise the tree moves focus to the next row afterwards
           focusReview();
-        } else if (e.key === '/' && !isEditable(target)) {
-          // The tree's own type-ahead opens its filter on letters only; `/` in the tree filters files, as it did from the diff.
-          e.preventDefault();
-          s.treeModel?.openSearch();
         }
         return; // the tree owns every other key while focused
       }

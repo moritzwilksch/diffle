@@ -156,6 +156,8 @@ export function FileTreePane() {
   useEffect(() => {
     const shadow = bodyRef.current?.firstElementChild?.shadowRoot;
     if (!shadow) return;
+    const searchInput = shadow.querySelector<HTMLInputElement>('[data-file-tree-search-input]');
+    if (searchInput) searchInput.placeholder = 'Search files…';
     const onEnter = (e: Event) => {
       const row = (e.composedPath() as HTMLElement[]).find(
         (n) => n instanceof HTMLElement && n.dataset.itemPath != null,

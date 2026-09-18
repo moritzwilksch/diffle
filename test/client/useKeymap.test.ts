@@ -117,6 +117,38 @@ describe('useKeymap', () => {
     }
   });
 
+  it('⌘/Ctrl+p opens filename search from an input and captures browser printing', () => {
+    const tree = { openSearch: vi.fn() };
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    const reached = vi.fn();
+    input.addEventListener('keydown', reached);
+    useStore.setState({ treeModel: tree as never, layout: { ...useStore.getState().layout, treeVisible: true } });
+    try {
+      for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+        const event = new KeyboardEvent('keydown', { key: 'p', ...modifier, bubbles: true, cancelable: true });
+        input.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(tree.openSearch).toHaveBeenCalledTimes(2);
+      expect(reached).not.toHaveBeenCalled();
+    } finally {
+      input.remove();
+      useStore.setState({ treeModel: null });
+    }
+  });
+
+  it('⌘+p waits for the hidden tree to mount before opening its search', async () => {
+    useStore.setState({ treeModel: null, layout: { ...useStore.getState().layout, treeVisible: false } });
+    expect(press('p', { metaKey: true }).defaultPrevented).toBe(true);
+    expect(useStore.getState().layout.treeVisible).toBe(true);
+    const tree = { openSearch: vi.fn() };
+    useStore.setState({ treeModel: tree as never });
+    await new Promise(requestAnimationFrame);
+    expect(tree.openSearch).toHaveBeenCalledOnce();
+    useStore.setState({ treeModel: null });
+  });
+
   it('⌘/Ctrl+Shift+e focuses the file tree on the active file, showing the tree first when it is hidden', async () => {
     const tree = { getItem: vi.fn(() => ({})), focusPath: vi.fn(), focusNearestPath: vi.fn() };
     useStore.setState({

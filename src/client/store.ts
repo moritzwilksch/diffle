@@ -96,7 +96,7 @@ export interface SearchState {
   regex: boolean;
   /** 'file' searches the file the reader is in; 'diff' only the changed files; 'repo' the whole codebase. */
   scope: SearchScope;
-  /** The file a 'file'-scoped result set came from; the bar names it while the query has run. */
+  /** The file owning the local search bar and its results, pinned when search opens. */
   path: string | null;
   /** Bumped by `g/` so the box takes focus again after `n` / `N` blurred it. */
   focusNonce: number;
@@ -1312,12 +1312,19 @@ export const useStore = create<ReviewState>((set, get) => {
           kind: 'text',
           direction: 1,
           scope: scope ?? s.search.scope,
+          path: (scope ?? s.search.scope) === 'file' ? currentPath(s) : null,
           focusNonce: s.search.focusNonce + 1,
         },
       }));
     },
     setSearchOptions(opts) {
-      set((s) => ({ search: { ...s.search, ...opts } }));
+      set((s) => ({
+        search: {
+          ...s.search,
+          ...opts,
+          path: opts.scope === undefined ? s.search.path : opts.scope === 'file' ? currentPath(s) : null,
+        },
+      }));
       const { query, kind } = get().search;
       if (kind === 'text' && query) void get().runSearch(query);
     },
@@ -1331,8 +1338,8 @@ export const useStore = create<ReviewState>((set, get) => {
     async runSearch(query) {
       const g = generation;
       const t = searchSeq.start();
-      // A file-scoped search is pinned to the file the reader is in when it runs; `/` again re-pins.
-      const path = get().search.scope === 'file' ? currentPath(get()) : null;
+      // Keep edits and option changes tied to the header owning the search; `/` again re-pins.
+      const path = get().search.scope === 'file' ? get().search.path : null;
       set((s) => ({ search: { ...s.search, kind: 'text', direction: 1, query, path, loading: true } }));
       try {
         const { ignoreCase, regex, scope } = get().search;

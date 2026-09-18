@@ -14,7 +14,15 @@ const SCOPE_LABEL: Record<SearchScope, string> = {
 const SCOPE_ICON: Record<SearchScope, typeof FileSearch> = { file: FileSearch, diff: FileDiff, repo: FolderSearch };
 
 /** Content search (/ in the current file, g/ across the diff or codebase), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
-export function SearchBar() {
+export function SearchBar({ path }: { path?: string }) {
+  const visible = useStore((s) => {
+    const local = s.search.kind === 'text' && s.search.scope === 'file';
+    return s.search.open && (local ? s.search.path === path : path === undefined);
+  });
+  return visible ? <SearchForm /> : null;
+}
+
+function SearchForm() {
   const search = useStore((s) => s.search);
   const runSearch = useStore((s) => s.runSearch);
   const closeSearch = useStore((s) => s.closeSearch);
@@ -26,7 +34,6 @@ export function SearchBar() {
     if (search.open) ref.current?.focus();
   }, [search.open, search.focusNonce]);
 
-  if (!search.open) return null;
   const n = search.matches.length;
   if (search.kind !== 'text') {
     return (
@@ -53,6 +60,7 @@ export function SearchBar() {
   return (
     <form
       className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5"
+      onClick={(e) => e.stopPropagation()}
       onSubmit={(e) => {
         e.preventDefault();
         void runSearch(q).then(() => {
@@ -63,14 +71,12 @@ export function SearchBar() {
     >
       <Search size="0.875rem" />
       <input
-        className="flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
+        className="min-w-0 flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
         ref={ref}
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={
-          search.scope === 'file'
-            ? 'Search this file… (Enter, then n / N)'
-            : 'Search file contents… (Enter, then n / N)'
+          search.scope === 'file' ? 'Search this file… (Enter, then n / N)' : 'Search all files… (Enter, then n / N)'
         }
         spellCheck={false}
       />
