@@ -1,0 +1,14 @@
+diff --git a/node_modules/@shikijs/core/dist/index.mjs b/node_modules/@shikijs/core/dist/index.mjs
+index ceab61a..f119171 100644
+--- a/node_modules/@shikijs/core/dist/index.mjs
++++ b/node_modules/@shikijs/core/dist/index.mjs
+@@ -165,7 +165,8 @@ function flatTokenVariants(merged, variantsOrder, cssVariablePrefix, defaultColo
+ 	const token = {
+ 		content: merged.content,
+ 		explanation: merged.explanation,
+-		offset: merged.offset
++		offset: merged.offset,
++		type: merged.type
+ 	};
+ 	const styles = variantsOrder.map((t) => getTokenStyleObject(merged.variants[t]));
+ 	const styleKeys = new Set(styles.flatMap((t) => Object.keys(t)));
