@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
 import { clearWordFocus, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
-import { currentPath, widenSearchScope } from '../model.js';
+import { currentPath } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
@@ -63,7 +63,7 @@ const KEYMAP: Record<string, Action> = {
   yy: () => void copyComments(),
   Y: () => void copyComments(),
   '/': (s) => s.openSearch('file'),
-  'g/': (s) => s.openSearch(widenSearchScope(s.search.scope)),
+  'g/': (s) => s.openSearch('diff'),
   gf: () => focusFileSearch(),
   gd: (s) => s.goToDefinition(),
   gy: (s) => s.goToTypeDefinition(),

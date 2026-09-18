@@ -17,6 +17,7 @@ import {
   type ModeRequest,
   type SearchMatch,
   type SearchScope,
+  type SearchContent,
   type Side,
   type Snapshot,
   type UserConfig,
@@ -94,8 +95,10 @@ export interface SearchState {
   /** Text-search options; `*` / `#` ignore them (whole word, case-sensitive, whole repository). */
   ignoreCase: boolean;
   regex: boolean;
-  /** 'file' searches the file the reader is in; 'diff' only the changed files; 'repo' the whole codebase. */
-  scope: SearchScope;
+  /** Local search stays pinned to one file; global search covers changed files. */
+  scope: Exclude<SearchScope, 'repo'>;
+  /** Each search location remembers its own content mode. */
+  content: Record<Exclude<SearchScope, 'repo'>, SearchContent>;
   /** The file owning the local search bar and its results, pinned when search opens. */
   path: string | null;
   /** Bumped by `g/` so the box takes focus again after `n` / `N` blurred it. */
@@ -236,15 +239,15 @@ export interface ReviewState {
   /** Toast for a failed fire-and-forget action: `${what} failed: <message>`. */
   report(what: string, e: unknown): void;
   search: SearchState;
-  /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → widened). */
-  openSearch(scope?: SearchScope): void;
+  /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → diff). */
+  openSearch(scope?: SearchState['scope']): void;
   setSearchInput(value: string): void;
   blurSearchInput(): void;
   typeSearchInput(key: string): void;
   closeSearch(): void;
   runSearch(query: string): Promise<void>;
   /** Flip a text-search option and rerun the current query. */
-  setSearchOptions(opts: Partial<Pick<SearchState, 'ignoreCase' | 'regex' | 'scope'>>): void;
+  setSearchOptions(opts: Partial<Pick<SearchState, 'ignoreCase' | 'regex'>> & { content?: SearchContent }): void;
   moveMatch(delta: 1 | -1): void;
   /** `*` / `#`: whole-word search for the focused word, landing on the next occurrence in `delta`'s direction. */
   searchWord(delta: 1 | -1): Promise<void>;
@@ -1304,6 +1307,7 @@ export const useStore = create<ReviewState>((set, get) => {
       ignoreCase: true,
       regex: false,
       scope: 'diff',
+      content: { file: 'diff', diff: 'diff' },
       path: null,
       focusNonce: 0,
       input: '',
@@ -1315,9 +1319,11 @@ export const useStore = create<ReviewState>((set, get) => {
       truncated: false,
     },
     openSearch(scope) {
+      searchSeq.start();
       set((s) => {
         const nextScope = scope ?? s.search.scope;
         const path = nextScope === 'file' ? currentPath(s) : null;
+        const sameSearch = s.search.kind === 'text' && s.search.scope === nextScope && s.search.path === path;
         return {
           search: {
             ...s.search,
@@ -1325,6 +1331,10 @@ export const useStore = create<ReviewState>((set, get) => {
             kind: 'text',
             direction: 1,
             scope: nextScope,
+            matches: sameSearch ? s.search.matches : [],
+            index: sameSearch ? s.search.index : -1,
+            truncated: sameSearch && s.search.truncated,
+            loading: false,
             input: s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query,
             editing: true,
             path,
@@ -1370,11 +1380,12 @@ export const useStore = create<ReviewState>((set, get) => {
       }));
     },
     setSearchOptions(opts) {
+      const { content, ...options } = opts;
       set((s) => ({
         search: {
           ...s.search,
-          ...opts,
-          path: opts.scope === undefined ? s.search.path : opts.scope === 'file' ? currentPath(s) : null,
+          ...options,
+          content: content ? { ...s.search.content, [s.search.scope]: content } : s.search.content,
         },
       }));
       const { query, kind } = get().search;
@@ -1405,12 +1416,18 @@ export const useStore = create<ReviewState>((set, get) => {
         search: { ...s.search, kind: 'text', direction: 1, query, input: query, editing: false, path, loading: true },
       }));
       try {
-        const { ignoreCase, regex, scope } = get().search;
+        const { ignoreCase, regex, scope, content } = get().search;
         if (scope === 'file' && !path) {
           set((s) => ({ search: { ...s.search, matches: [], index: -1, loading: false } }));
           return get().flash('No file to search in');
         }
-        const res = await api.search(query, { ignoreCase, regex, scope, ...(path ? { path } : {}) });
+        const res = await api.search(query, {
+          ignoreCase,
+          regex,
+          scope,
+          content: content[scope],
+          ...(path ? { path } : {}),
+        });
         if (!searchOwned(g, t)) return;
         set((s) => ({
           search: { ...s.search, matches: res.matches, truncated: res.truncated, index: -1, loading: false },
@@ -1420,9 +1437,7 @@ export const useStore = create<ReviewState>((set, get) => {
           get().flash(
             scope === 'file'
               ? `No matches for “${query}” in ${path}`
-              : scope === 'diff'
-                ? `No matches for “${query}” in the diff`
-                : `No matches for “${query}”`,
+              : `No matches for “${query}” in ${content[scope] === 'diff' ? 'the diff + context' : 'changed files'}`,
           );
       } catch (e) {
         if (!searchOwned(g, t)) return;
@@ -1459,7 +1474,7 @@ export const useStore = create<ReviewState>((set, get) => {
         },
       }));
       try {
-        const res = await api.search(word, { word: true, scope: 'repo' });
+        const res = await api.search(word, { word: true, scope: 'repo', content: 'full' });
         if (!searchOwned(g, t)) return;
         const matches = res.matches;
         // Start from the occurrence just past the cursor in the requested direction, wrapping like vim.

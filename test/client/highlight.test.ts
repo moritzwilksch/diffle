@@ -10,6 +10,7 @@ const base: SearchState = {
   ignoreCase: true,
   regex: false,
   scope: 'diff',
+  content: { file: 'diff', diff: 'diff' },
   path: null,
   focusNonce: 0,
   input: 'a.b',

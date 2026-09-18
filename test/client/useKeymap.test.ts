@@ -166,7 +166,7 @@ describe('useKeymap', () => {
     }
   });
 
-  it('/ opens the file-scoped search, g/ the widened one, and gf the tree filter', () => {
+  it('/ opens the file-scoped search, g/ the global one, and gf the tree filter', () => {
     const openSearch = vi.fn();
     const tree = { openSearch: vi.fn(), getSearchValue: () => '' };
     useStore.setState({ openSearch, treeModel: tree as never });
@@ -177,10 +177,10 @@ describe('useKeymap', () => {
       press('g');
       press('/');
       expect(openSearch).toHaveBeenLastCalledWith('diff');
-      useStore.setState({ search: { ...useStore.getState().search, scope: 'repo' } });
+      useStore.setState({ search: { ...useStore.getState().search, scope: 'diff' } });
       press('g');
       press('/');
-      expect(openSearch).toHaveBeenLastCalledWith('repo');
+      expect(openSearch).toHaveBeenLastCalledWith('diff');
       expect(tree.openSearch).not.toHaveBeenCalled();
       press('g');
       press('f');

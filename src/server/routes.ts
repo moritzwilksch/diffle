@@ -28,6 +28,8 @@ import {
   lspBlocker,
 } from '../shared/protocol.js';
 import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
+import { shownRanges } from './comments/hunks.js';
+import { mapLimit } from './concurrency.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
@@ -129,19 +131,31 @@ export function createApi(deps: ApiDeps): Hono {
     const query = SearchQuerySchema.parse(c.req.query());
     const { q, scope } = query;
     const snap = await session.snapshotter.current();
-    // Default scope is the diff's new side; `scope=repo` widens to the whole tree, `scope=file`
-    // narrows to `path`, which must be on the new side (an unknown path matches nothing).
-    const paths =
+    // File scope is pinned to the new-side allowlist; global text search covers changed files.
+    let paths =
       scope === 'repo'
         ? undefined
         : scope === 'file'
           ? snap.tree.filter((p) => p === query.path)
           : snap.changed.filter((f) => f.status !== 'D').map((f) => f.path);
+    let ranges: Map<string, [number, number][]> | undefined;
+    if (query.content === 'diff') {
+      const candidates = snap.changed.filter(
+        (f) => f.status !== 'D' && !f.binary && (!paths || paths.includes(f.path)),
+      );
+      const entries = await mapLimit(candidates, 8, async (file) => {
+        const patch = await session.repo.patch(snap.oldSha, snap.newSha, file, snap.context);
+        return [file.path, shownRanges(patch, 'new')] as const;
+      });
+      ranges = new Map(entries);
+      paths = entries.filter(([, spans]) => spans.length > 0).map(([path]) => path);
+    }
     const { matches, truncated } = await session.repo.grep(q, snap.newSha, 500, {
       word: query.word,
       ignoreCase: query.i,
       regex: query.re,
       paths,
+      ranges,
     });
     const body: SearchResponse = { query: q, matches, truncated };
     return c.json(body);

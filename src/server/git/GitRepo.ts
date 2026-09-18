@@ -69,6 +69,7 @@ interface ExecOptions {
 interface RecordOptions extends ExecOptions {
   /** Kill the child and reject after this long. */
   timeoutMs?: number;
+  accept?: (record: string) => boolean;
 }
 
 /** The only module that spawns git. All calls run with cwd = repo root, except reading a submodule's HEAD inside it. */
@@ -395,18 +396,27 @@ export class GitRepo {
    * Worktree searches include untracked files. The result is
    * bounded globally: git is stopped once `limit + 1` records have arrived, so a
    * common query in a large repository cannot flood the process. `paths`
-   * restricts the search to those files; an empty list matches nothing.
+   * restricts files; `ranges` restricts new-side lines before applying the limit.
+   * An empty path list or range map matches nothing.
    */
   async grep(
     query: string,
     rev: string | 'worktree',
     limit = 500,
-    opts: { word?: boolean; ignoreCase?: boolean; regex?: boolean; paths?: string[] } = {},
+    opts: {
+      word?: boolean;
+      ignoreCase?: boolean;
+      regex?: boolean;
+      paths?: string[];
+      ranges?: ReadonlyMap<string, readonly [number, number][]>;
+    } = {},
   ): Promise<{ matches: { path: string; line: number; text: string }[]; truncated: boolean }> {
     // An explicit empty path list means "search nothing": with no pathspec git would search everything.
-    if (!query || opts.paths?.length === 0) return { matches: [], truncated: false };
+    if (!query || opts.paths?.length === 0 || opts.ranges?.size === 0) return { matches: [], truncated: false };
     // --no-column: `grep.column=true` would splice a column field into the -z record.
-    const args = ['grep', '-n', '--no-column', '-I', opts.regex ? '-E' : '-F', '-z', `--max-count=${limit + 1}`];
+    const args = ['grep', '-n', '--no-column', '-I', opts.regex ? '-E' : '-F', '-z'];
+    // Filtering must precede the limit: early matches outside hunks must not hide later visible hits.
+    if (!opts.ranges) args.push(`--max-count=${limit + 1}`);
     if (opts.word) args.push('-w');
     if (opts.ignoreCase) args.push('-i');
     args.push('-e', query);
@@ -416,13 +426,23 @@ export class GitRepo {
     // Literal pathspecs: a path with `*` or `?` in it must not turn into a glob.
     for (const p of opts.paths ?? []) args.push(`:(literal)${p}`);
     // -z: "path\0line\0text\n" per match; with a rev the path is "rev:path".
-    const records = await execGitRecords(this.root, args, limit + 1, { okCodes: [0, 1], timeoutMs: GREP_TIMEOUT_MS });
-    const truncated = records.length > limit;
-    const matches = records.slice(0, limit).map((rec) => {
+    const parse = (rec: string) => {
       const [rawPath = '', line = '', ...rest] = rec.split('\0');
       const path = rev === 'worktree' ? rawPath : rawPath.slice(rawPath.indexOf(':') + 1);
       return { path, line: Number(line), text: rest.join('\0').slice(0, 300) };
+    };
+    const records = await execGitRecords(this.root, args, limit + 1, {
+      okCodes: [0, 1],
+      timeoutMs: GREP_TIMEOUT_MS,
+      accept: opts.ranges
+        ? (record) => {
+            const { path, line } = parse(record);
+            return opts.ranges!.get(path)?.some(([start, end]) => line >= start && line <= end) ?? false;
+          }
+        : undefined,
     });
+    const truncated = records.length > limit;
+    const matches = records.slice(0, limit).map(parse);
     return { matches, truncated };
   }
 
@@ -840,9 +860,10 @@ function execGit(cwd: string, args: string[], opts: ExecOptions = {}): Promise<B
 function execGitRecords(cwd: string, args: string[], maxRecords: number, opts: RecordOptions = {}): Promise<string[]> {
   return new Promise((res, rej) => {
     const child = spawn('git', [...CONFIG_ARGS, ...args], { cwd, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
-    const chunks: Buffer[] = [];
+    const records: string[] = [];
+    let chunks: Buffer[] = [];
+    let fields = 0;
     const errChunks: Buffer[] = [];
-    let seen = 0;
     let done = false;
     let timedOut = false;
     const timer =
@@ -854,16 +875,25 @@ function execGitRecords(cwd: string, args: string[], maxRecords: number, opts: R
           }, opts.timeoutMs);
     child.stdout.on('data', (chunk: Buffer) => {
       if (done) return;
+      let start = 0;
       for (let i = 0; i < chunk.length; i++) {
-        if (chunk[i] !== 10) continue;
-        if (++seen === maxRecords) {
-          chunks.push(chunk.subarray(0, i + 1));
+        if (chunk[i] === 0) fields++;
+        // Git grep terminates path and line with NUL; filenames may themselves contain newlines.
+        if (chunk[i] !== 10 || fields < 2) continue;
+        chunks.push(chunk.subarray(start, i));
+        const record = Buffer.concat(chunks).toString('utf8');
+        chunks = [];
+        fields = 0;
+        start = i + 1;
+        if (opts.accept && !opts.accept(record)) continue;
+        records.push(record);
+        if (records.length === maxRecords) {
           done = true;
           child.kill();
           return;
         }
       }
-      chunks.push(chunk);
+      if (start < chunk.length) chunks.push(chunk.subarray(start));
     });
     child.stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
     child.on('error', (err) => rej(new GitError(`git ${args.join(' ')} failed: ${err.message}`, args, null, '')));
@@ -878,8 +908,6 @@ function execGitRecords(cwd: string, args: string[], maxRecords: number, opts: R
         rej(new GitError(`git ${args.join(' ')} failed: ${stderr.trim()}`, args, code, stderr));
         return;
       }
-      const records = Buffer.concat(chunks).toString('utf8').split('\n');
-      if (records[records.length - 1] === '') records.pop();
       res(records);
     });
   });
