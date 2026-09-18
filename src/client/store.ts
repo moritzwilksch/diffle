@@ -389,7 +389,10 @@ export interface ReviewState {
   setViewed(path: string, viewed: boolean): Promise<void>;
   /** Mark every changed file not viewed (explicit marks override auto-viewed globs) and expand them. */
   unviewAll(): Promise<void>;
+  /** Collapse or expand a file from its header or the tree. The cursor and viewport stay put; `zc` is `setCollapsedAtCursor`. */
   toggleCollapsed(path: string): void;
+  /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
+  selectFile(path: string): void;
   saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>): Promise<void>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
@@ -2131,8 +2134,10 @@ export const useStore = create<ReviewState>((set, get) => {
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);
       set((s) => ({ collapsed: { ...s.collapsed, [path]: !cur } }));
-      if (!cur) afterCollapse(path, notCollapsed);
-      else void get().loadPatch(path);
+      if (cur) void get().loadPatch(path);
+    },
+    selectFile(path) {
+      set({ selection: null, visualAnchor: null, activePath: path });
     },
 
     async saveConfig(config) {

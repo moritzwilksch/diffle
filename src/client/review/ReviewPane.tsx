@@ -900,6 +900,7 @@ function FileHeaderMeta({ path }: { path: string }) {
     return () => host.removeAttribute('data-active');
   }, [active]);
   const toggleCollapsed = useStore((s) => s.toggleCollapsed);
+  const selectFile = useStore((s) => s.selectFile);
   const full = useStore((s) => s.fileView?.path === path);
   useEffect(() => {
     const metadata = ref.current;
@@ -916,14 +917,17 @@ function FileHeaderMeta({ path }: { path: string }) {
         header.style.cursor = '';
       };
     }
+    // The header is the file's one clickable surface, so clicking it also makes the file the current one:
+    // an empty file has no lines to click, and the pane must not wander off to another file (issue #151).
     const toggle = (event: MouseEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest('button, input, label, a, [role="button"]')) return;
+      selectFile(path);
       toggleCollapsed(path);
     };
     header.addEventListener('click', toggle);
     return () => header.removeEventListener('click', toggle);
-  }, [path, toggleCollapsed, full]);
+  }, [path, toggleCollapsed, selectFile, full]);
   const vs = useStore((s) => (file ? viewedState(s, file) : 'unviewed'));
   const setViewed = useStore((s) => s.setViewed);
   const count = useStore((s) => s.threads.filter((t) => t.anchor.path === path && !t.resolved).length);

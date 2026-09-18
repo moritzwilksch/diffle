@@ -527,6 +527,31 @@ describe('ReviewPane scroller effects', () => {
     expect(useStore.getState().viewed).toMatchObject([{ path: 'a.txt', blob: 'b1', viewed: true }]);
   });
 
+  it("clicking an empty file's header selects that file instead of the next one (issue #151)", async () => {
+    // A mode-change-only file: its diff has no hunks, so its header is all there is to click.
+    const files = [
+      { path: 'a.txt', status: 'M' as const, additions: 0, deletions: 0, binary: false, blob: 'b1', generated: false },
+      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: false },
+    ];
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: { ...snap(files), tree: ['a.txt', 'b.txt'] },
+        loaded: { 'a.txt': { kind: 'loading' }, 'b.txt': { kind: 'loading' } },
+        activePath: 'b.txt',
+        selection: { id: 'diff:b.txt@0', range: { start: 1, end: 1, side: 'additions', endSide: 'additions' } },
+      }),
+    );
+    const scrollTarget = useStore.getState().scrollTarget;
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+    expect(header.textContent).toContain('a.txt');
+
+    await act(() => header.querySelector<HTMLElement>('.filename')!.click());
+    expect(useStore.getState()).toMatchObject({ activePath: 'a.txt', selection: null });
+    expect(useStore.getState().collapsed['a.txt']).toBe(true);
+    expect(useStore.getState().scrollTarget).toBe(scrollTarget);
+  });
+
   it('expands a binary file to a placeholder line and collapses it again from the header', async () => {
     const binary = [
       { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
