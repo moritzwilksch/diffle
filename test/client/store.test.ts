@@ -1514,6 +1514,10 @@ describe('symbol navigation', () => {
     expect(useStore.getState().search.scope).toBe('file');
     expect(useStore.getState().search.path).toBe('b.py');
     expect(useStore.getState().search.editing).toBe(true);
+    expect(useStore.getState().scrollTarget).toMatchObject({ id: 'file:b.py@0', align: 'start' });
+    const openingNonce = useStore.getState().scrollTarget!.nonce;
+    useStore.getState().openSearch('file');
+    expect(useStore.getState().scrollTarget!.nonce).toBe(openingNonce + 1);
     // Scrolling to another file must not retarget the search living in b.py's header.
     useStore.setState({ activePath: 'a.py' });
     await useStore.getState().runSearch('y');

@@ -1312,19 +1312,32 @@ export const useStore = create<ReviewState>((set, get) => {
       truncated: false,
     },
     openSearch(scope) {
-      set((s) => ({
-        search: {
-          ...s.search,
-          open: true,
-          kind: 'text',
-          direction: 1,
-          scope: scope ?? s.search.scope,
-          input: s.search.editing && s.search.kind === 'text' ? s.search.input : s.search.query,
-          editing: true,
-          path: (scope ?? s.search.scope) === 'file' ? currentPath(s) : null,
-          focusNonce: s.search.focusNonce + 1,
-        },
-      }));
+      set((s) => {
+        const nextScope = scope ?? s.search.scope;
+        const path = nextScope === 'file' ? currentPath(s) : null;
+        return {
+          search: {
+            ...s.search,
+            open: true,
+            kind: 'text',
+            direction: 1,
+            scope: nextScope,
+            input: s.search.editing && s.search.kind === 'text' ? s.search.input : s.search.query,
+            editing: true,
+            path,
+            focusNonce: s.search.focusNonce + 1,
+          },
+          ...(path
+            ? {
+                scrollTarget: {
+                  id: itemIdOf(s, path),
+                  align: 'start' as const,
+                  nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+                },
+              }
+            : {}),
+        };
+      });
     },
     setSearchInput(input) {
       set((s) => ({ search: { ...s.search, input, editing: true } }));

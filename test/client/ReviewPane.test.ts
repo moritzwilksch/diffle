@@ -42,11 +42,15 @@ vi.mock('@pierre/diffs/react', () => ({
   ) {
     captureOptions(props.options);
     captureItems(props.items);
-    useImperativeHandle(ref, () => ({
-      getInstance: () => ({ getRenderedItems: () => rendered, render: () => {}, instanceChanged }),
-      getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
-      scrollTo,
-    }));
+    useImperativeHandle(
+      ref,
+      () => ({
+        getInstance: () => ({ getRenderedItems: () => rendered, render: () => {}, instanceChanged }),
+        getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
+        scrollTo,
+      }),
+      [],
+    );
     // Each item's header metadata renders in the light DOM so tests can see the header's buttons; a file
     // item's contents render as text.
     return createElement(
