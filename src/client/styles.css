@@ -10,6 +10,7 @@
   --color-canvas: var(--bg);
   --color-surface: var(--bg-2);
   --color-hover: var(--bg-3);
+  --color-raised: var(--bg-raised);
   --color-foreground: var(--fg);
   --color-muted: var(--fg-2);
   --color-border: var(--border);

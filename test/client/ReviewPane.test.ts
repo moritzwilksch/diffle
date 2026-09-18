@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
-import type { CodeViewOptions } from '@pierre/diffs';
+import { parsePatchFiles, type CodeViewOptions } from '@pierre/diffs';
 import { reviewGeometry } from '../../src/client/review/geometry.js';
 
 const api = {
@@ -23,8 +23,10 @@ vi.mock('../../src/client/api.js', () => ({ api }));
 
 // The real viewer needs a layout engine; a stub that hands out the scroller and a fixed set of rendered
 // rows is enough to see which element the pane's effects bound to.
-type Rendered = { id: string; element: HTMLElement; type: 'diff' };
+type Rendered = { id: string; element: HTMLElement; type: 'diff'; instance?: { setMetrics: ReturnType<typeof vi.fn> } };
 let rendered: Rendered[] = [];
+const instanceChanged = vi.fn();
+const renderViewer = vi.fn();
 const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 const captureItems = vi.fn<(items: unknown[]) => void>();
 const scrollTo = vi.fn();
@@ -33,29 +35,39 @@ vi.mock('@pierre/diffs/react', () => ({
     props: {
       containerRef: (el: HTMLDivElement | null) => void;
       className: string;
-      items: { id: string }[];
+      items: ({ id: string; type: 'diff' } | { id: string; type: 'file'; file: { contents: string } })[];
       options: CodeViewOptions<unknown>;
-      renderHeaderMetadata: (item: { id: string }) => unknown;
+      renderCustomHeader: (item: { id: string }) => unknown;
     },
     ref,
   ) {
     captureOptions(props.options);
     captureItems(props.items);
-    useImperativeHandle(ref, () => ({
-      getInstance: () => ({ getRenderedItems: () => rendered, render: () => {} }),
-      getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
-      scrollTo,
-    }));
-    // Each item's header metadata renders in the light DOM so tests can see the header's buttons.
+    useImperativeHandle(
+      ref,
+      () => ({
+        getInstance: () => ({ getRenderedItems: () => rendered, render: renderViewer, instanceChanged }),
+        getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
+        scrollTo,
+      }),
+      [],
+    );
+    // Each item's header metadata renders in the light DOM so tests can see the header's buttons; a file
+    // item's contents render as text.
     return createElement(
       'div',
       { ref: props.containerRef, className: props.className },
       props.items.map((it) =>
         createElement(
           'div',
-          { key: it.id, className: 'header', 'data-diffs-header': 'default' },
-          createElement('span', { className: 'filename' }, it.id),
-          props.renderHeaderMetadata(it) as never,
+          { key: it.id, className: 'item' },
+          createElement(
+            'div',
+            { className: 'header', 'data-diffs-header': 'default' },
+            createElement('span', { className: 'filename' }, it.id),
+            props.renderCustomHeader(it) as never,
+          ),
+          it.type === 'file' ? createElement('pre', { className: 'contents' }, it.file.contents) : null,
         ),
       ),
     );
@@ -114,6 +126,14 @@ const flush = () => act(() => new Promise((r) => setTimeout(r, 30)));
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
+  renderViewer.mockReset();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   installSearchHighlights.mockClear();
   rendered = [];
@@ -139,9 +159,173 @@ afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
   document.documentElement.style.removeProperty('font-size');
+  vi.unstubAllGlobals();
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('does not accumulate scroll drift when local search repeatedly opens and closes', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    const scroller = host.querySelector<HTMLElement>('.codeview')!;
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+    const content = header.lastElementChild as HTMLElement;
+    const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+    box(scroller, 0, 800);
+    let resized = false;
+    const instance = {
+      setMetrics: vi.fn(() => {
+        resized = true;
+      }),
+    };
+    rendered = [{ id, type: 'diff', element: header, instance }];
+    // A library resize can choose a line beyond collapsed context and advance the viewport.
+    renderViewer.mockImplementation(() => {
+      if (resized) {
+        scroller.scrollTop += 120;
+        resized = false;
+      }
+    });
+    const measure = vi.spyOn(content, 'getBoundingClientRect');
+    measure.mockImplementation(() => {
+      const form = content.querySelector('form');
+      if (form) box(form, 44, 84);
+      return { height: form ? 83 : 43 } as DOMRect;
+    });
+    scroller.scrollTop = 600;
+    scrollTo.mockClear();
+    for (let i = 0; i < 4; i++) {
+      await act(() => useStore.getState().openSearch('file'));
+      expect(scroller.scrollTop).toBe(600);
+      await act(() => useStore.getState().closeSearch());
+      expect(scroller.scrollTop).toBe(600);
+    }
+    expect(instance.setMetrics).toHaveBeenCalledTimes(8);
+    expect(scrollTo).not.toHaveBeenCalled();
+    measure.mockRestore();
+  });
+
+  it.each([
+    { top: 44, bottom: 84, visible: true },
+    { top: 780, bottom: 820, visible: false },
+    { top: -40, bottom: 0, visible: false },
+  ])(
+    'only scrolls on search refocus when its form is outside the viewport ($top, $bottom)',
+    async ({ top, bottom, visible }) => {
+      await act(() => {
+        useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+        root.render(createElement(ReviewPane));
+      });
+      await act(() => useStore.getState().openSearch('file'));
+      const scroller = host.querySelector<HTMLElement>('.codeview')!;
+      const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+      const input = header.querySelector<HTMLInputElement>('[data-content-search]')!;
+      box(scroller, 0, 800);
+      box(header, 12, 100);
+      box(input.closest('form')!, top, bottom);
+      const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+      rendered = [{ id, type: 'diff', element: header }];
+      await act(() => {
+        useStore.getState().blurSearchInput();
+        input.blur();
+      });
+      scroller.scrollTop = 400;
+      scrollTo.mockClear();
+      await act(() => useStore.getState().openSearch('file'));
+      expect(document.activeElement).toBe(input);
+      expect(
+        scrollTo.mock.calls.map(([target]) => ({ id: target.id, type: target.type, align: target.align })),
+      ).toEqual(visible ? [] : [{ id, type: 'item', align: 'start' }]);
+      expect(scroller.scrollTop).toBe(400);
+      await act(() => useStore.getState().closeSearch());
+    },
+  );
+
+  it('restores search focus without scrolling when its header reappears during scrolling', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    await act(() => {
+      useStore.getState().openSearch('file');
+      useStore.getState().setSearchInput('unfinished');
+    });
+    await act(() => root.render(null));
+    const focus = vi.spyOn(HTMLInputElement.prototype, 'focus');
+    scrollTo.mockClear();
+    try {
+      await act(() => root.render(createElement(ReviewPane)));
+      const input = host.querySelector<HTMLInputElement>('input[placeholder^="Search this file"]')!;
+      expect(input.value).toBe('unfinished');
+      expect(document.activeElement).toBe(input);
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      expect(scrollTo).not.toHaveBeenCalled();
+    } finally {
+      focus.mockRestore();
+      await act(() => useStore.getState().closeSearch());
+    }
+  });
+
+  it('restores the unsubmitted search draft and focus when its file header remounts', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    await act(() => {
+      useStore.getState().openSearch('file');
+      useStore.getState().setSearchInput('unfinished');
+    });
+    await act(() => root.render(null));
+    await act(() => useStore.getState().typeSearchInput('s'));
+    await act(() => root.render(createElement(ReviewPane)));
+    const input = host.querySelector<HTMLInputElement>('input[placeholder^="Search this file"]')!;
+    expect(input.value).toBe('unfinisheds');
+    expect(document.activeElement).toBe(input);
+    await act(() => useStore.getState().closeSearch());
+  });
+
+  it('keeps local search inside its file header and global search above the scroller', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    await act(() => useStore.getState().openSearch('file'));
+    const input = host.querySelector<HTMLInputElement>('input[placeholder^="Search this file"]')!;
+    expect(input).not.toBeNull();
+    expect(input.closest('[data-diffs-header]')).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    await act(() => input.closest('form')!.click());
+    expect(useStore.getState().collapsed['a.txt']).not.toBe(true);
+    await act(() => useStore.getState().openSearch('diff'));
+    const globalInput = host.querySelector<HTMLInputElement>('input[placeholder^="Search all files"]')!;
+    expect(globalInput).not.toBeNull();
+    expect(globalInput.closest('.codeview')).toBeNull();
+    expect(host.querySelector('input[placeholder^="Search this file"]')).toBeNull();
+    await act(() => useStore.getState().closeSearch());
+  });
+
+  it('reserves the local search height in its file and restores the header size on close', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+    const content = header.lastElementChild as HTMLElement;
+    const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+    const instance = { setMetrics: vi.fn() };
+    rendered = [{ id, type: 'diff', element: header, instance }];
+    const rect = vi.spyOn(content, 'getBoundingClientRect');
+    rect.mockReturnValue({ height: 83 } as DOMRect);
+    await act(() => useStore.getState().openSearch('file'));
+    expect(instance.setMetrics).toHaveBeenLastCalledWith(expect.objectContaining({ diffHeaderHeight: 84 }));
+    expect(instanceChanged).toHaveBeenLastCalledWith(instance, true);
+    rect.mockReturnValue({ height: 43 } as DOMRect);
+    await act(() => useStore.getState().closeSearch());
+    expect(instance.setMetrics).toHaveBeenLastCalledWith(expect.objectContaining({ diffHeaderHeight: 44 }));
+    rect.mockRestore();
+  });
+
   it('targets punctuation within schema keys at its actual column', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     await act(() =>
@@ -553,17 +737,19 @@ describe('ReviewPane scroller effects', () => {
     expect(useStore.getState().scrollTarget).toBe(scrollTarget);
   });
 
-  it('expands a binary file to a placeholder line and collapses it again from the header', async () => {
+  it('expands a binary file to a placeholder banner and collapses it again from the header', async () => {
     const binary = [
       { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'img.png': { kind: 'binary' } } }));
     const item = () => captureItems.mock.lastCall![0][0];
+    // The banner is the whole body: an empty file plus one file-level annotation, never a note line.
     expect(item()).toMatchObject({
       type: 'file',
       collapsed: false,
-      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string },
+      file: { name: 'img.png', contents: '' },
+      annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', placeholder: 'binary' } }],
     });
 
     await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
@@ -607,5 +793,35 @@ describe('ReviewPane scroller effects', () => {
     expect(host.querySelector<HTMLElement>('[data-diffs-header]')!.style.cursor).toBe('');
     await act(() => host.querySelector<HTMLElement>('[data-diffs-header] .filename')!.click());
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
+  });
+
+  it('renders a pure rename as a placeholder that keeps the old path for the header arrow', async () => {
+    const moved = [
+      {
+        path: 'b.txt',
+        oldPath: 'a.txt',
+        status: 'R' as const,
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        generated: false,
+      },
+    ];
+    const patch = 'diff --git a/a.txt b/b.txt\nsimilarity index 100%\nrename from a.txt\nrename to b.txt\n';
+    const fileDiff = parsePatchFiles(patch, 'k')[0]!.files[0]!;
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: { ...snap(moved), tree: ['b.txt'] },
+        loaded: { 'b.txt': { kind: 'diff', fileDiff } },
+      }),
+    );
+    // The header draws `a.txt -> b.txt` from `prevName`; the banner explains the empty body.
+    expect(captureItems.mock.lastCall![0][0]).toMatchObject({
+      type: 'file',
+      file: { name: 'b.txt', contents: '', prevName: 'a.txt' },
+      annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', message: 'No content changes' } }],
+    });
   });
 });

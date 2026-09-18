@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
 import { clearWordFocus, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
-import { currentPath, widenSearchScope } from '../model.js';
+import { currentPath } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
@@ -63,8 +63,8 @@ const KEYMAP: Record<string, Action> = {
   yy: () => void copyComments(),
   Y: () => void copyComments(),
   '/': (s) => s.openSearch('file'),
-  'g/': (s) => s.openSearch(widenSearchScope(s.search.scope)),
-  gf: (s) => s.treeModel?.openSearch(),
+  'g/': (s) => s.openSearch('diff'),
+  gf: () => focusFileSearch(),
   gd: (s) => s.goToDefinition(),
   gy: (s) => s.goToTypeDefinition(),
   gh: (s) => s.showHover(),
@@ -149,6 +149,31 @@ export function useKeymap(): void {
         clearPending();
         return;
       }
+      if (
+        !isEditable(target) &&
+        !e.metaKey &&
+        !hasModifier(e) &&
+        ([...e.key].length === 1 || e.key === 'Backspace' || e.key === 'Enter') &&
+        s.search.open &&
+        s.search.kind === 'text' &&
+        s.search.editing &&
+        s.search.scope === 'file'
+      ) {
+        e.preventDefault();
+        clearPending();
+        if ([...e.key].length === 1 || e.key === 'Backspace') s.typeSearchInput(e.key);
+        else if (e.key === 'Enter') void s.runSearch(s.search.input);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        clearPending();
+        if (!s.layout.treeVisible) {
+          s.setLayout({ treeVisible: true });
+          requestAnimationFrame(focusFileSearch);
+        } else focusFileSearch();
+        return;
+      }
       // The references overlay owns the keys while open, wherever focus sits.
       if (s.references.open) {
         e.preventDefault();
@@ -192,10 +217,6 @@ export function useKeymap(): void {
           e.preventDefault();
           e.stopPropagation(); // otherwise the tree moves focus to the next row afterwards
           focusReview();
-        } else if (e.key === '/' && !isEditable(target)) {
-          // The tree's own type-ahead opens its filter on letters only; `/` in the tree filters files, as it did from the diff.
-          e.preventDefault();
-          s.treeModel?.openSearch();
         }
         return; // the tree owns every other key while focused
       }
@@ -252,6 +273,16 @@ export function useKeymap(): void {
       dispatch(e);
       if (e.defaultPrevented) e.stopPropagation();
     };
+    // A deliberate click elsewhere releases search ownership; virtualization removing the input does not.
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0 || realTarget(e)?.closest('[data-content-search]')) return;
+      const s = useStore.getState();
+      if (!s.search.open || !s.search.editing) return;
+      s.blurSearchInput();
+      document.querySelector<HTMLInputElement>('[data-content-search]')?.blur();
+      clearPending();
+      count.current = '';
+    };
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && realTarget(e)?.getAttribute('role') !== 'combobox') setTimeout(focusReview, 0);
@@ -259,14 +290,26 @@ export function useKeymap(): void {
     // Capture phase: the tree stops propagation of keys it handles (arrows), and we
     // need ArrowRight to hand focus back. Editable targets are skipped early.
     document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keyup', onKeyUp);
     return () => {
       document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keyup', onKeyUp);
       clearPending();
       count.current = '';
     };
   }, []);
+}
+
+/** Re-focus filename search without discarding its current filter. */
+function focusFileSearch(): void {
+  const model = useStore.getState().treeModel;
+  model?.openSearch(model.getSearchValue());
+  document
+    .querySelector('file-tree-container')
+    ?.shadowRoot?.querySelector<HTMLInputElement>('[data-file-tree-search-input]')
+    ?.focus({ preventScroll: true });
 }
 
 /** Focus the file tree on the active file so its own arrow keys walk the files. */

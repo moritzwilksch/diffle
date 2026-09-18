@@ -213,6 +213,20 @@ describe('GitRepo', () => {
     expect(cut.truncated).toBe(true);
   });
 
+  it('applies visible line ranges before counting and truncating matches', async () => {
+    const ranges = new Map<string, [number, number][]>([['a.txt', [[3, 4]]]]);
+    const exact = await repo.grep('o', 'worktree', 1, { paths: ['a.txt'], ranges });
+    expect(exact.matches.map((m) => m.line)).toEqual([4]);
+    expect(exact.truncated).toBe(false);
+    ranges.set('a.txt', [[2, 4]]);
+    const cut = await repo.grep('o', 'worktree', 1, { paths: ['a.txt'], ranges });
+    expect(cut.matches.map((m) => m.line)).toEqual([2]);
+    expect(cut.truncated).toBe(true);
+    const committed = await repo.grep('o', 'feat', 1, { paths: ['a.txt'], ranges });
+    expect(committed.matches.map((m) => m.line)).toEqual([2]);
+    expect(committed.truncated).toBe(false);
+  });
+
   it('whole-word search matches complete, case-sensitive words only', async () => {
     const word = await repo.grep('one', 'worktree', 50, { word: true });
     expect(word.matches.map((m) => [m.path, m.line])).toEqual([['a.txt', 1]]);

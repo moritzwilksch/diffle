@@ -1,32 +1,31 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
-import { FileDiff, FileSearch, FolderSearch, Link2, Search, WholeWord, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import type { SearchScope } from '../../shared/protocol.js';
-import { nextSearchScope } from '../model.js';
+import { FileDiff, FileSearch, Link2, Search, WholeWord, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '../store.js';
 
-const SCOPE_LABEL: Record<SearchScope, string> = {
-  file: 'the current file',
-  diff: 'only the diff',
-  repo: 'the full codebase',
-};
-const SCOPE_ICON: Record<SearchScope, typeof FileSearch> = { file: FileSearch, diff: FileDiff, repo: FolderSearch };
+/** Content search (/ in the current file, g/ across changed files), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
+export function SearchBar({ path }: { path?: string }) {
+  const visible = useStore((s) => {
+    const local = s.search.kind === 'text' && s.search.scope === 'file';
+    return s.search.open && (local ? s.search.path === path : path === undefined);
+  });
+  return visible ? <SearchForm /> : null;
+}
 
-/** Content search (/ in the current file, g/ across the diff or codebase), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
-export function SearchBar() {
+function SearchForm() {
   const search = useStore((s) => s.search);
   const runSearch = useStore((s) => s.runSearch);
   const closeSearch = useStore((s) => s.closeSearch);
   const setSearchOptions = useStore((s) => s.setSearchOptions);
-  const [q, setQ] = useState(search.query);
+  const setSearchInput = useStore((s) => s.setSearchInput);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (search.open) ref.current?.focus();
-  }, [search.open, search.focusNonce]);
+    // Virtualization can remount this input during a wheel gesture; focus must not move the viewport.
+    if (search.editing) ref.current?.focus({ preventScroll: true });
+  }, [search.editing, search.focusNonce]);
 
-  if (!search.open) return null;
   const n = search.matches.length;
   if (search.kind !== 'text') {
     return (
@@ -49,13 +48,15 @@ export function SearchBar() {
       </div>
     );
   }
-  const ScopeIcon = SCOPE_ICON[search.scope];
+  const fullFile = search.content[search.scope] === 'full';
+  const ScopeIcon = fullFile ? FileSearch : FileDiff;
   return (
     <form
       className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5"
+      onClick={(e) => e.stopPropagation()}
       onSubmit={(e) => {
         e.preventDefault();
-        void runSearch(q).then(() => {
+        void runSearch(search.input).then(() => {
           ref.current?.blur();
           document.querySelector<HTMLElement>('main[tabindex]')?.focus({ preventScroll: true });
         });
@@ -63,14 +64,16 @@ export function SearchBar() {
     >
       <Search size="0.875rem" />
       <input
-        className="flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
+        data-content-search=""
+        className="min-w-0 flex-1 rounded-md border border-border bg-canvas px-2 py-1 font-mono text-[0.75rem]"
         ref={ref}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
+        value={search.input}
+        onFocus={() => {
+          if (!search.editing) setSearchInput(search.input);
+        }}
+        onChange={(e) => setSearchInput(e.target.value)}
         placeholder={
-          search.scope === 'file'
-            ? 'Search this file… (Enter, then n / N)'
-            : 'Search file contents… (Enter, then n / N)'
+          search.scope === 'file' ? 'Search this file… (Enter, then n / N)' : 'Search all files… (Enter, then n / N)'
         }
         spellCheck={false}
       />
@@ -102,12 +105,16 @@ export function SearchBar() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.scope === 'diff' ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${!fullFile ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
         )}
-        aria-label={`Searching ${SCOPE_LABEL[search.scope]}`}
-        data-scope={search.scope}
-        onClick={() => setSearchOptions({ scope: nextSearchScope(search.scope) })}
-        title={`Searching ${SCOPE_LABEL[search.scope]}; click to search ${SCOPE_LABEL[nextSearchScope(search.scope)]}`}
+        aria-label="Search full file"
+        aria-pressed={fullFile}
+        onClick={() => setSearchOptions({ content: fullFile ? 'diff' : 'full' })}
+        title={
+          fullFile
+            ? 'Searching full file; click to search diff + context'
+            : 'Searching diff + context; click to search full file'
+        }
       >
         <ScopeIcon size="0.75rem" />
       </Button>
@@ -117,9 +124,9 @@ export function SearchBar() {
           : n === 0 && search.query
             ? search.scope === 'file'
               ? 'none in file'
-              : search.scope === 'diff'
-                ? 'none in diff'
-                : 'no matches'
+              : fullFile
+                ? 'no matches'
+                : 'none in diff'
             : n
               ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}`
               : ''}

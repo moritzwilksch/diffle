@@ -6,7 +6,6 @@ import type {
   CommentThread,
   LspSymbol,
   ModeRequest,
-  SearchScope,
   Snapshot,
   UserConfig,
   ViewedState,
@@ -108,18 +107,6 @@ export function nextFileAfter(
  */
 export function currentPath(state: Pick<ReviewState, 'snapshot' | 'activePath' | 'fileView'>): string | null {
   return state.activePath ?? state.fileView?.path ?? (state.snapshot && orderedPaths(state.snapshot)[0]) ?? null;
-}
-
-/** The search scopes in widening order; the search bar's scope button cycles through them. */
-export const SEARCH_SCOPES: readonly SearchScope[] = ['file', 'diff', 'repo'];
-
-export function nextSearchScope(scope: SearchScope): SearchScope {
-  return SEARCH_SCOPES[(SEARCH_SCOPES.indexOf(scope) + 1) % SEARCH_SCOPES.length]!;
-}
-
-/** `g/` widens a file-scoped search to the diff but keeps a codebase-wide choice. */
-export function widenSearchScope(scope: SearchScope): Exclude<SearchScope, 'file'> {
-  return scope === 'file' ? 'diff' : scope;
 }
 
 /**

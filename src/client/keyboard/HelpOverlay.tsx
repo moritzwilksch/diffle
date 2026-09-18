@@ -53,8 +53,8 @@ export const COLUMNS: HelpSection[][] = [
       title: 'Search',
       rows: [
         ['/', 'search the current file, then n / N between matches'],
-        ['g/', 'search the diff (scope button: file / diff / codebase)'],
-        ['gf', 'filter the file tree by name (or / in the tree)'],
+        ['g/', 'search changed files (toggle: diff + context / full file)'],
+        ['⌘/Ctrl+p  or  gf', 'search files by name'],
         ['w / b', 'focus the next / previous symbol on the line'],
         ['0 / $', 'focus the first / last symbol on the line'],
         ['* / #', 'next / previous occurrence of the focused word'],

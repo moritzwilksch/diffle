@@ -313,6 +313,10 @@ export type SearchMatch = z.infer<typeof SearchMatchSchema>;
 export const SearchScopeSchema = z.enum(['file', 'diff', 'repo']);
 export type SearchScope = z.infer<typeof SearchScopeSchema>;
 
+/** Whether search includes whole files or only new-side diff hunks and their context. */
+export const SearchContentSchema = z.enum(['diff', 'full']);
+export type SearchContent = z.infer<typeof SearchContentSchema>;
+
 export const SearchResponseSchema = z.object({
   query: z.string(),
   matches: SearchMatchSchema.array(),
@@ -591,6 +595,7 @@ const flagSchema = z
 export const SearchQuerySchema = z.object({
   q: z.string().default(''),
   scope: SearchScopeSchema.default('diff'),
+  content: SearchContentSchema.default('diff'),
   path: z.string().optional(),
   word: flagSchema,
   i: flagSchema,

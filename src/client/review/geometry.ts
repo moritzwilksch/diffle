@@ -12,6 +12,7 @@ export function reviewGeometry(rem: number) {
   const layout = { paddingTop: px(0.75), paddingBottom: px(12.5), gap: px(1) };
   const css = `
 :host {
+  --diffle-header-height: ${diffHeaderHeight}px;
   --diffs-font-size: ${px(0.8125)}px;
   --diffs-line-height: ${lineHeight}px;
   --diffs-gap-block: ${spacing}px;
@@ -23,6 +24,7 @@ export function reviewGeometry(rem: number) {
   height: ${diffHeaderHeight}px;
   min-height: ${diffHeaderHeight}px;
 }
+[data-diffs-header='custom'] { height: auto; }
 [data-separator='line-info'] { height: ${hunkSeparatorHeight}px; }
 `;
   return { itemMetrics, layout, css, edge: px(3) } satisfies {

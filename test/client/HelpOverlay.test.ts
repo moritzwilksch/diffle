@@ -36,7 +36,7 @@ const BOUND = [
   'yy or Y',
   '/',
   'g/',
-  'gf',
+  '⌘/Ctrl+p  or  gf',
   'w / b',
   '0 / $',
   '* / #',

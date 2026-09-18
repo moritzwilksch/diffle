@@ -114,13 +114,15 @@ Completion runs in the shell alone and never starts diffle, so it stays fast —
 - `V`: select a block
 - `v`: mark viewed
 - `/`: search the current file
-- `g/`: search the diff or codebase
+- `g/`: search changed files
 - `gf`: filter files
 - `yy`: copy all comments
 - `F`: open the full file
 - `Ctrl+o`: go back
 
 Press `?` in the app for the full list.
+
+Both content searches toggle between diff hunks with context and full file contents, remembering that choice independently. Global search stays within changed files.
 
 ## GitHub reviews
 
