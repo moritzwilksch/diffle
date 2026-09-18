@@ -8,11 +8,21 @@ import {
   repoOfPrUrl,
   type GhRunner,
   type ExportInput,
+  type GithubDiff,
 } from '../../src/server/github.js';
 
 const PR_URL = 'https://github.com/o/r/pull/7';
 
 const HEAD = 'a'.repeat(40);
+
+/**
+ * The pull request diff as GitHub shows it: `a.txt`, `b.txt` and `c.txt` changed, each with one hunk
+ * over lines 1-20 of both sides, so every fixture line fits. `binary.png` changed without hunks.
+ */
+const DIFF: GithubDiff = {
+  changed: new Set(['a.txt', 'b.txt', 'c.txt', 'binary.png']),
+  patch: async (path) => (path === 'binary.png' ? '' : `diff --git a/${path} b/${path}\n@@ -1,20 +1,20 @@\n`),
+};
 
 function thread(
   over: Partial<CommentThread> & {
@@ -40,10 +50,11 @@ function fileThread(id: string, body = 'whole file', path = 'a.txt'): CommentThr
 }
 
 describe('buildReview', () => {
-  it('maps sides and multi-line ranges to the REST review shape', () => {
-    const { review, skipped } = buildReview(
+  it('maps sides and multi-line ranges to the REST review shape', async () => {
+    const { review, skipped } = await buildReview(
       [thread({ id: 'n', line: 3 }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' })],
       HEAD,
+      DIFF,
     );
     expect(skipped).toEqual([]);
     expect(review.commit_id).toBe(HEAD);
@@ -55,8 +66,8 @@ describe('buildReview', () => {
     ]);
   });
 
-  it('keeps file threads out of the REST payload but in the comment list, in review order', () => {
-    const { review, comments, ids } = buildReview([thread({ id: 'n', line: 3 }), fileThread('f')], HEAD);
+  it('keeps file threads out of the REST payload but in the comment list, in review order', async () => {
+    const { review, comments, ids } = await buildReview([thread({ id: 'n', line: 3 }), fileThread('f')], HEAD, DIFF);
     expect(review.comments).toEqual([{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi' }]);
     expect(comments).toEqual([
       { path: 'a.txt', subject_type: 'file', body: 'whole file' },
@@ -65,23 +76,69 @@ describe('buildReview', () => {
     expect(ids).toEqual(['f', 'n']);
   });
 
-  it('skips stale threads and, without ids, resolved ones', () => {
-    const { review, skipped } = buildReview(
+  it('skips stale threads and, without ids, resolved ones', async () => {
+    const { review, skipped } = await buildReview(
       [thread({ id: 's', stale: true }), thread({ id: 'r', resolved: true }), thread({ id: 'k' })],
       HEAD,
+      DIFF,
     );
     expect(review.comments.map((c) => c.body)).toEqual(['hi']);
     expect(skipped).toEqual([{ id: 's', reason: 'stale' }]);
   });
 
-  it('with ids posts the named threads, resolved included, and reports unknown ids', () => {
-    const { review, skipped } = buildReview(
+  it('with ids posts the named threads, resolved included, and reports unknown ids', async () => {
+    const { review, skipped } = await buildReview(
       [thread({ id: 'r', resolved: true, body: 'done' }), thread({ id: 'k' })],
       HEAD,
+      DIFF,
       ['r', 'nope'],
     );
     expect(review.comments.map((c) => c.body)).toEqual(['done']);
     expect(skipped).toEqual([{ id: 'nope', reason: 'unknown thread' }]);
+  });
+
+  it('skips line and file threads on files outside the diff: GitHub would take them but never show them', async () => {
+    const { comments, ids, skipped } = await buildReview(
+      [thread({ id: 'k' }), thread({ id: 'u', path: 'unchanged.txt' }), fileThread('uf', 'whole', 'unchanged.txt')],
+      HEAD,
+      DIFF,
+    );
+    expect(ids).toEqual(['k']);
+    expect(comments).toHaveLength(1);
+    expect(skipped).toEqual([
+      { id: 'uf', reason: 'outside the diff' },
+      { id: 'u', reason: 'outside the diff' },
+    ]);
+  });
+
+  it("skips a line thread outside the hunks of GitHub's own diff, which GitHub refuses with a 422", async () => {
+    const patches: string[] = [];
+    const diff: GithubDiff = {
+      changed: DIFF.changed,
+      patch: async (path) => {
+        patches.push(path);
+        return DIFF.patch(path);
+      },
+    };
+    const { ids, skipped } = await buildReview(
+      [
+        thread({ id: 'in', line: 20 }),
+        thread({ id: 'edge', line: 19, endLine: 21 }),
+        thread({ id: 'far', side: 'old', line: 40 }),
+        thread({ id: 'bin', path: 'binary.png', line: 1 }),
+        fileThread('binf', 'as a whole', 'binary.png'),
+      ],
+      HEAD,
+      diff,
+    );
+    expect(ids).toEqual(['in', 'binf']);
+    expect(skipped).toEqual([
+      { id: 'edge', reason: 'outside the diff hunks' },
+      { id: 'far', reason: 'outside the diff hunks' },
+      { id: 'bin', reason: 'outside the diff hunks' },
+    ]);
+    // One patch per file, however many threads sit on it; a file thread needs none.
+    expect(patches).toEqual(['a.txt', 'binary.png']);
   });
 });
 
@@ -169,6 +226,7 @@ describe('GithubExporter', () => {
     root: '/r',
     newSha: HEAD,
   };
+  const diff = DIFF;
 
   beforeEach(() => {
     calls.length = 0;
@@ -178,7 +236,7 @@ describe('GithubExporter', () => {
   it('refuses worktree export', async () => {
     const threads = [thread({ id: 'k' })];
     await expect(
-      exportToGithub({ pullRequest, snap: { root: '/r', newSha: 'worktree' }, threads, run: gh }),
+      exportToGithub({ pullRequest, diff, snap: { ...snap, newSha: 'worktree' }, threads, run: gh }),
     ).rejects.toThrow(/worktree/);
     expect(calls).toEqual([]);
   });
@@ -186,6 +244,7 @@ describe('GithubExporter', () => {
   it('creates a pending review, without an event, when the viewer has none', async () => {
     const res = await exportToGithub({
       pullRequest,
+      diff,
       snap,
       threads: [thread({ id: 'k' }), thread({ id: 's', stale: true })],
       run: gh,
@@ -211,6 +270,7 @@ describe('GithubExporter', () => {
   it('creates the pending review over REST, then appends its file comments through GraphQL', async () => {
     const res = await exportToGithub({
       pullRequest,
+      diff,
       snap,
       threads: [thread({ id: 'k' }), fileThread('f')],
       run: gh,
@@ -240,7 +300,7 @@ describe('GithubExporter', () => {
       return gh(args, opts);
     };
     await expect(
-      exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' }), fileThread('f')], run: failing }),
+      exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' }), fileThread('f')], run: failing }),
     ).rejects.toThrow(/created the pending review with 1 comments, then .*boom/);
   });
 
@@ -251,7 +311,7 @@ describe('GithubExporter', () => {
       { node_id: 'C_L', path: 'a.txt', side: 'RIGHT', line: 3, body: 'line\n\n<!-- diffle-thread:f -->' },
     ];
     const threads = [fileThread('f', 'new text'), fileThread('s', 'same', 'b.txt'), fileThread('n', 'added', 'c.txt')];
-    const res = await exportToGithub({ pullRequest, snap, threads, run: runner('PRR_1', existing) });
+    const res = await exportToGithub({ pullRequest, diff, snap, threads, run: runner('PRR_1', existing) });
     expect(res).toEqual({
       url: PR_URL,
       posted: 1,
@@ -272,6 +332,7 @@ describe('GithubExporter', () => {
   it('adds a thread per comment to the pending review the viewer already has', async () => {
     const res = await exportToGithub({
       pullRequest,
+      diff,
       snap,
       threads: [thread({ id: 'k' }), thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' })],
       run: runner('PRR_1'),
@@ -305,6 +366,7 @@ describe('GithubExporter', () => {
     ];
     const res = await exportToGithub({
       pullRequest,
+      diff,
       snap,
       threads: [thread({ id: 'k' })],
       run: runner('PRR_1', existing),
@@ -343,7 +405,7 @@ describe('GithubExporter', () => {
       thread({ id: 'o', side: 'old', line: 5, endLine: 8, body: 'gone' }),
       thread({ id: 'n', line: 9, body: 'new one' }),
     ];
-    const res = await exportToGithub({ pullRequest, snap, threads, run: runner('PRR_1', existing) });
+    const res = await exportToGithub({ pullRequest, diff, snap, threads, run: runner('PRR_1', existing) });
     expect(res).toEqual({
       url: PR_URL,
       posted: 1,
@@ -372,6 +434,7 @@ describe('GithubExporter', () => {
     ];
     const res = await exportToGithub({
       pullRequest,
+      diff,
       snap,
       threads: [thread({ id: 'k' })],
       run: runner('PRR_1', existing),
@@ -384,7 +447,7 @@ describe('GithubExporter', () => {
       { node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'first\n\n<!-- diffle-thread:a -->' },
     ];
     const threads = [thread({ id: 'a', body: 'first' }), thread({ id: 'b', body: 'second' })];
-    const res = await exportToGithub({ pullRequest, snap, threads, run: runner('PRR_1', existing) });
+    const res = await exportToGithub({ pullRequest, diff, snap, threads, run: runner('PRR_1', existing) });
     expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [{ id: 'a', reason: 'already in the review' }] });
   });
 
@@ -392,6 +455,7 @@ describe('GithubExporter', () => {
     const existing = [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'My GitHub draft' }];
     const res = await exportToGithub({
       pullRequest,
+      diff,
       snap,
       threads: [thread({ id: 'k' })],
       run: runner('PRR_1', existing),
@@ -412,7 +476,14 @@ describe('GithubExporter', () => {
       { node_id: 'C_B', path: 'a.txt', side: 'RIGHT' as const, line: 3, body: 'second\n\n<!-- diffle-thread:b -->' },
     ];
     const threads = [thread({ id: 'a', body: 'first' }), thread({ id: 'b', body: 'edited' })];
-    const res = await exportToGithub({ pullRequest, snap, threads, threadIds: ['b'], run: runner('PRR_1', existing) });
+    const res = await exportToGithub({
+      pullRequest,
+      diff,
+      snap,
+      threads,
+      threadIds: ['b'],
+      run: runner('PRR_1', existing),
+    });
     expect(res).toMatchObject({ posted: 0, updated: 1 });
     expect(calls).toHaveLength(3);
     expect(JSON.parse(calls[2]!.input!).variables.input).toEqual({
@@ -448,7 +519,7 @@ describe('GithubExporter', () => {
       }
       return runner('PRR_1')(args, opts);
     };
-    const res = await exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], run: paginated });
+    const res = await exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' })], run: paginated });
     expect(res).toMatchObject({ posted: 0, updated: 0, skipped: [{ id: 'k', reason: 'already in the review' }] });
     expect(calls).toHaveLength(3);
     expect(JSON.parse(calls[2]!.input!).variables.after).toBe('page-1');
@@ -478,7 +549,7 @@ describe('GithubExporter', () => {
         return runner('PRR_1')(args, opts);
       };
       await expect(
-        exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], run: incomplete }),
+        exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' })], run: incomplete }),
       ).rejects.toThrow(GithubError);
       expect(calls).toHaveLength(1);
       expect(pages).toBe(kind === 'limit' ? 10 : kind === 'failure' ? 2 : 1);
@@ -496,7 +567,7 @@ describe('GithubExporter', () => {
       }
       return runner('PRR_1')(args, o);
     };
-    const res = await exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], run: submitted });
+    const res = await exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' })], run: submitted });
     expect(res).toMatchObject({ posted: 1, updated: 0, skipped: [] });
   });
 
@@ -506,9 +577,9 @@ describe('GithubExporter', () => {
         throw new GithubError('gh api graphql failed: 502', 502);
       return runner('PRR_1')(args, o);
     };
-    await expect(exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], run: blind })).rejects.toThrow(
-      /502/,
-    );
+    await expect(
+      exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' })], run: blind }),
+    ).rejects.toThrow(/502/);
     expect(calls).toHaveLength(1);
   });
 
@@ -525,7 +596,7 @@ describe('GithubExporter', () => {
       }
       return gh(args, o);
     };
-    const res = await exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], run: others });
+    const res = await exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' })], run: others });
     expect(res.review).toBe('created');
   });
 
@@ -542,7 +613,13 @@ describe('GithubExporter', () => {
       return runner('PRR_1')(args, o);
     };
     await expect(
-      exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' }), thread({ id: 'k2', line: 9 })], run: flaky }),
+      exportToGithub({
+        pullRequest,
+        diff,
+        snap,
+        threads: [thread({ id: 'k' }), thread({ id: 'k2', line: 9 })],
+        run: flaky,
+      }),
     ).rejects.toThrow(/updated 0 and added 1 comments/);
   });
 
@@ -570,7 +647,7 @@ describe('GithubExporter', () => {
       }
       return runner('PRR_1', existing)(args, opts);
     };
-    const input = { snap, pullRequest, threads: [thread({ id: 'k' })], run };
+    const input = { snap, diff, pullRequest, threads: [thread({ id: 'k' })], run };
     const first = exportToGithub(input);
     await adding;
     const second = exportToGithub(input);
@@ -583,8 +660,8 @@ describe('GithubExporter', () => {
   });
 
   it('a failed export does not block the next export', async () => {
-    const failed = exportToGithub({ pullRequest, snap, threads: [thread({ id: 's', stale: true })], run: gh });
-    const next = exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], run: gh });
+    const failed = exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 's', stale: true })], run: gh });
+    const next = exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' })], run: gh });
     await expect(failed).rejects.toThrow('nothing to post');
     await expect(next).resolves.toMatchObject({ posted: 1 });
   });
@@ -607,6 +684,7 @@ describe('GithubExporter', () => {
     await expect(
       exportToGithub({
         pullRequest,
+        diff,
         snap,
         threads: [thread({ id: 'k' }), thread({ id: 'a', line: 8 }), thread({ id: 'b', line: 9 })],
         run,
@@ -634,7 +712,7 @@ describe('GithubExporter', () => {
       return runner('PRR_1', existing)(args, opts);
     };
     await expect(
-      exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' }), thread({ id: 'a', line: 8 })], run }),
+      exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 'k' }), thread({ id: 'a', line: 8 })], run }),
     ).rejects.toMatchObject({
       status: 502,
       message: 'updated 1 and added 0 comments in the pending review, then update failed',
@@ -643,10 +721,19 @@ describe('GithubExporter', () => {
 
   it('answers 400 when every thread is skipped', async () => {
     await expect(
-      exportToGithub({ pullRequest, snap, threads: [thread({ id: 's', stale: true })], run: gh }),
+      exportToGithub({ pullRequest, diff, snap, threads: [thread({ id: 's', stale: true })], run: gh }),
     ).rejects.toMatchObject({
       status: 400,
       message: /1 stale/,
     });
+  });
+
+  it('never posts a thread on an unchanged tree file, and says why', async () => {
+    const threads = [thread({ id: 'u', path: 'unchanged.txt' }), fileThread('uf', 'whole', 'unchanged.txt')];
+    await expect(exportToGithub({ pullRequest, diff, snap, threads, run: gh })).rejects.toMatchObject({
+      status: 400,
+      message: /2 outside the diff/,
+    });
+    expect(calls).toEqual([]);
   });
 });

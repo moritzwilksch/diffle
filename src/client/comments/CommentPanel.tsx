@@ -25,6 +25,7 @@ export function CommentPanel() {
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
+  const changed = useStore((s) => s.snapshot?.changed);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
@@ -46,6 +47,10 @@ export function CommentPanel() {
   const open = threads.filter((t) => !t.resolved);
   const resolvedCount = threads.length - open.length;
   const staleCount = threads.filter((t) => t.stale).length;
+  // GitHub accepts a review comment on an unchanged file but never shows it, so "All" counts those out up front.
+  const inDiff = useMemo(() => new Set(changed?.map((f) => f.path)), [changed]);
+  const exportable = open.filter((t) => !t.stale && inDiff.has(t.anchor.path)).length;
+  const offGithub = open.length - exportable;
   const groups = useMemo(() => {
     const by = new Map<string, CommentThread[]>();
     for (const t of [...shown].sort(cmp)) {
@@ -92,11 +97,13 @@ export function CommentPanel() {
             variant="ghost"
             icon={!post.armed && !posted}
             feedback={post.armed ? 'confirm' : posted ? 'posted' : undefined}
-            disabled={posting || (open.length === 0 && !posted)}
+            disabled={posting || (exportable === 0 && !posted)}
             title={
-              post.armed
-                ? 'Click again to add all open threads to the pending review'
-                : 'Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub'
+              exportable === 0 && open.length > 0
+                ? 'Nothing to add to a pending review: GitHub shows review comments only on files in the pull request diff'
+                : post.armed
+                  ? `Click again to add ${exportable} open thread${exportable === 1 ? '' : 's'} to the pending review`
+                  : `Add all open threads to a pending review on the GitHub pull request; you submit it on GitHub${offGithub > 0 ? `. ${offGithub} stale or outside the diff will be skipped` : ''}`
             }
             aria-label={
               post.armed
@@ -172,6 +179,7 @@ export function CommentPanel() {
                 openFile={openFile}
                 focusThread={focusThread}
                 deleteThread={deleteThread}
+                offGithub={canExport && !t.stale && !inDiff.has(t.anchor.path)}
               />
             ))}
           </section>
@@ -208,11 +216,14 @@ const ThreadRow = memo(function ThreadRow({
   openFile,
   focusThread,
   deleteThread,
+  offGithub,
 }: {
   thread: CommentThread;
   openFile: (path: string, line?: number, side?: Side) => Promise<void>;
   focusThread: (id: string | null) => void;
   deleteThread: (id: string) => Promise<void>;
+  /** Export is on, but this thread's file is not in the pull request diff: GitHub would never show it. */
+  offGithub: boolean;
 }) {
   const first = t.messages[0];
   const del = useConfirm(() => void deleteThread(t.id));
@@ -251,6 +262,14 @@ const ThreadRow = memo(function ThreadRow({
         {t.stale && (
           <span className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-warn">
             <AlertTriangle size="0.6875rem" /> stale
+          </span>
+        )}
+        {offGithub && (
+          <span
+            className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-warn"
+            title="Not added to GitHub reviews: GitHub shows review comments only on files in the pull request diff"
+          >
+            <GitPullRequestArrow size="0.6875rem" /> outside the diff
           </span>
         )}
         {t.resolved && (
