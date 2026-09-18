@@ -47,7 +47,7 @@ vi.mock('@pierre/diffs/react', () => ({
       scrollTo,
     }));
     // Each item's header metadata renders in the light DOM so tests can see the header's buttons; a file
-    // item's contents render as text so tests can see a placeholder body.
+    // item's contents render as text.
     return createElement(
       'div',
       { ref: props.containerRef, className: props.className },
@@ -558,17 +558,19 @@ describe('ReviewPane scroller effects', () => {
     expect(useStore.getState().scrollTarget).toBe(scrollTarget);
   });
 
-  it('expands a binary file to a placeholder line and collapses it again from the header', async () => {
+  it('expands a binary file to a placeholder banner and collapses it again from the header', async () => {
     const binary = [
       { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'img.png': { kind: 'binary' } } }));
     const item = () => captureItems.mock.lastCall![0][0];
+    // The banner is the whole body: an empty file plus one file-level annotation, never a note line.
     expect(item()).toMatchObject({
       type: 'file',
       collapsed: false,
-      file: { name: 'img.png', contents: expect.stringContaining('Binary file not shown') as string, lang: 'text' },
+      file: { name: 'img.png', contents: '' },
+      annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', placeholder: 'binary' } }],
     });
 
     await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
@@ -614,7 +616,7 @@ describe('ReviewPane scroller effects', () => {
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
   });
 
-  it('renders a pure rename as a diff item so the header keeps the old-path arrow', async () => {
+  it('renders a pure rename as a placeholder that keeps the old path for the header arrow', async () => {
     const moved = [
       {
         path: 'b.txt',
@@ -636,7 +638,11 @@ describe('ReviewPane scroller effects', () => {
         loaded: { 'b.txt': { kind: 'diff', fileDiff } },
       }),
     );
-    // A placeholder file item has no way to show `a.txt -> b.txt`; only a diff item does.
-    expect(captureItems.mock.lastCall![0][0]).toMatchObject({ type: 'diff', fileDiff });
+    // The header draws `a.txt -> b.txt` from `prevName`; the banner explains the empty body.
+    expect(captureItems.mock.lastCall![0][0]).toMatchObject({
+      type: 'file',
+      file: { name: 'b.txt', contents: '', prevName: 'a.txt' },
+      annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', message: 'No content changes' } }],
+    });
   });
 });
