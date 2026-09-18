@@ -1,4 +1,4 @@
-import { ToggleButton } from '../ui/ToggleButton.js';
+import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
 import { Button } from '../ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -30,6 +30,8 @@ const LANE_CSS = `
 [data-item-section="decoration"] { flex: 1 0 auto; overflow: visible; }
 [data-item-section="decoration"] > span { gap: 0.375rem; overflow: visible; font-variant-numeric: tabular-nums; }
 [data-item-section="decoration"] > span > span:last-child { min-width: 1ch; text-align: center; }
+/* The library butts the search box against the toolbar above; give it the toolbar's own vertical rhythm. */
+[data-file-tree-search-container] { padding-top: 0.5rem; }
 `;
 
 function rowDecoration(f: ChangedFile, state: ViewedState) {
@@ -225,14 +227,14 @@ export function FileTreePane() {
   return (
     <aside className="tree-theme flex min-h-0 flex-col bg-surface">
       <div className="flex items-center gap-2 border-b border-b-border px-2.5 py-1.5 text-muted [&_button]:flex-none [&_button]:whitespace-nowrap">
-        <div className="flex overflow-hidden rounded-md border border-border">
+        <SegmentedControl>
           <ToggleButton selected={scope === 'changed'} onClick={() => setScope('changed')}>
             Changed
           </ToggleButton>
           <ToggleButton selected={scope === 'all'} onClick={() => setScope('all')}>
             All files
           </ToggleButton>
-        </div>
+        </SegmentedControl>
         <span className="ml-auto">{paths.length}</span>
         <Button
           variant="ghost"

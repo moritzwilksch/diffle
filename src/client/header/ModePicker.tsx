@@ -1,4 +1,4 @@
-import { ToggleButton } from '../ui/ToggleButton.js';
+import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
 import {
@@ -210,8 +210,8 @@ export function ModePicker() {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <div
-                      className="flex self-start overflow-hidden rounded-md border border-border focus-visible:outline-2 focus-visible:outline-offset-[2px] focus-visible:outline-accent focus-visible:outline-solid"
+                    <SegmentedControl
+                      className="self-start focus-visible:outline-2 focus-visible:outline-offset-[2px] focus-visible:outline-accent focus-visible:outline-solid"
                       ref={comparisonToggle}
                       role="group"
                       aria-label={`Comparison: ${dots === '..' ? 'Direct' : 'Merge base'}. Space to toggle.`}
@@ -240,7 +240,7 @@ export function ModePicker() {
                       <ToggleButton type="button" selected={dots === '..'} tabIndex={-1} onClick={() => setDots('..')}>
                         Direct
                       </ToggleButton>
-                    </div>
+                    </SegmentedControl>
                     <Button
                       id="swap-refs"
                       className="border-0 bg-transparent p-0.5 text-muted hover:bg-hover hover:text-foreground"

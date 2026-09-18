@@ -6,6 +6,7 @@
   --bg: #ffffff;
   --bg-2: #f0f3f6;
   --bg-3: #e7ecf0;
+  --bg-raised: #ffffff;
   --fg: #0e1116;
   --fg-2: #66707b;
   --border: #acb6c0;
@@ -32,6 +33,7 @@
     --bg: #0a0c10;
     --bg-2: #0a0c10;
     --bg-3: #272b33;
+    --bg-raised: #353b44;
     --fg: #f0f3f6;
     --fg-2: #bdc4cc;
     --border: #2f353d;
@@ -56,6 +58,7 @@
   --bg: #0a0c10;
   --bg-2: #0a0c10;
   --bg-3: #272b33;
+  --bg-raised: #353b44;
   --fg: #f0f3f6;
   --fg-2: #bdc4cc;
   --border: #2f353d;

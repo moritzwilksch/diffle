@@ -1,4 +1,4 @@
-import { ToggleButton } from '../ui/ToggleButton.js';
+import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
 import {
@@ -67,14 +67,14 @@ export function Header() {
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
-      <div className="flex overflow-hidden rounded-md border border-border" title="Diff layout">
+      <SegmentedControl title="Diff layout">
         <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')}>
           <Columns2 size="0.875rem" /> Split
         </ToggleButton>
         <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')}>
           <Rows3 size="0.875rem" /> Unified
         </ToggleButton>
-      </div>
+      </SegmentedControl>
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
       </Button>
@@ -145,7 +145,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
     <details ref={popup} className="relative">
       <summary
         className={twMerge(
-          `inline-flex cursor-pointer list-none items-center gap-1.25 text-xs whitespace-nowrap text-muted [&::-webkit-details-marker]:hidden ${error || broken ? 'text-warn' : ''}`,
+          `flex cursor-pointer list-none items-center gap-1.25 text-xs whitespace-nowrap text-muted [&::-webkit-details-marker]:hidden ${error || broken ? 'text-warn' : ''}`,
         )}
         aria-label={`Language servers${label ? `: ${label}` : ''}`}
       >
