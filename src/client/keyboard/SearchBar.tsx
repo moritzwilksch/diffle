@@ -1,19 +1,10 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '../ui/Button.js';
-import { FileDiff, FileSearch, FolderSearch, Link2, Search, WholeWord, X } from 'lucide-react';
+import { FileDiff, FileSearch, Link2, Search, WholeWord, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import type { SearchScope } from '../../shared/protocol.js';
-import { nextSearchScope } from '../model.js';
 import { useStore } from '../store.js';
 
-const SCOPE_LABEL: Record<SearchScope, string> = {
-  file: 'the current file',
-  diff: 'only the diff',
-  repo: 'the full codebase',
-};
-const SCOPE_ICON: Record<SearchScope, typeof FileSearch> = { file: FileSearch, diff: FileDiff, repo: FolderSearch };
-
-/** Content search (/ in the current file, g/ across the diff or codebase), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
+/** Content search (/ in the current file, g/ across changed files), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
 export function SearchBar({ path }: { path?: string }) {
   const visible = useStore((s) => {
     const local = s.search.kind === 'text' && s.search.scope === 'file';
@@ -57,7 +48,8 @@ function SearchForm() {
       </div>
     );
   }
-  const ScopeIcon = SCOPE_ICON[search.scope];
+  const fullFile = search.content[search.scope] === 'full';
+  const ScopeIcon = fullFile ? FileSearch : FileDiff;
   return (
     <form
       className="flex items-center gap-2 border-b border-b-border bg-surface px-2.5 py-1.5"
@@ -113,12 +105,16 @@ function SearchForm() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.scope === 'diff' ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${!fullFile ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
         )}
-        aria-label={`Searching ${SCOPE_LABEL[search.scope]}`}
-        data-scope={search.scope}
-        onClick={() => setSearchOptions({ scope: nextSearchScope(search.scope) })}
-        title={`Searching ${SCOPE_LABEL[search.scope]}; click to search ${SCOPE_LABEL[nextSearchScope(search.scope)]}`}
+        aria-label="Search full file"
+        aria-pressed={fullFile}
+        onClick={() => setSearchOptions({ content: fullFile ? 'diff' : 'full' })}
+        title={
+          fullFile
+            ? 'Searching full file; click to search diff + context'
+            : 'Searching diff + context; click to search full file'
+        }
       >
         <ScopeIcon size="0.75rem" />
       </Button>
@@ -128,9 +124,9 @@ function SearchForm() {
           : n === 0 && search.query
             ? search.scope === 'file'
               ? 'none in file'
-              : search.scope === 'diff'
-                ? 'none in diff'
-                : 'no matches'
+              : fullFile
+                ? 'no matches'
+                : 'none in diff'
             : n
               ? `${search.index + 1} / ${n}${search.truncated ? '+' : ''}`
               : ''}

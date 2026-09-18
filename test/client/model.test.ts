@@ -16,10 +16,8 @@ import {
   draftRange,
   isViewed,
   nextFileAfter,
-  nextSearchScope,
   orderedPaths,
   reuseThreads,
-  widenSearchScope,
 } from '../../src/client/model.js';
 
 describe('orderedPaths', () => {
@@ -173,18 +171,6 @@ describe('reuseThreads', () => {
 });
 
 describe('search scope', () => {
-  it('cycles file → diff → repo → file', () => {
-    expect(nextSearchScope('file')).toBe('diff');
-    expect(nextSearchScope('diff')).toBe('repo');
-    expect(nextSearchScope('repo')).toBe('file');
-  });
-
-  it('g/ widens a file search to the diff and keeps a repo choice', () => {
-    expect(widenSearchScope('file')).toBe('diff');
-    expect(widenSearchScope('diff')).toBe('diff');
-    expect(widenSearchScope('repo')).toBe('repo');
-  });
-
   it('the current file is the cursor’s, else the whole-file view’s, else the first in tree order', () => {
     const changed = ['src/b.ts', 'src/a.ts'].map((path) => ({
       path,

@@ -1484,7 +1484,7 @@ describe('symbol navigation', () => {
 
     await useStore.getState().searchWord(1);
     await new Promise((r) => setTimeout(r, 0));
-    expect(api.search).toHaveBeenCalledWith('foo', { word: true, scope: 'repo' });
+    expect(api.search).toHaveBeenCalledWith('foo', { word: true, scope: 'repo', content: 'full' });
     let s = useStore.getState();
     expect(s.search.kind).toBe('word');
     expect(s.search.direction).toBe(1);
@@ -1505,7 +1505,7 @@ describe('symbol navigation', () => {
     useStore.getState().closeSearch();
   });
 
-  it('/ searches only the file the reader is in; g/ widens to the diff without forgetting a repo choice', async () => {
+  it('/ pins the current file and remembers content modes independently from global search', async () => {
     ready();
     useStore.setState({ activePath: 'b.py' });
     api.search.mockResolvedValue({ query: 'x', matches: [{ path: 'b.py', line: 2, text: 'y = 2' }], truncated: false });
@@ -1522,7 +1522,13 @@ describe('symbol navigation', () => {
     useStore.setState({ activePath: 'a.py' });
     await useStore.getState().runSearch('y');
     await new Promise((r) => setTimeout(r, 0));
-    expect(api.search).toHaveBeenCalledWith('y', { ignoreCase: true, regex: false, scope: 'file', path: 'b.py' });
+    expect(api.search).toHaveBeenCalledWith('y', {
+      ignoreCase: true,
+      regex: false,
+      scope: 'file',
+      content: 'diff',
+      path: 'b.py',
+    });
     let s = useStore.getState();
     expect(s.search.path).toBe('b.py');
     expect(s.search.input).toBe('y');
@@ -1530,16 +1536,39 @@ describe('symbol navigation', () => {
     expect(s.search.index).toBe(0);
     expect(s.selection?.range.end).toBe(2);
 
-    // The remembered scope: a file search leaves the codebase choice for g/ to return to.
-    useStore.getState().setSearchOptions({ scope: 'repo' });
+    useStore.getState().setSearchOptions({ content: 'full' });
     await new Promise((r) => setTimeout(r, 0));
-    expect(api.search).toHaveBeenLastCalledWith('y', { ignoreCase: true, regex: false, scope: 'repo' });
-    expect(useStore.getState().search.path).toBeNull();
-    useStore.getState().openSearch('file');
-    useStore.getState().openSearch();
+    expect(api.search).toHaveBeenLastCalledWith('y', {
+      ignoreCase: true,
+      regex: false,
+      scope: 'file',
+      content: 'full',
+      path: 'b.py',
+    });
+    expect(useStore.getState().search.path).toBe('b.py');
     expect(useStore.getState().search.scope).toBe('file');
+    useStore.getState().openSearch('diff');
+    await useStore.getState().runSearch('y');
+    expect(api.search).toHaveBeenLastCalledWith('y', {
+      ignoreCase: true,
+      regex: false,
+      scope: 'diff',
+      content: 'diff',
+    });
+    useStore.getState().setSearchOptions({ content: 'full' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.search).toHaveBeenLastCalledWith('y', {
+      ignoreCase: true,
+      regex: false,
+      scope: 'diff',
+      content: 'full',
+    });
+    useStore.getState().openSearch('file');
+    expect(useStore.getState().search.content.file).toBe('full');
+    useStore.getState().setSearchOptions({ content: 'diff' });
+    expect(useStore.getState().search.content.diff).toBe('full');
     useStore.getState().closeSearch();
-    useStore.setState((s) => ({ search: { ...s.search, scope: 'diff' } })); // the scope outlives the bar; later tests expect the default
+    useStore.setState((s) => ({ search: { ...s.search, scope: 'diff', content: { file: 'diff', diff: 'diff' } } }));
   });
 
   it('a file search with no file to pin to says so instead of querying', async () => {
@@ -1673,6 +1702,24 @@ describe('request ownership', () => {
     expect(s.search.matches).toEqual(hit('b.py', 2).matches);
     expect(s.search.loading).toBe(false);
     expect(s.selection?.range.end).toBe(2);
+  });
+
+  it('opening local search drops a pending global result without moving the cursor', async () => {
+    ready();
+    useStore.getState().openSearch('diff');
+    const slow = deferred<SearchResponse>();
+    api.search.mockReturnValueOnce(slow.promise);
+    const run = useStore.getState().runSearch('foo');
+    useStore.getState().openSearch('file');
+    const selection = useStore.getState().selection;
+    slow.resolve(hit('b.py', 2));
+    await run;
+    expect(useStore.getState().search.scope).toBe('file');
+    expect(useStore.getState().search.matches).toEqual([]);
+    expect(useStore.getState().search.loading).toBe(false);
+    expect(useStore.getState().selection).toBe(selection);
+    useStore.getState().closeSearch();
+    useStore.setState((s) => ({ search: { ...s.search, scope: 'diff' } }));
   });
 
   it('a word search completing after a mode switch is dropped', async () => {

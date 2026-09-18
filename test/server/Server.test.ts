@@ -148,6 +148,7 @@ describe('Server', () => {
   it.each([
     '/api/file?path=a.txt&rev=other',
     '/api/search?scope=other',
+    '/api/search?content=other',
     '/api/search?word=true',
     '/api/threads?state=other',
     '/api/threads/export?state=other',
@@ -325,7 +326,7 @@ describe('Server', () => {
     }
   });
 
-  it('GET /api/search covers only the diff unless scope=repo, or one file with scope=file', async () => {
+  it('GET /api/search covers changed files or one file, with full contents requested explicitly', async () => {
     await writeFile(join(dir, 'a.txt'), 'a\nneedle\n');
     await writeFile(join(dir, 'n.txt'), 'needle\n');
     // n.txt is committed, so it is in the tree but not in the working diff.
@@ -337,13 +338,44 @@ describe('Server', () => {
         (JSON.parse((await send('GET', `/api/search?${qs}`)).body).matches as { path: string }[]).map((m) => m.path);
       expect(await paths('q=needle')).toEqual(['a.txt']);
       expect(await paths('q=needle&scope=diff')).toEqual(['a.txt']);
-      expect(await paths('q=needle&scope=repo')).toEqual(['a.txt', 'n.txt']);
-      expect(await paths('q=needle&scope=file&path=n.txt')).toEqual(['n.txt']);
+      expect(await paths('q=needle&scope=repo&content=full')).toEqual(['a.txt', 'n.txt']);
+      expect(await paths('q=needle&scope=file&content=full&path=n.txt')).toEqual(['n.txt']);
       // A file outside the new side matches nothing rather than widening to everything.
       expect(await paths('q=needle&scope=file&path=missing.txt')).toEqual([]);
       expect(await paths('q=needle&scope=file')).toEqual([]);
     } finally {
       await writeFile(join(dir, 'a.txt'), 'a\n');
+      await session.refresh();
+    }
+  });
+
+  it('searches diff hunks with context or full changed files independently of file scope', async () => {
+    const original = Array.from({ length: 620 }, (_, i) => `needle ${i + 1}\n`).join('');
+    await writeFile(join(dir, 'context.txt'), original);
+    execFileSync('git', ['add', 'context.txt'], { cwd: dir, env });
+    execFileSync('git', ['commit', '-q', '-m', 'search context fixture'], { cwd: dir, env });
+    await writeFile(join(dir, 'context.txt'), original.replace('needle 610\n', 'needle changed\n'));
+    await session.refresh();
+    try {
+      const search = async (options: string) => {
+        const response = await send('GET', `/api/search?q=needle&${options}`);
+        expect(response.status).toBe(200);
+        return JSON.parse(response.body) as { matches: { path: string; line: number }[]; truncated: boolean };
+      };
+      for (const scope of ['scope=diff', 'scope=file&path=context.txt']) {
+        const visible = await search(`${scope}&content=diff`);
+        expect(visible.matches.map((m) => m.line)).toEqual([607, 608, 609, 610, 611, 612, 613]);
+        expect(visible.truncated).toBe(false);
+        const full = await search(`${scope}&content=full`);
+        expect(full.matches).toHaveLength(500);
+        expect(full.matches.every((m) => m.path === 'context.txt')).toBe(true);
+        expect(full.matches[0]?.line).toBe(1);
+        expect(full.truncated).toBe(true);
+      }
+      expect((await search('scope=file&path=n.txt&content=diff')).matches).toEqual([]);
+      expect((await search('scope=file&path=n.txt&content=full')).matches).toHaveLength(1);
+    } finally {
+      await writeFile(join(dir, 'context.txt'), original);
       await session.refresh();
     }
   });

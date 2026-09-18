@@ -34,6 +34,7 @@ import type {
   ModeRequest,
   ReplyCreate,
   SearchScope,
+  SearchContent,
   ServerMessage,
   Side,
   ThreadCreate,
@@ -111,11 +112,18 @@ export const api = {
   /** `path` names the file a `scope: 'file'` search is confined to. */
   search: (
     query: string,
-    opts: { word?: boolean; ignoreCase?: boolean; regex?: boolean; scope?: SearchScope; path?: string } = {},
+    opts: {
+      word?: boolean;
+      ignoreCase?: boolean;
+      regex?: boolean;
+      scope?: SearchScope;
+      content?: SearchContent;
+      path?: string;
+    } = {},
   ) =>
     json(
       SearchResponseSchema,
-      `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, path: opts.path })}`,
+      `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, content: opts.content, path: opts.path })}`,
     ),
   threads: (query: ThreadQuery = {}) =>
     json(CommentThreadSchema.array(), `api/threads?${q({ state: query.state, path: query.path })}`),
