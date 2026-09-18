@@ -118,7 +118,7 @@ export function FileTreePane() {
       const target = event.composedPath()[0];
       if (target instanceof Element && target.matches('[data-file-tree-search-input]')) event.stopPropagation();
     };
-    const guardEmptySearch = (event: KeyboardEvent) => {
+    const onSearchKeyDown = (event: KeyboardEvent) => {
       if (
         model.getSearchValue().trim() &&
         model.getSearchMatchingPaths().length === 0 &&
@@ -126,13 +126,24 @@ export function FileTreePane() {
       ) {
         event.preventDefault();
         event.stopPropagation();
+        return;
       }
+      if (event.key !== 'Enter' || event.isComposing || !model.isSearchOpen()) return;
+      const path = model.getFocusedPath();
+      if (!path || path.endsWith('/')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const s = useStore.getState();
+      if (isCollapsed(s, path)) s.toggleCollapsed(path);
+      void openRef.current(path);
+      // The tree re-focuses its input when it renders; hand focus over after that update.
+      requestAnimationFrame(focusReview);
     };
     body.addEventListener('blur', retainSearch, true);
-    body.addEventListener('keydown', guardEmptySearch, true);
+    body.addEventListener('keydown', onSearchKeyDown, true);
     return () => {
       body.removeEventListener('blur', retainSearch, true);
-      body.removeEventListener('keydown', guardEmptySearch, true);
+      body.removeEventListener('keydown', onSearchKeyDown, true);
     };
   }, [model]);
 
