@@ -23,7 +23,7 @@ import {
   type ViewedEntry,
 } from '../shared/protocol.js';
 import { api } from './api.js';
-import { anchorFromRange, resolveRange, sideOf } from './comments/anchor.js';
+import { anchorFromRange, sideOf } from './comments/anchor.js';
 import {
   buildNav,
   cursorFromSelection,
@@ -50,6 +50,7 @@ import {
   patchBatches,
   pathFromItemId,
   reuseThreads,
+  selectionRange,
   visibleThreads,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
@@ -2018,8 +2019,7 @@ export const useStore = create<ReviewState>((set, get) => {
     async draftQuote() {
       const d = get().draft;
       if (!d?.selection) return '';
-      const l = get().loaded[d.path];
-      const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
+      const range = selectionRange(get(), d.path, d.selection);
       const contents = await ensureContents(d.path, range.side);
       return anchorFromRange(d.path, range, contents).quoted;
     },
@@ -2039,8 +2039,7 @@ export const useStore = create<ReviewState>((set, get) => {
         return;
       }
       try {
-        const l = get().loaded[d.path];
-        const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
+        const range = selectionRange(get(), d.path, d.selection);
         const contents = await ensureContents(d.path, range.side);
         const { path, side, startLine, endLine, quoted } = anchorFromRange(d.path, range, contents);
         await api.addThread({ path, side, startLine, endLine, quoted, body });

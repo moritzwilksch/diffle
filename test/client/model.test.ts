@@ -13,6 +13,7 @@ import {
   countViewed,
   currentPath,
   documentTitle,
+  draftRange,
   isViewed,
   nextFileAfter,
   nextSearchScope,
@@ -125,6 +126,22 @@ describe('anchorLabel', () => {
     expect(anchorLabel({ ...line, endLine: 5 })).toBe('L3–5');
     expect(anchorLabel({ ...line, side: 'old' })).toBe('removed L3');
     expect(anchorLabel({ kind: 'file', path: 'a.py' })).toBe('whole file');
+  });
+});
+
+describe('draftRange', () => {
+  it('is the lines a line draft anchors to, and null for a file draft', () => {
+    const selection = {
+      id: 'file:a.py@0',
+      range: { start: 8, side: 'additions', end: 3, endSide: 'additions' },
+    } as const;
+    expect(draftRange({ draft: { path: 'a.py', selection }, loaded: {} })).toEqual({
+      side: 'new',
+      startLine: 3,
+      endLine: 8,
+    });
+    expect(draftRange({ draft: { path: 'a.py', selection: null }, loaded: {} })).toBeNull();
+    expect(draftRange({ draft: null, loaded: {} })).toBeNull();
   });
 });
 
