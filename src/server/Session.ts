@@ -8,12 +8,11 @@ import type {
   Side,
   Snapshot,
 } from '../shared/protocol.js';
-import { quoteRange } from './comments/anchor.js';
-import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
+import { CommentStore, type ReviewView } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
-import { GithubExporter, GithubError, type GhRunner } from './github.js';
+import { GITHUB_CONTEXT_LINES, GithubExporter, GithubError, type GhRunner } from './github.js';
 import { resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -202,7 +201,7 @@ export class Session {
     // Build the complete next state, then swap it in and retire the previous one.
     const next: Active = { mode, prUrl, snapshotter, comments, watcher: null };
     // The repository may have moved on while no server was watching it.
-    await this.relocateComments(next, snap);
+    await next.comments.relocateAll(this.reviewOf(next, snap));
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);
     const prev = this.active;
     this.active = next;
@@ -246,28 +245,37 @@ export class Session {
    */
   private async publish(a: Active): Promise<void> {
     const snap = await a.snapshotter.current();
-    await this.relocateComments(a, snap);
+    await a.comments.relocateAll(this.reviewOf(a, snap));
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     this.announce(snap);
   }
 
+  /** The review as relocation and import see it: the active mode's current snapshot. */
+  async review(): Promise<ReviewView> {
+    const a = this.require();
+    return this.reviewOf(a, await a.snapshotter.current());
+  }
+
   /**
-   * Re-anchors threads against what `snap` shows. A changed file shows its
-   * hunks; an unchanged tree file shows its new side whole (the file view) and
-   * nothing of its old side. A file thread only needs its file in the review.
+   * What `snap` shows of each file, through `readSide`, so the allowlist applies. A changed
+   * file shows its hunks, and on GitHub the pull request diff's context around each change; an
+   * unchanged tree file shows its new side whole (the file view), nothing of its old side, and
+   * nothing on GitHub. A file thread only needs its file in the review; on GitHub, in the diff.
    */
-  private async relocateComments(a: Active, snap: Snapshot): Promise<void> {
-    await a.comments.relocateAll({
+  private reviewOf(a: Active, snap: Snapshot): ReviewView {
+    const r = this.readablePaths(snap);
+    return {
       side: async (path, side) => {
         const buf = await this.readSide(snap, path, side);
         if (buf == null) return null;
         const contents = buf.toString('utf8');
-        if (!snap.changed.some((f) => f.path === path)) return side === 'new' ? { contents, shown: null } : null;
-        const patch = await a.snapshotter.patch(path);
-        return { contents, shown: shownRanges(patch ?? '', side) };
+        if (!r.changed.has(path)) return side === 'new' ? { contents, shown: null, onGithub: [] } : null;
+        const patch = (await a.snapshotter.patch(path)) ?? '';
+        return { contents, shown: shownRanges(patch, side), onGithub: shownRanges(patch, side, GITHUB_CONTEXT_LINES) };
       },
       hasFile: (path) => this.hasFile(snap, path),
-    });
+      inDiff: (path) => r.changed.has(path),
+    };
   }
 
   /**
@@ -294,22 +302,6 @@ export class Session {
   hasFile(snap: Snapshot, path: string): boolean {
     const r = this.readablePaths(snap);
     return r.tree.has(path) || r.changed.has(path);
-  }
-
-  /**
-   * Places imported anchors against the current snapshot: quotes a line range for
-   * imports that carry no `quoted`, and says whether a file thread's file is in the
-   * review. Goes through `readSide`, so the allowlist applies.
-   */
-  anchorSource(): AnchorSource {
-    return {
-      quote: async (path, side, startLine, endLine) => {
-        const snap = await this.snapshotter.current();
-        const buf = await this.readSide(snap, path, side);
-        return buf == null ? null : quoteRange(buf.toString('utf8'), startLine, endLine);
-      },
-      hasFile: async (path) => this.hasFile(await this.snapshotter.current(), path),
-    };
   }
 
   private readablePaths(snap: Snapshot): ReadablePaths {
