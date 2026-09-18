@@ -132,13 +132,18 @@ Revisions follow git diff, except that a lone one compares from the merge base:
   diffle main...feat       what feat added since it left main
   diffle main..worktree    main vs the uncommitted tree ("worktree" works on either side)
 
+Without revisions, diffle compares HEAD..worktree.
+
 Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
 closing the last auto-opened browser tab stops diffle and prints the open comments as a prompt for an agent.
 Ctrl+C always stops it.`,
   )
   .action(async (revs: string[], _o, cmd: Command) => {
-    if (revs.length === 0) cmd.help();
-    await run({ kind: 'revspec', args: revs }, cmd.optsWithGlobals<GlobalOpts>());
+    // No revisions: review the working tree, like a bare `git diff`.
+    await run(
+      revs.length === 0 ? { kind: 'working' } : { kind: 'revspec', args: revs },
+      cmd.optsWithGlobals<GlobalOpts>(),
+    );
   });
 
 // Shorthands name what to compare, not commands, so help lists them separately.

@@ -791,6 +791,64 @@ describe('client transitions', () => {
     expect(useStore.getState().activePath).toBe('d.txt');
   });
 
+  it('marking a file viewed by mouse collapses it but leaves cursor and viewport alone', async () => {
+    const changed = ['a.txt', 'b.txt', 'c.txt'].map((path, i) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b${i}`,
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
+    api.setViewed.mockImplementation(async (path: string, blob: string, viewed: boolean) => [{ path, blob, viewed }]);
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
+    await useStore.getState().boot();
+    useStore.setState({ diffStyle: 'unified' });
+    // The reader is on a.txt and clicks the Viewed checkbox of b.txt.
+    useStore.getState().moveFile('first');
+    const before = useStore.getState();
+    await useStore.getState().setViewed('b.txt', true);
+    const s = useStore.getState();
+    expect(viewedState(s, changed[1]!)).toBe('viewed');
+    expect(isCollapsed(s, 'b.txt')).toBe(true);
+    expect(s.activePath).toBe('a.txt');
+    expect(s.selection).toBe(before.selection);
+    expect(s.scrollTarget).toBe(before.scrollTarget);
+  });
+
+  it('collapsing a file by mouse leaves cursor and viewport alone; clicking its header selects it', async () => {
+    const changed = ['a.txt', 'b.txt', 'c.txt'].map((path, i) => ({
+      path,
+      status: 'M' as const,
+      additions: 1,
+      deletions: 0,
+      binary: false,
+      blob: `b${i}`,
+      generated: false,
+    }));
+    api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt', 'b.txt', 'c.txt']), changed });
+    await useStore.getState().boot();
+    useStore.setState({ diffStyle: 'unified' });
+    // The reader is on a.txt and clicks b.txt's collapse chevron.
+    useStore.getState().moveFile('first');
+    const before = useStore.getState();
+    useStore.getState().toggleCollapsed('b.txt');
+    let s = useStore.getState();
+    expect(isCollapsed(s, 'b.txt')).toBe(true);
+    expect(s.activePath).toBe('a.txt');
+    expect(s.selection).toBe(before.selection);
+    expect(s.scrollTarget).toBe(before.scrollTarget);
+
+    // Clicking a header puts the cursor on that file, as J / K do on a collapsed one, without scrolling.
+    useStore.getState().selectFile('c.txt');
+    s = useStore.getState();
+    expect(s).toMatchObject({ activePath: 'c.txt', selection: null });
+    expect(s.scrollTarget).toBe(before.scrollTarget);
+  });
+
   it('a slow first refresh never overwrites a faster second one', async () => {
     const slow = deferred<Snapshot>();
     const fast = deferred<Snapshot>();

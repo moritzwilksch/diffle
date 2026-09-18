@@ -50,6 +50,7 @@ nix shell nixpkgs#nil github:moritzwilksch/diffle --command diffle -- working
 ## Usage
 
 ```bash
+diffle                  # HEAD vs worktree, like a bare `git diff`
 diffle working          # HEAD vs worktree: staged, unstaged, untracked
 diffle develop          # merge-base(develop, HEAD) vs HEAD: what this branch added
 diffle pr 27            # GitHub PR 27, or its url; without a number, this branch's PR

@@ -1,3 +1,4 @@
+import type { CodeViewLineSelection } from '@pierre/diffs';
 import picomatch from 'picomatch/posix';
 import type {
   ChangedFile,
@@ -10,6 +11,7 @@ import type {
   UserConfig,
   ViewedState,
 } from '../shared/protocol.js';
+import { resolveRange, type ResolvedRange } from './comments/anchor.js';
 import type { ReviewState } from './store.js';
 
 // Pure functions over store state. No effects, no store import at runtime, so
@@ -214,9 +216,32 @@ export function visibleThreads(state: Pick<ReviewState, 'threads' | 'showResolve
 
 /** The header label of a thread: its line range and side, or the whole file. */
 export function anchorLabel(a: CommentAnchor): string {
-  if (a.kind === 'file') return 'whole file';
-  const range = a.startLine === a.endLine ? `${a.startLine}` : `${a.startLine}–${a.endLine}`;
-  return `${a.side === 'old' ? 'removed ' : ''}L${range}`;
+  return a.kind === 'file' ? 'whole file' : rangeLabel(a);
+}
+
+/** The header label of a line range, shared by saved comments and the draft so both name the same lines. */
+export function rangeLabel(r: ResolvedRange): string {
+  const range = r.startLine === r.endLine ? `${r.startLine}` : `${r.startLine}–${r.endLine}`;
+  return `${r.side === 'old' ? 'removed ' : ''}L${range}`;
+}
+
+/** The lines a viewer selection in `path` anchors a comment to; a diff maps context lines to the new side. */
+export function selectionRange(
+  state: Pick<ReviewState, 'loaded'>,
+  path: string,
+  sel: CodeViewLineSelection,
+): ResolvedRange {
+  const l = state.loaded[path];
+  return resolveRange(sel, l?.kind === 'diff' ? l.fileDiff : undefined);
+}
+
+/**
+ * The lines the draft comment will anchor to, resolved the way `submitDraft` anchors them, so the
+ * composer's label and the line tint show what the saved comment will say. Null for a file draft.
+ */
+export function draftRange(state: Pick<ReviewState, 'draft' | 'loaded'>): ResolvedRange | null {
+  const d = state.draft;
+  return d?.selection ? selectionRange(state, d.path, d.selection) : null;
 }
 
 export function threadOfMessage(threads: CommentThread[], messageId: string): CommentThread | undefined {

@@ -198,6 +198,68 @@ describe('ReviewPane scroller effects', () => {
       rangeSpy.mockRestore();
     }
   });
+  it('targets the word under the pointer as it moves inside a multi-word token', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: snap(changed),
+        lsp: {
+          enabled: true,
+          missing: [],
+          servers: [{ name: 'pyright', command: 'pyright', state: 'ready', languages: ['python'] }],
+        },
+      }),
+    );
+    const enter = vi.spyOn(hoverControl, 'enter').mockImplementation(() => {});
+    const leave = vi.spyOn(hoverControl, 'leave').mockImplementation(() => {});
+    const createRange = document.createRange.bind(document);
+    const rangeSpy = vi.spyOn(document, 'createRange').mockImplementation(() => {
+      const range = createRange();
+      range.getBoundingClientRect = () =>
+        ({ left: range.startOffset * 10, right: (range.startOffset + 1) * 10 }) as DOMRect;
+      return range;
+    });
+    try {
+      const options = captureOptions.mock.calls.at(-1)![0];
+      // One highlighter token: the theme colors `self` alone, the rest of the call shares one style.
+      const tokenElement = document.createElement('span');
+      const tokenText = '._version_prefetcher.schedule(';
+      tokenElement.textContent = tokenText;
+      const props = { tokenElement, tokenText, lineNumber: 1033, lineCharStart: 20 };
+      const ctx = { item: { id: 'diff:app.py@0' } };
+      const target = (text: string) => ({
+        path: 'app.py',
+        side: 'new',
+        line: 1033,
+        col: 20 + tokenText.indexOf(text),
+        text,
+        tokenType: null,
+      });
+      const move = (clientX: number) => tokenElement.dispatchEvent(new MouseEvent('pointermove', { clientX }));
+      const onTokenEnter = options.onTokenEnter as (props: unknown, event: unknown, ctx: unknown) => void;
+      // Entering on `(` names no word: the token's first column would resolve to the neighbour before the dot.
+      onTokenEnter(props, { clientX: 295 }, ctx);
+      expect(enter).not.toHaveBeenCalled();
+      move(255);
+      expect(enter).toHaveBeenLastCalledWith(target('schedule'), tokenElement);
+      // Staying on the same word asks nothing new.
+      move(215);
+      expect(enter).toHaveBeenCalledTimes(1);
+      move(55);
+      expect(enter).toHaveBeenLastCalledWith(target('_version_prefetcher'), tokenElement);
+      // Back onto punctuation lets the tooltip go, like leaving the token.
+      move(205);
+      expect(leave).toHaveBeenCalledTimes(1);
+      const onTokenLeave = options.onTokenLeave as (props: unknown) => void;
+      onTokenLeave(props);
+      move(255);
+      expect(enter).toHaveBeenCalledTimes(2);
+    } finally {
+      enter.mockRestore();
+      leave.mockRestore();
+      rangeSpy.mockRestore();
+    }
+  });
   it('uses the rendered header height for navigation and the same geometry for CSS and virtualization', async () => {
     document.documentElement.style.fontSize = '14.4px';
     await act(() => root.render(createElement(ReviewPane)));
@@ -281,6 +343,37 @@ describe('ReviewPane scroller effects', () => {
     await act(() => useStore.getState().setDiffStyle('split'));
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('closes the gap the viewer leaves at the document end in the same act, not from a later timer', async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(changed), diffStyle: 'split' }));
+    const header = captureOptions.mock.calls.at(-1)![0].itemMetrics!.diffHeaderHeight!;
+    const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
+    box(scroller, 0, 800);
+    scroller.scrollTop = 1500;
+    // Line 10 sits 10px below the sticky header. The viewer's scrollTo stands in for a hold past the
+    // document's end: the re-layout lands the row 108px below its mark, and no further request moves it.
+    const card = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.line = '10';
+    let rowTop = header + 10;
+    row.getBoundingClientRect = () => ({ top: rowTop, bottom: rowTop + 18, height: 18 }) as DOMRect;
+    card.appendChild(row);
+    rendered = [{ id: 'diff:a.txt@0', element: card, type: 'diff' }];
+    scrollTo.mockImplementation(() => {
+      rowTop = header + 118;
+    });
+    try {
+      await act(() => useStore.getState().setDiffStyle('unified'));
+      expect(useStore.getState().scrollTarget).toEqual(
+        expect.objectContaining({ line: 10, align: 'keep', offset: 10 }),
+      );
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ lineNumber: 10, offset: -98 }));
+      expect(scroller.scrollTop).toBe(1608);
+    } finally {
+      scrollTo.mockReset();
+    }
   });
 
   it('bind to the viewer that mounts after the empty-changes branch, and again after a theme remount', async () => {
@@ -433,6 +526,31 @@ describe('ReviewPane scroller effects', () => {
     await act(() => header.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
     expect(useStore.getState().collapsed['a.txt']).toBe(true);
     expect(useStore.getState().viewed).toMatchObject([{ path: 'a.txt', blob: 'b1', viewed: true }]);
+  });
+
+  it("clicking an empty file's header selects that file instead of the next one (issue #151)", async () => {
+    // A mode-change-only file: its diff has no hunks, so its header is all there is to click.
+    const files = [
+      { path: 'a.txt', status: 'M' as const, additions: 0, deletions: 0, binary: false, blob: 'b1', generated: false },
+      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: false },
+    ];
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: { ...snap(files), tree: ['a.txt', 'b.txt'] },
+        loaded: { 'a.txt': { kind: 'loading' }, 'b.txt': { kind: 'loading' } },
+        activePath: 'b.txt',
+        selection: { id: 'diff:b.txt@0', range: { start: 1, end: 1, side: 'additions', endSide: 'additions' } },
+      }),
+    );
+    const scrollTarget = useStore.getState().scrollTarget;
+    const header = host.querySelector<HTMLElement>('[data-diffs-header]')!;
+    expect(header.textContent).toContain('a.txt');
+
+    await act(() => header.querySelector<HTMLElement>('.filename')!.click());
+    expect(useStore.getState()).toMatchObject({ activePath: 'a.txt', selection: null });
+    expect(useStore.getState().collapsed['a.txt']).toBe(true);
+    expect(useStore.getState().scrollTarget).toBe(scrollTarget);
   });
 
   it('expands a binary file to a placeholder line and collapses it again from the header', async () => {

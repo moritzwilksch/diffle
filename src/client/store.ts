@@ -23,7 +23,7 @@ import {
   type ViewedEntry,
 } from '../shared/protocol.js';
 import { api } from './api.js';
-import { anchorFromRange, resolveRange, sideOf } from './comments/anchor.js';
+import { anchorFromRange, sideOf } from './comments/anchor.js';
 import {
   buildNav,
   cursorFromSelection,
@@ -50,6 +50,7 @@ import {
   patchBatches,
   pathFromItemId,
   reuseThreads,
+  selectionRange,
   visibleThreads,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
@@ -298,6 +299,7 @@ export interface ReviewState {
   deleteCommentAtCursor(): Promise<void>;
   /** Flip resolved on the thread under the cursor. */
   toggleResolvedAtCursor(): Promise<void>;
+  /** `v`: flip viewed on the file under the cursor; marking it viewed advances to the next unviewed file. */
   toggleViewedAtCursor(): Promise<void>;
   /** Open the next (or previous) unviewed file in risk order (see review/order.ts). */
   setCollapsedAtCursor(collapsed: boolean): void;
@@ -383,10 +385,14 @@ export interface ReviewState {
   /** Adds threads to the active PR's pending review; the human submits it on GitHub. A toast appears only when threads are skipped or the post fails. */
   /** Post open threads (or the given ones) to the PR; resolves to what happened, or null when the post failed. */
   exportToGithub(threadIds?: string[]): Promise<ExportOutcome | null>;
+  /** Mark a file viewed (collapsing it) or not viewed (expanding it). The cursor and viewport stay put. */
   setViewed(path: string, viewed: boolean): Promise<void>;
   /** Mark every changed file not viewed (explicit marks override auto-viewed globs) and expand them. */
   unviewAll(): Promise<void>;
+  /** Collapse or expand a file from its header or the tree. The cursor and viewport stay put; `zc` is `setCollapsedAtCursor`. */
   toggleCollapsed(path: string): void;
+  /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
+  selectFile(path: string): void;
   saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>): Promise<void>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
@@ -1748,7 +1754,12 @@ export const useStore = create<ReviewState>((set, get) => {
       const path = get().activePath;
       const f = path ? get().snapshot?.changed.find((x) => x.path === path) : undefined;
       if (!path || !f) return;
-      await get().setViewed(path, !isViewed(get(), f));
+      const viewed = !isViewed(get(), f);
+      // setViewed flips the mark before its first await, so the cursor moves on without
+      // waiting for the server; `notViewed` already sees the file as viewed.
+      const persisted = get().setViewed(path, viewed);
+      if (viewed) afterCollapse(path, notViewed);
+      await persisted;
     },
     setCollapsedAtCursor(collapsed) {
       const path = get().activePath;
@@ -2023,8 +2034,7 @@ export const useStore = create<ReviewState>((set, get) => {
     async draftQuote() {
       const d = get().draft;
       if (!d?.selection) return '';
-      const l = get().loaded[d.path];
-      const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
+      const range = selectionRange(get(), d.path, d.selection);
       const contents = await ensureContents(d.path, range.side);
       return anchorFromRange(d.path, range, contents).quoted;
     },
@@ -2044,8 +2054,7 @@ export const useStore = create<ReviewState>((set, get) => {
         return;
       }
       try {
-        const l = get().loaded[d.path];
-        const range = resolveRange(d.selection, l?.kind === 'diff' ? l.fileDiff : undefined);
+        const range = selectionRange(get(), d.path, d.selection);
         const contents = await ensureContents(d.path, range.side);
         const { path, side, startLine, endLine, quoted } = anchorFromRange(d.path, range, contents);
         await api.addThread({ path, side, startLine, endLine, quoted, body });
@@ -2115,7 +2124,6 @@ export const useStore = create<ReviewState>((set, get) => {
         viewed: [...s.viewed.filter((v) => !(v.path === path && v.blob === f.blob)), { path, blob: f.blob, viewed }],
         collapsed: { ...s.collapsed, [path]: viewed },
       }));
-      if (viewed) afterCollapse(path, notViewed);
       await persistViewed('Marking viewed', () => api.setViewed(path, f.blob, viewed));
     },
 
@@ -2131,8 +2139,10 @@ export const useStore = create<ReviewState>((set, get) => {
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);
       set((s) => ({ collapsed: { ...s.collapsed, [path]: !cur } }));
-      if (!cur) afterCollapse(path, notCollapsed);
-      else void get().loadPatch(path);
+      if (cur) void get().loadPatch(path);
+    },
+    selectFile(path) {
+      set({ selection: null, visualAnchor: null, activePath: path });
     },
 
     async saveConfig(config) {

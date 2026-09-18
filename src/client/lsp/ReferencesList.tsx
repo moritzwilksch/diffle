@@ -3,6 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import { FileCode2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { FilePath } from '../FilePath.js';
+import { overflow } from '../review/geometry.js';
 import { useStore } from '../store.js';
 import { CodeLine, type HlToken, useHighlighted } from './highlight.js';
 
@@ -41,7 +42,17 @@ export function ReferencesList() {
   );
 
   useEffect(() => {
-    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!list || !row) return;
+    // Use the header's rendered bottom: its sticky position includes the list's top padding, and its
+    // margin preserves the normal gap before the first row. Height alone leaves both under the header.
+    const header = row.parentElement?.querySelector('header');
+    const view = list.getBoundingClientRect();
+    const covered = header
+      ? header.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(header).marginBottom) || 0) - view.top
+      : 0;
+    list.scrollTop += overflow(view, row.getBoundingClientRect(), Math.max(0, covered));
   }, [refs.index, refs.open]);
 
   if (!refs.open) return null;
