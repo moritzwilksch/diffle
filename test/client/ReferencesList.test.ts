@@ -60,15 +60,18 @@ describe('ReferencesList', () => {
   it('scrolls a row hidden under its sticky file header back into view (issue #196)', async () => {
     useStore.setState((s) => ({ references: { ...s.references, index: 3 } }));
     await act(() => root.render(createElement(ReferencesList)));
-    // jsdom has no layout: model the list scrolled so a.ts's header sticks to the top and covers a.ts:3,
-    // which is inside the scroller's box but not visible.
+    // jsdom has no layout: model the list scrolled so its 8px top padding precedes the sticky header.
+    // The selected row is inside the scroller box but hidden under that header and its 2px margin.
     const rows = host.querySelectorAll<HTMLElement>('[data-active]');
     const list = rows[0]!.parentElement!.parentElement!;
     const rect = (top: number, bottom: number) => ({ top, bottom, height: bottom - top }) as DOMRect;
     list.getBoundingClientRect = () => rect(0, 200);
-    for (const header of host.querySelectorAll('header')) header.getBoundingClientRect = () => rect(0, 30);
-    rows[2]!.getBoundingClientRect = () => rect(10, 30);
-    rows[3]!.getBoundingClientRect = () => rect(30, 50);
+    for (const header of host.querySelectorAll('header')) {
+      header.getBoundingClientRect = () => rect(8, 38);
+      header.style.marginBottom = '2px';
+    }
+    rows[2]!.getBoundingClientRect = () => rect(20, 40);
+    rows[3]!.getBoundingClientRect = () => rect(40, 60);
     list.scrollTop = 100;
 
     await act(() => useStore.getState().moveReference(-1));

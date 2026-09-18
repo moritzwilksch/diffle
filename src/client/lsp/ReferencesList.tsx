@@ -45,10 +45,14 @@ export function ReferencesList() {
     const list = listRef.current;
     const row = list?.querySelector<HTMLElement>('[data-active="true"]');
     if (!list || !row) return;
-    // The row's file header sticks to the list's top edge and covers rows scrolled under it, which
-    // scrollIntoView('nearest') counts as visible; the row must land below the header instead.
-    const header = row.parentElement?.querySelector('header')?.getBoundingClientRect().height ?? 0;
-    list.scrollTop += overflow(list.getBoundingClientRect(), row.getBoundingClientRect(), header);
+    // Use the header's rendered bottom: its sticky position includes the list's top padding, and its
+    // margin preserves the normal gap before the first row. Height alone leaves both under the header.
+    const header = row.parentElement?.querySelector('header');
+    const view = list.getBoundingClientRect();
+    const covered = header
+      ? header.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(header).marginBottom) || 0) - view.top
+      : 0;
+    list.scrollTop += overflow(view, row.getBoundingClientRect(), Math.max(0, covered));
   }, [refs.index, refs.open]);
 
   if (!refs.open) return null;
