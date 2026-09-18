@@ -28,8 +28,6 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   drawn.length = 0;
-  // jsdom has no layout, so no scrollIntoView either.
-  Element.prototype.scrollIntoView = () => {};
   useStore.setState({ references: { open: true, kind: 'references', symbol: 'x', items, index: 0 } });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -57,5 +55,28 @@ describe('ReferencesList', () => {
     await act(() => host.querySelectorAll<HTMLElement>('[data-active]')[4]!.click());
     expect(pick).toHaveBeenCalledOnce();
     expect(useStore.getState().references.index).toBe(4);
+  });
+
+  it('scrolls a row hidden under its sticky file header back into view (issue #196)', async () => {
+    useStore.setState((s) => ({ references: { ...s.references, index: 3 } }));
+    await act(() => root.render(createElement(ReferencesList)));
+    // jsdom has no layout: model the list scrolled so a.ts's header sticks to the top and covers a.ts:3,
+    // which is inside the scroller's box but not visible.
+    const rows = host.querySelectorAll<HTMLElement>('[data-active]');
+    const list = rows[0]!.parentElement!.parentElement!;
+    const rect = (top: number, bottom: number) => ({ top, bottom, height: bottom - top }) as DOMRect;
+    list.getBoundingClientRect = () => rect(0, 200);
+    for (const header of host.querySelectorAll('header')) header.getBoundingClientRect = () => rect(0, 30);
+    rows[2]!.getBoundingClientRect = () => rect(10, 30);
+    rows[3]!.getBoundingClientRect = () => rect(30, 50);
+    list.scrollTop = 100;
+
+    await act(() => useStore.getState().moveReference(-1));
+    expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:3');
+    expect(list.scrollTop).toBe(80);
+
+    // Moving back down to a row already clear of the header leaves the scroll alone.
+    await act(() => useStore.getState().moveReference(1));
+    expect(list.scrollTop).toBe(80);
   });
 });

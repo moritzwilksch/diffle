@@ -47,7 +47,7 @@ import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
 import { rowOf, topRow } from './rows.js';
-import { reviewGeometry } from './geometry.js';
+import { overflow, reviewGeometry } from './geometry.js';
 import { onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installThreadHighlights } from './threadHighlights.js';
@@ -554,15 +554,11 @@ export function ReviewPane() {
     // How far a 'nearest' row pokes out of the pane: past its bottom edge, or under the sticky header.
     // The viewer decides "already visible" from its own bookkeeping, and when that is off the cursor
     // walks out of view and stays there (issue #8); the rendered row is the truth, so measure it.
-    const overflow = () => {
+    const protrusion = () => {
       const scroller = containerRef.current;
       const row = renderedRow(scrollTarget);
       if (!scroller || !row) return NaN;
-      const box = scroller.getBoundingClientRect();
-      const r = row.getBoundingClientRect();
-      if (r.top < box.top + header) return r.top - (box.top + header);
-      if (r.bottom > box.bottom) return r.bottom - box.bottom;
-      return 0;
+      return overflow(scroller.getBoundingClientRect(), row.getBoundingClientRect(), header);
     };
     // One synchronous landing; false when the item is not in the viewer yet.
     const land = (): boolean => {
@@ -572,7 +568,7 @@ export function ReviewPane() {
       viewer.scrollTo(target);
       instance.render(true);
       if (!exact) {
-        const d = target.type === 'line' ? overflow() : NaN;
+        const d = target.type === 'line' ? protrusion() : NaN;
         if (!Number.isNaN(d) && Math.abs(d) > 1 && containerRef.current) {
           containerRef.current.scrollTop += d;
           instance.render(true);

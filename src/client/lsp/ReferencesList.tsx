@@ -3,6 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import { FileCode2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { FilePath } from '../FilePath.js';
+import { overflow } from '../review/geometry.js';
 import { useStore } from '../store.js';
 import { CodeLine, type HlToken, useHighlighted } from './highlight.js';
 
@@ -41,7 +42,13 @@ export function ReferencesList() {
   );
 
   useEffect(() => {
-    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!list || !row) return;
+    // The row's file header sticks to the list's top edge and covers rows scrolled under it, which
+    // scrollIntoView('nearest') counts as visible; the row must land below the header instead.
+    const header = row.parentElement?.querySelector('header')?.getBoundingClientRect().height ?? 0;
+    list.scrollTop += overflow(list.getBoundingClientRect(), row.getBoundingClientRect(), header);
   }, [refs.index, refs.open]);
 
   if (!refs.open) return null;

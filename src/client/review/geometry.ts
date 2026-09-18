@@ -32,3 +32,14 @@ export function reviewGeometry(rem: number) {
     edge: number;
   };
 }
+
+/**
+ * How far a row pokes out of a scroller's visible region, whose top `inset` pixels are covered by a
+ * sticky header: negative when hidden above, positive when past the bottom, 0 when fully visible.
+ * Adding it to `scrollTop` reveals the row by the shortest scroll.
+ */
+export function overflow(view: { top: number; bottom: number }, row: { top: number; bottom: number }, inset = 0) {
+  if (row.top < view.top + inset) return row.top - (view.top + inset);
+  if (row.bottom > view.bottom) return row.bottom - view.bottom;
+  return 0;
+}
