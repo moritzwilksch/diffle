@@ -10,7 +10,7 @@
 // `frame`/`videoDuration` read a recording back.
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, rmSync, symlinkSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -77,6 +77,60 @@ export async function openBrowser() {
   return chromium.launch();
 }
 
+// The design names macOS-only families (`ui-monospace`, `system-ui`). A Linux capture host without
+// them substitutes DejaVu, so a screenshot no longer looks like the app. The skill vendors JetBrains
+// Mono and Inter; front them in the app's `--mono`/`--sans` tokens before the first paint, so the
+// viewer measures the final font. A checkout without the skill's install skips this.
+const FONTS = [
+  {
+    pkg: '@fontsource-variable/jetbrains-mono',
+    file: 'jetbrains-mono-latin-wght-normal.woff2',
+    family: 'JetBrains Mono Variable',
+    weight: '100 800',
+    token: "--mono:'JetBrains Mono Variable',ui-monospace,monospace",
+  },
+  {
+    pkg: '@fontsource-variable/inter',
+    file: 'inter-latin-wght-normal.woff2',
+    family: 'Inter Variable',
+    weight: '100 900',
+    token: "--sans:'Inter Variable',system-ui,sans-serif",
+  },
+];
+
+/** The `@font-face` + token override CSS, or null when the skill's font packages are not installed. */
+let fontsCss;
+function loadFontsCss() {
+  fontsCss ??= (async () => {
+    const require = createRequire(join(SKILL_ROOT, 'package.json'));
+    const faces = [];
+    const tokens = [];
+    for (const font of FONTS) {
+      let path;
+      try {
+        path = require.resolve(`${font.pkg}/files/${font.file}`);
+      } catch {
+        return null;
+      }
+      const data = await readFile(path, 'base64');
+      faces.push(
+        `@font-face{font-family:'${font.family}';font-style:normal;font-display:block;` +
+          `font-weight:${font.weight};src:url(data:font/woff2;base64,${data}) format('woff2-variations')}`,
+      );
+      tokens.push(font.token);
+    }
+    return `${faces.join('')}\n:root{${tokens.join(';')}}`;
+  })();
+  return fontsCss;
+}
+
+/** Applied by `addInitScript`, so it runs before the app's first paint. */
+function injectFontStyle(css) {
+  const style = document.createElement('style');
+  style.textContent = css;
+  (document.head ?? document.documentElement).append(style);
+}
+
 /** Wait until the viewer has rendered a line, so captures are not blank. */
 export async function waitForViewer(page) {
   await page.locator('.codeview').waitFor({ timeout: 15000 });
@@ -87,11 +141,18 @@ export async function waitForViewer(page) {
     .catch(() => {});
 }
 
-/** Open a page on `url` at a desktop viewport, the default screenshot frame. */
-export async function newPage(browser, url, { width = 1440, height = 900, colorScheme = 'light' } = {}) {
-  const context = await browser.newContext({ colorScheme, deviceScaleFactor: 1, viewport: { width, height } });
+/**
+ * Open a page on `url` at a desktop viewport, the default screenshot frame. `scale` is the capture
+ * DPR: 2 by default so glyphs rasterize at 2x and a crop stays crisp on a HiDPI display. It only
+ * changes `crop`/`clip` output size; Playwright boxes and mouse coordinates stay in CSS pixels.
+ */
+export async function newPage(browser, url, { width = 1440, height = 900, colorScheme = 'light', scale = 2 } = {}) {
+  const context = await browser.newContext({ colorScheme, deviceScaleFactor: scale, viewport: { width, height } });
+  const css = await loadFontsCss();
+  if (css) await context.addInitScript(injectFontStyle, css);
   const page = await context.newPage();
   await page.goto(url);
+  await page.evaluate(() => document.fonts.ready);
   await waitForViewer(page);
   return page;
 }
@@ -250,8 +311,11 @@ export async function newVideoPage(browser, url, { width = 1280, height = 800, c
     viewport: { width, height },
     recordVideo: { dir, size: { width, height } },
   });
+  const css = await loadFontsCss();
+  if (css) await context.addInitScript(injectFontStyle, css);
   const page = await context.newPage();
   await page.goto(url);
+  await page.evaluate(() => document.fonts.ready);
   await waitForViewer(page);
   return { page, context, video: page.video() };
 }
