@@ -157,6 +157,31 @@ afterEach(async () => {
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('restores search focus without scrolling when its header reappears during scrolling', async () => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    await act(() => {
+      useStore.getState().openSearch('file');
+      useStore.getState().setSearchInput('unfinished');
+    });
+    await act(() => root.render(null));
+    const focus = vi.spyOn(HTMLInputElement.prototype, 'focus');
+    scrollTo.mockClear();
+    try {
+      await act(() => root.render(createElement(ReviewPane)));
+      const input = host.querySelector<HTMLInputElement>('input[placeholder^="Search this file"]')!;
+      expect(input.value).toBe('unfinished');
+      expect(document.activeElement).toBe(input);
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      expect(scrollTo).not.toHaveBeenCalled();
+    } finally {
+      focus.mockRestore();
+      await act(() => useStore.getState().closeSearch());
+    }
+  });
+
   it('restores the unsubmitted search draft and focus when its file header remounts', async () => {
     await act(() => {
       useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
