@@ -16,7 +16,7 @@ jobs:
       - name: Build Nix package
         run: nix build
       - name: Smoke test Nix package
-        run: nix run .
+        run: nix run . -- --help
 
   test:
     runs-on: ${{ matrix.os }}
