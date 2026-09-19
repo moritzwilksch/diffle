@@ -33,6 +33,7 @@
   },
   "scripts": {
     "dev": "tsx src/cli/main.ts",
+    "fixture": "tsx scripts/fixture-repo.ts",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsdown",
