@@ -59,9 +59,13 @@ test('shows a binary change, a mode change and an empty file', async ({ page }) 
   await expect(page).toHaveScreenshot('binary-mode-empty.png');
 });
 
-test('renders CRLF endings, a missing trailing newline and a minified line', async ({ page }) => {
+// One screenshot per scenario: a failing first screenshot would otherwise hide the second one's result.
+test('renders CRLF endings', async ({ page }) => {
   await gotoFile(page, 'scripts/build.bat');
   await expect(page).toHaveScreenshot('line-endings.png');
+});
+
+test('renders a minified line and a missing trailing newline', async ({ page }) => {
   await gotoFile(page, 'web/vendor/sparkline.min.js');
   await expect(page).toHaveScreenshot('minified-line.png');
 });

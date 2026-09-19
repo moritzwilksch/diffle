@@ -1,7 +1,9 @@
 name: Update snapshots
 # Regenerate the e2e screenshots in the same container CI compares them in, and push the result
 # to the branch. Run it from the Actions tab on your branch after an intended UI change; the
-# snapshot report on the pull request then shows what changed.
+# snapshot report on the pull request then shows what changed. GitHub offers a manual workflow
+# only once its file is on the default branch. Until then, and for a fork, the failed e2e job's
+# `e2e-results` artifact carries the container's `*-actual.png` files to copy over the snapshots.
 on:
   workflow_dispatch:
 
