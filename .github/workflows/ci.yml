@@ -41,6 +41,33 @@ jobs:
           npm ci
           npm test
 
+  # Screenshots are compared in Playwright's container, so fonts and rasterization match the run
+  # that produced them; `update-snapshots.yml` regenerates them in the same container.
+  e2e:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.63.0-noble
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: End-to-end tests
+        run: |
+          npm ci
+          npm run test:e2e
+      # Expected, actual and diff images plus traces for every failed scenario, and the HTML report.
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-results
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+
   lint:
     runs-on: ubuntu-latest
     permissions:

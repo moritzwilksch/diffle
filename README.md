@@ -205,6 +205,20 @@ npm test && npm run typecheck && npm run build
 
 `npm run dev` builds the client, then starts the server from source. Restart it after client changes; the server always serves `dist/client`.
 
+### Testing
+
+Tests produce things you can look at. `npm run fixture -- <dir>` builds a small repository whose history covers every diff shape (renames, a binary, generated files, CRLF, a minified line, uncommitted changes) and prints the comparisons worth opening; it is the same repository the tests review.
+
+```bash
+npm test                      # unit and server tests; prompts, help text and payloads are file snapshots
+npx playwright install chromium --only-shell
+npm run test:e2e              # a real diffle in Chromium, compared with committed screenshots
+npm run test:e2e -- -g search # a few scenarios while iterating
+npm run test:e2e:update       # accept changed screenshots (Linux only; see below)
+```
+
+Screenshots live under `test/e2e/__snapshots__/`, one per scenario in light and dark. They are pixel-exact only on Linux, so CI compares them in Playwright's container; to accept an intended change from another platform, run the **Update snapshots** workflow on your branch and it commits the regenerated files. A pull request that touches snapshots gets a report comparing every changed one side by side.
+
 See [AGENTS.md](AGENTS.md) for repository notes.
 
 ## Acknowledgements

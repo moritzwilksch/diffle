@@ -10,5 +10,6 @@
   },
   // The workflows are hand-maintained, with pinned action SHAs and comments; the
   // formatter only wants to reflow their quotes, so it stays out of them.
-  "ignorePatterns": ["**/*.yml", "**/*.yaml"]
+  // Snapshots are test output, byte for byte; reformatting one would fail its test.
+  "ignorePatterns": ["**/*.yml", "**/*.yaml", "**/__snapshots__/**"]
 }

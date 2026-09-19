@@ -1,0 +1,70 @@
+{
+  "review": {
+    "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "comments": [
+      {
+        "path": "tally/currency.py",
+        "line": 7,
+        "side": "RIGHT",
+        "body": "`KWD` has no symbol.\n\n```suggestion\n_SYMBOLS = {\"KWD\": \"KD\"}\n```"
+      },
+      {
+        "path": "tally/ledger.py",
+        "line": 4,
+        "side": "RIGHT",
+        "body": "Say what counts as a refund here.",
+        "start_line": 3,
+        "start_side": "RIGHT"
+      },
+      {
+        "path": "tally/legacy.py",
+        "line": 15,
+        "side": "LEFT",
+        "body": "Still called by cron.",
+        "start_line": 9,
+        "start_side": "LEFT"
+      }
+    ]
+  },
+  "comments": [
+    {
+      "path": "tally/currency.py",
+      "line": 7,
+      "side": "RIGHT",
+      "body": "`KWD` has no symbol.\n\n```suggestion\n_SYMBOLS = {\"KWD\": \"KD\"}\n```"
+    },
+    {
+      "path": "tally/ledger.py",
+      "line": 4,
+      "side": "RIGHT",
+      "body": "Say what counts as a refund here.",
+      "start_line": 3,
+      "start_side": "RIGHT"
+    },
+    {
+      "path": "tally/legacy.py",
+      "line": 15,
+      "side": "LEFT",
+      "body": "Still called by cron.",
+      "start_line": 9,
+      "start_side": "LEFT"
+    },
+    {
+      "path": "tally/refunds.py",
+      "subject_type": "file",
+      "body": "Fold this into ledger.py."
+    }
+  ],
+  "ids": [
+    "symbol",
+    "kind",
+    "removed",
+    "module"
+  ],
+  "skipped": [
+    {
+      "id": "gone",
+      "reason": "stale"
+    }
+  ]
+}

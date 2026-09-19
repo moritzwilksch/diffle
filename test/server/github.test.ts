@@ -85,6 +85,37 @@ describe('buildReview', () => {
   });
 });
 
+describe('a review as GitHub receives it', () => {
+  // The REST payload and the file comments appended afterwards, kept as JSON so a change to the
+  // shape is judged against what GitHub's API is sent.
+  it('is the committed payload', async () => {
+    const built = buildReview(
+      [
+        thread({ id: 'kind', path: 'tally/ledger.py', line: 3, endLine: 4, body: 'Say what counts as a refund here.' }),
+        thread({
+          id: 'symbol',
+          path: 'tally/currency.py',
+          line: 7,
+          body: '`KWD` has no symbol.\n\n```suggestion\n_SYMBOLS = {"KWD": "KD"}\n```',
+        }),
+        thread({
+          id: 'removed',
+          path: 'tally/legacy.py',
+          side: 'old',
+          line: 9,
+          endLine: 15,
+          body: 'Still called by cron.',
+        }),
+        fileThread('module', 'Fold this into ledger.py.', 'tally/refunds.py'),
+        thread({ id: 'gone', path: 'tally/cli.py', line: 27, body: 'Trips set -e.', stale: true }),
+        thread({ id: 'done', path: 'tally/ledger.py', line: 33, body: 'Already handled.', resolved: true }),
+      ],
+      HEAD,
+    );
+    await expect(JSON.stringify(built, null, 2) + '\n').toMatchFileSnapshot('__snapshots__/review.json');
+  });
+});
+
 describe('formatBody', () => {
   it('joins messages and keeps suggestion fences verbatim', () => {
     const body = formatBody([

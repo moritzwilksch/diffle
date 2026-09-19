@@ -5,11 +5,13 @@ description: Capture cropped before/after screenshots or record a video of diffl
 
 # Capture a diffle UI change
 
-Prove each change with the smallest image that shows it. A capture is a short scenario script over `scripts/harness.mjs`; copy `scripts/scenario.template.mjs` and edit it. The harness documents the rest.
+Prove each change with the smallest image that shows it. A capture is a short scenario script over `test/e2e/harness.ts`, the harness the e2e tests use; copy `scripts/scenario.template.mts`, edit it, and run it with `npx tsx` from the checkout. The harness documents the rest.
+
+A change that should stay proven belongs in `test/e2e/*.spec.ts` as a scenario with `toHaveScreenshot`, not in a one-off script: `npm run test:e2e:update` accepts its screenshots, and the PR's snapshot report shows the change to reviewers.
 
 ## Screenshots
 
-1. **Prepare a throwaway repo with a diff.** Keep it outside the checkout and pass it with `-C`. Include the lines and files the change touches; content only needs to render. Done when `git -C <repo> diff <range>` lists the changed files.
+1. **Prepare a repo with a diff.** `npm run fixture -- <dir>` builds one with every diff shape (renames, binary, generated, CRLF, a long line, uncommitted changes) and prints the comparisons to open; hand-roll one only for a shape it lacks. Keep it outside the checkout and pass it with `-C`. Done when `git -C <repo> diff <range>` lists the changed files.
 2. **Build the client once.** `buildClient()` (install dependencies first, see [SETUP.md](SETUP.md)). The server serves `dist/client`; server code rarely affects a capture.
 3. **Capture the after state.** Crop to the element with `crop(page, selector, path)`, or `clip(page, box, path)` for a region. Seed what the server can hold with `seedThreads(url, threads)`; drive what has no endpoint with the page. Reach diffle controls through the verbs (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`) instead of locators. Done when every change has a named crop.
 4. **Capture the before state** inside `withBaseClient(rev, fn)`. It builds `rev` into a worktree, installs that client, runs `fn`, then restores this checkout's client. Re-run the same scenario inside `fn`. Done when each after crop has a before crop from the same selector.
@@ -26,13 +28,13 @@ Record behavior that unfolds over time: key presses, cursor jumps, collapses. St
 ## Notes
 
 - **Crop to the element.** Read back only the crops: a 500×200 crop costs a fraction of a 1440×900 frame. Captures are 2x by default (`newPage(..., { scale })`), so a crop's pixel count is four times its CSS box.
-- **The harness sets the type.** `newPage`/`newVideoPage` front the skill's vendored JetBrains Mono and Inter in the app's `--mono`/`--sans` tokens before the first paint, so a host without the design's fonts still captures it. The design runs on `ui-monospace`/`system-ui`, which a minimal Linux host resolves to DejaVu.
+- **The harness sets the type.** `newPage`/`newVideoPage` front the checkout's JetBrains Mono and Inter (dev dependencies) in the app's `--mono`/`--sans` tokens before the first paint, so a host without the design's fonts still captures it. The design runs on `ui-monospace`/`system-ui`, which a minimal Linux host resolves to DejaVu.
 - **Seed over HTTP.** Clicking state through the UI is slower and flakier than one request.
 - **Wait on a signal.** `locator.waitFor()` beats `waitForTimeout`; keep timeouts for animations only.
-- **Locators pierce the shadow DOM, `page.evaluate` does not.** The viewer and file tree render into shadow roots, so reach for Playwright locators (or the verbs) instead of `querySelector` inside `evaluate`.
+- **Locators pierce the shadow DOM, `page.evaluate` does not.** The viewer and file tree render into shadow roots, so reach for Playwright locators (or the verbs) instead of `querySelector` inside `evaluate`. The viewer renders only files near the viewport: move the cursor to a file (`gotoFile`, or `walkToFile` to keep it collapsed) before reading its header or lines.
 - **Viewing moves the cursor.** `setViewed` and `v` collapse the file and land on the next unviewed file, so read `activePath` after them. `setViewed` clicks the checkbox and blurs it so later keys still land; a raw checkbox click would leave focus on the `INPUT` and swallow the keymap.
 - Diffle verbs index files by tree order (`pkg/` before root files), not flat alphabetical, so pass the exact changed path. `gotoFile(page, path)` moves the cursor there deterministically; `filePaths(page)` returns the order when you need it. These read the file tree, so they need it visible (`Ctrl+B` toggles it).
 - Review state (viewed, collapsed, threads) persists under the demo repo's `<git-dir>/diffle/`; call `resetReviewState(repo)` before a take so the run starts clean.
-- `selectLines(page, path, from, to)` selects a line range in one file and opens the composer; `openModePicker` opens the compare menu. Line numbers repeat across files, so always pass the path the cursor is in.
+- `selectLines(page, path, from, to)` selects a line range in one file and opens the composer; `openModePicker` opens the compare menu; `hoverSymbol(page, text)` rests the pointer on a token so the language-server tooltip opens (after `waitForLsp(url)`). Line numbers repeat across files, so always pass the path the cursor is in.
 - Read state back with `readThreads(url)` and `activePath(page)` instead of scraping the DOM. A thread's path is `anchor.path`, not a top-level `path`.
 - A launch failure means missing setup: see [SETUP.md](SETUP.md).
