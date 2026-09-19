@@ -985,7 +985,8 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
   }, [id, resizeHeader, localSearch]);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
-    <div ref={ref}>
+    // `data-path` names the file for tests and scripts; the visible title splits it into styled parts.
+    <div ref={ref} data-path={path}>
       <div className="flex h-[calc(var(--diffle-header-height)-1px)] items-center gap-2 px-2.5 py-1.5">
         <FileText size="0.875rem" className="shrink-0 text-muted" />
         {file?.oldPath && file.oldPath !== path && (
