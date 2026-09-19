@@ -95,3 +95,118 @@ describe('parseSuggestions', () => {
     expect(parseSuggestions('```python\nx\n```')).toEqual([{ text: '```python\nx\n```' }]);
   });
 });
+
+describe('a review exported as a prompt', () => {
+  // One realistic export, kept as a file so a change to the format is judged by reading the prompt an
+  // agent would receive rather than a string literal.
+  it('reads as an agent would receive it', async () => {
+    const threads: CommentThread[] = [
+      {
+        id: 'ledger-kind',
+        anchor: {
+          kind: 'line',
+          path: 'tally/ledger.py',
+          side: 'new',
+          startLine: 3,
+          endLine: 4,
+          quoted: 'A line is a sale unless its ``kind`` column says ``refund``; refunds count negative.\n"""',
+        },
+        messages: [
+          msg('Say what counts as a refund here, not only in the parser.', { id: 'a1', createdAt: 10, updatedAt: 10 }),
+          msg('Also link the release notes once they mention `kind`.', { id: 'a2', createdAt: 20, updatedAt: 20 }),
+        ],
+        resolved: false,
+        stale: false,
+      },
+      {
+        id: 'currency-symbol',
+        anchor: {
+          kind: 'line',
+          path: 'tally/currency.py',
+          side: 'new',
+          startLine: 7,
+          endLine: 7,
+          quoted: '_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥"}',
+        },
+        messages: [
+          msg(
+            '`KWD` gets three decimals above but no symbol here.\n\n```suggestion\n_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "KWD": "KD"}\n```',
+            { id: 'b1', createdAt: 30, updatedAt: 30 },
+          ),
+        ],
+        resolved: false,
+        stale: false,
+      },
+      {
+        id: 'legacy-removed',
+        anchor: {
+          kind: 'line',
+          path: 'tally/legacy.py',
+          side: 'old',
+          startLine: 9,
+          endLine: 15,
+          quoted:
+            'def read_tsv(path: Path) -> Ledger:\n    ledger = Ledger()\n    for line in path.read_text().splitlines():\n        if not line or line.startswith("#"):\n            continue\n        account, description, quantity, unit_price = line.split("\\t")\n        ledger.add(Entry(account, description, int(quantity), Decimal(unit_price)))',
+        },
+        messages: [
+          msg('Is the archive really converted? The cron job still calls this.', {
+            id: 'c1',
+            createdAt: 40,
+            updatedAt: 40,
+          }),
+        ],
+        resolved: false,
+        stale: false,
+      },
+      {
+        id: 'refunds-file',
+        anchor: { kind: 'file', path: 'tally/refunds.py' },
+        messages: [
+          msg('Consider folding this into `ledger.py`; it only has two callers.', {
+            id: 'd1',
+            createdAt: 50,
+            updatedAt: 50,
+          }),
+        ],
+        resolved: false,
+        stale: false,
+      },
+      {
+        id: 'cli-stale',
+        anchor: {
+          kind: 'line',
+          path: 'tally/cli.py',
+          side: 'new',
+          startLine: 27,
+          endLine: 27,
+          quoted: 'print("no entries", file=sys.stderr)',
+        },
+        messages: [
+          msg('Exit code 1 for "nothing to do" will trip `set -e` in the cron wrapper.', {
+            id: 'e1',
+            createdAt: 60,
+            updatedAt: 60,
+          }),
+        ],
+        resolved: false,
+        stale: true,
+        staleFromLine: 26,
+      },
+      {
+        id: 'resolved',
+        anchor: {
+          kind: 'line',
+          path: 'tally/ledger.py',
+          side: 'new',
+          startLine: 33,
+          endLine: 33,
+          quoted: 'amount = self.unit_price * self.quantity',
+        },
+        messages: [msg('Resolved threads stay out of the prompt.', { id: 'f1', createdAt: 70, updatedAt: 70 })],
+        resolved: true,
+        stale: false,
+      },
+    ];
+    await expect(formatPrompt(threads.filter((t) => !t.resolved))).toMatchFileSnapshot('__snapshots__/prompt.md');
+  });
+});
