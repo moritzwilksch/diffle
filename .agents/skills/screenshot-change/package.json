@@ -1,10 +1,8 @@
 {
   "name": "diffle-screenshot-change",
   "private": true,
-  "description": "Playwright and the design fonts for the screenshot-change skill harness. Kept out of the root manifest so the app's install and CI do not pull them.",
+  "description": "Playwright for the screenshot-change skill harness. Kept out of the root manifest so the app's install and CI do not pull it.",
   "devDependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
-    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "playwright": "^1.63.0"
   }
 }

@@ -24,8 +24,9 @@
   --search-current-fg: #0e1116;
   --bg-card: #ffffff;
   --review-card-shadow: 0 1px 2px rgba(14, 17, 22, 0.08), 0 0.1875rem 0.625rem rgba(14, 17, 22, 0.1);
-  --mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* The bundled families (fonts.css) come first; the system stacks only cover glyphs the bundled subsets lack. */
+  --mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
