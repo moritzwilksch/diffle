@@ -1,6 +1,7 @@
 // Drives a real diffle in a real browser: the e2e tests and the screenshot-change skill share it.
 //
-// The generic part starts the server, opens pages with the design's fonts and records video.
+// The generic part starts the server, opens pages and records video; the app bundles its fonts,
+// so a capture on any host shows the design's type once `document.fonts.ready` resolves.
 // The diffle-specific verbs (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`,
 // `activePath`, `gotoFile`, `selectLines`, `openModePicker`) encode where the UI lives, so a
 // scenario reads as what a reviewer does rather than as selectors. Verbs that take a path
@@ -8,8 +9,7 @@
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, rmSync, symlinkSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
-import { createRequire } from 'node:module';
+import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,8 +20,6 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..
 
 /** The client build the server serves. Swap it to screenshot a different build. */
 export const CLIENT_DIR = join(REPO_ROOT, 'dist/client');
-
-const require = createRequire(join(REPO_ROOT, 'package.json'));
 
 /**
  * Chromium's shared libraries. A headless shell needs libnspr4/libnss3 and friends, which a
@@ -42,58 +40,6 @@ export async function openBrowser(): Promise<Browser> {
   return chromium.launch();
 }
 
-// The design names macOS-only families (`ui-monospace`, `system-ui`). A Linux host without them
-// substitutes DejaVu, so a screenshot no longer looks like the app and differs between machines.
-// Front JetBrains Mono and Inter in the app's `--mono`/`--sans` tokens before the first paint, so
-// the viewer measures the final font and every host renders the same glyphs.
-const FONTS = [
-  {
-    pkg: '@fontsource-variable/jetbrains-mono',
-    file: 'jetbrains-mono-latin-wght-normal.woff2',
-    family: 'JetBrains Mono Variable',
-    weight: '100 800',
-    token: "--mono:'JetBrains Mono Variable',ui-monospace,monospace",
-  },
-  {
-    pkg: '@fontsource-variable/inter',
-    file: 'inter-latin-wght-normal.woff2',
-    family: 'Inter Variable',
-    weight: '100 900',
-    token: "--sans:'Inter Variable',system-ui,sans-serif",
-  },
-];
-
-let fontsCss: Promise<string> | undefined;
-/** The `@font-face` + token override CSS, built once per process. */
-function loadFontsCss(): Promise<string> {
-  fontsCss ??= (async () => {
-    const faces: string[] = [];
-    const tokens: string[] = [];
-    for (const font of FONTS) {
-      const data = await readFile(require.resolve(`${font.pkg}/files/${font.file}`), 'base64');
-      faces.push(
-        `@font-face{font-family:'${font.family}';font-style:normal;font-display:block;` +
-          `font-weight:${font.weight};src:url(data:font/woff2;base64,${data}) format('woff2-variations')}`,
-      );
-      tokens.push(font.token);
-    }
-    return `${faces.join('')}\n:root{${tokens.join(';')}}`;
-  })();
-  return fontsCss;
-}
-
-/** Runs in the page before the app's first paint. */
-function injectFontStyle(css: string) {
-  const style = document.createElement('style');
-  style.textContent = css;
-  (document.head ?? document.documentElement).append(style);
-}
-
-/** Make every page of `context` render with the design fonts. Call before the first `goto`. */
-export async function installFonts(context: BrowserContext): Promise<void> {
-  await context.addInitScript(injectFontStyle, await loadFontsCss());
-}
-
 /**
  * Wait until the viewer has rendered a line, so captures are not blank. Attached, not visible:
  * the first number cell can be a zero-size one, and a review of binary files alone has none.
@@ -107,7 +53,7 @@ export async function waitForViewer(page: Page): Promise<void> {
     .catch(() => {});
 }
 
-/** Fonts and the first render, for a page that was opened outside `newPage`. */
+/** The bundled fonts and the first render, for a page that was opened outside `newPage`. */
 export async function settle(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await waitForViewer(page);
@@ -131,7 +77,6 @@ export async function newPage(
   { width = 1440, height = 900, colorScheme = 'light', scale = 2 }: PageOptions = {},
 ): Promise<Page> {
   const context = await browser.newContext({ colorScheme, deviceScaleFactor: scale, viewport: { width, height } });
-  await installFonts(context);
   const page = await context.newPage();
   await page.goto(url);
   await settle(page);
@@ -343,7 +288,6 @@ export async function newVideoPage(
     viewport: { width, height },
     recordVideo: { dir, size: { width, height } },
   });
-  await installFonts(context);
   const page = await context.newPage();
   await page.goto(url);
   await settle(page);

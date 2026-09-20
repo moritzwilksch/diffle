@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildFixtureRepo, FEATURE_BRANCH, MAIN_BRANCH } from '../fixture/repo.js';
 import { rmTmp } from '../tmp.js';
-import { installFonts, type RunningDiffle, settle, startDiffle } from './harness.js';
+import { type RunningDiffle, settle, startDiffle } from './harness.js';
 
 /** Name of the checkout, and so of the repository in the header. */
 export const REPO_NAME = 'tally';
@@ -47,11 +47,6 @@ export const test = base.extend<Options & Fixtures>({
     const server = await startDiffle({ repo, revs, args, env });
     await use(server);
     await server.stop();
-  },
-
-  context: async ({ context }, use) => {
-    await installFonts(context);
-    await use(context);
   },
 
   /** Already on the review, fonts loaded and the first file rendered. */
