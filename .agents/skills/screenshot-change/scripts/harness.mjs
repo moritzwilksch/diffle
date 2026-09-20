@@ -87,11 +87,16 @@ export async function waitForViewer(page) {
     .catch(() => {});
 }
 
-/** Open a page on `url` at a desktop viewport, the default screenshot frame. */
-export async function newPage(browser, url, { width = 1440, height = 900, colorScheme = 'light' } = {}) {
-  const context = await browser.newContext({ colorScheme, deviceScaleFactor: 1, viewport: { width, height } });
+/**
+ * Open a page on `url` at a desktop viewport, the default screenshot frame. `scale` is the capture
+ * DPR: 2 by default so glyphs rasterize at 2x and a crop stays crisp on a HiDPI display. It only
+ * changes `crop`/`clip` output size; Playwright boxes and mouse coordinates stay in CSS pixels.
+ */
+export async function newPage(browser, url, { width = 1440, height = 900, colorScheme = 'light', scale = 2 } = {}) {
+  const context = await browser.newContext({ colorScheme, deviceScaleFactor: scale, viewport: { width, height } });
   const page = await context.newPage();
   await page.goto(url);
+  await page.evaluate(() => document.fonts.ready);
   await waitForViewer(page);
   return page;
 }
@@ -252,6 +257,7 @@ export async function newVideoPage(browser, url, { width = 1280, height = 800, c
   });
   const page = await context.newPage();
   await page.goto(url);
+  await page.evaluate(() => document.fonts.ready);
   await waitForViewer(page);
   return { page, context, video: page.video() };
 }
