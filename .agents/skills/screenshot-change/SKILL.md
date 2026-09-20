@@ -26,7 +26,7 @@ Record behavior that unfolds over time: key presses, cursor jumps, collapses. St
 ## Notes
 
 - **Crop to the element.** Read back only the crops: a 500×200 crop costs a fraction of a 1440×900 frame. Captures are 2x by default (`newPage(..., { scale })`), so a crop's pixel count is four times its CSS box.
-- **The harness sets the type.** `newPage`/`newVideoPage` front the skill's vendored JetBrains Mono and Inter in the app's `--mono`/`--sans` tokens before the first paint, so a host without the design's fonts still captures it. The design runs on `ui-monospace`/`system-ui`, which a minimal Linux host resolves to DejaVu.
+- **The app sets the type.** The client bundles JetBrains Mono and Inter, and `newPage`/`newVideoPage` wait for `document.fonts.ready`, so a capture on any host shows the design's fonts.
 - **Seed over HTTP.** Clicking state through the UI is slower and flakier than one request.
 - **Wait on a signal.** `locator.waitFor()` beats `waitForTimeout`; keep timeouts for animations only.
 - **Locators pierce the shadow DOM, `page.evaluate` does not.** The viewer and file tree render into shadow roots, so reach for Playwright locators (or the verbs) instead of `querySelector` inside `evaluate`.
