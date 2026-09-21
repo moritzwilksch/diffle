@@ -64,7 +64,6 @@ NO_COLOR=1 "$ROOT/node_modules/.bin/tsx" "$ROOT/src/cli/main.ts" \
   --port 0 \
   --no-open \
   --no-watch \
-  --lsp \
   HEAD~5...HEAD \
   >"$stdout_log" 2>"$stderr_log" &
 diffle_pid=$!
@@ -103,6 +102,26 @@ PLAYWRIGHT_MODULE="$playwright_module" SCREENSHOT_URL="$url" SCREENSHOT_OUTPUT_D
 import { join } from 'node:path';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+
+/**
+ * The code viewer renders into a shadow root, so the token is only reachable through a locator.
+ * A locator click would scroll its first match into view, dragging the comment card out of frame;
+ * clicking the match already on screen by coordinate keeps the card where the jump put it.
+ */
+async function visibleBox(page, locator) {
+  const viewport = page.viewportSize();
+  for (let i = 0; i < (await locator.count()); i++) {
+    const match = locator.nth(i);
+    // Intraline diffing nests wrapper spans; only a token holding one text node resolves to a word.
+    if (!(await match.evaluate((e) => e.childNodes.length === 1 && e.firstChild?.nodeType === Node.TEXT_NODE)))
+      continue;
+    const box = await match.boundingBox();
+    if (box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height)
+      return box;
+  }
+  return null;
+}
+
 const browser = await chromium.launch();
 try {
   for (const colorScheme of ['light', 'dark']) {
@@ -113,15 +132,23 @@ try {
     });
     const page = await context.newPage();
     await page.goto(process.env.SCREENSHOT_URL);
-    const thread = page.locator('.panel .item').first();
+    const thread = page.locator('aside div[role="button"]').first();
     await thread.waitFor();
     await thread.click();
-    await page.locator('.comment-card.focused').waitFor();
-    await page.waitForTimeout(750);
+    // Open the menu on a symbol below the comment line, so the popover clears the comment card.
     // Shiki merges adjacent tokens that share a colour, so the symbol may sit in a span with its
-    // trailing punctuation. Match the start of the token; the click still lands inside the word.
-    await page.locator('span[data-char]', { hasText: /^VersionDataLoader\b/ }).first().click();
-    await page.locator('.symbol-menu').waitFor();
+    // trailing punctuation; match the start of the token.
+    const symbol = page.locator('span[data-char]', { hasText: /^ValueError\b/ });
+    let box = null;
+    for (let tries = 0; tries < 100 && !box; tries++) {
+      box = await visibleBox(page, symbol);
+      if (!box) await page.waitForTimeout(50);
+    }
+    if (!box) throw new Error('ValueError is not on screen after the thread jump');
+    // The span may hold trailing punctuation and its type; click just inside its left edge to land on
+    // the identifier itself, since targetOf picks the word under the cursor.
+    await page.mouse.click(box.x + Math.min(4, box.width / 2), box.y + box.height / 2);
+    await page.locator('[data-symbol-menu]').waitFor();
     await page.waitForTimeout(750);
     await page.screenshot({
       animations: 'disabled',
