@@ -64,7 +64,6 @@ NO_COLOR=1 "$ROOT/node_modules/.bin/tsx" "$ROOT/src/cli/main.ts" \
   --port 0 \
   --no-open \
   --no-watch \
-  --lsp \
   HEAD~5...HEAD \
   >"$stdout_log" 2>"$stderr_log" &
 diffle_pid=$!
@@ -113,15 +112,13 @@ try {
     });
     const page = await context.newPage();
     await page.goto(process.env.SCREENSHOT_URL);
-    const thread = page.locator('.panel .item').first();
+    const thread = page.locator('aside div[role="button"]').first();
     await thread.waitFor();
     await thread.click();
-    await page.locator('.comment-card.focused').waitFor();
-    await page.waitForTimeout(750);
     // Shiki merges adjacent tokens that share a colour, so the symbol may sit in a span with its
     // trailing punctuation. Match the start of the token; the click still lands inside the word.
     await page.locator('span[data-char]', { hasText: /^VersionDataLoader\b/ }).first().click();
-    await page.locator('.symbol-menu').waitFor();
+    await page.locator('[data-symbol-menu]').waitFor();
     await page.waitForTimeout(750);
     await page.screenshot({
       animations: 'disabled',
