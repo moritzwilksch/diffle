@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/octo-sts/app/refs/heads/main/pkg/octosts/octosts.TrustPolicy.json
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: repo:moritzwilksch/diffle:ref:refs/heads/.+
+claim_pattern:
+  workflow_ref: moritzwilksch/diffle/\.github/workflows/update-snapshots\.yml@refs/heads/.+
+  event_name: issue_comment|workflow_dispatch
+permissions:
+  contents: write

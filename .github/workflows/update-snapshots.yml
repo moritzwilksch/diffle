@@ -56,7 +56,8 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      id-token: write
     concurrency:
       group: update-assets-${{ needs.target.outputs.branch }}
       cancel-in-progress: false
@@ -64,11 +65,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.target.outputs.sha }}
+          persist-credentials: false
       - name: Regenerate snapshots
         run: docker compose run --build --rm e2e --update-snapshots
-      - name: Commit and push
-        env:
-          BRANCH: ${{ needs.target.outputs.branch }}
+      - name: Commit snapshots
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -78,4 +79,19 @@ jobs:
             exit 0
           fi
           git commit -m "test(e2e): update snapshots"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Obtain GitHub app token
+        if: steps.commit.outputs.changed == 'true'
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: update-assets
+      - name: Push snapshots
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          BRANCH: ${{ needs.target.outputs.branch }}
+        run: |
+          gh auth setup-git
           git push origin "HEAD:refs/heads/$BRANCH"

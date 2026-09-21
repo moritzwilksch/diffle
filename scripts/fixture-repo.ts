@@ -1,14 +1,23 @@
 // Build the fixture repository for hands-on testing: `npm run fixture -- [dir]`.
 //
 // The same history the e2e tests review, checked out with uncommitted changes, so every
-// mode diffle offers has something to show. Without a directory it lands in the system
-// temp directory and is replaced on every run.
+// mode diffle offers has something to show. Without a directory, create a fresh temporary one.
+import { Command } from 'commander';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
-import { buildFixtureRepo, REVIEWS } from '../test/fixture/repo.js';
+import { join, resolve } from 'node:path';
+import { buildFixtureRepo, FixtureDirectoryError, REVIEWS } from '../test/fixture/repo.js';
 
-const dir = resolve(process.argv[2] ?? `${tmpdir()}/diffle-fixture`);
-const { refs } = await buildFixtureRepo(dir);
+const command = new Command('fixture')
+  .description('Build a demo repository in a new or empty directory.')
+  .argument('[dir]', 'destination (default: a fresh temporary directory)')
+  .exitOverride((error) => process.exit(error.exitCode === 0 ? 0 : 2));
+command.parse();
+const dir = command.args[0] ? resolve(command.args[0]) : await mkdtemp(join(tmpdir(), 'diffle-fixture-'));
+const { refs } = await buildFixtureRepo(dir).catch((error: unknown) => {
+  if (error instanceof FixtureDirectoryError) command.error(error.message, { exitCode: 2 });
+  throw error;
+});
 
 const width = Math.max(...REVIEWS.map((r) => r.revs.length));
 console.log(`Fixture repository built at ${dir}\n`);

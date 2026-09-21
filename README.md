@@ -207,7 +207,7 @@ npm test && npm run typecheck && npm run build
 
 ### Testing
 
-Tests produce things you can look at. `npm run fixture -- <dir>` builds a small repository whose history covers every diff shape (renames, a binary, generated files, CRLF, a minified line, uncommitted changes) and prints the comparisons worth opening; it is the same repository the tests review.
+Tests produce things you can look at. `npm run fixture -- <dir>` builds a small repository whose history covers every diff shape (renames, a binary, generated files, CRLF, a minified line, uncommitted changes) and prints the comparisons worth opening; it is the same repository the tests review. The destination must be new or empty; omit it to create a fresh temporary directory.
 
 ```bash
 npm test                      # unit and server tests; prompts, help text and payloads are file snapshots

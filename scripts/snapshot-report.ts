@@ -244,7 +244,9 @@ function findTestSource(rev: string, path: string): TestSource | null {
 
 function label(path: string): string {
   const parts = path.split('/__snapshots__/');
-  return parts.length === 2 ? `${parts[1]}  <span class="dim">${parts[0]}</span>` : path;
+  return parts.length === 2
+    ? `${escapeHtml(parts[1]!)}  <span class="dim">${escapeHtml(parts[0]!)}</span>`
+    : escapeHtml(path);
 }
 
 function buildCards(base: string, head: string, changes: Change[]): Card[] {

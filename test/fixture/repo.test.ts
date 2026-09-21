@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
-import { buildFixtureRepo, FEATURE_BRANCH, type FixtureRepo, MAIN_BRANCH, TAG } from './repo.js';
+import { buildFixtureRepo, FEATURE_BRANCH, FixtureDirectoryError, type FixtureRepo, MAIN_BRANCH, TAG } from './repo.js';
 
 /**
  * The history's identity. A change to `repo.ts` that alters any commit lands here first:
@@ -30,6 +30,13 @@ beforeAll(async () => {
 afterAll(() => rmTmp(dir));
 
 describe('fixture repository', () => {
+  it('refuses to replace an existing repository, including its uncommitted work', async () => {
+    const status = git('status', '--porcelain');
+    await expect(buildFixtureRepo(dir)).rejects.toBeInstanceOf(FixtureDirectoryError);
+    expect(git('rev-parse', 'HEAD')).toBe(PINNED[FEATURE_BRANCH]);
+    expect(git('status', '--porcelain')).toBe(status);
+  });
+
   it('hashes the same on every machine', () => {
     expect(repo.refs).toEqual(PINNED);
   });

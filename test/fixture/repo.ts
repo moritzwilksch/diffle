@@ -20,7 +20,7 @@
  * unstaged edit and an untracked file for `working` mode.
  */
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 /** The branch checked out when the build finishes. */
@@ -1042,10 +1042,14 @@ const GIT_ARGS = [
   'tag.gpgsign=false',
 ];
 
-/** Build the fixture repository in `dir`, replacing whatever is there. */
+export class FixtureDirectoryError extends Error {}
+
+/** Build the fixture repository in a new or empty directory; never remove existing contents. */
 export async function buildFixtureRepo(dir: string): Promise<FixtureRepo> {
-  await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
+  if ((await readdir(dir)).length > 0) {
+    throw new FixtureDirectoryError(`Refusing to overwrite nonempty directory: ${dir}`);
+  }
 
   let commits = 0;
   const git = (args: string[], author: Author = 'ada'): string => {
