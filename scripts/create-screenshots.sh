@@ -111,7 +111,11 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
 async function visibleBox(page, locator) {
   const viewport = page.viewportSize();
   for (let i = 0; i < (await locator.count()); i++) {
-    const box = await locator.nth(i).boundingBox();
+    const match = locator.nth(i);
+    // Intraline diffing nests wrapper spans; only a token holding one text node resolves to a word.
+    if (!(await match.evaluate((e) => e.childNodes.length === 1 && e.firstChild?.nodeType === Node.TEXT_NODE)))
+      continue;
+    const box = await match.boundingBox();
     if (box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height)
       return box;
   }
@@ -131,18 +135,19 @@ try {
     const thread = page.locator('aside div[role="button"]').first();
     await thread.waitFor();
     await thread.click();
-    // The comment lands on the normalize_channel_names line. Shiki merges adjacent tokens that share
-    // a colour, so the symbol may sit in a span with its trailing punctuation; match the start of the
-    // token. Its first match is the import near the top of the file, so wait for the match the jump
-    // left on screen rather than clicking that one.
-    const symbol = page.locator('span[data-char]', { hasText: /^normalize_channel_names\b/ });
+    // Open the menu on a symbol below the comment line, so the popover clears the comment card.
+    // Shiki merges adjacent tokens that share a colour, so the symbol may sit in a span with its
+    // trailing punctuation; match the start of the token.
+    const symbol = page.locator('span[data-char]', { hasText: /^ValueError\b/ });
     let box = null;
     for (let tries = 0; tries < 100 && !box; tries++) {
       box = await visibleBox(page, symbol);
       if (!box) await page.waitForTimeout(50);
     }
-    if (!box) throw new Error('normalize_channel_names is not on screen after the thread jump');
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    if (!box) throw new Error('ValueError is not on screen after the thread jump');
+    // The span may hold trailing punctuation and its type; click just inside its left edge to land on
+    // the identifier itself, since targetOf picks the word under the cursor.
+    await page.mouse.click(box.x + Math.min(4, box.width / 2), box.y + box.height / 2);
     await page.locator('[data-symbol-menu]').waitFor();
     await page.waitForTimeout(750);
     await page.screenshot({
