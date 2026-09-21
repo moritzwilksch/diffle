@@ -4,7 +4,7 @@ import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
-import { GithubError } from '../server/github.js';
+import { createGithubClient, type GithubClient, GithubError, resolveToken } from '../server/github/client.js';
 import { LspPool } from '../server/lsp/LspPool.js';
 import { resolveServers } from '../server/lsp/registry.js';
 import { RevspecError } from '../server/revspec.js';
@@ -269,14 +269,16 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
   process.on('SIGTERM', interrupt);
   let review: Awaited<ReturnType<typeof openReviewRepository>> | undefined;
   try {
-    review = await openReviewRepository(req, opts.C ?? process.cwd());
+    const github = await connectGithub();
+    timing.mark('github token');
+    review = await openReviewRepository(req, opts.C ?? process.cwd(), github.client);
     timing.mark('open repository');
     const config = await UserConfigStore.open();
     if (interrupted) {
       await review.close();
       return;
     }
-    await serve(req, opts, review.repo, review.close, config, timing);
+    await serve(req, opts, review.repo, review.close, config, github, timing);
   } catch (e) {
     await review?.close();
     throw e;
@@ -292,10 +294,15 @@ async function serve(
   repo: GitRepo,
   closeRepo: () => Promise<void>,
   config: UserConfigStore,
+  github: ConnectedGithub,
   timing: Timing,
 ): Promise<void> {
   const hub = new WsHub();
-  const session = new Session(repo, hub, { watch: opts.watch, context: opts.context ?? config.get().contextLines });
+  const session = new Session(repo, hub, {
+    watch: opts.watch,
+    context: opts.context ?? config.get().contextLines,
+    github: github.client ?? undefined,
+  });
   // A `--lsp` override outranks the config and starts its server whatever the diff holds.
   const named = Array.isArray(opts.lsp) ? opts.lsp : [];
   const overrides = { ...config.get().lspCommands, ...Object.fromEntries(named.map((o) => [o.language, o.command])) };
@@ -363,6 +370,8 @@ async function serve(
     }
     console.error(`🚀 diffle running at ${c.cyan(url.href)}`);
     console.error(`📂 ${c.dim('repo')} ${repo.root}`);
+    if (github.client) console.error(`🐙 ${c.dim('github')} ${c.dim(`token from ${github.source}`)}`);
+    else console.error(`🐙 ${c.dim('github')} ${c.dim('off: no token in GITHUB_TOKEN, GH_TOKEN or gh auth token')}`);
 
     const snap = await session.start(req);
     timing.mark('snapshot');
@@ -395,6 +404,18 @@ async function serve(
     }
     throw e;
   }
+}
+
+interface ConnectedGithub {
+  client: GithubClient | null;
+  source?: string;
+}
+
+/** One token lookup per run; without one, GitHub features are off rather than failing later. */
+async function connectGithub(): Promise<ConnectedGithub> {
+  const found = await resolveToken();
+  if (!found) return { client: null };
+  return { client: createGithubClient(found.token), source: found.source };
 }
 
 /**

@@ -13,7 +13,8 @@ import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
-import { GithubExporter, GithubError, type GhRunner } from './github.js';
+import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
+import { GithubExporter } from './github/review.js';
 import { resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -40,7 +41,8 @@ interface Active {
 
 export interface SessionOptions {
   watch: boolean;
-  gh?: GhRunner;
+  /** Absent: no token, so pull request lookup and export are off. */
+  github?: GithubClient;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
   /** Replaces the chokidar-backed Watcher. Test seam. */
@@ -99,7 +101,7 @@ export class Session {
     if (snap.mode !== active.mode) return Promise.reject(new GithubError('Comparison changed; try again'));
     const cached = active.github;
     if (cached?.snapshot === snap && cached.expires > Date.now()) return cached.promise;
-    const promise = discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
+    const promise = discoverGithub(this.repo, snap, { github: this.opts.github, prUrl: active.prUrl });
     const entry = { snapshot: snap, expires: Date.now() + 30_000, promise };
     active.github = entry;
     void promise.catch(() => {
@@ -114,7 +116,9 @@ export class Session {
       const active = this.require();
       const snap = await active.snapshotter.current();
       if (active !== this.active) throw new GithubError('Comparison changed; try again');
-      const metadata = await discoverGithub(this.repo, snap, { run: this.opts.gh, prUrl: active.prUrl });
+      const github = this.opts.github;
+      if (!github) throw new GithubError(NO_TOKEN);
+      const metadata = await discoverGithub(this.repo, snap, { github, prUrl: active.prUrl });
       if (!metadata.pullRequest || metadata.reason !== null)
         throw new GithubError(metadata.reason ?? 'No matching pull request');
       if (active !== this.active || snap !== (await active.snapshotter.current()))
@@ -124,7 +128,7 @@ export class Session {
         pullRequest: metadata.pullRequest,
         threads: active.comments.threads({ state: 'all' }),
         threadIds,
-        run: this.opts.gh,
+        github,
       };
     });
   }
@@ -192,7 +196,7 @@ export class Session {
   }
 
   private async transition(req: ModeRequest): Promise<Snapshot> {
-    const { mode, prUrl } = await resolveReview(req, this.repo, this.opts.gh);
+    const { mode, prUrl } = await resolveReview(req, this.repo, this.opts.github);
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([

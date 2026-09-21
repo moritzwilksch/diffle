@@ -2,7 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
-import { type GhRunner, runGh, viewPr } from '../server/github.js';
+import { type GithubClient, GithubError, NO_TOKEN } from '../server/github/client.js';
+import { viewPr } from '../server/github/pulls.js';
 import { remoteSlug } from '../server/mode.js';
 import type { ModeRequest } from '../shared/protocol.js';
 
@@ -10,7 +11,7 @@ import type { ModeRequest } from '../shared/protocol.js';
 export async function openReviewRepository(
   req: ModeRequest,
   cwd: string,
-  gh: GhRunner = runGh,
+  github: GithubClient | null,
 ): Promise<{
   repo: GitRepo;
   close: () => Promise<void>;
@@ -22,7 +23,8 @@ export async function openReviewRepository(
     if (!(e instanceof GitError && e.code === 128 && req.kind === 'pr' && /^https?:\/\//.test(req.pr ?? ''))) throw e;
   }
   if (req.kind !== 'pr') return { repo: local!, close: () => local!.cleanReviewRefs() };
-  const pr = await viewPr(req.pr, cwd, gh);
+  if (!github) throw new GithubError(NO_TOKEN);
+  const pr = await viewPr(req.pr, local ?? null, github);
   const matches = local && (await local.remotes()).some((r) => remoteSlug(r.url) === pr.repository.toLowerCase());
   if (matches) return { repo: local!, close: () => local!.cleanReviewRefs() };
 

@@ -1,13 +1,16 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { access, chmod, mkdir, mkdtemp, readdir, realpath, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, realpath, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
-import { GithubError, viewPr, type GhRunner } from '../../src/server/github.js';
+import { type GithubClient, GithubError } from '../../src/server/github/client.js';
+import { viewPr } from '../../src/server/github/pulls.js';
 import { resolveReview } from '../../src/server/mode.js';
 
 /**
@@ -41,28 +44,45 @@ const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd,
  */
 const asGitUrl = (p: string) => p.replaceAll('\\', '/');
 
-/** What `gh pr view` would say for PR 7 of o/r. */
-const PR_VIEW = (over: Record<string, unknown> = {}) =>
-  JSON.stringify({
-    title: 'Improve feature',
-    state: 'OPEN',
-    isDraft: false,
-    baseRefOid: mergeBase,
-    number: 7,
-    url: 'https://github.com/o/r/pull/7',
-    baseRefName: 'main',
-    headRefName: 'feat',
-    headRefOid: 'unused-here',
-    headRepository: { name: 'r' },
-    headRepositoryOwner: { login: 'o' },
-    ...over,
-  });
+/**
+ * Makes `origin` look like github.com/o/r while fetching from the local bare repository: the
+ * lookup reads the GitHub identity off the remote url, and the fetch rewrites it back.
+ */
+function pointRemoteAtGithub(cwd: string, remote = 'origin'): void {
+  git(cwd, 'remote', 'set-url', remote, 'https://github.com/o/r');
+  git(cwd, 'config', `url.${asGitUrl(origin)}.insteadOf`, 'https://github.com/o/r');
+}
 
-let ghCalls: string[][] = [];
-const gh: GhRunner = async (args) => {
-  ghCalls.push(args);
-  return PR_VIEW();
-};
+/** What GitHub would say for PR 7 of o/r. */
+const PR_NODE = (over: Record<string, unknown> = {}) => ({
+  title: 'Improve feature',
+  state: 'OPEN',
+  isDraft: false,
+  baseRefOid: mergeBase,
+  number: 7,
+  url: 'https://github.com/o/r/pull/7',
+  baseRefName: 'main',
+  headRefName: 'feat',
+  headRefOid: 'unused-here',
+  headRepository: { name: 'r', owner: { login: 'o' } },
+  ...over,
+});
+
+/** A GitHub that knows one pull request, answering lookups by number and by head branch alike. */
+function fake(node: Record<string, unknown> | null = PR_NODE(), over: Record<string, unknown> = {}): GithubClient {
+  const pr = node && { ...node, ...over };
+  return {
+    async graphql<T>(query: string, variables: Record<string, unknown>) {
+      calls.push(variables);
+      if (query.includes('pullRequests(')) return { repository: { pullRequests: { nodes: pr ? [pr] : [] } } } as T;
+      return { repository: { pullRequest: pr } } as T;
+    },
+  };
+}
+
+let calls: Record<string, unknown>[] = [];
+/** Knows PR 7; made once the fixture's hashes exist. */
+let github: GithubClient;
 
 beforeAll(async () => {
   tmp = await mkdtemp(join(TMP_ROOT, 'diffle-pr-'));
@@ -85,60 +105,93 @@ beforeAll(async () => {
   // A clone that has never seen the PR head: only refs/heads/main.
   local = join(tmp, 'work');
   execFileSync('git', ['clone', '-q', asGitUrl(origin), local], { encoding: 'utf8', env });
+  pointRemoteAtGithub(local);
   repo = await GitRepo.open(local);
+  github = fake();
 });
 afterAll(() => rmTmp(tmp));
 beforeEach(() => {
-  ghCalls = [];
+  calls = [];
 });
 
 describe('viewPr', () => {
-  it('passes a number, a #number and a url through to gh, and the branch when nothing is given', async () => {
-    for (const [selector, expected] of [
-      ['7', '7'],
-      ['#7', '7'],
-      [' 7 ', '7'],
-      ['https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7'],
-      ['feat', 'feat'],
-    ] as const) {
-      await viewPr(selector, local, gh);
-      expect(ghCalls.pop()).toEqual([
-        'pr',
-        'view',
-        expected,
-        '--json',
-        'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
-      ]);
+  it('looks a number, a #number and a url up by number in the base repository', async () => {
+    for (const selector of ['7', '#7', ' 7 ', 'https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7/files']) {
+      await viewPr(selector, repo, github);
+      expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', number: 7 });
     }
-    await viewPr(undefined, local, gh);
-    expect(ghCalls.pop()).toEqual([
-      'pr',
-      'view',
-      '--json',
-      'number,url,title,state,isDraft,baseRefOid,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner',
-    ]);
+    // A url names its own repository: no local checkout needed.
+    await viewPr('https://github.com/other/place/pull/9', null, fake(PR_NODE({ number: 9 })));
+    expect(calls.pop()).toEqual({ owner: 'other', repo: 'place', number: 9 });
+  });
+
+  it('looks a branch up among the open pull requests with that head, in any fork or the named one', async () => {
+    await viewPr('feat', repo, github);
+    expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', head: 'feat', base: null });
+    expect((await viewPr('o:feat', repo, github)).number).toBe(7);
+    await expect(viewPr('someone:feat', repo, github)).rejects.toThrow(/no open pull request in o\/r for someone:feat/);
+    await expect(viewPr('feat', repo, fake(null))).rejects.toThrow(/no open pull request in o\/r for feat/);
+    const two: GithubClient = {
+      async graphql<T>() {
+        return { repository: { pullRequests: { nodes: [PR_NODE(), PR_NODE({ number: 8 })] } } } as T;
+      },
+    };
+    await expect(viewPr('feat', repo, two)).rejects.toThrow(/2 open pull requests .*open one by number/);
+  });
+
+  it("uses the checked-out branch's upstream when nothing is given", async () => {
+    const work = join(tmp, 'branch');
+    execFileSync('git', ['clone', '-q', asGitUrl(origin), work], { encoding: 'utf8', env });
+    pointRemoteAtGithub(work);
+    git(work, 'checkout', '-q', '-b', 'feat');
+    git(work, 'branch', '-q', '--set-upstream-to=origin/main');
+    const branchRepo = await GitRepo.open(work);
+    // The upstream names the branch on GitHub; the local name may differ.
+    expect((await viewPr(undefined, branchRepo, github)).number).toBe(7);
+    expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', head: 'main', base: null });
+    git(work, 'branch', '-q', '--unset-upstream');
+    // Without an upstream, the local branch name is the best guess.
+    await viewPr(undefined, branchRepo, github);
+    expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', head: 'feat', base: null });
+    git(work, 'checkout', '-q', '--detach');
+    await expect(viewPr(undefined, branchRepo, github)).rejects.toThrow(/not on a branch/);
   });
 
   it('reads the base repository off the pull request url', async () => {
-    expect((await viewPr('7', local, gh)).repository).toBe('o/r');
+    expect((await viewPr('7', repo, github)).repository).toBe('o/r');
   });
 
-  it('refuses an option-shaped selector before gh sees it', async () => {
-    await expect(viewPr('--json', local, gh)).rejects.toThrow(GithubError);
-    expect(ghCalls).toEqual([]);
+  it('refuses an option-shaped selector and a non-pull-request url before asking GitHub', async () => {
+    await expect(viewPr('--json', repo, github)).rejects.toThrow(GithubError);
+    await expect(viewPr('https://github.com/o/r/issues/7', repo, github)).rejects.toThrow(/not a pull request url/);
+    expect(calls).toEqual([]);
   });
 
-  it('names unusable gh output instead of guessing', async () => {
-    const bad: GhRunner = async () => 'not json';
-    await expect(viewPr('7', local, bad)).rejects.toThrow(/unexpected output from gh pr view/);
-    const noSlug: GhRunner = async () => PR_VIEW({ url: 'https://example.invalid/x' });
-    await expect(viewPr('7', local, noSlug)).rejects.toThrow(/cannot read the repository/);
+  it('needs a GitHub origin, or one GitHub remote, for everything but a url', async () => {
+    await expect(viewPr('7', null, github)).rejects.toThrow(/not in a git repository/);
+    const dir = join(tmp, 'no-origin');
+    git(tmp, 'init', '-q', dir);
+    await expect(viewPr('7', await GitRepo.open(dir), github)).rejects.toThrow(/no GitHub remote/);
+    git(dir, 'remote', 'add', 'fork', 'git@github.com:me/r.git');
+    expect((await viewPr('7', await GitRepo.open(dir), github)).number).toBe(7);
+    expect(calls.pop()).toEqual({ owner: 'me', repo: 'r', number: 7 });
+    git(dir, 'remote', 'add', 'other', 'https://github.com/o/r');
+    await expect(viewPr('7', await GitRepo.open(dir), github)).rejects.toThrow(/2 GitHub remotes and no origin/);
+    expect(calls).toEqual([]);
+  });
+
+  it('names unusable GitHub data instead of guessing', async () => {
+    await expect(viewPr('7', repo, fake(null))).rejects.toThrow(/no pull request o\/r#7/);
+    await expect(viewPr('7', repo, fake(PR_NODE({ title: 3 })))).rejects.toThrow(/unexpected pull request data/);
+    await expect(viewPr('7', repo, fake(PR_NODE({ url: 'https://example.invalid/x' })))).rejects.toThrow(
+      /cannot read the repository/,
+    );
   });
 });
 
 describe("resolveReview({ kind: 'pr' })", () => {
   it('fetches the pull request into fixed refs retaining both branch names', async () => {
-    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, gh);
+    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, github);
     expect(mode).toMatchObject({
       old: `${repo.reviewRefs}/7/base/main`,
       mergeBase: true,
@@ -157,56 +210,64 @@ describe("resolveReview({ kind: 'pr' })", () => {
   it('fetches from the remote that points at the base repository, whatever it is called', async () => {
     const forked = join(tmp, 'forked');
     execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
+    pointRemoteAtGithub(forked, 'upstream');
     const forkRepo = await GitRepo.open(forked);
-    const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, gh);
+    const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, github);
     expect(await forkRepo.resolve(mode.new)).toBe(headSha);
   });
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
     const refs = git(local, 'show-ref');
     await expect(
-      resolveReview({ kind: 'pr', pr: '7' }, repo, async () =>
-        PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' }),
-      ),
+      resolveReview({ kind: 'pr', pr: '7' }, repo, fake(PR_NODE({ url: 'https://github.com/foreign/repo/pull/7' }))),
     ).rejects.toThrow(/foreign repository/);
     expect(git(local, 'show-ref')).toBe(refs);
   });
 
   it('cleans only this instance’s refs', async () => {
     const other = await GitRepo.open(local);
-    await resolveReview({ kind: 'pr', pr: '7' }, other, gh);
+    await resolveReview({ kind: 'pr', pr: '7' }, other, github);
     await repo.cleanReviewRefs();
     expect(git(local, 'for-each-ref', repo.reviewRefs)).toBe('');
     expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head/feat`)).toBe(headSha);
     await other.cleanReviewRefs();
   });
 
-  it('reports a pull request gh cannot find as the user error it is', async () => {
-    const missing: GhRunner = async () => {
-      throw new GithubError('gh pr view failed: no pull requests found');
-    };
-    await expect(resolveReview({ kind: 'pr', pr: '999' }, repo, missing)).rejects.toThrow(GithubError);
+  it('reports a pull request GitHub cannot find as the user error it is', async () => {
+    await expect(resolveReview({ kind: 'pr', pr: '999' }, repo, fake(null))).rejects.toThrow(GithubError);
+  });
+
+  it('is off without a token', async () => {
+    await expect(resolveReview({ kind: 'pr', pr: '7' }, repo)).rejects.toThrow(/No GitHub token/);
+    await expect(openReviewRepository({ kind: 'pr', pr: '7' }, local, null)).rejects.toThrow(/No GitHub token/);
   });
 });
 
 describe('openReviewRepository', () => {
   it('keeps matching PRs in the local repository', async () => {
-    const review = await openReviewRepository({ kind: 'pr', pr: '7' }, local, gh);
+    const review = await openReviewRepository({ kind: 'pr', pr: '7' }, local, github);
     expect(review.repo.root).toBe(local);
     await review.close();
     await access(local);
   });
 
-  // POSIX-only: the fake `gh` is a shebang script made runnable with `chmod`, PATH is
-  // joined with `:`, and the assertion is on a graceful SIGTERM shutdown.
+  // POSIX-only: the assertion is on a graceful SIGTERM shutdown, which Windows cannot deliver.
   it.skipIf(process.platform === 'win32')(
     'removes foreign clones when the CLI receives SIGTERM',
     async () => {
-      const bin = join(tmp, 'bin');
-      await mkdir(bin);
       const url = 'https://github.com/foreign/cli/pull/7';
-      await writeFile(join(bin, 'gh'), `#!/usr/bin/env node\nconsole.log(${JSON.stringify(PR_VIEW({ url }))});\n`);
-      await chmod(join(bin, 'gh'), 0o755);
+      // A GitHub API on localhost: the CLI reaches it through GITHUB_API_URL, as in Actions.
+      const api = createServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', () => {
+          const auth = req.headers.authorization;
+          const ok = req.url === '/graphql' && auth?.endsWith(' test-token') && body.includes('pullRequest(');
+          res.writeHead(ok ? 200 : 401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(ok ? { data: { repository: { pullRequest: PR_NODE({ url }) } } } : { message: 'no' }));
+        });
+      });
+      await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
       const config = join(tmp, 'cli-gitconfig');
       await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/cli\n`);
       // Load TypeScript in-process so SIGTERM reaches diffle, not tsx's signal relay.
@@ -226,7 +287,13 @@ describe('openReviewRepository', () => {
           '0',
         ],
         {
-          env: { ...env, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: config, NO_COLOR: '1' },
+          env: {
+            ...env,
+            GIT_CONFIG_GLOBAL: config,
+            NO_COLOR: '1',
+            GITHUB_TOKEN: 'test-token',
+            GITHUB_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}`,
+          },
           stdio: ['ignore', 'ignore', 'pipe'],
         },
       );
@@ -241,6 +308,7 @@ describe('openReviewRepository', () => {
           child.on('error', reject);
           child.on('exit', () => reject(new Error(stderr)));
         });
+        expect(stderr).toContain('token from GITHUB_TOKEN');
         const root = /repo (.+)\n/.exec(stderr)?.[1];
         expect(root).toBeTruthy();
         expect(root).not.toBe(local);
@@ -249,6 +317,7 @@ describe('openReviewRepository', () => {
         await expect(access(root!)).rejects.toThrow();
       } finally {
         child.kill('SIGKILL');
+        api.close();
       }
     },
     15_000,
@@ -262,7 +331,7 @@ describe('openReviewRepository', () => {
     vi.stubEnv('GIT_CONFIG_GLOBAL', config);
     vi.stubEnv('TMPDIR', scratch);
     try {
-      const foreign: GhRunner = async () => PR_VIEW({ url: 'https://github.com/foreign/missing/pull/7' });
+      const foreign = fake(PR_NODE({ url: 'https://github.com/foreign/missing/pull/7' }));
       await expect(openReviewRepository({ kind: 'pr', pr: '7' }, local, foreign)).rejects.toThrow();
       expect(await readdir(scratch)).toEqual([]);
     } finally {
@@ -274,7 +343,7 @@ describe('openReviewRepository', () => {
     const config = join(tmp, 'gitconfig');
     await writeFile(config, `[url "${asGitUrl(origin)}"]\n\tinsteadOf = https://github.com/foreign/repo\n`);
     vi.stubEnv('GIT_CONFIG_GLOBAL', config);
-    const foreign: GhRunner = async () => PR_VIEW({ url: 'https://github.com/foreign/repo/pull/7' });
+    const foreign = fake(PR_NODE({ url: 'https://github.com/foreign/repo/pull/7' }));
     const refs = git(local, 'show-ref');
     const objects = git(local, 'count-objects', '-v');
     try {

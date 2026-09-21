@@ -1,29 +1,18 @@
 import type { GithubMetadata, Snapshot } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
-import { GithubError, listPrsForHead, viewPr, runGh, type GhRunner, type PullRequest } from './github.js';
+import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
+import { githubRepository, originRepository, type PullRequest, pullRequestsForHead, viewPr } from './github/pulls.js';
 
 const LOOKUP_TIMEOUT_MS = 5000;
 
-/** GitHub.com identity from a configured HTTPS, SSH, or scp-style remote URL. */
-export function githubRepository(url: string): string | null {
-  const match =
-    /^(?:https?:\/\/github\.com\/|ssh:\/\/(?:[^/@]+@)?github\.com(?::\d+)?\/|(?:[^/@]+@)?github\.com:)([^/]+)\/([^/]+?)\/?$/i.exec(
-      url,
-    );
-  return match ? `${match[1]}/${match[2]!.replace(/\.git$/i, '')}` : null;
-}
-
-/** Local-only origin identity; works without gh, authentication, or a network connection. */
-export async function originRepository(repo: GitRepo): Promise<string | null> {
-  const origin = (await repo.remotes()).find((r) => r.name === 'origin');
-  return origin ? githubRepository(origin.url) : null;
-}
-
-/** Enriches a comparison without fetching commits, changing its endpoints, or changing comment storage. */
+/**
+ * Enriches a comparison without fetching commits, changing its endpoints, or changing comment
+ * storage. Without a client (no token), only the origin repository is known.
+ */
 export async function discoverGithub(
   repo: GitRepo,
   snap: Snapshot,
-  { run = runGh, prUrl }: { run?: GhRunner; prUrl?: string } = {},
+  { github, prUrl }: { github?: GithubClient; prUrl?: string } = {},
 ): Promise<GithubMetadata> {
   const repository = await originRepository(repo);
   const absent = (reason: string): GithubMetadata => ({
@@ -32,10 +21,11 @@ export async function discoverGithub(
     pullRequest: null,
     reason,
   });
+  if (!github) return absent(NO_TOKEN);
   try {
     let pr: PullRequest;
     if (prUrl) {
-      pr = await viewPr(prUrl, repo.root, run, LOOKUP_TIMEOUT_MS);
+      pr = await viewPr(prUrl, repo, github, LOOKUP_TIMEOUT_MS);
     } else {
       const [old, next, remotes] = await Promise.all([
         repo.upstreamBranch(snap.mode.old),
@@ -50,7 +40,9 @@ export async function discoverGithub(
       const baseRepo = repository(old.remote);
       const headRepo = repository(next.remote);
       if (!baseRepo || !headRepo) return absent('Both branches must have GitHub remotes');
-      const prs = await listPrsForHead(baseRepo, old.branch, next.branch, headRepo, repo.root, run, LOOKUP_TIMEOUT_MS);
+      const prs = (await pullRequestsForHead(github, baseRepo, next.branch, old.branch, LOOKUP_TIMEOUT_MS)).filter(
+        (pr) => pr.headRepository?.toLowerCase() === headRepo.toLowerCase(),
+      );
       if (!prs.length) return absent('No matching pull request');
       if (prs.length !== 1) return absent('Multiple matching pull requests; open one explicitly');
       pr = prs[0]!;
