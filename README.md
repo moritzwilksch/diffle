@@ -217,7 +217,17 @@ npm run test:e2e -- -g search # a few scenarios while iterating
 npm run test:e2e:update       # accept changed screenshots (Linux only; see below)
 ```
 
-Screenshots live under `test/e2e/__snapshots__/`, one per scenario in light and dark. They are pixel-exact only on Linux, so CI compares them in Playwright's container; to accept an intended change from another platform, run the **Update snapshots** workflow on your branch and it commits the regenerated files. A pull request that touches snapshots gets a report comparing every changed one side by side.
+Screenshots live under `test/e2e/__snapshots__/`, one per scenario in light and dark. Use Docker Compose to reproduce CI's Linux x64 environment locally, including on macOS or ARM:
+
+```bash
+docker compose run --build --rm e2e
+docker compose run --build --rm e2e --update-snapshots
+docker compose run --build --rm e2e -g search
+```
+
+Compose keeps container dependencies and build output separate from your local installation; snapshots and reports are written to the checkout. On Linux, these files may be owned by root.
+
+To regenerate remotely, run the **Update snapshots** workflow on your branch or comment `update-assets` on an open PR. The comment command requires repository write access and a branch in this repository (forks can use Compose locally). The workflow commits and pushes changed snapshots to that branch. Both triggers require the workflow to be on the default branch. A pull request that touches snapshots gets a report comparing every changed one side by side.
 
 See [AGENTS.md](AGENTS.md) for repository notes.
 
