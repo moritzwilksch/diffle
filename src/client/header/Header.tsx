@@ -67,7 +67,7 @@ export function Header() {
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
-      <SegmentedControl title="Diff layout">
+      <SegmentedControl title="Diff layout (s)">
         <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')}>
           <Columns2 size="0.875rem" /> Split
         </ToggleButton>
