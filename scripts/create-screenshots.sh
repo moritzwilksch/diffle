@@ -102,6 +102,22 @@ PLAYWRIGHT_MODULE="$playwright_module" SCREENSHOT_URL="$url" SCREENSHOT_OUTPUT_D
 import { join } from 'node:path';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+
+/**
+ * The code viewer renders into a shadow root, so the token is only reachable through a locator.
+ * A locator click would scroll its first match into view, dragging the comment card out of frame;
+ * clicking the match already on screen by coordinate keeps the card where the jump put it.
+ */
+async function visibleBox(page, locator) {
+  const viewport = page.viewportSize();
+  for (let i = 0; i < (await locator.count()); i++) {
+    const box = await locator.nth(i).boundingBox();
+    if (box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height)
+      return box;
+  }
+  return null;
+}
+
 const browser = await chromium.launch();
 try {
   for (const colorScheme of ['light', 'dark']) {
@@ -115,9 +131,18 @@ try {
     const thread = page.locator('aside div[role="button"]').first();
     await thread.waitFor();
     await thread.click();
-    // Shiki merges adjacent tokens that share a colour, so the symbol may sit in a span with its
-    // trailing punctuation. Match the start of the token; the click still lands inside the word.
-    await page.locator('span[data-char]', { hasText: /^VersionDataLoader\b/ }).first().click();
+    // The comment lands on the normalize_channel_names line. Shiki merges adjacent tokens that share
+    // a colour, so the symbol may sit in a span with its trailing punctuation; match the start of the
+    // token. Its first match is the import near the top of the file, so wait for the match the jump
+    // left on screen rather than clicking that one.
+    const symbol = page.locator('span[data-char]', { hasText: /^normalize_channel_names\b/ });
+    let box = null;
+    for (let tries = 0; tries < 100 && !box; tries++) {
+      box = await visibleBox(page, symbol);
+      if (!box) await page.waitForTimeout(50);
+    }
+    if (!box) throw new Error('normalize_channel_names is not on screen after the thread jump');
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await page.locator('[data-symbol-menu]').waitFor();
     await page.waitForTimeout(750);
     await page.screenshot({
