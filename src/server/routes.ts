@@ -33,7 +33,7 @@ import { mapLimit } from './concurrency.js';
 import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
-import { GithubError } from './github.js';
+import { GithubError } from './github/client.js';
 import { LspUnavailableError } from './lsp/LspBridge.js';
 import type { LspPool } from './lsp/LspPool.js';
 import { RevspecError } from './revspec.js';
@@ -231,7 +231,7 @@ export function createApi(deps: ApiDeps): Hono {
     return c.body(null, 204);
   });
 
-  // Adds threads to a pending review on the matching pull request through the local `gh`; the human submits it on GitHub.
+  // Adds threads to a pending review on the matching pull request; the human submits it on GitHub.
   app.post('/api/github/export', async (c) => {
     const body = GithubExportRequestSchema.parse(await readJson(c));
     return c.json(await session.exportGithub(body));
