@@ -4,9 +4,11 @@ import type {
   CommentThread,
   GithubExportResponse,
   GithubPullRequest,
+  Side,
   Snapshot,
 } from '../shared/protocol.js';
 import { compareThreads } from './comments/anchor.js';
+import { isShown, shownRanges } from './comments/hunks.js';
 
 /** Runs `gh` with `args` in `cwd` and resolves its stdout. The test seam: nothing here spawns `gh` directly. */
 export type GhRunner = (args: string[], opts: { cwd: string; input?: string; timeoutMs?: number }) => Promise<string>;
@@ -65,14 +67,35 @@ export interface BuiltReview {
   skipped: GithubExportResponse['skipped'];
 }
 
+/** Context lines GitHub renders around each change of a pull request diff. A review comment must land inside them. */
+export const GITHUB_CONTEXT = 3;
+
+/**
+ * The pull request diff as GitHub renders it, for placing review comments. `changed` holds
+ * the paths of its files; `patch` is a changed file's unified patch with `GITHUB_CONTEXT`
+ * lines of context, whose hunks are the lines GitHub can comment on. '' for a file without
+ * hunks (binary, a pure rename), where only a file comment can land.
+ */
+export interface GithubDiff {
+  changed: ReadonlySet<string>;
+  patch(path: string): Promise<string>;
+}
+
 /**
  * Threads → the comments of one pending GitHub review, one per thread. Stale threads are skipped:
- * their lines no longer sit in the diff, and GitHub would refuse them anyway. With
- * `threadIds`, only those (resolved included, the user asked for them by hand);
- * without, every unresolved thread. `review.comments` holds the line comments REST can
- * create; the file comments are appended afterwards, but `ids` counts both, in review order.
+ * their lines no longer sit in the diff, and GitHub would refuse them anyway. So are threads
+ * GitHub would not show: on a file outside the diff, which the API accepts and then renders
+ * nowhere, or on a line outside the diff's hunks, which it refuses with a 422. With `threadIds`,
+ * only those (resolved included, the user asked for them by hand); without, every unresolved
+ * thread. `review.comments` holds the line comments REST can create; the file comments are
+ * appended afterwards, but `ids` counts both, in review order.
  */
-export function buildReview(threads: CommentThread[], commitId: string, threadIds?: string[]): BuiltReview {
+export async function buildReview(
+  threads: CommentThread[],
+  commitId: string,
+  diff: GithubDiff,
+  threadIds?: string[],
+): Promise<BuiltReview> {
   const skipped: BuiltReview['skipped'] = [];
   let chosen: CommentThread[];
   if (threadIds) {
@@ -88,9 +111,27 @@ export function buildReview(threads: CommentThread[], commitId: string, threadId
   }
   const comments: ReviewComment[] = [];
   const ids: string[] = [];
+  const patches = new Map<string, Promise<string>>();
+  const shown = async (path: string, side: Side) => {
+    let p = patches.get(path);
+    if (!p) {
+      p = diff.patch(path);
+      patches.set(path, p);
+    }
+    return shownRanges(await p, side);
+  };
   for (const t of [...chosen].sort(compareThreads)) {
+    const { anchor } = t;
     if (t.stale) {
       skipped.push({ id: t.id, reason: 'stale' });
+      continue;
+    }
+    if (!diff.changed.has(anchor.path)) {
+      skipped.push({ id: t.id, reason: 'outside the diff' });
+      continue;
+    }
+    if (anchor.kind === 'line' && !isShown(await shown(anchor.path, anchor.side), anchor.startLine, anchor.endLine)) {
+      skipped.push({ id: t.id, reason: 'outside the diff hunks' });
       continue;
     }
     comments.push(toReviewComment(t));
@@ -130,6 +171,7 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
 
 export interface ExportInput {
   snap: Pick<Snapshot, 'root' | 'newSha'>;
+  diff: GithubDiff;
   pullRequest: GithubPullRequest;
   threads: CommentThread[];
   threadIds?: string[];
@@ -159,13 +201,14 @@ export class GithubExporter {
  */
 async function exportToGithub({
   snap,
+  diff,
   pullRequest: pr,
   threads,
   threadIds,
   run = runGh,
 }: ExportInput): Promise<GithubExportResponse> {
   if (snap.newSha === 'worktree') throw new GithubError('GitHub cannot anchor comments to the worktree');
-  const { review, comments, ids, skipped } = buildReview(threads, snap.newSha, threadIds);
+  const { review, comments, ids, skipped } = await buildReview(threads, snap.newSha, diff, threadIds);
   if (comments.length === 0)
     throw new GithubError(skipped.length ? `nothing to post: ${describe(skipped)}` : 'nothing to post', 400);
 
@@ -431,16 +474,38 @@ export const runGh: GhRunner = (args, { cwd, input, timeoutMs }) =>
         if (!err) return resolve(stdout);
         if ((err as NodeJS.ErrnoException).code === 'ENOENT')
           return reject(new GithubError('gh is not installed; see https://cli.github.com'));
-        const detail = (stderr || err.message).trim().split('\n')[0] ?? '';
+        logGhFailure(args, err, stdout, stderr);
+        // gh puts the HTTP status on its first line and GitHub's explanation (`line must be part of the diff`) below it.
+        const detail = (stderr.trim() || err.message.trim())
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
         // `gh api` failures are GitHub's answer (422 on a line outside the diff, 404 on a missing PR); the rest is local setup.
         reject(
-          new GithubError(`gh ${args[0]} ${args[1] ?? ''} failed: ${detail}`.trim(), args[0] === 'api' ? 502 : 409),
+          new GithubError(
+            `gh ${args[0]} ${args[1] ?? ''} failed: ${detail.join('; ').slice(0, 500)}`.trim(),
+            args[0] === 'api' ? 502 : 409,
+          ),
         );
       },
     );
     if (input != null) child.stdin?.end(input);
     else child.stdin?.end();
   });
+
+/**
+ * The whole failure on the server's stderr: the command line (never its stdin, which carries
+ * comment bodies), the exit, gh's stderr and the response body gh prints to stdout. The toast
+ * only gets the first 500 characters.
+ */
+function logGhFailure(args: string[], err: Error, stdout: string, stderr: string): void {
+  const { code, signal } = err as NodeJS.ErrnoException & { signal?: string };
+  const exit = signal ? `killed by ${signal}` : code == null ? err.message : `exited ${code}`;
+  const parts = [`[diffle] gh ${args.join(' ')}: ${exit}`];
+  if (stderr.trim()) parts.push(stderr.trimEnd());
+  if (stdout.trim()) parts.push(stdout.trimEnd().slice(0, 4000));
+  console.error(parts.join('\n'));
+}
 
 /** A pull request as `gh pr view` reports it, plus the base repository derived from its URL. */
 export interface PullRequest extends GithubPullRequest {
