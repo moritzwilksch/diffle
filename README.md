@@ -219,7 +219,7 @@ npm test                                # unit and server tests
 npm run test:e2e:docker                  # the Linux x64 browser suite used in CI
 npm run test:e2e:report                  # open the saved Playwright report locally
 npm run test:e2e:docker -- -g search     # run matching scenarios
-npm run test:e2e:docker -- --update-snapshots
+npm run test:e2e:docker:update
 ```
 
 The container includes Chromium and keeps its dependencies and build output separate from your local installation. The HTML report is saved in `playwright-report/`, with failure screenshots, visual diffs, and traces; raw results are in `test-results/`. Both survive the container exiting, even when tests fail. Each run replaces the previous report: copy the whole `playwright-report/` directory to keep or share a run. Opening the report does not require Docker or a local Chromium installation.
