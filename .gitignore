@@ -149,3 +149,4 @@ spec/
 # Playwright
 test-results/
 playwright-report/
+snapshot-report.html
