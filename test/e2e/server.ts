@@ -1,5 +1,8 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { rmSync } from 'node:fs';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { rmTmp } from '../tmp.js';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommentThread, ThreadCreate } from '../../src/shared/protocol.js';
@@ -38,6 +41,7 @@ export async function startDiffle({
   env = {},
   timeoutMs = 30000,
 }: DiffleOptions): Promise<RunningDiffle> {
+  const configDir = await mkdtemp(join(tmpdir(), 'diffle-e2e-config-'));
   const proc = spawn(
     process.execPath,
     [
@@ -53,7 +57,12 @@ export async function startDiffle({
       ...revs,
       ...args,
     ],
-    { cwd: REPO_ROOT, env: { ...process.env, NO_COLOR: '1', ...env }, stdio: ['ignore', 'pipe', 'pipe'] },
+    {
+      cwd: REPO_ROOT,
+      // Every server owns its settings, including writes made through the settings dialog.
+      env: { ...process.env, NO_COLOR: '1', ...env, XDG_CONFIG_HOME: configDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
   let stderr = '';
   let stdout = '';
@@ -78,8 +87,9 @@ export async function startDiffle({
       reject(new Error(`diffle exited (${code})\n${stderr}\n${stdout}`));
     });
     scan();
-  }).catch((error: unknown) => {
+  }).catch(async (error: unknown) => {
     proc.kill('SIGKILL');
+    await rmTmp(configDir);
     throw error;
   });
 
@@ -98,6 +108,7 @@ export async function startDiffle({
           done();
         });
       });
+      await rmTmp(configDir);
     },
   };
 }
