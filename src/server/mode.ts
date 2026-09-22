@@ -1,7 +1,7 @@
 import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
-import { type GhRunner, type PullRequest, runGh, viewPr } from './github.js';
-import { githubRepository } from './GithubMetadata.js';
+import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
+import { githubRepository, type PullRequest, viewPr } from './github/pulls.js';
 import { parseRevspec, RevspecError } from './revspec.js';
 
 /**
@@ -84,8 +84,8 @@ export interface ResolvedReview {
 }
 
 /** Resolves an input command into a comparison and optional explicit PR identity. */
-export async function resolveReview(req: ModeRequest, repo: GitRepo, gh: GhRunner = runGh): Promise<ResolvedReview> {
-  if (req.kind === 'pr') return resolvePr(req, repo, gh);
+export async function resolveReview(req: ModeRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
+  if (req.kind === 'pr') return resolvePr(req, repo, github);
   const parsed = req.kind === 'working' ? { old: 'HEAD', new: 'worktree', mergeBase: false } : parseRevspec(req.args);
   const { oldSha, newSha, live } = await resolveComparison(repo, parsed);
   return {
@@ -139,14 +139,19 @@ function branchKey(old: string, next: string, mergeBase: boolean): string {
 
 /**
  * A GitHub pull request, as GitHub shows it: merge-base(base tip, head) vs head.
- * `gh` names the PR, then one fetch brings the base tip and the PR head into
+ * GitHub names the PR, then one fetch brings the base tip and the PR head into
  * session-owned refs named after the branches, so a PR nobody has checked out
  * is reviewable. These refs stay fixed until another fetch; review state uses
  * the same branch identities as ordinary comparisons, so comments survive
  * pushes and reopening by branch.
  */
-async function resolvePr(req: { kind: 'pr'; pr?: string }, repo: GitRepo, gh: GhRunner): Promise<ResolvedReview> {
-  const pr = await viewPr(req.pr, repo.root, gh);
+async function resolvePr(
+  req: { kind: 'pr'; pr?: string },
+  repo: GitRepo,
+  github?: GithubClient,
+): Promise<ResolvedReview> {
+  if (!github) throw new GithubError(NO_TOKEN);
+  const pr = await viewPr(req.pr, repo, github);
 
   const head = `${repo.reviewRefs}/${pr.number}/head/${pr.headRefName}`;
   const base = `${repo.reviewRefs}/${pr.number}/base/${pr.baseRefName}`;
