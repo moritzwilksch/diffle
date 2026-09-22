@@ -2,12 +2,13 @@
 // review state (threads, viewed marks) never leaks between scenarios and each one can pick
 // the comparison it needs with `test.use({ revs: [...] })`.
 import { test as base, expect, type Locator } from '@playwright/test';
-import { mkdtemp } from 'node:fs/promises';
+import { cp, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildFixtureRepo, FEATURE_BRANCH, MAIN_BRANCH } from '../fixture/repo.js';
 import { rmTmp } from '../tmp.js';
-import { type RunningDiffle, settle, startDiffle } from './harness.js';
+import { type RunningDiffle, startDiffle } from './server.js';
+import { settle } from './browser.js';
 
 /** Name of the checkout, and so of the repository in the header. */
 export const REPO_NAME = 'tally';
@@ -22,31 +23,55 @@ export interface Options {
 }
 
 export interface Fixtures {
-  /** A fresh build of the fixture repository, removed after the test. */
+  /** An isolated copy of the fixture repository, removed after the test. */
   repo: string;
   /** A diffle reviewing `repo`; stopped after the test. */
   diffle: RunningDiffle;
 }
 
-export const test = base.extend<Options & Fixtures>({
+interface WorkerFixtures {
+  fixtureTemplate: string;
+}
+
+export const test = base.extend<Options & Fixtures, WorkerFixtures>({
   revs: [[`${MAIN_BRANCH}...${FEATURE_BRANCH}`], { option: true }],
   args: [[], { option: true }],
   env: [{}, { option: true }],
 
-  // Playwright's idiom for a fixture without dependencies.
-  // oxlint-disable-next-line no-empty-pattern
-  repo: async ({}, use) => {
+  // Copy the complete checkout, including staged/unstaged files; git clone would lose working-mode inputs.
+  fixtureTemplate: [
+    // Playwright's idiom for a fixture without dependencies.
+    // oxlint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const dir = await mkdtemp(join(tmpdir(), 'diffle-e2e-template-'));
+      try {
+        await buildFixtureRepo(dir);
+        await use(dir);
+      } finally {
+        await rmTmp(dir);
+      }
+    },
+    { scope: 'worker' },
+  ],
+
+  repo: async ({ fixtureTemplate }, use) => {
     const dir = await mkdtemp(join(tmpdir(), 'diffle-e2e-'));
-    const repo = join(dir, REPO_NAME);
-    await buildFixtureRepo(repo);
-    await use(repo);
-    await rmTmp(dir);
+    try {
+      const repo = join(dir, REPO_NAME);
+      await cp(fixtureTemplate, repo, { recursive: true });
+      await use(repo);
+    } finally {
+      await rmTmp(dir);
+    }
   },
 
   diffle: async ({ repo, revs, args, env }, use) => {
     const server = await startDiffle({ repo, revs, args, env });
-    await use(server);
-    await server.stop();
+    try {
+      await use(server);
+    } finally {
+      await server.stop();
+    }
   },
 
   /** Already on the review, fonts loaded and the first file rendered. */

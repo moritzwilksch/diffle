@@ -2,10 +2,11 @@
 // and the layouts a reader switches between. Judge changes in the screenshots under
 // `__snapshots__/review.spec.ts/`.
 import { expect, test } from './fixtures.js';
-import { collapsed, filePaths, gotoFile, header, walkToFile } from './harness.js';
+import { collapsed, filePaths, gotoFile, header, waitForHighlight, walkToFile } from './browser.js';
 
 test('opens on the first changed file with the tree and threads panel', async ({ page }) => {
   await expect(page.locator('header')).toContainText('17 files');
+  await waitForHighlight(page, 'tally/cli.py');
   await expect(page).toHaveScreenshot('overview.png');
 });
 

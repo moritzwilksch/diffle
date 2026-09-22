@@ -5,9 +5,9 @@ description: Capture cropped before/after screenshots or record a video of diffl
 
 # Capture a diffle UI change
 
-Prove each change with the smallest image that shows it. A capture is a short scenario script over `test/e2e/harness.ts`, the harness the e2e tests use; copy `scripts/scenario.template.mts`, edit it, and run it with `npx tsx` from the checkout. The harness documents the rest.
+Prove each change with the smallest image that shows it. A capture is a short scenario script over `test/e2e/server.ts`, `browser.ts`, and `capture.ts`, the harness the e2e tests use; copy `scripts/scenario.template.mts`, edit it, and run it with `npx tsx` from the checkout. The harness documents the rest.
 
-A change that should stay proven belongs in `test/e2e/*.spec.ts` as a scenario with `toHaveScreenshot`, not in a one-off script: `npm run test:e2e:update` accepts its screenshots, and the PR's snapshot report shows the change to reviewers.
+A change that should stay proven belongs in `test/e2e/*.spec.ts` as a scenario with `toHaveScreenshot`, not in a one-off script: `npm run test:e2e:docker -- --update-snapshots` accepts its screenshots in the CI environment, and the PR's snapshot report shows the change to reviewers.
 
 ## Screenshots
 

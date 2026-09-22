@@ -1,4 +1,4 @@
-import { buildClient } from './harness.js';
+import { buildClient } from './server.js';
 
 /**
  * The server serves `dist/client`, so the screenshots show whatever was built last. Build it

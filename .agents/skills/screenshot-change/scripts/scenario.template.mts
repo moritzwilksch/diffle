@@ -1,21 +1,10 @@
 // Copy this file, point it at a demo repo, and run it with `npx tsx <copy>` from the checkout.
 //
-// The harness is the e2e tests' one: `test/e2e/harness.ts`. Import it by absolute path so the
+// The harness is the e2e tests' one: `test/e2e/{server,browser,capture}.ts`. Import it by absolute path so the
 // scenario runs from anywhere; `npm run fixture -- <dir>` builds a repo with every diff shape.
-import {
-  activePath,
-  collapsed,
-  crop,
-  gotoFile,
-  newPage,
-  newVideoPage,
-  openBrowser,
-  resetReviewState,
-  saveVideo,
-  seedThreads,
-  viewed,
-  withDiffle,
-} from '/path/to/diffle/test/e2e/harness.ts';
+import { activePath, collapsed, gotoFile, newPage, openBrowser, viewed } from '/path/to/diffle/test/e2e/browser.ts';
+import { crop, newVideoPage, saveVideo } from '/path/to/diffle/test/e2e/capture.ts';
+import { resetReviewState, seedThreads, withDiffle } from '/path/to/diffle/test/e2e/server.ts';
 
 const REPO = '/tmp/diffle-fixture';
 const OUT = '/tmp/shots';

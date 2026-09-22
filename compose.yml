@@ -14,9 +14,11 @@ services:
     working_dir: /workspace
     environment:
       CI: "true"
+      DIFFLE_UID: "${DIFFLE_UID:-0}"
+      DIFFLE_GID: "${DIFFLE_GID:-0}"
     volumes:
       - .:/workspace
       # Keep Linux dependencies and build output separate from the host installation.
       - /workspace/node_modules
       - /workspace/dist
-    entrypoint: ["/bin/sh", "-c", 'npm ci && exec npm run test:e2e -- "$@"', "--"]
+    entrypoint: ["/bin/sh", "scripts/e2e-container.sh"]

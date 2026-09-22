@@ -1,6 +1,6 @@
 # Setup
 
-The harness is `test/e2e/harness.ts`, the one the e2e tests run on. It spawns the server with the checkout's `tsx` and serves `dist/client`, so install the project dependencies and build the client first. Playwright is a dev dependency of the checkout; only the browser is a separate download.
+The shared helpers live in `test/e2e/`: `server.ts` starts diffle and builds the client, `browser.ts` drives the review UI, and `capture.ts` records video and swaps before/after client builds. The server uses the checkout's `tsx` and serves `dist/client`, so install the project dependencies and build the client first. Playwright is a dev dependency of the checkout; only the browser is a separate download.
 
 ```sh
 npm install

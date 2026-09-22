@@ -12,9 +12,11 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   globalSetup: './test/e2e/global-setup.ts',
   fullyParallel: true,
+  workers: process.env.CI ? 2 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'on-failure' }]],
+  outputDir: 'test-results',
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   // One directory per spec, one file per scenario and colour scheme; no platform suffix, since only
   // Linux screenshots are committed.
   snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}.{projectName}{ext}',
@@ -27,6 +29,7 @@ export default defineConfig({
     locale: 'en-US',
     timezoneId: 'UTC',
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   projects: [
     { name: 'light', use: { colorScheme: 'light' } },

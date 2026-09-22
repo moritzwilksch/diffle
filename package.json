@@ -43,6 +43,8 @@
     "format:check": "oxfmt --check",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:docker": "node scripts/e2e-docker.mjs",
+    "test:e2e:report": "playwright show-report playwright-report",
     "test:e2e:update": "playwright test --update-snapshots",
     "snapshot-report": "tsx scripts/snapshot-report.ts",
     "prepack": "npm run build"
