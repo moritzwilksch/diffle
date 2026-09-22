@@ -145,6 +145,8 @@ beforeEach(() => {
     activePath: null,
     selection: null,
     scrollTarget: null,
+    jumps: [],
+    jumpIndex: 0,
     gens: {},
     collapsed: {},
     viewed: [],
@@ -766,19 +768,19 @@ describe('ReviewPane scroller effects', () => {
     expect(host.querySelector('[title="Mark as viewed and collapse the file (v)"]')).not.toBeNull();
   });
 
-  it('offers one way back from the file view: the bar above, not the file header too', async () => {
+  it('offers no way back of its own: the header arrows are the one way back', async () => {
     await act(() => root.render(createElement(ReviewPane)));
     const file = { kind: 'file' as const, file: { name: 'a.txt', contents: 'x' } };
     await act(() => useStore.setState({ snapshot: snap(changed), loaded: { 'a.txt': file } }));
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(1);
-    expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(0);
+    expect(host.querySelectorAll('[title^="Back ("]')).toHaveLength(0);
 
     await act(() =>
       useStore.setState({
         fileView: { path: 'a.txt', external: false, item: file, from: { position: null, activePath: null } },
       }),
     );
-    expect(host.querySelectorAll('[title^="Back to the diff"]')).toHaveLength(1);
+    expect(host.querySelectorAll('[title^="Back ("]')).toHaveLength(0);
     expect(host.querySelectorAll('[title="View full file (F)"]')).toHaveLength(0);
     expect(host.querySelector('[title="Collapse / expand"]')).toBeNull();
     const fullHeader = host.querySelector<HTMLElement>('[data-diffs-header]')!;

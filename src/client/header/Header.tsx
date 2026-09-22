@@ -26,6 +26,7 @@ import { copyText } from '../clipboard.js';
 import { useStore } from '../store.js';
 import { nextTheme, type ThemeChoice } from '../theme.js';
 import { GithubMenu } from './GithubMenu.js';
+import { HistoryNav } from './HistoryNav.js';
 import { ModePicker } from './ModePicker.js';
 import { SettingsDialog } from './SettingsDialog.js';
 
@@ -54,6 +55,7 @@ export function Header() {
       >
         <PanelLeft size="1rem" />
       </Button>
+      <HistoryNav />
       <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em]">
         <GitCompareArrows size="1rem" /> diffle
       </span>
