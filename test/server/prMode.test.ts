@@ -180,6 +180,24 @@ describe('viewPr', () => {
     expect(calls).toEqual([]);
   });
 
+  it('normalizes the head repository and accepts a deleted fork', async () => {
+    expect((await viewPr('7', repo, github)).headRepository).toBe('o/r');
+    expect((await viewPr('7', repo, fake(PR_NODE({ headRepository: null })))).headRepository).toBeNull();
+  });
+
+  it.each([
+    { headRepository: { name: 'r', owner: { login: 3 } } },
+    { headRepository: { name: 'r' } },
+    { headRepository: undefined },
+    { state: 'UNKNOWN' },
+    { headRefOid: null },
+  ])('rejects malformed PR fields: %j', async (fields) => {
+    await expect(viewPr('7', repo, fake(PR_NODE(fields)))).rejects.toMatchObject({
+      message: 'unexpected pull request data from GitHub',
+      status: 502,
+    });
+  });
+
   it('names unusable GitHub data instead of guessing', async () => {
     await expect(viewPr('7', repo, fake(null))).rejects.toThrow(/no pull request o\/r#7/);
     await expect(viewPr('7', repo, fake(PR_NODE({ title: 3 })))).rejects.toThrow(/unexpected pull request data/);

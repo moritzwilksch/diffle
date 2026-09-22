@@ -1,4 +1,5 @@
-import type { GithubPullRequest } from '../../shared/protocol.js';
+import { z } from 'zod';
+import { type GithubPullRequest, GithubPullRequestSchema } from '../../shared/protocol.js';
 import type { GitRepo } from '../git/GitRepo.js';
 import { type GithubClient, GithubError } from './client.js';
 
@@ -157,36 +158,22 @@ export async function pullRequestsForHead(
   return nodes.map(parsePullRequest);
 }
 
+const PullRequestNodeSchema = GithubPullRequestSchema.omit({ repository: true }).extend({
+  baseRefOid: z.string(),
+  baseRefName: z.string(),
+  headRefName: z.string(),
+  headRefOid: z.string(),
+  headRepository: z
+    .object({ name: z.string(), owner: z.object({ login: z.string() }) })
+    .nullable()
+    .transform((source) => (source ? `${source.owner.login}/${source.name}` : null)),
+});
+
 function parsePullRequest(value: unknown): PullRequest {
-  const pr = value as Partial<PullRequest>;
-  const ok =
-    pr != null &&
-    typeof pr.title === 'string' &&
-    ['OPEN', 'CLOSED', 'MERGED'].includes(pr.state ?? '') &&
-    typeof pr.isDraft === 'boolean' &&
-    typeof pr.baseRefOid === 'string' &&
-    typeof pr.number === 'number' &&
-    typeof pr.url === 'string' &&
-    typeof pr.baseRefName === 'string' &&
-    typeof pr.headRefName === 'string' &&
-    typeof pr.headRefOid === 'string';
-  if (!ok) throw new GithubError('unexpected pull request data from GitHub', 502);
-  const slug = /^https?:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+/.exec(pr.url!);
+  const result = PullRequestNodeSchema.safeParse(value);
+  if (!result.success) throw new GithubError('unexpected pull request data from GitHub', 502);
+  const pr = result.data;
+  const slug = /^https?:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/\d+/.exec(pr.url);
   if (!slug) throw new GithubError(`cannot read the repository from the pull request url: ${pr.url}`, 502);
-  const source = value as { headRepository?: { name?: string; owner?: { login?: string } | null } | null };
-  const owner = source.headRepository?.owner?.login;
-  const name = source.headRepository?.name;
-  return {
-    headRepository: typeof owner === 'string' && typeof name === 'string' ? `${owner}/${name}` : null,
-    number: pr.number!,
-    url: pr.url!,
-    title: pr.title!,
-    state: pr.state!,
-    isDraft: pr.isDraft!,
-    repository: slug[1]!,
-    baseRefOid: pr.baseRefOid!,
-    baseRefName: pr.baseRefName!,
-    headRefName: pr.headRefName!,
-    headRefOid: pr.headRefOid!,
-  };
+  return { ...pr, repository: slug[1]! };
 }
