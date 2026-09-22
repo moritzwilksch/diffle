@@ -19,7 +19,17 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 }
 const child = spawn(
   'docker',
-  ['compose', 'run', '--build', '--rm', '--name', container, '-T', 'e2e', ...process.argv.slice(2)],
+  [
+    'compose',
+    'run',
+    '--build',
+    '--rm',
+    '--name',
+    container,
+    ...(process.stdin.isTTY ? [] : ['-T']),
+    'e2e',
+    ...process.argv.slice(2),
+  ],
   {
     cwd: root,
     stdio: 'inherit',
