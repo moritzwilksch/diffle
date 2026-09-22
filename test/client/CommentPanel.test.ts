@@ -120,5 +120,14 @@ describe('CommentPanel rows', () => {
 
     await act(() => useStore.setState({ github: { status: 'ready', data: metadata(null) } }));
     expect(post()).not.toBeNull();
+    expect(post()!.disabled).toBe(false);
+
+    // Some blocked threads are skipped by the export; all blocked leaves nothing to add.
+    const blocked = threads.map((t) => ({ ...t, githubBlocker: 'file not in the pull request diff' }));
+    await act(() => useStore.setState({ threads: [threads[0]!, ...blocked.slice(1)] }));
+    expect(post()!.disabled).toBe(false);
+    await act(() => useStore.setState({ threads: blocked }));
+    const none = host.querySelector<HTMLButtonElement>('button[title="GitHub cannot show any open thread"]');
+    expect(none?.disabled).toBe(true);
   });
 });

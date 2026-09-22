@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
+import { UnquotableError } from '../../src/server/comments/CommentStore.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { WatchTarget } from '../../src/server/Watcher.js';
@@ -129,10 +130,15 @@ describe('Session', () => {
     const stale = () => [outside, inside, unchangedOld, unchangedNew].map((t) => session.comments.get(t.id)?.stale);
     expect(stale()).toEqual([true, false, true, false]);
     expect(session.comments.get(outside.id)?.staleFromLine).toBe(1);
+    // GitHub shows none of these but `inside`: the file view's thread on `same.txt` is fresh here, not there.
+    const blockers = () =>
+      [outside, inside, unchangedOld, unchangedNew].map((t) => session.comments.get(t.id)?.githubBlocker);
+    expect(blockers()).toEqual(['stale', undefined, 'stale', 'file not in the pull request diff']);
 
-    // Three lines of context bring `alpha` back into the hunk.
+    // Three lines of context bring `alpha` back into the hunk, and into GitHub's diff.
     await session.setContext(3);
     expect(stale()).toEqual([false, false, true, false]);
+    expect(blockers()).toEqual([undefined, undefined, 'stale', 'file not in the pull request diff']);
     await session.setContext(0);
     expect(stale()).toEqual([true, false, true, false]);
     await session.close();
@@ -141,6 +147,31 @@ describe('Session', () => {
     const again = new Session(repo, hub, { watch: false, context: 3 });
     await again.start({ kind: 'revspec', args: ['main..feat'] });
     expect(again.comments.get(outside.id)?.stale).toBe(false);
+    await again.comments.clear();
+    await again.close();
+  });
+
+  it('refuses a posted line thread the diff does not show, so a restart cannot turn it stale', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 0 });
+    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.comments.clear();
+    // Context 0 shows only `delta`; `alpha` is in the file but in no hunk.
+    await expect(
+      session.comments.importThreads([{ path: 'new.txt', startLine: 1, body: 'context line' }], await session.review()),
+    ).rejects.toBeInstanceOf(UnquotableError);
+    const { added } = await session.comments.importThreads(
+      [{ path: 'new.txt', startLine: 4, body: 'added line' }],
+      await session.review(),
+    );
+    expect(added[0]).toMatchObject({ stale: false });
+    expect(added[0]!.githubBlocker).toBeUndefined();
+    await session.close();
+
+    const again = new Session(repo, hub, { watch: false, context: 0 });
+    await again.start({ kind: 'revspec', args: ['main..feat'] });
+    const t = again.comments.get(added[0]!.id);
+    expect(t).toMatchObject({ stale: false });
+    expect(t?.githubBlocker).toBeUndefined();
     await again.comments.clear();
     await again.close();
   });
@@ -162,18 +193,27 @@ describe('Session', () => {
     await session.close();
   });
 
-  it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
+  it('presents each side of the snapshot with what the diff and GitHub show of it, and nothing it cannot read', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
     await session.start({ kind: 'revspec', args: ['main..feat'] });
-    const { quote, hasFile } = session.anchorSource();
-    expect(await quote('new.txt', 'new', 2, 4)).toBe('beta\ngamma\ndelta');
-    expect(await quote('new.txt', 'old', 1, 1)).toBe('alpha');
-    expect(await quote('new.txt', 'new', 4, 5)).toBeNull();
-    expect(await quote('secret.env', 'new', 1, 1)).toBeNull();
+    const { side, hasFile, inDiff } = await session.review();
+    // A changed file: both sides, the hunk (context 3 reaches line 1), and GitHub's three context lines.
+    expect(await side('new.txt', 'new')).toEqual({
+      contents: 'alpha\nbeta\ngamma\ndelta\n',
+      shown: [[1, 4]],
+      onGithub: [[1, 4]],
+    });
+    expect(await side('new.txt', 'old')).toMatchObject({ contents: 'alpha\nbeta\ngamma\n', shown: [[1, 3]] });
+    // An unchanged file: its new side whole in the file view, nowhere on GitHub, and no old side.
+    expect(await side('same.txt', 'new')).toEqual({ contents: 'same\n', shown: null, onGithub: [] });
+    expect(await side('same.txt', 'old')).toBeNull();
+    expect(await side('secret.env', 'new')).toBeNull();
     // File threads go on the review's files: a changed file by its new path, or any tree path.
-    expect(await hasFile('new.txt')).toBe(true);
-    expect(await hasFile('same.txt')).toBe(true);
-    for (const p of ['old.txt', 'secret.env', '.git/config', '../etc/passwd']) expect(await hasFile(p)).toBe(false);
+    expect(hasFile('new.txt')).toBe(true);
+    expect(hasFile('same.txt')).toBe(true);
+    for (const p of ['old.txt', 'secret.env', '.git/config', '../etc/passwd']) expect(hasFile(p)).toBe(false);
+    expect(inDiff('new.txt')).toBe(true);
+    expect(inDiff('same.txt')).toBe(false);
     await session.close();
   });
 
@@ -189,6 +229,9 @@ describe('Session', () => {
     expect(stale()).toEqual([false, false, true]);
     // A file thread never has a line to remember.
     expect(session.comments.get(oldName.id)?.staleFromLine).toBeUndefined();
+    // GitHub shows only the changed files: a fresh thread on an unchanged one has nowhere to go.
+    const blockers = [renamed, unchanged, oldName].map((t) => session.comments.get(t.id)?.githubBlocker);
+    expect(blockers).toEqual([undefined, 'file not in the pull request diff', 'stale']);
     await session.comments.clear();
     await session.close();
   });
