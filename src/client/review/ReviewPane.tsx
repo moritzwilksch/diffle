@@ -14,7 +14,6 @@ import type {
 } from '@pierre/diffs';
 import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   Download,
@@ -837,16 +836,12 @@ export function ReviewPane() {
   );
 }
 
-/** The file view's header: the way back to the diff list. */
+/** The file view's header: the path, its change stats, and the note on files outside the repository. */
 function FileViewBar({ path }: { path: string }) {
-  const closeFullFile = useStore((s) => s.closeFullFile);
   const external = useStore((s) => s.fileView?.external ?? false);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
     <div className="flex items-center gap-3 border-b border-b-border bg-hover px-3 py-1.5 text-[0.75rem]">
-      <Button variant="ghost" onClick={closeFullFile} title="Back to the diff (Ctrl+o)">
-        <ArrowLeft size="0.875rem" /> Back to diff
-      </Button>
       <span className="min-w-0 flex-1 truncate font-mono">
         <FilePath path={path} />
       </span>
@@ -861,7 +856,6 @@ function FileViewBar({ path }: { path: string }) {
           outside the repository, read-only
         </span>
       )}
-      <kbd>Ctrl+o</kbd>
     </div>
   );
 }
