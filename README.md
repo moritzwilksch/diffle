@@ -36,8 +36,8 @@ npx @moritzwilksch/diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
 
-The default Nix package includes `gh`; use `#minimal` for Diffle alone, or run a
-variant with bundled language-server support:
+The default Nix package includes `gh`, so a `gh auth login` covers the GitHub token; use
+`#minimal` for Diffle alone, or run a variant with bundled language-server support:
 
 ```bash
 nix run github:moritzwilksch/diffle#minimal -- working
@@ -60,7 +60,7 @@ diffle working --no-lsp # skip the language servers for this run
 diffle --help           # list all commands and flags
 ```
 
-`diffle pr` needs an authenticated [`gh`](https://cli.github.com/). Foreign PR URLs open in a temporary clone, leaving your local repository untouched.
+`diffle pr` needs a GitHub token (see [GitHub reviews](#github-reviews)). It looks the pull request up in `origin`, or in the only GitHub remote when origin is not one; a url names any repository. Foreign PR URLs open in a temporary clone, leaving your local repository untouched.
 
 Closing the last browser tab that diffle opened stops the server and prints open comments to stdout. Pass `--keep-alive` to keep it running, or use `--no-open` and press Ctrl+C when done.
 
@@ -126,11 +126,13 @@ Both content searches toggle between diff hunks with context and full file conte
 
 ## GitHub reviews
 
-Use the pull request icon to add one thread or all open threads to a pending GitHub review — a new one, or the pending review already waiting on the pull request. This requires a local, authenticated [`gh`](https://cli.github.com/).
+Use the pull request icon to add one thread or all open threads to a pending GitHub review — a new one, or the pending review already waiting on the pull request.
+
+Every GitHub request uses one token: `GITHUB_TOKEN`, else `GH_TOKEN`, else the token of a signed-in [`gh`](https://cli.github.com/) (`gh auth token`). Without one, diffle runs without GitHub: the origin repository still shows, and pull request lookup and export are off. `GITHUB_API_URL` points the requests at another GitHub API root, as in Actions.
 
 Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
 
-The GitHub button next to the comparison menu (`o`) shows the repository from your GitHub `origin`, even without `gh`. Pull request details load in the background by matching the old and new branches' upstreams; an explicit `diffle pr` supplies the PR directly. Discovery never changes your comparison.
+The GitHub button next to the comparison menu (`o`) shows the repository from your GitHub `origin`, even without a token. Pull request details load in the background by matching the old and new branches' upstreams; an explicit `diffle pr` supplies the PR directly. Discovery never changes your comparison.
 
 Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped. Threads on a whole file become GitHub file-level comments.
 
