@@ -109,6 +109,16 @@ export function currentPath(state: Pick<ReviewState, 'snapshot' | 'activePath' |
   return state.activePath ?? state.fileView?.path ?? (state.snapshot && orderedPaths(state.snapshot)[0]) ?? null;
 }
 
+/** Back is open in a full-file view (which always leaves for the diff) or at any jumplist position past the oldest. */
+export function canJumpBack(state: Pick<ReviewState, 'fileView' | 'jumpIndex'>): boolean {
+  return state.fileView != null || state.jumpIndex > 0;
+}
+
+/** Forward is open while a newer jumplist position than the current one exists. */
+export function canJumpForward(state: Pick<ReviewState, 'jumps' | 'jumpIndex'>): boolean {
+  return state.jumpIndex < state.jumps.length - 1;
+}
+
 /**
  * The order `@pierre/trees` lists paths in (its path store's default sort), so the review pane and
  * the tree agree file for file: at the first segment where two paths diverge, folders before

@@ -40,6 +40,8 @@ import { lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome } from './model.js';
 import {
+  canJumpBack,
+  canJumpForward,
   currentPath,
   filterSymbols,
   isCollapsed,
@@ -1727,10 +1729,10 @@ export const useStore = create<ReviewState>((set, get) => {
     jumps: [],
     jumpIndex: 0,
     jumpBack() {
+      if (!canJumpBack(get())) return;
       // From the file view, Ctrl+o always means back to the diff, where it was left.
       if (get().fileView) return get().closeFullFile();
       const { jumps, jumpIndex } = get();
-      if (jumpIndex === 0) return;
       let list = jumps;
       let index = jumpIndex;
       if (index === list.length) {
@@ -1744,8 +1746,8 @@ export const useStore = create<ReviewState>((set, get) => {
       if (target) void goToPositionSilently(target);
     },
     jumpForward() {
+      if (!canJumpForward(get())) return;
       const { jumps, jumpIndex } = get();
-      if (jumpIndex >= jumps.length - 1) return;
       const index = jumpIndex + 1;
       set({ jumpIndex: index });
       const target = jumps[index];
