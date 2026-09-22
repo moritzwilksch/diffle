@@ -13,6 +13,9 @@ const { state } = vi.hoisted(() => ({
     layout: { treeVisible: true, panelVisible: true },
     theme: 'dark',
     diffStyle: 'split',
+    jumps: [],
+    jumpIndex: 0,
+    fileView: null,
   },
 }));
 vi.mock('../../src/client/store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
