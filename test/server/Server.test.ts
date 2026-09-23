@@ -239,7 +239,9 @@ describe('Server', () => {
   it('rejects foreign Host and mismatched Origin with a 403 naming the header', async () => {
     const host = await send('GET', '/api/snapshot', { headers: { host: 'evil.example' } });
     expect(host.status).toBe(403);
-    expect(JSON.parse(host.body).error).toMatch(/^forbidden Host "evil.example"; .*--allowed-origin/);
+    expect(JSON.parse(host.body).error).toBe(
+      'forbidden Host "evil.example"; allowed origin is "https://proxy.example"',
+    );
     const origin = await send('GET', '/api/snapshot', { headers: { origin: 'http://evil.example' } });
     expect(origin.status).toBe(403);
     expect(JSON.parse(origin.body).error).toMatch(/^forbidden Origin "http:\/\/evil.example" for Host "/);
