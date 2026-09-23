@@ -1,0 +1,40 @@
+$ diffle working --help
+
+Usage: diffle working [options]
+
+Same as `diffle HEAD..worktree`: uncommitted changes, staged and untracked files
+included.
+
+Options:
+  -h, --help  display help for command
+
+$ diffle pr --help
+
+Usage: diffle pr [options] [pr]
+
+A GitHub pull request, as GitHub shows it: merge-base(base, head) vs head.
+
+Arguments:
+  pr          pull request number or url; default: the pull request for this
+              branch
+
+Options:
+  -h, --help  display help for command
+
+$ diffle config --help
+
+Usage: diffle config [options] [command]
+
+show or edit the user config (same settings as the UI dialog)
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  show                          print the config file path and contents
+  add-auto-viewed <glob...>     add patterns for files that start viewed
+  set-context <n>               set context lines around changes
+  set-lsp <language> <command>  set the language-server command for one language
+  unset-lsp <language...>       forget a language-server override, back to PATH
+  remove-auto-viewed <glob...>  remove patterns for files that start viewed
+  help [command]                display help for command

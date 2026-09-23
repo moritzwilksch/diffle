@@ -1,0 +1,97 @@
+name: Update snapshots
+# Both triggers become available once this workflow is on the default branch.
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  target:
+    name: Resolve branch
+    permissions:
+      contents: read
+      pull-requests: read
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request && github.event.comment.body == 'update-assets')
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.target.outputs.branch }}
+      sha: ${{ steps.target.outputs.sha }}
+    steps:
+      - name: Resolve and authorize target
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.event.comment.user.login }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if [ "$EVENT_NAME" = issue_comment ]; then
+            permission=$(gh api "repos/$REPOSITORY/collaborators/$ACTOR/permission" --jq .permission)
+            case "$permission" in
+              admin|maintain|write) ;;
+              *) echo "::error::update-assets requires write access."; exit 1 ;;
+            esac
+            pr=$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")
+            if ! echo "$pr" | jq -e --arg repo "$REPOSITORY" '.state == "open" and .head.repo.full_name == $repo' > /dev/null; then
+              echo "::error::update-assets requires an open PR from this repository."
+              exit 1
+            fi
+            BRANCH=$(echo "$pr" | jq -r .head.ref)
+            SHA=$(echo "$pr" | jq -r .head.sha)
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  update:
+    name: Regenerate and commit
+    needs: target
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: update-assets-${{ needs.target.outputs.branch }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.target.outputs.sha }}
+          persist-credentials: false
+      - name: Regenerate snapshots
+        run: docker compose run --build --rm e2e --update-snapshots
+      - name: Commit snapshots
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- '**/__snapshots__/**'
+          if git diff --cached --quiet; then
+            echo "Snapshots are already up to date."
+            exit 0
+          fi
+          git commit -m "test(e2e): update snapshots"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Obtain GitHub app token
+        if: steps.commit.outputs.changed == 'true'
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: update-assets
+      - name: Push snapshots
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          BRANCH: ${{ needs.target.outputs.branch }}
+        run: |
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$BRANCH"

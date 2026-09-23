@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["test/e2e", "test/fixture", "test/tmp.ts", "src/shared", "playwright.config.ts"]
+}

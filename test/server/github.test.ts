@@ -196,6 +196,44 @@ describe('GithubExporter', () => {
     exporter = new GithubExporter();
   });
 
+  it('sends the committed GraphQL review payloads', async () => {
+    const result = await exportToGithub({
+      pullRequest,
+      snap,
+      github,
+      threads: [
+        thread({ id: 'kind', path: 'tally/ledger.py', line: 3, endLine: 4, body: 'Say what counts as a refund here.' }),
+        thread({
+          id: 'symbol',
+          path: 'tally/currency.py',
+          line: 7,
+          body: '`KWD` has no symbol.\n\n```suggestion\n_SYMBOLS = {"KWD": "KD"}\n```',
+        }),
+        thread({
+          id: 'removed',
+          path: 'tally/legacy.py',
+          side: 'old',
+          line: 9,
+          endLine: 15,
+          body: 'Still called by cron.',
+        }),
+        fileThread('module', 'Fold this into ledger.py.', 'tally/refunds.py'),
+        thread({ id: 'gone', path: 'tally/cli.py', line: 27, body: 'Trips set -e.', stale: true }),
+        thread({ id: 'done', path: 'tally/ledger.py', line: 33, body: 'Already handled.', resolved: true }),
+      ],
+    });
+    const payload = {
+      mutations: calls
+        .filter((c) => c.query.startsWith('mutation'))
+        .map((c) => ({
+          operation: op(c),
+          input: input(c),
+        })),
+      result,
+    };
+    await expect(JSON.stringify(payload, null, 2) + '\n').toMatchFileSnapshot('__snapshots__/review.json');
+  });
+
   it('refuses worktree export', async () => {
     const threads = [thread({ id: 'k' })];
     await expect(exportToGithub({ pullRequest, snap: { newSha: 'worktree' }, threads, github })).rejects.toThrow(

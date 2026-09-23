@@ -1,0 +1,10 @@
+- complementary:
+  - text: Threads 1
+  - button "All"
+  - button "Delete all threads for this mode"
+  - heading "tally/ledger.py" [level=4]
+  - 'button "L3–4 Delete this thread A line is a sale unless its ``kind`` column says ``refund``; refunds c… Say what counts as a refund here, not only in the parser."':
+    - text: ""
+    - button "Delete this thread"
+    - text: ""
+    - paragraph: Say what counts as a refund here, not only in the parser.

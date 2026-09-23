@@ -1,0 +1,6 @@
+- dialog "Compare":
+  - text: ""
+  - button "Working 1"
+  - button "Two refs… 2"
+  - button "Last commits 3"
+  - button "PR 4"

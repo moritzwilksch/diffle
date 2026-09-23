@@ -1,0 +1,25 @@
+services:
+  e2e:
+    # Pin the architecture too: screenshots must match the Linux x64 CI runner.
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:24-bookworm-slim AS node
+        FROM mcr.microsoft.com/playwright:v1.63.0-noble
+        COPY --from=node /usr/local/ /usr/local/
+        RUN git config --global --add safe.directory /workspace
+    init: true
+    ipc: host
+    working_dir: /workspace
+    environment:
+      CI: "true"
+      FORCE_COLOR: "1"
+      DIFFLE_UID: "${DIFFLE_UID:-0}"
+      DIFFLE_GID: "${DIFFLE_GID:-0}"
+    volumes:
+      - .:/workspace
+      # Keep Linux dependencies and build output separate from the host installation.
+      - /workspace/node_modules
+      - /workspace/dist
+    entrypoint: ["/bin/sh", "scripts/e2e-container.sh"]
