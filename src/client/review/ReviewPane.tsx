@@ -31,7 +31,7 @@ import { HoverTooltip, hoverControl } from '../lsp/HoverTooltip.js';
 import { ReferencesList } from '../lsp/ReferencesList.js';
 import { SymbolMenu } from '../lsp/SymbolMenu.js';
 import { SymbolPicker } from '../lsp/SymbolPicker.js';
-import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
+import { lspTarget, schemaHoverOnly, tokenTypeAt, type TokenTarget } from '../lsp/target.js';
 import {
   draftRange,
   isCollapsed,
@@ -182,7 +182,9 @@ function targetOf(
       line = alt;
     }
   }
-  return { path, side, line, col: props.lineCharStart + word.start, text: word.text };
+  // The highlighter already classified this span while rendering it.
+  const tokenType = tokenTypeAt(props.tokenElement);
+  return { path, side, line, col: props.lineCharStart + word.start, text: word.text, tokenType };
 }
 
 /** Whether some running language server claims this file's language. */

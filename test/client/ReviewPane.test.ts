@@ -359,7 +359,7 @@ describe('ReviewPane scroller effects', () => {
         { item: { id: 'diff:config.json@0' } },
       );
       expect(enter).toHaveBeenCalledWith(
-        { path: 'config.json', side: 'new', line: 3, col: 7, text: '"runs-on"' },
+        { path: 'config.json', side: 'new', line: 3, col: 7, text: '"runs-on"', tokenType: null },
         tokenElement,
       );
       expect(tokenElement.classList.contains('lsp-hover')).toBe(false);
@@ -419,6 +419,7 @@ describe('ReviewPane scroller effects', () => {
         line: 1033,
         col: 20 + tokenText.indexOf(text),
         text,
+        tokenType: null,
       });
       const move = (clientX: number) => tokenElement.dispatchEvent(new MouseEvent('pointermove', { clientX }));
       const onTokenEnter = options.onTokenEnter as (props: unknown, event: unknown, ctx: unknown) => void;
