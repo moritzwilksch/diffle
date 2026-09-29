@@ -352,26 +352,15 @@ export function documentTitle(
 /** Raster formats a browser shows in an `<img>`; SVG is text and keeps its text diff. */
 const IMAGE_PATH = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i;
 
+/** What an image view shows: one side, or both to compare. */
+export type ImageSides = Side | 'both';
+
 /**
  * The sides an image view of `path` shows, or null when the path names no raster image: those a changed
  * file has (`changed` undefined is the file view, which shows the new side).
  */
-export function imageSides(path: string, changed: ChangedFile | undefined): Side[] | null {
+export function imageSides(path: string, changed: ChangedFile | undefined): ImageSides | null {
   if (!IMAGE_PATH.test(path)) return null;
-  if (!changed) return ['new'];
-  return changed.status === 'A' ? ['new'] : changed.status === 'D' ? ['old'] : ['old', 'new'];
-}
-
-/**
- * The `v` for `api.imageUrl`: the new side's blob, else the side's commit. An unchanged path is keyed by
- * whichever side is a commit, since both hold its bytes. A changed worktree side without a blob falls back
- * to the snapshot version, which changes on every refresh.
- */
-export function imageKey(snapshot: Snapshot, path: string, side: Side): string {
-  const file = snapshot.changed.find((f) => f.path === path);
-  if (side === 'new' && file?.blob) return file.blob;
-  const rev = side === 'new' ? snapshot.newSha : snapshot.oldSha;
-  const other = side === 'new' ? snapshot.oldSha : snapshot.newSha;
-  if (rev !== 'worktree') return rev;
-  return !file && other !== 'worktree' ? other : `v${snapshot.version}`;
+  if (!changed) return 'new';
+  return changed.status === 'A' ? 'new' : changed.status === 'D' ? 'old' : 'both';
 }

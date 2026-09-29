@@ -1,12 +1,13 @@
-import type {
-  GithubExportRequest,
-  GithubExportResponse,
-  GithubMetadata,
-  ModeRequest,
-  ModeSpec,
-  ServerMessage,
-  Side,
-  Snapshot,
+import {
+  imageKey,
+  type GithubExportRequest,
+  type GithubExportResponse,
+  type GithubMetadata,
+  type ModeRequest,
+  type ModeSpec,
+  type ServerMessage,
+  type Side,
+  type Snapshot,
 } from '../shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
@@ -290,6 +291,22 @@ export class Session {
       return snap.newSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.newSha, target);
     }
     return snap.oldSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.oldSha, target);
+  }
+
+  /**
+   * The bytes `key` names on one side of `path`, or null unless `key` is that side's `imageKey` in `snap`.
+   * A worktree file that changed since `snap` reads as null too, so a key never serves other bytes.
+   */
+  async readImage(snap: Snapshot, path: string, side: Side, key: string): Promise<Buffer | null> {
+    if (key !== imageKey(snap, path, side)) return null;
+    // An unchanged path's key is a commit: read that commit, not a worktree that may have moved on.
+    if (!snap.changed.some((f) => f.path === path))
+      return this.readSide(snap, path, key === snap.newSha ? 'new' : 'old');
+    const buf = await this.readSide(snap, path, side);
+    if (buf == null || (side === 'new' ? snap.newSha : snap.oldSha) !== 'worktree') return buf;
+    // The file may have changed since `snap`: serve it only while it still hashes to the key.
+    const target = sidePath(this.readablePaths(snap), path, side);
+    return target != null && (await this.repo.hashObject(buf, target)) === key ? buf : null;
   }
 
   /** Whether `readSide` would find `path` on `side`: the allowlist alone, no read. */

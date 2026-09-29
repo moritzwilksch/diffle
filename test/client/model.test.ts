@@ -14,7 +14,6 @@ import {
   currentPath,
   documentTitle,
   draftRange,
-  imageKey,
   imageSides,
   isViewed,
   nextFileAfter,
@@ -41,6 +40,7 @@ describe('orderedPaths', () => {
       deletions: 0,
       binary: false,
       blob: 'b',
+      oldBlob: '',
       generated: false,
     }));
     const snapshot = { changed, tree: [...paths].sort() } as unknown as Snapshot;
@@ -181,6 +181,7 @@ describe('search scope', () => {
       deletions: 0,
       binary: false,
       blob: 'b',
+      oldBlob: '',
       generated: false,
     }));
     const snapshot = { changed, tree: ['src/a.ts', 'src/b.ts', 'src/c.ts'] } as unknown as Snapshot;
@@ -200,6 +201,7 @@ describe('countViewed', () => {
     deletions: 0,
     binary: false,
     blob,
+    oldBlob: '',
     generated: false,
   });
   const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
@@ -226,6 +228,7 @@ describe('nextFileAfter', () => {
     deletions: 0,
     binary: false,
     blob,
+    oldBlob: '',
     generated: false,
   });
   const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
@@ -281,46 +284,21 @@ describe('imageSides', () => {
     deletions: 0,
     binary: true,
     blob: '',
+    oldBlob: '',
     generated: false,
   });
 
   it('shows the sides a changed image has, and the new side in the file view', () => {
-    expect(imageSides('a.png', file('M'))).toEqual(['old', 'new']);
-    expect(imageSides('a.PNG', file('R'))).toEqual(['old', 'new']);
-    expect(imageSides('a.jpeg', file('A'))).toEqual(['new']);
-    expect(imageSides('a.gif', file('D'))).toEqual(['old']);
-    expect(imageSides('a.webp', undefined)).toEqual(['new']);
+    expect(imageSides('a.png', file('M'))).toBe('both');
+    expect(imageSides('a.PNG', file('R'))).toBe('both');
+    expect(imageSides('a.jpeg', file('A'))).toBe('new');
+    expect(imageSides('a.gif', file('D'))).toBe('old');
+    expect(imageSides('a.webp', undefined)).toBe('new');
   });
 
   it('leaves other binaries and text images to their banner and text diff', () => {
     expect(imageSides('a.bin', file('M'))).toBeNull();
     expect(imageSides('a.svg', file('M'))).toBeNull();
     expect(imageSides('png', file('M'))).toBeNull();
-  });
-});
-
-describe('imageKey', () => {
-  const snap = (oldSha: string, newSha: string, blob: string) =>
-    ({
-      version: 7,
-      oldSha,
-      newSha,
-      changed: [{ path: 'a.png', blob }],
-    }) as unknown as Snapshot;
-
-  it("keys the new side by its blob and the old side by its commit, so a refresh keeps an unchanged image's URL", () => {
-    expect(imageKey(snap('c0', 'worktree', 'b1'), 'a.png', 'new')).toBe('b1');
-    expect(imageKey(snap('c0', 'worktree', 'b1'), 'a.png', 'old')).toBe('c0');
-    expect(imageKey(snap('c0', 'c1', 'b1'), 'other.png', 'new')).toBe('c1');
-  });
-
-  it("keys an unchanged path's worktree side by the other side's commit, so an unrelated save keeps its URL", () => {
-    expect(imageKey(snap('c0', 'worktree', 'b1'), 'other.png', 'new')).toBe('c0');
-    expect(imageKey(snap('worktree', 'c1', 'b1'), 'other.png', 'old')).toBe('c1');
-  });
-
-  it('falls back to the snapshot version for a changed worktree side without a blob', () => {
-    expect(imageKey(snap('worktree', 'c1', ''), 'a.png', 'old')).toBe('v7');
-    expect(imageKey(snap('c0', 'worktree', ''), 'a.png', 'new')).toBe('v7');
   });
 });

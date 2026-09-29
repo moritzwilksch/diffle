@@ -131,14 +131,13 @@ export function createApi(deps: ApiDeps): Hono {
 
   // Snapshot files only: `readExternal` stays the one read outside the allowlist.
   app.get('/api/image', async (c) => {
-    const { path, rev } = ImageQuerySchema.parse(c.req.query());
-    const buf = await session.readSide(await session.snapshotter.current(), path, rev);
+    const { path, rev, key } = ImageQuerySchema.parse(c.req.query());
+    const buf = await session.readImage(await session.snapshotter.current(), path, rev, key);
     const type = buf && imageType(buf);
-    if (!type) return c.json({ error: 'not an image on that side' }, 404);
-    // A `v` may be the snapshot version, which restarts with the server: a cached body could outlive it.
+    if (!type) return c.json({ error: 'no image under that key' }, 404);
     return c.body(new Uint8Array(buf), 200, {
       'content-type': type,
-      'cache-control': 'no-store',
+      'cache-control': 'private, max-age=31536000, immutable',
       'x-content-type-options': 'nosniff',
       // An <img> from another site sends no Origin, so the origin guard passes it; this blocks the embed.
       'cross-origin-resource-policy': 'same-origin',

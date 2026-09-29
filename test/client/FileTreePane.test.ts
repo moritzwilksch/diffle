@@ -33,6 +33,7 @@ const snapshot: Snapshot = {
     deletions: 0,
     binary: false,
     blob: `blob-${path}`,
+    oldBlob: '',
     generated: false,
   })),
 };

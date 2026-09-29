@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
 
 vi.mock('../../src/client/api.js', () => ({
-  api: { imageUrl: (path: string, rev: string, v: string) => `http://x/api/image?path=${path}&rev=${rev}&v=${v}` },
+  api: {
+    imageUrl: (path: string, rev: string, key: string) => `http://x/api/image?path=${path}&rev=${rev}&key=${key}`,
+  },
 }));
 
 const { useStore } = await import('../../src/client/store.js');
@@ -56,18 +58,17 @@ afterEach(async () => {
 });
 
 let version = 0;
-/** A fresh snapshot per test: its commits key the URLs, so the module's size cache never carries over. */
+/** A fresh snapshot per test: its blobs key the URLs, so the module's size cache never carries over. */
 function snapshot(): Snapshot {
   version++;
   return {
     version,
-    oldSha: `old${version}`,
-    newSha: `new${version}`,
-    changed: [{ path: 'a.png', blob: `blob${version}` }],
+    oldSha: 'c0',
+    newSha: 'worktree',
+    changed: [{ path: 'a.png', blob: `new${version}`, oldBlob: `old${version}` }],
   } as unknown as Snapshot;
 }
-const url = (rev: 'old' | 'new') =>
-  `http://x/api/image?path=a.png&rev=${rev}&v=${rev === 'old' ? `old${version}` : `blob${version}`}`;
+const url = (rev: 'old' | 'new') => `http://x/api/image?path=a.png&rev=${rev}&key=${rev}${version}`;
 const settle = () => act(() => new Promise((r) => setTimeout(r, 10)));
 const button = (label: string) =>
   [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label)!;
@@ -76,7 +77,7 @@ describe('ImageDiff', () => {
   it('shows both sides next to each other, sized to their natural dimensions', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'side-by-side' });
     decoded = { [url('old')]: [40, 20], [url('new')]: [80, 20] };
-    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: ['old', 'new'] })));
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'both' })));
     expect(host.textContent).toContain('Loading image…');
     await settle();
     const imgs = [...host.querySelectorAll('img')];
@@ -89,7 +90,7 @@ describe('ImageDiff', () => {
   it('stacks the sides on one canvas for swipe, onion skin and difference, and remembers the choice', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'side-by-side' });
     decoded = { [url('old')]: [40, 20], [url('new')]: [80, 40] };
-    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: ['old', 'new'] })));
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'both' })));
     await settle();
 
     await act(() => button('Swipe').click());
@@ -122,7 +123,7 @@ describe('ImageDiff', () => {
   it('clips a narrower new side at the divider, measured on the canvas rather than on the image', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'swipe' });
     decoded = { [url('old')]: [80, 40], [url('new')]: [40, 20] };
-    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: ['old', 'new'] })));
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'both' })));
     await settle();
     const stack = host.querySelector<HTMLElement>('[data-stack="swipe"]')!;
     const layer = stack.querySelector<HTMLElement>('[data-layer="new"]')!;
@@ -136,17 +137,31 @@ describe('ImageDiff', () => {
   it('shows one side of an added image, with nothing to compare and no request for the missing side', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'swipe' });
     decoded = { [url('new')]: [10, 10] };
-    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: ['new'] })));
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'new' })));
     await settle();
     expect(requested).toEqual([url('new')]);
     expect(host.querySelectorAll('img')).toHaveLength(1);
     expect(host.querySelector('[aria-label="Image comparison"]')).toBeNull();
   });
 
+  it('retries a side that failed to load once it mounts again', async () => {
+    useStore.setState({ snapshot: snapshot(), imageCompare: 'side-by-side' });
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'new' })));
+    await settle();
+    expect(host.textContent).toContain('Binary file: not a displayable image');
+
+    await act(() => root.render(createElement('div')));
+    decoded = { [url('new')]: [10, 10] };
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'new' })));
+    await settle();
+    expect(requested).toEqual([url('new'), url('new')]);
+    expect(host.querySelector('img')!.getAttribute('src')).toBe(url('new'));
+  });
+
   it('falls back to side by side with a note when a side does not decode', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'difference' });
     decoded = { [url('new')]: [10, 10] };
-    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: ['old', 'new'] })));
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'both' })));
     await settle();
     expect(host.querySelector('[data-stack]')).toBeNull();
     expect(host.textContent).toContain('Binary file: not a displayable image');

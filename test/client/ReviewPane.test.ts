@@ -105,7 +105,16 @@ function snap(changed: Snapshot['changed']): Snapshot {
   };
 }
 const changed = [
-  { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+  {
+    path: 'a.txt',
+    status: 'M' as const,
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob: 'b1',
+    oldBlob: '',
+    generated: false,
+  },
 ];
 
 const box = (el: HTMLElement, top: number, bottom: number) => {
@@ -621,7 +630,16 @@ describe('ReviewPane scroller effects', () => {
   it('keeps the active file while it is on screen, even when another file sits at the gaze point', async () => {
     const two = [
       ...changed,
-      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true },
+      {
+        path: 'b.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b2',
+        oldBlob: '',
+        generated: true,
+      },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     await act(() =>
@@ -651,7 +669,16 @@ describe('ReviewPane scroller effects', () => {
   it('leaves the active file alone while a line is focused, even when the cursor has scrolled off screen', async () => {
     const two = [
       ...changed,
-      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: true },
+      {
+        path: 'b.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b2',
+        oldBlob: '',
+        generated: true,
+      },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     const selection = { id: 'diff:b.txt@0', lineNumber: 1, side: 'additions' } as unknown as NonNullable<
@@ -740,8 +767,26 @@ describe('ReviewPane scroller effects', () => {
   it("clicking an empty file's header selects that file instead of the next one (issue #151)", async () => {
     // A mode-change-only file: its diff has no hunks, so its header is all there is to click.
     const files = [
-      { path: 'a.txt', status: 'M' as const, additions: 0, deletions: 0, binary: false, blob: 'b1', generated: false },
-      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b2', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
+      {
+        path: 'b.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b2',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     await act(() =>
@@ -771,6 +816,7 @@ describe('ReviewPane scroller effects', () => {
         deletions: 0,
         binary: true,
         blob: 'b1',
+        oldBlob: '',
         generated: false,
       },
     ];
@@ -795,8 +841,26 @@ describe('ReviewPane scroller effects', () => {
 
   it('shows the sides of a binary image instead of the banner, in the diff and in the file view', async () => {
     const images = [
-      { path: 'new.png', status: 'A' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
-      { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b2', generated: false },
+      {
+        path: 'new.png',
+        status: 'A' as const,
+        additions: 0,
+        deletions: 0,
+        binary: true,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
+      {
+        path: 'img.png',
+        status: 'M' as const,
+        additions: 0,
+        deletions: 0,
+        binary: true,
+        blob: 'b2',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     await act(() => root.render(createElement(ReviewPane)));
     await act(() =>
@@ -809,9 +873,9 @@ describe('ReviewPane scroller effects', () => {
       {
         type: 'file',
         file: { name: 'img.png', contents: '' },
-        annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'img.png', sides: ['old', 'new'] } }],
+        annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'img.png', sides: 'both' } }],
       },
-      { annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'new.png', sides: ['new'] } }] },
+      { annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'new.png', sides: 'new' } }] },
     ]);
 
     await act(() =>
@@ -825,7 +889,7 @@ describe('ReviewPane scroller effects', () => {
       }),
     );
     expect(captureItems.mock.lastCall![0]).toMatchObject([
-      { annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'logo.png', sides: ['new'] } }] },
+      { annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'logo.png', sides: 'new' } }] },
     ]);
   });
 
@@ -874,6 +938,7 @@ describe('ReviewPane scroller effects', () => {
         deletions: 0,
         binary: false,
         blob: 'b1',
+        oldBlob: '',
         generated: false,
       },
     ];

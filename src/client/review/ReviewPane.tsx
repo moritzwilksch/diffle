@@ -35,6 +35,7 @@ import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
 import {
   draftRange,
   imageSides,
+  type ImageSides,
   isCollapsed,
   itemDeps,
   itemId,
@@ -62,7 +63,7 @@ import { ImageDiff } from './ImageDiff.js';
 
 export type Annot =
   | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
-  | { kind: 'image'; path: string; sides: Side[] }
+  | { kind: 'image'; path: string; sides: ImageSides }
   | { kind: 'thread'; thread: CommentThread }
   | { kind: 'draft' };
 
