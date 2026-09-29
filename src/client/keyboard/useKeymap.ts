@@ -137,6 +137,13 @@ export function useKeymap(): void {
       )
         return;
       if (e.key === 'Escape') {
+        // Leaving a configuration pane returns to the entry list, not the diff.
+        if (s.modePane && !s.helpOpen) {
+          s.escape();
+          if (target?.closest('#mode-picker')) focusModeEntry();
+          clearPending();
+          return;
+        }
         if (isEditable(target)) {
           target!.blur();
           if (s.treeModel?.isSearchOpen()) s.treeModel.closeSearch();
@@ -235,9 +242,23 @@ export function useKeymap(): void {
           if (step) {
             s.highlightModeEntry(s.modeEntry + step);
             // Focus on any button follows the highlight, so its native Enter picks the entry shown.
-            if (target?.closest('button') && !target.closest('#mode-config'))
-              document.querySelector<HTMLElement>(`[data-mode-entry="${useStore.getState().modeEntry}"]`)?.focus();
+            if (target?.closest('button') && !target.closest('#mode-config')) focusModeEntry();
           } else s.pickModeEntry(entry);
+          return;
+        }
+        // l / → enter the highlighted entry's pane, which sits to the right; h / ← leave it for the list.
+        if (e.key === 'l' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (s.modeEntry === 1) return; // Working has no pane
+          // An already open pane keeps its fields mounted, so autofocus will not move focus into it.
+          if (s.modePane === MODE_PANES[s.modeEntry - 1]) focusModeConfig();
+          else s.pickModeEntry(s.modeEntry);
+          return;
+        }
+        if (e.key === 'h' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          s.closeModePane();
+          if (target?.closest('#mode-picker')) focusModeEntry();
           return;
         }
       }
@@ -299,7 +320,10 @@ export function useKeymap(): void {
     };
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && realTarget(e)?.getAttribute('role') !== 'combobox') setTimeout(focusReview, 0);
+      if (e.key !== 'Escape' || realTarget(e)?.getAttribute('role') === 'combobox') return;
+      // Escape that only closed a configuration pane leaves focus on the entry list.
+      if (useStore.getState().modeMenuOpen && document.activeElement?.closest('#mode-picker')) return;
+      setTimeout(focusReview, 0);
     };
     // Capture phase: the tree stops propagation of keys it handles (arrows), and we
     // need ArrowRight to hand focus back. Editable targets are skipped early.
@@ -314,6 +338,16 @@ export function useKeymap(): void {
       count.current = '';
     };
   }, []);
+}
+
+const MODE_PANES = [null, 'refs', 'commits', 'pr'] as const;
+
+function focusModeEntry(): void {
+  document.querySelector<HTMLElement>(`[data-mode-entry="${useStore.getState().modeEntry}"]`)?.focus();
+}
+
+function focusModeConfig(): void {
+  document.querySelector<HTMLElement>('#mode-config :is(input, [tabindex="0"])')?.focus();
 }
 
 /** Re-focus filename search without discarding its current filter. */
