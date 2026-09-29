@@ -563,7 +563,11 @@ export const useStore = create<ReviewState>((set, get) => {
     return {
       gens,
       selection: s.selection && moved(s.selection),
-      draft: s.draft && { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) },
+      // An unmoved draft keeps its identity: a new one is an open request and refocuses the composer.
+      draft:
+        s.draft && paths.includes(s.draft.path)
+          ? { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) }
+          : s.draft,
       // A new object re-runs the scroll effect, so a jump in flight lands on the fresh renderer.
       scrollTarget: s.scrollTarget && moved(s.scrollTarget),
       reveal: s.reveal && moved(s.reveal),

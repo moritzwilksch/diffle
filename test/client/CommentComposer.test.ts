@@ -43,7 +43,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
-  useStore.setState({ draftQuote: originalDraftQuote });
+  useStore.setState({ draftQuote: originalDraftQuote, draft: null });
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -60,6 +60,15 @@ it('takes focus once the viewer lays it out, not while it mounts off screen', as
   resized!();
   expect(document.activeElement).toBe(textarea);
   expect(resized).toBeUndefined();
+});
+
+it('takes focus again when a new draft opens while it stays mounted', async () => {
+  // The viewer keys annotation slots by index, so pressing C again can reuse this composer.
+  await act(() => useStore.setState({ draft: { path: 'a.txt', selection: null } }));
+  const textarea = host.querySelector('textarea')!;
+  textarea.blur();
+  await act(() => useStore.setState({ draft: { path: 'a.txt', selection: null } }));
+  expect(document.activeElement).toBe(textarea);
 });
 
 it('names the lines the comment attaches to in its header', () => {

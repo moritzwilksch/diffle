@@ -13,6 +13,8 @@ export function CommentComposer({ label }: { label: string }) {
   const draftQuote = useStore((s) => s.draftQuote);
   // A comment on the whole file has no lines to suggest a replacement for.
   const fileLevel = useStore((s) => s.draft != null && s.draft.selection == null);
+  // Each open request makes a new draft; the viewer may keep this composer mounted across them.
+  const draft = useStore((s) => s.draft);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -26,8 +28,8 @@ export function CommentComposer({ label }: { label: string }) {
     textarea.style.height = `${textarea.scrollHeight + borders}px`;
   }, [text]);
 
-  // The viewer lays out only rows near the viewport: a composer mounted off screen has no box to take
-  // focus until the jump to it renders it.
+  // Focus on every open, not just on mount. The viewer lays out only rows near the viewport: a composer
+  // off screen has no box to take focus until the jump to it renders it.
   useEffect(() => {
     const textarea = ref.current;
     if (!textarea) return;
@@ -39,7 +41,7 @@ export function CommentComposer({ label }: { label: string }) {
     });
     observer.observe(textarea);
     return () => observer.disconnect();
-  }, []);
+  }, [draft]);
 
   const submit = async () => {
     if (!text.trim() || busy) return;
