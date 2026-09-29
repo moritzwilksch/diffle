@@ -363,6 +363,8 @@ async function serve(
     // Resolve the revision or PR before binding, so invalid input never opens a browser.
     const review = await session.resolve(req);
     timing.mark('resolve');
+    // A signal during a slow PR fetch already runs shutdown; binding now would open a dead tab.
+    if (closing) return;
     // Bind and open the browser before the first snapshot.
     const url = await server.listen();
     timing.mark('listen');
