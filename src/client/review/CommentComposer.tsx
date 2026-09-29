@@ -11,10 +11,10 @@ export function CommentComposer({ label }: { label: string }) {
   const submitDraft = useStore((s) => s.submitDraft);
   const closeDraft = useStore((s) => s.closeDraft);
   const draftQuote = useStore((s) => s.draftQuote);
-  // A comment on the whole file has no lines to suggest a replacement for.
-  const fileLevel = useStore((s) => s.draft != null && s.draft.selection == null);
   // Each open request makes a new draft; the viewer may keep this composer mounted across them.
   const draft = useStore((s) => s.draft);
+  // A comment on the whole file has no lines to suggest a replacement for.
+  const fileLevel = draft != null && draft.selection == null;
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
