@@ -140,6 +140,8 @@ export function createApi(deps: ApiDeps): Hono {
       'content-type': type,
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
+      // An <img> from another site sends no Origin, so the origin guard passes it; this blocks the embed.
+      'cross-origin-resource-policy': 'same-origin',
     });
   });
 
