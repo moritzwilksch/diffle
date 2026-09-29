@@ -234,8 +234,8 @@ export function useKeymap(): void {
           e.preventDefault();
           if (step) {
             s.highlightModeEntry(s.modeEntry + step);
-            // A focused entry follows the highlight, so native Enter picks the entry shown.
-            if (target?.closest('[data-mode-entry]'))
+            // Focus on any button follows the highlight, so its native Enter picks the entry shown.
+            if (target?.closest('button') && !target.closest('#mode-config'))
               document.querySelector<HTMLElement>(`[data-mode-entry="${useStore.getState().modeEntry}"]`)?.focus();
           } else s.pickModeEntry(entry);
           return;

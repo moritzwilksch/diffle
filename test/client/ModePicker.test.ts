@@ -248,3 +248,19 @@ it('leaves Enter to a focused button and keeps a focused entry highlighted', asy
   expect(useStore.getState().modeMenuOpen).toBe(true);
   expect(switchMode).not.toHaveBeenCalled();
 });
+
+it('moves focus from another header button onto the entry j highlights', async () => {
+  function WithKeys() {
+    useKeymap();
+    return createElement(ModePicker);
+  }
+  await act(() => root.render(createElement(WithKeys)));
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-controls="mode-picker"]')!;
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  await act(() => trigger.focus());
+  act(() => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
+  // Native Enter on the trigger would close the menu instead of picking the entry shown.
+  expect(document.activeElement).toBe(entries()[1]);
+  expect(useStore.getState().modeEntry).toBe(2);
+});
