@@ -163,9 +163,14 @@ export class Session {
   }
 
   /**
-   * First mode, resolved by the caller so invalid input fails before anything is
-   * served. Rejects `ready()` on failure so early requests error out.
+   * Resolves a request into a review without activating it, so a caller can reject
+   * invalid input before serving. Queued, so `close()` waits for a PR fetch.
    */
+  resolve(req: ModeRequest): Promise<ResolvedReview> {
+    return this.run(() => resolveReview(req, this.repo, this.opts.github));
+  }
+
+  /** First mode, from `resolve`. Rejects `ready()` on failure so early requests error out. */
   async start(review: ResolvedReview): Promise<Snapshot> {
     try {
       const snap = await this.run(() => this.activate(review));

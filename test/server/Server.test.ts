@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
-import { resolveReview } from '../../src/server/mode.js';
 import { Server } from '../../src/server/Server.js';
 import { LspPool } from '../../src/server/lsp/LspPool.js';
 import type { ApiDeps } from '../../src/server/routes.js';
@@ -78,7 +77,7 @@ beforeAll(async () => {
   deps = { session, config, extraAutoViewed: [], hub, lsp: null };
   server = new Server(deps, { port: 0, host: '127.0.0.1', allowedOrigin: 'https://proxy.example', dev: false });
   base = await server.listen();
-  await session.start(await resolveReview({ kind: 'working' }, repo));
+  await session.start(await session.resolve({ kind: 'working' }));
 });
 afterAll(async () => {
   await server.close();

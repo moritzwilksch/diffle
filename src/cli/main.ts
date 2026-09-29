@@ -7,7 +7,6 @@ import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { createGithubClient, type GithubClient, GithubError, resolveToken } from '../server/github/client.js';
 import { LspPool } from '../server/lsp/LspPool.js';
 import { resolveServers } from '../server/lsp/registry.js';
-import { resolveReview } from '../server/mode.js';
 import { RevspecError } from '../server/revspec.js';
 import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
 import { Session } from '../server/Session.js';
@@ -361,8 +360,8 @@ async function serve(
   stopBrowserWatch = watchBrowserLifetime(hub, opts.open && !opts.keepAlive, shutdown);
 
   try {
-    // Reject bad revisions before binding, so a failed run never opens a browser.
-    const review = await resolveReview(req, repo, github.client ?? undefined);
+    // Resolve the revision or PR before binding, so invalid input never opens a browser.
+    const review = await session.resolve(req);
     timing.mark('resolve');
     // Bind and open the browser before the first snapshot.
     const url = await server.listen();

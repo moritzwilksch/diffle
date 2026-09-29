@@ -98,29 +98,29 @@ describe('failed startup', () => {
     },
     30_000,
   );
-});
 
-// The fake browser openers are POSIX shell scripts; Windows opens through `cmd /c start`.
-it.skipIf(process.platform === 'win32')(
-  'rejects an unknown revision before serving or opening a browser',
-  async () => {
-    const bin = join(dir, 'bin');
-    const opened = join(dir, 'opened');
-    await mkdir(bin, { recursive: true });
-    for (const opener of ['open', 'xdg-open']) {
-      await writeFile(join(bin, opener), `#!/bin/sh\necho "$@" >> "${opened}"\n`);
-      await chmod(join(bin, opener), 0o755);
-    }
-    const run = await cli(['does-not-exist', '--no-watch', '--no-lsp', '-C', dir, '-p', '0'], {
-      PATH: `${bin}:${process.env.PATH}`,
-    });
-    expect(run.code).toBe(2);
-    expect(run.stderr).toContain('unknown revision: does-not-exist');
-    expect(run.stderr).not.toContain('running at');
-    await expect(stat(opened)).rejects.toThrow();
-  },
-  30_000,
-);
+  // The fake browser openers are POSIX shell scripts; Windows opens through `cmd /c start`.
+  it.skipIf(process.platform === 'win32')(
+    'rejects an unknown revision before serving or opening a browser',
+    async () => {
+      const bin = join(dir, 'bin');
+      const opened = join(dir, 'opened');
+      await mkdir(bin, { recursive: true });
+      for (const opener of ['open', 'xdg-open']) {
+        await writeFile(join(bin, opener), `#!/bin/sh\necho "$@" >> "${opened}"\n`);
+        await chmod(join(bin, opener), 0o755);
+      }
+      const run = await cli(['does-not-exist', '--no-watch', '--no-lsp', '-C', dir, '-p', '0'], {
+        PATH: `${bin}:${process.env.PATH}`,
+      });
+      expect(run.code).toBe(2);
+      expect(run.stderr).toContain('unknown revision: does-not-exist');
+      expect(run.stderr).not.toContain('running at');
+      await expect(stat(opened)).rejects.toThrow();
+    },
+    30_000,
+  );
+});
 
 it('rejects a public origin containing a path with usage exit code 2', async () => {
   const run = await cli(['--allowed-origin', 'https://proxy.example/prefix/']);
