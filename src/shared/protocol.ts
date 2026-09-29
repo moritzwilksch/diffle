@@ -582,6 +582,11 @@ export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });
 export const ViewedBulkRequestSchema = z.object({ entries: ViewedEntrySchema.array() });
 export const FileQuerySchema = z.object({ path: z.string().min(1), rev: SideSchema });
+/** `GET /api/image`: one side of a file as image bytes. The server answers 404 unless the bytes are a raster image. */
+export const ImageQuerySchema = FileQuerySchema.extend({
+  /** Changes whenever that side's bytes may have, so the browser never shows a stale image; the server ignores it. */
+  v: z.string().optional(),
+});
 const offsetSchema = z
   .string()
   .regex(/^[0-9]+$/)

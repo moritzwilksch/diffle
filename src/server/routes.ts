@@ -10,6 +10,7 @@ import {
   ModeRequestSchema,
   PatchRequestSchema,
   FileQuerySchema,
+  ImageQuerySchema,
   LastCommitsQuerySchema,
   SearchQuerySchema,
   ThreadQuerySchema,
@@ -34,6 +35,7 @@ import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
 import { GithubError } from './github/client.js';
+import { imageType } from './image.js';
 import { LspUnavailableError } from './lsp/LspBridge.js';
 import type { LspPool } from './lsp/LspPool.js';
 import { RevspecError } from './revspec.js';
@@ -125,6 +127,20 @@ export function createApi(deps: ApiDeps): Hono {
     const binary = isBinary(buf);
     const body: FileResponse = { path, contents: binary ? '' : buf.toString('utf8'), binary };
     return c.json(body);
+  });
+
+  // Snapshot files only: `readExternal` stays the one read outside the allowlist.
+  app.get('/api/image', async (c) => {
+    const { path, rev } = ImageQuerySchema.parse(c.req.query());
+    const buf = await session.readSide(await session.snapshotter.current(), path, rev);
+    const type = buf && imageType(buf);
+    if (!type) return c.json({ error: 'not an image on that side' }, 404);
+    // A `v` may be the snapshot version, which restarts with the server: a cached body could outlive it.
+    return c.body(new Uint8Array(buf), 200, {
+      'content-type': type,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    });
   });
 
   app.get('/api/search', async (c) => {
