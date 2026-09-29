@@ -18,6 +18,7 @@ vi.mock('../../src/client/api.js', () => ({
 }));
 const { useStore } = await import('../../src/client/store.js');
 const { ModePicker } = await import('../../src/client/header/ModePicker.js');
+const { useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
 type Result = Awaited<ReturnType<typeof originalSwitchMode>>;
 let root: Root;
 let host: HTMLDivElement;
@@ -215,4 +216,35 @@ it('shows one highlight shared by the pointer and the keyboard', async () => {
   await act(() => useStore.getState().pickModeEntry(4));
   expect(highlighted()).toBe(4);
   expect(entries().filter((b) => b.hasAttribute('data-highlighted'))).toHaveLength(1);
+});
+
+it('leaves Enter to a focused button and keeps a focused entry highlighted', async () => {
+  function WithKeys() {
+    useKeymap();
+    return createElement(ModePicker);
+  }
+  await act(() => root.render(createElement(WithKeys)));
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const enter = (el: Element) => {
+    const e = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    act(() => el.dispatchEvent(e));
+    return e;
+  };
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  await act(() => entries()[1]!.focus());
+  expect(entries()[1]!.hasAttribute('data-highlighted')).toBe(true);
+  // j on a focused entry moves focus with the highlight, so native Enter activates the entry shown.
+  act(() => entries()[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
+  expect(document.activeElement).toBe(entries()[2]);
+  expect(useStore.getState().modeEntry).toBe(3);
+  await act(() => entries()[1]!.focus());
+  expect(enter(entries()[1]!).defaultPrevented).toBe(false);
+  expect(useStore.getState().modePane).toBeNull();
+  await act(() => entries()[1]!.click()); // the native activation Enter triggers in a browser
+  expect(useStore.getState().modePane).toBe('refs');
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-controls="mode-picker"]')!;
+  await act(() => trigger.focus());
+  expect(enter(trigger).defaultPrevented).toBe(false);
+  expect(useStore.getState().modeMenuOpen).toBe(true);
+  expect(switchMode).not.toHaveBeenCalled();
 });

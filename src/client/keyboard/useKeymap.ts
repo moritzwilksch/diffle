@@ -221,18 +221,23 @@ export function useKeymap(): void {
         return; // the tree owns every other key while focused
       }
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
-      // The open compare menu owns its navigation keys wherever focus sits; its pane keeps native Enter.
+      // The open compare menu owns its navigation keys wherever focus sits. A focused button and the
+      // configuration pane keep native Enter, so Enter and Space activate the same control.
       if (s.modeMenuOpen && !s.helpOpen) {
         const step = e.key === 'j' || e.key === 'ArrowDown' ? 1 : e.key === 'k' || e.key === 'ArrowUp' ? -1 : 0;
         const entry = /^[1-4]$/.test(e.key)
           ? Number(e.key)
-          : e.key === 'Enter' && !target?.closest('#mode-config')
+          : e.key === 'Enter' && !target?.closest('button, #mode-config')
             ? s.modeEntry
             : 0;
         if (step || entry) {
           e.preventDefault();
-          if (step) s.highlightModeEntry(s.modeEntry + step);
-          else s.pickModeEntry(entry);
+          if (step) {
+            s.highlightModeEntry(s.modeEntry + step);
+            // A focused entry follows the highlight, so native Enter picks the entry shown.
+            if (target?.closest('[data-mode-entry]'))
+              document.querySelector<HTMLElement>(`[data-mode-entry="${useStore.getState().modeEntry}"]`)?.focus();
+          } else s.pickModeEntry(entry);
           return;
         }
       }

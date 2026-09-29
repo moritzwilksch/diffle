@@ -145,7 +145,7 @@ export function ModePicker() {
           <div className="w-60 shrink-0 max-[640px]:w-44">
             <div className="px-2.5 pt-1 pb-1.5 text-[0.6875rem] font-semibold text-muted">Compare</div>
             {/* The accent marks an expanded configuration pane; Working has none and acts on click.
-                The pointer and j / k share one highlight, which Enter picks. */}
+                Pointer, focus and j / k share one highlight, which Enter picks. */}
             {entries.map((entry, i) => (
               <Button
                 key={entry.label}
@@ -154,8 +154,10 @@ export function ModePicker() {
                 )}
                 aria-expanded={entry.pane ? pane === entry.pane : undefined}
                 aria-controls={entry.pane ? 'mode-config' : undefined}
+                data-mode-entry={i + 1}
                 data-highlighted={highlighted === i + 1 || undefined}
                 onPointerMove={() => highlight(i + 1)}
+                onFocus={() => highlight(i + 1)}
                 onClick={(e) => {
                   pointerPick.current = e.detail > 0;
                   pick(i + 1);
