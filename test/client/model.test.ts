@@ -14,6 +14,8 @@ import {
   currentPath,
   documentTitle,
   draftRange,
+  imageKey,
+  imageSides,
   isViewed,
   nextFileAfter,
   orderedPaths,
@@ -268,5 +270,53 @@ describe('comparisonLabel', () => {
       }),
     ).toBe('main...feature/nested');
     expect(comparisonLabel({ old: 'HEAD', new: 'worktree', mergeBase: false })).toBe('HEAD..worktree');
+  });
+});
+
+describe('imageSides', () => {
+  const file = (status: ChangedFile['status']): ChangedFile => ({
+    path: 'a.png',
+    status,
+    additions: 0,
+    deletions: 0,
+    binary: true,
+    blob: '',
+    generated: false,
+  });
+
+  it('shows the sides a changed image has, and the new side in the file view', () => {
+    expect(imageSides('a.png', file('M'))).toEqual(['old', 'new']);
+    expect(imageSides('a.PNG', file('R'))).toEqual(['old', 'new']);
+    expect(imageSides('a.jpeg', file('A'))).toEqual(['new']);
+    expect(imageSides('a.gif', file('D'))).toEqual(['old']);
+    expect(imageSides('a.webp', undefined)).toEqual(['new']);
+  });
+
+  it('leaves other binaries and text images to their banner and text diff', () => {
+    expect(imageSides('a.bin', file('M'))).toBeNull();
+    expect(imageSides('a.svg', file('M'))).toBeNull();
+    expect(imageSides('png', file('M'))).toBeNull();
+  });
+});
+
+describe('imageKey', () => {
+  const snap = (oldSha: string, newSha: string, blob: string) =>
+    ({
+      version: 7,
+      oldSha,
+      newSha,
+      changed: [{ path: 'a.png', blob }],
+    }) as unknown as Snapshot;
+
+  it("keys the new side by its blob and the old side by its commit, so a refresh keeps an unchanged image's URL", () => {
+    expect(imageKey(snap('c0', 'worktree', 'b1'), 'a.png', 'new')).toBe('b1');
+    expect(imageKey(snap('c0', 'worktree', 'b1'), 'a.png', 'old')).toBe('c0');
+    expect(imageKey(snap('c0', 'c1', 'b1'), 'other.png', 'new')).toBe('c1');
+  });
+
+  it('falls back to the snapshot version for a worktree side without a blob', () => {
+    expect(imageKey(snap('worktree', 'c1', ''), 'a.png', 'old')).toBe('v7');
+    expect(imageKey(snap('c0', 'worktree', ''), 'a.png', 'new')).toBe('v7');
+    expect(imageKey(snap('c0', 'worktree', 'b1'), 'other.png', 'new')).toBe('v7');
   });
 });

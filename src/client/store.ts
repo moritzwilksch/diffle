@@ -80,6 +80,18 @@ const DIFF_STYLE_KEY = 'diffle:diffStyle';
 export const WORKSPACE_SYMBOL_DEBOUNCE_MS = 150;
 /** How long every toast stays visible: long enough to read a full sentence, since errors are the main thing shown. */
 export const TOAST_MS = 3500;
+/** How an image diff shows its two sides: next to each other, or stacked with a swipe, a fade or a pixel difference. */
+export type ImageCompare = 'side-by-side' | 'swipe' | 'onion' | 'difference';
+export const IMAGE_COMPARES: readonly ImageCompare[] = ['side-by-side', 'swipe', 'onion', 'difference'];
+const IMAGE_COMPARE_KEY = 'diffle:imageCompare';
+function readImageCompare(): ImageCompare {
+  try {
+    const stored = localStorage.getItem(IMAGE_COMPARE_KEY);
+    return IMAGE_COMPARES.find((c) => c === stored) ?? 'side-by-side';
+  } catch {
+    return 'side-by-side';
+  }
+}
 function readDiffStyle(): DiffStyle {
   try {
     return localStorage.getItem(DIFF_STYLE_KEY) === 'unified' ? 'unified' : 'split';
@@ -208,6 +220,8 @@ export interface ReviewState {
   setLayout(patch: Partial<LayoutState>): void;
   diffStyle: DiffStyle;
   setDiffStyle(style: DiffStyle): void;
+  imageCompare: ImageCompare;
+  setImageCompare(compare: ImageCompare): void;
   theme: ThemeChoice;
   setTheme(theme: ThemeChoice): void;
 
@@ -1903,6 +1917,15 @@ export const useStore = create<ReviewState>((set, get) => {
       }
       // The cursor survives the re-layout; the pane holds the viewport in place.
       set({ diffStyle: style, draft: null, visualAnchor: null });
+    },
+    imageCompare: readImageCompare(),
+    setImageCompare(compare) {
+      try {
+        localStorage.setItem(IMAGE_COMPARE_KEY, compare);
+      } catch {
+        /* ignore */
+      }
+      set({ imageCompare: compare });
     },
     snapshot: null,
     error: null,

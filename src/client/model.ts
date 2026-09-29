@@ -6,6 +6,7 @@ import type {
   CommentThread,
   LspSymbol,
   ModeRequest,
+  Side,
   Snapshot,
   UserConfig,
   ViewedState,
@@ -346,4 +347,27 @@ export function documentTitle(
 ): string {
   const pr = github?.pullRequest;
   return pr ? `diffle: ${pr.repository} #${pr.number}` : `diffle: ${repoName(snapshot)}`;
+}
+
+/** Raster formats a browser shows in an `<img>`; SVG is text and keeps its text diff. */
+const IMAGE_PATH = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i;
+
+/**
+ * The sides an image view of `path` shows, or null when the path names no raster image: those a changed
+ * file has (`changed` undefined is the file view, which shows the new side).
+ */
+export function imageSides(path: string, changed: ChangedFile | undefined): Side[] | null {
+  if (!IMAGE_PATH.test(path)) return null;
+  if (!changed) return ['new'];
+  return changed.status === 'A' ? ['new'] : changed.status === 'D' ? ['old'] : ['old', 'new'];
+}
+
+/**
+ * The `v` for `api.imageUrl`: the new side's blob, else the side's commit; a worktree side without a
+ * blob falls back to the snapshot version, which changes on every refresh.
+ */
+export function imageKey(snapshot: Snapshot, path: string, side: Side): string {
+  const blob = side === 'new' ? snapshot.changed.find((f) => f.path === path)?.blob : undefined;
+  const rev = side === 'new' ? snapshot.newSha : snapshot.oldSha;
+  return blob || (rev === 'worktree' ? `v${snapshot.version}` : rev);
 }

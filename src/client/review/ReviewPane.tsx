@@ -34,6 +34,7 @@ import { SymbolPicker } from '../lsp/SymbolPicker.js';
 import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
 import {
   draftRange,
+  imageSides,
   isCollapsed,
   itemDeps,
   itemId,
@@ -57,9 +58,11 @@ import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
 import { hostOf } from './host.js';
+import { ImageDiff } from './ImageDiff.js';
 
 export type Annot =
   | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
+  | { kind: 'image'; path: string; sides: Side[] }
   | { kind: 'thread'; thread: CommentThread }
   | { kind: 'draft' };
 
@@ -753,6 +756,7 @@ export function ReviewPane() {
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {
     const meta = annotation.metadata;
     if (meta.kind === 'placeholder') return <PlaceholderBanner kind={meta.placeholder} message={meta.message} />;
+    if (meta.kind === 'image') return <ImageDiff path={meta.path} sides={meta.sides} />;
     if (meta.kind === 'draft') {
       const range = draftRange(useStore.getState());
       return <CommentComposer label={range ? rangeLabel(range) : 'whole file'} />;
@@ -902,8 +906,8 @@ function toItem(
     if (loaded.kind === 'diff' && loaded.fileDiff.hunks.length > 0)
       return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
     // Binary, hunkless (a pure rename, a mode change), oversized or failed: an empty file item under the
-    // diff id whose line-0 annotation carries a banner saying why there is nothing to expand. The banner
-    // also gives file threads a place to hang.
+    // diff id whose line-0 annotation carries a banner saying why there is nothing to expand, or a binary
+    // image's sides. Either also gives file threads a place to hang.
     const [placeholder, message] =
       loaded.kind === 'diff'
         ? changed.status === 'R'
@@ -920,7 +924,7 @@ function toItem(
             : loaded.kind === 'loading'
               ? (['loading', 'Loading…'] as const)
               : (['binary', 'Binary file'] as const);
-    fileLevel.unshift({ lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } });
+    fileLevel.unshift(standIn(path, loaded, changed, placeholder, message));
     return {
       id,
       type: 'file',
@@ -943,7 +947,7 @@ function toItem(
         : loaded.kind === 'error'
           ? (['error', loaded.message] as const)
           : (['loading', 'Loading…'] as const);
-    fileLevel.unshift({ lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } });
+    fileLevel.unshift(standIn(path, loaded, undefined, placeholder, message));
     return { id, type: 'file', file: { name: path, contents: '' }, annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
@@ -960,6 +964,20 @@ function toItem(
 
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
 const FILE_LINE = 0;
+
+/** The line-0 annotation that stands in for a body without lines: a binary image's sides, else the banner. */
+function standIn(
+  path: string,
+  loaded: Loaded,
+  changed: ChangedFile | undefined,
+  placeholder: PlaceholderKind,
+  message: string,
+): LineAnnotation<Annot> {
+  const sides = loaded.kind === 'binary' ? imageSides(path, changed) : null;
+  return sides
+    ? { lineNumber: FILE_LINE, metadata: { kind: 'image', path, sides } }
+    : { lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } };
+}
 
 function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: string, height: number) => void }) {
   const path = pathFromItemId(id);

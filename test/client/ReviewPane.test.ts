@@ -764,25 +764,69 @@ describe('ReviewPane scroller effects', () => {
 
   it('expands a binary file to a placeholder banner and collapses it again from the header', async () => {
     const binary = [
-      { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
+      {
+        path: 'data.bin',
+        status: 'M' as const,
+        additions: 0,
+        deletions: 0,
+        binary: true,
+        blob: 'b1',
+        generated: false,
+      },
     ];
     await act(() => root.render(createElement(ReviewPane)));
-    await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'img.png': { kind: 'binary' } } }));
+    await act(() => useStore.setState({ snapshot: snap(binary), loaded: { 'data.bin': { kind: 'binary' } } }));
     const item = () => captureItems.mock.lastCall![0][0];
     // The banner is the whole body: an empty file plus one file-level annotation, never a note line.
     expect(item()).toMatchObject({
       type: 'file',
       collapsed: false,
-      file: { name: 'img.png', contents: '' },
+      file: { name: 'data.bin', contents: '' },
       annotations: [{ lineNumber: 0, metadata: { kind: 'placeholder', placeholder: 'binary' } }],
     });
 
     await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
-    expect(useStore.getState().collapsed['img.png']).toBe(true);
+    expect(useStore.getState().collapsed['data.bin']).toBe(true);
     expect(item()).toMatchObject({ collapsed: true });
 
     await act(() => host.querySelector<HTMLElement>('[title="Collapse / expand"]')!.click());
     expect(item()).toMatchObject({ collapsed: false });
+  });
+
+  it('shows the sides of a binary image instead of the banner, in the diff and in the file view', async () => {
+    const images = [
+      { path: 'new.png', status: 'A' as const, additions: 0, deletions: 0, binary: true, blob: 'b1', generated: false },
+      { path: 'img.png', status: 'M' as const, additions: 0, deletions: 0, binary: true, blob: 'b2', generated: false },
+    ];
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() =>
+      useStore.setState({
+        snapshot: snap(images),
+        loaded: { 'new.png': { kind: 'binary' }, 'img.png': { kind: 'binary' } },
+      }),
+    );
+    expect(captureItems.mock.lastCall![0]).toMatchObject([
+      {
+        type: 'file',
+        file: { name: 'img.png', contents: '' },
+        annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'img.png', sides: ['old', 'new'] } }],
+      },
+      { annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'new.png', sides: ['new'] } }] },
+    ]);
+
+    await act(() =>
+      useStore.setState({
+        fileView: {
+          path: 'logo.png',
+          external: false,
+          item: { kind: 'binary' },
+          from: { position: null, activePath: null },
+        },
+      }),
+    );
+    expect(captureItems.mock.lastCall![0]).toMatchObject([
+      { annotations: [{ lineNumber: 0, metadata: { kind: 'image', path: 'logo.png', sides: ['new'] } }] },
+    ]);
   });
 
   it('shows the viewed shortcut in the file header tooltip', async () => {
