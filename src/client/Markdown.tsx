@@ -80,15 +80,17 @@ function Pre({
   if (lang === 'suggestion') {
     // A highlighted suggestion renders as a <div>: the File and FileDiff markup is not phrasing content.
     if (path != null) {
-      const source = textOf(props?.children).replace(/\n$/, '');
+      const source = lf(textOf(props?.children).replace(/\n$/, ''));
+      // A quote from a CRLF file keeps its CRs; the composer's textarea drops them from the suggestion.
+      const original = quoted == null ? undefined : lf(quoted);
       return (
         <div className="suggestion highlighted" title="Suggested replacement for the quoted lines">
           <span className="tag">Suggestion</span>
           {/* An unchanged suggestion diffs to nothing, so it shows as the lines it keeps. */}
-          {quoted == null || (source !== '' && quoted === source) ? (
+          {original == null || (source !== '' && original === source) ? (
             <Highlighted path={path} source={source} />
           ) : (
-            <SuggestedChange path={path} quoted={quoted} source={source} />
+            <SuggestedChange path={path} quoted={original} source={source} />
           )}
         </div>
       );
@@ -180,6 +182,11 @@ function usePrimed(prime: (pool: WorkerPool) => Promise<void>): string {
 /** JSON keeps the parts apart, so no two contents share a key, alone or joined into a diff's key. */
 function cacheKey(...parts: string[]): string {
   return JSON.stringify(['suggestion', ...parts]);
+}
+
+/** Drops each line's trailing CR, so line endings alone never make lines differ. */
+function lf(text: string): string {
+  return text.replace(/\r$/gm, '');
 }
 
 function textOf(node: unknown): string {

@@ -99,4 +99,17 @@ describe('Markdown suggestion fences', () => {
     const [diff] = diffs.rendered;
     expect(diff?.hunks.map((h) => [h.deletionLines, h.additionLines])).toEqual([[1, 1]]);
   });
+
+  it('ignores the CRs a quote from a CRLF file keeps', async () => {
+    const quoted = 'x = 1\r\ny = 1\r';
+    const text = '```suggestion\nx = 1\ny = 2\n```';
+    await act(() => root.render(createElement(Markdown, { text, path: 'a.py', quoted })));
+    const [diff] = diffs.rendered;
+    expect(diff?.hunks.map((h) => [h.deletionLines, h.additionLines])).toEqual([[1, 1]]);
+    diffs.rendered = [];
+    const kept = '```suggestion\nx = 1\ny = 1\n```';
+    await act(() => root.render(createElement(Markdown, { text: kept, path: 'a.py', quoted })));
+    expect(diffs.rendered).toEqual([]);
+    expect(host.querySelector('.suggestion.highlighted')).not.toBeNull();
+  });
 });
