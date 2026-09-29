@@ -210,7 +210,11 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
           </div>
         </div>
       ) : (
-        <Markdown text={message.body} path={thread.anchor.path} />
+        <Markdown
+          text={message.body}
+          path={thread.anchor.path}
+          quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
+        />
       )}
     </div>
   );
