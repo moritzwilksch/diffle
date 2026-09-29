@@ -15,7 +15,7 @@ import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
-import { resolveReview } from './mode.js';
+import { type ResolvedReview, resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
 
@@ -162,10 +162,13 @@ export class Session {
     }
   }
 
-  /** First mode. Rejects `ready()` on failure so early requests error out. */
-  async start(req: ModeRequest): Promise<Snapshot> {
+  /**
+   * First mode, resolved by the caller so invalid input fails before anything is
+   * served. Rejects `ready()` on failure so early requests error out.
+   */
+  async start(review: ResolvedReview): Promise<Snapshot> {
     try {
-      const snap = await this.enter(req);
+      const snap = await this.run(() => this.activate(review));
       this.resolveReady();
       return snap;
     } catch (e) {
@@ -176,7 +179,7 @@ export class Session {
 
   /** Switch modes at runtime. Broadcasts a snapshot bump on success. */
   async switchMode(req: ModeRequest): Promise<Snapshot> {
-    const snap = await this.enter(req);
+    const snap = await this.run(async () => this.activate(await resolveReview(req, this.repo, this.opts.github)));
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     return snap;
   }
@@ -191,12 +194,7 @@ export class Session {
     return r;
   }
 
-  private enter(req: ModeRequest): Promise<Snapshot> {
-    return this.run(() => this.transition(req));
-  }
-
-  private async transition(req: ModeRequest): Promise<Snapshot> {
-    const { mode, prUrl } = await resolveReview(req, this.repo, this.opts.github);
+  private async activate({ mode, prUrl }: ResolvedReview): Promise<Snapshot> {
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([

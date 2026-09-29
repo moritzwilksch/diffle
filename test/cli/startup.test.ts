@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,9 +33,12 @@ let blocker: Server;
 let port: number;
 
 /** Runs the CLI to completion. */
-function cli(args: string[]): Promise<{ code: number | null; stderr: string }> {
+function cli(args: string[], extraEnv: NodeJS.ProcessEnv = {}): Promise<{ code: number | null; stderr: string }> {
   return new Promise((res, rej) => {
-    const child = spawn(process.execPath, [TSX, MAIN, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [TSX, MAIN, ...args], {
+      env: { ...env, ...extraEnv },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stderr = '';
     child.stderr.setEncoding('utf8').on('data', (d: string) => (stderr += d));
     child.on('error', rej);
@@ -96,6 +99,28 @@ describe('failed startup', () => {
     30_000,
   );
 });
+
+// The fake browser openers are POSIX shell scripts; Windows opens through `cmd /c start`.
+it.skipIf(process.platform === 'win32')(
+  'rejects an unknown revision before serving or opening a browser',
+  async () => {
+    const bin = join(dir, 'bin');
+    const opened = join(dir, 'opened');
+    await mkdir(bin, { recursive: true });
+    for (const opener of ['open', 'xdg-open']) {
+      await writeFile(join(bin, opener), `#!/bin/sh\necho "$@" >> "${opened}"\n`);
+      await chmod(join(bin, opener), 0o755);
+    }
+    const run = await cli(['does-not-exist', '--no-watch', '--no-lsp', '-C', dir, '-p', '0'], {
+      PATH: `${bin}:${process.env.PATH}`,
+    });
+    expect(run.code).toBe(2);
+    expect(run.stderr).toContain('unknown revision: does-not-exist');
+    expect(run.stderr).not.toContain('running at');
+    await expect(stat(opened)).rejects.toThrow();
+  },
+  30_000,
+);
 
 it('rejects a public origin containing a path with usage exit code 2', async () => {
   const run = await cli(['--allowed-origin', 'https://proxy.example/prefix/']);
