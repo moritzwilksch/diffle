@@ -96,26 +96,41 @@ describe('ImageDiff', () => {
     expect(useStore.getState().imageCompare).toBe('swipe');
     const stack = host.querySelector<HTMLElement>('[data-stack="swipe"]')!;
     expect(stack.style.aspectRatio).toBe('80 / 40');
-    const [oldImg, newImg] = [...stack.querySelectorAll('img')];
+    const [oldImg] = [...stack.querySelectorAll('img')];
     // The smaller side keeps its scale: half the canvas each way, anchored top left.
     expect(oldImg!.style.width).toBe('50%');
     expect(oldImg!.style.height).toBe('50%');
-    expect(newImg!.style.clipPath).toBe('inset(0 0 0 50%)');
+    const newLayer = stack.querySelector<HTMLElement>('[data-layer="new"]')!;
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
     const slider = host.querySelector<HTMLInputElement>('input[aria-label="Swipe position"]')!;
     await act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(slider, '20');
       slider.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    expect(newImg!.style.clipPath).toBe('inset(0 0 0 20%)');
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
 
     await act(() => button('Onion skin').click());
-    expect(host.querySelector<HTMLElement>('[data-stack="onion"] img:last-child')!.style.opacity).toBe('0.2');
+    expect(host.querySelector<HTMLElement>('[data-stack="onion"] [data-layer="new"]')!.style.opacity).toBe('0.2');
 
     await act(() => button('Difference').click());
-    expect(host.querySelector<HTMLElement>('[data-stack="difference"] img:last-child')!.style.mixBlendMode).toBe(
+    expect(host.querySelector<HTMLElement>('[data-stack="difference"] [data-layer="new"]')!.style.mixBlendMode).toBe(
       'difference',
     );
     expect(localStorage.getItem('diffle:imageCompare')).toBe('difference');
+  });
+
+  it('clips a narrower new side at the divider, measured on the canvas rather than on the image', async () => {
+    useStore.setState({ snapshot: snapshot(), imageCompare: 'swipe' });
+    decoded = { [url('old')]: [80, 40], [url('new')]: [40, 20] };
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: ['old', 'new'] })));
+    await settle();
+    const stack = host.querySelector<HTMLElement>('[data-stack="swipe"]')!;
+    const layer = stack.querySelector<HTMLElement>('[data-layer="new"]')!;
+    // The layer spans the canvas, so its 50% inset lands on the divider at the canvas's 50%.
+    expect(layer.classList.contains('inset-0')).toBe(true);
+    expect(layer.style.clipPath).toBe('inset(0 0 0 50%)');
+    expect(layer.querySelector('img')!.style.width).toBe('50%');
+    expect(stack.querySelector<HTMLElement>('.bg-accent')!.style.left).toBe('50%');
   });
 
   it('shows one side of an added image, with nothing to compare and no request for the missing side', async () => {

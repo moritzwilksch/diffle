@@ -81,8 +81,8 @@ export const WORKSPACE_SYMBOL_DEBOUNCE_MS = 150;
 /** How long every toast stays visible: long enough to read a full sentence, since errors are the main thing shown. */
 export const TOAST_MS = 3500;
 /** How an image diff shows its two sides: next to each other, or stacked with a swipe, a fade or a pixel difference. */
-export type ImageCompare = 'side-by-side' | 'swipe' | 'onion' | 'difference';
-export const IMAGE_COMPARES: readonly ImageCompare[] = ['side-by-side', 'swipe', 'onion', 'difference'];
+export const IMAGE_COMPARES = ['side-by-side', 'swipe', 'onion', 'difference'] as const;
+export type ImageCompare = (typeof IMAGE_COMPARES)[number];
 const IMAGE_COMPARE_KEY = 'diffle:imageCompare';
 function readImageCompare(): ImageCompare {
   try {

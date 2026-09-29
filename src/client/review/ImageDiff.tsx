@@ -172,13 +172,16 @@ function Stack({
           className="absolute top-0 left-0"
           style={place(oldSize)}
         />
-        <img
-          src={newUrl}
-          alt={`${path} (new)`}
-          draggable={false}
-          className="absolute top-0 left-0"
-          style={{ ...place(newSize), ...top }}
-        />
+        {/* The effect sits on a canvas-sized layer: a swipe inset on a smaller image would miss the divider. */}
+        <div className="absolute inset-0" style={top} data-layer="new">
+          <img
+            src={newUrl}
+            alt={`${path} (new)`}
+            draggable={false}
+            className="absolute top-0 left-0"
+            style={place(newSize)}
+          />
+        </div>
         {mode === 'swipe' && (
           <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-accent" style={{ left: `${amount}%` }} />
         )}

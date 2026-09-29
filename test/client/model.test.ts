@@ -314,9 +314,13 @@ describe('imageKey', () => {
     expect(imageKey(snap('c0', 'c1', 'b1'), 'other.png', 'new')).toBe('c1');
   });
 
-  it('falls back to the snapshot version for a worktree side without a blob', () => {
+  it("keys an unchanged path's worktree side by the other side's commit, so an unrelated save keeps its URL", () => {
+    expect(imageKey(snap('c0', 'worktree', 'b1'), 'other.png', 'new')).toBe('c0');
+    expect(imageKey(snap('worktree', 'c1', 'b1'), 'other.png', 'old')).toBe('c1');
+  });
+
+  it('falls back to the snapshot version for a changed worktree side without a blob', () => {
     expect(imageKey(snap('worktree', 'c1', ''), 'a.png', 'old')).toBe('v7');
     expect(imageKey(snap('c0', 'worktree', ''), 'a.png', 'new')).toBe('v7');
-    expect(imageKey(snap('c0', 'worktree', 'b1'), 'other.png', 'new')).toBe('v7');
   });
 });

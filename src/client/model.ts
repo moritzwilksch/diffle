@@ -363,11 +363,15 @@ export function imageSides(path: string, changed: ChangedFile | undefined): Side
 }
 
 /**
- * The `v` for `api.imageUrl`: the new side's blob, else the side's commit; a worktree side without a
- * blob falls back to the snapshot version, which changes on every refresh.
+ * The `v` for `api.imageUrl`: the new side's blob, else the side's commit. An unchanged path is keyed by
+ * whichever side is a commit, since both hold its bytes. A changed worktree side without a blob falls back
+ * to the snapshot version, which changes on every refresh.
  */
 export function imageKey(snapshot: Snapshot, path: string, side: Side): string {
-  const blob = side === 'new' ? snapshot.changed.find((f) => f.path === path)?.blob : undefined;
+  const file = snapshot.changed.find((f) => f.path === path);
+  if (side === 'new' && file?.blob) return file.blob;
   const rev = side === 'new' ? snapshot.newSha : snapshot.oldSha;
-  return blob || (rev === 'worktree' ? `v${snapshot.version}` : rev);
+  const other = side === 'new' ? snapshot.oldSha : snapshot.newSha;
+  if (rev !== 'worktree') return rev;
+  return !file && other !== 'worktree' ? other : `v${snapshot.version}`;
 }
