@@ -85,7 +85,7 @@ function Pre({
       const original = quoted == null ? undefined : lf(quoted);
       return (
         <div className="suggestion highlighted" title="Suggested replacement for the quoted lines">
-          <span className="tag">Suggestion</span>
+          <span className="tag">Suggested change</span>
           {/* An unchanged suggestion diffs to nothing, so it shows as the lines it keeps. */}
           {original == null || (source !== '' && original === source) ? (
             <Highlighted path={path} source={source} />
@@ -97,7 +97,7 @@ function Pre({
     }
     return (
       <pre {...rest} className="suggestion" title="Suggested replacement for the quoted lines">
-        <span className="tag">Suggestion</span>
+        <span className="tag">Suggested change</span>
         {children}
       </pre>
     );

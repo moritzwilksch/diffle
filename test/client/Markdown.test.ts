@@ -62,13 +62,13 @@ describe('Markdown suggestion fences', () => {
   it('labels a ```suggestion fence and keeps its code verbatim', async () => {
     await act(() => root.render(createElement(Markdown, { text: 'Try:\n\n```suggestion\nx = 1\n```' })));
     const block = host.querySelector('pre.suggestion');
-    expect(block?.querySelector('.tag')?.textContent).toBe('Suggestion');
+    expect(block?.querySelector('.tag')?.textContent).toBe('Suggested change');
     expect(block?.querySelector('code')?.textContent).toBe('x = 1\n');
   });
 
   it('renders a suggestion for a known file as a highlighted block', async () => {
     await act(() => root.render(createElement(Markdown, { text: '```suggestion\nx = 1\n```', path: 'a.py' })));
-    expect(host.querySelector('.suggestion.highlighted')?.querySelector('.tag')?.textContent).toBe('Suggestion');
+    expect(host.querySelector('.suggestion.highlighted')?.querySelector('.tag')?.textContent).toBe('Suggested change');
   });
 
   it('renders a suggestion on quoted lines as a diff from them', async () => {
