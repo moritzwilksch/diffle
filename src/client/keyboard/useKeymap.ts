@@ -221,7 +221,22 @@ export function useKeymap(): void {
         return; // the tree owns every other key while focused
       }
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
-      if (s.modeMenuOpen && target?.closest('#mode-picker') && !/^[1-4]$/.test(e.key)) return;
+      // The open compare menu owns its navigation keys wherever focus sits; its pane keeps native Enter.
+      if (s.modeMenuOpen && !s.helpOpen) {
+        const step = e.key === 'j' || e.key === 'ArrowDown' ? 1 : e.key === 'k' || e.key === 'ArrowUp' ? -1 : 0;
+        const entry = /^[1-4]$/.test(e.key)
+          ? Number(e.key)
+          : e.key === 'Enter' && !target?.closest('#mode-config')
+            ? s.modeEntry
+            : 0;
+        if (step || entry) {
+          e.preventDefault();
+          if (step) s.highlightModeEntry(s.modeEntry + step);
+          else s.pickModeEntry(entry);
+          return;
+        }
+      }
+      if (s.modeMenuOpen && target?.closest('#mode-picker')) return;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const dir = e.key === 'ArrowDown' ? 1 : -1;
@@ -238,12 +253,6 @@ export function useKeymap(): void {
         s.setHelpOpen(false);
         return;
       }
-      if (s.modeMenuOpen && /^[1-4]$/.test(e.key)) {
-        e.preventDefault();
-        s.pickModeEntry(Number(e.key));
-        return;
-      }
-
       const prefix = pending.current?.key;
       clearPending();
       // A count starts with 1-9 (`0` alone is a motion) and grows with any digit.

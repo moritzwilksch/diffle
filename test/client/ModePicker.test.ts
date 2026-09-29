@@ -202,3 +202,17 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   expect(base.value).toBe('main');
   expect(switchMode).not.toHaveBeenCalled();
 });
+
+it('shows one highlight shared by the pointer and the keyboard', async () => {
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const highlighted = () => entries().findIndex((b) => b.hasAttribute('data-highlighted')) + 1;
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  expect(highlighted()).toBe(1);
+  await act(() => entries()[2]!.dispatchEvent(new MouseEvent('pointermove', { bubbles: true })));
+  expect(highlighted()).toBe(3);
+  await act(() => useStore.getState().highlightModeEntry(5));
+  expect(highlighted()).toBe(1);
+  await act(() => useStore.getState().pickModeEntry(4));
+  expect(highlighted()).toBe(4);
+  expect(entries().filter((b) => b.hasAttribute('data-highlighted'))).toHaveLength(1);
+});

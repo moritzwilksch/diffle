@@ -231,6 +231,10 @@ export interface ReviewState {
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
   modePane: 'refs' | 'commits' | 'pr' | null;
+  /** Compare-menu entry (1–4) that Enter picks; opening the menu highlights the first. */
+  modeEntry: number;
+  /** Highlight entry `n`, wrapping past either end. */
+  highlightModeEntry(n: number): void;
   pickModeEntry(n: number): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
@@ -1276,15 +1280,20 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     modeMenuOpen: false,
     modePane: null,
+    modeEntry: 1,
     setModeMenuOpen(open) {
-      set({ modeMenuOpen: open, modePane: null, ...(open ? { githubMenuOpen: false } : {}) });
+      set({ modeMenuOpen: open, modePane: null, modeEntry: 1, ...(open ? { githubMenuOpen: false } : {}) });
+    },
+    highlightModeEntry(n) {
+      const entry = ((((n - 1) % 4) + 4) % 4) + 1;
+      if (entry !== get().modeEntry) set({ modeEntry: entry });
     },
     pickModeEntry(n) {
       if (n === 1) {
-        set({ modeMenuOpen: false, modePane: null });
+        set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
         void get().switchMode({ kind: 'working' });
       } else if (n >= 2 && n <= 4) {
-        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr' });
+        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr', modeEntry: n });
       }
     },
     helpOpen: false,

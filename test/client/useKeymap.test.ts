@@ -347,6 +347,44 @@ describe('useKeymap', () => {
     expect(moveCursorBy).toHaveBeenCalledTimes(4);
   });
 
+  it('walks the open compare menu with j / k and the arrows instead of the cursor, and Enter picks the highlight', () => {
+    const moveCursor = vi.fn();
+    useStore.setState({ moveCursor });
+    useStore.getState().setModeMenuOpen(true);
+    const pane = document.createElement('form');
+    pane.id = 'mode-config';
+    const submit = document.createElement('button');
+    pane.appendChild(submit);
+    document.body.appendChild(pane);
+    try {
+      expect(useStore.getState().modeEntry).toBe(1);
+      expect(press('k').defaultPrevented).toBe(true);
+      expect(useStore.getState().modeEntry).toBe(4);
+      press('j');
+      press('j');
+      press('ArrowDown');
+      press('ArrowUp');
+      expect(useStore.getState().modeEntry).toBe(2);
+      expect(moveCursor).not.toHaveBeenCalled();
+      press('Enter');
+      expect(useStore.getState().modePane).toBe('refs');
+      press('ArrowDown');
+      // Enter inside the configuration pane submits it natively rather than re-picking.
+      const native = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      submit.dispatchEvent(native);
+      expect(native.defaultPrevented).toBe(false);
+      expect(useStore.getState().modePane).toBe('refs');
+      press('4');
+      expect(useStore.getState().modeEntry).toBe(4);
+      expect(useStore.getState().modePane).toBe('pr');
+    } finally {
+      pane.remove();
+      useStore.getState().setModeMenuOpen(false);
+    }
+    press('j');
+    expect(moveCursor).toHaveBeenCalledWith(1);
+  });
+
   it('t changes the theme without jumping to the cursor line', () => {
     useStore.setState({
       selection: { id: 'diff:a.py@1', range: { start: 3, side: 'additions', end: 3, endSide: 'additions' } },
