@@ -2049,6 +2049,13 @@ describe('threads', () => {
     expect(s.selection).toBeNull();
     expect(s.replyTo).toBeNull();
     expect(s.activePath).toBe('a.py');
+    // The composer sits above line 1; the pane brings the file's top into view unless it is already there.
+    expect(s.scrollTarget).toEqual({
+      id: itemIdOf(s, 'a.py'),
+      align: 'start',
+      unlessVisible: 'top',
+      nonce: expect.any(Number),
+    });
     useStore.setState({ selection: sel });
     useStore.getState().openFileDraft('a.py');
     expect(useStore.getState().selection).toEqual(sel);

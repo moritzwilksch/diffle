@@ -244,6 +244,30 @@ describe('ReviewPane scroller effects', () => {
     },
   );
 
+  it.each([
+    { top: 12, jumps: false },
+    { top: -2400, jumps: true },
+    { top: 820, jumps: true },
+  ])('a file draft brings the file top into view only when it is off screen ($top)', async ({ top, jumps }) => {
+    await act(() => {
+      useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });
+      root.render(createElement(ReviewPane));
+    });
+    const scroller = host.querySelector<HTMLElement>('.codeview')!;
+    const card = host.querySelector<HTMLElement>('.item')!;
+    box(scroller, 0, 800);
+    box(card, top, top + 3000);
+    const id = (captureItems.mock.lastCall![0] as { id: string }[])[0]!.id;
+    rendered = [{ id, type: 'diff', element: card }];
+    scrollTo.mockClear();
+    await act(() => useStore.getState().openFileDraft('a.txt'));
+    // A landing may reissue the jump to fold in measured drift; the first request names the target.
+    expect(
+      scrollTo.mock.calls.slice(0, 1).map(([target]) => ({ id: target.id, type: target.type, align: target.align })),
+    ).toEqual(jumps ? [{ id, type: 'item', align: 'start' }] : []);
+    await act(() => useStore.getState().closeDraft());
+  });
+
   it('restores search focus without scrolling when its header reappears during scrolling', async () => {
     await act(() => {
       useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });

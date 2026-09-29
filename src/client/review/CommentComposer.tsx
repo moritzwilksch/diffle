@@ -26,8 +26,19 @@ export function CommentComposer({ label }: { label: string }) {
     textarea.style.height = `${textarea.scrollHeight + borders}px`;
   }, [text]);
 
+  // The viewer lays out only rows near the viewport: a composer mounted off screen has no box to take
+  // focus until the jump to it renders it.
   useEffect(() => {
-    ref.current?.focus();
+    const textarea = ref.current;
+    if (!textarea) return;
+    if (textarea.getClientRects().length > 0) return textarea.focus();
+    const observer = new ResizeObserver(() => {
+      if (textarea.getClientRects().length === 0) return;
+      observer.disconnect();
+      textarea.focus();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
   }, []);
 
   const submit = async () => {
