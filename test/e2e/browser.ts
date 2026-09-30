@@ -235,6 +235,18 @@ export async function selectLines(
 }
 
 /**
+ * Put the cursor on `path`'s line `number` by clicking its content, just right of the number column,
+ * the way a reader picks a line before pressing `c`.
+ */
+export async function clickLine(page: Page, path: string, number: number, side: 'old' | 'new' = 'new'): Promise<void> {
+  const root = await fileItem(page, path);
+  await root.locator('[data-column-number]').first().waitFor({ timeout: 15000 });
+  const cell = await cellBox(root, number, side);
+  await page.mouse.click(cell.x + cell.width + 24, cell.y + cell.height / 2);
+  await page.waitForTimeout(250);
+}
+
+/**
  * Rest the pointer on a token starting with `text`, the way a reader hovers a symbol: the first one
  * on `side` (new by default, the side a language server can answer for), inside `path` or anywhere
  * rendered. The viewer arms the tooltip on pointer movement inside the token, so a plain `hover()`

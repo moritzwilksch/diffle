@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js';
-import { gotoFile, selectLines } from './browser.js';
+import { clickLine, gotoFile, selectLines } from './browser.js';
 import { readPrompt, readThreads } from './server.js';
 
 test('comments on a line range and lists the thread in the panel', async ({ page, diffle }) => {
@@ -21,6 +21,25 @@ test('comments on a line range and lists the thread in the panel', async ({ page
   });
   await expect(page).toHaveScreenshot('comment.png');
   await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'threads-panel.aria.yml' });
+});
+
+test("regression: pressing the cursor's line number comments on that line", async ({ page, diffle }) => {
+  await gotoFile(page, 'tally/ledger.py');
+  await clickLine(page, 'tally/ledger.py', 5);
+  // The viewer reads a press on the one selected line as unselecting it; it must open the composer.
+  await selectLines(page, 'tally/ledger.py', 5, 5);
+  const composer = page.getByPlaceholder('Leave a comment…');
+  await expect(composer).toBeVisible();
+  await composer.fill('Name the unit.');
+  await composer.press('Control+Enter');
+  await expect
+    .poll(async () => (await readThreads(diffle.url))[0]?.anchor)
+    .toMatchObject({
+      kind: 'line',
+      path: 'tally/ledger.py',
+      startLine: 5,
+      endLine: 5,
+    });
 });
 
 test('comments on a whole file and exports both threads as a prompt', async ({ page, diffle }) => {
