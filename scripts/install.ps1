@@ -34,7 +34,8 @@ try {
   Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile (Join-Path $tmp $asset)
   Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS" -OutFile (Join-Path $tmp 'SHA256SUMS')
 
-  $line = Get-Content (Join-Path $tmp 'SHA256SUMS') | Where-Object { ($_ -split '\s+')[1] -eq $asset }
+  # A `*` before the name marks binary mode in sha256sum's format.
+  $line = Get-Content (Join-Path $tmp 'SHA256SUMS') | Where-Object { (($_ -split '\s+')[1] -replace '^\*') -eq $asset }
   if (-not $line) { Fail "SHA256SUMS lists no $asset" }
   $expected = ($line -split '\s+')[0]
   $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $asset)).Hash

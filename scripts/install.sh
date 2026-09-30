@@ -69,7 +69,8 @@ echo "downloading $base/$asset" >&2
 fetch "$base/$asset" "$tmp/$asset" || fail "download failed: $base/$asset"
 fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "download failed: $base/SHA256SUMS"
 
-expected=$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/SHA256SUMS")
+# A `*` before the name marks binary mode in sha256sum's format.
+expected=$(awk -v f="$asset" '{ sub(/^\*/, "", $2) } $2 == f { print $1 }' "$tmp/SHA256SUMS")
 [ -n "$expected" ] || fail "SHA256SUMS lists no $asset"
 actual=$(sha256 "$tmp/$asset" | awk '{ print $1 }')
 [ "$expected" = "$actual" ] || fail "checksum mismatch for $asset"
