@@ -325,18 +325,19 @@ export async function filePaths(page) {
   return paths;
 }
 
-const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /**
  * The rendered file, a `diffs-container` holding the header and the viewed and collapse controls.
- * Found by the path in its header title, not by position, so a file the viewer skips does not shift
- * the mapping for the ones after it.
+ * Found by the path in diffle's slotted header, whose path span carries the full path as its title,
+ * not by position, so a file the viewer skips does not shift the mapping for the ones after it.
  */
 async function fileItem(page, path) {
   if (!(await filePaths(page)).includes(path)) throw new Error(`not a changed file: ${path}`);
+  // The app's tooltip lifts `title` off the hovered control, which the path and button lookups
+  // match on; parking the pointer closes the tip and restores the attribute.
+  await page.mouse.move(0, 0);
   const item = page
     .locator('diffs-container')
-    .filter({ has: page.locator('[data-title]', { hasText: new RegExp(`^${escapeRegExp(path)}$`) }) })
+    .filter({ has: page.locator(`[slot="header-custom"] [title=${JSON.stringify(path)}]`) })
     .first();
   await item.waitFor({ state: 'attached', timeout: 5000 });
   return item;
@@ -424,6 +425,9 @@ async function cellBox(root, number, side) {
  * viewer's shadow DOM; Playwright locators pierce it.
  */
 export async function selectLines(page, path, from, to, side = 'new') {
+  // A press on an already-selected line toggles it off, and navigation leaves the cursor's line
+  // selected; Escape clears it so the drag always opens the composer.
+  await page.keyboard.press('Escape');
   const root = await fileItem(page, path);
   await root.locator('[data-column-number]').first().waitFor({ timeout: 15000 });
   const start = await cellBox(root, from, side);
