@@ -80,7 +80,7 @@ export const COLUMNS: HelpSection[][] = [
         ['t', 'cycle theme'],
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
         ['o', 'GitHub repository and pull request'],
-        ['m, then 1–4', 'open the mode picker; choose, or walk with h / j / k / l'],
+        ['m, then 1–4', 'open the mode picker and choose an entry'],
       ],
     },
     {
