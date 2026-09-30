@@ -1,11 +1,13 @@
 import { existsSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { dirname, join } from 'node:path';
+import { getAssetKeys, getRawAsset, isSea } from 'node:sea';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { compress } from 'hono/compress';
+import { getMimeType } from 'hono/utils/mime';
 import { requestGuard } from './guard.js';
 import { createApi, type ApiDeps } from './routes.js';
 
@@ -85,7 +87,9 @@ export class Server {
       c.json({ error: 'API endpoint not found. Restart diffle to load the latest server.' }, 404),
     );
 
-    if (!this.opts.dev) {
+    if (!this.opts.dev && isSea()) {
+      app.get('*', serveEmbedded);
+    } else if (!this.opts.dev) {
       const clientDir = resolveClientDir();
       app.use('*', serveStatic({ root: clientDir }));
       app.get('*', serveStatic({ root: clientDir, path: 'index.html' }));
@@ -180,5 +184,15 @@ function resolveClientDir(): string {
 }
 
 export function hasClientBuild(): boolean {
-  return existsSync(join(resolveClientDir(), 'index.html'));
+  return isSea() || existsSync(join(resolveClientDir(), 'index.html'));
+}
+
+// A single executable carries dist/client as SEA assets keyed by their relative path.
+const embedded = isSea() ? new Set(getAssetKeys()) : new Set<string>();
+
+function serveEmbedded(c: Context): Response {
+  const path = c.req.path.slice(1);
+  const key = embedded.has(path) ? path : 'index.html';
+  const type = getMimeType(key) ?? 'application/octet-stream';
+  return c.body(new Uint8Array(getRawAsset(key)), 200, { 'content-type': type });
 }

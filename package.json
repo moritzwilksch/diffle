@@ -25,6 +25,7 @@
   "files": [
     "bin",
     "dist",
+    "!dist/sea",
     "THIRD_PARTY_NOTICES.md"
   ],
   "type": "module",
@@ -37,6 +38,7 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsdown",
+    "build:sea": "npm run build && node scripts/build-sea.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
     "lint": "oxlint",
     "format": "oxfmt",

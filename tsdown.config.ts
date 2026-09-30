@@ -1,6 +1,6 @@
-import { defineConfig } from 'tsdown';
+import { defineConfig, type UserConfig } from 'tsdown';
 
-export default defineConfig({
+const server: UserConfig = {
   entry: { main: 'src/cli/main.ts' },
   outDir: 'dist/server',
   format: 'esm',
@@ -11,4 +11,10 @@ export default defineConfig({
   dts: false,
   // One self-contained file: fast startup, no runtime module resolution.
   deps: { neverBundle: ['vite'], alwaysBundle: (id) => id !== 'vite' },
-});
+};
+
+export default defineConfig([
+  server,
+  // A single executable resolves no relative modules, so lazy chunks are inlined.
+  { ...server, outDir: 'dist/sea', outputOptions: { codeSplitting: false } },
+]);
