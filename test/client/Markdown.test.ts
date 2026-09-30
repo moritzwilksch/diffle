@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
+import type { FileDiffMetadata } from '@pierre/diffs';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/client/api.js', () => ({ api: {} }));
-vi.mock('@pierre/diffs/react', () => ({ File: () => null, useWorkerPool: () => null }));
+const diffs = vi.hoisted(() => ({ rendered: [] as FileDiffMetadata[] }));
+vi.mock('@pierre/diffs/react', () => ({
+  File: () => null,
+  FileDiff: ({ fileDiff }: { fileDiff: FileDiffMetadata }) => {
+    diffs.rendered.push(fileDiff);
+    return null;
+  },
+  useWorkerPool: () => null,
+}));
 
 const { useStore } = await import('../../src/client/store.js');
 const { Markdown } = await import('../../src/client/Markdown.js');
@@ -13,6 +22,7 @@ let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  diffs.rendered = [];
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -52,12 +62,54 @@ describe('Markdown suggestion fences', () => {
   it('labels a ```suggestion fence and keeps its code verbatim', async () => {
     await act(() => root.render(createElement(Markdown, { text: 'Try:\n\n```suggestion\nx = 1\n```' })));
     const block = host.querySelector('pre.suggestion');
-    expect(block?.querySelector('.tag')?.textContent).toBe('Suggestion');
+    expect(block?.querySelector('.tag')?.textContent).toBe('Suggested change');
     expect(block?.querySelector('code')?.textContent).toBe('x = 1\n');
   });
 
   it('renders a suggestion for a known file as a highlighted block', async () => {
     await act(() => root.render(createElement(Markdown, { text: '```suggestion\nx = 1\n```', path: 'a.py' })));
-    expect(host.querySelector('.suggestion.highlighted')?.querySelector('.tag')?.textContent).toBe('Suggestion');
+    expect(host.querySelector('.suggestion.highlighted')?.querySelector('.tag')?.textContent).toBe('Suggested change');
+  });
+
+  it('renders a suggestion on quoted lines as a diff from them', async () => {
+    const text = '```suggestion\nx = 2\n```';
+    await act(() => root.render(createElement(Markdown, { text, path: 'a.py', quoted: 'x = 1\ny = 1' })));
+    const [diff] = diffs.rendered;
+    expect(diff?.hunks.map((h) => [h.deletionLines, h.additionLines])).toEqual([[2, 1]]);
+  });
+
+  it('renders an empty suggestion as deleting the quoted lines', async () => {
+    await act(() =>
+      root.render(createElement(Markdown, { text: '```suggestion\n```', path: 'a.py', quoted: 'x = 1' })),
+    );
+    const [diff] = diffs.rendered;
+    expect(diff?.hunks.map((h) => [h.deletionLines, h.additionLines])).toEqual([[1, 0]]);
+  });
+
+  it('renders an unchanged suggestion as the lines it keeps', async () => {
+    const text = '```suggestion\nx = 1\n```';
+    await act(() => root.render(createElement(Markdown, { text, path: 'a.py', quoted: 'x = 1' })));
+    expect(diffs.rendered).toEqual([]);
+    expect(host.querySelector('.suggestion.highlighted')).not.toBeNull();
+  });
+
+  it('reads an empty quote as the blank line it was', async () => {
+    const text = '```suggestion\nx = 1\n```';
+    await act(() => root.render(createElement(Markdown, { text, path: 'a.py', quoted: '' })));
+    const [diff] = diffs.rendered;
+    expect(diff?.hunks.map((h) => [h.deletionLines, h.additionLines])).toEqual([[1, 1]]);
+  });
+
+  it('ignores the CRs a quote from a CRLF file keeps', async () => {
+    const quoted = 'x = 1\r\ny = 1\r';
+    const text = '```suggestion\nx = 1\ny = 2\n```';
+    await act(() => root.render(createElement(Markdown, { text, path: 'a.py', quoted })));
+    const [diff] = diffs.rendered;
+    expect(diff?.hunks.map((h) => [h.deletionLines, h.additionLines])).toEqual([[1, 1]]);
+    diffs.rendered = [];
+    const kept = '```suggestion\nx = 1\ny = 1\n```';
+    await act(() => root.render(createElement(Markdown, { text: kept, path: 'a.py', quoted })));
+    expect(diffs.rendered).toEqual([]);
+    expect(host.querySelector('.suggestion.highlighted')).not.toBeNull();
   });
 });
