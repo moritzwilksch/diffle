@@ -12,12 +12,6 @@ vi.mock('../../src/client/api.js', () => ({
 
 const { useStore } = await import('../../src/client/store.js');
 const { ImageDiff } = await import('../../src/client/review/ImageDiff.js');
-const { useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
-
-function Keys() {
-  useKeymap();
-  return null;
-}
 
 /** Natural sizes the stub decoder reports, by URL; a URL missing here fails to decode. */
 let decoded: Record<string, [number, number]> = {};
@@ -112,7 +106,8 @@ describe('ImageDiff', () => {
     const newLayer = stack.querySelector<HTMLElement>('[data-layer="new"]')!;
     expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
     expect(host.querySelector('input[type="range"]')).toBeNull();
-    const divider = stack.querySelector<HTMLElement>('[role="slider"]')!;
+    const divider = stack.querySelector<HTMLElement>('.bg-accent')!;
+    expect(host.querySelector('[role="slider"]')).toBeNull();
     let captured = false;
     stack.setPointerCapture = vi.fn(() => {
       captured = true;
@@ -121,16 +116,20 @@ describe('ImageDiff', () => {
     vi.spyOn(stack, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 100 } as DOMRect);
     const pointer = (type: string, clientX: number) =>
       Object.assign(new Event(type, { bubbles: true }), { clientX, pointerId: 1, buttons: 1 });
+    await act(() => stack.dispatchEvent(pointer('pointermove', 20)));
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
     await act(() => stack.dispatchEvent(pointer('pointerdown', 20)));
     expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
     await act(() => stack.dispatchEvent(pointer('pointermove', 30)));
-    expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 30%)');
+    captured = false;
+    await act(() => stack.dispatchEvent(pointer('pointermove', 40)));
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 30%)');
     await act(() => stack.dispatchEvent(pointer('pointerdown', 50)));
     expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
-    await act(() => divider.dispatchEvent(pointer('pointerdown', 52)));
-    expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
+    await act(() => divider.dispatchEvent(pointer('pointerdown', 50)));
     await act(() => stack.dispatchEvent(pointer('pointermove', 20)));
-    expect(divider.getAttribute('aria-valuenow')).toBe('20');
+    expect(divider.style.left).toBe('20%');
     expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
 
     await act(() => button('Onion skin').click());
@@ -149,14 +148,10 @@ describe('ImageDiff', () => {
     expect(localStorage.getItem('diffle:imageCompare')).toBe('difference');
   });
 
-  it('clips on the canvas and lets the focused divider own its keys with the review keymap mounted', async () => {
+  it('clips a narrower new side at the divider, measured on the canvas rather than on the image', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'swipe' });
     decoded = { [url('old')]: [80, 40], [url('new')]: [40, 20] };
-    await act(() =>
-      root.render(
-        createElement('div', null, createElement(Keys), createElement(ImageDiff, { path: 'a.png', sides: 'both' })),
-      ),
-    );
+    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'both' })));
     await settle();
     const stack = host.querySelector<HTMLElement>('[data-stack="swipe"]')!;
     const layer = stack.querySelector<HTMLElement>('[data-layer="new"]')!;
@@ -164,31 +159,7 @@ describe('ImageDiff', () => {
     expect(layer.classList.contains('inset-0')).toBe(true);
     expect(layer.style.clipPath).toBe('inset(0 0 0 50%)');
     expect(layer.querySelector('img')!.style.width).toBe('50%');
-    const divider = stack.querySelector<HTMLElement>('[role="slider"]')!;
-    expect(divider.style.left).toBe('50%');
-    const moveCursor = vi.spyOn(useStore.getState(), 'moveCursor');
-    const moveCursorBy = vi.spyOn(useStore.getState(), 'moveCursorBy');
-    const setLayout = vi.spyOn(useStore.getState(), 'setLayout');
-    divider.focus();
-    for (const [key, shiftKey, expected] of [
-      ['ArrowRight', false, 51],
-      ['ArrowLeft', false, 50],
-      ['ArrowUp', true, 60],
-      ['ArrowDown', true, 50],
-      ['Home', false, 0],
-      ['End', false, 100],
-      ['ArrowRight', false, 100],
-    ] as const) {
-      await act(() =>
-        divider.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true })),
-      );
-      expect(divider.getAttribute('aria-valuenow')).toBe(String(expected));
-      expect(layer.style.clipPath).toBe(`inset(0 0 0 ${expected}%)`);
-      expect(document.activeElement).toBe(divider);
-    }
-    expect(moveCursor).not.toHaveBeenCalled();
-    expect(moveCursorBy).not.toHaveBeenCalled();
-    expect(setLayout).not.toHaveBeenCalled();
+    expect(stack.querySelector<HTMLElement>('.bg-accent')!.style.left).toBe('50%');
   });
 
   it('shows one side of an added image, with nothing to compare and no request for the missing side', async () => {

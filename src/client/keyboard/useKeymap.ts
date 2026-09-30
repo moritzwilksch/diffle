@@ -100,13 +100,7 @@ export function hasModifier(e: KeyboardEvent): boolean {
 function isEditable(el: HTMLElement | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
-  return (
-    tag === 'TEXTAREA' ||
-    tag === 'INPUT' ||
-    tag === 'SELECT' ||
-    el.getAttribute('role') === 'slider' ||
-    el.isContentEditable
-  );
+  return tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || el.isContentEditable;
 }
 
 /**
