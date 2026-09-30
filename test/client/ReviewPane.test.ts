@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/shared/protocol.js';
-import { parsePatchFiles, type CodeViewOptions } from '@pierre/diffs';
+import { parsePatchFiles, type CodeViewOptions, type FileDiffMetadata } from '@pierre/diffs';
 import { reviewGeometry } from '../../src/client/review/geometry.js';
 
 const api = {
@@ -29,8 +29,10 @@ const instanceChanged = vi.fn();
 const renderViewer = vi.fn();
 const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 const captureItems = vi.fn<(items: unknown[]) => void>();
+const primeDiffHighlightCache = vi.fn(async (_diff: unknown) => {});
 const scrollTo = vi.fn();
 vi.mock('@pierre/diffs/react', () => ({
+  useWorkerPool: () => ({ primeDiffHighlightCache }),
   CodeView: forwardRef(function CodeView(
     props: {
       containerRef: (el: HTMLDivElement | null) => void;
@@ -132,10 +134,49 @@ const box = (el: HTMLElement, top: number, bottom: number) => {
 };
 const flush = () => act(() => new Promise((r) => setTimeout(r, 30)));
 
+async function mountDiffs(paths: string[]) {
+  const diffs = paths.map(
+    (path, i) =>
+      parsePatchFiles(
+        `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old${i}\n+new${i}\n`,
+        `lookahead-${i}`,
+      )[0]!.files[0]!,
+  );
+  const changes = paths.map((path, i) => ({
+    path,
+    status: 'M' as const,
+    additions: 1,
+    deletions: 1,
+    binary: false,
+    blob: `blob-${i}`,
+    generated: false,
+  }));
+  await act(() => {
+    useStore.setState({
+      snapshot: snap(changes),
+      loaded: Object.fromEntries(paths.map((path, i) => [path, { kind: 'diff', fileDiff: diffs[i]! }])) as Record<
+        string,
+        { kind: 'diff'; fileDiff: FileDiffMetadata }
+      >,
+    });
+    root.render(createElement(ReviewPane));
+  });
+  const items = captureItems.mock.lastCall![0] as { id: string }[];
+  const scroller = host.querySelector<HTMLDivElement>('.codeview')!;
+  box(scroller, 0, 300);
+  const row = (index: number): Rendered => {
+    const element = document.createElement('div');
+    box(element, index * 100, (index + 1) * 100);
+    return { id: items[index]!.id, element, type: 'diff' };
+  };
+  return { diffs, items, row, scroller };
+}
+
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   renderViewer.mockReset();
+  primeDiffHighlightCache.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -174,6 +215,93 @@ afterEach(async () => {
 });
 
 describe('ReviewPane scroller effects', () => {
+  it('primes ahead in the scroll direction and keeps only the latest pending target', async () => {
+    const { diffs, row, scroller } = await mountDiffs(['a.py', 'b.py', 'c.py', 'd.py', 'e.py']);
+    rendered = [row(0), row(1)];
+    let release!: () => void;
+    primeDiffHighlightCache.mockImplementationOnce(() => new Promise<void>((resolve) => (release = resolve)));
+
+    const scroll = async (top: number, visible: number[]) => {
+      rendered = visible.map(row);
+      scroller.scrollTop = top;
+      scroller.dispatchEvent(new Event('scroll'));
+      await flush();
+    };
+    await scroll(100, [0, 1]);
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(1);
+    expect(primeDiffHighlightCache).toHaveBeenNthCalledWith(1, diffs[2]);
+    await scroll(200, [1, 2]);
+    await scroll(300, [2, 3]);
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(2);
+    expect(primeDiffHighlightCache).toHaveBeenNthCalledWith(2, diffs[4]);
+
+    await scroll(200, [2, 3]);
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(3);
+    expect(primeDiffHighlightCache).toHaveBeenNthCalledWith(3, diffs[1]);
+  });
+
+  it('drops a held pending prime when the snapshot removes its diff', async () => {
+    const paths = ['a.py', 'b.py', 'c.py', 'd.py', 'e.py'];
+    const { row, scroller } = await mountDiffs(paths);
+    rendered = [row(0), row(1)];
+    let release!: () => void;
+    primeDiffHighlightCache.mockImplementationOnce(() => new Promise<void>((resolve) => (release = resolve)));
+
+    const scroll = async (top: number, visible: number[]) => {
+      rendered = visible.map(row);
+      scroller.scrollTop = top;
+      scroller.dispatchEvent(new Event('scroll'));
+      await flush();
+    };
+    await scroll(100, [0, 1]);
+    await scroll(300, [2, 3]);
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(1);
+
+    await act(() => {
+      const snapshot = useStore.getState().snapshot!;
+      const loaded = useStore.getState().loaded;
+      useStore.setState({
+        snapshot: { ...snapshot, version: snapshot.version + 1, changed: snapshot.changed.slice(0, 3) },
+        loaded: Object.fromEntries(paths.slice(0, 3).map((path) => [path, loaded[path]!])),
+      });
+    });
+    await act(async () => {
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a held pending prime when the viewer tears down', async () => {
+    const { diffs, row, scroller } = await mountDiffs(['a.py', 'b.py', 'c.py', 'd.py', 'e.py']);
+    rendered = [row(0), row(1)];
+    let release!: () => void;
+    primeDiffHighlightCache.mockImplementationOnce(() => new Promise<void>((resolve) => (release = resolve)));
+
+    const scroll = async (top: number, visible: number[]) => {
+      rendered = visible.map(row);
+      scroller.scrollTop = top;
+      scroller.dispatchEvent(new Event('scroll'));
+      await flush();
+    };
+    await scroll(100, [0, 1]);
+    await scroll(300, [2, 3]);
+    expect(primeDiffHighlightCache).toHaveBeenCalledWith(diffs[2]);
+
+    await act(() => root.render(createElement('div')));
+    await act(async () => {
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(primeDiffHighlightCache).toHaveBeenCalledTimes(1);
+  });
+
   it('does not accumulate scroll drift when local search repeatedly opens and closes', async () => {
     await act(() => {
       useStore.setState({ snapshot: snap(changed), activePath: 'a.txt' });

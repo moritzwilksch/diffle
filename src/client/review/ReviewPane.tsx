@@ -12,7 +12,7 @@ import type {
   OnLineClickProps,
   TokenEventBase,
 } from '@pierre/diffs';
-import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
+import { CodeView, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import {
   ChevronDown,
   ChevronRight,
@@ -235,6 +235,27 @@ const codeViewOptions = {
 
 const LOADING: Loaded = { kind: 'loading' };
 
+type WorkerPool = NonNullable<ReturnType<typeof useWorkerPool>>;
+type PendingHighlight = { key: string; diff: FileDiffMetadata; pool: WorkerPool };
+type HighlightLookahead = { runningKey: string | null; lastKey: string | null; pending: PendingHighlight | null };
+
+function drainHighlightLookahead(state: HighlightLookahead): void {
+  if (state.runningKey || !state.pending) return;
+  const pending = state.pending;
+  state.pending = null;
+  if (state.lastKey === pending.key) return;
+  state.runningKey = pending.key;
+  void Promise.resolve()
+    .then(() => pending.pool.primeDiffHighlightCache(pending.diff))
+    .catch(() => {})
+    .finally(() => {
+      state.runningKey = null;
+      // Remember failures too: a rejected prime should not be retried on every scroll event.
+      state.lastKey = pending.key;
+      drainHighlightLookahead(state);
+    });
+}
+
 export function ReviewPane() {
   const rem = remPx();
   const geometry = useMemo(() => reviewGeometry(rem), [rem]);
@@ -260,6 +281,12 @@ export function ReviewPane() {
   const reveal = useStore((s) => s.reveal);
   const setActivePath = useStore((s) => s.setActivePath);
   const viewerRef = useRef<CodeViewHandle<Annot> | null>(null);
+  const workerPool = useWorkerPool();
+  const lookahead = useRef<HighlightLookahead>({
+    runningKey: null,
+    lastKey: null,
+    pending: null,
+  });
   const theme = useStore((s) => s.theme);
   const diffStyle = useStore((s) => s.diffStyle);
 
@@ -365,14 +392,34 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     let raf = 0;
+    let lastScrollTop = scroller.scrollTop;
+    let direction: 'up' | 'down' = 'down';
+    const indexById = new Map(items.map((item, index) => [item.id, index]));
+    const state = lookahead.current;
     const update = () => {
       raf = 0;
+      const rendered = viewerRef.current?.getInstance()?.getRenderedItems() ?? [];
+      if (workerPool && rendered.length > 0) {
+        let edge = direction === 'down' ? -1 : items.length;
+        for (const row of rendered) {
+          const index = indexById.get(row.id);
+          if (index !== undefined) edge = direction === 'down' ? Math.max(edge, index) : Math.min(edge, index);
+        }
+        const nextIndex = edge + (direction === 'down' ? 1 : -1);
+        const candidate = items[nextIndex];
+        if (candidate?.type === 'diff' && candidate.fileDiff.cacheKey) {
+          const key = `${theme}:${candidate.fileDiff.cacheKey}`;
+          if (state.runningKey !== key && state.lastKey !== key)
+            state.pending = { key, diff: candidate.fileDiff, pool: workerPool };
+          else if (state.pending?.key !== key) state.pending = null;
+          drainHighlightLookahead(state);
+        } else state.pending = null;
+      }
       if (jumping.current || useStore.getState().selection) return;
-      const items = viewerRef.current?.getInstance()?.getRenderedItems() ?? [];
       const box = scroller.getBoundingClientRect();
       const header = geometry.itemMetrics.diffHeaderHeight;
       const eye = box.top + box.height * EYE_FRACTION;
-      const inView = items
+      const inView = rendered
         .map((r) => ({ id: r.id, rect: r.element.getBoundingClientRect() }))
         .filter((r) => r.rect.bottom > box.top + header + 1 && r.rect.top < box.bottom && r.rect.height > 0);
       if (inView.length === 0) return;
@@ -384,15 +431,21 @@ export function ReviewPane() {
       const path = pathFromItemId(pick.id);
       if (path !== s.activePath) s.setActivePath(path);
     };
+    // Highlight one diff beyond the rendered window without mounting more DOM. Keep one request in flight
+    // and replace the pending target on scroll so speculative work cannot flood the worker queue.
     const onScroll = () => {
+      const scrollTop = scroller.scrollTop;
+      if (scrollTop !== lastScrollTop) direction = scrollTop > lastScrollTop ? 'down' : 'up';
+      lastScrollTop = scrollTop;
       if (!raf) raf = requestAnimationFrame(update);
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       scroller.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
+      state.pending = null;
     };
-  }, [scroller, geometry]);
+  }, [scroller, geometry, items, workerPool, theme]);
 
   // A display toggle re-lays the rows out (split / unified) or remounts the viewer (theme). Neither is
   // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
