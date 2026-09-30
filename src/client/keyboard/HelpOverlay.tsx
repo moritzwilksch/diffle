@@ -31,6 +31,7 @@ export const COLUMNS: HelpSection[][] = [
         ['{n}gg / {n}G', 'line n of the current file'],
         ['] / [   n / N', 'next / previous hunk (n / N follow matches while searching)'],
         ['v', 'toggle viewed on the current file'],
+        ['gv', 'toggle viewed on the file above'],
         ['zo / zc', 'expand / collapse the current file (zo loads a large diff)'],
         ['zO / zC', 'open / close all files'],
         ['F', 'view the current file whole; Ctrl+o returns'],

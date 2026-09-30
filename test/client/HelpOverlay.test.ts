@@ -26,6 +26,7 @@ const BOUND = [
   'dd',
   'R',
   'v',
+  'gv',
   'zo / zc',
   'zO / zC',
   'zt / zb',

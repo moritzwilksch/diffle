@@ -332,6 +332,8 @@ export interface ReviewState {
   toggleResolvedAtCursor(): Promise<void>;
   /** `v`: flip viewed on the file under the cursor; marking it viewed advances to the next unviewed file. */
   toggleViewedAtCursor(): Promise<void>;
+  /** `gv`: flip viewed on the file above the cursor's, leaving the cursor where it is. */
+  toggleViewedAbove(): Promise<void>;
   /** Open the next (or previous) unviewed file in risk order (see review/order.ts). */
   setCollapsedAtCursor(collapsed: boolean): void;
   setAllCollapsed(collapsed: boolean): void;
@@ -1875,6 +1877,20 @@ export const useStore = create<ReviewState>((set, get) => {
       // waiting for the server; `notViewed` already sees the file as viewed.
       const persisted = get().setViewed(path, viewed);
       if (viewed) afterCollapse(path, notViewed);
+      await persisted;
+    },
+    async toggleViewedAbove() {
+      const items = nav();
+      const at = items.findIndex((i) => i.path === get().activePath);
+      const above = at > 0 ? items[at - 1]!.path : undefined;
+      const f = above ? get().snapshot?.changed.find((x) => x.path === above) : undefined;
+      if (!f) return get().flash('No file above');
+      const persisted = get().setViewed(f.path, !isViewed(get(), f));
+      // The file above folds or unfolds; pin the cursor at eye level, where `]` left it, so the text read stays put.
+      const item = items[at]!;
+      set((s) => ({
+        scrollTarget: s.selection ? cursorTarget(s, 'eye') : { id: item.id, nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+      }));
       await persisted;
     },
     setCollapsedAtCursor(collapsed) {

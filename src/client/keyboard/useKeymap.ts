@@ -51,6 +51,7 @@ const KEYMAP: Record<string, Action> = {
   dd: (s) => s.deleteCommentAtCursor(),
   R: (s) => s.toggleResolvedAtCursor(),
   v: (s) => s.toggleViewedAtCursor(),
+  gv: (s) => s.toggleViewedAbove(),
   zo: (s) => s.setCollapsedAtCursor(false),
   zc: (s) => s.setCollapsedAtCursor(true),
   zC: (s) => s.setAllCollapsed(true),
