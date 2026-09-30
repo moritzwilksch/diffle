@@ -282,7 +282,11 @@ const ThreadRow = memo(function ThreadRow({
             {firstLine(t.anchor.quoted)}
           </div>
         )}
-        <Markdown text={first?.body ?? ''} path={t.anchor.path} />
+        <Markdown
+          text={first?.body ?? ''}
+          path={t.anchor.path}
+          quoted={t.anchor.kind === 'line' ? t.anchor.quoted : undefined}
+        />
       </div>
     </div>
   );

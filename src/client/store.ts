@@ -359,8 +359,8 @@ export interface ReviewState {
     side?: Side;
     align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
     offset?: number;
-    /** Leave the viewport alone if this item's search form is already fully visible. */
-    revealSearch?: boolean;
+    /** Leave the viewport alone while that part of this item is on screen: its search form whole, or its top edge. */
+    unlessVisible?: 'search' | 'top';
     nonce: number;
   } | null;
 
@@ -569,7 +569,11 @@ export const useStore = create<ReviewState>((set, get) => {
     return {
       gens,
       selection: s.selection && moved(s.selection),
-      draft: s.draft && { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) },
+      // An unmoved draft keeps its identity: a new one is an open request and refocuses the composer.
+      draft:
+        s.draft && paths.includes(s.draft.path)
+          ? { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) }
+          : s.draft,
       // A new object re-runs the scroll effect, so a jump in flight lands on the fresh renderer.
       scrollTarget: s.scrollTarget && moved(s.scrollTarget),
       reveal: s.reveal && moved(s.reveal),
@@ -1361,7 +1365,7 @@ export const useStore = create<ReviewState>((set, get) => {
                 scrollTarget: {
                   id: itemIdOf(s, path),
                   align: 'start' as const,
-                  revealSearch: true,
+                  unlessVisible: 'search' as const,
                   nonce: (s.scrollTarget?.nonce ?? 0) + 1,
                 },
               }
@@ -1388,7 +1392,7 @@ export const useStore = create<ReviewState>((set, get) => {
               scrollTarget: {
                 id: itemIdOf(s, s.search.path),
                 align: 'start' as const,
-                revealSearch: true,
+                unlessVisible: 'search' as const,
                 nonce: (s.scrollTarget?.nonce ?? 0) + 1,
               },
             }
@@ -2122,7 +2126,20 @@ export const useStore = create<ReviewState>((set, get) => {
       // there; a cursor in another file gives way to this file's header as the motion stop.
       const sel = get().selection;
       const kept = sel && pathFromItemId(sel.id) === path ? sel : null;
-      set({ draft: { path, selection: null }, selection: kept, visualAnchor: null, activePath: path, replyTo: null });
+      // The composer sits above the first line, so it is off screen once the reader has scrolled into the file.
+      set((s) => ({
+        draft: { path, selection: null },
+        selection: kept,
+        visualAnchor: null,
+        activePath: path,
+        replyTo: null,
+        scrollTarget: {
+          id: itemIdOf(s, path),
+          align: 'start',
+          unlessVisible: 'top',
+          nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+        },
+      }));
       ensureExpanded(path);
     },
 
