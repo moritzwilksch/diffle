@@ -75,17 +75,66 @@ export async function filePaths(page: Page): Promise<string[]> {
 /**
  * The rendered file, a `diffs-container` holding the header and the viewed and collapse controls.
  * Found by the path its header names, not by position, so a file the viewer skips does not shift
- * the mapping for the ones after it. The viewer renders only files near the viewport: move the
- * cursor there first (`gotoFile`, `J`/`K`) for a file further down.
+ * the mapping for the ones after it. The viewer renders only files near the viewport, so a file
+ * further down is brought into view with `reveal` first, which moves the cursor there.
  */
-async function fileItem(page: Page, path: string) {
+async function fileItem(page: Page, path: string, reveal: (page: Page, path: string) => Promise<void> = walkToFile) {
   if (!(await filePaths(page)).includes(path)) throw new Error(`not a changed file: ${path}`);
   const item = page
     .locator('diffs-container')
     .filter({ has: page.locator(`[slot="header-custom"] [data-path=${JSON.stringify(path)}]`) })
     .first();
-  await item.waitFor({ state: 'attached', timeout: 5000 });
+  if ((await item.count()) === 0) await reveal(page, path);
+  await item.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {
+    throw new Error(`${path} is in the tree, but the viewer rendered no file for it after moving the cursor there`);
+  });
   return item;
+}
+
+/**
+ * The rendered file with its line rows, for the verbs that act on lines. `gotoFile` reveals it and
+ * expands it if collapsed. Fails fast on a file that has no rows to act on.
+ */
+async function fileLines(page: Page, path: string) {
+  let item = await fileItem(page, path, gotoFile);
+  if (!(await hasRows(item, 1))) {
+    await gotoFile(page, path);
+    item = await fileItem(page, path, gotoFile);
+  }
+  if (!(await hasRows(item))) {
+    throw new Error(`${path} renders no lines: it is binary, empty, or a pure rename or mode change`);
+  }
+  return item;
+}
+
+/** Whether a file shows line rows. Binary and rename-only files keep zero-size number cells. */
+async function hasRows(item: ReturnType<Page['locator']>, tries = 20): Promise<boolean> {
+  for (let i = 0; i < tries; i++) {
+    const sized = await item
+      .locator('[data-column-number]')
+      .evaluateAll((cells) => cells.some((cell) => cell.getBoundingClientRect().height > 0));
+    if (sized) return true;
+    await item.page().waitForTimeout(100);
+  }
+  return false;
+}
+
+/**
+ * Scroll line `number` into the viewport and wait until it stops moving: a jump lands on an estimated
+ * layout that the viewer corrects once the rows above render, and a press taken mid-correction lands
+ * on another row.
+ */
+async function revealLine(root: ReturnType<Page['locator']>, number: number): Promise<void> {
+  const cell = root.locator(`[data-column-number="${number}"]`).first();
+  if ((await cell.count()) === 0) return;
+  await cell.scrollIntoViewIfNeeded();
+  let last = (await cell.boundingBox())?.y;
+  for (let i = 0; i < 20; i++) {
+    await root.page().waitForTimeout(50);
+    const now = (await cell.boundingBox())?.y;
+    if (now === last) return;
+    last = now;
+  }
 }
 
 /** The file header's content (path, counts, badges and controls), for reading or clicking. */
@@ -96,7 +145,7 @@ export async function header(page: Page, path: string) {
 /** Wait for syntax-colored tokens in a rendered source file, excluding plaintext and placeholders. */
 export async function waitForHighlight(page: Page, path: string): Promise<void> {
   await (
-    await fileItem(page, path)
+    await fileItem(page, path, gotoFile)
   )
     .locator('span[data-char][style*="--diffs-token-"]')
     .first()
@@ -194,19 +243,21 @@ export async function toggleCollapse(page: Page, path: string): Promise<void> {
 
 /** The number cell of `number` on `side`: in split view the same number appears on both sides. */
 async function cellBox(root: ReturnType<Page['locator']>, number: number, side: 'old' | 'new') {
-  const boxes = await root.locator('[data-column-number]').evaluateAll(
-    (cells, wanted) =>
-      cells
-        .filter((cell) => cell.getAttribute('data-column-number') === wanted)
-        .map((cell) => cell.getBoundingClientRect())
-        .filter((box) => box.width > 0 && box.height > 0)
-        .map(({ x, y, width, height }) => ({ x, y, width, height })),
-    String(number),
+  const cells = await root.locator('[data-column-number]').evaluateAll((elements) =>
+    elements
+      .map((cell) => ({ number: cell.getAttribute('data-column-number'), box: cell.getBoundingClientRect() }))
+      .filter(({ box }) => box.width > 0 && box.height > 0)
+      .map(({ number, box: { x, y, width, height } }) => ({ number, x, y, width, height })),
   );
   const wantRight = side !== 'old';
   let best: { x: number; y: number; width: number; height: number } | null = null;
-  for (const box of boxes) if (best === null || (wantRight ? box.x > best.x : box.x < best.x)) best = box;
-  if (!best) throw new Error(`line ${number} not found on the ${side} side`);
+  for (const box of cells.filter((cell) => cell.number === String(number))) {
+    if (best === null || (wantRight ? box.x > best.x : box.x < best.x)) best = box;
+  }
+  if (!best) {
+    const shown = [...new Set(cells.map((cell) => Number(cell.number)))].sort((a, b) => a - b);
+    throw new Error(`line ${number} not found on the ${side} side; rendered lines: ${shown.join(', ') || 'none'}`);
+  }
   return best;
 }
 
@@ -223,15 +274,21 @@ export async function selectLines(
   to: number,
   side: 'old' | 'new' = 'new',
 ): Promise<void> {
-  const root = await fileItem(page, path);
-  await root.locator('[data-column-number]').first().waitFor({ timeout: 15000 });
+  const root = await fileLines(page, path);
+  await revealLine(root, from);
   const start = await cellBox(root, from, side);
   const end = await cellBox(root, to, side);
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();
   await page.mouse.move(end.x + end.width / 2, end.y + end.height - 4, { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(250);
+  await page
+    .locator('textarea')
+    .first()
+    .waitFor({ timeout: 5000 })
+    .catch(() => {
+      throw new Error(`selecting ${path}:${from}-${to} opened no comment composer`);
+    });
 }
 
 /**
@@ -239,8 +296,8 @@ export async function selectLines(
  * the way a reader picks a line before pressing `c`.
  */
 export async function clickLine(page: Page, path: string, number: number, side: 'old' | 'new' = 'new'): Promise<void> {
-  const root = await fileItem(page, path);
-  await root.locator('[data-column-number]').first().waitFor({ timeout: 15000 });
+  const root = await fileLines(page, path);
+  await revealLine(root, number);
   const cell = await cellBox(root, number, side);
   await page.mouse.click(cell.x + cell.width + 24, cell.y + cell.height / 2);
   await page.waitForTimeout(250);
@@ -257,7 +314,7 @@ export async function hoverSymbol(
   text: string,
   { path, side = 'new' }: { path?: string; side?: 'old' | 'new' } = {},
 ): Promise<void> {
-  const root = path ? await fileItem(page, path) : page;
+  const root = path ? await fileItem(page, path, gotoFile) : page;
   const pattern = new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
   const tokens = root.locator('span[data-char]', { hasText: pattern });
   const boxes = await tokens.evaluateAll((elements) =>
