@@ -149,6 +149,7 @@ async function mountDiffs(paths: string[]) {
     deletions: 1,
     binary: false,
     blob: `blob-${i}`,
+    oldBlob: `old-blob-${i}`,
     generated: false,
   }));
   await act(() => {
