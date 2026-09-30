@@ -5,35 +5,61 @@ description: Capture cropped before/after screenshots or record a video of diffl
 
 # Capture a diffle UI change
 
-Prove each change with the smallest image that shows it. A capture is a short scenario script over `scripts/harness.mjs`; copy `scripts/scenario.template.mjs` and edit it. The harness documents the rest.
+Prove each change with the smallest image that shows it. Write a scenario, run it with `scripts/shoot.mjs`, read the one image it points at. Setup: [SETUP.md](SETUP.md).
 
-## Screenshots
+## Write a scenario
 
-1. **Prepare a throwaway repo with a diff.** Keep it outside the checkout and pass it with `-C`. Include the lines and files the change touches; content only needs to render. Done when `git -C <repo> diff <range>` lists the changed files.
-2. **Build the client once.** `buildClient()` (install dependencies first, see [SETUP.md](SETUP.md)). The server serves `dist/client`; server code rarely affects a capture.
-3. **Capture the after state.** Crop to the element with `crop(page, selector, path)`, or `clip(page, box, path)` for a region. Seed what the server can hold with `seedThreads(url, threads)`; drive what has no endpoint with the page. Reach diffle controls through the verbs (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`) instead of locators. Done when every change has a named crop.
-4. **Capture the before state** inside `withBaseClient(rev, fn)`. It builds `rev` into a worktree, installs that client, runs `fn`, then restores this checkout's client. Re-run the same scenario inside `fn`. Done when each after crop has a before crop from the same selector.
-5. **Verify** by reading one crop per change. Done when the pixels show the stated difference; re-capture rather than describe a mismatch.
+Save it in your scratch directory, never in the checkout:
 
-## Video
+```js
+// Demo repo: `before` committed, `after` committed on top (null deletes a file).
+export const repo = { before: { 'a.py': 'x = 1\n' }, after: { 'a.py': 'x = 2\n' } };
 
-Record behavior that unfolds over time: key presses, cursor jumps, collapses. Steps 1 and 2 are the screenshot workflow's.
+export default async ({ page, shot, selectLines }) => {
+  await selectLines('a.py', 1);
+  await page.keyboard.type('Wait...');
+  await shot('composer', page.locator('textarea').first());
+};
+```
 
-1. **Record the run.** `newVideoPage(browser, url, { dir })` records at the viewport size, so frames map 1:1 to CSS pixels. Drive it with `page.keyboard`, pausing between beats so a reader can follow. The vim keys are document-level: `gg` first file, `J`/`K` move file, `v` toggle viewed, `zc` collapse; use them for the beats a viewer should follow. Set up before recording with `gotoFile(page, path)`, which clicks the tree row and waits for the cursor, instead of counting `J` presses. Keyboard selection beats `selectLines` here: `V` starts it, `j` extends, `c` opens the composer, so the comment lands in the file under the cursor.
-2. **Assert while recording.** A recording that asserts is a test; one that only shows is a hope. Assert the controls with the verbs (`activePath` after each `J`/`K`), and assert the setup too; stale state silently changes what the run means. Assert a submitted comment with `readThreads(url)` and its `anchor.path`, not just the pixels.
-3. **Save and verify.** `saveVideo(context, video, path)` closes the context, converts the recorded webm to mp4, and writes it to `path`. It leaves the intermediate webm next to the mp4; delete it if the take is good. Recording starts when the context opens, before the page settles, so wall-clock beats drift from video time. Read frames back with `frame(mp4, seconds, png)` and size the beats with `videoDuration(mp4)` rather than trusting a stopwatch. Done when the transition is on tape; re-record rather than describe a mismatch.
+Exports:
 
-## Notes
+- `repo`: `{ before, after, commit? }` files for a fresh demo repo (`commit: false` leaves `after` uncommitted), or the absolute path of an existing repo.
+- `revs`: diffle's revision arguments. Default `HEAD~1..HEAD` for a committed demo, none (the working tree) otherwise.
+- `args`: extra diffle flags, e.g. `['--context', '10']`.
+- `setup({ url, seedThreads })`: runs before the page opens; seed server state here.
+- `viewport`: `{ width, height, colorScheme, scale }`, default 1440×900, light, 2x.
+- `video`: `true` records each side to `<scenario>-<side>.mp4` at 1x.
+- `default(ctx)`: the interaction. `ctx` holds `page`, `url`, `side`, `assert` (`node:assert/strict`), `h` (the whole harness), `shot`, `seedThreads`, `readThreads`, and the verbs bound to the page.
 
-- **Crop to the element.** Read back only the crops: a 500×200 crop costs a fraction of a 1440×900 frame. Captures are 2x by default (`newPage(..., { scale })`), so a crop's pixel count is four times its CSS box.
-- **The app sets the type.** The client bundles JetBrains Mono and Inter, and `newPage`/`newVideoPage` wait for `document.fonts.ready`, so a capture on any host shows the design's fonts.
-- **Seed over HTTP.** Clicking state through the UI is slower and flakier than one request.
-- **Wait on a signal.** `locator.waitFor()` beats `waitForTimeout`; keep timeouts for animations only.
-- **Locators pierce the shadow DOM, `page.evaluate` does not.** The viewer and file tree render into shadow roots, so reach for Playwright locators (or the verbs) instead of `querySelector` inside `evaluate`.
-- **Viewing moves the cursor.** `setViewed` and `v` collapse the file and land on the next unviewed file, so read `activePath` after them. `setViewed` clicks the checkbox and blurs it so later keys still land; a raw checkbox click would leave focus on the `INPUT` and swallow the keymap.
-- Diffle verbs index files by tree order (`pkg/` before root files), not flat alphabetical, so pass the exact changed path. `gotoFile(page, path)` moves the cursor there deterministically; `filePaths(page)` returns the order when you need it. These read the file tree, so they need it visible (`Ctrl+B` toggles it).
-- Review state (viewed, collapsed, threads) persists under the demo repo's `<git-dir>/diffle/`; call `resetReviewState(repo)` before a take so the run starts clean.
-- `selectLines(page, path, from, to)` selects a line range in one file and opens the composer; `openModePicker` opens the compare menu. Line numbers repeat across files, so always pass the path the cursor is in. `selectLines` presses Escape first, which clears the cursor's selection and closes an open composer.
-- The per-file verbs park the pointer at the top-left corner: the app's tooltip lifts `title` off a hovered control, and the verbs find paths and buttons by title. Hover again before a crop that should show a hover state.
-- Read state back with `readThreads(url)` and `activePath(page)` instead of scraping the DOM. A thread's path is `anchor.path`, not a top-level `path`.
-- A launch failure means missing setup: see [SETUP.md](SETUP.md).
+`shot(label, target)` crops a selector or locator, or clips a `{ x, y, width, height }` box, to `<label>-<side>.png`.
+
+Verbs, which take the changed file's exact path:
+
+| Verb                                       | Does                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `filePaths()`                              | Changed files in tree order (`pkg/` before root files).                         |
+| `activePath()`                             | File under the cursor.                                                          |
+| `gotoFile(path)`                           | Moves the cursor there via the tree.                                            |
+| `header(path)`                             | The file header locator.                                                        |
+| `viewed(path)` / `setViewed(path, on)`     | Viewed state. Viewing collapses and moves the cursor to the next unviewed file. |
+| `collapsed(path)` / `toggleCollapse(path)` | Collapse state.                                                                 |
+| `selectLines(path, from, to?, side?)`      | Drags the number column and waits for the composer. Presses Escape first.       |
+| `openModePicker(entry?)`                   | Opens the compare menu, optionally picks an entry.                              |
+
+## Run it
+
+```sh
+node .agents/skills/screenshot-change/scripts/shoot.mjs <scenario.mjs> --before origin/main --out <scratch>/shots
+```
+
+It builds what is stale, runs the scenario against this checkout and, with `--before`, against the base revision's own server and client. It prints the output paths only: each shot per side and a labelled `<label>-compare.png`. Read the compare image; attach the per-side crops to the PR. A failure prints the error, the scenario line, and `failure-<side>.png` of the viewport; exit status 1.
+
+## Rules
+
+- **Assert, don't hope.** Check state with the verbs and `readThreads()` (a thread's path is `anchor.path`), not pixels. For video, assert after each beat: `J`/`K` move file (the first `J` lands on the first file), `v` views, `zc` collapses, `V`…`c` comments.
+- **Wait on signals.** Prefer `locator.waitFor()`; keep `waitForTimeout` for animations and video beats.
+- **Locators pierce shadow DOM; `page.evaluate` does not.** The viewer and tree render in shadow roots.
+- **The verbs park the pointer** at the top-left corner, because the app's tooltip lifts `title` off a hovered control. Hover again before a shot of a hover state.
+- **Focus matters.** A focused `INPUT` swallows the keymap; `setViewed` blurs its checkbox, and raw clicks should too.
+- **A verb that times out means the UI moved.** Run `scripts/selftest.mjs` through `shoot.mjs`, fix `harness.mjs` until it passes, and ship the fix with your change.

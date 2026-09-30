@@ -1,19 +1,26 @@
-// Screenshot harness for diffle UI changes. Import the helpers from a short scenario
-// script instead of re-deriving the browser, server, and shadow-DOM boilerplate.
+// Screenshot harness for diffle UI changes. `shoot.mjs` runs a scenario over it; a custom script can
+// import the helpers directly by absolute path.
 //
-//   import { withDiffle, openBrowser, newPage, seedThreads, crop, viewed } from
-//     '<repo>/.agents/skills/screenshot-change/scripts/harness.mjs';
-//
-// The diffle-specific helpers (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`,
-// `activePath`, `gotoFile`, `selectLines`, `openModePicker`) encode where the UI lives; the rest is generic.
-// Verbs that take a path index files by tree order; `filePaths` returns that order.
-// `frame`/`videoDuration` read a recording back.
+// The diffle verbs (`header`, `viewed`, `collapsed`, `setViewed`, `toggleCollapse`, `activePath`,
+// `gotoFile`, `selectLines`, `openModePicker`, `filePaths`) encode where the UI lives; the rest is
+// generic. Verbs that take a path index files by tree order; `filePaths` returns that order.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, rmSync, symlinkSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
 /** Skill directory that contains this script. */
@@ -22,8 +29,8 @@ export const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /** Diffle checkout that contains this script. */
 export const REPO_ROOT = resolve(SKILL_ROOT, '../../..');
 
-/** Dist client the server serves. Swap it to screenshot a different client build. */
-export const CLIENT_DIR = join(REPO_ROOT, 'dist/client');
+const win = process.platform === 'win32';
+const npm = win ? 'npm.cmd' : 'npm';
 
 /**
  * Chromium's shared libraries. A headless shell needs libnspr4/libnss3 and friends, which a
@@ -52,7 +59,7 @@ function resolvePlaywright() {
     }
   }
   try {
-    const globalRoot = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim();
+    const globalRoot = execFileSync(npm, ['root', '-g'], { encoding: 'utf8' }).trim();
     for (const name of ['playwright', 'playwright-core']) {
       const candidate = join(globalRoot, name, 'index.mjs');
       if (existsSync(candidate)) return pathToFileURL(candidate).href;
@@ -60,10 +67,7 @@ function resolvePlaywright() {
   } catch {
     // npm missing or failed; fall through to the error below
   }
-  throw new Error(
-    'Playwright not found. Install dependencies in the checkout (`npm install`) and a browser ' +
-      '(`npx playwright install chromium --only-shell`), or point PLAYWRIGHT_MODULE at a playwright `index.mjs`.',
-  );
+  throw new Error('Playwright not found; see SETUP.md.');
 }
 
 /** Launch Chromium, adding Chromium's shared libraries to the loader path when found. */
@@ -75,6 +79,105 @@ export async function openBrowser() {
   const chromium = mod.chromium ?? mod.default?.chromium;
   if (!chromium) throw new Error(`Playwright at ${resolvePlaywright()} exposes no chromium export`);
   return chromium.launch();
+}
+
+/** Run a command with its output captured; on failure, throw with the output's tail. */
+function quiet(cmd, args, opts = {}) {
+  try {
+    return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+  } catch (error) {
+    const out = `${error.stdout ?? ''}${error.stderr ?? ''}`.trim().split('\n').slice(-30).join('\n');
+    throw new Error(`${cmd} ${args.join(' ')} failed\n${out}`);
+  }
+}
+
+/** Inputs of the client build; a change to any of them makes `dist/client` stale. */
+const CLIENT_INPUTS = ['src/client', 'src/shared', 'vite.config.ts', 'tsconfig.client.json', 'package-lock.json'];
+
+function inputsKey(root) {
+  const hash = createHash('sha256');
+  const walk = (path) => {
+    if (!existsSync(path)) return;
+    const st = statSync(path);
+    if (!st.isDirectory()) return hash.update(`${relative(root, path)}\0${st.size}\0${st.mtimeMs}\n`);
+    for (const name of readdirSync(path).sort()) walk(join(path, name));
+  };
+  for (const input of CLIENT_INPUTS) walk(join(root, input));
+  return hash.digest('hex');
+}
+
+/**
+ * Build `root`'s client unless `dist/client` already matches its sources. Output is captured and
+ * shown only on failure. Returns whether it built.
+ */
+export function buildClient(root = REPO_ROOT) {
+  const stamp = join(root, 'dist/client/.shoot-stamp');
+  const key = inputsKey(root);
+  if (existsSync(stamp) && readFileSync(stamp, 'utf8') === key) return false;
+  quiet(npm, ['run', 'build:client'], { cwd: root });
+  writeFileSync(stamp, key);
+  return true;
+}
+
+/**
+ * A built checkout of `rev`, for the before state: `git archive` into a cache keyed by commit, with
+ * this checkout's `node_modules` linked in. Built once per commit and never registered as a
+ * worktree, so re-runs are instant and `git worktree list` stays clean.
+ */
+export function baseCheckout(rev) {
+  const sha = quiet('git', ['-C', REPO_ROOT, 'rev-parse', '--verify', `${rev}^{commit}`]).trim();
+  const cache = join(tmpdir(), 'diffle-shoot-base');
+  const dir = join(cache, sha);
+  if (existsSync(join(dir, 'dist/client/index.html'))) return dir;
+  const staging = `${dir}.${process.pid}`;
+  rmSync(staging, { recursive: true, force: true });
+  mkdirSync(staging, { recursive: true });
+  const tar = `${staging}.tar`;
+  quiet('git', ['-C', REPO_ROOT, 'archive', '-o', tar, sha]);
+  quiet('tar', ['-xf', tar, '-C', staging]);
+  rmSync(tar, { force: true });
+  symlinkSync(join(REPO_ROOT, 'node_modules'), join(staging, 'node_modules'), win ? 'junction' : 'dir');
+  buildClient(staging);
+  try {
+    renameSync(staging, dir);
+  } catch {
+    // A parallel run built the same commit first; use its copy.
+    rmSync(staging, { recursive: true, force: true });
+  }
+  return dir;
+}
+
+const GIT_ID = ['-c', 'user.name=diffle-demo', '-c', 'user.email=demo@example.invalid', '-c', 'commit.gpgsign=false'];
+
+async function writeTree(repo, files) {
+  for (const [path, text] of Object.entries(files)) {
+    const file = join(repo, path);
+    if (text === null) await rm(file, { force: true });
+    else {
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, text);
+    }
+  }
+}
+
+/**
+ * A throwaway repo in the system temp dir: `before` committed, then `after` (a path to text, or
+ * `null` to delete) committed on top, or left in the worktree when `commit` is false. Git runs with
+ * an explicit `-C` and inline identity, so nothing touches this checkout or its config.
+ */
+export async function demoRepo({ before = {}, after = {}, commit = true }) {
+  const repo = await mkdtemp(join(tmpdir(), 'diffle-demo-'));
+  const git = (...args) => quiet('git', ['-C', repo, ...GIT_ID, ...args]);
+  git('init', '-q', '-b', 'main');
+  await writeTree(repo, before);
+  git('add', '-A');
+  git('commit', '-q', '--allow-empty', '-m', 'before');
+  await writeTree(repo, after);
+  if (commit) {
+    git('add', '-A');
+    git('commit', '-q', '--allow-empty', '-m', 'after');
+  }
+  return repo;
 }
 
 /** Wait until the viewer has rendered a line, so captures are not blank. */
@@ -102,16 +205,15 @@ export async function newPage(browser, url, { width = 1440, height = 900, colorS
 }
 
 /**
- * Start diffle on `repo` for `revs`, with status noise off. Resolves once stderr names the
- * URL. Call `stop` (or use `withDiffle`) to reap the process.
+ * Start diffle from checkout `root` on `repo` for `revs`, with status noise off. Resolves once
+ * stderr names the URL. Call `stop` (or use `withDiffle`) to reap the process.
  */
-export async function startDiffle({ repo, revs = [], args = [], timeoutMs = 30000 } = {}) {
-  const win = process.platform === 'win32';
+export async function startDiffle({ repo, revs = [], args = [], root = REPO_ROOT, timeoutMs = 30000 } = {}) {
   const tsx = join(REPO_ROOT, 'node_modules/.bin/tsx') + (win ? '.cmd' : '');
   const proc = spawn(
     tsx,
     ['src/cli/main.ts', '-C', repo, '--port', '0', '--no-open', '--no-watch', '--no-lsp', ...revs, ...args],
-    { cwd: REPO_ROOT, env: { ...process.env, NO_COLOR: '1' } },
+    { cwd: root, env: { ...process.env, NO_COLOR: '1' } },
   );
   let stderr = '';
   let stdout = '';
@@ -197,52 +299,6 @@ export function resetReviewState(repo) {
   rmSync(join(resolve(repo, gitDir), 'diffle'), { recursive: true, force: true });
 }
 
-/** Install a client build (e.g. the base branch's `dist/client`) into the served directory. */
-export async function installClient(sourceDir) {
-  await rm(CLIENT_DIR, { recursive: true, force: true });
-  await cp(sourceDir, CLIENT_DIR, { recursive: true });
-}
-
-/** Build the client in this checkout. Run once per source revision. */
-export function buildClient() {
-  execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:client'], {
-    cwd: REPO_ROOT,
-    stdio: 'inherit',
-  });
-}
-
-/**
- * Run `fn` with the served client built from `rev`, then restore this checkout's build and drop
- * the temporary worktree. `rev` reuses this checkout's `node_modules` through a symlink.
- */
-export async function withBaseClient(rev, fn) {
-  const dir = await mkdtemp(join(tmpdir(), 'diffle-base-'));
-  try {
-    execFileSync('git', ['worktree', 'add', '--detach', dir, rev], { cwd: REPO_ROOT });
-    const deps = join(REPO_ROOT, 'node_modules');
-    if (existsSync(deps)) {
-      symlinkSync(deps, join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-    }
-    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:client'], {
-      cwd: dir,
-      stdio: 'inherit',
-    });
-    await installClient(join(dir, 'dist/client'));
-    return await fn();
-  } finally {
-    try {
-      buildClient();
-    } finally {
-      try {
-        execFileSync('git', ['worktree', 'remove', '--force', dir], { cwd: REPO_ROOT });
-      } catch {
-        // The worktree may never have been added; the directory removal below still cleans up.
-      }
-      await rm(dir, { recursive: true, force: true });
-    }
-  }
-}
-
 /**
  * Open a page on `url` that records video at the viewport size, so frames map 1:1 to CSS pixels.
  * Save the recording with `saveVideo`; the webm only exists once the context closes.
@@ -263,49 +319,53 @@ export async function newVideoPage(browser, url, { width = 1280, height = 800, c
 }
 
 /**
- * Close the recording context and convert the webm to mp4 (GitHub plays mp4 inline, not webm).
- * Needs a system ffmpeg with libx264; Playwright's bundled ffmpeg cannot do this.
+ * Close the recording context and convert the webm to mp4 (GitHub plays mp4 inline, not webm),
+ * then drop the webm. Needs a system ffmpeg with libx264; Playwright's bundled ffmpeg lacks it.
  */
 export async function saveVideo(context, video, mp4Path) {
   const webm = await video.path();
   await context.close();
   await mkdir(dirname(mp4Path), { recursive: true });
-  execFileSync(
-    'ffmpeg',
-    ['-y', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4Path],
-    {
-      stdio: 'inherit',
-    },
-  );
+  quiet('ffmpeg', [
+    '-y',
+    '-v',
+    'error',
+    '-i',
+    webm,
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-movflags',
+    '+faststart',
+    mp4Path,
+  ]);
+  rmSync(webm, { force: true });
   return mp4Path;
 }
 
 /** One video frame at `seconds` as a png. Cheaper than reading whole frames when verifying a take. */
 export async function frame(mp4Path, seconds, pngPath) {
   await mkdir(dirname(pngPath), { recursive: true });
-  execFileSync('ffmpeg', ['-y', '-v', 'error', '-ss', String(seconds), '-i', mp4Path, '-frames:v', '1', pngPath], {
-    stdio: ['ignore', 'ignore', 'inherit'],
-  });
+  quiet('ffmpeg', ['-y', '-v', 'error', '-ss', String(seconds), '-i', mp4Path, '-frames:v', '1', pngPath]);
   return pngPath;
 }
 
 /** Duration of a recorded mp4 in seconds, for picking a frame to probe. */
 export function videoDuration(mp4Path) {
-  const out = execFileSync(
-    'ffprobe',
-    ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', mp4Path],
-    { encoding: 'utf8' },
+  return Number(
+    quiet('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', mp4Path]).trim(),
   );
-  return Number(out.trim());
 }
 
 /**
- * Screenshot one element. Cropping at capture time keeps the image (and its read-back
- * cost) to the changed surface instead of a full frame.
+ * Screenshot one element: a selector or a Playwright locator. Cropping at capture time keeps the
+ * image (and its read-back cost) to the changed surface instead of a full frame.
  */
-export async function crop(page, selector, path) {
+export async function crop(page, target, path) {
   await mkdir(dirname(path), { recursive: true });
-  await page.locator(selector).first().screenshot({ path, animations: 'disabled' });
+  const locator = typeof target === 'string' ? page.locator(target) : target;
+  await locator.first().screenshot({ path, animations: 'disabled' });
   return path;
 }
 
@@ -314,6 +374,37 @@ export async function clip(page, box, path) {
   await mkdir(dirname(path), { recursive: true });
   await page.screenshot({ path, clip: box, animations: 'disabled' });
   return path;
+}
+
+/** Width and height of a png, read from its header. */
+export function pngSize(path) {
+  const header = readFileSync(path).subarray(16, 24);
+  return { width: header.readUInt32BE(0), height: header.readUInt32BE(4) };
+}
+
+/**
+ * Before and after pngs side by side (stacked when wide), labelled, in one image at 1x: one read
+ * verifies a change. `scale` is the crops' DPR, so they render at their CSS size.
+ */
+export async function compare(browser, { before, after, out, labels = ['Before', 'After'], scale = 2 }) {
+  const img = async (path) => `data:image/png;base64,${(await readFile(path)).toString('base64')}`;
+  const width = Math.max(pngSize(before).width, pngSize(after).width) / scale;
+  const row = width <= 700;
+  const cell = async (label, path) =>
+    `<figure><figcaption>${label}</figcaption><img src="${await img(path)}" style="width:${pngSize(path).width / scale}px"></figure>`;
+  const context = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: 100, height: 100 } });
+  try {
+    const page = await context.newPage();
+    await page.setContent(
+      `<style>body{margin:0;font:600 13px system-ui;background:#fff}main{display:inline-flex;flex-direction:${row ? 'row' : 'column'};gap:12px;padding:12px}figure{margin:0}figcaption{margin-bottom:4px;color:#555}img{display:block;outline:1px solid #ddd}</style>` +
+        `<main>${await cell(labels[0], before)}${await cell(labels[1], after)}</main>`,
+    );
+    await mkdir(dirname(out), { recursive: true });
+    await page.locator('main').screenshot({ path: out });
+  } finally {
+    await context.close();
+  }
+  return out;
 }
 
 /** Changed files in the order the diff renders them, the order the verbs below index by. */
@@ -331,7 +422,9 @@ export async function filePaths(page) {
  * not by position, so a file the viewer skips does not shift the mapping for the ones after it.
  */
 async function fileItem(page, path) {
-  if (!(await filePaths(page)).includes(path)) throw new Error(`not a changed file: ${path}`);
+  const paths = await filePaths(page);
+  if (!paths.includes(path))
+    throw new Error(`not a changed file: ${path} (tree has ${paths.join(', ') || 'no files'})`);
   // The app's tooltip lifts `title` off the hovered control, which the path and button lookups
   // match on; parking the pointer closes the tip and restores the attribute.
   await page.mouse.move(0, 0);
@@ -339,8 +432,24 @@ async function fileItem(page, path) {
     .locator('diffs-container')
     .filter({ has: page.locator(`[slot="header-custom"] [title=${JSON.stringify(path)}]`) })
     .first();
-  await item.waitFor({ state: 'attached', timeout: 5000 });
+  await item.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {
+    throw new Error(
+      `no rendered file for ${path}: the tree lists it, but no diffs-container has a header titled with it. ` +
+        'If FileHeader markup changed, update fileItem in harness.mjs and run scripts/selftest.mjs.',
+    );
+  });
   return item;
+}
+
+/** A control inside a file's header or body, with an error that names what was missing. */
+async function control(page, path, selector) {
+  const locator = (await fileItem(page, path)).locator(selector);
+  if ((await locator.count()) === 0) {
+    throw new Error(
+      `${path} has no ${selector}; if the header controls changed, update harness.mjs and run scripts/selftest.mjs.`,
+    );
+  }
+  return locator.first();
 }
 
 /** The file header, for scrolling to or clicking. */
@@ -350,7 +459,7 @@ export async function header(page, path) {
 
 /** Whether the file is marked viewed. */
 export async function viewed(page, path) {
-  return (await fileItem(page, path)).locator('input[type="checkbox"]').isChecked();
+  return (await control(page, path, 'input[type="checkbox"]')).isChecked();
 }
 
 /**
@@ -391,7 +500,7 @@ export async function collapsed(page, path) {
  * `INPUT`, and the keymap ignores keys while one has focus, so a later `J`/`v` would silently no-op.
  */
 export async function setViewed(page, path, on) {
-  const box = (await fileItem(page, path)).locator('input[type="checkbox"]');
+  const box = await control(page, path, 'input[type="checkbox"]');
   if ((await box.isChecked()) !== on) {
     await box.click();
     await box.blur();
@@ -400,7 +509,7 @@ export async function setViewed(page, path, on) {
 
 /** Collapse or expand the file's diff. Moves the cursor, like a header click. */
 export async function toggleCollapse(page, path) {
-  await (await fileItem(page, path)).locator('button[title="Collapse / expand"]').click();
+  await (await control(page, path, 'button[title="Collapse / expand"]')).click();
 }
 
 async function cellBox(root, number, side) {
@@ -424,7 +533,7 @@ async function cellBox(root, number, side) {
  * first file that has the line rather than the one the cursor is in. The number cells live in the
  * viewer's shadow DOM; Playwright locators pierce it.
  */
-export async function selectLines(page, path, from, to, side = 'new') {
+export async function selectLines(page, path, from, to = from, side = 'new') {
   // A press on an already-selected line toggles it off, and navigation leaves the cursor's line
   // selected; Escape clears it so the drag always opens the composer.
   await page.keyboard.press('Escape');
@@ -436,7 +545,7 @@ export async function selectLines(page, path, from, to, side = 'new') {
   await page.mouse.down();
   await page.mouse.move(end.x + end.width / 2, end.y + end.height - 4, { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(250);
+  await page.locator('textarea').first().waitFor({ timeout: 5000 });
 }
 
 /** Open the compare menu and pick an entry ("Working", "Two refs", "Last commits", "PR"). */
