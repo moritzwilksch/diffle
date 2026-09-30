@@ -17,7 +17,7 @@ fail() {
 case $(uname -s) in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
-  MINGW* | MSYS* | CYGWIN*) fail "on Windows, download diffle-windows-<arch>.zip from https://github.com/$repo/releases" ;;
+  MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://github.com/$repo/releases/latest/download/install.ps1 | iex" ;;
   *) fail "no binary for $(uname -s); install with npm or pixi instead" ;;
 esac
 
