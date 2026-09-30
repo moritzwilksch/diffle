@@ -15,10 +15,12 @@ function Fail($msg) {
 
 if ($env:OS -ne 'Windows_NT') { Fail 'this installer is for Windows; use install.sh elsewhere' }
 
-# OSArchitecture reports the machine, not the process, so x64 PowerShell on ARM still picks arm64.
-$arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-  'X64' { 'x64' }
-  'Arm64' { 'arm64' }
+# The registry holds the machine's architecture; emulated processes (Windows PowerShell on ARM)
+# see AMD64 in $env:PROCESSOR_ARCHITECTURE and in .NET's OSArchitecture.
+$native = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
+$arch = switch ($native) {
+  'AMD64' { 'x64' }
+  'ARM64' { 'arm64' }
   default { Fail "no binary for $_; install with npm or pixi instead" }
 }
 
