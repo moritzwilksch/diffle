@@ -145,3 +145,8 @@ vite.config.ts.timestamp-*
 # Local, untracked design notes
 specs/
 spec/
+
+# Playwright
+test-results/
+playwright-report/
+snapshot-report.html

@@ -1,0 +1,11 @@
+- group "Image comparison":
+  - button "Side by side" [pressed]
+  - button "Swipe"
+  - button "Onion skin"
+  - button "Difference"
+- figure /Old · \d+ × \d+/:
+  - img "assets/logo.png (old)"
+  - text: ""
+- figure /New · \d+ × \d+/:
+  - img "assets/logo.png (new)"
+  - text: ""

@@ -1,0 +1,46 @@
+name: Snapshot report
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/__snapshots__/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  snapshot-report:
+    name: Build snapshot report
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Build snapshot report
+        run: |
+          npm ci
+          npm run snapshot-report -- --base "${{ github.event.pull_request.base.sha }}" --head HEAD
+      - name: Upload snapshot report
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-report
+          path: snapshot-report.html
+          archive: false
+      # A fork's token cannot comment; the artifact link in the run summary still works there.
+      - name: Comment with the report link
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          steps.upload.outputs.artifact-url != ''
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: snapshot-report
+          message: |
+            This pull request changes committed snapshots. [View the snapshot report](${{ steps.upload.outputs.artifact-url }}) to compare them side by side.

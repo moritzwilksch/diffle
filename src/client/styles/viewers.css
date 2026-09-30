@@ -36,6 +36,7 @@
 }
 
 .codeview diffs-container {
+  --diffs-font-family: var(--mono);
   display: block;
   /* Paint the border inside the card; real borders add height the virtualizer cannot see. */
   outline: 1px solid var(--border);
