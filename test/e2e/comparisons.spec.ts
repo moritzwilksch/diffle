@@ -5,8 +5,8 @@ test.describe('working mode', () => {
   test.use({ revs: ['working'] });
 
   test('shows the staged, unstaged and untracked changes', async ({ page }) => {
-    await expect(page.locator('header')).toContainText('3 files');
-    expect(await filePaths(page)).toEqual(['notes/todo.md', 'tally/refunds.py', 'README.md']);
+    await expect(page.locator('header')).toContainText('4 files');
+    expect(await filePaths(page)).toEqual(['assets/logo.png', 'notes/todo.md', 'tally/refunds.py', 'README.md']);
     await waitForHighlight(page, 'tally/refunds.py');
     await expect(page).toHaveScreenshot('working.png');
   });

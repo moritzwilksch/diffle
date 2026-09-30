@@ -27,17 +27,14 @@ const child = spawn(
     '--name',
     container,
     ...(process.stdin.isTTY ? [] : ['-T']),
+    // Run as the host user so reports and snapshots written through the bind mount stay theirs on Linux.
+    ...(process.getuid ? ['--user', `${process.getuid()}:${process.getgid?.()}`] : []),
     'e2e',
     ...process.argv.slice(2),
   ],
   {
     cwd: root,
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      DIFFLE_UID: String(process.getuid?.() ?? 0),
-      DIFFLE_GID: String(process.getgid?.() ?? 0),
-    },
   },
 );
 child.on('error', (error) => {

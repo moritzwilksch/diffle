@@ -12,8 +12,8 @@ import { buildFixtureRepo, FEATURE_BRANCH, FixtureDirectoryError, type FixtureRe
  * that show the fixture.
  */
 const PINNED = {
-  [MAIN_BRANCH]: '170cd2806e2e541bd24e4aa6b3e6e341b143dae8',
-  [FEATURE_BRANCH]: '1d1351368585e680f98a5df85a9abf285d67a83e',
+  [MAIN_BRANCH]: '86752b6e50a73907e1f02cc7d11da3f577caae62',
+  [FEATURE_BRANCH]: '1de24f1c115a1c81cd19c3fe4c9fc26329c6b8f3',
   [TAG]: '578ee788e83eb4acd93855eab14b9a57f8c8b9f5',
 };
 
@@ -75,9 +75,14 @@ describe('fixture repository', () => {
     expect(threeDot).not.toContain('README.md');
   });
 
-  it('leaves a staged, an unstaged and an untracked change for working mode', () => {
+  it('leaves staged, unstaged and untracked changes for working mode', () => {
     expect(git('branch', '--show-current')).toBe(FEATURE_BRANCH);
-    expect(git('status', '--porcelain').split('\n')).toEqual([' M README.md', 'M  tally/refunds.py', '?? notes/']);
+    expect(git('status', '--porcelain').split('\n')).toEqual([
+      ' M README.md',
+      ' M assets/logo.png',
+      'M  tally/refunds.py',
+      '?? notes/',
+    ]);
   });
 
   it('keeps CRLF and a missing trailing newline byte for byte', () => {
