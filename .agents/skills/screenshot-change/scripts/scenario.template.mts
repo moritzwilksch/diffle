@@ -1,4 +1,4 @@
-// Copy this file, point it at a demo repo, and run it with `npx tsx <copy>` from the checkout.
+// Copy this file, point it at a demo repo, and run it with `npm run screenshot -- <copy>` from the checkout.
 //
 // The harness is the e2e tests' one: `test/e2e/{server,browser,capture}.ts`. Import it by absolute path so the
 // scenario runs from anywhere; `npm run fixture -- <dir>` builds a repo with every diff shape.
