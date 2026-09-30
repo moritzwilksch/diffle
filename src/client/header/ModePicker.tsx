@@ -37,7 +37,8 @@ export function ModePicker() {
   const [dots, setDots] = useState<'..' | '...'>('...');
   const [oldOffsetText, setOldOffsetText] = useState('1');
   const [newOffsetText, setNewOffsetText] = useState('0');
-  const [commit, setCommit] = useState('HEAD');
+  const commit = useStore((s) => s.modeCommit);
+  const setCommit = useStore((s) => s.setModeCommit);
   const [pr, setPr] = useState('');
   const [prPending, setPrPending] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);

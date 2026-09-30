@@ -246,13 +246,18 @@ export interface ReviewState {
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
   modePane: ModePane | null;
-  /** Compare-menu entry (1–4) that Enter picks; opening the menu highlights the first. */
+  /** Compare-menu entry (1–5) that Enter picks; opening the menu highlights the first. */
   modeEntry: number;
   /** Highlight entry `n`, wrapping past either end. */
   highlightModeEntry(n: number): void;
   pickModeEntry(n: number): void;
   /** Collapse the configuration pane, keeping the menu open and the highlight. */
   closeModePane(): void;
+  /** The revision in the compare menu's Commit… pane. */
+  modeCommit: string;
+  setModeCommit(revision: string): void;
+  /** Open the compare menu on its Commit… pane with `revision` filled in. */
+  openCommitPane(revision: string): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
   treeModel: FileTree | null;
@@ -1323,6 +1328,14 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     closeModePane() {
       if (get().modePane) set({ modePane: null });
+    },
+    modeCommit: 'HEAD',
+    setModeCommit(revision) {
+      set({ modeCommit: revision });
+    },
+    openCommitPane(revision) {
+      const entry = MODE_PANES.indexOf('commit') + 1;
+      set({ modeMenuOpen: true, modePane: 'commit', modeEntry: entry, modeCommit: revision, githubMenuOpen: false });
     },
     helpOpen: false,
     setHelpOpen(open) {

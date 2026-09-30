@@ -2,7 +2,15 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { lstat, open, readFile, readlink } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
-import type { ChangedFile, ChangeStatus, CommitInfo, LastCommitsPreview, RefsResponse } from '../../shared/protocol.js';
+import type {
+  ChangedFile,
+  ChangeStatus,
+  CommitInfo,
+  LastCommitsPreview,
+  RangeCommit,
+  RangeCommits,
+  RefsResponse,
+} from '../../shared/protocol.js';
 import { mapLimit } from '../concurrency.js';
 
 const MAX_BUFFER = 512 * 1024 * 1024;
@@ -171,6 +179,32 @@ export class GitRepo {
     // Newest first, so the oldest descendant comes last; it is the child only if it sits on sha directly.
     const [child, firstParent] = list.trim().split('\n').pop()?.split(' ') ?? [];
     return { parent, child: child && firstParent === sha ? child : null };
+  }
+
+  /** The commits a revision range such as `a..b` or `c^!` selects, oldest first: the newest `limit`, and the total. */
+  async rangeCommits(range: string, limit: number): Promise<RangeCommits> {
+    const [count, log] = await Promise.all([
+      this.text(['rev-list', '--count', '--end-of-options', range, '--']),
+      this.text([
+        'log',
+        '-z',
+        '--no-show-signature',
+        '--reverse',
+        `--max-count=${limit}`,
+        '--format=%H%x00%h%x00%an%x00%ae%x00%at%x00%B',
+        '--end-of-options',
+        range,
+        '--',
+      ]),
+    ]);
+    // Fields cannot contain NUL, and `-z` ends each record with one, so every commit is six fields.
+    const fields = log.split('\0');
+    const list: RangeCommit[] = [];
+    for (let i = 0; i + 5 < fields.length; i += 6) {
+      const [sha = '', short = '', author = '', email = '', time = '', message = ''] = fields.slice(i, i + 6);
+      list.push({ sha, short, message: message.trimEnd(), author, email, date: Number(time) * 1000 });
+    }
+    return { list, total: Number(count.trim()) };
   }
 
   /** The empty tree under the repository's hash algorithm: the old side of an unborn branch. */

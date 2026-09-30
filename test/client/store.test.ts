@@ -99,6 +99,7 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     changed: [],
     tree,
     commit: null,
+    commits: { list: [], total: 0 },
   };
 }
 

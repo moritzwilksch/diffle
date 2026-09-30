@@ -139,6 +139,25 @@ export const ReviewedCommitSchema = CommitInfoSchema.extend({
 });
 export type ReviewedCommit = z.infer<typeof ReviewedCommitSchema>;
 
+/** One commit of the compared range. */
+export const RangeCommitSchema = CommitInfoSchema.extend({
+  author: z.string(),
+  email: z.string(),
+  /** Author date, epoch milliseconds. */
+  date: z.number(),
+});
+export type RangeCommit = z.infer<typeof RangeCommitSchema>;
+
+/** The commits a comparison spans: old..new, with the worktree taken as HEAD, or the one commit under `parent`. */
+export const RangeCommitsSchema = z.object({
+  /** Oldest first; the newest MAX_RANGE_COMMITS when there are more. */
+  list: RangeCommitSchema.array(),
+  total: z.number(),
+});
+export type RangeCommits = z.infer<typeof RangeCommitsSchema>;
+
+export const MAX_RANGE_COMMITS = 250;
+
 export const SnapshotSchema = z.object({
   root: z.string(),
   mode: ModeSpecSchema,
@@ -156,6 +175,7 @@ export const SnapshotSchema = z.object({
   tree: z.string().array(),
   /** The reviewed commit when the comparison is a single commit against its parent; otherwise null. */
   commit: ReviewedCommitSchema.nullable(),
+  commits: RangeCommitsSchema,
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 
