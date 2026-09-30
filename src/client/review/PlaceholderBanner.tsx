@@ -1,5 +1,5 @@
 import { FileWarning, Image, Loader2, TriangleAlert } from 'lucide-react';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { hostOf } from './host.js';
 
 /** Why a file's body has no code lines to show. */
@@ -13,19 +13,25 @@ const ICON: Record<PlaceholderKind, typeof Image> = {
   error: TriangleAlert,
 };
 
-/** A file body's stand-in: one muted, icon-led strip that is the whole body under the header. Rendered
- * as a file-level annotation (line 0); `ReviewPane` hides the gutter and rows around it, so it reads as
- * a notice about the file, never as its content. */
-export function PlaceholderBanner({ kind, message }: { kind: PlaceholderKind; message: string }) {
-  const Icon = ICON[kind];
-  const ref = useRef<HTMLDivElement>(null);
-  // The viewer's shadow CSS hides the gutter and rows of a host carrying this mark (see ReviewPane).
+/**
+ * Marks the viewer host around `ref` as showing a stand-in for the file body, rendered as a file-level
+ * annotation (line 0): the viewer's shadow CSS then hides the gutter and rows around it (see ReviewPane).
+ */
+export function useStandIn(ref: RefObject<HTMLElement | null>, kind: PlaceholderKind | 'image'): void {
   useLayoutEffect(() => {
     const host = ref.current && hostOf(ref.current);
     if (!host) return;
     host.setAttribute('data-placeholder', kind);
     return () => host.removeAttribute('data-placeholder');
-  }, [kind]);
+  }, [ref, kind]);
+}
+
+/** A file body's stand-in: one muted, icon-led strip that is the whole body under the header, so it reads
+ * as a notice about the file, never as its content. */
+export function PlaceholderBanner({ kind, message }: { kind: PlaceholderKind; message: string }) {
+  const Icon = ICON[kind];
+  const ref = useRef<HTMLDivElement>(null);
+  useStandIn(ref, kind);
   return (
     <div
       ref={ref}

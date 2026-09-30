@@ -61,7 +61,7 @@ export class GitError extends Error {
 interface ExecOptions {
   /** Exit codes that are not errors (e.g. 1 for `diff --no-index`). */
   okCodes?: number[];
-  input?: string;
+  input?: string | Buffer;
   /** Merged over the inherited environment. */
   env?: Record<string, string>;
 }
@@ -266,7 +266,7 @@ export class GitRepo {
 
   /**
    * Changed files between two revs, or a rev and the worktree (incl. untracked).
-   * One diff call yields status, line counts and, against a commit, the new-side
+   * One diff call yields status, line counts and, against a commit, each side's
    * blob; the worktree's blobs are hashed from disk.
    */
   async numstat(oldRev: string, newRev: string): Promise<ChangedFile[]> {
@@ -291,6 +291,7 @@ export class GitRepo {
           deletions: 0,
           binary: false,
           blob: '',
+          oldBlob: '',
           generated: false,
         };
         const st = await lstat(resolve(this.root, path)).catch(() => null);
@@ -306,49 +307,67 @@ export class GitRepo {
       },
     );
     const all = [...files, ...extra].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    if (newRev === 'worktree') await this.hashWorktree(all.filter((f) => f.status !== 'D'));
+    if (newRev === 'worktree') {
+      const present = all.filter((f) => f.status !== 'D');
+      (await this.hashWorktree(present)).forEach((sha, i) => (present[i]!.blob = sha));
+    }
+    if (reverse) {
+      const present = all.filter((f) => f.status !== 'A');
+      const entries = present.map((f) => ({ path: f.oldPath ?? f.path, submodule: f.submodule }));
+      (await this.hashWorktree(entries)).forEach((sha, i) => (present[i]!.oldBlob = sha));
+    }
     return all;
   }
 
   /**
-   * Sets `blob` to what git would store for each worktree entry: the file's
+   * What git would store for each worktree entry, in order: the file's
    * blob, a symlink's target blob, a submodule's checked-out commit. Regular
    * files go to one `hash-object --stdin-paths` call; everything else is hashed
    * on its own, so a gitlink, a broken link or an unreadable path never fails
    * the batch. A path containing a newline cannot ride the stdin list either.
-   * A path that cannot be hashed keeps an empty blob.
+   * A path that cannot be hashed gets an empty blob.
    */
-  private async hashWorktree(files: ChangedFile[]): Promise<void> {
-    const regular: ChangedFile[] = [];
-    await mapLimit(files, READ_CONCURRENCY, async (f) => {
-      f.blob = '';
-      if (f.submodule) {
-        f.blob = await this.submoduleHead(f.path);
+  private async hashWorktree(files: { path: string; submodule?: true }[]): Promise<string[]> {
+    const shas = files.map(() => '');
+    const regular: number[] = [];
+    await mapLimit([...files.keys()], READ_CONCURRENCY, async (i) => {
+      const { path, submodule } = files[i]!;
+      if (submodule) {
+        shas[i] = await this.submoduleHead(path);
         return;
       }
-      const st = await lstat(resolve(this.root, f.path)).catch(() => null);
-      if (st?.isSymbolicLink()) f.blob = blobSha(Buffer.from(await readlink(resolve(this.root, f.path)), 'utf8'));
-      else if (st?.isFile()) regular.push(f);
+      const st = await lstat(resolve(this.root, path)).catch(() => null);
+      if (st?.isSymbolicLink()) shas[i] = blobSha(Buffer.from(await readlink(resolve(this.root, path)), 'utf8'));
+      else if (st?.isFile()) regular.push(i);
     });
-    const batch = regular.filter((f) => !f.path.includes('\n'));
-    const single = regular.filter((f) => f.path.includes('\n'));
+    const batch = regular.filter((i) => !files[i]!.path.includes('\n'));
+    const single = regular.filter((i) => files[i]!.path.includes('\n'));
     if (batch.length) {
       try {
         const out = await this.text(['hash-object', '--stdin-paths'], {
-          input: batch.map((f) => f.path).join('\n') + '\n',
+          input: batch.map((i) => files[i]!.path).join('\n') + '\n',
         });
-        const shas = out.trim().split('\n');
-        batch.forEach((f, i) => (f.blob = shas[i] ?? ''));
+        const lines = out.trim().split('\n');
+        batch.forEach((i, j) => (shas[i] = lines[j] ?? ''));
       } catch {
         // One unreadable path (permissions, vanished mid-refresh) aborts git's whole batch; retry each alone.
         single.push(...batch);
       }
     }
-    await mapLimit(single, READ_CONCURRENCY, async (f) => {
-      f.blob = await this.text(['hash-object', '--', f.path])
+    await mapLimit(single, READ_CONCURRENCY, async (i) => {
+      shas[i] = await this.text(['hash-object', '--', files[i]!.path])
         .then((s) => s.trim())
         .catch(() => '');
     });
+    return shas;
+  }
+
+  /**
+   * What git would store for `content` at worktree `path`, its clean filters applied: equals the
+   * snapshot's blob for a worktree file whose bytes are still the snapshot's.
+   */
+  async hashObject(content: Buffer, path: string): Promise<string> {
+    return (await this.text(['hash-object', '--stdin', `--path=${path}`], { input: content })).trim();
   }
 
   /** The commit a checked-out submodule is at, or '' if it is not a repository. */
@@ -925,8 +944,8 @@ function splitZ(buf: Buffer): string[] {
  * `-z -M --raw --no-abbrev --numstat`: the raw records come first, then the numstat records,
  * each path-terminated by NUL. Raw: ":mode mode sha sha X\0path\0", renames and
  * copies "R100\0old\0new\0". Numstat: "add\tdel\tpath\0", renames "add\tdel\t\0old\0new\0".
- * Binary files count as "-\t-". The dst sha is the new-side blob against a
- * commit; against the worktree it is zeros and the caller hashes the file.
+ * Binary files count as "-\t-". The src and dst shas are each side's blob
+ * against a commit; against the worktree, or where a side is absent, they are zeros.
  * Mode 160000 on either side marks a gitlink, which no file operation may touch.
  */
 function parseRawNumstat(buf: Buffer): ChangedFile[] {
@@ -934,7 +953,7 @@ function parseRawNumstat(buf: Buffer): ChangedFile[] {
   const byPath = new Map<string, ChangedFile>();
   let i = 0;
   for (; i < parts.length && parts[i]!.startsWith(':'); i++) {
-    const [srcMode = '', dstMode = '', , dstSha = '', code = ''] = parts[i]!.split(' ');
+    const [srcMode = '', dstMode = '', srcSha = '', dstSha = '', code = ''] = parts[i]!.split(' ');
     const status = code[0] as ChangeStatus;
     const oldPath = status === 'R' || status === 'C' ? parts[++i]! : undefined;
     const path = parts[++i]!;
@@ -945,6 +964,7 @@ function parseRawNumstat(buf: Buffer): ChangedFile[] {
       deletions: 0,
       binary: false,
       blob: /^0+$/.test(dstSha) ? '' : dstSha,
+      oldBlob: /^0+$/.test(srcSha) ? '' : srcSha,
       generated: false,
     };
     if (oldPath != null) file.oldPath = oldPath;

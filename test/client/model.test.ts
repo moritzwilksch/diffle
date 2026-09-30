@@ -14,6 +14,7 @@ import {
   currentPath,
   documentTitle,
   draftRange,
+  imageSides,
   isViewed,
   nextFileAfter,
   orderedPaths,
@@ -39,6 +40,7 @@ describe('orderedPaths', () => {
       deletions: 0,
       binary: false,
       blob: 'b',
+      oldBlob: '',
       generated: false,
     }));
     const snapshot = { changed, tree: [...paths].sort() } as unknown as Snapshot;
@@ -179,6 +181,7 @@ describe('search scope', () => {
       deletions: 0,
       binary: false,
       blob: 'b',
+      oldBlob: '',
       generated: false,
     }));
     const snapshot = { changed, tree: ['src/a.ts', 'src/b.ts', 'src/c.ts'] } as unknown as Snapshot;
@@ -198,6 +201,7 @@ describe('countViewed', () => {
     deletions: 0,
     binary: false,
     blob,
+    oldBlob: '',
     generated: false,
   });
   const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
@@ -224,6 +228,7 @@ describe('nextFileAfter', () => {
     deletions: 0,
     binary: false,
     blob,
+    oldBlob: '',
     generated: false,
   });
   const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
@@ -268,5 +273,32 @@ describe('comparisonLabel', () => {
       }),
     ).toBe('main...feature/nested');
     expect(comparisonLabel({ old: 'HEAD', new: 'worktree', mergeBase: false })).toBe('HEAD..worktree');
+  });
+});
+
+describe('imageSides', () => {
+  const file = (status: ChangedFile['status']): ChangedFile => ({
+    path: 'a.png',
+    status,
+    additions: 0,
+    deletions: 0,
+    binary: true,
+    blob: '',
+    oldBlob: '',
+    generated: false,
+  });
+
+  it('shows the sides a changed image has, and the new side in the file view', () => {
+    expect(imageSides('a.png', file('M'))).toBe('both');
+    expect(imageSides('a.PNG', file('R'))).toBe('both');
+    expect(imageSides('a.jpeg', file('A'))).toBe('new');
+    expect(imageSides('a.gif', file('D'))).toBe('old');
+    expect(imageSides('a.webp', undefined)).toBe('new');
+  });
+
+  it('leaves other binaries and text images to their banner and text diff', () => {
+    expect(imageSides('a.bin', file('M'))).toBeNull();
+    expect(imageSides('a.svg', file('M'))).toBeNull();
+    expect(imageSides('png', file('M'))).toBeNull();
   });
 });

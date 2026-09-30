@@ -107,6 +107,8 @@ export const ChangedFileSchema = z.object({
   binary: z.boolean(),
   /** New-side blob sha. '' for deletions. Keys the viewed state. */
   blob: z.string(),
+  /** Old-side blob sha. '' for additions. A worktree side's blob, like `blob`, is '' when the file cannot be hashed. */
+  oldBlob: z.string(),
   /** The `linguist-generated` gitattribute, a path pattern or a content sniff said this file is generated. Feeds auto-collapse and risk ranking. */
   generated: z.boolean(),
   /** A gitlink (mode 160000): `blob` is the recorded commit, the patch shows the commit-id change, and there is no file to open. */
@@ -582,6 +584,26 @@ export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });
 export const ViewedBulkRequestSchema = z.object({ entries: ViewedEntrySchema.array() });
 export const FileQuerySchema = z.object({ path: z.string().min(1), rev: SideSchema });
+/**
+ * `GET /api/image`: one side of a file as image bytes. The server answers 404 unless `key` is that side's
+ * `imageKey` in its current snapshot, the bytes are still the ones the key names, and they are a raster image.
+ */
+export const ImageQuerySchema = FileQuerySchema.extend({ key: z.string().min(1) });
+
+/**
+ * Names the bytes of one side of `path`, or null when the side has no name: a changed file's blob on that
+ * side, else the commit of a side that is one, since an unchanged path is alike on both. What a key names
+ * never changes, so an image served under it may be cached for good.
+ */
+export function imageKey(
+  snap: Pick<Snapshot, 'changed' | 'oldSha' | 'newSha'>,
+  path: string,
+  side: Side,
+): string | null {
+  const file = snap.changed.find((f) => f.path === path);
+  if (file) return (side === 'new' ? file.blob : file.oldBlob) || null;
+  return [snap.newSha, snap.oldSha].find((rev) => rev !== 'worktree') ?? null;
+}
 const offsetSchema = z
   .string()
   .regex(/^[0-9]+$/)
