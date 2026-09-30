@@ -20,6 +20,7 @@ test('masks the version in the settings dialog', async ({ page }) => {
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  // The version changes with every release; everything else in the dialog is stable.
+  // The version changes with every release; its label stretches to the buttons, so the mask's width
+  // does not depend on the version's length.
   await expect(page).toHaveScreenshot('settings.png', { mask: [page.getByTitle('Installed diffle version')] });
 });
