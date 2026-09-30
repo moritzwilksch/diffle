@@ -31,6 +31,7 @@ const captureOptions = vi.fn<(options: CodeViewOptions<unknown>) => void>();
 const captureItems = vi.fn<(items: unknown[]) => void>();
 const primeDiffHighlightCache = vi.fn(async (_diff: unknown) => {});
 const scrollTo = vi.fn();
+let viewerSelection: unknown = null;
 vi.mock('@pierre/diffs/react', () => ({
   useWorkerPool: () => ({ primeDiffHighlightCache }),
   CodeView: forwardRef(function CodeView(
@@ -50,6 +51,7 @@ vi.mock('@pierre/diffs/react', () => ({
       () => ({
         getInstance: () => ({ getRenderedItems: () => rendered, render: renderViewer, instanceChanged }),
         getItem: (id: string) => rendered.find((r) => r.id === id)?.element ?? null,
+        getSelectedLines: () => viewerSelection,
         scrollTo,
       }),
       [],
@@ -188,6 +190,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   installSearchHighlights.mockClear();
   rendered = [];
+  viewerSelection = null;
   useStore.setState({
     snapshot: null,
     loaded: {},
@@ -876,6 +879,24 @@ describe('ReviewPane scroller effects', () => {
     await act(() => useStore.setState({ error: null }));
     expect(installSearchHighlights).toHaveBeenCalledTimes(1);
     expect(installSearchHighlights.mock.calls[0]![1]).toBe(host.querySelector('.codeview'));
+  });
+
+  it("opens a comment on the cursor's line when its number is pressed, which the viewer reads as unselecting it", async () => {
+    await act(() => root.render(createElement(ReviewPane)));
+    await act(() => useStore.setState({ snapshot: snap(changed), draft: null }));
+    const onLineClick = captureOptions.mock.calls.at(-1)![0].onLineClick as (props: unknown, ctx: unknown) => void;
+    const ctx = { item: { id: 'diff:a.txt@0' } };
+    const press = { lineNumber: 2, annotationSide: 'additions', numberColumn: true };
+    const range = { start: 2, side: 'additions', end: 2, endSide: 'additions' };
+
+    // A press that left a selection already opened the composer through onLineSelectionEnd.
+    viewerSelection = { id: ctx.item.id, range };
+    await act(() => onLineClick(press, ctx));
+    expect(useStore.getState().draft).toBeNull();
+
+    viewerSelection = null;
+    await act(() => onLineClick(press, ctx));
+    expect(useStore.getState().draft).toEqual({ path: 'a.txt', selection: { id: ctx.item.id, range } });
   });
 
   it('toggles collapse from the file header while only the checkbox changes viewed state', async () => {
