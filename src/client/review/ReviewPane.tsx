@@ -780,9 +780,14 @@ export function ReviewPane() {
       // Clicking a line's content puts the cursor there (the number column starts a range selection instead).
       // Fires after onTokenClick on the same click, so it must not close the popover that click opened.
       onLineClick: (props: OnLineClickProps | OnDiffLineClickProps, ctx: { item: { id: string } }) => {
-        if (props.numberColumn) return;
         const side = 'annotationSide' in props ? props.annotationSide : 'additions';
         const range = { start: props.lineNumber, side, end: props.lineNumber, endSide: side };
+        if (props.numberColumn) {
+          // The viewer toggles off a lone selected line pressed again, which is often the cursor's line;
+          // here that press comments on it like any other line's.
+          if (!viewerRef.current?.getSelectedLines()) void openDraft({ id: ctx.item.id, range });
+          return;
+        }
         setSelection({ id: ctx.item.id, range });
         setActivePath(pathFromItemId(ctx.item.id));
       },
