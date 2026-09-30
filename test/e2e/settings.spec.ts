@@ -1,11 +1,11 @@
-import { expect, expectAria, test } from './fixtures.js';
+import { expect, test } from './fixtures.js';
 
 test('opens the keyboard help', async ({ page }) => {
   await page.keyboard.press('?');
   const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(dialog).toBeVisible();
   await expect(page).toHaveScreenshot('help.png');
-  await expectAria(dialog, 'help');
+  await expect(dialog).toMatchAriaSnapshot({ name: 'help.aria.yml' });
 });
 
 test('opens the mode picker on the current comparison', async ({ page }) => {
@@ -13,7 +13,7 @@ test('opens the mode picker on the current comparison', async ({ page }) => {
   const picker = page.locator('#mode-picker');
   await expect(picker).toBeVisible();
   await expect(page).toHaveScreenshot('mode-picker.png');
-  await expectAria(picker, 'mode-picker');
+  await expect(picker).toMatchAriaSnapshot({ name: 'mode-picker.aria.yml' });
 });
 
 test('masks the version in the settings dialog', async ({ page }) => {

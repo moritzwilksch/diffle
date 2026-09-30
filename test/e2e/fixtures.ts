@@ -1,7 +1,7 @@
 // Playwright fixtures: every test gets its own fixture repository and its own diffle, so
 // review state (threads, viewed marks) never leaks between scenarios and each one can pick
 // the comparison it needs with `test.use({ revs: [...] })`.
-import { test as base, expect, type Locator } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 import { cp, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,13 +83,3 @@ export const test = base.extend<Options & Fixtures, WorkerFixtures>({
 });
 
 export { expect };
-
-/**
- * The accessibility tree of `locator` against its stored `.aria.yml`. Checked once per scenario,
- * in the light project: structure does not depend on the colour scheme, and a second copy of the
- * same YAML would only double the review.
- */
-export async function expectAria(locator: Locator, name: string): Promise<void> {
-  if (test.info().project.name !== 'light') return;
-  await expect(locator).toMatchAriaSnapshot({ name: `${name}.aria.yml` });
-}

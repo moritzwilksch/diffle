@@ -33,7 +33,7 @@ it('reports additions, deletions, edited renames and differently sized images fr
     await writeFile(join(snapshots, 'old.txt'), original);
     await writeFile(join(snapshots, 'pure.txt'), 'unchanged contents\n');
     await writeFile(join(snapshots, 'deleted.txt'), 'removed contents\n');
-    await writeFile(join(snapshots, 'sample.light.png'), png(2, 2, 0));
+    await writeFile(join(snapshots, 'sample.png'), png(2, 2, 0));
     await writeFile(
       join(dir, 'test/demo.spec.ts'),
       "test('image', async () => {\n  await expect(page).toHaveScreenshot('sample.png');\n});\n",
@@ -46,7 +46,7 @@ it('reports additions, deletions, edited renames and differently sized images fr
     await rename(join(snapshots, 'pure.txt'), join(snapshots, 'pure-renamed.txt'));
     await rm(join(snapshots, 'deleted.txt'));
     await writeFile(join(snapshots, 'added.txt'), 'added contents\n');
-    await writeFile(join(snapshots, 'sample.light.png'), png(4, 3, 255));
+    await writeFile(join(snapshots, 'sample.png'), png(4, 3, 255));
     git('add', '-A');
     git('commit', '-qm', 'head');
 

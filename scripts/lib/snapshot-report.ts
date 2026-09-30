@@ -172,19 +172,10 @@ function imageHtml(before: ImageSide | null, after: ImageSide | null, index: num
 </div>`;
 }
 
-/** The snapshot's name as its test spells it, so the call that produced it can be found in the source. */
-function snapshotArg(path: string): string | null {
-  const name = basename(path);
-  // Playwright: <arg>.<project><ext>; Vitest: the path relative to the test file.
-  const shot = /^(.*)\.(light|dark)(\.[a-z]+)$/.exec(name);
-  if (shot) return `${shot[1]}${shot[3]}`;
-  return name;
-}
-
 /** The test function that names this snapshot in `rev`, found by its argument string. */
 function findTestSource(repo: ReportRepository, rev: string, path: string): TestSource | null {
-  const arg = snapshotArg(path);
-  if (!arg) return null;
+  // Playwright names the file after its argument; Vitest names it in the assertion.
+  const arg = basename(path);
   const snapshotsDir = path.slice(0, path.indexOf('/__snapshots__/') + '/__snapshots__/'.length);
   const testDir = dirname(snapshotsDir);
   // Playwright keeps one directory per spec file; Vitest names the file in the assertion.

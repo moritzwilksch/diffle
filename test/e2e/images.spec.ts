@@ -2,7 +2,7 @@
 // comparison, the logo's first commit as one side, and a truncated logo in the worktree that no
 // browser decodes. Judge changes in the screenshots under `__snapshots__/images.spec.ts/`.
 import type { Page } from '@playwright/test';
-import { expect, expectAria, test } from './fixtures.js';
+import { expect, test } from './fixtures.js';
 import { gotoFile, settle } from './browser.js';
 
 const LOGO = 'assets/logo.png';
@@ -23,7 +23,7 @@ test.describe('a resized image', () => {
     const view = await openLogo(page);
     await expect(view.getByText('Old · 128 × 96')).toBeVisible();
     await expect(view.getByText('New · 96 × 96')).toBeVisible();
-    await expectAria(view, 'side-by-side');
+    await expect(view).toMatchAriaSnapshot({ name: 'side-by-side.aria.yml' });
     await expect(view).toHaveScreenshot('side-by-side.png');
   });
 

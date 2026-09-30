@@ -1,4 +1,4 @@
-import { expect, expectAria, test } from './fixtures.js';
+import { expect, test } from './fixtures.js';
 import { gotoFile, selectLines } from './browser.js';
 import { readPrompt, readThreads } from './server.js';
 
@@ -20,7 +20,7 @@ test('comments on a line range and lists the thread in the panel', async ({ page
     endLine: 4,
   });
   await expect(page).toHaveScreenshot('comment.png');
-  await expectAria(page.locator('aside').last(), 'threads-panel');
+  await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'threads-panel.aria.yml' });
 });
 
 test('comments on a whole file and exports both threads as a prompt', async ({ page, diffle }) => {
@@ -38,8 +38,8 @@ test('comments on a whole file and exports both threads as a prompt', async ({ p
   await expect(page.locator('aside').last()).toContainText('currency.py');
   const prompt = await readPrompt(diffle.url);
   expect(prompt).toContain('KWD');
-  // The prompt an agent receives for this review, quoted lines included; same in both schemes.
-  if (test.info().project.name === 'light') expect(prompt).toMatchSnapshot('prompt.md');
+  // The prompt an agent receives for this review, quoted lines included.
+  expect(prompt).toMatchSnapshot('prompt.md');
   await expect(page).toHaveScreenshot('two-threads.png');
 });
 

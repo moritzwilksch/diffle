@@ -17,22 +17,19 @@ export default defineConfig({
   retries: 0,
   outputDir: 'test-results',
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
-  // One directory per spec, one file per scenario and colour scheme; no platform suffix, since only
-  // Linux screenshots are committed.
-  snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}.{projectName}{ext}',
+  // One directory per spec, one file per scenario; no platform suffix, since only Linux screenshots
+  // are committed.
+  snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}{ext}',
   expect: {
     toHaveScreenshot: { animations: 'disabled', caret: 'hide', scale: 'css' },
   },
   use: {
     viewport: { width: 1440, height: 900 },
+    colorScheme: 'light',
     deviceScaleFactor: 1,
     locale: 'en-US',
     timezoneId: 'UTC',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [
-    { name: 'light', use: { colorScheme: 'light' } },
-    { name: 'dark', use: { colorScheme: 'dark' } },
-  ],
 });

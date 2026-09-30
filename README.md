@@ -224,7 +224,7 @@ npm run test:e2e:docker:update
 
 The container includes Chromium and keeps its dependencies and build output separate from your local installation. The HTML report is saved in `playwright-report/`, with failure screenshots, visual diffs, and traces; raw results are in `test-results/`. Both survive the container exiting, even when tests fail. Each run replaces the previous report: copy the whole `playwright-report/` directory to keep or share a run. Opening the report does not require Docker or a local Chromium installation.
 
-Snapshots live under `test/e2e/__snapshots__/`, grouped by behavior and color scheme. Review their changes before committing an update. For native browser debugging, install Chromium with `npm run test:e2e:install`, then use `npm run test:e2e -- --ui`. Native screenshot comparisons can differ from the Linux baselines; use Docker to accept them.
+Snapshots live under `test/e2e/__snapshots__/`, grouped by behavior, in the light theme. Review their changes before committing an update. For native browser debugging, install Chromium with `npm run test:e2e:install`, then use `npm run test:e2e -- --ui`. Native screenshot comparisons can differ from the Linux baselines; use Docker to accept them.
 
 To regenerate remotely, run the **Update snapshots** workflow on your branch or comment `update-assets` on an open PR. The comment command requires repository write access and a branch in this repository (forks can use Compose locally). The workflow commits and pushes changed snapshots to that branch. Both triggers require the workflow to be on the default branch. A pull request that touches snapshots gets a report comparing every changed one side by side.
 
