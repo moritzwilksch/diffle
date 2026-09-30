@@ -42,3 +42,10 @@
   outline: 1px solid var(--border);
   outline-offset: -1px;
 }
+
+/* Transparent pixels of an image diff read as a checkerboard, not as the pane's ground. */
+.image-checker {
+  background-color: var(--bg);
+  background-image: conic-gradient(var(--bg-3) 25%, transparent 0 50%, var(--bg-3) 0 75%, transparent 0);
+  background-size: 1rem 1rem;
+}

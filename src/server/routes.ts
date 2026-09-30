@@ -10,6 +10,7 @@ import {
   ModeRequestSchema,
   PatchRequestSchema,
   FileQuerySchema,
+  ImageQuerySchema,
   LastCommitsQuerySchema,
   SearchQuerySchema,
   ThreadQuerySchema,
@@ -34,6 +35,7 @@ import { formatPrompt } from './comments/format.js';
 import { ImportError, parseImports } from './comments/import.js';
 import { GitError, isBinary } from './git/GitRepo.js';
 import { GithubError } from './github/client.js';
+import { imageType } from './image.js';
 import { LspUnavailableError } from './lsp/LspBridge.js';
 import type { LspPool } from './lsp/LspPool.js';
 import { RevspecError } from './revspec.js';
@@ -125,6 +127,21 @@ export function createApi(deps: ApiDeps): Hono {
     const binary = isBinary(buf);
     const body: FileResponse = { path, contents: binary ? '' : buf.toString('utf8'), binary };
     return c.json(body);
+  });
+
+  // Snapshot files only: `readExternal` stays the one read outside the allowlist.
+  app.get('/api/image', async (c) => {
+    const { path, rev, key } = ImageQuerySchema.parse(c.req.query());
+    const buf = await session.readImage(await session.snapshotter.current(), path, rev, key);
+    const type = buf && imageType(buf);
+    if (!type) return c.json({ error: 'no image under that key' }, 404);
+    return c.body(new Uint8Array(buf), 200, {
+      'content-type': type,
+      'cache-control': 'private, max-age=31536000, immutable',
+      'x-content-type-options': 'nosniff',
+      // An <img> from another site sends no Origin, so the origin guard passes it; this blocks the embed.
+      'cross-origin-resource-policy': 'same-origin',
+    });
   });
 
   app.get('/api/search', async (c) => {
