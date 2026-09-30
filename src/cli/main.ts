@@ -360,7 +360,12 @@ async function serve(
   stopBrowserWatch = watchBrowserLifetime(hub, opts.open && !opts.keepAlive, shutdown);
 
   try {
-    // Bind and open the browser before any further git work.
+    // Resolve the revision or PR before binding, so invalid input never opens a browser.
+    const review = await session.resolve(req);
+    timing.mark('resolve');
+    // A signal during a slow PR fetch already runs shutdown; binding now would open a dead tab.
+    if (closing) return;
+    // Bind and open the browser before the first snapshot.
     const url = await server.listen();
     timing.mark('listen');
     if (opts.open) {
@@ -373,7 +378,7 @@ async function serve(
     if (github.client) console.error(`🐙 ${c.dim('github')} ${c.dim(`token from ${github.source}`)}`);
     else console.error(`🐙 ${c.dim('github')} ${c.dim('off: no token in GITHUB_TOKEN, GH_TOKEN or gh auth token')}`);
 
-    const snap = await session.start(req);
+    const snap = await session.start(review);
     timing.mark('snapshot');
     const n = snap.changed.length;
     const adds = snap.changed.reduce((a, f) => a + f.additions, 0);

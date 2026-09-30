@@ -441,6 +441,23 @@ describe('client transitions', () => {
     api.patches.mockReset();
   });
 
+  it('a reload of another file keeps the draft object, so the composer does not take focus again', async () => {
+    const changed = [
+      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false },
+    ];
+    api.patch.mockResolvedValue(patchesFor(['b.txt']));
+    api.file.mockResolvedValue({ contents: 'y\nrest\n', binary: false });
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
+    await useStore.getState().refreshSnapshot();
+    const draft = { path: 'a.txt', selection: null };
+    useStore.setState({ draft });
+    const id = itemIdOf(useStore.getState(), 'b.txt');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(itemIdOf(useStore.getState(), 'b.txt')).not.toBe(id);
+    expect(useStore.getState().draft).toBe(draft);
+    api.patch.mockReset();
+  });
+
   it('a mode switch stops the hydration queue: no further file requests, and the batch in flight is aborted', async () => {
     const paths = Array.from({ length: 8 }, (_, i) => `f${i}.txt`);
     const changed = paths.map((path) => ({
@@ -2049,6 +2066,13 @@ describe('threads', () => {
     expect(s.selection).toBeNull();
     expect(s.replyTo).toBeNull();
     expect(s.activePath).toBe('a.py');
+    // The composer sits above line 1; the pane brings the file's top into view unless it is already there.
+    expect(s.scrollTarget).toEqual({
+      id: itemIdOf(s, 'a.py'),
+      align: 'start',
+      unlessVisible: 'top',
+      nonce: expect.any(Number),
+    });
     useStore.setState({ selection: sel });
     useStore.getState().openFileDraft('a.py');
     expect(useStore.getState().selection).toEqual(sel);
