@@ -231,7 +231,13 @@ export interface ReviewState {
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
   modePane: 'refs' | 'commits' | 'pr' | null;
+  /** Compare-menu entry (1–4) that Enter picks; opening the menu highlights the first. */
+  modeEntry: number;
+  /** Highlight entry `n`, wrapping past either end. */
+  highlightModeEntry(n: number): void;
   pickModeEntry(n: number): void;
+  /** Collapse the configuration pane, keeping the menu open and the highlight. */
+  closeModePane(): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
   treeModel: FileTree | null;
@@ -1280,16 +1286,24 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     modeMenuOpen: false,
     modePane: null,
+    modeEntry: 1,
     setModeMenuOpen(open) {
-      set({ modeMenuOpen: open, modePane: null, ...(open ? { githubMenuOpen: false } : {}) });
+      set({ modeMenuOpen: open, modePane: null, modeEntry: 1, ...(open ? { githubMenuOpen: false } : {}) });
+    },
+    highlightModeEntry(n) {
+      const entry = ((((n - 1) % 4) + 4) % 4) + 1;
+      if (entry !== get().modeEntry) set({ modeEntry: entry });
     },
     pickModeEntry(n) {
       if (n === 1) {
-        set({ modeMenuOpen: false, modePane: null });
+        set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
         void get().switchMode({ kind: 'working' });
       } else if (n >= 2 && n <= 4) {
-        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr' });
+        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr', modeEntry: n });
       }
+    },
+    closeModePane() {
+      if (get().modePane) set({ modePane: null });
     },
     helpOpen: false,
     setHelpOpen(open) {
@@ -1866,6 +1880,7 @@ export const useStore = create<ReviewState>((set, get) => {
     escape() {
       const s = get();
       if (s.helpOpen) set({ helpOpen: false });
+      else if (s.modePane) s.closeModePane();
       else if (s.modeMenuOpen) set({ modeMenuOpen: false });
       else if (s.githubMenuOpen) set({ githubMenuOpen: false });
       else if (s.hover) s.closeHover();

@@ -18,6 +18,7 @@ vi.mock('../../src/client/api.js', () => ({
 }));
 const { useStore } = await import('../../src/client/store.js');
 const { ModePicker } = await import('../../src/client/header/ModePicker.js');
+const { useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
 type Result = Awaited<ReturnType<typeof originalSwitchMode>>;
 let root: Root;
 let host: HTMLDivElement;
@@ -201,4 +202,129 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   expect(typed.defaultPrevented).toBe(false);
   expect(base.value).toBe('main');
   expect(switchMode).not.toHaveBeenCalled();
+});
+
+it('shows one highlight shared by the pointer and the keyboard', async () => {
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const highlighted = () => entries().findIndex((b) => b.hasAttribute('data-highlighted')) + 1;
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  expect(highlighted()).toBe(1);
+  await act(() => entries()[2]!.dispatchEvent(new MouseEvent('pointermove', { bubbles: true })));
+  expect(highlighted()).toBe(3);
+  await act(() => useStore.getState().highlightModeEntry(5));
+  expect(highlighted()).toBe(1);
+  await act(() => useStore.getState().pickModeEntry(4));
+  expect(highlighted()).toBe(4);
+  expect(entries().filter((b) => b.hasAttribute('data-highlighted'))).toHaveLength(1);
+});
+
+it('leaves Enter to a focused button and keeps a focused entry highlighted', async () => {
+  function WithKeys() {
+    useKeymap();
+    return createElement(ModePicker);
+  }
+  await act(() => root.render(createElement(WithKeys)));
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const enter = (el: Element) => {
+    const e = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    act(() => el.dispatchEvent(e));
+    return e;
+  };
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  await act(() => entries()[1]!.focus());
+  expect(entries()[1]!.hasAttribute('data-highlighted')).toBe(true);
+  // j on a focused entry moves focus with the highlight, so native Enter activates the entry shown.
+  act(() => entries()[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
+  expect(document.activeElement).toBe(entries()[2]);
+  expect(useStore.getState().modeEntry).toBe(3);
+  await act(() => entries()[1]!.focus());
+  expect(enter(entries()[1]!).defaultPrevented).toBe(false);
+  expect(useStore.getState().modePane).toBeNull();
+  await act(() => entries()[1]!.click()); // the native activation Enter triggers in a browser
+  expect(useStore.getState().modePane).toBe('refs');
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-controls="mode-picker"]')!;
+  await act(() => trigger.focus());
+  expect(enter(trigger).defaultPrevented).toBe(false);
+  expect(useStore.getState().modeMenuOpen).toBe(true);
+  expect(switchMode).not.toHaveBeenCalled();
+});
+
+it('moves focus from another header button onto the entry j highlights', async () => {
+  function WithKeys() {
+    useKeymap();
+    return createElement(ModePicker);
+  }
+  await act(() => root.render(createElement(WithKeys)));
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-controls="mode-picker"]')!;
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  await act(() => trigger.focus());
+  act(() => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
+  // Native Enter on the trigger would close the menu instead of picking the entry shown.
+  expect(document.activeElement).toBe(entries()[1]);
+  expect(useStore.getState().modeEntry).toBe(2);
+});
+
+it('enters the highlighted pane with l and leaves it with h', async () => {
+  function WithKeys() {
+    useKeymap();
+    return createElement(ModePicker);
+  }
+  await act(() => root.render(createElement(WithKeys)));
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const press = (key: string, el: Element = document.activeElement ?? document.body) => {
+    const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    act(() => el.dispatchEvent(e));
+    return e;
+  };
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  expect(press('l', document.body).defaultPrevented).toBe(true);
+  expect(useStore.getState().modePane).toBeNull(); // Working has no pane
+  press('j', document.body);
+  press('j', document.body);
+  press('l', document.body);
+  expect(useStore.getState().modePane).toBe('commits');
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Base offset');
+  expect(press('h').defaultPrevented).toBe(false); // an input keeps its letters
+  await act(() => entries()[2]!.focus());
+  press('h');
+  expect(useStore.getState().modePane).toBeNull();
+  expect(document.activeElement).toBe(entries()[2]);
+  press('ArrowRight');
+  expect(useStore.getState().modePane).toBe('commits');
+  // With the pane already open, l moves focus into it.
+  await act(() => entries()[2]!.focus());
+  press('l');
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Base offset');
+  await act(() => entries()[2]!.focus());
+  press('ArrowLeft');
+  expect(useStore.getState().modePane).toBeNull();
+  expect(useStore.getState().modeMenuOpen).toBe(true);
+  expect(switchMode).not.toHaveBeenCalled();
+});
+
+it('closes an open pane on Escape before the menu, keeping the list navigable', async () => {
+  function WithKeys() {
+    useKeymap();
+    return createElement(ModePicker);
+  }
+  await act(() => root.render(createElement(WithKeys)));
+  const entries = () => [...host.querySelectorAll<HTMLButtonElement>('#mode-picker > div > button')];
+  const press = (key: string, type = 'keydown') => {
+    const el = document.activeElement ?? document.body;
+    act(() => el.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, cancelable: true })));
+  };
+  await act(() => useStore.getState().setModeMenuOpen(true));
+  await act(() => useStore.getState().pickModeEntry(3));
+  host.querySelector<HTMLInputElement>('input[aria-label="Base offset"]')!.focus();
+  press('Escape');
+  press('Escape', 'keyup');
+  await new Promise((r) => setTimeout(r, 0));
+  expect(useStore.getState().modePane).toBeNull();
+  expect(useStore.getState().modeMenuOpen).toBe(true);
+  expect(document.activeElement).toBe(entries()[2]);
+  press('k');
+  expect(useStore.getState().modeEntry).toBe(2);
+  press('Escape');
+  expect(useStore.getState().modeMenuOpen).toBe(false);
 });
