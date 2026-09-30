@@ -33,6 +33,19 @@ test.describe('single commit', () => {
     await expect(page).toHaveScreenshot('commit.png');
   });
 
+  test('steps to the parent and back toward HEAD', async ({ page }) => {
+    const header = page.locator('header');
+    const previous = page.getByRole('button', { name: 'Previous commit' });
+    const next = page.getByRole('button', { name: 'Next commit' });
+    await expect(next).toBeDisabled();
+    await previous.click();
+    await expect(header).toContainText('chore: regenerate the client, refresh the lockfile and the logo');
+    await expect(next).toBeEnabled();
+    await page.keyboard.press('>');
+    await expect(header).toContainText('fix(cli): report an empty ledger instead of crashing');
+    await expect(next).toBeDisabled();
+  });
+
   test('picks another commit from the compare menu', async ({ page }) => {
     await page.keyboard.press('m');
     await page.keyboard.press('5');

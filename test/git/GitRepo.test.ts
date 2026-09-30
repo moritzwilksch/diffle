@@ -557,7 +557,13 @@ describe('a single commit', () => {
     const snap = await new Snapshotter(crepo, mode, 1, 3).current();
     expect(snap.oldSha).toBe(cgit('rev-parse', 'HEAD~2'));
     expect(snap.changed.map((f) => [f.path, f.status])).toEqual([['a.txt', 'M']]);
-    expect(snap.commit).toEqual({ sha, short: cgit('rev-parse', '--short', sha), message: 'second\n\nwith a body' });
+    expect(snap.commit).toEqual({
+      sha,
+      short: cgit('rev-parse', '--short', sha),
+      message: 'second\n\nwith a body',
+      parent: cgit('rev-parse', 'HEAD~2'),
+      child: cgit('rev-parse', 'HEAD'),
+    });
   });
 
   it('shows a root commit against the empty tree', async () => {
@@ -572,6 +578,15 @@ describe('a single commit', () => {
     const snap = await new Snapshotter(crepo, mode, 1, 3).current();
     expect(snap.oldSha).toBe(cgit('rev-parse', 'HEAD^1'));
     expect(snap.changed.map((f) => [f.path, f.status])).toEqual([['side.txt', 'A']]);
+  });
+
+  it("steps along HEAD's first-parent line and stops at its ends", async () => {
+    const [root, second, merge, side] = ['HEAD~2', 'HEAD~1', 'HEAD', 'side'].map((rev) => cgit('rev-parse', rev));
+    expect(await crepo.commitNeighbours(root!)).toEqual({ parent: null, child: second });
+    expect(await crepo.commitNeighbours(second!)).toEqual({ parent: root, child: merge });
+    expect(await crepo.commitNeighbours(merge!)).toEqual({ parent: second, child: null });
+    // The side commit's only descendant is the merge, whose first parent is not the side commit.
+    expect(await crepo.commitNeighbours(side!)).toEqual({ parent: root, child: null });
   });
 
   it('leaves commit null for a range', async () => {

@@ -130,6 +130,15 @@ export const CommitInfoSchema = z.object({
 });
 export type CommitInfo = z.infer<typeof CommitInfoSchema>;
 
+/** A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it. */
+export const ReviewedCommitSchema = CommitInfoSchema.extend({
+  /** First parent; null for a root commit. */
+  parent: z.string().nullable(),
+  /** The commit whose first parent this is, toward HEAD; null at HEAD or off HEAD's first-parent line. */
+  child: z.string().nullable(),
+});
+export type ReviewedCommit = z.infer<typeof ReviewedCommitSchema>;
+
 export const SnapshotSchema = z.object({
   root: z.string(),
   mode: ModeSpecSchema,
@@ -146,7 +155,7 @@ export const SnapshotSchema = z.object({
   /** All paths on the new side: the new commit's tree, or index ∪ untracked for the worktree. Sorted. */
   tree: z.string().array(),
   /** The reviewed commit when the comparison is a single commit against its parent; otherwise null. */
-  commit: CommitInfoSchema.nullable(),
+  commit: ReviewedCommitSchema.nullable(),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 

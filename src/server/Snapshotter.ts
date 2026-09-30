@@ -1,4 +1,4 @@
-import type { ChangedFile, ModeSpec, Snapshot } from '../shared/protocol.js';
+import type { ChangedFile, ModeSpec, ReviewedCommit, Snapshot } from '../shared/protocol.js';
 import { mapLimit } from './concurrency.js';
 import { looksGenerated, SNIFF_BYTES } from './generated.js';
 import type { GitRepo } from './git/GitRepo.js';
@@ -116,7 +116,7 @@ export class Snapshotter {
           )
         : this.repo.lsTree(newSha),
       this.repo.numstat(oldSha, newSha),
-      this.mode.base === 'parent' ? this.repo.commitInfo(newSha) : null,
+      this.mode.base === 'parent' ? this.reviewedCommit(newSha) : null,
     ]);
     await this.fillGenerated(changed, newSha);
     const tree = new Set(tracked);
@@ -139,6 +139,11 @@ export class Snapshotter {
     };
     for (const f of changed.slice(0, PREWARM)) void this.patchFor(snap, f).catch(() => {});
     return snap;
+  }
+
+  private async reviewedCommit(sha: string): Promise<ReviewedCommit | null> {
+    const [info, neighbours] = await Promise.all([this.repo.commitInfo(sha), this.repo.commitNeighbours(sha)]);
+    return info && { ...info, ...neighbours };
   }
 
   /**

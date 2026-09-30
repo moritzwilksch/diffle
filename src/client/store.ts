@@ -389,6 +389,8 @@ export interface ReviewState {
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
   switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
+  /** In a single-commit view, show the parent (-1) or the child toward HEAD (1); a no-op at either end. */
+  stepCommit(direction: -1 | 1): void;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
@@ -2070,6 +2072,12 @@ export const useStore = create<ReviewState>((set, get) => {
       } finally {
         if (owned && snap && fetching === snap.version) fetching = 0;
       }
+    },
+
+    stepCommit(direction) {
+      const commit = get().snapshot?.commit;
+      const target = direction < 0 ? commit?.parent : commit?.child;
+      if (target) void get().switchMode({ kind: 'revspec', args: [`${target}^!`] });
     },
 
     loadFile,

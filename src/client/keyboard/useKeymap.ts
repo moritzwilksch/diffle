@@ -78,6 +78,8 @@ const KEYMAP: Record<string, Action> = {
   },
   o: (s) => s.setGithubMenuOpen(!s.githubMenuOpen),
   m: (s) => s.setModeMenuOpen(!s.modeMenuOpen),
+  '<': (s) => s.stepCommit(-1),
+  '>': (s) => s.stepCommit(1),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
 };
 
