@@ -12,6 +12,12 @@ vi.mock('../../src/client/api.js', () => ({
 
 const { useStore } = await import('../../src/client/store.js');
 const { ImageDiff } = await import('../../src/client/review/ImageDiff.js');
+const { useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
+
+function Keys() {
+  useKeymap();
+  return null;
+}
 
 /** Natural sizes the stub decoder reports, by URL; a URL missing here fails to decode. */
 let decoded: Record<string, [number, number]> = {};
@@ -55,6 +61,7 @@ afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 let version = 0;
@@ -115,9 +122,13 @@ describe('ImageDiff', () => {
     const pointer = (type: string, clientX: number) =>
       Object.assign(new Event(type, { bubbles: true }), { clientX, pointerId: 1, buttons: 1 });
     await act(() => stack.dispatchEvent(pointer('pointerdown', 20)));
-    await act(() => stack.dispatchEvent(pointer('pointermove', 20)));
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
+    await act(() => stack.dispatchEvent(pointer('pointermove', 30)));
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
+    await act(() => stack.dispatchEvent(pointer('pointerdown', 50)));
     expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
-    await act(() => divider.dispatchEvent(pointer('pointerdown', 50)));
+    await act(() => divider.dispatchEvent(pointer('pointerdown', 52)));
+    expect(newLayer.style.clipPath).toBe('inset(0 0 0 50%)');
     await act(() => stack.dispatchEvent(pointer('pointermove', 20)));
     expect(divider.getAttribute('aria-valuenow')).toBe('20');
     expect(newLayer.style.clipPath).toBe('inset(0 0 0 20%)');
@@ -138,10 +149,14 @@ describe('ImageDiff', () => {
     expect(localStorage.getItem('diffle:imageCompare')).toBe('difference');
   });
 
-  it('clips a narrower new side at the divider, measured on the canvas rather than on the image', async () => {
+  it('clips on the canvas and lets the focused divider own its keys with the review keymap mounted', async () => {
     useStore.setState({ snapshot: snapshot(), imageCompare: 'swipe' });
     decoded = { [url('old')]: [80, 40], [url('new')]: [40, 20] };
-    await act(() => root.render(createElement(ImageDiff, { path: 'a.png', sides: 'both' })));
+    await act(() =>
+      root.render(
+        createElement('div', null, createElement(Keys), createElement(ImageDiff, { path: 'a.png', sides: 'both' })),
+      ),
+    );
     await settle();
     const stack = host.querySelector<HTMLElement>('[data-stack="swipe"]')!;
     const layer = stack.querySelector<HTMLElement>('[data-layer="new"]')!;
@@ -151,12 +166,29 @@ describe('ImageDiff', () => {
     expect(layer.querySelector('img')!.style.width).toBe('50%');
     const divider = stack.querySelector<HTMLElement>('[role="slider"]')!;
     expect(divider.style.left).toBe('50%');
-    await act(() => divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
-    expect(layer.style.clipPath).toBe('inset(0 0 0 51%)');
-    await act(() => divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
-    expect(divider.getAttribute('aria-valuenow')).toBe('0');
-    await act(() => divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
-    expect(divider.getAttribute('aria-valuenow')).toBe('100');
+    const moveCursor = vi.spyOn(useStore.getState(), 'moveCursor');
+    const moveCursorBy = vi.spyOn(useStore.getState(), 'moveCursorBy');
+    const setLayout = vi.spyOn(useStore.getState(), 'setLayout');
+    divider.focus();
+    for (const [key, shiftKey, expected] of [
+      ['ArrowRight', false, 51],
+      ['ArrowLeft', false, 50],
+      ['ArrowUp', true, 60],
+      ['ArrowDown', true, 50],
+      ['Home', false, 0],
+      ['End', false, 100],
+      ['ArrowRight', false, 100],
+    ] as const) {
+      await act(() =>
+        divider.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true })),
+      );
+      expect(divider.getAttribute('aria-valuenow')).toBe(String(expected));
+      expect(layer.style.clipPath).toBe(`inset(0 0 0 ${expected}%)`);
+      expect(document.activeElement).toBe(divider);
+    }
+    expect(moveCursor).not.toHaveBeenCalled();
+    expect(moveCursorBy).not.toHaveBeenCalled();
+    expect(setLayout).not.toHaveBeenCalled();
   });
 
   it('shows one side of an added image, with nothing to compare and no request for the missing side', async () => {

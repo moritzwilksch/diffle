@@ -184,6 +184,14 @@ function Stack({
         className={`relative isolate overflow-hidden ${mode === 'difference' ? 'bg-black' : 'image-checker'} ${mode === 'swipe' ? 'touch-none' : ''}`}
         style={frame(canvas)}
         data-stack={mode}
+        onPointerDown={
+          mode === 'swipe'
+            ? (e) => {
+                e.preventDefault();
+                swipeTo(e);
+              }
+            : undefined
+        }
         onPointerMove={
           mode === 'swipe' ? (e) => e.currentTarget.hasPointerCapture(e.pointerId) && swipeTo(e) : undefined
         }
@@ -217,6 +225,7 @@ function Stack({
             style={{ left: `${amount}%` }}
             onPointerDown={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               e.currentTarget.focus();
               e.currentTarget.parentElement?.setPointerCapture(e.pointerId);
             }}
