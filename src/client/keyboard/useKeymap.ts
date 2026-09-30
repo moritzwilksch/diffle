@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
 import { clearWordFocus, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
-import { currentPath } from '../model.js';
+import { currentPath, MODE_PANES } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
@@ -233,7 +233,7 @@ export function useKeymap(): void {
       // configuration pane keep native Enter, so Enter and Space activate the same control.
       if (s.modeMenuOpen && !s.helpOpen) {
         const step = e.key === 'j' || e.key === 'ArrowDown' ? 1 : e.key === 'k' || e.key === 'ArrowUp' ? -1 : 0;
-        const entry = /^[1-4]$/.test(e.key)
+        const entry = /^[1-5]$/.test(e.key)
           ? Number(e.key)
           : e.key === 'Enter' && !target?.closest('button, #mode-config')
             ? s.modeEntry
@@ -340,8 +340,6 @@ export function useKeymap(): void {
     };
   }, []);
 }
-
-const MODE_PANES = [null, 'refs', 'commits', 'pr'] as const;
 
 function focusModeEntry(): void {
   document.querySelector<HTMLElement>(`[data-mode-entry="${useStore.getState().modeEntry}"]`)?.focus();

@@ -141,7 +141,8 @@ export class GitRepo {
     return { old, new: next };
   }
 
-  private async commitInfo(rev: string): Promise<CommitInfo | null> {
+  /** A commit's hash, abbreviation and full message; null when `rev` names no commit. */
+  async commitInfo(rev: string): Promise<CommitInfo | null> {
     let sha: string;
     try {
       sha = await this.resolve(rev);

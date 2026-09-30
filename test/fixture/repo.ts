@@ -35,7 +35,7 @@ export const REVIEWS: { revs: string; shows: string }[] = [
   { revs: `${MAIN_BRANCH}..${FEATURE_BRANCH}`, shows: 'the two branches side by side, main’s own fix included' },
   { revs: 'working', shows: 'the staged, unstaged and untracked changes' },
   { revs: `${TAG}..${MAIN_BRANCH}`, shows: 'what main released since the tag' },
-  { revs: 'HEAD~1', shows: 'the last commit alone' },
+  { revs: 'HEAD^!', shows: 'the last commit alone' },
 ];
 
 const AUTHORS = {

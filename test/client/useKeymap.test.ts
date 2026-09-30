@@ -359,7 +359,7 @@ describe('useKeymap', () => {
     try {
       expect(useStore.getState().modeEntry).toBe(1);
       expect(press('k').defaultPrevented).toBe(true);
-      expect(useStore.getState().modeEntry).toBe(4);
+      expect(useStore.getState().modeEntry).toBe(5);
       press('j');
       press('j');
       press('ArrowDown');

@@ -52,23 +52,30 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
 ]);
 export type ModeRequest = z.infer<typeof ModeRequestSchema>;
 
-/** A comparison; both endpoints accept a Git revision or "worktree". */
+/**
+ * How the old side is derived: `old` itself, merge-base(old, new) with worktree
+ * taken as HEAD, or new's first parent (the empty tree for a root commit).
+ */
+export const ComparisonBaseSchema = z.enum(['direct', 'merge-base', 'parent']);
+export type ComparisonBase = z.infer<typeof ComparisonBaseSchema>;
+
+/** A comparison; both endpoints accept a Git revision or "worktree". Under `parent`, both name the one commit. */
 export const ModeSpecSchema = z.object({
   old: z.string(),
   new: z.string(),
-  /** Compare merge-base(old, new) to new; worktree uses HEAD for the merge base. */
-  mergeBase: z.boolean(),
+  base: ComparisonBaseSchema,
   live: z.enum(['worktree', 'refs', 'none']),
   /** Fixed when the comparison is entered; discovery never changes comment storage. */
   commentKey: z.string(),
 });
 export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
-/** Display comparison endpoints with branch names instead of internal ref namespaces. */
-export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>): string {
+/** Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as `<sha>^!`. */
+export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base'>): string {
+  if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
   const name = (rev: string) =>
     rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
-  return `${name(mode.old)}${mode.mergeBase ? '...' : '..'}${name(mode.new)}`;
+  return `${name(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${name(mode.new)}`;
 }
 
 export const GithubPullRequestSchema = z.object({
@@ -116,6 +123,13 @@ export const ChangedFileSchema = z.object({
 });
 export type ChangedFile = z.infer<typeof ChangedFileSchema>;
 
+export const CommitInfoSchema = z.object({
+  sha: z.string(),
+  short: z.string(),
+  message: z.string(),
+});
+export type CommitInfo = z.infer<typeof CommitInfoSchema>;
+
 export const SnapshotSchema = z.object({
   root: z.string(),
   mode: ModeSpecSchema,
@@ -131,6 +145,8 @@ export const SnapshotSchema = z.object({
   changed: ChangedFileSchema.array(),
   /** All paths on the new side: the new commit's tree, or index ∪ untracked for the worktree. Sorted. */
   tree: z.string().array(),
+  /** The reviewed commit when the comparison is a single commit against its parent; otherwise null. */
+  commit: CommitInfoSchema.nullable(),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 
@@ -272,13 +288,6 @@ export const ViewedEntrySchema = z.object({
   viewed: z.boolean(),
 });
 export type ViewedEntry = z.infer<typeof ViewedEntrySchema>;
-
-export const CommitInfoSchema = z.object({
-  sha: z.string(),
-  short: z.string(),
-  message: z.string(),
-});
-export type CommitInfo = z.infer<typeof CommitInfoSchema>;
 
 /** Endpoints of HEAD~oldOffset..HEAD~newOffset, resolved against the same HEAD. Null means the commit does not exist. */
 export const LastCommitsPreviewSchema = z.object({

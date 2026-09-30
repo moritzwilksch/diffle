@@ -20,3 +20,29 @@ test.describe('two-dot comparison', () => {
     expect(await filePaths(page)).toContain('README.md');
   });
 });
+
+test.describe('single commit', () => {
+  test.use({ revs: ['HEAD^!'] });
+
+  test('shows the commit against its parent, with its subject', async ({ page }) => {
+    const header = page.locator('header');
+    await expect(header).toContainText('fix(cli): report an empty ledger instead of crashing');
+    await expect(header).toContainText('1 files');
+    expect(await filePaths(page)).toEqual(['tally/cli.py']);
+    await waitForHighlight(page, 'tally/cli.py');
+    await expect(page).toHaveScreenshot('commit.png');
+  });
+
+  test('picks another commit from the compare menu', async ({ page }) => {
+    await page.keyboard.press('m');
+    await page.keyboard.press('5');
+    const pane = page.getByRole('form', { name: 'Commit…' });
+    await expect(pane).toBeVisible();
+    await expect(pane).toMatchAriaSnapshot({ name: 'commit-pane.aria.yml' });
+    await page.getByRole('combobox', { name: 'Commit' }).fill('HEAD~1');
+    await page.keyboard.press('Enter');
+    const header = page.locator('header');
+    await expect(header).toContainText('chore: regenerate the client, refresh the lockfile and the logo');
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/\^!/);
+  });
+});

@@ -5,7 +5,7 @@ describe('parseRevspec', () => {
   it('single rev diffs its merge base with HEAD against HEAD', () => {
     expect(parseRevspec(['main'])).toEqual({
       old: 'main',
-      mergeBase: true,
+      base: 'merge-base',
       new: 'HEAD',
     });
     expect(parseRevspec(['main'])).toEqual(parseRevspec(['main...HEAD']));
@@ -15,7 +15,7 @@ describe('parseRevspec', () => {
   it('sends a lone ancestor of HEAD through the merge base too', () => {
     expect(parseRevspec(['HEAD~3'])).toEqual({
       old: 'HEAD~3',
-      mergeBase: true,
+      base: 'merge-base',
       new: 'HEAD',
     });
   });
@@ -23,19 +23,19 @@ describe('parseRevspec', () => {
   it('names the uncommitted tree on the new side of any form', () => {
     expect(parseRevspec(['main..worktree'])).toEqual({
       old: 'main',
-      mergeBase: false,
+      base: 'direct',
       new: 'worktree',
     });
     // A merge base needs a commit, and the worktree sits on HEAD.
     expect(parseRevspec(['main...worktree'])).toEqual({
       old: 'main',
-      mergeBase: true,
+      base: 'merge-base',
       new: 'worktree',
     });
     expect(parseRevspec(['main', 'worktree']).new).toBe('worktree');
     expect(parseRevspec(['worktree'])).toEqual({
       old: 'HEAD',
-      mergeBase: false,
+      base: 'direct',
       new: 'worktree',
     });
   });
@@ -43,7 +43,7 @@ describe('parseRevspec', () => {
   it('two-dot is a direct comparison', () => {
     expect(parseRevspec(['main..feat'])).toEqual({
       old: 'main',
-      mergeBase: false,
+      base: 'direct',
       new: 'feat',
     });
   });
@@ -51,7 +51,7 @@ describe('parseRevspec', () => {
   it('three-dot uses the merge base', () => {
     expect(parseRevspec(['main...feat'])).toEqual({
       old: 'main',
-      mergeBase: true,
+      base: 'merge-base',
       new: 'feat',
     });
   });
@@ -66,8 +66,16 @@ describe('parseRevspec', () => {
     expect(parseRevspec(['a', 'b'])).toEqual(parseRevspec(['a..b']));
   });
 
+  it('^! names one commit, compared with its parent', () => {
+    expect(parseRevspec(['feat^!'])).toEqual({ old: 'feat', new: 'feat', base: 'parent' });
+    expect(parseRevspec(['^!']).new).toBe('HEAD');
+  });
+
   it('rejects mixed forms and bad arity', () => {
     expect(() => parseRevspec(['a..b', 'c'])).toThrow(RevspecError);
+    expect(() => parseRevspec(['a..b^!'])).toThrow(RevspecError);
+    expect(() => parseRevspec(['a^!', 'b'])).toThrow(RevspecError);
+    expect(() => parseRevspec(['worktree^!'])).toThrow(RevspecError);
     expect(() => parseRevspec([])).toThrow(RevspecError);
     expect(() => parseRevspec(['a', 'b', 'c'])).toThrow(RevspecError);
   });

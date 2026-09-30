@@ -10,6 +10,7 @@ export function RefInput({
   autoFocus,
   inputRef,
   onAccept,
+  worktree = true,
 }: {
   label: string;
   value: string;
@@ -17,7 +18,10 @@ export function RefInput({
   refs: RefsResponse | null;
   autoFocus?: boolean;
   inputRef?: Ref<HTMLInputElement>;
-  onAccept(): void;
+  /** Enter settled on `revision`; it is passed because `value` updates only on the next render. */
+  onAccept(revision: string): void;
+  /** Offer "worktree"; a commit input leaves it out because the worktree is not a commit. */
+  worktree?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -26,7 +30,7 @@ export function RefInput({
   const list = useRef<HTMLDivElement>(null);
   const options = [
     { value: 'HEAD', detail: 'Current commit', section: 'special' },
-    { value: 'worktree', detail: 'Uncommitted changes', section: 'special' },
+    ...(worktree ? [{ value: 'worktree', detail: 'Uncommitted changes', section: 'special' }] : []),
     ...(refs?.branches ?? []).map((value) => ({
       value,
       detail: value === refs?.current ? 'Current branch' : 'Branch',
@@ -95,7 +99,7 @@ export function RefInput({
             const revision = open && selected ? selected.value : value.trim();
             if (revision) {
               choose(revision);
-              onAccept();
+              onAccept(revision);
             }
           } else if (e.key === 'Escape' && open) {
             e.preventDefault();

@@ -211,10 +211,11 @@ it('shows one highlight shared by the pointer and the keyboard', async () => {
   expect(highlighted()).toBe(1);
   await act(() => entries()[2]!.dispatchEvent(new MouseEvent('pointermove', { bubbles: true })));
   expect(highlighted()).toBe(3);
-  await act(() => useStore.getState().highlightModeEntry(5));
+  await act(() => useStore.getState().highlightModeEntry(6));
   expect(highlighted()).toBe(1);
-  await act(() => useStore.getState().pickModeEntry(4));
-  expect(highlighted()).toBe(4);
+  await act(() => useStore.getState().pickModeEntry(5));
+  expect(highlighted()).toBe(5);
+  expect(useStore.getState().modePane).toBe('commit');
   expect(entries().filter((b) => b.hasAttribute('data-highlighted'))).toHaveLength(1);
 });
 

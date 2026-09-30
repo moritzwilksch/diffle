@@ -109,13 +109,14 @@ export class Snapshotter {
     ]);
     // The tree belongs to the selected new side: a commit's own listing, or the
     // index plus untracked files (added below via `changed`) for the worktree.
-    const [tracked, changed] = await Promise.all([
+    const [tracked, changed, commit] = await Promise.all([
       newSha === 'worktree'
         ? Promise.all([this.repo.lsFiles(), this.repo.untracked()]).then((lists) =>
             lists.flat().filter((p) => !p.endsWith('/')),
           )
         : this.repo.lsTree(newSha),
       this.repo.numstat(oldSha, newSha),
+      this.mode.base === 'parent' ? this.repo.commitInfo(newSha) : null,
     ]);
     await this.fillGenerated(changed, newSha);
     const tree = new Set(tracked);
@@ -134,6 +135,7 @@ export class Snapshotter {
       context: this.context,
       changed,
       tree: [...tree].sort(),
+      commit,
     };
     for (const f of changed.slice(0, PREWARM)) void this.patchFor(snap, f).catch(() => {});
     return snap;

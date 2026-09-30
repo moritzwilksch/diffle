@@ -269,10 +269,12 @@ describe('comparisonLabel', () => {
       comparisonLabel({
         old: 'refs/diffle/session/42/base/main',
         new: 'refs/diffle/session/42/head/feature/nested',
-        mergeBase: true,
+        base: 'merge-base',
       }),
     ).toBe('main...feature/nested');
-    expect(comparisonLabel({ old: 'HEAD', new: 'worktree', mergeBase: false })).toBe('HEAD..worktree');
+    expect(comparisonLabel({ old: 'HEAD', new: 'worktree', base: 'direct' })).toBe('HEAD..worktree');
+    const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+    expect(comparisonLabel({ old: sha, new: sha, base: 'parent' })).toBe('a1b2c3d^!');
   });
 });
 

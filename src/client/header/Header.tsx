@@ -63,6 +63,11 @@ export function Header() {
         {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
+      {snapshot?.commit && (
+        <span className="max-w-[24rem] min-w-0 truncate text-[0.8125rem]" title={snapshot.commit.message}>
+          {snapshot.commit.message.split('\n', 1)[0]}
+        </span>
+      )}
       <GithubMenu />
       <span className="text-muted">
         {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>
