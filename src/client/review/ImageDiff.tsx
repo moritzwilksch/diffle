@@ -130,7 +130,6 @@ function Compare({ path, url }: { path: string; url: Record<Side, string | null>
 function Figure({ path, side, image }: { path: string; side: Side; image: Decoded | null | undefined }) {
   return (
     <figure className="m-0 flex min-w-0 flex-col gap-1">
-      <figcaption className="font-mono text-[0.75rem] text-muted">{caption(side, image)}</figcaption>
       {image === undefined ? (
         <span className="text-muted">Loading image…</span>
       ) : image === null ? (
@@ -144,6 +143,7 @@ function Figure({ path, side, image }: { path: string; side: Side; image: Decode
           style={frame(image.size)}
         />
       )}
+      <figcaption className="font-mono text-[0.75rem] text-muted">{caption(side, image)}</figcaption>
     </figure>
   );
 }
@@ -181,19 +181,12 @@ function Stack({
   return (
     <div className="flex flex-col gap-1">
       <div
-        className={`relative isolate overflow-hidden ${mode === 'difference' ? 'bg-black' : 'image-checker'} ${mode === 'swipe' ? 'cursor-ew-resize touch-none' : ''}`}
+        className={`relative isolate overflow-hidden ${mode === 'difference' ? 'bg-black' : 'image-checker'} ${mode === 'swipe' ? 'touch-none' : ''}`}
         style={frame(canvas)}
         data-stack={mode}
-        onPointerDown={
-          mode === 'swipe'
-            ? (e) => {
-                e.preventDefault();
-                e.currentTarget.setPointerCapture(e.pointerId);
-                swipeTo(e);
-              }
-            : undefined
+        onPointerMove={
+          mode === 'swipe' ? (e) => e.currentTarget.hasPointerCapture(e.pointerId) && swipeTo(e) : undefined
         }
-        onPointerMove={mode === 'swipe' ? (e) => e.buttons & 1 && swipeTo(e) : undefined}
       >
         <img
           src={pair.old.url}
@@ -213,19 +206,52 @@ function Stack({
           />
         </div>
         {mode === 'swipe' && (
-          <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-accent" style={{ left: `${amount}%` }} />
+          <div
+            role="slider"
+            tabIndex={0}
+            aria-label="Swipe position"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={amount}
+            className="absolute inset-y-0 w-4 -translate-x-1/2 cursor-ew-resize focus-visible:outline-2 focus-visible:outline-accent"
+            style={{ left: `${amount}%` }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.currentTarget.focus();
+              e.currentTarget.parentElement?.setPointerCapture(e.pointerId);
+            }}
+            onKeyDown={(e) => {
+              const step = e.shiftKey ? 10 : 1;
+              const value =
+                e.key === 'Home'
+                  ? 0
+                  : e.key === 'End'
+                    ? 100
+                    : e.key === 'ArrowLeft' || e.key === 'ArrowDown'
+                      ? amount - step
+                      : e.key === 'ArrowRight' || e.key === 'ArrowUp'
+                        ? amount + step
+                        : null;
+              if (value === null) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setAmount(Math.min(100, Math.max(0, value)));
+            }}
+          >
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-accent" />
+          </div>
         )}
       </div>
       <div className="flex items-center gap-3 font-mono text-[0.75rem] text-muted">
         <span>{caption('old', pair.old)}</span>
-        {mode !== 'difference' && (
+        {mode === 'onion' && (
           <input
             type="range"
             min={0}
             max={100}
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
-            aria-label={mode === 'swipe' ? 'Swipe position' : 'New side opacity'}
+            aria-label="New side opacity"
             className="w-40 accent-accent"
           />
         )}
