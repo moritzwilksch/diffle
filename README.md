@@ -28,6 +28,22 @@ Or from [npm](https://npmx.dev/package/@moritzwilksch/diffle):
 npm install -g @moritzwilksch/diffle
 ```
 
+Or as a standalone binary, with no Node.js required, for Linux (x64, arm64, glibc) and Apple
+silicon macOS:
+
+```bash
+curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | sh
+```
+
+It installs to `~/.local/bin`; set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.1.9` to
+pin a release. On Windows (x64, arm64), from PowerShell:
+
+```powershell
+irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
+```
+
+It installs to `%LOCALAPPDATA%\Programs\diffle` and adds that to your user `PATH`.
+
 To run it without installing anything:
 
 ```bash
