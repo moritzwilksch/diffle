@@ -1,17 +1,15 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { rmTmp } from '../tmp.js';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommentThread, ThreadCreate } from '../../src/shared/protocol.js';
 
 /** The diffle checkout that contains this file. */
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-
-/** The client build the server serves. Swap it to screenshot a different build. */
-export const CLIENT_DIR = join(REPO_ROOT, 'dist/client');
 
 export interface DiffleOptions {
   /** The repository to review; any directory inside a worktree. */
@@ -21,6 +19,8 @@ export interface DiffleOptions {
   /** Further CLI flags. */
   args?: string[];
   env?: NodeJS.ProcessEnv;
+  /** The diffle checkout to run, server and client; this one by default. See `baseCheckout`. */
+  root?: string;
   timeoutMs?: number;
 }
 
@@ -39,6 +39,7 @@ export async function startDiffle({
   revs = [],
   args = [],
   env = {},
+  root = REPO_ROOT,
   timeoutMs = 30000,
 }: DiffleOptions): Promise<RunningDiffle> {
   const configDir = await mkdtemp(join(tmpdir(), 'diffle-e2e-config-'));
@@ -46,7 +47,7 @@ export async function startDiffle({
     process.execPath,
     [
       join(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs'),
-      join(REPO_ROOT, 'src/cli/main.ts'),
+      join(root, 'src/cli/main.ts'),
       '-C',
       repo,
       '--port',
@@ -58,7 +59,7 @@ export async function startDiffle({
       ...args,
     ],
     {
-      cwd: REPO_ROOT,
+      cwd: root,
       // Every server owns its settings, including writes made through the settings dialog.
       env: { ...process.env, NO_COLOR: '1', ...env, XDG_CONFIG_HOME: configDir },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -171,7 +172,49 @@ export function resetReviewState(repo: string): void {
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-/** Build the client in this checkout. Run once per source revision. */
-export function buildClient(cwd = REPO_ROOT): void {
-  execFileSync(npm, ['run', 'build:client'], { cwd, stdio: 'inherit', shell: process.platform === 'win32' });
+/** Run a command with its output captured; on failure, throw with the output's tail. */
+export function quiet(cmd: string, args: string[], cwd = REPO_ROOT): string {
+  try {
+    return execFileSync(cmd, args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32' && cmd === npm,
+    });
+  } catch (error) {
+    const { stdout = '', stderr = '' } = error as { stdout?: string; stderr?: string };
+    const tail = `${stdout}${stderr}`.trim().split('\n').slice(-30).join('\n');
+    throw new Error(`${cmd} ${args.join(' ')} failed\n${tail}`);
+  }
+}
+
+/** Inputs of the client build; a change to any of them makes `dist/client` stale. */
+const CLIENT_INPUTS = ['src/client', 'src/shared', 'vite.config.ts', 'tsconfig.client.json', 'package-lock.json'];
+
+function clientInputsKey(root: string): string {
+  const hash = createHash('sha256');
+  const walk = (path: string): void => {
+    if (!existsSync(path)) return;
+    const st = statSync(path);
+    if (!st.isDirectory()) {
+      hash.update(`${relative(root, path)}\0${st.size}\0${st.mtimeMs}\n`);
+      return;
+    }
+    for (const name of readdirSync(path).sort()) walk(join(path, name));
+  };
+  for (const input of CLIENT_INPUTS) walk(join(root, input));
+  return hash.digest('hex');
+}
+
+/**
+ * Build `cwd`'s client unless `dist/client` already matches its sources. Output appears only on
+ * failure. Returns whether it built.
+ */
+export function buildClient(cwd = REPO_ROOT): boolean {
+  const stamp = join(cwd, 'dist/client/.build-stamp');
+  const key = clientInputsKey(cwd);
+  if (existsSync(stamp) && readFileSync(stamp, 'utf8') === key) return false;
+  quiet(npm, ['run', 'build:client'], cwd);
+  writeFileSync(stamp, key);
+  return true;
 }

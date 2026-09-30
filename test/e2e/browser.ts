@@ -80,9 +80,11 @@ export async function filePaths(page: Page): Promise<string[]> {
  */
 async function fileItem(page: Page, path: string, reveal: (page: Page, path: string) => Promise<void> = walkToFile) {
   if (!(await filePaths(page)).includes(path)) throw new Error(`not a changed file: ${path}`);
+  // Headers before `data-path` name the file in the path span's title; `--before` captures run those.
+  const named = JSON.stringify(path);
   const item = page
     .locator('diffs-container')
-    .filter({ has: page.locator(`[slot="header-custom"] [data-path=${JSON.stringify(path)}]`) })
+    .filter({ has: page.locator(`[slot="header-custom"] :is([data-path=${named}], [title=${named}])`) })
     .first();
   if ((await item.count()) === 0) await reveal(page, path);
   await item.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {
@@ -236,8 +238,12 @@ export async function setViewed(page: Page, path: string, on: boolean): Promise<
   }
 }
 
-/** Collapse or expand the file's diff. Moves the cursor, like a header click. */
+/**
+ * Collapse or expand the file's diff. Moves the cursor, like a header click. The app's tooltip lifts
+ * `title` off the hovered control, so the pointer leaves first or a second toggle finds no button.
+ */
 export async function toggleCollapse(page: Page, path: string): Promise<void> {
+  await page.mouse.move(0, 0);
   await (await fileItem(page, path)).locator('button[title="Collapse / expand"]').click();
 }
 
