@@ -22,6 +22,7 @@ function file(path: string, extra: Partial<ChangedFile> = {}): ChangedFile {
     deletions: 0,
     binary: false,
     blob: 'b1',
+    oldBlob: '',
     generated: false,
     ...extra,
   };

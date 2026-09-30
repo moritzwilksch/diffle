@@ -49,3 +49,14 @@ describe('diffle --help', () => {
     for (const line of configCommands.split('\n').slice(2).filter(Boolean)) expect(line).toMatch(/\S {2,}\S/);
   });
 });
+
+describe('help text', () => {
+  // The whole text, kept as files: a wording change is judged by reading the diff of what a user sees.
+  it('is the committed text for the main command', async () => {
+    await expect(help()).toMatchFileSnapshot('__snapshots__/help.txt');
+  });
+  it('is the committed text for the shorthands and config', async () => {
+    const sections = ['working', 'pr', 'config'].map((cmd) => `$ diffle ${cmd} --help\n\n${help(cmd)}`);
+    await expect(sections.join('\n')).toMatchFileSnapshot('__snapshots__/help-commands.txt');
+  });
+});

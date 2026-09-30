@@ -1,8 +1,0 @@
-{
-  "name": "diffle-screenshot-change",
-  "private": true,
-  "description": "Playwright for the screenshot-change skill harness. Kept out of the root manifest so the app's install and CI do not pull it.",
-  "devDependencies": {
-    "playwright": "^1.63.0"
-  }
-}

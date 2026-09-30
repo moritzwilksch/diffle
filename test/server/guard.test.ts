@@ -58,7 +58,13 @@ describe('reverse proxy origin', () => {
         expect(guard({ host, origin: foreign })).toMatch(/^forbidden/);
       }
     }
-    expect(guard({ host: 'evil.example', origin })).toMatch(/^forbidden/);
+    // The rejected Origin can differ from the configured one only in the scheme, so name it.
+    expect(guard({ host: 'proxy.example:8443', origin: 'http://proxy.example:8443' })).toBe(
+      'forbidden Origin "http://proxy.example:8443" for Host "proxy.example:8443"; allowed origin is "https://proxy.example:8443"',
+    );
+    expect(guard({ host: 'evil.example', origin })).toBe(
+      'forbidden Host "evil.example"; allowed origin is "https://proxy.example:8443"',
+    );
     expect(guard({ host: 'proxy.example:8444', origin })).toMatch(/^forbidden/);
     expect(guard({ origin })).toBe('missing Host header');
     expect(guard({ host: '127.0.0.1:4966', origin: 'http://127.0.0.1:4966' })).toBeNull();

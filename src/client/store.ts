@@ -80,6 +80,18 @@ const DIFF_STYLE_KEY = 'diffle:diffStyle';
 export const WORKSPACE_SYMBOL_DEBOUNCE_MS = 150;
 /** How long every toast stays visible: long enough to read a full sentence, since errors are the main thing shown. */
 export const TOAST_MS = 3500;
+/** How an image diff shows its two sides: next to each other, or stacked with a swipe, a fade or a pixel difference. */
+export const IMAGE_COMPARES = ['side-by-side', 'swipe', 'onion', 'difference'] as const;
+export type ImageCompare = (typeof IMAGE_COMPARES)[number];
+const IMAGE_COMPARE_KEY = 'diffle:imageCompare';
+function readImageCompare(): ImageCompare {
+  try {
+    const stored = localStorage.getItem(IMAGE_COMPARE_KEY);
+    return IMAGE_COMPARES.find((c) => c === stored) ?? 'side-by-side';
+  } catch {
+    return 'side-by-side';
+  }
+}
 function readDiffStyle(): DiffStyle {
   try {
     return localStorage.getItem(DIFF_STYLE_KEY) === 'unified' ? 'unified' : 'split';
@@ -208,6 +220,8 @@ export interface ReviewState {
   setLayout(patch: Partial<LayoutState>): void;
   diffStyle: DiffStyle;
   setDiffStyle(style: DiffStyle): void;
+  imageCompare: ImageCompare;
+  setImageCompare(compare: ImageCompare): void;
   theme: ThemeChoice;
   setTheme(theme: ThemeChoice): void;
 
@@ -231,7 +245,13 @@ export interface ReviewState {
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
   modePane: 'refs' | 'commits' | 'pr' | null;
+  /** Compare-menu entry (1–4) that Enter picks; opening the menu highlights the first. */
+  modeEntry: number;
+  /** Highlight entry `n`, wrapping past either end. */
+  highlightModeEntry(n: number): void;
   pickModeEntry(n: number): void;
+  /** Collapse the configuration pane, keeping the menu open and the highlight. */
+  closeModePane(): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
   treeModel: FileTree | null;
@@ -312,6 +332,8 @@ export interface ReviewState {
   toggleResolvedAtCursor(): Promise<void>;
   /** `v`: flip viewed on the file under the cursor; marking it viewed advances to the next unviewed file. */
   toggleViewedAtCursor(): Promise<void>;
+  /** `gv`: flip viewed on the file above the cursor's, leaving the cursor where it is. */
+  toggleViewedAbove(): Promise<void>;
   /** Open the next (or previous) unviewed file in risk order (see review/order.ts). */
   setCollapsedAtCursor(collapsed: boolean): void;
   setAllCollapsed(collapsed: boolean): void;
@@ -353,8 +375,8 @@ export interface ReviewState {
     side?: Side;
     align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
     offset?: number;
-    /** Leave the viewport alone if this item's search form is already fully visible. */
-    revealSearch?: boolean;
+    /** Leave the viewport alone while that part of this item is on screen: its search form whole, or its top edge. */
+    unlessVisible?: 'search' | 'top';
     nonce: number;
   } | null;
 
@@ -563,7 +585,11 @@ export const useStore = create<ReviewState>((set, get) => {
     return {
       gens,
       selection: s.selection && moved(s.selection),
-      draft: s.draft && { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) },
+      // An unmoved draft keeps its identity: a new one is an open request and refocuses the composer.
+      draft:
+        s.draft && paths.includes(s.draft.path)
+          ? { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) }
+          : s.draft,
       // A new object re-runs the scroll effect, so a jump in flight lands on the fresh renderer.
       scrollTarget: s.scrollTarget && moved(s.scrollTarget),
       reveal: s.reveal && moved(s.reveal),
@@ -1276,16 +1302,24 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     modeMenuOpen: false,
     modePane: null,
+    modeEntry: 1,
     setModeMenuOpen(open) {
-      set({ modeMenuOpen: open, modePane: null, ...(open ? { githubMenuOpen: false } : {}) });
+      set({ modeMenuOpen: open, modePane: null, modeEntry: 1, ...(open ? { githubMenuOpen: false } : {}) });
+    },
+    highlightModeEntry(n) {
+      const entry = ((((n - 1) % 4) + 4) % 4) + 1;
+      if (entry !== get().modeEntry) set({ modeEntry: entry });
     },
     pickModeEntry(n) {
       if (n === 1) {
-        set({ modeMenuOpen: false, modePane: null });
+        set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
         void get().switchMode({ kind: 'working' });
       } else if (n >= 2 && n <= 4) {
-        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr' });
+        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr', modeEntry: n });
       }
+    },
+    closeModePane() {
+      if (get().modePane) set({ modePane: null });
     },
     helpOpen: false,
     setHelpOpen(open) {
@@ -1347,7 +1381,7 @@ export const useStore = create<ReviewState>((set, get) => {
                 scrollTarget: {
                   id: itemIdOf(s, path),
                   align: 'start' as const,
-                  revealSearch: true,
+                  unlessVisible: 'search' as const,
                   nonce: (s.scrollTarget?.nonce ?? 0) + 1,
                 },
               }
@@ -1374,7 +1408,7 @@ export const useStore = create<ReviewState>((set, get) => {
               scrollTarget: {
                 id: itemIdOf(s, s.search.path),
                 align: 'start' as const,
-                revealSearch: true,
+                unlessVisible: 'search' as const,
                 nonce: (s.scrollTarget?.nonce ?? 0) + 1,
               },
             }
@@ -1850,6 +1884,20 @@ export const useStore = create<ReviewState>((set, get) => {
       if (viewed) afterCollapse(path, notViewed);
       await persisted;
     },
+    async toggleViewedAbove() {
+      const items = nav();
+      const at = items.findIndex((i) => i.path === get().activePath);
+      const above = at > 0 ? items[at - 1]!.path : undefined;
+      const f = above ? get().snapshot?.changed.find((x) => x.path === above) : undefined;
+      if (!f) return get().flash('No file above');
+      const persisted = get().setViewed(f.path, !isViewed(get(), f));
+      // The file above folds or unfolds; pin the cursor at eye level, where `]` left it, so the text read stays put.
+      const item = items[at]!;
+      set((s) => ({
+        scrollTarget: s.selection ? cursorTarget(s, 'eye') : { id: item.id, nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+      }));
+      await persisted;
+    },
     setCollapsedAtCursor(collapsed) {
       const path = get().activePath;
       if (!path) return;
@@ -1867,6 +1915,7 @@ export const useStore = create<ReviewState>((set, get) => {
     escape() {
       const s = get();
       if (s.helpOpen) set({ helpOpen: false });
+      else if (s.modePane) s.closeModePane();
       else if (s.modeMenuOpen) set({ modeMenuOpen: false });
       else if (s.githubMenuOpen) set({ githubMenuOpen: false });
       else if (s.hover) s.closeHover();
@@ -1889,6 +1938,15 @@ export const useStore = create<ReviewState>((set, get) => {
       }
       // The cursor survives the re-layout; the pane holds the viewport in place.
       set({ diffStyle: style, draft: null, visualAnchor: null });
+    },
+    imageCompare: readImageCompare(),
+    setImageCompare(compare) {
+      try {
+        localStorage.setItem(IMAGE_COMPARE_KEY, compare);
+      } catch {
+        /* ignore */
+      }
+      set({ imageCompare: compare });
     },
     snapshot: null,
     error: null,
@@ -2112,7 +2170,20 @@ export const useStore = create<ReviewState>((set, get) => {
       // there; a cursor in another file gives way to this file's header as the motion stop.
       const sel = get().selection;
       const kept = sel && pathFromItemId(sel.id) === path ? sel : null;
-      set({ draft: { path, selection: null }, selection: kept, visualAnchor: null, activePath: path, replyTo: null });
+      // The composer sits above the first line, so it is off screen once the reader has scrolled into the file.
+      set((s) => ({
+        draft: { path, selection: null },
+        selection: kept,
+        visualAnchor: null,
+        activePath: path,
+        replyTo: null,
+        scrollTarget: {
+          id: itemIdOf(s, path),
+          align: 'start',
+          unlessVisible: 'top',
+          nonce: (s.scrollTarget?.nonce ?? 0) + 1,
+        },
+      }));
       ensureExpanded(path);
     },
 

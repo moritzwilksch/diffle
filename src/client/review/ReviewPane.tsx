@@ -12,7 +12,7 @@ import type {
   OnLineClickProps,
   TokenEventBase,
 } from '@pierre/diffs';
-import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
+import { CodeView, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import {
   ChevronDown,
   ChevronRight,
@@ -34,6 +34,8 @@ import { SymbolPicker } from '../lsp/SymbolPicker.js';
 import { lspTarget, schemaHoverOnly, tokenTypeAt, type TokenTarget } from '../lsp/target.js';
 import {
   draftRange,
+  imageSides,
+  type ImageSides,
   isCollapsed,
   itemDeps,
   itemId,
@@ -57,9 +59,11 @@ import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
 import { hostOf } from './host.js';
+import { ImageDiff } from './ImageDiff.js';
 
 export type Annot =
   | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
+  | { kind: 'image'; path: string; sides: ImageSides }
   | { kind: 'thread'; thread: CommentThread }
   | { kind: 'draft' };
 
@@ -233,6 +237,27 @@ const codeViewOptions = {
 
 const LOADING: Loaded = { kind: 'loading' };
 
+type WorkerPool = NonNullable<ReturnType<typeof useWorkerPool>>;
+type PendingHighlight = { key: string; diff: FileDiffMetadata; pool: WorkerPool };
+type HighlightLookahead = { runningKey: string | null; lastKey: string | null; pending: PendingHighlight | null };
+
+function drainHighlightLookahead(state: HighlightLookahead): void {
+  if (state.runningKey || !state.pending) return;
+  const pending = state.pending;
+  state.pending = null;
+  if (state.lastKey === pending.key) return;
+  state.runningKey = pending.key;
+  void Promise.resolve()
+    .then(() => pending.pool.primeDiffHighlightCache(pending.diff))
+    .catch(() => {})
+    .finally(() => {
+      state.runningKey = null;
+      // Remember failures too: a rejected prime should not be retried on every scroll event.
+      state.lastKey = pending.key;
+      drainHighlightLookahead(state);
+    });
+}
+
 export function ReviewPane() {
   const rem = remPx();
   const geometry = useMemo(() => reviewGeometry(rem), [rem]);
@@ -258,6 +283,12 @@ export function ReviewPane() {
   const reveal = useStore((s) => s.reveal);
   const setActivePath = useStore((s) => s.setActivePath);
   const viewerRef = useRef<CodeViewHandle<Annot> | null>(null);
+  const workerPool = useWorkerPool();
+  const lookahead = useRef<HighlightLookahead>({
+    runningKey: null,
+    lastKey: null,
+    pending: null,
+  });
   const theme = useStore((s) => s.theme);
   const diffStyle = useStore((s) => s.diffStyle);
 
@@ -363,14 +394,34 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     let raf = 0;
+    let lastScrollTop = scroller.scrollTop;
+    let direction: 'up' | 'down' = 'down';
+    const indexById = new Map(items.map((item, index) => [item.id, index]));
+    const state = lookahead.current;
     const update = () => {
       raf = 0;
+      const rendered = viewerRef.current?.getInstance()?.getRenderedItems() ?? [];
+      if (workerPool && rendered.length > 0) {
+        let edge = direction === 'down' ? -1 : items.length;
+        for (const row of rendered) {
+          const index = indexById.get(row.id);
+          if (index !== undefined) edge = direction === 'down' ? Math.max(edge, index) : Math.min(edge, index);
+        }
+        const nextIndex = edge + (direction === 'down' ? 1 : -1);
+        const candidate = items[nextIndex];
+        if (candidate?.type === 'diff' && candidate.fileDiff.cacheKey) {
+          const key = `${theme}:${candidate.fileDiff.cacheKey}`;
+          if (state.runningKey !== key && state.lastKey !== key)
+            state.pending = { key, diff: candidate.fileDiff, pool: workerPool };
+          else if (state.pending?.key !== key) state.pending = null;
+          drainHighlightLookahead(state);
+        } else state.pending = null;
+      }
       if (jumping.current || useStore.getState().selection) return;
-      const items = viewerRef.current?.getInstance()?.getRenderedItems() ?? [];
       const box = scroller.getBoundingClientRect();
       const header = geometry.itemMetrics.diffHeaderHeight;
       const eye = box.top + box.height * EYE_FRACTION;
-      const inView = items
+      const inView = rendered
         .map((r) => ({ id: r.id, rect: r.element.getBoundingClientRect() }))
         .filter((r) => r.rect.bottom > box.top + header + 1 && r.rect.top < box.bottom && r.rect.height > 0);
       if (inView.length === 0) return;
@@ -382,15 +433,21 @@ export function ReviewPane() {
       const path = pathFromItemId(pick.id);
       if (path !== s.activePath) s.setActivePath(path);
     };
+    // Highlight one diff beyond the rendered window without mounting more DOM. Keep one request in flight
+    // and replace the pending target on scroll so speculative work cannot flood the worker queue.
     const onScroll = () => {
+      const scrollTop = scroller.scrollTop;
+      if (scrollTop !== lastScrollTop) direction = scrollTop > lastScrollTop ? 'down' : 'up';
+      lastScrollTop = scrollTop;
       if (!raf) raf = requestAnimationFrame(update);
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       scroller.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
+      state.pending = null;
     };
-  }, [scroller, geometry]);
+  }, [scroller, geometry, items, workerPool, theme]);
 
   // A display toggle re-lays the rows out (split / unified) or remounts the viewer (theme). Neither is
   // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
@@ -536,15 +593,20 @@ export function ReviewPane() {
   // the row afterwards; the deferred checks catch that without a visible hunt.
   useEffect(() => {
     if (!scrollTarget || !viewerRef.current) return;
-    if (scrollTarget.revealSearch && containerRef.current) {
+    if (scrollTarget.unlessVisible && containerRef.current) {
       const item = viewerRef.current
         .getInstance()
         ?.getRenderedItems()
         .find((r) => r.id === scrollTarget.id);
-      const form = item?.element.querySelector('[data-content-search]')?.closest('form');
-      const rect = form?.getBoundingClientRect();
       const view = containerRef.current.getBoundingClientRect();
-      if (rect && rect.height > 0 && rect.top >= view.top && rect.bottom <= view.bottom) return;
+      if (scrollTarget.unlessVisible === 'search') {
+        const rect = item?.element.querySelector('[data-content-search]')?.closest('form')?.getBoundingClientRect();
+        if (rect && rect.height > 0 && rect.top >= view.top && rect.bottom <= view.bottom) return;
+      } else {
+        // With the file's top on screen, what sits above its first line lays out there and can focus itself into view.
+        const top = item?.element.getBoundingClientRect().top;
+        if (top != null && top >= view.top && top < view.bottom) return;
+      }
     }
     const { eye, offset, header, target } = scrollPlan(scrollTarget);
     const pinned = eye && scrollTarget.line != null;
@@ -720,9 +782,14 @@ export function ReviewPane() {
       // Clicking a line's content puts the cursor there (the number column starts a range selection instead).
       // Fires after onTokenClick on the same click, so it must not close the popover that click opened.
       onLineClick: (props: OnLineClickProps | OnDiffLineClickProps, ctx: { item: { id: string } }) => {
-        if (props.numberColumn) return;
         const side = 'annotationSide' in props ? props.annotationSide : 'additions';
         const range = { start: props.lineNumber, side, end: props.lineNumber, endSide: side };
+        if (props.numberColumn) {
+          // The viewer toggles off a lone selected line pressed again, which is often the cursor's line;
+          // here that press comments on it like any other line's.
+          if (!viewerRef.current?.getSelectedLines()) void openDraft({ id: ctx.item.id, range });
+          return;
+        }
         setSelection({ id: ctx.item.id, range });
         setActivePath(pathFromItemId(ctx.item.id));
       },
@@ -750,6 +817,7 @@ export function ReviewPane() {
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {
     const meta = annotation.metadata;
     if (meta.kind === 'placeholder') return <PlaceholderBanner kind={meta.placeholder} message={meta.message} />;
+    if (meta.kind === 'image') return <ImageDiff path={meta.path} sides={meta.sides} />;
     if (meta.kind === 'draft') {
       const range = draftRange(useStore.getState());
       return <CommentComposer label={range ? rangeLabel(range) : 'whole file'} />;
@@ -899,8 +967,8 @@ function toItem(
     if (loaded.kind === 'diff' && loaded.fileDiff.hunks.length > 0)
       return { id, type: 'diff', fileDiff: loaded.fileDiff, annotations, version, collapsed };
     // Binary, hunkless (a pure rename, a mode change), oversized or failed: an empty file item under the
-    // diff id whose line-0 annotation carries a banner saying why there is nothing to expand. The banner
-    // also gives file threads a place to hang.
+    // diff id whose line-0 annotation carries a banner saying why there is nothing to expand, or a binary
+    // image's sides. Either also gives file threads a place to hang.
     const [placeholder, message] =
       loaded.kind === 'diff'
         ? changed.status === 'R'
@@ -917,7 +985,7 @@ function toItem(
             : loaded.kind === 'loading'
               ? (['loading', 'Loading…'] as const)
               : (['binary', 'Binary file'] as const);
-    fileLevel.unshift({ lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } });
+    fileLevel.unshift(standIn(path, loaded, changed, placeholder, message));
     return {
       id,
       type: 'file',
@@ -940,7 +1008,7 @@ function toItem(
         : loaded.kind === 'error'
           ? (['error', loaded.message] as const)
           : (['loading', 'Loading…'] as const);
-    fileLevel.unshift({ lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } });
+    fileLevel.unshift(standIn(path, loaded, undefined, placeholder, message));
     return { id, type: 'file', file: { name: path, contents: '' }, annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
@@ -957,6 +1025,20 @@ function toItem(
 
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
 const FILE_LINE = 0;
+
+/** The line-0 annotation that stands in for a body without lines: a binary image's sides, else the banner. */
+function standIn(
+  path: string,
+  loaded: Loaded,
+  changed: ChangedFile | undefined,
+  placeholder: PlaceholderKind,
+  message: string,
+): LineAnnotation<Annot> {
+  const sides = loaded.kind === 'binary' ? imageSides(path, changed) : null;
+  return sides
+    ? { lineNumber: FILE_LINE, metadata: { kind: 'image', path, sides } }
+    : { lineNumber: FILE_LINE, metadata: { kind: 'placeholder', placeholder, message } };
+}
 
 function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: string, height: number) => void }) {
   const path = pathFromItemId(id);
@@ -981,7 +1063,8 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
   }, [id, resizeHeader, localSearch]);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   return (
-    <div ref={ref}>
+    // `data-path` names the file for tests and scripts; the visible title splits it into styled parts.
+    <div ref={ref} data-path={path}>
       <div className="flex h-[calc(var(--diffle-header-height)-1px)] items-center gap-2 px-2.5 py-1.5">
         <FileText size="0.875rem" className="shrink-0 text-muted" />
         {file?.oldPath && file.oldPath !== path && (

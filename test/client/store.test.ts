@@ -225,12 +225,22 @@ describe('client transitions', () => {
       deletions: 0,
       binary: true,
       blob: 'b0',
+      oldBlob: '',
       generated: false,
     });
     const changed = [
       bin('a.gif'),
       bin('b.mp4'),
-      { path: 'c.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'c.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue(patchesFor(['c.txt']));
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.gif', 'b.mp4', 'c.txt']), changed });
@@ -256,6 +266,7 @@ describe('client transitions', () => {
       deletions: 0,
       binary: false,
       blob: 'b1',
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockResolvedValue(patchesFor(['a.py', 'b.py']));
@@ -276,7 +287,16 @@ describe('client transitions', () => {
 
   it('a watcher refresh keeps the open draft, cursor and search; a mode switch drops them', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
@@ -307,7 +327,16 @@ describe('client transitions', () => {
 
   it('a reloaded file moves the selection to its new item id', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
@@ -326,7 +355,16 @@ describe('client transitions', () => {
 
   it('the old side moving alone reloads every patch and refetches an unchanged file view', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 1,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.file.mockResolvedValue({ contents: 'one\n', binary: false });
@@ -355,7 +393,16 @@ describe('client transitions', () => {
 
   it('a reloading file and file view stay on screen until the replacement lands', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     const patch = (minus: string) =>
       `diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-${minus}\n+y\n`;
@@ -415,6 +462,7 @@ describe('client transitions', () => {
       deletions: 1,
       binary: false,
       blob: 'b1',
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockImplementation(async (paths: string[]) => patchesFor(paths));
@@ -441,6 +489,23 @@ describe('client transitions', () => {
     api.patches.mockReset();
   });
 
+  it('a reload of another file keeps the draft object, so the composer does not take focus again', async () => {
+    const changed = [
+      { path: 'b.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false },
+    ];
+    api.patch.mockResolvedValue(patchesFor(['b.txt']));
+    api.file.mockResolvedValue({ contents: 'y\nrest\n', binary: false });
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
+    await useStore.getState().refreshSnapshot();
+    const draft = { path: 'a.txt', selection: null };
+    useStore.setState({ draft });
+    const id = itemIdOf(useStore.getState(), 'b.txt');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(itemIdOf(useStore.getState(), 'b.txt')).not.toBe(id);
+    expect(useStore.getState().draft).toBe(draft);
+    api.patch.mockReset();
+  });
+
   it('a mode switch stops the hydration queue: no further file requests, and the batch in flight is aborted', async () => {
     const paths = Array.from({ length: 8 }, (_, i) => `f${i}.txt`);
     const changed = paths.map((path) => ({
@@ -450,6 +515,7 @@ describe('client transitions', () => {
       deletions: 1,
       binary: false,
       blob: 'b1',
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockImplementation(async (ps: string[]) => patchesFor(ps));
@@ -520,6 +586,7 @@ describe('client transitions', () => {
       deletions: 0,
       binary: false,
       blob: 'b1',
+      oldBlob: '',
       generated: false,
     });
     const changed = [
@@ -579,7 +646,16 @@ describe('client transitions', () => {
 
   it('hydration and the file view opening at once share one request per side; a failed load is retried by the next consumer', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 1, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 1,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     const pending: Deferred<{ contents: string; binary: boolean }>[] = [];
@@ -620,7 +696,16 @@ describe('client transitions', () => {
 
   it('the file view shows one file in place of the diff list, survives a refresh of that file, and Ctrl+o returns', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.file.mockResolvedValue({ contents: 'y\nz\nw\n', binary: false });
@@ -685,7 +770,16 @@ describe('client transitions', () => {
 
   it('an unchanged file opens in the file view, not in the diff list', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.file.mockResolvedValue({ contents: 'one\ntwo\n', binary: false });
@@ -713,6 +807,7 @@ describe('client transitions', () => {
       deletions: 0,
       binary: false,
       blob: `b${i}`,
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
@@ -756,6 +851,7 @@ describe('client transitions', () => {
       deletions: 0,
       binary: false,
       blob: `b${i}`,
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt', 'd.txt']));
@@ -799,6 +895,7 @@ describe('client transitions', () => {
       deletions: 0,
       binary: false,
       blob: `b${i}`,
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
@@ -826,6 +923,7 @@ describe('client transitions', () => {
       deletions: 0,
       binary: false,
       blob: `b${i}`,
+      oldBlob: '',
       generated: false,
     }));
     api.patches.mockResolvedValue(patchesFor(['a.txt', 'b.txt', 'c.txt']));
@@ -958,7 +1056,16 @@ describe('client transitions', () => {
 
   it('a resync after a reconnect catches up snapshot, threads and viewed marks and keeps the draft', async () => {
     const changed = [
-      { path: 'a.txt', status: 'M' as const, additions: 1, deletions: 0, binary: false, blob: 'b1', generated: false },
+      {
+        path: 'a.txt',
+        status: 'M' as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        blob: 'b1',
+        oldBlob: '',
+        generated: false,
+      },
     ];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
@@ -1640,6 +1747,7 @@ const file = (over: Partial<ChangedFile>): ChangedFile => ({
   deletions: 1,
   binary: false,
   blob: 'b2',
+  oldBlob: '',
   generated: false,
   ...over,
 });
@@ -2049,6 +2157,13 @@ describe('threads', () => {
     expect(s.selection).toBeNull();
     expect(s.replyTo).toBeNull();
     expect(s.activePath).toBe('a.py');
+    // The composer sits above line 1; the pane brings the file's top into view unless it is already there.
+    expect(s.scrollTarget).toEqual({
+      id: itemIdOf(s, 'a.py'),
+      align: 'start',
+      unlessVisible: 'top',
+      nonce: expect.any(Number),
+    });
     useStore.setState({ selection: sel });
     useStore.getState().openFileDraft('a.py');
     expect(useStore.getState().selection).toEqual(sel);
@@ -2143,6 +2258,7 @@ describe('goToLine', () => {
       deletions: 0,
       binary: false,
       blob: `b-${path}`,
+      oldBlob: '',
       generated: false,
     });
     api.patch.mockImplementation(
@@ -2192,6 +2308,7 @@ describe('jumplist', () => {
       deletions: 0,
       binary: false,
       blob: `b-${path}`,
+      oldBlob: '',
       generated: false,
     });
     api.patch.mockImplementation(

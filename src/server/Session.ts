@@ -1,12 +1,13 @@
-import type {
-  GithubExportRequest,
-  GithubExportResponse,
-  GithubMetadata,
-  ModeRequest,
-  ModeSpec,
-  ServerMessage,
-  Side,
-  Snapshot,
+import {
+  imageKey,
+  type GithubExportRequest,
+  type GithubExportResponse,
+  type GithubMetadata,
+  type ModeRequest,
+  type ModeSpec,
+  type ServerMessage,
+  type Side,
+  type Snapshot,
 } from '../shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
@@ -15,7 +16,7 @@ import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
-import { resolveReview } from './mode.js';
+import { type ResolvedReview, resolveReview } from './mode.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
 
@@ -162,10 +163,18 @@ export class Session {
     }
   }
 
-  /** First mode. Rejects `ready()` on failure so early requests error out. */
-  async start(req: ModeRequest): Promise<Snapshot> {
+  /**
+   * Resolves a request into a review without activating it, so a caller can reject
+   * invalid input before serving. Queued, so `close()` waits for a PR fetch.
+   */
+  resolve(req: ModeRequest): Promise<ResolvedReview> {
+    return this.run(() => resolveReview(req, this.repo, this.opts.github));
+  }
+
+  /** First mode, from `resolve`. Rejects `ready()` on failure so early requests error out. */
+  async start(review: ResolvedReview): Promise<Snapshot> {
     try {
-      const snap = await this.enter(req);
+      const snap = await this.run(() => this.activate(review));
       this.resolveReady();
       return snap;
     } catch (e) {
@@ -176,7 +185,7 @@ export class Session {
 
   /** Switch modes at runtime. Broadcasts a snapshot bump on success. */
   async switchMode(req: ModeRequest): Promise<Snapshot> {
-    const snap = await this.enter(req);
+    const snap = await this.run(async () => this.activate(await resolveReview(req, this.repo, this.opts.github)));
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     return snap;
   }
@@ -191,12 +200,7 @@ export class Session {
     return r;
   }
 
-  private enter(req: ModeRequest): Promise<Snapshot> {
-    return this.run(() => this.transition(req));
-  }
-
-  private async transition(req: ModeRequest): Promise<Snapshot> {
-    const { mode, prUrl } = await resolveReview(req, this.repo, this.opts.github);
+  private async activate({ mode, prUrl }: ResolvedReview): Promise<Snapshot> {
     const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([
@@ -287,6 +291,22 @@ export class Session {
       return snap.newSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.newSha, target);
     }
     return snap.oldSha === 'worktree' ? this.repo.readWorktree(target) : this.repo.show(snap.oldSha, target);
+  }
+
+  /**
+   * The bytes `key` names on one side of `path`, or null unless `key` is that side's `imageKey` in `snap`.
+   * A worktree file that changed since `snap` reads as null too, so a key never serves other bytes.
+   */
+  async readImage(snap: Snapshot, path: string, side: Side, key: string): Promise<Buffer | null> {
+    if (key !== imageKey(snap, path, side)) return null;
+    // An unchanged path's key is a commit: read that commit, not a worktree that may have moved on.
+    if (!snap.changed.some((f) => f.path === path))
+      return this.readSide(snap, path, key === snap.newSha ? 'new' : 'old');
+    const buf = await this.readSide(snap, path, side);
+    if (buf == null || (side === 'new' ? snap.newSha : snap.oldSha) !== 'worktree') return buf;
+    // The file may have changed since `snap`: serve it only while it still hashes to the key.
+    const target = sidePath(this.readablePaths(snap), path, side);
+    return target != null && (await this.repo.hashObject(buf, target)) === key ? buf : null;
   }
 
   /** Whether `readSide` would find `path` on `side`: the allowlist alone, no read. */

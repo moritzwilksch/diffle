@@ -1,0 +1,28 @@
+services:
+  e2e:
+    # Pin the architecture too: screenshots must match the Linux x64 CI runner.
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:24-bookworm-slim AS node
+        FROM mcr.microsoft.com/playwright:v1.63.0-noble
+        COPY --from=node /usr/local/ /usr/local/
+        # Any host user can run the suite: Git trusts the mount and the volumes below start writable.
+        RUN git config --system --add safe.directory /workspace \
+          && mkdir -p /workspace/node_modules /workspace/dist \
+          && chmod 777 /workspace/node_modules /workspace/dist
+    init: true
+    ipc: host
+    working_dir: /workspace
+    environment:
+      CI: "true"
+      FORCE_COLOR: "1"
+      # npm needs a writable home under an arbitrary `--user`.
+      HOME: /tmp
+    volumes:
+      - .:/workspace
+      # Keep Linux dependencies and build output separate from the host installation.
+      - /workspace/node_modules
+      - /workspace/dist
+    entrypoint: ["/bin/sh", "-c", 'npm ci && npm run test:e2e -- "$$@"', "e2e"]

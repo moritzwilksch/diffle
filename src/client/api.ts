@@ -109,6 +109,8 @@ export const api = {
   /** One side's full contents; `signal` aborts the request when its consumer no longer wants it. */
   file: (path: string, rev: Side, signal?: AbortSignal) =>
     json(FileResponseSchema, `api/file?${q({ path, rev })}`, { signal }),
+  /** Where an `<img>` loads one side of a file; `key` is that side's `imageKey`. */
+  imageUrl: (path: string, rev: Side, key: string) => new URL(`api/image?${q({ path, rev, key })}`, location.href).href,
   /** `path` names the file a `scope: 'file'` search is confined to. */
   search: (
     query: string,

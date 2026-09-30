@@ -13,6 +13,6 @@
     "noEmit": true,
     "resolveJsonModule": true
   },
-  "include": ["src/cli", "src/server", "src/shared", "test", "tsdown.config.ts", "vite.config.ts"],
-  "exclude": ["test/client"]
+  "include": ["src/cli", "src/server", "src/shared", "test", "scripts", "tsdown.config.ts", "vite.config.ts"],
+  "exclude": ["test/client", "test/e2e"]
 }

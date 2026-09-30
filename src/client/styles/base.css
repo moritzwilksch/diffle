@@ -1,6 +1,9 @@
 /* Preserve browser form defaults and the app density; Tailwind Preflight is intentionally omitted. */
+/* No ligatures: JetBrains Mono's contextual `..` and `...` glyphs reflow mid-typing, and code should
+   show the characters it contains. Set on every element because the `font` shorthand resets it. */
 * {
   box-sizing: border-box;
+  font-variant-ligatures: none;
 }
 
 html {

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
+import { type GithubClient, GithubError } from '../../src/server/github/client.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { WatchTarget } from '../../src/server/Watcher.js';
 import type { ServerMessage, Snapshot } from '../../src/shared/protocol.js';
@@ -87,7 +88,7 @@ describe('sidePath', () => {
 describe('Session', () => {
   it('reads both sides of a renamed file by its new path and relocates comments on it', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
-    const snap = await session.start({ kind: 'revspec', args: ['main..feat'] });
+    const snap = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     expect(snap.tree).toEqual(['.gitignore', 'link.txt', 'new.txt', 'same.txt']);
     expect((await session.readSide(snap, 'new.txt', 'old'))?.toString()).toBe('alpha\nbeta\ngamma\n');
     expect((await session.readSide(snap, 'new.txt', 'new'))?.toString()).toBe('alpha\nbeta\ngamma\ndelta\n');
@@ -103,9 +104,31 @@ describe('Session', () => {
     await session.close();
   });
 
+  it('keeps close() waiting while a resolution is in flight, so cleanup never races a PR fetch', async () => {
+    let asked!: () => void;
+    const lookup = new Promise<void>((r) => (asked = r));
+    let answer!: (v: unknown) => void;
+    const github: GithubClient = {
+      graphql: <T>() => {
+        asked();
+        return new Promise<T>((r) => (answer = r as (v: unknown) => void));
+      },
+    };
+    const session = new Session(repo, hub, { watch: false, context: 3, github });
+    const resolving = session.resolve({ kind: 'pr', pr: 'https://github.com/o/r/pull/7' });
+    await lookup;
+    let closed = false;
+    const closing = session.close().then(() => (closed = true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(closed).toBe(false);
+    answer({ repository: { pullRequest: null } });
+    await expect(resolving).rejects.toThrow(GithubError);
+    await closing;
+  });
+
   it('flags threads stale whose lines left the diff, on start and on context change', async () => {
     const session = new Session(repo, hub, { watch: false, context: 0 });
-    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     await session.comments.clear();
     // Context 0 shows only `delta`; `alpha` exists on both sides but is outside every hunk.
     const outside = await session.comments.addThread(
@@ -139,7 +162,7 @@ describe('Session', () => {
 
     // A fresh session relocates against the snapshot before serving anything.
     const again = new Session(repo, hub, { watch: false, context: 3 });
-    await again.start({ kind: 'revspec', args: ['main..feat'] });
+    await again.start(await again.resolve({ kind: 'revspec', args: ['main..feat'] }));
     expect(again.comments.get(outside.id)?.stale).toBe(false);
     await again.comments.clear();
     await again.close();
@@ -149,7 +172,7 @@ describe('Session', () => {
     const session = new Session(repo, hub, { watch: false, context: 0 });
     const seen: number[] = [];
     const off = session.onSnapshot((snap) => seen.push(snap.version));
-    const first = await session.start({ kind: 'revspec', args: ['main..feat'] });
+    const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     await session.refresh();
     await session.setContext(3);
     await session.switchMode({ kind: 'working' });
@@ -164,7 +187,7 @@ describe('Session', () => {
 
   it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
-    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     const { quote, hasFile } = session.anchorSource();
     expect(await quote('new.txt', 'new', 2, 4)).toBe('beta\ngamma\ndelta');
     expect(await quote('new.txt', 'old', 1, 1)).toBe('alpha');
@@ -179,7 +202,7 @@ describe('Session', () => {
 
   it('keeps a file thread fresh while its file is in the review and flags it when the comparison drops the file', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
-    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     await session.comments.clear();
     const renamed = await session.comments.addThread({ kind: 'file', path: 'new.txt' }, { body: 'split this' });
     const unchanged = await session.comments.addThread({ kind: 'file', path: 'same.txt' }, { body: 'fine' });
@@ -199,7 +222,7 @@ describe('Session', () => {
     await writeFile(join(dir, 'yarn.lock'), '# yarn\n');
     try {
       const session = new Session(repo, hub, { watch: false, context: 3 });
-      const snap = await session.start({ kind: 'working' });
+      const snap = await session.start(await session.resolve({ kind: 'working' }));
       const gen = Object.fromEntries(snap.changed.map((f) => [f.path, f.generated]));
       expect(gen).toMatchObject({ 'gen.py': true, 'plain.py': false, 'yarn.lock': true });
       await session.close();
@@ -212,7 +235,7 @@ describe('Session', () => {
 
   it('refuses ignored files, git internals, traversal, and returns a symlink as its target string', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
-    const snap = await session.start({ kind: 'working' });
+    const snap = await session.start(await session.resolve({ kind: 'working' }));
     expect(await session.readSide(snap, 'secret.env', 'new')).toBeNull();
     expect(await session.readSide(snap, '.git/config', 'new')).toBeNull();
     expect(await session.readSide(snap, '../etc/passwd', 'new')).toBeNull();
@@ -228,7 +251,7 @@ describe('Session', () => {
     const session = new Session(slow.repo, hub, { watch: false, context: 3 });
     const seen: Snapshot[] = [];
     session.onSnapshot((snap) => seen.push(snap));
-    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     // The switch to working mode blocks inside git; the other two arrive meanwhile.
     slow.hold();
     const switching = session.switchMode({ kind: 'working' });
@@ -250,7 +273,7 @@ describe('Session', () => {
   it('coalesces refreshes: at most one waits behind the running one', async () => {
     const slow = gatedRepo();
     const session = new Session(slow.repo, hub, { watch: false, context: 3 });
-    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     slow.hold();
     const running = session.refresh();
     await slow.reached;
@@ -303,7 +326,7 @@ describe('Session', () => {
             resolve(snap);
           });
         });
-      const first = await session.start({ kind: 'working' });
+      const first = await session.start(await session.resolve({ kind: 'working' }));
       expect(first.changed).toEqual([]);
       expect(first.tree).toEqual(['.gitignore']);
       // Worktree mode watches the worktree with git's ignores; `metaPaths` adds the index to the polled set.
@@ -351,7 +374,7 @@ describe('Session', () => {
         return w;
       },
     });
-    await session.start({ kind: 'revspec', args: ['main..feat'] });
+    await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     const a = session.switchMode({ kind: 'working' });
     const b = session.switchMode({ kind: 'revspec', args: ['main'] });
     const [snapA, snapB] = await Promise.all([a, b]);
@@ -419,7 +442,7 @@ describe('old-side worktree reads', () => {
   it('maps reverse rename anchors into the worktree and preserves the new-side allowlist', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3 });
     try {
-      const snap = await session.start({ kind: 'revspec', args: ['worktree..main'] });
+      const snap = await session.start(await session.resolve({ kind: 'revspec', args: ['worktree..main'] }));
       const renamed = snap.changed.find((file) => file.path === 'old.txt')!;
       expect(renamed.oldPath).toBe('new.txt');
       expect((await session.readSide(snap, 'old.txt', 'old'))?.toString()).toBe('alpha\nbeta\ngamma\ndelta\n');

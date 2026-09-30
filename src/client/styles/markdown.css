@@ -13,34 +13,37 @@
   margin-bottom: 0;
 }
 
+/* A suggestion is a code block with a caption strip, framed like every other card and block in the review. */
 .markdown .suggestion {
-  position: relative;
-  margin: 0.375rem 0 0;
-  padding: 1.125rem 0.5rem 0.375rem;
+  margin: 0.375rem 0;
+  padding: 0;
   font: 0.75rem/1.5 var(--mono);
   background: var(--bg);
-  border: 1px solid var(--add);
+  border: 1px solid var(--border);
   border-radius: 0.375rem;
-  white-space: pre;
-  overflow-x: auto;
+  overflow: hidden;
 }
 
 .markdown .suggestion .tag {
-  position: absolute;
-  top: 0;
-  left: 0;
-  font: 0.625rem var(--sans);
-  color: var(--add);
-  padding: 2px 0.375rem;
+  display: block;
+  padding: 0.125rem 0.5rem;
+  font: 0.75rem/1.5 var(--sans);
+  color: var(--fg-2);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown .suggestion > code {
+  padding: 0.375rem 0.5rem;
+  overflow-x: auto;
 }
 
 .markdown .suggestion.highlighted {
-  white-space: normal;
-  padding: 1.125rem 0 0;
-  overflow: hidden;
   --diffs-font-family: var(--mono);
   --diffs-font-size: 0.75rem;
   --diffs-line-height: 1.125rem;
+  /* Match the padding of a plain code block. */
+  --diffs-gap-block: 0.375rem;
 }
 
 .markdown {
@@ -161,8 +164,4 @@
 .markdown input[type='checkbox'] {
   margin: 0 0.25rem 0 0;
   vertical-align: middle;
-}
-
-.markdown .suggestion {
-  margin: 0.375rem 0;
 }

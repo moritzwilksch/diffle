@@ -91,7 +91,7 @@ describe('GitRepo', () => {
     expect(files.every((f) => f.blob.length === 40)).toBe(true);
   });
 
-  it('numstat between revs carries the new-side blob', async () => {
+  it("numstat between revs carries each side's blob", async () => {
     const mb = await repo.mergeBase('main', 'feat');
     const files = await repo.numstat(mb, 'feat');
     expect(files.map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
@@ -99,6 +99,7 @@ describe('GitRepo', () => {
       ['new.txt', 'A', 1, 0],
     ]);
     expect(files.map((f) => f.blob)).toEqual([git('rev-parse', 'feat:a.txt'), git('rev-parse', 'feat:new.txt')]);
+    expect(files.map((f) => f.oldBlob)).toEqual([git('rev-parse', `${mb}:a.txt`), '']);
   });
 
   it('numstat reports renames and binaries', async () => {
@@ -110,6 +111,7 @@ describe('GitRepo', () => {
       expect(byPath.get('moved.txt')).toMatchObject({ status: 'R', oldPath: 'keep.txt', additions: 0, deletions: 0 });
       expect(byPath.get('bin.dat')).toMatchObject({ status: 'A', binary: true, additions: 0 });
       expect(byPath.get('a.txt')?.blob).toBe(git('hash-object', '--', 'a.txt'));
+      expect(byPath.get('a.txt')?.oldBlob).toBe(git('rev-parse', 'HEAD:a.txt'));
       expect(files.every((f) => f.status === 'D' || f.blob.length === 40)).toBe(true);
     } finally {
       git('mv', 'moved.txt', 'keep.txt');

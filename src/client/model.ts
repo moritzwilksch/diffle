@@ -6,6 +6,7 @@ import type {
   CommentThread,
   LspSymbol,
   ModeRequest,
+  Side,
   Snapshot,
   UserConfig,
   ViewedState,
@@ -346,4 +347,20 @@ export function documentTitle(
 ): string {
   const pr = github?.pullRequest;
   return pr ? `diffle: ${pr.repository} #${pr.number}` : `diffle: ${repoName(snapshot)}`;
+}
+
+/** Raster formats a browser shows in an `<img>`; SVG is text and keeps its text diff. */
+const IMAGE_PATH = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i;
+
+/** What an image view shows: one side, or both to compare. */
+export type ImageSides = Side | 'both';
+
+/**
+ * The sides an image view of `path` shows, or null when the path names no raster image: those a changed
+ * file has (`changed` undefined is the file view, which shows the new side).
+ */
+export function imageSides(path: string, changed: ChangedFile | undefined): ImageSides | null {
+  if (!IMAGE_PATH.test(path)) return null;
+  if (!changed) return 'new';
+  return changed.status === 'A' ? 'new' : changed.status === 'D' ? 'old' : 'both';
 }
