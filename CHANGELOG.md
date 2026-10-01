@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.10](https://github.com/moritzwilksch/diffle/compare/v0.1.9...v0.1.10) - 2026-10-01
+
+### Documentation
+
+- Use https://diffle.app for installer script ([#264](https://github.com/moritzwilksch/diffle/pull/264))
+
+### Build and CI
+
+- Add git-cliff for release notes generation ([#265](https://github.com/moritzwilksch/diffle/pull/265))
+
 ## [0.1.9](https://github.com/moritzwilksch/diffle/compare/v0.1.8...v0.1.9) - 2026-10-01
 
 ### Features
