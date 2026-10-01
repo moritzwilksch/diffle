@@ -22,8 +22,9 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       actions: read
+      id-token: write
     steps:
       - name: Resolve the pull request
         id: pr
@@ -39,9 +40,17 @@ jobs:
           fi
           echo "branch=$(echo "$pr" | jq -r .head.ref)" >> "$GITHUB_OUTPUT"
           echo "sha=$(echo "$pr" | jq -r .head.sha)" >> "$GITHUB_OUTPUT"
+      # An octo-sts token rather than GITHUB_TOKEN, so that the push triggers CI.
+      - name: Obtain GitHub app token
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: update-snapshots
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.pr.outputs.sha }}
+          token: ${{ steps.octo-sts.outputs.token }}
       # Only a run of this repository's own branch: a fork's PR run of the same commit executes the fork's workflow.
       # Waits for the e2e job alone; the rest of CI need not finish.
       - name: Wait for the e2e job
@@ -88,8 +97,8 @@ jobs:
             exit 1
           fi
           cp -R "$src/." test/e2e/__snapshots__/
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "octo-sts[bot]"
+          git config user.email "157150467+octo-sts[bot]@users.noreply.github.com"
           git add -A -- test/e2e/__snapshots__
           if git diff --cached --quiet; then
             echo "Snapshots are already up to date."
