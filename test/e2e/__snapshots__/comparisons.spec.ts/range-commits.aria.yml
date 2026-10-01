@@ -1,0 +1,18 @@
+- region "Commits":
+  - button "Commits 4" [expanded]
+  - button "Older commit"
+  - button "Newer commit" [disabled]
+  - button "All changes main...feature/refunds"
+  - list:
+    - listitem:
+      - 'button "fix(cli): report an empty ledger instead of crashing"'
+      - button "Copy hash 1de24f1"
+    - listitem:
+      - 'button "chore: regenerate the client, refresh the lockfile and the logo"'
+      - button "Copy hash 97eb0c9"
+    - listitem:
+      - 'button "refactor: move money helpers into a currency module"'
+      - button "Copy hash 640d216"
+    - listitem:
+      - 'button "feat(ledger): support refund lines"'
+      - button "Copy hash 5206db2"

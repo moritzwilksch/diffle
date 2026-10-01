@@ -594,6 +594,25 @@ describe('a single commit', () => {
     expect((await new Snapshotter(crepo, mode, 1, 3).current()).commit).toBeNull();
   });
 
+  it("lists a range's commits oldest first, the newest of them past the limit", async () => {
+    const [root, second, merge, side] = ['HEAD~2', 'HEAD~1', 'HEAD', 'side'].map((rev) => cgit('rev-parse', rev));
+    const snap = async (revspec: string) =>
+      new Snapshotter(crepo, (await resolveReview({ kind: 'revspec', args: [revspec] }, crepo)).mode, 1, 3).current();
+    const range = (await snap('HEAD~2..HEAD')).commits;
+    expect(range.total).toBe(3);
+    expect(range.list.at(-1)).toMatchObject({ sha: merge, message: 'merge side', author: 't', email: 't@t' });
+    expect(new Set(range.list.map((c) => c.sha))).toEqual(new Set([second, side, merge]));
+    expect(range.list.every((c) => c.date === Number(cgit('log', '-1', '--format=%at', c.sha)) * 1000)).toBe(true);
+    expect((await crepo.rangeCommits(`${root}..${merge}`, 1)).list.map((c) => c.sha)).toEqual([merge]);
+    // A single commit spans only itself, a merge included; the worktree stands for HEAD.
+    expect((await snap('HEAD^!')).commits).toMatchObject({ list: [{ sha: merge }], total: 1 });
+    expect((await snap('HEAD~1^!')).commits.list[0]?.message).toBe('second\n\nwith a body');
+    // The merged side commit is reachable from HEAD but not from HEAD~1.
+    const worktree = (await snap('HEAD~1..worktree')).commits;
+    expect([worktree.total, worktree.list.at(-1)?.sha]).toEqual([2, merge]);
+    expect((await snap('HEAD..worktree')).commits).toEqual({ list: [], total: 0 });
+  });
+
   it('reports an unknown commit as a revspec error', async () => {
     await expect(resolveReview({ kind: 'revspec', args: ['nope^!'] }, crepo)).rejects.toThrow('unknown revision: nope');
   });

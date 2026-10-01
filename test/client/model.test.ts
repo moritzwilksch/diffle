@@ -9,6 +9,7 @@ import {
 } from '../../src/shared/protocol.js';
 import {
   anchorLabel,
+  commitBody,
   compareTreeOrder,
   countViewed,
   currentPath,
@@ -18,6 +19,7 @@ import {
   isViewed,
   nextFileAfter,
   orderedPaths,
+  rangeStep,
   reuseThreads,
 } from '../../src/client/model.js';
 
@@ -302,5 +304,63 @@ describe('imageSides', () => {
     expect(imageSides('a.bin', file('M'))).toBeNull();
     expect(imageSides('a.svg', file('M'))).toBeNull();
     expect(imageSides('png', file('M'))).toBeNull();
+  });
+});
+
+describe('commitBody', () => {
+  it('reflows hard-wrapped paragraphs but keeps list items and indented lines on their own', () => {
+    const message = [
+      'feat: add a box',
+      '',
+      'Adds a box at the top of the file list that shows the',
+      'current commit and steps through the commits.',
+      '',
+      '- one item',
+      '- another item that wraps',
+      '  onto a second line',
+      '',
+      '    indented code',
+      '',
+    ].join('\n');
+    expect(commitBody(message)).toEqual([
+      'Adds a box at the top of the file list that shows the current commit and steps through the commits.',
+      '- one item\n- another item that wraps\n  onto a second line',
+      '    indented code',
+    ]);
+  });
+
+  it('is empty for a subject alone', () => {
+    expect(commitBody('fix: one line\n')).toEqual([]);
+  });
+});
+
+describe('rangeStep', () => {
+  const range = {
+    old: 'main',
+    new: 'feat',
+    base: 'merge-base',
+    live: 'refs',
+    commentKey: 'range:main...feat',
+  } as const;
+  const commit = (sha: string) => ({ sha, short: sha.slice(0, 7), message: sha, author: 'a', email: 'a@a', date: 0 });
+  const commits = { list: [commit('a'.repeat(40)), commit('b'.repeat(40))], total: 2 };
+  const focused = (sha: string) => ({
+    mode: { old: sha, new: sha, base: 'parent', live: 'refs', commentKey: `commit:${sha}`, within: range } as const,
+    commits,
+  });
+
+  it('walks from the range to the newest commit, older to the oldest, and stops at either end', () => {
+    expect(rangeStep({ mode: range, commits }, 1)).toBeUndefined();
+    expect(rangeStep({ mode: range, commits }, -1)).toBe('b'.repeat(40));
+    expect(rangeStep(focused('b'.repeat(40)), 1)).toBeNull();
+    expect(rangeStep(focused('b'.repeat(40)), -1)).toBe('a'.repeat(40));
+    expect(rangeStep(focused('a'.repeat(40)), -1)).toBeUndefined();
+  });
+
+  it('steps a commit the range no longer lists newer to the range, and a lone commit nowhere', () => {
+    expect(rangeStep(focused('c'.repeat(40)), 1)).toBeNull();
+    expect(rangeStep(focused('c'.repeat(40)), -1)).toBeUndefined();
+    const { within: _, ...lone } = focused('a'.repeat(40)).mode;
+    expect(rangeStep({ mode: lone, commits }, 1)).toBeUndefined();
   });
 });

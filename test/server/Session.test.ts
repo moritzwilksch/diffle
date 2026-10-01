@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '../../src/server/github/client.js';
+import { RevspecError } from '../../src/server/revspec.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { WatchTarget } from '../../src/server/Watcher.js';
 import type { ServerMessage, Snapshot } from '../../src/shared/protocol.js';
@@ -182,6 +183,30 @@ describe('Session', () => {
     off();
     await session.refresh();
     expect(seen).toHaveLength(4);
+    await session.close();
+  });
+
+  it('focuses one listed commit of a range, keeps listing the range, and returns to it', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 3 });
+    const range = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
+    const [commit] = range.commits.list;
+    const focused = await session.switchMode({ kind: 'focus', commit: commit!.short });
+    expect(focused.mode).toEqual({
+      old: commit!.sha,
+      new: commit!.sha,
+      base: 'parent',
+      live: 'refs',
+      commentKey: `commit:${commit!.sha}`,
+      within: range.mode,
+    });
+    expect(focused.commits).toEqual(range.commits);
+    expect(focused.commit?.sha).toBe(commit!.sha);
+    // Stepping from one focused commit to another keeps the range, not the commit, as the outer comparison.
+    expect((await session.switchMode({ kind: 'focus', commit: commit!.sha })).mode.within).toEqual(range.mode);
+    await expect(session.switchMode({ kind: 'focus', commit: 'f'.repeat(40) })).rejects.toThrow(RevspecError);
+    expect((await session.switchMode({ kind: 'focus', commit: null })).mode).toEqual(range.mode);
+    await session.switchMode({ kind: 'revspec', args: ['feat^!'] });
+    await expect(session.switchMode({ kind: 'focus', commit: null })).rejects.toThrow(RevspecError);
     await session.close();
   });
 

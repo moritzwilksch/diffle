@@ -1,7 +1,9 @@
 import {
+  comparisonLabel,
   imageKey,
   type GithubExportRequest,
   type GithubExportResponse,
+  type EntryRequest,
   type GithubMetadata,
   type ModeRequest,
   type ModeSpec,
@@ -17,6 +19,7 @@ import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
 import { type ResolvedReview, resolveReview } from './mode.js';
+import { RevspecError } from './revspec.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
 
@@ -167,7 +170,7 @@ export class Session {
    * Resolves a request into a review without activating it, so a caller can reject
    * invalid input before serving. Queued, so `close()` waits for a PR fetch.
    */
-  resolve(req: ModeRequest): Promise<ResolvedReview> {
+  resolve(req: EntryRequest): Promise<ResolvedReview> {
     return this.run(() => resolveReview(req, this.repo, this.opts.github));
   }
 
@@ -185,9 +188,40 @@ export class Session {
 
   /** Switch modes at runtime. Broadcasts a snapshot bump on success. */
   async switchMode(req: ModeRequest): Promise<Snapshot> {
-    const snap = await this.run(async () => this.activate(await resolveReview(req, this.repo, this.opts.github)));
+    const snap = await this.run(async () =>
+      this.activate(
+        req.kind === 'focus' ? await this.focus(req.commit) : await resolveReview(req, this.repo, this.opts.github),
+      ),
+    );
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     return snap;
+  }
+
+  /**
+   * Focuses `commit`, by hash or short hash, of the active range's listed commits, or with null returns to
+   * the range. A focused commit keeps its own comments, as when entered alone, and the range's PR identity.
+   */
+  private async focus(commit: string | null): Promise<ResolvedReview> {
+    const a = this.require();
+    const { within, ...self } = a.mode;
+    if (!within && self.base === 'parent') throw new RevspecError('a single commit has no commits to focus');
+    const range = within ?? self;
+    if (commit === null) return { mode: range, prUrl: a.prUrl };
+    const listed = (await a.snapshotter.current()).commits.list;
+    const sha = listed.find((c) => c.sha === commit || c.short === commit)?.sha;
+    if (!sha) throw new RevspecError(`not a listed commit of ${comparisonLabel(range)}: ${commit}`);
+    return {
+      prUrl: a.prUrl,
+      mode: {
+        old: sha,
+        new: sha,
+        base: 'parent',
+        // The commit is pinned; refs still move the range, whose commits stay listed.
+        live: range.live === 'none' ? 'none' : 'refs',
+        commentKey: `commit:${sha}`,
+        within: range,
+      },
+    };
   }
 
   /**

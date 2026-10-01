@@ -17,7 +17,7 @@ import {
   followsCheckout,
   LANGUAGE_IDS,
   type LanguageId,
-  type ModeRequest,
+  type EntryRequest,
   type UserConfig,
 } from '../shared/protocol.js';
 import {
@@ -269,7 +269,7 @@ function printLspCommands(config: UserConfig): void {
   for (const [language, command] of Object.entries(config.lspCommands)) console.log(`${language}=${command}`);
 }
 
-async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
+async function run(req: EntryRequest, opts: GlobalOpts): Promise<void> {
   const timing = new Timing(opts.timing);
   // A signal during cloning must let git settle before removing its destination.
   let interrupted = false;
@@ -300,7 +300,7 @@ async function run(req: ModeRequest, opts: GlobalOpts): Promise<void> {
 }
 
 async function serve(
-  req: ModeRequest,
+  req: EntryRequest,
   opts: GlobalOpts,
   repo: GitRepo,
   closeRepo: () => Promise<void>,

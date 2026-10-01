@@ -83,7 +83,7 @@ export const COLUMNS: HelpSection[][] = [
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
         ['o', 'GitHub repository and pull request'],
         ['m, then 1–5', 'open the mode picker and choose an entry'],
-        ['< / >', 'previous / next commit when viewing one commit'],
+        ['< / >', 'older / newer commit, of the range or of a single commit'],
       ],
     },
     {

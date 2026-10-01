@@ -374,3 +374,32 @@ export function imageSides(path: string, changed: ChangedFile | undefined): Imag
   if (!changed) return 'new';
   return changed.status === 'A' ? 'new' : changed.status === 'D' ? 'old' : 'both';
 }
+
+/**
+ * A commit message's body, after the subject, as paragraphs to wrap at any width.
+ * Blank lines separate paragraphs; a list item or an indented line keeps its line break.
+ */
+export function commitBody(message: string): string[] {
+  const body = message.split('\n').slice(1).join('\n').trim();
+  if (!body) return [];
+  return body.split(/\n\s*\n/).map((paragraph) =>
+    paragraph
+      .split('\n')
+      .reduce((out, line) => (/^\s|^([-*+]|\d+[.)])\s/.test(line) ? `${out}\n${line}` : `${out} ${line}`), '')
+      .slice(1),
+  );
+}
+
+/**
+ * Where `direction` steps through a range's list, older (-1) or newer (1), the range itself past the newest:
+ * a commit's hash, null for the range, or undefined past either end and outside a range. A focused commit
+ * no longer listed steps newer to the range.
+ */
+export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, direction: -1 | 1): string | null | undefined {
+  const { mode, commits } = snapshot;
+  if (!mode.within && mode.base === 'parent') return undefined;
+  const order = [...commits.list.map((c) => c.sha), null];
+  const at = mode.within ? order.indexOf(mode.new) : order.length - 1;
+  if (at < 0) return direction > 0 ? null : undefined;
+  return order[at + direction];
+}
