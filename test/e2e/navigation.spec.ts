@@ -93,3 +93,39 @@ test.describe('copying a file path', () => {
     await expect.poll(() => clipboard(page)).toBe(path);
   });
 });
+
+test('a directory mark views every changed file under it, then un-views them', async ({ page }) => {
+  const mark = page.locator(
+    'file-tree-container [data-item-type="folder"][data-item-path="scripts/"] [data-item-section="decoration"] > span',
+  );
+  const fileMark = page.locator(
+    'file-tree-container [data-item-path="scripts/build.bat"] [data-item-section="decoration"] > span > span:last-child',
+  );
+  await expect(mark).toHaveText('○');
+  await fileMark.click();
+  await expect(mark).toHaveText('1/2○');
+  // A partly viewed directory completes; the click marks the files without folding the directory.
+  await mark.click();
+  await expect.poll(() => viewed(page, 'scripts/tally.sh')).toBe(true);
+  expect(await viewed(page, 'scripts/build.bat')).toBe(true);
+  expect(await collapsed(page, 'scripts/tally.sh')).toBe(true);
+  await expect(mark).toHaveText('✓');
+  await expect(page.locator('file-tree-container [data-item-path="scripts/"]')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(page.locator('file-tree-container')).toHaveScreenshot('viewed-directory.png');
+  await mark.click();
+  await expect.poll(() => viewed(page, 'scripts/tally.sh')).toBe(false);
+  expect(await viewed(page, 'scripts/build.bat')).toBe(false);
+  await expect(mark).toHaveText('○');
+});
+
+test('the directory context menu marks the directory viewed', async ({ page }) => {
+  await page.locator('file-tree-container [data-item-path="tally/"]').click({ button: 'right' });
+  await page.getByRole('button', { name: /Mark directory viewed/ }).click();
+  await expect.poll(() => viewed(page, 'tally/ledger.py')).toBe(true);
+  await expect(
+    page.locator('file-tree-container [data-item-path="tally/"] [data-item-section="decoration"] > span'),
+  ).toHaveText('✓');
+});
