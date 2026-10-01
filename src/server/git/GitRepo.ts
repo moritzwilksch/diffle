@@ -141,7 +141,8 @@ export class GitRepo {
     return { old, new: next };
   }
 
-  private async commitInfo(rev: string): Promise<CommitInfo | null> {
+  /** A commit's hash, abbreviation and full message; null when `rev` names no commit. */
+  async commitInfo(rev: string): Promise<CommitInfo | null> {
     let sha: string;
     try {
       sha = await this.resolve(rev);
@@ -152,6 +153,24 @@ export class GitRepo {
     const output = await this.text(['log', '-1', '--no-show-signature', '--format=%h%x00%B', sha, '--']);
     const separator = output.indexOf('\0');
     return { sha, short: output.slice(0, separator), message: output.slice(separator + 1).trimEnd() };
+  }
+
+  /**
+   * `sha`'s first parent, and the commit toward HEAD whose first parent it is. The
+   * child is null at HEAD, on an unborn branch, or when `sha` is off HEAD's
+   * first-parent line, e.g. on a merged side branch.
+   */
+  async commitNeighbours(sha: string): Promise<{ parent: string | null; child: string | null }> {
+    const [parent, list] = await Promise.all([
+      this.resolve(`${sha}^`).catch((e: unknown) => {
+        if (e instanceof GitError && e.code === 1) return null;
+        throw e;
+      }),
+      this.text(['rev-list', '--first-parent', '--ancestry-path', '--parents', `${sha}..HEAD`, '--']).catch(() => ''),
+    ]);
+    // Newest first, so the oldest descendant comes last; it is the child only if it sits on sha directly.
+    const [child, firstParent] = list.trim().split('\n').pop()?.split(' ') ?? [];
+    return { parent, child: child && firstParent === sha ? child : null };
   }
 
   /** The empty tree under the repository's hash algorithm: the old side of an unborn branch. */

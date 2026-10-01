@@ -1,0 +1,5 @@
+- form "Commit…":
+  - combobox "Commit": HEAD
+  - text: ^!
+  - paragraph: Show this commit against its first parent.
+  - button "Show commit"

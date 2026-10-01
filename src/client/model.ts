@@ -322,6 +322,10 @@ function isSubsequence(needle: string, hay: string): boolean {
 }
 
 /** Compare two validated, nonnegative ancestor offsets from HEAD. */
+/** The compare menu's entries by position (keys 1–5); Working acts at once and has no pane. */
+export const MODE_PANES = [null, 'refs', 'commits', 'pr', 'commit'] as const;
+export type ModePane = NonNullable<(typeof MODE_PANES)[number]>;
+
 export function lastCommitsRequest(n: number, m: number): ModeRequest {
   return { kind: 'revspec', args: [`HEAD~${n}..HEAD~${m}`] };
 }

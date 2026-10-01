@@ -38,7 +38,7 @@ import {
 } from './keyboard/nav.js';
 import { lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
-import type { ExportOutcome } from './model.js';
+import type { ExportOutcome, ModePane } from './model.js';
 import {
   canJumpBack,
   canJumpForward,
@@ -49,6 +49,7 @@ import {
   nextFileAfter,
   itemIdOf,
   linesOf,
+  MODE_PANES,
   OVERSIZED_LINES,
   patchBatches,
   pathFromItemId,
@@ -244,7 +245,7 @@ export interface ReviewState {
   refreshGithub(): Promise<void>;
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
-  modePane: 'refs' | 'commits' | 'pr' | null;
+  modePane: ModePane | null;
   /** Compare-menu entry (1–4) that Enter picks; opening the menu highlights the first. */
   modeEntry: number;
   /** Highlight entry `n`, wrapping past either end. */
@@ -388,6 +389,8 @@ export interface ReviewState {
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
   switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
+  /** In a single-commit view, show the parent (-1) or the child toward HEAD (1); a no-op at either end. */
+  stepCommit(direction: -1 | 1): void;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
@@ -1307,15 +1310,15 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ modeMenuOpen: open, modePane: null, modeEntry: 1, ...(open ? { githubMenuOpen: false } : {}) });
     },
     highlightModeEntry(n) {
-      const entry = ((((n - 1) % 4) + 4) % 4) + 1;
+      const entry = ((((n - 1) % 5) + 5) % 5) + 1;
       if (entry !== get().modeEntry) set({ modeEntry: entry });
     },
     pickModeEntry(n) {
       if (n === 1) {
         set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
         void get().switchMode({ kind: 'working' });
-      } else if (n >= 2 && n <= 4) {
-        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr', modeEntry: n });
+      } else if (n >= 2 && n <= 5) {
+        set({ modeMenuOpen: true, modePane: MODE_PANES[n - 1]!, modeEntry: n });
       }
     },
     closeModePane() {
@@ -2069,6 +2072,12 @@ export const useStore = create<ReviewState>((set, get) => {
       } finally {
         if (owned && snap && fetching === snap.version) fetching = 0;
       }
+    },
+
+    stepCommit(direction) {
+      const commit = get().snapshot?.commit;
+      const target = direction < 0 ? commit?.parent : commit?.child;
+      if (target) void get().switchMode({ kind: 'revspec', args: [`${target}^!`] });
     },
 
     loadFile,

@@ -71,6 +71,7 @@ diffle                  # HEAD vs worktree, like a bare `git diff`
 diffle working          # HEAD vs worktree: staged, unstaged, untracked
 diffle develop          # merge-base(develop, HEAD) vs HEAD: what this branch added
 diffle pr 27            # GitHub PR 27, or its url; without a number, this branch's PR
+diffle show a1b2c3d     # one commit against its first parent, like `git show`
 diffle main..feat       # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle main..worktree   # "worktree" names the uncommitted tree on either side
 diffle working --no-lsp # skip the language servers for this run

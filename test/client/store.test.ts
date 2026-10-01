@@ -86,9 +86,8 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     root: '/r',
     mode: {
       old: 'HEAD',
-      mergeBase: false,
       new: 'worktree',
-
+      base: 'direct',
       live: 'none',
       commentKey: key,
     },
@@ -99,6 +98,7 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     context: 5,
     changed: [],
     tree,
+    commit: null,
   };
 }
 

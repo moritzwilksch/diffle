@@ -212,12 +212,12 @@ describe("resolveReview({ kind: 'pr' })", () => {
     const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, github);
     expect(mode).toMatchObject({
       old: `${repo.reviewRefs}/7/base/main`,
-      mergeBase: true,
+      base: 'merge-base',
       new: `${repo.reviewRefs}/7/head/feat`,
 
       live: 'none',
       // Branch identities share review state with ordinary branch comparisons.
-      commentKey: 'branches:["o/r:main","o/r:feat",true]',
+      commentKey: 'range:o/r:main...o/r:feat',
     });
     expect(mode).not.toHaveProperty('request');
     expect(prUrl).toBe('https://github.com/o/r/pull/7');

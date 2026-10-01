@@ -477,8 +477,8 @@ describe('resolveReview + Snapshotter', () => {
   it('a lone revision diffs its merge-base with HEAD against HEAD', async () => {
     const { mode } = await resolveReview({ kind: 'revspec', args: ['main'] }, repo);
     const mb = await repo.mergeBase('main', 'feat');
-    expect(mode).toMatchObject({ old: 'main', new: 'HEAD', mergeBase: true });
-    expect(mode.commentKey).toBe('branches:["refs/heads/main","refs/heads/feat",true]');
+    expect(mode).toMatchObject({ old: 'main', new: 'HEAD', base: 'merge-base' });
+    expect(mode.commentKey).toBe('range:refs/heads/main...refs/heads/feat');
     expect(mode.live).toBe('refs');
     const snap = await new Snapshotter(repo, mode, 1, 3).current();
     expect(snap.oldSha).toBe(mb);
@@ -513,6 +513,89 @@ describe('resolveReview + Snapshotter', () => {
     expect((await resolveReview({ kind: 'revspec', args: ['main..feat'] }, repo)).mode.live).toBe('refs');
     expect((await resolveReview({ kind: 'revspec', args: ['main'] }, repo)).mode.live).toBe('refs');
     expect((await resolveReview({ kind: 'revspec', args: ['main..worktree'] }, repo)).mode.live).toBe('worktree');
+  });
+});
+
+describe('a single commit', () => {
+  let cdir: string;
+  let crepo: GitRepo;
+  const cgit = (...args: string[]) =>
+    execFileSync('git', args, {
+      cwd: cdir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 't',
+        GIT_AUTHOR_EMAIL: 't@t',
+        GIT_COMMITTER_NAME: 't',
+        GIT_COMMITTER_EMAIL: 't@t',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+      },
+    }).trim();
+  beforeAll(async () => {
+    cdir = await mkdtemp(join(tmpdir(), 'diffle-commit-'));
+    cgit('init', '-q', '-b', 'main');
+    await writeFile(join(cdir, 'a.txt'), 'one\n');
+    cgit('add', '.');
+    cgit('commit', '-q', '-m', 'root');
+    cgit('checkout', '-q', '-b', 'side');
+    await writeFile(join(cdir, 'side.txt'), 's\n');
+    cgit('add', '.');
+    cgit('commit', '-q', '-m', 'side');
+    cgit('checkout', '-q', 'main');
+    await writeFile(join(cdir, 'a.txt'), 'one\ntwo\n');
+    cgit('commit', '-q', '-am', 'second\n\nwith a body');
+    cgit('merge', '-q', '--no-ff', '-m', 'merge side', 'side');
+    crepo = await GitRepo.open(cdir);
+  });
+  afterAll(() => rmTmp(cdir));
+
+  it('pins the commit and shows it against its parent with its message', async () => {
+    const sha = cgit('rev-parse', 'HEAD~1');
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['HEAD~1^!'] }, crepo);
+    expect(mode).toEqual({ old: sha, new: sha, base: 'parent', live: 'none', commentKey: `commit:${sha}` });
+    const snap = await new Snapshotter(crepo, mode, 1, 3).current();
+    expect(snap.oldSha).toBe(cgit('rev-parse', 'HEAD~2'));
+    expect(snap.changed.map((f) => [f.path, f.status])).toEqual([['a.txt', 'M']]);
+    expect(snap.commit).toEqual({
+      sha,
+      short: cgit('rev-parse', '--short', sha),
+      message: 'second\n\nwith a body',
+      parent: cgit('rev-parse', 'HEAD~2'),
+      child: cgit('rev-parse', 'HEAD'),
+    });
+  });
+
+  it('shows a root commit against the empty tree', async () => {
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['HEAD~2^!'] }, crepo);
+    const snap = await new Snapshotter(crepo, mode, 1, 3).current();
+    expect(snap.oldSha).toBe(await crepo.emptyTree());
+    expect(snap.changed.map((f) => [f.path, f.status])).toEqual([['a.txt', 'A']]);
+  });
+
+  it('shows a merge commit against its first parent', async () => {
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['HEAD^!'] }, crepo);
+    const snap = await new Snapshotter(crepo, mode, 1, 3).current();
+    expect(snap.oldSha).toBe(cgit('rev-parse', 'HEAD^1'));
+    expect(snap.changed.map((f) => [f.path, f.status])).toEqual([['side.txt', 'A']]);
+  });
+
+  it("steps along HEAD's first-parent line and stops at its ends", async () => {
+    const [root, second, merge, side] = ['HEAD~2', 'HEAD~1', 'HEAD', 'side'].map((rev) => cgit('rev-parse', rev));
+    expect(await crepo.commitNeighbours(root!)).toEqual({ parent: null, child: second });
+    expect(await crepo.commitNeighbours(second!)).toEqual({ parent: root, child: merge });
+    expect(await crepo.commitNeighbours(merge!)).toEqual({ parent: second, child: null });
+    // The side commit's only descendant is the merge, whose first parent is not the side commit.
+    expect(await crepo.commitNeighbours(side!)).toEqual({ parent: root, child: null });
+  });
+
+  it('leaves commit null for a range', async () => {
+    const { mode } = await resolveReview({ kind: 'revspec', args: ['HEAD~1..HEAD'] }, crepo);
+    expect((await new Snapshotter(crepo, mode, 1, 3).current()).commit).toBeNull();
+  });
+
+  it('reports an unknown commit as a revspec error', async () => {
+    await expect(resolveReview({ kind: 'revspec', args: ['nope^!'] }, crepo)).rejects.toThrow('unknown revision: nope');
   });
 });
 

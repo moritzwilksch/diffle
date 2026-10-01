@@ -1,4 +1,4 @@
-import type { ChangedFile, ModeSpec, Snapshot } from '../shared/protocol.js';
+import type { ChangedFile, ModeSpec, ReviewedCommit, Snapshot } from '../shared/protocol.js';
 import { mapLimit } from './concurrency.js';
 import { looksGenerated, SNIFF_BYTES } from './generated.js';
 import type { GitRepo } from './git/GitRepo.js';
@@ -109,13 +109,14 @@ export class Snapshotter {
     ]);
     // The tree belongs to the selected new side: a commit's own listing, or the
     // index plus untracked files (added below via `changed`) for the worktree.
-    const [tracked, changed] = await Promise.all([
+    const [tracked, changed, commit] = await Promise.all([
       newSha === 'worktree'
         ? Promise.all([this.repo.lsFiles(), this.repo.untracked()]).then((lists) =>
             lists.flat().filter((p) => !p.endsWith('/')),
           )
         : this.repo.lsTree(newSha),
       this.repo.numstat(oldSha, newSha),
+      this.mode.base === 'parent' ? this.reviewedCommit(newSha) : null,
     ]);
     await this.fillGenerated(changed, newSha);
     const tree = new Set(tracked);
@@ -134,9 +135,15 @@ export class Snapshotter {
       context: this.context,
       changed,
       tree: [...tree].sort(),
+      commit,
     };
     for (const f of changed.slice(0, PREWARM)) void this.patchFor(snap, f).catch(() => {});
     return snap;
+  }
+
+  private async reviewedCommit(sha: string): Promise<ReviewedCommit | null> {
+    const [info, neighbours] = await Promise.all([this.repo.commitInfo(sha), this.repo.commitNeighbours(sha)]);
+    return info && { ...info, ...neighbours };
   }
 
   /**

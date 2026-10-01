@@ -124,6 +124,7 @@ Shorthands (in place of <revs>):
   working                  same as HEAD..worktree: uncommitted changes, staged and untracked included
   pr [number|url]          a GitHub pull request: its base...head, fetched if needed
                            (without an argument: the pull request for this branch)
+  show [rev]               same as <rev>^!: one commit against its first parent, pinned (default: HEAD)
 
 Revisions follow git diff, except that a lone one compares from the merge base:
   diffle main              same as main...HEAD: what this branch added since it left main
@@ -131,6 +132,7 @@ Revisions follow git diff, except that a lone one compares from the merge base:
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
   diffle main..worktree    main vs the uncommitted tree ("worktree" works on either side)
+  diffle a1b2c3d^!         the commit a1b2c3d alone, like git show
 
 Without revisions, diffle compares HEAD..worktree.
 
@@ -152,6 +154,15 @@ program
   .summary('same as HEAD..worktree')
   .description('Same as `diffle HEAD..worktree`: uncommitted changes, staged and untracked files included.')
   .action(async (_o, cmd: Command) => run({ kind: 'working' }, cmd.optsWithGlobals<GlobalOpts>()));
+
+program
+  .command('show', { hidden: true })
+  .argument('[rev]', 'the commit to review', 'HEAD')
+  .summary('one commit')
+  .description('Same as `diffle <rev>^!`: one commit against its first parent, as git show shows it.')
+  .action(async (rev: string, _o, cmd: Command) =>
+    run({ kind: 'revspec', args: [`${rev}^!`] }, cmd.optsWithGlobals<GlobalOpts>()),
+  );
 
 program
   .command('pr', { hidden: true })
