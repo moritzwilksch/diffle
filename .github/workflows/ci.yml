@@ -63,6 +63,23 @@ jobs:
             test-results
             playwright-report
           if-no-files-found: ignore
+      # Rewrites the snapshots of the failed scenarios; the Update snapshots workflow commits them.
+      - name: Regenerate failed snapshots
+        if: failure()
+        run: npm run test:e2e:docker -- --last-failed --update-snapshots
+      - name: Collect changed snapshots
+        if: failure()
+        run: |
+          mkdir snapshot-updates
+          git ls-files -z --modified --others --exclude-standard -- test/e2e/__snapshots__ \
+            | xargs -0 --no-run-if-empty cp --parents -t snapshot-updates
+      - name: Upload changed snapshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-snapshots
+          path: snapshot-updates
+          if-no-files-found: ignore
 
   lint:
     runs-on: ubuntu-latest
