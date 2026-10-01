@@ -4,6 +4,7 @@
 [![conda-forge](https://img.shields.io/conda/vn/conda-forge/diffle?logoColor=white&logo=conda-forge&style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![conda-forge-platforms](https://img.shields.io/conda/pn/conda-forge/diffle?style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![npm](https://img.shields.io/npm/v/%40moritzwilksch%2Fdiffle?logo=npm&logoColor=white&style=flat-square)](https://npmx.dev/package/@moritzwilksch/diffle)
+[![website](https://img.shields.io/badge/website-diffle.app-0349b4?style=flat-square)](https://diffle.app)
 
 Review a git diff in the browser, comment on lines, blocks, or whole files, then copy the
 comments as a prompt for an agent.
