@@ -81,22 +81,22 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               icon
-              disabled={rangeStep(snapshot, 1) === undefined}
-              onClick={() => stepCommit(1)}
-              title="Newer commit (>)"
-              aria-label="Newer commit"
-            >
-              <ChevronUp size="0.875rem" />
-            </Button>
-            <Button
-              variant="ghost"
-              icon
               disabled={rangeStep(snapshot, -1) === undefined}
               onClick={() => stepCommit(-1)}
               title="Older commit (<)"
               aria-label="Older commit"
             >
               <ChevronDown size="0.875rem" />
+            </Button>
+            <Button
+              variant="ghost"
+              icon
+              disabled={rangeStep(snapshot, 1) === undefined}
+              onClick={() => stepCommit(1)}
+              title="Newer commit (>)"
+              aria-label="Newer commit"
+            >
+              <ChevronUp size="0.875rem" />
             </Button>
           </>
         )}

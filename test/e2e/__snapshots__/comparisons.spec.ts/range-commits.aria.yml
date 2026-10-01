@@ -1,7 +1,7 @@
 - region "Commits":
   - button "Commits 4" [expanded]
-  - button "Newer commit" [disabled]
   - button "Older commit"
+  - button "Newer commit" [disabled]
   - button "All changes main...feature/refunds"
   - list:
     - listitem:
