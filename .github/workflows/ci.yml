@@ -113,6 +113,12 @@ jobs:
           path: "*.tgz"
           archive: false
 
+  # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
+  sea:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sea.yml
+
   lockfile:
     runs-on: ubuntu-latest
     permissions:

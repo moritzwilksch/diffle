@@ -1,0 +1,63 @@
+name: Single executable
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-latest, target: darwin-arm64 }
+          - { os: windows-latest, target: windows-x64 }
+          - { os: windows-11-arm, target: windows-arm64 }
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # `node --build-sea` needs Node 25.5 or later; the binary embeds this runtime.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+      - name: Build single executable
+        run: |
+          npm ci
+          npm run build:sea
+      - name: Smoke test
+        shell: bash
+        run: node scripts/smoke-sea.mjs dist/sea/diffle${{ runner.os == 'Windows' && '.exe' || '' }}
+      - name: Archive
+        shell: bash
+        run: |
+          mkdir out
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            7z a -tzip "out/diffle-${{ matrix.target }}.zip" ./dist/sea/diffle.exe ./LICENSE ./THIRD_PARTY_NOTICES.md
+          else
+            tar -czf "out/diffle-${{ matrix.target }}.tar.gz" -C dist/sea diffle -C ../.. LICENSE THIRD_PARTY_NOTICES.md
+          fi
+      # Serves this job's archive as a one-asset release and installs from it.
+      - name: Test installer
+        shell: bash
+        run: |
+          mkdir release
+          cp out/* release/
+          (cd release && sha256sum diffle-* > SHA256SUMS)
+          "$(command -v python3 || command -v python)" -m http.server 8765 --bind 127.0.0.1 --directory release > /dev/null 2>&1 &
+          trap 'kill $!' EXIT
+          sleep 2
+          # Each installer runs the installed binary's --version before it reports success.
+          export DIFFLE_DOWNLOAD_URL=http://127.0.0.1:8765 DIFFLE_INSTALL_DIR="$RUNNER_TEMP/diffle-bin"
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            pwsh -NoProfile -File scripts/install.ps1
+            # Again under Windows PowerShell 5.1, over the existing install.
+            powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
+          else
+            sh scripts/install.sh
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: out/*
+          archive: false

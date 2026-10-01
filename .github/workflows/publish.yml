@@ -27,3 +27,33 @@ jobs:
         run: |
           npm ci
           npm publish
+
+  sea:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sea.yml
+
+  # Attaches the binaries, their checksums, and the installers to the tag's release.
+  release:
+    needs: [publish, sea]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: diffle-*
+          path: out
+          merge-multiple: true
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp scripts/install.sh scripts/install.ps1 out/
+          (cd out && sha256sum diffle-* > SHA256SUMS)
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" out/* --verify-tag --generate-notes
+          fi
