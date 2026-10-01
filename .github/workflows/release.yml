@@ -1,0 +1,118 @@
+name: Release
+# Keeps a `chore: release vX.Y.Z` pull request open that bumps the version and updates CHANGELOG.md
+# from the conventional commits since the last tag. Merging it tags the release; the tag runs Publish.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  # Tags the commit that set package.json's version, unless that version is already tagged.
+  # It finds that commit rather than using HEAD, since a later push may have superseded the release commit's run.
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Find the untagged version
+        id: version
+        run: |
+          tag="v$(jq -r .version package.json)"
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "$tag is already tagged."
+            exit 0
+          fi
+          sha=$(git log -1 --format=%H -G '^  "version": ' -- package.json)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      # An octo-sts token rather than GITHUB_TOKEN, so that the tag triggers Publish.
+      - name: Obtain GitHub app token
+        if: steps.version.outputs.tag
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: release
+      - name: Push the tag
+        if: steps.version.outputs.tag
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ steps.version.outputs.sha }}
+        run: gh api "repos/$REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA"
+
+  pull-request:
+    needs: tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: git-cliff@2.14.2
+      - name: Determine the next version
+        id: version
+        run: |
+          latest=$(git describe --tags --abbrev=0 --match 'v*')
+          next=$(git cliff --bumped-version)
+          if [ "$next" = "$latest" ]; then
+            echo "Nothing to release since $latest."
+            exit 0
+          fi
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+      - name: Bump the version and update the changelog
+        if: steps.version.outputs.next
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          npm ci --ignore-scripts
+          npm version --no-git-tag-version "${NEXT#v}"
+          git cliff --tag "$NEXT" -o CHANGELOG.md
+          npx oxfmt CHANGELOG.md
+          awk -v v="${NEXT#v}" '/^## \[/ { p = index($0, "## [" v "]") == 1; next } p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+      # An octo-sts token rather than GITHUB_TOKEN, so that the pull request runs CI.
+      - name: Obtain GitHub app token
+        if: steps.version.outputs.next
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: release
+      # Resets the release branch onto main on every run, so it never carries stale changes.
+      - name: Open or update the release pull request
+        if: steps.version.outputs.next
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.octo-sts.outputs.token }}
+          branch: release
+          base: main
+          title: "chore: release ${{ steps.version.outputs.next }}"
+          commit-message: "chore: release ${{ steps.version.outputs.next }}"
+          body-path: ${{ runner.temp }}/notes.md
+          add-paths: |
+            package.json
+            package-lock.json
+            CHANGELOG.md
+          sign-commits: true
