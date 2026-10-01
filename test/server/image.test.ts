@@ -86,9 +86,18 @@ describe('GET /api/image', () => {
   const current = async (path: string, rev: Side) =>
     image(path, rev, imageKey(await session.snapshotter.current(), path, rev));
   const bytes = async (res: Response) => Buffer.from(await res.arrayBuffer());
+  /**
+   * Starts a mode and waits out the snapshot's patch prewarm: on Windows a `git diff` still
+   * reading a worktree file makes rewriting it fail.
+   */
+  const start = async (...spec: Parameters<Session['resolve']>) => {
+    await session.start(await session.resolve(...spec));
+    const snap = await session.snapshotter.current();
+    await session.snapshotter.patchMany(snap.changed.map((f) => f.path));
+  };
 
   describe('between commits', () => {
-    beforeAll(async () => session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] })));
+    beforeAll(() => start({ kind: 'revspec', args: ['main..feat'] }));
 
     it('serves each side of a changed image under its blob, as its sniffed type, for good', async () => {
       for (const [rev, tag] of [
@@ -124,7 +133,7 @@ describe('GET /api/image', () => {
   describe('against the worktree', () => {
     it("serves a worktree side only while its bytes are the snapshot's", async () => {
       await writeFile(join(dir, 'logo.png'), png(6));
-      await session.start(await session.resolve({ kind: 'working' }));
+      await start({ kind: 'working' });
       const key = imageKey(await session.snapshotter.current(), 'logo.png', 'new');
       expect(await bytes(await image('logo.png', 'new', key))).toEqual(png(6));
       // No refresh yet: the key still names the old bytes, so the new ones must not be served under it.
@@ -134,7 +143,7 @@ describe('GET /api/image', () => {
     });
 
     it('reads an unchanged path from the commit its key names, not from a worktree that moved on', async () => {
-      await session.start(await session.resolve({ kind: 'working' }));
+      await start({ kind: 'working' });
       await writeFile(join(dir, 'still.png'), png(8));
       try {
         const res = await image('still.png', 'new', git('rev-parse', 'HEAD'));
@@ -147,7 +156,7 @@ describe('GET /api/image', () => {
     it('keys a worktree old side by its hashed blob', async () => {
       await writeFile(join(dir, 'logo.png'), png(9));
       try {
-        await session.start(await session.resolve({ kind: 'revspec', args: ['worktree..HEAD'] }));
+        await start({ kind: 'revspec', args: ['worktree..HEAD'] });
         expect(imageKey(await session.snapshotter.current(), 'logo.png', 'old')).toBe(git('hash-object', 'logo.png'));
         expect(await bytes(await current('logo.png', 'old'))).toEqual(png(9));
         expect(await bytes(await current('logo.png', 'new'))).toEqual(png(2));
