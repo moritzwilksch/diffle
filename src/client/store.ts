@@ -425,8 +425,8 @@ export interface ReviewState {
   exportToGithub(threadIds?: string[]): Promise<ExportOutcome | null>;
   /** Mark a file viewed (collapsing it) or not viewed (expanding it). The cursor and viewport stay put. */
   setViewed(path: string, viewed: boolean): Promise<void>;
-  /** Mark every changed file not viewed (explicit marks override auto-viewed globs) and expand them. */
-  unviewAll(): Promise<void>;
+  /** Mark the named changed files viewed (collapsing them) or not viewed (expanding them); explicit marks override auto-viewed globs. */
+  setViewedMany(paths: readonly string[], viewed: boolean): Promise<void>;
   /** Collapse or expand a file from its header or the tree. The cursor and viewport stay put; `zc` is `setCollapsedAtCursor`. */
   toggleCollapsed(path: string): void;
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
@@ -2291,14 +2291,18 @@ export const useStore = create<ReviewState>((set, get) => {
       await persistViewed('Marking viewed', () => api.setViewed(path, f.blob, viewed));
     },
 
-    async unviewAll() {
-      const snap = get().snapshot;
-      if (!snap) return;
-      const entries = snap.changed.map((f) => ({ path: f.path, blob: f.blob, viewed: false }));
-      const collapsed: Record<string, boolean> = {};
-      for (const f of snap.changed) collapsed[f.path] = false;
-      set({ viewed: entries, collapsed });
-      await persistViewed('Marking all not viewed', () => api.setViewedBulk(entries));
+    async setViewedMany(paths, viewed) {
+      const wanted = new Set(paths);
+      const entries = (get().snapshot?.changed ?? [])
+        .filter((f) => wanted.has(f.path))
+        .map((f) => ({ path: f.path, blob: f.blob, viewed }));
+      if (!entries.length) return;
+      // The server drops these paths' history, so the optimistic state does too.
+      set((s) => ({
+        viewed: [...s.viewed.filter((v) => !wanted.has(v.path)), ...entries],
+        collapsed: { ...s.collapsed, ...Object.fromEntries(entries.map((e) => [e.path, viewed])) },
+      }));
+      await persistViewed(viewed ? 'Marking viewed' : 'Marking not viewed', () => api.setViewedBulk(entries));
     },
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);
