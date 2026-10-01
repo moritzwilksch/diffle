@@ -61,33 +61,55 @@ test.describe('single commit', () => {
 });
 
 test.describe("the range's commits", () => {
-  test('lists them, expands one and picks it in the compare menu', async ({ page }) => {
+  test('shows a hovered commit in full', async ({ page }) => {
     const box = page.getByRole('region', { name: 'Commits' });
     await expect(box).toMatchAriaSnapshot({ name: 'range-commits.aria.yml' });
-    const row = box.getByRole('button', { name: 'refactor: move money helpers into a currency module' });
-    await row.click();
-    await expect(row).toHaveAttribute('aria-expanded', 'true');
-    await expect(box.getByRole('listitem').nth(1)).toContainText('Grace Hopper');
-    // The last commit has a body; hovering it highlights the whole expanded item.
-    const last = box.getByRole('listitem').last();
-    await last.getByRole('button', { name: /^fix\(cli\)/ }).click();
-    await expect(last).toContainText('hid a wrong glob in cron jobs.');
-    await last.getByText('Grace Hopper').hover();
-    await expect(box).toHaveScreenshot('range-commits.png');
-    await box.getByRole('button', { name: 'Pick commit 640d216 in the compare menu' }).click();
-    const pane = page.getByRole('form', { name: 'Commit…' });
-    await expect(pane.getByRole('combobox', { name: 'Commit' })).toHaveValue('640d216');
-    await expect(pane.getByRole('combobox', { name: 'Commit' })).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('header')).toContainText('refactor: move money helpers into a currency module');
-    await expect(box.getByRole('listitem')).toHaveCount(1);
+    await box.getByRole('button', { name: /^fix\(cli\)/ }).hover();
+    const card = page.getByRole('tooltip');
+    await expect(card).toContainText('fix(cli): report an empty ledger instead of crashing');
+    await expect(card).toContainText('hid a wrong glob in cron jobs.');
+    await expect(card).toContainText('Grace Hopper');
+    await expect(page).toHaveScreenshot('commit-card.png');
+    await page.mouse.move(0, 0);
+    await expect(card).toHaveCount(0);
+  });
+
+  test('focuses one commit, steps through the range and returns to all changes', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const picker = page.getByTitle(/Change what is compared/);
+    const header = page.locator('header');
+    const all = box.getByRole('button', { name: /^All changes/ });
+    await expect(all).toHaveAttribute('aria-current', 'true');
+    await expect(box.getByRole('button', { name: 'Previous commit' })).toBeDisabled();
+
+    await box.getByRole('button', { name: /^refactor: move money helpers/ }).click();
+    await expect(picker).toHaveText(/main\.\.\.feature\/refunds @ 640d216/);
+    await expect(header).toContainText('refactor: move money helpers into a currency module');
+    const active = box.locator('[aria-current="true"]');
+    await expect(active).toContainText('Grace Hopper');
+    await expect(all).not.toHaveAttribute('aria-current');
+    // The range still lists all its commits while one is shown.
+    await expect(box.getByRole('listitem')).toHaveCount(4);
+    await waitForHighlight(page, 'tally/currency.py');
+    await expect(page).toHaveScreenshot('focused-commit.png');
+
+    await box.getByRole('button', { name: 'Next commit' }).click();
+    await expect(active).toContainText('chore: regenerate the client');
+    await page.keyboard.press('<');
+    await expect(active).toContainText('refactor: move money helpers');
+    await page.keyboard.press('<');
+    await expect(active).toContainText('feat(ledger): support refund lines');
+    await page.keyboard.press('<');
+    await expect(all).toHaveAttribute('aria-current', 'true');
+    await expect(picker).toHaveText(/^main\.\.\.feature\/refunds/);
+    await expect(header).toContainText('17 files');
   });
 
   test('collapses to its header', async ({ page }) => {
     const box = page.getByRole('region', { name: 'Commits' });
-    const header = box.getByRole('button', { name: /^Commits/ });
-    await header.click();
-    await expect(header).toHaveAttribute('aria-expanded', 'false');
+    const toggle = box.getByRole('button', { name: /^Commits/ });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await expect(box.getByRole('list')).toHaveCount(0);
   });
 });

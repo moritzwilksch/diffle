@@ -1,8 +1,8 @@
-import { ChevronDown, ChevronRight, GitCommitHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronRight, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import type { RangeCommit, RangeCommits } from '../../shared/protocol.js';
-import { commitBody } from '../model.js';
+import { comparisonLabel, type RangeCommit, type Snapshot } from '../../shared/protocol.js';
+import { commitBody, rangeStep } from '../model.js';
 import { useStore } from '../store.js';
 import { Button } from '../ui/Button.js';
 
@@ -11,43 +11,104 @@ const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeSt
 
 /** Longer ranges start collapsed so the threads keep the panel. */
 const OPEN_UP_TO = 5;
+/** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
+const HOVER_DELAY_MS = 250;
 
 /**
- * The compared range's commits, oldest first, one line each; a row expands to its
- * message and author. A hash opens the compare menu's Commit… pane on that commit.
+ * The compared range's commits, oldest first, under an entry for the range itself. Choosing a commit
+ * shows its diff alone while the list stays the range's; the shown entry is highlighted with its full
+ * message, and hovering another shows that one's in a card.
  */
-export function CommitNavigator({ commits }: { commits: RangeCommits }) {
+export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
+  const { mode, commits } = snapshot;
+  const focusCommit = useStore((s) => s.focusCommit);
+  const stepCommit = useStore((s) => s.stepCommit);
   const [open, setOpen] = useState(commits.total <= OPEN_UP_TO);
-  // By sha, so a refresh that adds commits keeps the same rows expanded.
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const toggle = (sha: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(sha)) next.add(sha);
-      return next;
-    });
+  const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const list = useRef<HTMLDivElement>(null);
+  const cardId = useId();
+  // A single commit alone has nothing to step through; it is shown as the one active entry.
+  const range = mode.within ?? (mode.base === 'parent' ? null : mode);
+  const active = mode.base === 'parent' ? mode.new : null;
   const older = commits.total - commits.list.length;
+
+  useEffect(() => {
+    list.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [active, open]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const hoverStart = (commit: RangeCommit, row: Element) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setHover({ commit, row: row.getBoundingClientRect() }), HOVER_DELAY_MS);
+  };
+  const hoverEnd = () => {
+    clearTimeout(timer.current);
+    setHover(null);
+  };
+
   return (
     <section
       className="flex max-h-[40%] shrink-0 flex-col border-b border-b-border text-[0.8125rem]"
       aria-label="Commits"
     >
-      <Button
-        variant="ghost"
-        className="min-h-10 flex-none gap-1.5 rounded-none px-2.5 py-1.5 text-left font-semibold"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <GitCommitHorizontal size="0.9375rem" className="flex-none" /> Commits
-        <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">{commits.total}</span>
-        {open ? (
-          <ChevronDown size="0.875rem" className="ml-auto flex-none text-muted" />
-        ) : (
-          <ChevronRight size="0.875rem" className="ml-auto flex-none text-muted" />
+      <div className="flex min-h-10 flex-none items-center gap-0.5 pr-1.5">
+        <Button
+          variant="ghost"
+          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? (
+            <ChevronDown size="0.875rem" className="text-muted" />
+          ) : (
+            <ChevronRight size="0.875rem" className="text-muted" />
+          )}
+          <GitCommitHorizontal size="0.9375rem" /> Commits
+          <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">{commits.total}</span>
+        </Button>
+        {range && (
+          <>
+            <Button
+              variant="ghost"
+              icon
+              disabled={rangeStep(snapshot, -1) === undefined}
+              onClick={() => stepCommit(-1)}
+              title="Previous commit (<)"
+              aria-label="Previous commit"
+            >
+              <ChevronUp size="0.875rem" />
+            </Button>
+            <Button
+              variant="ghost"
+              icon
+              disabled={rangeStep(snapshot, 1) === undefined}
+              onClick={() => stepCommit(1)}
+              title="Next commit (>)"
+              aria-label="Next commit"
+            >
+              <ChevronDown size="0.875rem" />
+            </Button>
+          </>
         )}
-      </Button>
+      </div>
       {open && (
-        <div className="min-h-0 overflow-auto pb-1.5">
+        <div ref={list} className="min-h-0 overflow-auto pb-1.5" onScroll={hoverEnd}>
+          {range && (
+            <Button
+              variant="ghost"
+              className={twMerge(
+                'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem]',
+                active === null && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
+              )}
+              aria-current={active === null ? 'true' : undefined}
+              onClick={() => focusCommit(null)}
+            >
+              <Layers size="0.8125rem" className={active === null ? 'text-accent' : 'text-muted'} />
+              <span className={twMerge('flex-none', active === null && 'font-semibold')}>All changes</span>
+              <span className="min-w-0 truncate font-mono text-[0.75rem] text-muted">{comparisonLabel(range)}</span>
+            </Button>
+          )}
           {older > 0 && (
             <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">
               {older} older {older === 1 ? 'commit' : 'commits'} not shown
@@ -59,13 +120,18 @@ export function CommitNavigator({ commits }: { commits: RangeCommits }) {
                 key={commit.sha}
                 commit={commit}
                 rail={commits.list.length > 1}
-                expanded={expanded.has(commit.sha)}
-                onToggle={() => toggle(commit.sha)}
+                active={commit.sha === active}
+                described={hover?.commit.sha === commit.sha ? cardId : undefined}
+                onPick={range ? () => focusCommit(commit.sha) : undefined}
+                onHover={(row) => hoverStart(commit, row)}
+                onLeave={hoverEnd}
               />
             ))}
           </ol>
         </div>
       )}
+      {/* The shown commit already lays its message out in the list. */}
+      {hover && hover.commit.sha !== active && <CommitCard id={cardId} commit={hover.commit} row={hover.row} />}
     </section>
   );
 }
@@ -73,19 +139,47 @@ export function CommitNavigator({ commits }: { commits: RangeCommits }) {
 function CommitRow({
   commit,
   rail,
-  expanded,
-  onToggle,
+  active,
+  described,
+  onPick,
+  onHover,
+  onLeave,
 }: {
   commit: RangeCommit;
   rail: boolean;
-  expanded: boolean;
-  onToggle(): void;
+  active: boolean;
+  described: string | undefined;
+  /** Absent when the commit cannot be focused: it is the comparison itself. */
+  onPick: (() => void) | undefined;
+  onHover(row: Element): void;
+  onLeave(): void;
 }) {
-  const openCommitPane = useStore((s) => s.openCommitPane);
-  const subject = commit.message.split('\n', 1)[0] || '(Empty commit message)';
-  const body = commitBody(commit.message);
+  const head = (
+    <>
+      <span
+        aria-hidden
+        className={twMerge(
+          // The first line's middle, where the rail meets it.
+          'relative mt-1.25 size-2 flex-none rounded-full border-[1.5px]',
+          active ? 'border-accent bg-accent' : 'border-muted bg-surface group-hover:bg-hover',
+        )}
+      />
+      <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>
+        {subjectOf(commit)}
+      </span>
+      <span className="flex-none font-mono text-[0.75rem] text-muted">{commit.short}</span>
+    </>
+  );
   return (
-    <li className="group relative hover:bg-hover">
+    <li
+      className={twMerge(
+        'group relative',
+        active ? 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)]' : 'hover:bg-hover',
+      )}
+      aria-current={active ? 'true' : undefined}
+      onPointerEnter={(e) => onHover(e.currentTarget)}
+      onPointerLeave={onLeave}
+    >
       {rail && (
         // The rail between the dots: it starts at the first dot and stops at the last.
         <span
@@ -93,56 +187,87 @@ function CommitRow({
           className="absolute top-0 bottom-0 left-[0.8125rem] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
         />
       )}
-      <div className="flex items-start gap-1 pr-1.5 pl-2.5">
+      {onPick ? (
         <Button
           variant="ghost"
-          className="min-w-0 flex-1 items-start gap-2 rounded-none p-0 py-1 text-left leading-[1.125rem] hover:bg-transparent"
-          aria-expanded={expanded}
-          title={expanded ? undefined : subject}
-          onClick={onToggle}
+          className="w-full items-start gap-2 rounded-none py-1 pr-2.5 pl-2.5 text-left leading-[1.125rem] hover:bg-transparent"
+          aria-describedby={described}
+          onClick={onPick}
         >
-          <span
-            aria-hidden
-            className={twMerge(
-              // The first line's middle, where the rail meets it.
-              'relative mt-1.25 size-2 flex-none rounded-full border-[1.5px]',
-              expanded ? 'border-accent bg-accent' : 'border-muted bg-surface group-hover:bg-hover',
-            )}
-          />
-          <span className={expanded ? 'min-w-0 wrap-anywhere' : 'min-w-0 truncate'}>{subject}</span>
+          {head}
         </Button>
-        <Button
-          variant="ghost"
-          className="mt-1 flex-none px-1 py-px font-mono text-[0.75rem] text-muted hover:text-foreground"
-          title="Pick this commit in the compare menu"
-          aria-label={`Pick commit ${commit.short} in the compare menu`}
-          onClick={() => openCommitPane(commit.short)}
-        >
-          {commit.short}
-        </Button>
-      </div>
-      {expanded && (
-        <div className="pr-2.5 pb-1.5 pl-6.5 leading-[1.4]">
-          {body.map((paragraph, i) => (
-            <p key={i} className="m-0 mb-1.5 wrap-anywhere whitespace-pre-wrap text-muted">
-              {paragraph}
-            </p>
-          ))}
-          <p className="m-0 flex min-w-0 items-center gap-1.5 text-[0.75rem] text-muted">
-            <span className="min-w-0 truncate" title={`${commit.author} <${commit.email}>`}>
-              {commit.author}
-            </span>
-            <span aria-hidden>·</span>
-            <time
-              className="flex-none"
-              dateTime={new Date(commit.date).toISOString()}
-              title={DATE_TIME.format(commit.date)}
-            >
-              {DATE.format(commit.date)}
-            </time>
-          </p>
+      ) : (
+        <div className="flex items-start gap-2 py-1 pr-2.5 pl-2.5 leading-[1.125rem]">{head}</div>
+      )}
+      {active && (
+        <div className="pr-2.5 pb-1.5 pl-6.5">
+          <CommitDetails commit={commit} />
         </div>
       )}
     </li>
+  );
+}
+
+function subjectOf(commit: RangeCommit): string {
+  return commit.message.split('\n', 1)[0] || '(Empty commit message)';
+}
+
+/** A commit's body and author line; `full` adds the email, the time and the hash, for the hover card. */
+function CommitDetails({ commit, full = false }: { commit: RangeCommit; full?: boolean }) {
+  const time = (
+    <time className="flex-none" dateTime={new Date(commit.date).toISOString()} title={DATE_TIME.format(commit.date)}>
+      {(full ? DATE_TIME : DATE).format(commit.date)}
+    </time>
+  );
+  return (
+    <div className="leading-[1.4]">
+      {commitBody(commit.message).map((paragraph, i) => (
+        <p key={i} className="m-0 mb-1.5 wrap-anywhere whitespace-pre-wrap text-muted">
+          {paragraph}
+        </p>
+      ))}
+      {full ? (
+        <div className="text-[0.75rem] text-muted">
+          <p className="m-0 wrap-anywhere">
+            {commit.author} &lt;{commit.email}&gt;
+          </p>
+          <p className="m-0 flex items-center gap-1.5">
+            {time}
+            <span aria-hidden>·</span>
+            <span className="font-mono text-foreground">{commit.short}</span>
+          </p>
+        </div>
+      ) : (
+        <p className="m-0 flex min-w-0 items-center gap-1.5 text-[0.75rem] text-muted">
+          <span className="min-w-0 truncate" title={`${commit.author} <${commit.email}>`}>
+            {commit.author}
+          </span>
+          <span aria-hidden>·</span>
+          {time}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The hovered commit in full, beside the panel and level with its row, kept inside the viewport. */
+function CommitCard({ id, commit, row }: { id: string; commit: RangeCommit; row: DOMRect }) {
+  const card = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(row.top);
+  useLayoutEffect(() => {
+    const height = card.current?.offsetHeight ?? 0;
+    setTop(Math.max(8, Math.min(row.top, window.innerHeight - height - 8)));
+  }, [row]);
+  return (
+    <div
+      ref={card}
+      id={id}
+      role="tooltip"
+      className="pointer-events-none fixed z-40 max-h-[calc(100vh-1rem)] w-[26rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-border bg-canvas px-3 py-2.5 text-[0.8125rem] shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
+      style={{ top, right: window.innerWidth - row.left + 8 }}
+    >
+      <p className="m-0 mb-1.5 leading-[1.4] font-semibold wrap-anywhere">{subjectOf(commit)}</p>
+      <CommitDetails commit={commit} full />
+    </div>
   );
 }

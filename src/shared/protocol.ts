@@ -49,8 +49,15 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('revspec'),
     args: z.string().array(),
   }),
+  /** One listed commit of the current range against its first parent, or with null the range itself. */
+  z.object({
+    kind: z.literal('focus'),
+    commit: z.string().nullable(),
+  }),
 ]);
 export type ModeRequest = z.infer<typeof ModeRequestSchema>;
+/** A request that enters a comparison from scratch, as the CLI does; a focus depends on the active one. */
+export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' }>;
 
 /**
  * How the old side is derived: `old` itself, merge-base(old, new) with worktree
@@ -60,7 +67,7 @@ export const ComparisonBaseSchema = z.enum(['direct', 'merge-base', 'parent']);
 export type ComparisonBase = z.infer<typeof ComparisonBaseSchema>;
 
 /** A comparison; both endpoints accept a Git revision or "worktree". Under `parent`, both name the one commit. */
-export const ModeSpecSchema = z.object({
+export const ComparisonSchema = z.object({
   old: z.string(),
   new: z.string(),
   base: ComparisonBaseSchema,
@@ -68,10 +75,20 @@ export const ModeSpecSchema = z.object({
   /** Fixed when the comparison is entered; discovery never changes comment storage. */
   commentKey: z.string(),
 });
+export type Comparison = z.infer<typeof ComparisonSchema>;
+
+export const ModeSpecSchema = ComparisonSchema.extend({
+  /** Set while one commit of a range is focused: the range, whose commits the snapshot keeps listing. */
+  within: ComparisonSchema.optional(),
+});
 export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
-/** Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as `<sha>^!`. */
-export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base'>): string {
+/**
+ * Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as
+ * `<sha>^!`, or as `<range> @ <sha>` when focused within a range.
+ */
+export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within'>): string {
+  if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
   const name = (rev: string) =>
     rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
@@ -148,7 +165,10 @@ export const RangeCommitSchema = CommitInfoSchema.extend({
 });
 export type RangeCommit = z.infer<typeof RangeCommitSchema>;
 
-/** The commits a comparison spans: old..new, with the worktree taken as HEAD, or the one commit under `parent`. */
+/**
+ * The commits a comparison spans: old..new, with the worktree taken as HEAD, or the one commit under `parent`.
+ * A focused commit lists its range's.
+ */
 export const RangeCommitsSchema = z.object({
   /** Oldest first; the newest MAX_RANGE_COMMITS when there are more. */
   list: RangeCommitSchema.array(),

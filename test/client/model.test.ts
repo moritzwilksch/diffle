@@ -19,6 +19,7 @@ import {
   isViewed,
   nextFileAfter,
   orderedPaths,
+  rangeStep,
   reuseThreads,
 } from '../../src/client/model.js';
 
@@ -330,5 +331,36 @@ describe('commitBody', () => {
 
   it('is empty for a subject alone', () => {
     expect(commitBody('fix: one line\n')).toEqual([]);
+  });
+});
+
+describe('rangeStep', () => {
+  const range = {
+    old: 'main',
+    new: 'feat',
+    base: 'merge-base',
+    live: 'refs',
+    commentKey: 'range:main...feat',
+  } as const;
+  const commit = (sha: string) => ({ sha, short: sha.slice(0, 7), message: sha, author: 'a', email: 'a@a', date: 0 });
+  const commits = { list: [commit('a'.repeat(40)), commit('b'.repeat(40))], total: 2 };
+  const focused = (sha: string) => ({
+    mode: { old: sha, new: sha, base: 'parent', live: 'refs', commentKey: `commit:${sha}`, within: range } as const,
+    commits,
+  });
+
+  it('walks the range, then its commits oldest first, and stops at either end', () => {
+    expect(rangeStep({ mode: range, commits }, -1)).toBeUndefined();
+    expect(rangeStep({ mode: range, commits }, 1)).toBe('a'.repeat(40));
+    expect(rangeStep(focused('a'.repeat(40)), -1)).toBeNull();
+    expect(rangeStep(focused('a'.repeat(40)), 1)).toBe('b'.repeat(40));
+    expect(rangeStep(focused('b'.repeat(40)), 1)).toBeUndefined();
+  });
+
+  it('steps a commit the range no longer lists up to the range, and a lone commit nowhere', () => {
+    expect(rangeStep(focused('c'.repeat(40)), -1)).toBeNull();
+    expect(rangeStep(focused('c'.repeat(40)), 1)).toBeUndefined();
+    const { within: _, ...lone } = focused('a'.repeat(40)).mode;
+    expect(rangeStep({ mode: lone, commits }, 1)).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
+import type { EntryRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { githubRepository, type PullRequest, viewPr } from './github/pulls.js';
@@ -93,7 +93,7 @@ export interface ResolvedReview {
 }
 
 /** Resolves an input command into a comparison and optional explicit PR identity. */
-export async function resolveReview(req: ModeRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
+export async function resolveReview(req: EntryRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
   if (req.kind === 'pr') return resolvePr(req, repo, github);
   const parsed: ParsedRevspec =
     req.kind === 'working' ? { old: 'HEAD', new: 'worktree', base: 'direct' } : parseRevspec(req.args);

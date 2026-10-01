@@ -53,6 +53,7 @@ import {
   OVERSIZED_LINES,
   patchBatches,
   pathFromItemId,
+  rangeStep,
   reuseThreads,
   selectionRange,
   visibleThreads,
@@ -256,8 +257,6 @@ export interface ReviewState {
   /** The revision in the compare menu's Commit… pane. */
   modeCommit: string;
   setModeCommit(revision: string): void;
-  /** Open the compare menu on its Commit… pane with `revision` filled in. */
-  openCommitPane(revision: string): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
   treeModel: FileTree | null;
@@ -394,7 +393,12 @@ export interface ReviewState {
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
   switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
-  /** In a single-commit view, show the parent (-1) or the child toward HEAD (1); a no-op at either end. */
+  /** Show one listed commit of the current range, or with null the range itself. */
+  focusCommit(commit: string | null): void;
+  /**
+   * Step to the previous (-1) or next (1) entry of a range's list, the range itself first; in a single-commit
+   * view, to the parent or the child toward HEAD. A no-op at either end.
+   */
   stepCommit(direction: -1 | 1): void;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
@@ -1333,10 +1337,6 @@ export const useStore = create<ReviewState>((set, get) => {
     setModeCommit(revision) {
       set({ modeCommit: revision });
     },
-    openCommitPane(revision) {
-      const entry = MODE_PANES.indexOf('commit') + 1;
-      set({ modeMenuOpen: true, modePane: 'commit', modeEntry: entry, modeCommit: revision, githubMenuOpen: false });
-    },
     helpOpen: false,
     setHelpOpen(open) {
       set({ helpOpen: open });
@@ -2087,9 +2087,19 @@ export const useStore = create<ReviewState>((set, get) => {
       }
     },
 
+    focusCommit(commit) {
+      void get().switchMode({ kind: 'focus', commit });
+    },
+
     stepCommit(direction) {
-      const commit = get().snapshot?.commit;
-      const target = direction < 0 ? commit?.parent : commit?.child;
+      const snap = get().snapshot;
+      if (!snap) return;
+      if (snap.mode.within || snap.mode.base !== 'parent') {
+        const target = rangeStep(snap, direction);
+        if (target !== undefined) get().focusCommit(target);
+        return;
+      }
+      const target = direction < 0 ? snap.commit?.parent : snap.commit?.child;
       if (target) void get().switchMode({ kind: 'revspec', args: [`${target}^!`] });
     },
 

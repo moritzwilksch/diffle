@@ -383,3 +383,16 @@ export function commitBody(message: string): string[] {
       .slice(1),
   );
 }
+
+/**
+ * Where `direction` steps through a range's list, the range itself first: a commit's hash, null for the
+ * range, or undefined past either end and outside a range. A focused commit no longer listed steps up to the range.
+ */
+export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, direction: -1 | 1): string | null | undefined {
+  const { mode, commits } = snapshot;
+  if (!mode.within && mode.base === 'parent') return undefined;
+  const order = [null, ...commits.list.map((c) => c.sha)];
+  const at = mode.within ? order.indexOf(mode.new) : 0;
+  if (at < 0) return direction < 0 ? null : undefined;
+  return order[at + direction];
+}

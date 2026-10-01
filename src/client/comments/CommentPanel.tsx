@@ -26,8 +26,7 @@ export function CommentPanel() {
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
-  const commentKey = useStore((s) => s.snapshot?.mode.commentKey);
-  const commits = useStore((s) => s.snapshot?.commits);
+  const snapshot = useStore((s) => s.snapshot);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
@@ -75,7 +74,11 @@ export function CommentPanel() {
 
   return (
     <aside className="flex min-h-0 flex-col bg-surface">
-      {commits && commits.total > 0 && <CommitNavigator key={commentKey} commits={commits} />}
+      {snapshot &&
+        snapshot.commits.total > 0 && (
+          // Keyed by the range, so focusing one of its commits keeps the list as it was.
+          <CommitNavigator key={(snapshot.mode.within ?? snapshot.mode).commentKey} snapshot={snapshot} />
+        )}
       <div className="flex min-h-10 items-center gap-1.5 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:px-2 [&_button]:whitespace-nowrap">
         <span className="mr-auto inline-flex min-w-0 items-center gap-1.5 truncate font-semibold">
           <MessageSquare size="0.9375rem" /> Threads
