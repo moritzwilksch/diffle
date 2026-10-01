@@ -1,6 +1,6 @@
 name: Update snapshots
 # Commits the snapshots that CI regenerated for a pull request's head commit onto its branch.
-# Dispatch it once that commit's CI run has finished; the branch must live in this repository.
+# It waits for that commit's e2e job to finish; the branch must live in this repository.
 on:
   workflow_dispatch:
     inputs:
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   update:
     name: Commit regenerated snapshots
-    timeout-minutes: 10
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -43,24 +43,26 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.sha }}
       # Only a run of this repository's own branch: a fork's PR run of the same commit executes the fork's workflow.
-      - name: Find the CI run
+      # Waits for the e2e job alone; the rest of CI need not finish.
+      - name: Wait for the e2e job
         id: run
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           SHA: ${{ steps.pr.outputs.sha }}
         run: |
-          run=$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=100" \
-            --jq "[.workflow_runs[] | select(.head_repository.full_name == \"$REPOSITORY\")] | max_by(.run_number)")
-          if [ -z "$run" ] || [ "$run" = null ]; then
-            echo "::error::No CI run found for $SHA."
-            exit 1
-          fi
-          if [ "$(echo "$run" | jq -r .status)" != completed ]; then
-            echo "::error::CI for $SHA is still running: $(echo "$run" | jq -r .html_url)"
-            exit 1
-          fi
-          echo "id=$(echo "$run" | jq -r .id)" >> "$GITHUB_OUTPUT"
+          while :; do
+            id=$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=100" \
+              --jq "[.workflow_runs[] | select(.head_repository.full_name == \"$REPOSITORY\")] | max_by(.run_number) | .id // empty")
+            if [ -n "$id" ]; then
+              status=$(gh api "repos/$REPOSITORY/actions/runs/$id/jobs?per_page=100" \
+                --jq '.jobs[] | select(.name == "e2e") | .status')
+              [ "$status" = completed ] && break
+            fi
+            echo "Waiting for the e2e job of CI for $SHA..."
+            sleep 20
+          done
+          echo "id=$id" >> "$GITHUB_OUTPUT"
       - name: Download changed snapshots
         id: download
         env:

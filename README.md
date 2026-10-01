@@ -244,7 +244,7 @@ The container includes Chromium and keeps its dependencies and build output sepa
 
 Snapshots live under `test/e2e/__snapshots__/`, grouped by behavior, in the light theme. Review their changes before committing an update. For native browser debugging, install Chromium with `npm run test:e2e:install`, then use `npm run test:e2e -- --ui`. Native screenshot comparisons can differ from the Linux baselines; use Docker to accept them.
 
-When the e2e job fails in CI, it regenerates the failed scenarios' snapshots and uploads them as the `e2e-snapshots` artifact. To accept them, run the **Update snapshots** workflow for your pull request after that CI run finishes (`gh workflow run update-snapshots.yml -f pr=<number>`): it commits the artifact of the PR's head commit and pushes it to the PR's branch. It needs repository write access and a branch in this repository; forks can use Compose locally. A pull request that touches snapshots gets a report comparing every changed one side by side.
+When the e2e job fails in CI, it regenerates the failed scenarios' snapshots and uploads them as the `e2e-snapshots` artifact. To accept them, run the **Update snapshots** workflow for your pull request (`gh workflow run update-snapshots.yml -f pr=<number>`): it waits for the e2e job of the PR's head commit, then commits its artifact and pushes it to the PR's branch. It needs repository write access and a branch in this repository; forks can use Compose locally. A pull request that touches snapshots gets a report comparing every changed one side by side.
 
 See [AGENTS.md](AGENTS.md) for repository notes.
 
