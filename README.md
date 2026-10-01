@@ -64,6 +64,9 @@ nix run github:moritzwilksch/diffle#python -- working
 nix shell nixpkgs#nil github:moritzwilksch/diffle --command diffle -- working
 ```
 
+Once a day, diffle asks GitHub for its latest release and says on startup when a newer one exists.
+Set `DIFFLE_NO_UPDATE_CHECK=1` to turn that off.
+
 ## Usage
 
 ```bash

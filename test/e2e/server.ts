@@ -60,8 +60,9 @@ export async function startDiffle({
     ],
     {
       cwd: root,
-      // Every server owns its settings, including writes made through the settings dialog.
-      env: { ...process.env, NO_COLOR: '1', ...env, XDG_CONFIG_HOME: configDir },
+      // Every server owns its settings, including writes made through the settings dialog. No
+      // scenario asks GitHub for a release unless it points the check at a stub of its own.
+      env: { ...process.env, NO_COLOR: '1', DIFFLE_NO_UPDATE_CHECK: '1', ...env, XDG_CONFIG_HOME: configDir },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );

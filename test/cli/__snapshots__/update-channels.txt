@@ -1,0 +1,22 @@
+/usr/local/lib/node_modules/@moritzwilksch/diffle/dist/server/main.js
+  npm: npm install -g @moritzwilksch/diffle@latest
+/home/u/.npm/_npx/0a1b/node_modules/@moritzwilksch/diffle/dist/server/main.js
+  npx: npx @moritzwilksch/diffle@latest
+/home/u/.pixi/envs/diffle/lib/node_modules/@moritzwilksch/diffle/dist/server/main.js
+  pixi-global: pixi global update diffle
+/work/app/.pixi/envs/default/lib/node_modules/@moritzwilksch/diffle/dist/server/main.js
+  pixi: pixi update diffle
+/opt/conda/lib/node_modules/@moritzwilksch/diffle/dist/server/main.js
+  conda: (none)
+/nix/store/abc-diffle-0.1.8/lib/node_modules/@moritzwilksch/diffle/dist/server/main.js
+  nix: (none)
+/home/u/src/diffle/src/cli/main.ts
+  source: (none)
+binary at /home/u/.local/bin/diffle
+  curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | sh
+binary at /opt/my tools/diffle
+  curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | DIFFLE_INSTALL_DIR='/opt/my tools' sh
+binary at C:\Users\u\AppData\Local\Programs\diffle\diffle.exe
+  irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
+binary at D:\it's\diffle.exe
+  $env:DIFFLE_INSTALL_DIR='D:\it''s'; irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex

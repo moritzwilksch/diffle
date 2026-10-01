@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',
+    // Spawned CLIs inherit this: no test asks GitHub for its latest release.
+    env: { DIFFLE_NO_UPDATE_CHECK: '1' },
   },
 });
