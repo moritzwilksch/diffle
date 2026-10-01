@@ -36,7 +36,8 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 
 ## Verify changes
 
-- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing; run `npm run test:e2e` after a client change.
+- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing.
+- Never run the e2e tests (`npm run test:e2e*`) unprompted, not even after a client change. Run them only when the user asks or when you edited `test/e2e/`.
 - Prefer tests that produce something a reviewer can judge: a screenshot, an accessibility tree, a prompt, a payload. Server tests use temporary real Git repositories; e2e tests (`test/e2e/*.spec.ts`) drive a real diffle over the fixture repository (`test/fixture/repo.ts`) in Chromium and compare against snapshots under `__snapshots__/`; text outputs use `toMatchFileSnapshot`. Do not stub the viewer or the API in client tests: write an e2e scenario instead. The one exception is `test/client/store.test.ts`, whose deferred-promise races a browser cannot provoke reliably.
 - The fixture repository hashes the same everywhere; `test/fixture/repo.test.ts` pins the hashes. Changing its history means updating the pins and re-accepting the screenshots that show it. `npm run fixture -- <dir>` builds it for hands-on testing.
 - Screenshots are compared on Linux only, in Playwright's container in CI. Run `npm run test:e2e:docker` on any host and inspect the persisted report with `npm run test:e2e:report`. Accept intended changes with `npm run test:e2e:docker:update` or the `Update snapshots` workflow; the PR gets a snapshot report comparing before and after. `npm run test:e2e:docker -- -g <pattern>` runs a few scenarios while iterating.
