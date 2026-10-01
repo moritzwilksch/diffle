@@ -233,7 +233,6 @@ function CopyHash({ commit }: { commit: RangeCommit }) {
     <Button
       variant="ghost"
       className="relative mt-0.5 flex-none px-1 py-px font-mono text-[0.75rem] text-muted hover:text-foreground"
-      title={done ? 'Copied' : 'Copy the full hash'}
       aria-label={done ? `Copied ${commit.short}` : `Copy hash ${commit.short}`}
       onClick={async () => {
         if (!(await copyText(commit.sha))) return;
