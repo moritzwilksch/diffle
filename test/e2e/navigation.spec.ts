@@ -51,3 +51,43 @@ test('gv marks the file above viewed and keeps the cursor in place', async ({ pa
   await expect.poll(async () => Math.abs((await cursor.boundingBox())!.y - before)).toBeLessThanOrEqual(1);
   await expect(page).toHaveScreenshot('viewed-above.png');
 });
+
+test.describe('copying a file path', () => {
+  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+  const path = 'tally/ledger.py';
+  const clipboard = (page: import('@playwright/test').Page) => page.evaluate(() => navigator.clipboard.readText());
+
+  test('the header reveals a copy button on hover', async ({ page }) => {
+    await gotoFile(page, path);
+    const title = page.locator(`[slot="header-custom"] [data-path="${path}"]`);
+    const copy = title.getByRole('button', { name: 'Copy path' });
+    await page.mouse.move(0, 0);
+    await expect(copy).toHaveCSS('opacity', '0');
+    await title.hover();
+    await expect(copy).toHaveCSS('opacity', '1');
+    await expect(title).toHaveScreenshot('copy-path-hover.png');
+    await copy.click();
+    await expect.poll(() => clipboard(page)).toBe(path);
+    expect(await collapsed(page, path)).toBe(false);
+  });
+
+  test('dragging across the path selects it without collapsing the file', async ({ page }) => {
+    await gotoFile(page, path);
+    // The FilePath span, first after the icon; its text splits into directory and basename parts.
+    const name = page.locator(`[slot="header-custom"] [data-path="${path}"] > div > span`).first();
+    const box = (await name.boundingBox())!;
+    await page.mouse.move(box.x + 1, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(path);
+    expect(await collapsed(page, path)).toBe(false);
+  });
+
+  test('yp copies the current file path', async ({ page }) => {
+    await gotoFile(page, path);
+    await page.keyboard.press('y');
+    await page.keyboard.press('p');
+    await expect.poll(() => clipboard(page)).toBe(path);
+  });
+});

@@ -63,6 +63,7 @@ const KEYMAP: Record<string, Action> = {
   t: (s) => s.setTheme(nextTheme(s.theme)),
   yy: () => void copyComments(),
   Y: () => void copyComments(),
+  yp: (s) => void copyPath(s),
   '/': (s) => s.openSearch('file'),
   'g/': (s) => s.openSearch('diff'),
   gf: () => focusFileSearch(),
@@ -377,6 +378,12 @@ function focusTree(): void {
       host?.shadowRoot?.querySelector<HTMLElement>('[role="tree"]');
     (row ?? host)?.focus();
   });
+}
+
+async function copyPath(s: ReviewState): Promise<void> {
+  const path = currentPath(s);
+  if (!path) return;
+  s.flash((await copyText(path)) ? `Copied ${path}` : 'The browser blocked clipboard access');
 }
 
 /** Move keyboard focus to the review pane, so the vim keys reach the cursor instead of the tree or a field. */
