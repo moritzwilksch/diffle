@@ -1071,11 +1071,12 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
         <FileText size="0.875rem" className="shrink-0 text-muted" />
         {file?.oldPath && file.oldPath !== path && (
           <>
-            <FilePath path={file.oldPath} nowrap />
+            <FilePath path={file.oldPath} nowrap tooltip={false} />
             <span className="text-muted">→</span>
           </>
         )}
-        <FilePath path={path} nowrap />
+        {/* The copy button beside it already hands over the full path; a hover tip would only repeat it. */}
+        <FilePath path={path} nowrap tooltip={false} />
         <CopyPathButton path={path} />
         <span className="mr-auto" />
         {file && (

@@ -63,6 +63,8 @@ test.describe('copying a file path', () => {
     const copy = title.getByRole('button', { name: 'Copy path' });
     await page.mouse.move(0, 0);
     await expect(copy).toHaveCSS('opacity', '0');
+    // The app's tooltip lifts `title` only while hovered, so check with the pointer away.
+    await expect(title.locator('> div > span').first()).not.toHaveAttribute('title');
     await title.hover();
     await expect(copy).toHaveCSS('opacity', '1');
     await expect(title).toHaveScreenshot('copy-path-hover.png');

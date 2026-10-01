@@ -6,14 +6,25 @@ import { Fragment } from 'react';
  * line breaks are offered after each `/` so wrapping happens between path
  * elements first; a single overlong element still breaks as a last resort.
  */
-export function FilePath({ path, className, nowrap = false }: { path: string; className?: string; nowrap?: boolean }) {
+export function FilePath({
+  path,
+  className,
+  nowrap = false,
+  tooltip = true,
+}: {
+  path: string;
+  className?: string;
+  nowrap?: boolean;
+  /** Name the full path on hover, for spots that truncate it. */
+  tooltip?: boolean;
+}) {
   const cut = path.lastIndexOf('/') + 1;
   const dirs = path.slice(0, cut).split('/').filter(Boolean);
   const base = path.slice(cut);
   return (
     <span
       className={twMerge('font-mono break-normal wrap-anywhere', nowrap && 'min-w-0 truncate', className)}
-      title={path}
+      title={tooltip ? path : undefined}
     >
       {dirs.length > 0 && (
         <span className="text-muted">
