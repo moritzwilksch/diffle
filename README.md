@@ -189,3 +189,4 @@ See [AGENTS.md](AGENTS.md) for more.
 ## Acknowledgements
 
 diffle is inspired by [difit](https://github.com/yoshiko-pg/difit).
+Diffs are rendered with [@pierre/diffs](https://github.com/pierrecomputer/pierre).
