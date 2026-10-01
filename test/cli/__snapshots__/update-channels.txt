@@ -12,11 +12,7 @@
   nix: (none)
 /home/u/src/diffle/src/cli/main.ts
   source: (none)
-binary at /home/u/.local/bin/diffle
-  curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | sh
-binary at /opt/my tools/diffle
-  curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | DIFFLE_INSTALL_DIR='/opt/my tools' sh
-binary at C:\Users\u\AppData\Local\Programs\diffle\diffle.exe
-  irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
-binary at D:\it's\diffle.exe
-  $env:DIFFLE_INSTALL_DIR='D:\it''s'; irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
+/nix/store/abc-diffle-0.1.8/bin/diffle
+  nix: (none)
+the standalone binary
+  binary: diffle self-update

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import { rmSync } from 'node:fs';
 import { isSea } from 'node:sea';
 import { fileURLToPath } from 'node:url';
-import { Argument, Command, CommanderError, Option } from 'commander';
+import { Argument, Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '../server/comments/format.js';
@@ -35,8 +36,9 @@ import { watchBrowserLifetime } from './browserLifetime.js';
 import { addCompletionCommand } from './completion.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
+import { installRelease } from './selfUpdate.js';
 import { Timing } from './timing.js';
-import { installChannel, isNewer, latestRelease, updateCommand } from './update.js';
+import { type InstallChannel, installChannel, isNewer, latestRelease, SELF_UPDATE, updateCommand } from './update.js';
 
 /** Minimal ANSI colors; off when stderr is not a TTY or NO_COLOR is set. */
 const useColor = process.stderr.isTTY && !process.env.NO_COLOR;
@@ -246,7 +248,55 @@ program
     for (const language of LANGUAGE_IDS) console.log(`${language.padEnd(width)}  ${answer.get(language) ?? ''}`);
   });
 
+program
+  .command('self-update')
+  .description('replace this standalone binary with the latest release, or with [version]')
+  .argument('[version]', 'release to install, e.g. 0.2.0', parseReleaseVersion)
+  .action(async (version: string | undefined, _o, cmd: Command) => {
+    // Under plain node, `process.execPath` is node itself.
+    if (!SELF_UPDATE || !isSea()) {
+      const command = updateCommand(runningChannel());
+      cmd.error(
+        `self-update only replaces the standalone binary from GitHub releases; ${command ? `update this diffle with: ${command}` : 'update diffle the way you installed it'}`,
+        { exitCode: 2 },
+      );
+    }
+    let next = version;
+    if (next == null) {
+      const latest = await latestRelease({ maxAge: 0 });
+      if (!latest) throw new Error('could not ask GitHub for the latest release');
+      if (!isNewer(latest.version, pkg.version)) {
+        console.error(`diffle ${pkg.version} is the latest release`);
+        return;
+      }
+      next = latest.version;
+    }
+    console.error(`⬇️  ${c.dim('downloading')} diffle ${next}`);
+    const reported = await installRelease({
+      target: process.execPath,
+      tag: `v${next}`,
+      base: process.env.DIFFLE_DOWNLOAD_URL || undefined,
+    });
+    console.error(`✅ ${process.execPath} is now diffle ${reported} ${c.dim(`(was ${pkg.version})`)}`);
+  });
+
 addCompletionCommand(program);
+
+/** `0.2.0` or `v0.2.0`, without the `v`. */
+function parseReleaseVersion(raw: string): string {
+  const version = raw.trim().replace(/^v/, '');
+  if (!/^\d+\.\d+\.\d+(-[\w.-]+)?$/.test(version)) throw new InvalidArgumentError('expected a version such as 0.2.0');
+  return version;
+}
+
+/**
+ * The self-updating executable is `binary`. A repackaged one, built without self-update, is judged
+ * by where it lives; elsewhere the entry script's location names the channel.
+ */
+function runningChannel(): InstallChannel {
+  if (!isSea()) return installChannel(fileURLToPath(import.meta.url));
+  return SELF_UPDATE ? 'binary' : installChannel(process.execPath);
+}
 
 function collect(value: string, prev: string[]): string[] {
   return [...prev, value];
@@ -423,8 +473,7 @@ async function announceUpdate(): Promise<void> {
   if (process.env.DIFFLE_NO_UPDATE_CHECK) return;
   const latest = await latestRelease();
   if (!latest || !isNewer(latest.version, pkg.version)) return;
-  // The single executable has no script of its own; elsewhere the script's location names the channel.
-  const command = updateCommand(isSea() ? 'binary' : installChannel(fileURLToPath(import.meta.url)));
+  const command = updateCommand(runningChannel());
   console.error(
     `✨ ${c.bold(`diffle ${latest.version} is available`)} ${c.dim(`(this is ${pkg.version})`)}: ${command ?? latest.url}`,
   );
@@ -489,6 +538,16 @@ function startLsp(
     },
   });
   return lsp;
+}
+
+// A Windows self-update leaves the replaced executable behind; it is free to go once that run has ended.
+// Synchronous, so even a run that only prints its version removes it.
+if (SELF_UPDATE && isSea() && process.platform === 'win32') {
+  try {
+    rmSync(`${process.execPath}.old`, { force: true });
+  } catch {
+    /* Still running: the next start tries again. */
+  }
 }
 
 program.parseAsync(process.argv).catch((e) => {

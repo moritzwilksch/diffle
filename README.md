@@ -43,7 +43,8 @@ pin a release. On Windows (x64, arm64), from PowerShell:
 irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
 ```
 
-It installs to `%LOCALAPPDATA%\Programs\diffle` and adds that to your user `PATH`.
+It installs to `%LOCALAPPDATA%\Programs\diffle` and adds that to your user `PATH`. The binary
+updates itself with `diffle self-update`, or `diffle self-update 0.1.9` for a given release.
 
 To run it without installing anything:
 

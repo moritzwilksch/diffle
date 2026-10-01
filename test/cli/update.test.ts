@@ -26,6 +26,13 @@ function answering(body: unknown, status = 200) {
 }
 
 describe('latestRelease', () => {
+  it('asks again regardless of the cache when told to', async () => {
+    const request = answering(RELEASE);
+    await latestRelease({ cacheFile, request });
+    await latestRelease({ cacheFile, request, maxAge: 0 });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it('asks GitHub once a day and answers from the cache in between', async () => {
     const request = answering(RELEASE);
     const at = (now: number) => latestRelease({ cacheFile, request, now: () => now });
@@ -97,18 +104,15 @@ describe('installChannel and updateCommand', () => {
       `/opt/conda/lib/${main}`,
       `/nix/store/abc-diffle-0.1.8/lib/${main}`,
       '/home/u/src/diffle/src/cli/main.ts',
+      // A single executable repackaged without self-update is judged by its own path.
+      '/nix/store/abc-diffle-0.1.8/bin/diffle',
     ];
-    const binary = (platform: NodeJS.Platform, execPath: string) =>
-      updateCommand('binary', { platform, execPath, home, localAppData: 'C:\\Users\\u\\AppData\\Local' });
     const lines = [
       ...scripts.map((script) => {
         const c = channel(script);
         return `${script}\n  ${c}: ${updateCommand(c) ?? '(none)'}`;
       }),
-      ...[`${home}/.local/bin/diffle`, '/opt/my tools/diffle'].map((p) => `binary at ${p}\n  ${binary('linux', p)}`),
-      ...['C:\\Users\\u\\AppData\\Local\\Programs\\diffle\\diffle.exe', "D:\\it's\\diffle.exe"].map(
-        (p) => `binary at ${p}\n  ${binary('win32', p)}`,
-      ),
+      `the standalone binary\n  binary: ${updateCommand('binary')}`,
     ];
     await expect(lines.join('\n') + '\n').toMatchFileSnapshot('__snapshots__/update-channels.txt');
   });

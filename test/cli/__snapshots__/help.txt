@@ -38,6 +38,8 @@ Commands:
                              UI dialog)
   lsp                        show the language server each language would get,
                              and what is missing from PATH
+  self-update [version]      replace this standalone binary with the latest
+                             release, or with [version]
   completion [options]       print a shell completion script for bash, zsh, or
                              fish
 

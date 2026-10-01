@@ -15,6 +15,13 @@ const server: UserConfig = {
 
 export default defineConfig([
   server,
-  // A single executable resolves no relative modules, so lazy chunks are inlined.
-  { ...server, outDir: 'dist/sea', outputOptions: { codeSplitting: false } },
+  // A single executable resolves no relative modules, so lazy chunks are inlined. It updates itself
+  // from GitHub releases unless a repackager, whose package manager owns the file, builds it with
+  // DIFFLE_SELF_UPDATE=0.
+  {
+    ...server,
+    outDir: 'dist/sea',
+    outputOptions: { codeSplitting: false },
+    define: { __DIFFLE_SELF_UPDATE__: JSON.stringify(process.env.DIFFLE_SELF_UPDATE !== '0') },
+  },
 ]);
