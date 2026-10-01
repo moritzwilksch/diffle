@@ -47,7 +47,8 @@ jobs:
           (cd release && sha256sum diffle-* > SHA256SUMS)
           "$(command -v python3 || command -v python)" -m http.server 8765 --bind 127.0.0.1 --directory release > /dev/null 2>&1 &
           trap 'kill $!' EXIT
-          sleep 2
+          # Python can take several seconds to start on windows-11-arm; wait until it answers.
+          curl -sSf --retry 30 --retry-delay 1 --retry-connrefused -o /dev/null http://127.0.0.1:8765/SHA256SUMS
           # Each installer runs the installed binary's --version before it reports success.
           export DIFFLE_DOWNLOAD_URL=http://127.0.0.1:8765 DIFFLE_INSTALL_DIR="$RUNNER_TEMP/diffle-bin"
           if [[ "$RUNNER_OS" == Windows ]]; then
