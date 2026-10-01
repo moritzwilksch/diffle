@@ -50,3 +50,4 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 ## Conventional commits
 
 - Use conventional commits for commit messages and PR titles (e.g. `feat(cli): add pr command`, `fix(store): guard async commits`).
+- Squash-merged PR titles become `CHANGELOG.md` entries and pick the next version (`cliff.toml`): a `!` bumps the minor version before 1.0, anything else the patch. The Release workflow keeps a `chore: release vX.Y.Z` PR open; merging it tags the release, and the tag publishes it. Never edit `CHANGELOG.md` or the version by hand.
