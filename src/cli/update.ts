@@ -1,14 +1,16 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, posix, win32 } from 'node:path';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import pkg from '../../package.json' with { type: 'json' };
 import { writeFileAtomic } from '../server/persist.js';
 
 export const RELEASES_URL = 'https://api.github.com/repos/moritzwilksch/diffle/releases/latest';
-const DOWNLOAD_URL = 'https://github.com/moritzwilksch/diffle/releases/latest/download';
 const MAX_AGE = 24 * 60 * 60 * 1000;
+
+/** True in a build that may replace itself with a newer release: the single executable GitHub releases ship. */
+export const SELF_UPDATE = typeof __DIFFLE_SELF_UPDATE__ !== 'undefined' && __DIFFLE_SELF_UPDATE__ === true;
 
 const ReleaseSchema = z.object({ tag_name: z.string(), html_url: z.url({ protocol: /^https$/ }) });
 const CacheSchema = z.object({ source: z.string(), checkedAt: z.number(), version: z.string(), url: z.url() });
@@ -24,6 +26,8 @@ export interface LookupOptions {
   /** The `releases/latest` endpoint; `DIFFLE_UPDATE_URL` overrides it. */
   source?: string;
   cacheFile?: string;
+  /** How old a cached answer may be, in milliseconds; a day by default. */
+  maxAge?: number;
   request?: typeof fetch;
   now?: () => number;
 }
@@ -35,6 +39,7 @@ export interface LookupOptions {
 export async function latestRelease({
   source = process.env.DIFFLE_UPDATE_URL || RELEASES_URL,
   cacheFile = join(process.env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'diffle', 'latest-release.json'),
+  maxAge = MAX_AGE,
   request = fetch,
   now = Date.now,
 }: LookupOptions = {}): Promise<Release | null> {
@@ -44,7 +49,7 @@ export async function latestRelease({
     // A cache filled from another endpoint (a test's stub) says nothing about this one.
     if (entry.source === source) {
       cached = { version: entry.version, url: entry.url };
-      if (now() - entry.checkedAt < MAX_AGE) return cached;
+      if (now() - entry.checkedAt < maxAge) return cached;
     }
   } catch {
     /* No usable cache yet. */
@@ -81,8 +86,8 @@ function parseVersion(v: string): { core: number[]; pre: boolean } | null {
 }
 
 /**
- * How the running diffle was installed. `binary` is the single executable; the rest are judged by
- * where its script lives, and `source` covers a checkout or anything unrecognized.
+ * How the running diffle was installed. `binary` is the self-updating single executable; the rest
+ * are judged by where its code lives, and `source` covers a checkout or anything unrecognized.
  */
 export type InstallChannel = 'binary' | 'npx' | 'npm' | 'pixi-global' | 'pixi' | 'conda' | 'nix' | 'source';
 
@@ -94,7 +99,10 @@ export interface ChannelOptions {
   isCondaPrefix?: (dir: string) => boolean;
 }
 
-/** The channel of a diffle whose entry script is `script`, an absolute path with symlinks resolved. */
+/**
+ * The channel of a diffle whose code is `script`: its entry script, or a repackaged single
+ * executable itself. An absolute path with symlinks resolved.
+ */
 export function installChannel(
   script: string,
   {
@@ -123,30 +131,12 @@ function slashes(path: string): string {
 
 /**
  * The command that updates a diffle installed through `channel`; null where diffle cannot know
- * it (a conda environment, a Nix profile or flake, a checkout). `execPath` places a binary.
+ * it (a conda environment, a Nix profile or flake, a checkout).
  */
-export function updateCommand(
-  channel: InstallChannel,
-  {
-    platform = process.platform,
-    execPath = process.execPath,
-    home = homedir(),
-    localAppData = process.env.LOCALAPPDATA,
-  } = {},
-): string | null {
+export function updateCommand(channel: InstallChannel): string | null {
   switch (channel) {
-    case 'binary': {
-      // The installers default to these directories; anywhere else has to be named or a second copy lands there.
-      if (platform === 'win32') {
-        const dir = win32.dirname(execPath);
-        const fallback = localAppData ? win32.join(localAppData, 'Programs', 'diffle') : null;
-        const env = dir === fallback ? '' : `$env:DIFFLE_INSTALL_DIR=${powershellQuote(dir)}; `;
-        return `${env}irm ${DOWNLOAD_URL}/install.ps1 | iex`;
-      }
-      const dir = posix.dirname(execPath);
-      const env = dir === posix.join(home, '.local', 'bin') ? '' : `DIFFLE_INSTALL_DIR=${shellQuote(dir)} `;
-      return `curl -fsSL ${DOWNLOAD_URL}/install.sh | ${env}sh`;
-    }
+    case 'binary':
+      return 'diffle self-update';
     case 'npx':
       return 'npx @moritzwilksch/diffle@latest';
     case 'npm':
@@ -160,12 +150,4 @@ export function updateCommand(
     case 'source':
       return null;
   }
-}
-
-function shellQuote(s: string): string {
-  return /^[\w./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`;
-}
-
-function powershellQuote(s: string): string {
-  return `'${s.replaceAll("'", "''")}'`;
 }

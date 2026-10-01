@@ -52,4 +52,18 @@ describe('usage errors', () => {
     expect(run.stderr).toContain('unknown language "nope"');
     expect(run.code).toBe(2);
   }, 30_000);
+
+  it('names a malformed self-update version', async () => {
+    const run = await cli(['self-update', 'latest']);
+    expect(run.stderr).toContain('expected a version such as 0.2.0');
+    expect(run.code).toBe(2);
+  }, 30_000);
+
+  it('refuses to self-update anything but the standalone binary', async () => {
+    const run = await cli(['self-update']);
+    expect(run.stderr).toContain(
+      'self-update only replaces the standalone binary from GitHub releases; update diffle the way you installed it',
+    );
+    expect(run.code).toBe(2);
+  }, 30_000);
 });
