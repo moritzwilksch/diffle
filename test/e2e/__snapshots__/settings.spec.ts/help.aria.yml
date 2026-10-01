@@ -6,7 +6,7 @@
   - heading "Files and hunks" [level=4]
   - text: "J / K next / previous file gg / G first / last file {n}gg / {n}G line n of the current file ] / [ n / N next / previous hunk (n / N follow matches while searching) v toggle viewed on the current file gv toggle viewed on the file above zo / zc expand / collapse the current file (zo loads a large diff) zO / zC open / close all files F view the current file whole; Ctrl+o returns"
   - heading "Comments" [level=4]
-  - text: c comment on the current line or selection C comment on the current file as a whole e edit the newest message of the thread under the cursor dd delete the thread under the cursor R resolve / reopen the thread under the cursor yy or Y copy all comments
+  - text: c comment on the current line or selection C comment on the current file as a whole e edit the newest message of the thread under the cursor dd delete the thread under the cursor R resolve / reopen the thread under the cursor yy or Y copy all comments yp copy the current file’s path
   - heading "Search" [level=4]
   - text: "/ search the current file, then n / N between matches g/ search changed files (toggle: diff + context / full file) ⌘/Ctrl+p or gf search files by name w / b focus the next / previous symbol on the line 0 / $ focus the first / last symbol on the line * / # next / previous occurrence of the focused word"
   - heading "Code intelligence (language server)" [level=4]

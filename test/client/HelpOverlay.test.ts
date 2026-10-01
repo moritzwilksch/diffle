@@ -34,6 +34,7 @@ const BOUND = [
   'F',
   's',
   't',
+  'yp',
   'yy or Y',
   '/',
   'g/',
