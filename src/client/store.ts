@@ -396,8 +396,8 @@ export interface ReviewState {
   /** Show one listed commit of the current range, or with null the range itself. */
   focusCommit(commit: string | null): void;
   /**
-   * Step to the previous (-1) or next (1) entry of a range's list, the range itself first; in a single-commit
-   * view, to the parent or the child toward HEAD. A no-op at either end.
+   * Step to the older (-1) or newer (1) entry of a range's list, the range itself past the newest; in a
+   * single-commit view, to the parent or the child toward HEAD. A no-op at either end.
    */
   stepCommit(direction: -1 | 1): void;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */

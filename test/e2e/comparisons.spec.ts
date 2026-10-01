@@ -80,7 +80,7 @@ test.describe("the range's commits", () => {
     const header = page.locator('header');
     const all = box.getByRole('button', { name: /^All changes/ });
     await expect(all).toHaveAttribute('aria-current', 'true');
-    await expect(box.getByRole('button', { name: 'Previous commit' })).toBeDisabled();
+    await expect(box.getByRole('button', { name: 'Newer commit' })).toBeDisabled();
 
     await box.getByRole('button', { name: /^refactor: move money helpers/ }).click();
     await expect(picker).toHaveText(/main\.\.\.feature\/refunds @ 640d216/);
@@ -93,16 +93,33 @@ test.describe("the range's commits", () => {
     await waitForHighlight(page, 'tally/currency.py');
     await expect(page).toHaveScreenshot('focused-commit.png');
 
-    await box.getByRole('button', { name: 'Next commit' }).click();
+    // Focus follows the shown commit, and a key press after the click draws no ring around it.
+    await page.keyboard.press('>');
     await expect(active).toContainText('chore: regenerate the client');
-    await page.keyboard.press('<');
-    await expect(active).toContainText('refactor: move money helpers');
-    await page.keyboard.press('<');
-    await expect(active).toContainText('feat(ledger): support refund lines');
-    await page.keyboard.press('<');
+    await expect(active.getByRole('button', { name: /^chore/ })).toBeFocused();
+    expect(await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle)).toBe('none');
+    await page.keyboard.press('>');
+    await expect(active).toContainText('fix(cli): report an empty ledger');
+    await page.keyboard.press('>');
     await expect(all).toHaveAttribute('aria-current', 'true');
     await expect(picker).toHaveText(/^main\.\.\.feature\/refunds/);
     await expect(header).toContainText('17 files');
+
+    // From the range, older steps to the newest commit.
+    await box.getByRole('button', { name: 'Older commit' }).click();
+    await expect(active).toContainText('fix(cli): report an empty ledger');
+  });
+
+  test('copies a full hash and shows a check mark on it', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const box = page.getByRole('region', { name: 'Commits' });
+    await box.getByRole('button', { name: 'Copy hash 640d216' }).click();
+    await expect(box.getByRole('button', { name: 'Copied 640d216' })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^640d216[0-9a-f]{33}$/);
+    // Copying does not focus the commit.
+    await expect(box.getByRole('button', { name: /^All changes/ })).toHaveAttribute('aria-current', 'true');
+    await expect(box).toHaveScreenshot('copied-hash.png');
+    await expect(box.getByRole('button', { name: 'Copy hash 640d216' })).toBeVisible();
   });
 
   test('collapses to its header', async ({ page }) => {

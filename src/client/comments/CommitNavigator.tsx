@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { comparisonLabel, type RangeCommit, type Snapshot } from '../../shared/protocol.js';
+import { copyText } from '../clipboard.js';
 import { commitBody, rangeStep } from '../model.js';
 import { useStore } from '../store.js';
 import { Button } from '../ui/Button.js';
@@ -13,9 +14,11 @@ const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeSt
 const OPEN_UP_TO = 5;
 /** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
 const HOVER_DELAY_MS = 250;
+/** How long a copied hash shows its check mark. */
+const COPIED_MS = 1400;
 
 /**
- * The compared range's commits, oldest first, under an entry for the range itself. Choosing a commit
+ * The compared range's commits, newest first, under an entry for the range itself. Choosing a commit
  * shows its diff alone while the list stays the range's; the shown entry is highlighted with its full
  * message, and hovering another shows that one's in a card.
  */
@@ -34,7 +37,13 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   const older = commits.total - commits.list.length;
 
   useEffect(() => {
-    list.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+    const current = list.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    current?.scrollIntoView({ block: 'nearest' });
+    // Focus left on a row stepped away from would mark it as well as the shown one.
+    if (list.current?.contains(document.activeElement) && document.activeElement !== current)
+      (current?.matches('button') ? current : current?.querySelector<HTMLElement>('button'))?.focus({
+        preventScroll: true,
+      });
   }, [active, open]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -72,20 +81,20 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               icon
-              disabled={rangeStep(snapshot, -1) === undefined}
-              onClick={() => stepCommit(-1)}
-              title="Previous commit (<)"
-              aria-label="Previous commit"
+              disabled={rangeStep(snapshot, 1) === undefined}
+              onClick={() => stepCommit(1)}
+              title="Newer commit (>)"
+              aria-label="Newer commit"
             >
               <ChevronUp size="0.875rem" />
             </Button>
             <Button
               variant="ghost"
               icon
-              disabled={rangeStep(snapshot, 1) === undefined}
-              onClick={() => stepCommit(1)}
-              title="Next commit (>)"
-              aria-label="Next commit"
+              disabled={rangeStep(snapshot, -1) === undefined}
+              onClick={() => stepCommit(-1)}
+              title="Older commit (<)"
+              aria-label="Older commit"
             >
               <ChevronDown size="0.875rem" />
             </Button>
@@ -98,7 +107,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               className={twMerge(
-                'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem]',
+                'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem] outline-none focus-visible:bg-hover',
                 active === null && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
               )}
               aria-current={active === null ? 'true' : undefined}
@@ -109,13 +118,8 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
               <span className="min-w-0 truncate font-mono text-[0.75rem] text-muted">{comparisonLabel(range)}</span>
             </Button>
           )}
-          {older > 0 && (
-            <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">
-              {older} older {older === 1 ? 'commit' : 'commits'} not shown
-            </p>
-          )}
           <ol className="m-0 list-none p-0">
-            {commits.list.map((commit) => (
+            {commits.list.toReversed().map((commit) => (
               <CommitRow
                 key={commit.sha}
                 commit={commit}
@@ -128,6 +132,11 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
               />
             ))}
           </ol>
+          {older > 0 && (
+            <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">
+              {older} older {older === 1 ? 'commit' : 'commits'} not shown
+            </p>
+          )}
         </div>
       )}
       {/* The shown commit already lays its message out in the list. */}
@@ -167,7 +176,6 @@ function CommitRow({
       <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>
         {subjectOf(commit)}
       </span>
-      <span className="flex-none font-mono text-[0.75rem] text-muted">{commit.short}</span>
     </>
   );
   return (
@@ -187,24 +195,65 @@ function CommitRow({
           className="absolute top-0 bottom-0 left-[0.8125rem] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
         />
       )}
-      {onPick ? (
-        <Button
-          variant="ghost"
-          className="w-full items-start gap-2 rounded-none py-1 pr-2.5 pl-2.5 text-left leading-[1.125rem] hover:bg-transparent"
-          aria-describedby={described}
-          onClick={onPick}
-        >
-          {head}
-        </Button>
-      ) : (
-        <div className="flex items-start gap-2 py-1 pr-2.5 pl-2.5 leading-[1.125rem]">{head}</div>
-      )}
+      <div className="flex items-start pr-1.5">
+        {onPick ? (
+          <Button
+            variant="ghost"
+            className={twMerge(
+              // The list marks the shown commit itself; a ring around the clicked row would only repeat it.
+              'min-w-0 flex-1 items-start gap-2 rounded-none py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              !active && 'focus-visible:bg-hover',
+            )}
+            aria-describedby={described}
+            onClick={onPick}
+          >
+            {head}
+          </Button>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+        )}
+        <CopyHash commit={commit} />
+      </div>
       {active && (
         <div className="pr-2.5 pb-1.5 pl-6.5">
           <CommitDetails commit={commit} />
         </div>
       )}
     </li>
+  );
+}
+
+/** The short hash; a click copies the full one and swaps the hash for a check mark, as `yy` does its button. */
+function CopyHash({ commit }: { commit: RangeCommit }) {
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const transition = '[transition:opacity_160ms_ease,transform_200ms_cubic-bezier(0.2,0.8,0.2,1)]';
+  return (
+    <Button
+      variant="ghost"
+      className="relative mt-0.5 flex-none px-1 py-px font-mono text-[0.75rem] text-muted hover:text-foreground"
+      title={done ? 'Copied' : 'Copy the full hash'}
+      aria-label={done ? `Copied ${commit.short}` : `Copy hash ${commit.short}`}
+      onClick={async () => {
+        if (!(await copyText(commit.sha))) return;
+        setDone(true);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), COPIED_MS);
+      }}
+    >
+      <span className={twMerge(transition, done && '[transform:scale(0.6)] opacity-0')}>{commit.short}</span>
+      <span
+        aria-hidden
+        className={twMerge(
+          'absolute inset-0 flex items-center justify-center text-add',
+          transition,
+          done ? '[transform:scale(1)_rotate(0)] opacity-100' : '[transform:scale(0.4)_rotate(-30deg)] opacity-0',
+        )}
+      >
+        <Check size="0.875rem" strokeWidth={3} />
+      </span>
+    </Button>
   );
 }
 

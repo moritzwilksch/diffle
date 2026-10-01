@@ -349,17 +349,17 @@ describe('rangeStep', () => {
     commits,
   });
 
-  it('walks the range, then its commits oldest first, and stops at either end', () => {
-    expect(rangeStep({ mode: range, commits }, -1)).toBeUndefined();
-    expect(rangeStep({ mode: range, commits }, 1)).toBe('a'.repeat(40));
-    expect(rangeStep(focused('a'.repeat(40)), -1)).toBeNull();
-    expect(rangeStep(focused('a'.repeat(40)), 1)).toBe('b'.repeat(40));
-    expect(rangeStep(focused('b'.repeat(40)), 1)).toBeUndefined();
+  it('walks from the range to the newest commit, older to the oldest, and stops at either end', () => {
+    expect(rangeStep({ mode: range, commits }, 1)).toBeUndefined();
+    expect(rangeStep({ mode: range, commits }, -1)).toBe('b'.repeat(40));
+    expect(rangeStep(focused('b'.repeat(40)), 1)).toBeNull();
+    expect(rangeStep(focused('b'.repeat(40)), -1)).toBe('a'.repeat(40));
+    expect(rangeStep(focused('a'.repeat(40)), -1)).toBeUndefined();
   });
 
-  it('steps a commit the range no longer lists up to the range, and a lone commit nowhere', () => {
-    expect(rangeStep(focused('c'.repeat(40)), -1)).toBeNull();
-    expect(rangeStep(focused('c'.repeat(40)), 1)).toBeUndefined();
+  it('steps a commit the range no longer lists newer to the range, and a lone commit nowhere', () => {
+    expect(rangeStep(focused('c'.repeat(40)), 1)).toBeNull();
+    expect(rangeStep(focused('c'.repeat(40)), -1)).toBeUndefined();
     const { within: _, ...lone } = focused('a'.repeat(40)).mode;
     expect(rangeStep({ mode: lone, commits }, 1)).toBeUndefined();
   });
