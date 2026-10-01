@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { isSea } from 'node:sea';
+import { fileURLToPath } from 'node:url';
 import { Argument, Command, CommanderError, Option } from 'commander';
 import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
@@ -34,6 +36,7 @@ import { addCompletionCommand } from './completion.js';
 import { openBrowser } from './open.js';
 import { openReviewRepository } from './repository.js';
 import { Timing } from './timing.js';
+import { installChannel, isNewer, latestRelease, updateCommand } from './update.js';
 
 /** Minimal ANSI colors; off when stderr is not a TTY or NO_COLOR is set. */
 const useColor = process.stderr.isTTY && !process.env.NO_COLOR;
@@ -401,6 +404,7 @@ async function serve(
         console.error(`${c.yellow('!')} no ${m.language} language server ${c.dim(`(tried ${m.tried.join(', ')})`)}`);
     }
     timing.report();
+    void announceUpdate();
   } catch (e) {
     await dispose();
     if (e instanceof RevspecError || e instanceof GitError || e instanceof GithubError) {
@@ -409,6 +413,21 @@ async function serve(
     }
     throw e;
   }
+}
+
+/**
+ * Says on stderr when a newer release exists. `DIFFLE_NO_UPDATE_CHECK` turns it off. Never
+ * rejects, and never holds up startup: the lookup answers from a daily cache or in the background.
+ */
+async function announceUpdate(): Promise<void> {
+  if (process.env.DIFFLE_NO_UPDATE_CHECK) return;
+  const latest = await latestRelease();
+  if (!latest || !isNewer(latest.version, pkg.version)) return;
+  // The single executable has no script of its own; elsewhere the script's location names the channel.
+  const command = updateCommand(isSea() ? 'binary' : installChannel(fileURLToPath(import.meta.url)));
+  console.error(
+    `✨ ${c.bold(`diffle ${latest.version} is available`)} ${c.dim(`(this is ${pkg.version})`)}: ${command ?? latest.url}`,
+  );
 }
 
 interface ConnectedGithub {
