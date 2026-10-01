@@ -12,8 +12,11 @@ function help(...args: string[]): string {
   });
 }
 
+// Spawned once at collection, outside any test's timeout: each tsx start takes over a second on Windows.
+const out = help();
+const sub = { working: help('working'), pr: help('pr'), config: help('config') };
+
 describe('diffle --help', () => {
-  const out = help();
   const commands = out.slice(out.indexOf('\nCommands:')).split('\nShorthands')[0]!;
 
   it('keeps the shorthands out of the command list, in a section of their own', () => {
@@ -44,8 +47,8 @@ describe('diffle --help', () => {
   });
 
   it('describes every shorthand and config subcommand it lists', () => {
-    for (const shorthand of ['working', 'pr']) expect(help(shorthand).split('\n')[2]).not.toBe('');
-    const configCommands = help('config').slice(help('config').indexOf('\nCommands:'));
+    for (const shorthand of ['working', 'pr'] as const) expect(sub[shorthand].split('\n')[2]).not.toBe('');
+    const configCommands = sub.config.slice(sub.config.indexOf('\nCommands:'));
     for (const line of configCommands.split('\n').slice(2).filter(Boolean)) expect(line).toMatch(/\S {2,}\S/);
   });
 });
@@ -53,10 +56,10 @@ describe('diffle --help', () => {
 describe('help text', () => {
   // The whole text, kept as files: a wording change is judged by reading the diff of what a user sees.
   it('is the committed text for the main command', async () => {
-    await expect(help()).toMatchFileSnapshot('__snapshots__/help.txt');
+    await expect(out).toMatchFileSnapshot('__snapshots__/help.txt');
   });
   it('is the committed text for the shorthands and config', async () => {
-    const sections = ['working', 'pr', 'config'].map((cmd) => `$ diffle ${cmd} --help\n\n${help(cmd)}`);
+    const sections = (['working', 'pr', 'config'] as const).map((cmd) => `$ diffle ${cmd} --help\n\n${sub[cmd]}`);
     await expect(sections.join('\n')).toMatchFileSnapshot('__snapshots__/help-commands.txt');
   });
 });
