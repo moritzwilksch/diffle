@@ -1,5 +1,5 @@
 # Installs the diffle binary from a GitHub release.
-#   irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
+#   irm https://diffle.app/install.ps1 | iex
 # DIFFLE_VERSION picks a release tag (default: latest); DIFFLE_INSTALL_DIR the target
 # (default: %LOCALAPPDATA%\Programs\diffle); DIFFLE_DOWNLOAD_URL a mirror of the release assets.
 $ErrorActionPreference = 'Stop'
