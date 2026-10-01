@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs the diffle binary from a GitHub release.
-#   curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | sh
+#   curl -fsSL https://diffle.app/install.sh | sh
 # DIFFLE_VERSION picks a release tag (default: latest); DIFFLE_INSTALL_DIR the target (default: ~/.local/bin);
 # DIFFLE_DOWNLOAD_URL a mirror of the release assets.
 set -eu
@@ -17,7 +17,7 @@ fail() {
 case $(uname -s) in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
-  MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://github.com/$repo/releases/latest/download/install.ps1 | iex" ;;
+  MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://diffle.app/install.ps1 | iex" ;;
   *) fail "no binary for $(uname -s); install with npm or pixi instead" ;;
 esac
 

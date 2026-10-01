@@ -26,14 +26,14 @@ Or grab the standalone binary, which needs no Node.js. On Linux (x64, arm64, gli
 silicon macOS:
 
 ```bash
-curl -fsSL https://github.com/moritzwilksch/diffle/releases/latest/download/install.sh | sh
+curl -fsSL https://diffle.app/install.sh | sh
 ```
 
 It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.1.9`
 to pin a release. On Windows (x64, arm64), from PowerShell:
 
 ```powershell
-irm https://github.com/moritzwilksch/diffle/releases/latest/download/install.ps1 | iex
+irm https://diffle.app/install.ps1 | iex
 ```
 
 To try it without installing:
