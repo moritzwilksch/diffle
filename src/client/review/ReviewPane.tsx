@@ -16,6 +16,7 @@ import { CodeView, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/reac
 import {
   ChevronDown,
   ChevronRight,
+  Copy,
   Download,
   FileText,
   MessageSquare,
@@ -23,8 +24,11 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { twMerge } from 'tailwind-merge';
 import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
+import { copyText } from '../clipboard.js';
 import { FilePath } from '../FilePath.js';
+import { CopyIcon } from '../ui/CopyIcon.js';
 import { lineBounds, sideOf } from '../comments/anchor.js';
 import { SearchBar } from '../keyboard/SearchBar.js';
 import { HoverTooltip, hoverControl } from '../lsp/HoverTooltip.js';
@@ -1063,15 +1067,18 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
   return (
     // `data-path` names the file for tests and scripts; the visible title splits it into styled parts.
     <div ref={ref} data-path={path}>
-      <div className="flex h-[calc(var(--diffle-header-height)-1px)] items-center gap-2 px-2.5 py-1.5">
+      <div className="group flex h-[calc(var(--diffle-header-height)-1px)] items-center gap-2 px-2.5 py-1.5">
         <FileText size="0.875rem" className="shrink-0 text-muted" />
         {file?.oldPath && file.oldPath !== path && (
           <>
-            <FilePath path={file.oldPath} nowrap />
+            <FilePath path={file.oldPath} nowrap tooltip={false} />
             <span className="text-muted">→</span>
           </>
         )}
-        <FilePath path={path} nowrap className="mr-auto" />
+        {/* The copy button beside it already hands over the full path; a hover tip would only repeat it. */}
+        <FilePath path={path} nowrap tooltip={false} />
+        <CopyPathButton path={path} />
+        <span className="mr-auto" />
         {file && (
           <span className="flex shrink-0 gap-2 font-mono text-[0.75rem]">
             <span className="text-del">−{file.deletions}</span>
@@ -1082,6 +1089,33 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
       </div>
       <SearchBar path={path} />
     </div>
+  );
+}
+
+/** Copies the path for quoting it in a comment; shown only while the header is hovered or the button focused. */
+function CopyPathButton({ path }: { path: string }) {
+  const flash = useStore((s) => s.flash);
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  return (
+    <Button
+      variant="ghost"
+      icon
+      className={twMerge('shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100', done && 'opacity-100')}
+      title="Copy path (yp)"
+      aria-label="Copy path"
+      onClick={async () => {
+        if (!(await copyText(path))) return flash('The browser blocked clipboard access');
+        setDone(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), 1400);
+      }}
+    >
+      <CopyIcon done={done}>
+        <Copy size="0.875rem" />
+      </CopyIcon>
+    </Button>
   );
 }
 
@@ -1119,6 +1153,8 @@ function FileHeaderMeta({ path }: { path: string }) {
     const toggle = (event: MouseEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest('button, input, label, a, form, [role="button"]')) return;
+      // Dragging across the path selects it for copying; only a plain click toggles.
+      if (!(window.getSelection()?.isCollapsed ?? true)) return;
       selectFile(path);
       toggleCollapsed(path);
     };
