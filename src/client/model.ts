@@ -196,6 +196,12 @@ export function countViewed(state: Pick<ReviewState, 'viewed' | 'config'>, chang
   return n;
 }
 
+/** Changed files inside directory `dir`, given with or without its trailing slash. */
+export function filesUnder(changed: readonly ChangedFile[], dir: string): ChangedFile[] {
+  const prefix = dir.endsWith('/') ? dir : `${dir}/`;
+  return changed.filter((f) => f.path.startsWith(prefix));
+}
+
 /** Collapsed defaults to viewed or generated, until the user toggles it. */
 export function isCollapsed(
   state: Pick<ReviewState, 'collapsed' | 'viewed' | 'config' | 'snapshot'>,

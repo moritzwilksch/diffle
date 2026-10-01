@@ -880,7 +880,7 @@ describe('client transitions', () => {
     expect(useStore.getState().selection).toBeNull();
 
     // zc skips collapsed files whatever their viewed state.
-    useStore.getState().unviewAll();
+    void useStore.getState().setViewedMany(['a.txt', 'b.txt', 'c.txt', 'd.txt'], false);
     useStore.setState({ collapsed: { 'b.txt': true, 'c.txt': true } });
     useStore.getState().moveFile('first');
     useStore.getState().setCollapsedAtCursor(true);
