@@ -61,23 +61,50 @@ test.describe('single commit', () => {
 });
 
 test.describe("the range's commits", () => {
-  test('steps through them and picks one in the compare menu', async ({ page }) => {
+  test('lists them, expands one and picks it in the compare menu', async ({ page }) => {
     const box = page.getByRole('region', { name: 'Commits' });
     await expect(box).toMatchAriaSnapshot({ name: 'range-commits.aria.yml' });
-    const previous = box.getByRole('button', { name: 'Previous commit in the range' });
-    const next = box.getByRole('button', { name: 'Next commit in the range' });
-    await expect(previous).toBeDisabled();
-    await next.click();
-    await expect(box).toContainText('Commit 2 / 4');
-    await expect(box).toContainText('refactor: move money helpers into a currency module');
-    await expect(previous).toBeEnabled();
-    await box.getByRole('button', { name: /^Pick commit/ }).click();
+    const row = box.getByRole('button', { name: 'refactor: move money helpers into a currency module' });
+    await row.click();
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
+    await expect(box.getByRole('listitem').nth(1)).toContainText('Grace Hopper');
+    // The last commit has a body; hovering it highlights the whole expanded item.
+    const last = box.getByRole('listitem').last();
+    await last.getByRole('button', { name: /^fix\(cli\)/ }).click();
+    await expect(last).toContainText('hid a wrong glob in cron jobs.');
+    await last.getByText('Grace Hopper').hover();
+    await expect(box).toHaveScreenshot('range-commits.png');
+    await box.getByRole('button', { name: 'Pick commit 640d216 in the compare menu' }).click();
     const pane = page.getByRole('form', { name: 'Commit…' });
     await expect(pane.getByRole('combobox', { name: 'Commit' })).toHaveValue('640d216');
     await expect(pane.getByRole('combobox', { name: 'Commit' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator('header')).toContainText('refactor: move money helpers into a currency module');
-    await expect(box).toContainText('Commit 1 / 1');
-    await expect(box.getByRole('button', { name: 'Next commit in the range' })).toHaveCount(0);
+    await expect(box.getByRole('listitem')).toHaveCount(1);
+  });
+
+  test('collapses to its header', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const header = box.getByRole('button', { name: /^Commits/ });
+    await header.click();
+    await expect(header).toHaveAttribute('aria-expanded', 'false');
+    await expect(box.getByRole('list')).toHaveCount(0);
+  });
+});
+
+test.describe('a long range of commits', () => {
+  test.use({ revs: ['HEAD~7..HEAD'], viewport: { width: 1440, height: 520 } });
+
+  test('starts collapsed and, opened, scrolls within its share of the panel', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const header = box.getByRole('button', { name: /^Commits/ });
+    await expect(header).toHaveAttribute('aria-expanded', 'false');
+    await header.click();
+    await expect(box.getByRole('listitem')).toHaveCount(7);
+    const [panel, own] = await Promise.all([page.locator('aside').last().boundingBox(), box.boundingBox()]);
+    expect(own!.height).toBeLessThanOrEqual(panel!.height * 0.4 + 1);
+    const list = box.getByRole('list').locator('..');
+    expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
+    await expect(page).toHaveScreenshot('long-range.png');
   });
 });

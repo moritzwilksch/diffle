@@ -1,8 +1,15 @@
 - region "Commits":
-  - text: Commit 1 / 4
-  - button "Previous commit in the range" [disabled]
-  - button "Next commit in the range"
-  - paragraph: "feat(ledger): support refund lines"
-  - text: Ada Lovelace
-  - time: /May 6, \d+/
-  - button "Pick commit 5206db2 in the compare menu"
+  - button "Commits 4" [expanded]
+  - list:
+    - listitem:
+      - 'button "feat(ledger): support refund lines"'
+      - button "Pick commit 5206db2 in the compare menu"
+    - listitem:
+      - 'button "refactor: move money helpers into a currency module"'
+      - button "Pick commit 640d216 in the compare menu"
+    - listitem:
+      - 'button "chore: regenerate the client, refresh the lockfile and the logo"'
+      - button "Pick commit 97eb0c9 in the compare menu"
+    - listitem:
+      - 'button "fix(cli): report an empty ledger instead of crashing"'
+      - button "Pick commit 1de24f1 in the compare menu"

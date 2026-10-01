@@ -368,3 +368,18 @@ export function imageSides(path: string, changed: ChangedFile | undefined): Imag
   if (!changed) return 'new';
   return changed.status === 'A' ? 'new' : changed.status === 'D' ? 'old' : 'both';
 }
+
+/**
+ * A commit message's body, after the subject, as paragraphs to wrap at any width.
+ * Blank lines separate paragraphs; a list item or an indented line keeps its line break.
+ */
+export function commitBody(message: string): string[] {
+  const body = message.split('\n').slice(1).join('\n').trim();
+  if (!body) return [];
+  return body.split(/\n\s*\n/).map((paragraph) =>
+    paragraph
+      .split('\n')
+      .reduce((out, line) => (/^\s|^([-*+]|\d+[.)])\s/.test(line) ? `${out}\n${line}` : `${out} ${line}`), '')
+      .slice(1),
+  );
+}

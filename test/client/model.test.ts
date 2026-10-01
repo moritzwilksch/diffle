@@ -9,6 +9,7 @@ import {
 } from '../../src/shared/protocol.js';
 import {
   anchorLabel,
+  commitBody,
   compareTreeOrder,
   countViewed,
   currentPath,
@@ -302,5 +303,32 @@ describe('imageSides', () => {
     expect(imageSides('a.bin', file('M'))).toBeNull();
     expect(imageSides('a.svg', file('M'))).toBeNull();
     expect(imageSides('png', file('M'))).toBeNull();
+  });
+});
+
+describe('commitBody', () => {
+  it('reflows hard-wrapped paragraphs but keeps list items and indented lines on their own', () => {
+    const message = [
+      'feat: add a box',
+      '',
+      'Adds a box at the top of the file list that shows the',
+      'current commit and steps through the commits.',
+      '',
+      '- one item',
+      '- another item that wraps',
+      '  onto a second line',
+      '',
+      '    indented code',
+      '',
+    ].join('\n');
+    expect(commitBody(message)).toEqual([
+      'Adds a box at the top of the file list that shows the current commit and steps through the commits.',
+      '- one item\n- another item that wraps\n  onto a second line',
+      '    indented code',
+    ]);
+  });
+
+  it('is empty for a subject alone', () => {
+    expect(commitBody('fix: one line\n')).toEqual([]);
   });
 });
