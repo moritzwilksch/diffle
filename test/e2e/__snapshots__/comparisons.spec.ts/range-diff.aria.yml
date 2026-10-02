@@ -7,7 +7,7 @@
   - list:
     - listitem:
       - 'button "wip: more refunds added"'
-      - text: ——————— → 61e94d6
+      - text: ——————— → b6cec17
     - listitem: "fix(cli): report an empty ledger instead of crashing identical 1de24f1 → 1de24f1"
     - listitem: "chore: regenerate the client, refresh the lockfile and the logo identical 97eb0c9 → 97eb0c9"
     - listitem: "refactor: move money helpers into a currency module identical 640d216 → 640d216"

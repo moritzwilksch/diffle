@@ -461,7 +461,8 @@ describe('Session', () => {
     }
   });
 
-  it('records an iteration per loaded range state and compares two across a rebase', async () => {
+  // Many git invocations in sequence: well over vitest's default on the Windows runners.
+  it('records an iteration per loaded range state and compares two across a rebase', { timeout: 30_000 }, async () => {
     const live = await mkdtemp(join(tmpdir(), 'diffle-iter-'));
     const liveGit = (...args: string[]) =>
       execFileSync('git', args, {

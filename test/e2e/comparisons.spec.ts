@@ -157,12 +157,15 @@ test.describe('moved refs', () => {
       execFileSync('git', args, {
         cwd: repo,
         encoding: 'utf8',
+        // Fixed identity and dates: the new commit's hash appears in the snapshots.
         env: {
           ...process.env,
           GIT_AUTHOR_NAME: 't',
           GIT_AUTHOR_EMAIL: 't@t',
+          GIT_AUTHOR_DATE: '2024-06-01T12:00:00Z',
           GIT_COMMITTER_NAME: 't',
           GIT_COMMITTER_EMAIL: 't@t',
+          GIT_COMMITTER_DATE: '2024-06-01T12:00:00Z',
         },
       }).trim();
     const notice = page.locator('header').getByRole('status');
