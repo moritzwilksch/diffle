@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '../../src/server/github/client.js';
@@ -386,7 +386,8 @@ describe('Session', () => {
     }
   });
 
-  it('announces moved refs instead of recomputing a refs comparison, until asked to reload', async () => {
+  // Dozens of git invocations in sequence: well over vitest's default on the Windows runners.
+  it('announces moved refs and keeps the comparison until asked to reload', { timeout: 30_000 }, async () => {
     const live = await mkdtemp(join(tmpdir(), 'diffle-refs-'));
     const liveGit = (...args: string[]) =>
       execFileSync('git', args, {
@@ -413,6 +414,9 @@ describe('Session', () => {
       const watcher = new FakeWatcher(0);
       const messages = () => hub.messages.slice(before);
       const session = new Session(liveRepo, hub, { watch: true, context: 3, createWatcher: () => watcher });
+      // The check behind a dirty signal runs on the session's queue; a `setContext` with the current value is a
+      // queued no-op, so awaiting it means the check has settled, however slow git is on this runner.
+      const settled = () => session.setContext(3);
       let published = 0;
       session.onSnapshot(() => published++);
       const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
@@ -425,21 +429,22 @@ describe('Session', () => {
       liveGit('commit', '-q', '-am', 'two');
       const two = liveGit('rev-parse', 'feat');
       watcher.dirty();
-      await vi.waitFor(() => expect(session.moved).not.toBeNull());
+      await settled();
       expect(session.moved).toEqual({ version: first.version, oldSha: first.oldSha, newSha: two });
       expect(messages()).toEqual([{ type: 'moved', moved: session.moved }]);
       expect(published).toBe(1);
       expect(await session.snapshotter.current()).toBe(first);
 
-      // The same position again says nothing new; `setContext` is a queued no-op that drains the check.
+      // The same position again says nothing new.
       watcher.dirty();
-      await session.setContext(3);
+      await settled();
       expect(messages()).toHaveLength(1);
 
       // Back where the snapshot has it: the notice is withdrawn.
       liveGit('reset', '-q', '--hard', first.newSha);
       watcher.dirty();
-      await vi.waitFor(() => expect(session.moved).toBeNull());
+      await settled();
+      expect(session.moved).toBeNull();
       expect(messages()).toEqual([
         { type: 'moved', moved: { version: first.version, oldSha: first.oldSha, newSha: two } },
         { type: 'moved', moved: null },
@@ -447,7 +452,8 @@ describe('Session', () => {
 
       liveGit('reset', '-q', '--hard', two);
       watcher.dirty();
-      await vi.waitFor(() => expect(session.moved).not.toBeNull());
+      await settled();
+      expect(session.moved).not.toBeNull();
       const reloaded = await session.reload();
       expect(reloaded.version).toBeGreaterThan(first.version);
       expect(reloaded.newSha).toBe(two);
