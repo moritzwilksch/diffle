@@ -19,6 +19,7 @@ import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
+import { IterationStore } from './iterations.js';
 import { resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
 import { RevspecError } from './revspec.js';
 import { Snapshotter } from './Snapshotter.js';
@@ -204,7 +205,11 @@ export class Session {
   async switchMode(req: ModeRequest): Promise<Snapshot> {
     const snap = await this.run(async () =>
       this.activate(
-        req.kind === 'focus' ? await this.focus(req.commit) : await resolveReview(req, this.repo, this.opts.github),
+        req.kind === 'focus'
+          ? await this.focus(req.commit)
+          : req.kind === 'interdiff'
+            ? await this.interdiff(req.from, req.to)
+            : await resolveReview(req, this.repo, this.opts.github),
       ),
     );
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
@@ -239,6 +244,38 @@ export class Session {
   }
 
   /**
+   * Compares two recorded iterations of the active range: `from`'s head replayed onto `to`'s base
+   * against `to`'s head, so only what the branch itself changed in between shows. The interdiff
+   * keeps its own comments and the range's PR identity; its refs keep being watched.
+   */
+  private async interdiff(from: number, to: number): Promise<ResolvedReview> {
+    const a = this.require();
+    const range = a.mode.within ?? a.mode;
+    if (range.base === 'parent') throw new RevspecError('a single commit has no iterations');
+    if (from >= to) throw new RevspecError('compare an older iteration with a newer one');
+    const store = new IterationStore(this.repo, range.commentKey);
+    const [older, newer] = await Promise.all([store.get(from), store.get(to)]);
+    if (!older || !newer) throw new RevspecError(`no iteration #${older ? to : from} of ${comparisonLabel(range)}`);
+    // The same base needs no replay: the older head's tree is what was reviewed.
+    const { tree, conflicts } =
+      older.oldSha === newer.oldSha
+        ? { tree: await this.repo.tree(older.newSha), conflicts: [] }
+        : await this.repo.replay(older.oldSha, newer.oldSha, older.newSha);
+    return {
+      prUrl: a.prUrl,
+      mode: {
+        old: tree,
+        new: newer.newSha,
+        base: 'direct',
+        live: range.live === 'none' ? 'none' : 'refs',
+        commentKey: `${range.commentKey}:interdiff:${from}-${to}`,
+        within: range,
+        interdiff: { from: older, to: newer, conflicts },
+      },
+    };
+  }
+
+  /**
    * Runs `fn` after every earlier mutation settled. The only way to touch
    * `active`, `version` or `opts.context`.
    */
@@ -249,7 +286,16 @@ export class Session {
   }
 
   private async activate({ mode, prUrl }: ResolvedReview): Promise<Snapshot> {
-    const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
+    // A range that can move again gets its iterations recorded: one between refs, or a PR's, fetched anew each run.
+    const range = mode.within ?? mode;
+    const followed = range.base !== 'parent' && (range.live === 'refs' || prUrl != null);
+    const snapshotter = new Snapshotter(
+      this.repo,
+      mode,
+      ++this.version,
+      this.opts.context,
+      followed ? new IterationStore(this.repo, range.commentKey) : null,
+    );
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([
       CommentStore.open(this.repo.gitDir, mode.commentKey),
@@ -296,7 +342,14 @@ export class Session {
 
   /** The reviewer asks for the moved refs: recompute now. Unlike `refresh`, a failure is the caller's. */
   reload(): Promise<Snapshot> {
-    return this.run(() => this.recompute());
+    return this.run(async () => {
+      const a = this.require();
+      if (!a.mode.interdiff || !a.mode.within) return this.recompute();
+      // An interdiff is pinned; the moved refs belong to its range, where the reviewer continues.
+      const snap = await this.activate({ mode: a.mode.within, prUrl: a.prUrl });
+      this.hub.broadcast({ type: 'snapshot', version: snap.version });
+      return snap;
+    });
   }
 
   private recompute(): Promise<Snapshot> {

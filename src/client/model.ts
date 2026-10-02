@@ -358,6 +358,20 @@ export function movedLabel(snapshot: Snapshot, moved: Moved): string {
   return ends.join(', ');
 }
 
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['day', 86_400_000],
+  ['hour', 3_600_000],
+  ['minute', 60_000],
+];
+
+/** "3 hours ago", "yesterday", or "just now" under a minute; `now` is injectable for tests. */
+export function relativeTime(at: number, now = Date.now()): string {
+  const elapsed = now - at;
+  for (const [unit, ms] of UNITS) if (elapsed >= ms) return RELATIVE.format(-Math.round(elapsed / ms), unit);
+  return 'just now';
+}
+
 /** Local repository name, independent of GitHub discovery. */
 export function repoName(snapshot: Snapshot): string {
   const parts = snapshot.root.split(/[\\/]/).filter(Boolean);

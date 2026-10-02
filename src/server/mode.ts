@@ -32,8 +32,10 @@ import { type ParsedRevspec, parseRevspec, RevspecError } from './revspec.js';
  */
 export async function resolveComparison(
   repo: GitRepo,
-  comparison: Pick<ModeSpec, 'old' | 'new' | 'base'>,
+  comparison: Pick<ModeSpec, 'old' | 'new' | 'base' | 'interdiff'>,
 ): Promise<{ oldSha: string; newSha: string; live: ModeSpec['live'] }> {
+  // An interdiff's old side is a tree the session wrote, which no revision names; both sides are pinned.
+  if (comparison.interdiff) return { oldSha: comparison.old, newSha: comparison.new, live: 'none' };
   const endpoints = [comparison.old, comparison.new];
   const resolve = async (rev: string): Promise<string> => {
     if (rev === 'worktree') return rev;

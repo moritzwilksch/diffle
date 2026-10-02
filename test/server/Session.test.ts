@@ -9,7 +9,7 @@ import { type GithubClient, GithubError } from '../../src/server/github/client.j
 import { RevspecError } from '../../src/server/revspec.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { WatchTarget } from '../../src/server/Watcher.js';
-import type { ServerMessage, Snapshot } from '../../src/shared/protocol.js';
+import { comparisonLabel, type ServerMessage, type Snapshot } from '../../src/shared/protocol.js';
 
 let dir: string;
 let outside: string;
@@ -455,6 +455,91 @@ describe('Session', () => {
       expect(session.moved).toBeNull();
       expect(messages().at(-1)).toEqual({ type: 'snapshot', version: reloaded.version });
       expect(published).toBe(2);
+      await session.close();
+    } finally {
+      await rmTmp(live);
+    }
+  });
+
+  it('records an iteration per loaded range state and compares two across a rebase', async () => {
+    const live = await mkdtemp(join(tmpdir(), 'diffle-iter-'));
+    const liveGit = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: live,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+          GIT_CONFIG_GLOBAL: '/dev/null',
+        },
+      }).trim();
+    try {
+      liveGit('init', '-q', '-b', 'main');
+      await writeFile(join(live, 'a.txt'), 'a\n');
+      await writeFile(join(live, 'b.txt'), 'b\n');
+      liveGit('add', '.');
+      liveGit('commit', '-q', '-m', 'base');
+      liveGit('checkout', '-q', '-b', 'feat');
+      await writeFile(join(live, 'a.txt'), 'a\nfeature\n');
+      liveGit('commit', '-q', '-am', 'feature');
+      const liveRepo = await GitRepo.open(live);
+      const session = new Session(liveRepo, hub, { watch: false, context: 3 });
+      const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main...feat'] }));
+      expect(first.iterations).toEqual([
+        { n: 1, oldSha: first.oldSha, newSha: first.newSha, recordedAt: expect.any(Number) },
+      ]);
+      // The pins keep both ends alive whatever happens to the branches.
+      const pins = liveGit('for-each-ref', '--format=%(refname) %(objectname)', 'refs/diffle/iterations/');
+      expect(
+        pins
+          .split('\n')
+          .map((l) => l.split(' ')[1])
+          .sort(),
+      ).toEqual([first.oldSha, first.newSha].sort());
+      // Reloading the same state records nothing.
+      expect((await session.reload()).iterations).toHaveLength(1);
+
+      // Upstream moves on, the branch is rebased onto it and amended.
+      liveGit('checkout', '-q', 'main');
+      await writeFile(join(live, 'b.txt'), 'b\nupstream\n');
+      liveGit('commit', '-q', '-am', 'upstream');
+      liveGit('checkout', '-q', 'feat');
+      liveGit('rebase', '-q', 'main');
+      await writeFile(join(live, 'a.txt'), 'a\nfeature\namended\n');
+      liveGit('commit', '-q', '--amend', '--no-edit', '-a');
+      const second = await session.reload();
+      expect(second.iterations.map((it) => it.n)).toEqual([1, 2]);
+      expect(second.iterations[1]).toMatchObject({ oldSha: second.oldSha, newSha: second.newSha });
+      // The range itself now also differs from main by the upstream commit's base move, but not in content.
+      expect(second.changed.map((f) => f.path)).toEqual(['a.txt']);
+
+      // The interdiff shows the amend alone: b.txt's upstream change is on both sides after the replay.
+      const inter = await session.switchMode({ kind: 'interdiff', from: 1, to: 2 });
+      expect(inter.mode).toMatchObject({
+        new: second.newSha,
+        base: 'direct',
+        live: 'refs',
+        commentKey: `${first.mode.commentKey}:interdiff:1-2`,
+        within: first.mode,
+        interdiff: { from: second.iterations[0], to: second.iterations[1], conflicts: [] },
+      });
+      expect(inter.mode.old).not.toBe(first.newSha);
+      expect(inter.changed.map((f) => f.path)).toEqual(['a.txt']);
+      expect((await session.snapshotter.patch('a.txt'))?.split('\n').filter((l) => /^[+-][^+-]/.test(l))).toEqual([
+        '+amended',
+      ]);
+      expect((await session.readSide(inter, 'b.txt', 'old'))?.toString()).toBe('b\nupstream\n');
+      expect(inter.commits.list.map((c) => c.message)).toEqual(['feature']);
+      expect(inter.iterations).toHaveLength(2);
+      expect(comparisonLabel(inter.mode)).toBe('main...feat #1→#2');
+
+      // A reload from the interdiff returns to the range, where the moved refs would be picked up.
+      expect((await session.reload()).mode).toEqual(first.mode);
+      await expect(session.switchMode({ kind: 'interdiff', from: 2, to: 1 })).rejects.toThrow(RevspecError);
+      await expect(session.switchMode({ kind: 'interdiff', from: 1, to: 3 })).rejects.toThrow(RevspecError);
       await session.close();
     } finally {
       await rmTmp(live);

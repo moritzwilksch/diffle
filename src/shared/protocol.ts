@@ -54,10 +54,31 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('focus'),
     commit: z.string().nullable(),
   }),
+  /** What the current range's iteration `to` changed since its iteration `from`. */
+  z.object({
+    kind: z.literal('interdiff'),
+    from: z.number().int().positive(),
+    to: z.number().int().positive(),
+  }),
 ]);
 export type ModeRequest = z.infer<typeof ModeRequestSchema>;
-/** A request that enters a comparison from scratch, as the CLI does; a focus depends on the active one. */
-export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' }>;
+/** A request that enters a comparison from scratch, as the CLI does; a focus or interdiff depends on the active one. */
+export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' | 'interdiff' }>;
+
+/**
+ * One state of a reviewed range: its resolved endpoints when a snapshot of it was taken. A new
+ * one is recorded whenever the endpoints differ from the last, so a push, rebase or amend
+ * yields the next iteration; the commits are pinned under `refs/diffle/iterations/`.
+ */
+export const IterationSchema = z.object({
+  /** 1-based, in recording order. */
+  n: z.number(),
+  oldSha: z.string(),
+  newSha: z.string(),
+  /** Epoch milliseconds. */
+  recordedAt: z.number(),
+});
+export type Iteration = z.infer<typeof IterationSchema>;
 
 /**
  * How the old side is derived: `old` itself, merge-base(old, new) with worktree
@@ -77,17 +98,33 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 
+/**
+ * Two iterations of a range compared. The old side is `from`'s head replayed onto `to`'s base
+ * (a tree, not a commit), so a rebase in between does not show up as the upstream's changes;
+ * the new side is `to`'s head.
+ */
+export const InterdiffSchema = z.object({
+  from: IterationSchema,
+  to: IterationSchema,
+  /** Paths the replay could not merge; they carry conflict markers on the old side. */
+  conflicts: z.string().array(),
+});
+export type Interdiff = z.infer<typeof InterdiffSchema>;
+
 export const ModeSpecSchema = ComparisonSchema.extend({
-  /** Set while one commit of a range is focused: the range, whose commits the snapshot keeps listing. */
+  /** Set while one commit of a range is focused, or two of its iterations compared: the range, whose commits the snapshot keeps listing. */
   within: ComparisonSchema.optional(),
+  interdiff: InterdiffSchema.optional(),
 });
 export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
 /**
  * Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as
- * `<sha>^!`, or as `<range> @ <sha>` when focused within a range.
+ * `<sha>^!`, as `<range> @ <sha>` when focused within a range, or as `<range> #1→#2` for an interdiff.
  */
-export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within'>): string {
+export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within' | 'interdiff'>): string {
+  if (mode.within && mode.interdiff)
+    return `${comparisonLabel(mode.within)} #${mode.interdiff.from.n}→#${mode.interdiff.to.n}`;
   if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
   return `${refName(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${refName(mode.new)}`;
@@ -202,6 +239,8 @@ export const SnapshotSchema = z.object({
   /** The reviewed commit when the comparison is a single commit against its parent; otherwise null. */
   commit: ReviewedCommitSchema.nullable(),
   commits: RangeCommitsSchema,
+  /** The recorded iterations of the range `commits` spans, oldest first; empty for comparisons that are not followed. */
+  iterations: IterationSchema.array(),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 

@@ -401,6 +401,8 @@ export interface ReviewState {
   switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
   /** Show one listed commit of the current range, or with null the range itself. */
   focusCommit(commit: string | null): void;
+  /** Show what the current range's iteration `to` changed since its iteration `from`. */
+  compareIterations(from: number, to: number): void;
   /**
    * Step to the older (-1) or newer (1) entry of a range's list, the range itself past the newest; in a
    * single-commit view, to the parent or the child toward HEAD. A no-op at either end.
@@ -2136,6 +2138,10 @@ export const useStore = create<ReviewState>((set, get) => {
 
     focusCommit(commit) {
       void get().switchMode({ kind: 'focus', commit });
+    },
+
+    compareIterations(from, to) {
+      void get().switchMode({ kind: 'interdiff', from, to });
     },
 
     stepCommit(direction) {

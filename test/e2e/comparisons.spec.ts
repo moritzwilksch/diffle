@@ -170,9 +170,9 @@ test.describe('moved refs', () => {
     await expect(notice).toHaveCount(0);
     await expect(box.getByRole('listitem')).toHaveCount(4);
 
-    // A new commit on the branch, without touching the index or the worktree.
+    // A new commit on the branch out of the staged change, without touching the index or the worktree.
     const tip = git('rev-parse', 'feature/refunds');
-    const wip = git('commit-tree', '-p', tip, '-m', 'wip: more refunds', `${tip}^{tree}`);
+    const wip = git('commit-tree', '-p', tip, '-m', 'wip: more refunds', git('write-tree'));
     git('update-ref', 'refs/heads/feature/refunds', wip);
     await expect(notice).toContainText(`feature/refunds ${tip.slice(0, 7)} → ${wip.slice(0, 7)}`);
     await expect(box.getByRole('listitem')).toHaveCount(4);
@@ -182,6 +182,22 @@ test.describe('moved refs', () => {
     await expect(notice).toHaveCount(0);
     await expect(box.getByRole('listitem')).toHaveCount(5);
     await expect(box).toContainText('wip: more refunds');
+    await expect(page.locator('header')).toContainText('17 files');
+
+    // Both loaded states are iterations; the older one opens what the branch changed since.
+    const iterations = page.getByRole('region', { name: 'Iterations' });
+    await expect(iterations.getByRole('listitem')).toHaveCount(2);
+    await iterations.getByRole('button', { name: /^#1/ }).click();
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/main\.\.\.feature\/refunds #1→#2/);
+    await expect(page.locator('header')).toContainText('1 file');
+    expect(await filePaths(page)).toEqual(['tally/refunds.py']);
+    await expect(iterations.locator('[aria-current="true"]')).toContainText('#1');
+    await waitForHighlight(page, 'tally/refunds.py');
+    await expect(page).toHaveScreenshot('interdiff.png');
+
+    // "All changes" leads back to the range.
+    await box.getByRole('button', { name: /^All changes/ }).click();
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
     await expect(page.locator('header')).toContainText('17 files');
   });
 });

@@ -906,3 +906,60 @@ describe('linguist-generated attribute', () => {
     }
   });
 });
+
+describe('replay and pins', () => {
+  let rdir: string;
+  let rrepo: GitRepo;
+  const rgit = (...args: string[]) =>
+    execFileSync('git', args, {
+      cwd: rdir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 't',
+        GIT_AUTHOR_EMAIL: 't@t',
+        GIT_COMMITTER_NAME: 't',
+        GIT_COMMITTER_EMAIL: 't@t',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+      },
+    }).trim();
+
+  beforeAll(async () => {
+    rdir = await mkdtemp(join(tmpdir(), 'diffle-replay-'));
+    rgit('init', '-q', '-b', 'main');
+    await writeFile(join(rdir, 'f.txt'), 'a\nb\nc\n');
+    rgit('add', '.');
+    rgit('commit', '-q', '-m', 'base');
+    rgit('checkout', '-q', '-b', 'feat');
+    await writeFile(join(rdir, 'f.txt'), 'a\nB\nc\n');
+    rgit('commit', '-q', '-am', 'feat');
+    rgit('checkout', '-q', 'main');
+    await writeFile(join(rdir, 'f.txt'), 'a\nb\nc\nd\n');
+    rgit('commit', '-q', '-am', 'main: append');
+    await writeFile(join(rdir, 'f.txt'), 'a\nX\nc\nd\n');
+    rgit('commit', '-q', '-am', 'main: conflict');
+    rrepo = await GitRepo.open(rdir);
+  });
+  afterAll(() => rmTmp(rdir));
+
+  it('replays a branch onto a moved base and names the files it could not merge', async () => {
+    const base = rgit('rev-parse', 'main~2');
+    const clean = await rrepo.replay(base, 'main~1', 'feat');
+    expect(clean.conflicts).toEqual([]);
+    expect((await rrepo.show(clean.tree, 'f.txt'))?.toString()).toBe('a\nB\nc\nd\n');
+    const conflicted = await rrepo.replay(base, 'main', 'feat');
+    expect(conflicted.conflicts).toEqual(['f.txt']);
+    expect((await rrepo.show(conflicted.tree, 'f.txt'))?.toString()).toContain('<<<<<<<');
+    expect(await rrepo.tree('feat')).toBe(rgit('rev-parse', 'feat^{tree}'));
+  });
+
+  it('pins and deletes refs under refs/diffle/iterations/ only', async () => {
+    const sha = rgit('rev-parse', 'feat');
+    await rrepo.pin({ 'refs/diffle/iterations/x/1/new': sha });
+    expect(rgit('rev-parse', 'refs/diffle/iterations/x/1/new')).toBe(sha);
+    await rrepo.pin({ 'refs/diffle/iterations/x/1/new': null });
+    expect(rgit('for-each-ref', 'refs/diffle/iterations/')).toBe('');
+    await expect(rrepo.pin({ 'refs/heads/main': sha })).rejects.toThrow(/refusing to update/);
+    await expect(rrepo.pin({ 'refs/diffle/other/1': sha })).rejects.toThrow(/refusing to update/);
+  });
+});

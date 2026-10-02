@@ -19,6 +19,7 @@ import {
   isViewed,
   movedLabel,
   nextFileAfter,
+  relativeTime,
   orderedPaths,
   rangeStep,
   reuseThreads,
@@ -278,6 +279,30 @@ describe('comparisonLabel', () => {
     expect(comparisonLabel({ old: 'HEAD', new: 'worktree', base: 'direct' })).toBe('HEAD..worktree');
     const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
     expect(comparisonLabel({ old: sha, new: sha, base: 'parent' })).toBe('a1b2c3d^!');
+  });
+
+  it('names an interdiff by its range and iteration numbers, not by its synthetic old side', () => {
+    const within = { old: 'main', new: 'feat', base: 'merge-base', live: 'refs', commentKey: 'k' } as const;
+    const it = (n: number) => ({ n, oldSha: 'a'.repeat(40), newSha: 'b'.repeat(40), recordedAt: 0 });
+    expect(
+      comparisonLabel({
+        old: 'c'.repeat(40),
+        new: 'b'.repeat(40),
+        base: 'direct',
+        within,
+        interdiff: { from: it(1), to: it(3), conflicts: [] },
+      }),
+    ).toBe('main...feat #1→#3');
+  });
+});
+
+describe('relativeTime', () => {
+  it('rounds to the largest unit that elapsed and says "just now" under a minute', () => {
+    const now = 1_700_000_000_000;
+    expect(relativeTime(now - 20_000, now)).toBe('just now');
+    expect(relativeTime(now - 90_000, now)).toBe('2 minutes ago');
+    expect(relativeTime(now - 3 * 3_600_000, now)).toBe('3 hours ago');
+    expect(relativeTime(now - 86_400_000, now)).toBe('yesterday');
   });
 });
 

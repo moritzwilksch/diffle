@@ -34,6 +34,8 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   // A single commit alone has nothing to step through; it is shown as the one active entry.
   const range = mode.within ?? (mode.base === 'parent' ? null : mode);
   const active = mode.base === 'parent' ? mode.new : null;
+  // An interdiff shows neither the range nor one of its commits; "All changes" leads back to the range.
+  const whole = active === null && !mode.interdiff;
   const older = commits.total - commits.list.length;
 
   useEffect(() => {
@@ -108,13 +110,13 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
               variant="ghost"
               className={twMerge(
                 'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem] outline-none focus-visible:bg-hover',
-                active === null && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
+                whole && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
               )}
-              aria-current={active === null ? 'true' : undefined}
+              aria-current={whole ? 'true' : undefined}
               onClick={() => focusCommit(null)}
             >
-              <Layers size="0.8125rem" className={active === null ? 'text-accent' : 'text-muted'} />
-              <span className={twMerge('flex-none', active === null && 'font-semibold')}>All changes</span>
+              <Layers size="0.8125rem" className={whole ? 'text-accent' : 'text-muted'} />
+              <span className={twMerge('flex-none', whole && 'font-semibold')}>All changes</span>
               <span className="min-w-0 truncate font-mono text-[0.75rem] text-muted">{comparisonLabel(range)}</span>
             </Button>
           )}

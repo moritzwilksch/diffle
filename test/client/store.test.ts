@@ -102,6 +102,7 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     tree,
     commit: null,
     commits: { list: [], total: 0, oldSha: 'x', newSha: 'worktree' },
+    iterations: [],
   };
 }
 

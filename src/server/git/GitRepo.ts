@@ -140,6 +140,11 @@ export class GitRepo {
     return (await this.text(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`])).trim();
   }
 
+  /** The tree a commit points at. */
+  async tree(rev: string): Promise<string> {
+    return (await this.text(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{tree}`])).trim();
+  }
+
   /** Commit messages for two ancestor offsets, pinned to one HEAD. */
   async lastCommitsPreview(oldOffset: number, newOffset: number): Promise<LastCommitsPreview> {
     const head = await this.commitInfo('HEAD');
@@ -214,6 +219,39 @@ export class GitRepo {
 
   async mergeBase(a: string, b: string): Promise<string> {
     return (await this.text(['merge-base', '--end-of-options', a, b])).trim();
+  }
+
+  /**
+   * Replays what `head` changed since `base` onto `onto`, in memory: the resulting tree, and the
+   * paths the merge could not settle, which the tree holds with conflict markers. `--write-tree`
+   * needs git 2.38. With `-z`, the tree, each conflicted path and the sections end in NUL.
+   */
+  async replay(base: string, onto: string, head: string): Promise<{ tree: string; conflicts: string[] }> {
+    const out = await this.text(
+      ['merge-tree', '--write-tree', '-z', '--name-only', `--merge-base=${base}`, '--end-of-options', onto, head],
+      { okCodes: [1] },
+    );
+    const [tree = '', ...rest] = out.split('\0');
+    const conflicts: string[] = [];
+    for (const path of rest) {
+      if (path === '') break;
+      conflicts.push(path);
+    }
+    return { tree, conflicts };
+  }
+
+  /**
+   * Points refs at objects so they survive `gc` and a force-push, or with null deletes them. Refs
+   * must stay inside `refs/diffle/iterations/`: nothing the user owns moves.
+   */
+  async pin(refs: Record<string, string | null>): Promise<void> {
+    const lines: string[] = [];
+    for (const [ref, sha] of Object.entries(refs)) {
+      if (!ref.startsWith('refs/diffle/iterations/'))
+        throw new GitError(`refusing to update ${ref}`, ['update-ref'], null, '');
+      lines.push(sha === null ? `delete ${ref}\n` : `update ${ref} ${sha}\n`);
+    }
+    if (lines.length) await this.exec(['update-ref', '--stdin'], { input: lines.join('') });
   }
 
   /** origin/HEAD → main → master. */
