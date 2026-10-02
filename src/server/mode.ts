@@ -1,8 +1,8 @@
-import type { ModeRequest, ModeSpec } from '../shared/protocol.js';
+import type { EntryRequest, ModeSpec } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { githubRepository, type PullRequest, viewPr } from './github/pulls.js';
-import { parseRevspec, RevspecError } from './revspec.js';
+import { type ParsedRevspec, parseRevspec, RevspecError } from './revspec.js';
 
 /**
  * Resolves a comparison to Git endpoints for initial mode setup, PR setup after
@@ -13,24 +13,26 @@ import { parseRevspec, RevspecError } from './revspec.js';
  *   A--B--C  main
  *       \--D--E  HEAD
  *
- *   old       new       mergeBase   oldSha      newSha     live
- *   main      HEAD      false       C           E          refs
- *   main      HEAD      true        B           E          refs
- *   HEAD      worktree  false       E           worktree   worktree
- *   worktree  HEAD      false       worktree    E          worktree
- *   main      worktree  true        B           worktree   worktree
- *   <C hash>  <E hash>  false       C           E          none
+ *   old       new       base        oldSha      newSha     live
+ *   main      HEAD      direct      C           E          refs
+ *   main      HEAD      merge-base  B           E          refs
+ *   HEAD      worktree  direct      E           worktree   worktree
+ *   worktree  HEAD      direct      worktree    E          worktree
+ *   main      worktree  merge-base  B           worktree   worktree
+ *   <C hash>  <E hash>  direct      C           E          none
+ *   <E hash>  <E hash>  parent      D           E          none
  *
- * mergeBase replaces only the old endpoint with the common ancestor, using
- * HEAD for any worktree input. live is "worktree" if either input is worktree,
- * "none" if both inputs are pinned hashes, and "refs" otherwise.
+ * merge-base replaces only the old endpoint with the common ancestor, using
+ * HEAD for any worktree input; parent replaces it with new's first parent, or
+ * the empty tree for a root commit. live is "worktree" if either input is
+ * worktree, "none" if both inputs are pinned hashes, and "refs" otherwise.
  *
  * In an unborn repository, HEAD compared directly with worktree resolves to
  * the empty tree. Invalid revisions or missing merge bases throw RevspecError.
  */
 export async function resolveComparison(
   repo: GitRepo,
-  comparison: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>,
+  comparison: Pick<ModeSpec, 'old' | 'new' | 'base'>,
 ): Promise<{ oldSha: string; newSha: string; live: ModeSpec['live'] }> {
   const endpoints = [comparison.old, comparison.new];
   const resolve = async (rev: string): Promise<string> => {
@@ -39,7 +41,7 @@ export async function resolveComparison(
       return await repo.resolve(rev);
     } catch (e) {
       if (
-        !comparison.mergeBase &&
+        comparison.base === 'direct' &&
         rev === 'HEAD' &&
         endpoints.includes('worktree') &&
         e instanceof GitError &&
@@ -52,7 +54,7 @@ export async function resolveComparison(
   };
   const [old, next] = await Promise.all([resolve(comparison.old), resolve(comparison.new)]);
   let oldSha = old;
-  if (comparison.mergeBase) {
+  if (comparison.base === 'merge-base') {
     const [a, b] = await Promise.all([
       old === 'worktree' ? resolve('HEAD') : old,
       next === 'worktree' ? resolve('HEAD') : next,
@@ -64,6 +66,13 @@ export async function resolveComparison(
         throw new RevspecError(`no merge base between ${comparison.old} and ${comparison.new}`);
       throw e;
     }
+  }
+  if (comparison.base === 'parent') {
+    if (next === 'worktree') throw new RevspecError('the worktree is not a commit');
+    oldSha = await repo.resolve(`${next}^`).catch((e: unknown) => {
+      if (e instanceof GitError && e.code === 1) return repo.emptyTree();
+      throw e;
+    });
   }
   const pinned = (rev: string, sha: string) => rev.length >= 7 && sha.startsWith(rev.toLowerCase());
   return {
@@ -84,9 +93,15 @@ export interface ResolvedReview {
 }
 
 /** Resolves an input command into a comparison and optional explicit PR identity. */
-export async function resolveReview(req: ModeRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
+export async function resolveReview(req: EntryRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
   if (req.kind === 'pr') return resolvePr(req, repo, github);
-  const parsed = req.kind === 'working' ? { old: 'HEAD', new: 'worktree', mergeBase: false } : parseRevspec(req.args);
+  const parsed: ParsedRevspec =
+    req.kind === 'working' ? { old: 'HEAD', new: 'worktree', base: 'direct' } : parseRevspec(req.args);
+  // A commit is pinned when entered: moving the ref it was named by, e.g. amending HEAD, makes a different commit.
+  if (parsed.base === 'parent') {
+    const { newSha: sha } = await resolveComparison(repo, parsed);
+    return { mode: { old: sha, new: sha, base: 'parent', live: 'none', commentKey: `commit:${sha}` } };
+  }
   const { oldSha, newSha, live } = await resolveComparison(repo, parsed);
   return {
     mode: {
@@ -99,26 +114,23 @@ export async function resolveReview(req: ModeRequest, repo: GitRepo, github?: Gi
 
 /**
  * Branch identities keep review state stable across pushes and local branch aliases.
+ * Keys read like the comparison, with ... for a merge base and .. otherwise.
  * For origin = github.com/o/r and HEAD on feat tracking origin/feat:
- *   origin/main...HEAD → branches:["o/r:main","o/r:feat",true]
- *   origin/main..HEAD  → branches:["o/r:main","o/r:feat",false]
+ *   origin/main...HEAD → range:o/r:main...o/r:feat
+ *   origin/main..HEAD  → range:o/r:main..o/r:feat
  * The matching explicit PR uses the first key too. If feat tracks a fork,
  * its identity becomes e.g. "contributor/r:feat", keeping forks distinct.
  *
  * Without a GitHub upstream, branches use full refs:
- *   main...feat → branches:["refs/heads/main","refs/heads/feat",true]
+ *   main...feat → range:refs/heads/main...refs/heads/feat
  * Non-branch endpoints use their resolved hash or literal "worktree":
- *   main..worktree → branches:["refs/heads/main","worktree",false]
- * If neither endpoint is a branch, the key is revspec:<oldSha>..<newSha>.
+ *   main..worktree → range:refs/heads/main..worktree
+ *   <C>..<E>       → range:<C hash>..<E hash>
  * Hash placeholders denote full resolved hashes, with oldSha already adjusted
- * for mergeBase. The working command bypasses this helper and uses "working".
+ * for the merge base. The working command bypasses this helper and uses
+ * "working"; a single commit uses "commit:<hash>".
  */
-async function commentKey(
-  repo: GitRepo,
-  comparison: Pick<ModeSpec, 'old' | 'new' | 'mergeBase'>,
-  oldSha: string,
-  newSha: string,
-): Promise<string> {
+async function commentKey(repo: GitRepo, comparison: ParsedRevspec, oldSha: string, newSha: string): Promise<string> {
   const remotes = await repo.remotes();
   const identity = async (rev: string): Promise<string | null> => {
     const upstream = await repo.upstreamBranch(rev);
@@ -130,11 +142,11 @@ async function commentKey(
     return repo.branchRef(rev);
   };
   const [old, next] = await Promise.all([identity(comparison.old), identity(comparison.new)]);
-  return old || next ? branchKey(old ?? oldSha, next ?? newSha, comparison.mergeBase) : `revspec:${oldSha}..${newSha}`;
+  return rangeKey(old ?? oldSha, next ?? newSha, comparison.base === 'merge-base');
 }
 
-function branchKey(old: string, next: string, mergeBase: boolean): string {
-  return `branches:${JSON.stringify([old, next, mergeBase])}`;
+function rangeKey(old: string, next: string, mergeBase: boolean): string {
+  return `range:${old}${mergeBase ? '...' : '..'}${next}`;
 }
 
 /**
@@ -159,15 +171,15 @@ async function resolvePr(
     `+refs/pull/${pr.number}/head:${head}`,
     `+refs/heads/${pr.baseRefName}:${base}`,
   ]);
-  await resolveComparison(repo, { old: base, new: head, mergeBase: true });
+  await resolveComparison(repo, { old: base, new: head, base: 'merge-base' });
   return {
     prUrl: pr.url,
     mode: {
       old: base,
       new: head,
-      mergeBase: true,
+      base: 'merge-base',
       live: 'none',
-      commentKey: branchKey(
+      commentKey: rangeKey(
         `${pr.repository.toLowerCase()}:${pr.baseRefName}`,
         `${pr.headRepository?.toLowerCase() ?? `deleted:${pr.url}`}:${pr.headRefName}`,
         true,

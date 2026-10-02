@@ -4,9 +4,10 @@
 [![conda-forge](https://img.shields.io/conda/vn/conda-forge/diffle?logoColor=white&logo=conda-forge&style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![conda-forge-platforms](https://img.shields.io/conda/pn/conda-forge/diffle?style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![npm](https://img.shields.io/npm/v/%40moritzwilksch%2Fdiffle?logo=npm&logoColor=white&style=flat-square)](https://npmx.dev/package/@moritzwilksch/diffle)
+[![website](https://img.shields.io/badge/website-diffle.app-0349b4?style=flat-square)](https://diffle.app)
 
-Review a git diff in the browser, comment on lines, blocks, or whole files, then copy the
-comments as a prompt for an agent.
+Review a Git diff in the browser and comment on lines, blocks, or whole files. Then hand the
+comments to an agent as a prompt, or to GitHub as a pending review.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/diffle-dark.png">
@@ -14,21 +15,28 @@ comments as a prompt for an agent.
   <img alt="diffle reviewing a git diff" src=".github/assets/diffle-light.png">
 </picture>
 
-## Installation
-
-From [conda-forge](https://prefix.dev/channels/conda-forge/packages/diffle):
+## Install
 
 ```bash
-pixi global install diffle
+pixi global install diffle               # conda-forge
+npm install -g @moritzwilksch/diffle     # npm
 ```
 
-Or from [npm](https://npmx.dev/package/@moritzwilksch/diffle):
+Or grab the standalone binary, which needs no Node.js. On Linux (x64, arm64, glibc) and Apple
+silicon macOS:
 
 ```bash
-npm install -g @moritzwilksch/diffle
+curl -fsSL https://diffle.app/install.sh | sh
 ```
 
-To run it without installing anything:
+It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.1.9`
+to pin a release. On Windows (x64, arm64), from PowerShell:
+
+```powershell
+irm https://diffle.app/install.ps1 | iex
+```
+
+To try it without installing:
 
 ```bash
 pixi exec diffle working
@@ -36,166 +44,126 @@ npx @moritzwilksch/diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
 
-The default Nix package includes `gh`, so a `gh auth login` covers the GitHub token; use
-`#minimal` for Diffle alone, or run a variant with bundled language-server support:
+The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, and `#python` bundle
+language servers.
 
-```bash
-nix run github:moritzwilksch/diffle#minimal -- working
-nix run github:moritzwilksch/diffle#web -- working
-nix run github:moritzwilksch/diffle#rust -- working
-nix run github:moritzwilksch/diffle#python -- working
-nix shell nixpkgs#nil github:moritzwilksch/diffle --command diffle -- working
-```
-
-## Usage
+## Pick what to review
 
 ```bash
 diffle                  # HEAD vs worktree, like a bare `git diff`
 diffle working          # HEAD vs worktree: staged, unstaged, untracked
-diffle develop          # merge-base(develop, HEAD) vs HEAD: what this branch added
-diffle pr 27            # GitHub PR 27, or its url; without a number, this branch's PR
+diffle develop          # what this branch added since it left develop
+diffle pr 27            # GitHub PR 27, or its URL; without a number, this branch's PR
+diffle show a1b2c3d     # one commit, like `git show`
 diffle main..feat       # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle main..worktree   # "worktree" names the uncommitted tree on either side
-diffle working --no-lsp # skip the language servers for this run
-diffle --help           # list all commands and flags
+diffle --help           # all commands and flags
 ```
 
-`diffle pr` needs a GitHub token (see [GitHub reviews](#github-reviews)). It looks the pull request up in `origin`, or in the only GitHub remote when origin is not one; a url names any repository. Foreign PR URLs open in a temporary clone, leaving your local repository untouched.
+`diffle pr` needs a [GitHub token](#send-comments-to-github). A PR from another repository opens
+in a temporary clone.
 
-Closing the last browser tab that diffle opened stops the server and prints open comments to stdout. Pass `--keep-alive` to keep it running, or use `--no-open` and press Ctrl+C when done.
+Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
+to keep it running.
 
-Comments persist in `<git-dir>/diffle/comments.json` and never touch the worktree. They follow changed text where possible and become stale when their text leaves the diff. A comment on a whole file (`C`, or the speech-bubble button in the file header) sits above the file's first line and only goes stale when the file leaves the comparison.
+## Review
 
-Generated files and files matching auto-viewed globs start collapsed. A file is generated when `.gitattributes` marks it `linguist-generated`, as on GitHub, or when its path or header looks generated; `linguist-generated=false` opts a file out. There are no globs by default; configure them in settings or with `diffle config`.
-
-## Reverse proxies
-
-The built app supports a path prefix such as `https://my-reverse-proxy:8080/diffle/`.
-Opening `/diffle` redirects to `/diffle/`. Configure the proxy to strip that prefix
-when forwarding to diffle, including WebSocket upgrades at `/diffle/ws`. No build
-or CLI base-path setting is needed.
-
-Run diffle with `--no-open` for a proxy-managed session. If the proxy preserves its
-public Host or Origin headers, explicitly trust its public origin (without the path).
-Some proxies instead rewrite both headers to the upstream address they use for diffle,
-such as a Kubernetes service name; then trust that address. A rejected request gets a
-403 naming the header and value that failed, so the browser's network tab shows which.
-
-```bash
-diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
-```
-
-This applies to both HTTP requests and WebSocket upgrades. The proxy can preserve
-the public Host or rewrite it to an allowed upstream Host, such as `127.0.0.1:4966`.
-Other browser origins remain rejected; forwarded headers do not grant trust.
-Without this setting, the proxy must use an allowed upstream Host and validate any
-browser Origin against its public origin before rewriting it to the upstream origin.
-
-## Shell completions
-
-`diffle completion --shell <bash|zsh|fish>` prints a standalone completion script. Install it once for the current user and start a new shell:
-
-```bash
-diffle completion --shell bash > ~/.local/share/bash-completion/completions/diffle
-diffle completion --shell zsh > ~/.local/share/zsh/site-functions/_diffle   # a directory on fpath, before compinit
-diffle completion --shell fish > ~/.config/fish/completions/diffle.fish
-```
-
-Completion runs in the shell alone and never starts diffle, so it stays fast — and stays as it was: run the command again after upgrading to pick up new commands and flags. Commands, shorthands, flags, and their fixed values complete; revisions do not, because a static script cannot ask git for them.
-
-## Shortcuts
-
-- `j` / `k`: next or previous line (`10j` / `10k`: ten lines down or up)
+- `j` / `k`: next or previous line (`10j`: ten lines down)
 - `J` / `K`: next or previous file
 - `]` / `[`: next or previous hunk
 - `c`: comment
 - `C`: comment on the whole file
-- `R`: resolve
 - `V`: select a block
+- `R`: resolve
 - `v`: mark viewed
 - `/`: search the current file
-- `g/`: search changed files
+- `g/`: search all changed files
 - `gf`: filter files
-- `yy`: copy all comments
 - `F`: open the full file
 - `Ctrl+o`: go back
+- `yy`: copy all comments
 
-Press `?` in the app for the full list.
+Press `?` for the full list.
 
-Both content searches toggle between diff hunks with context and full file contents, remembering that choice independently. Global search stays within changed files.
+A comparison lists its commits above the threads. Pick one, or step with `<` and `>`, to see
+that commit alone; **All changes** returns to the whole range. Comments on a focused commit
+belong to that commit, as in `diffle show`.
 
-## GitHub reviews
+Comments live in `<git-dir>/diffle/` and never touch your worktree. They follow their text as
+the code changes and go stale once it leaves the diff.
 
-Use the pull request icon to add one thread or all open threads to a pending GitHub review — a new one, or the pending review already waiting on the pull request.
+Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattributes` marks
+them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
+globs in settings or with `diffle config`.
 
-Every GitHub request uses one token: `GITHUB_TOKEN`, else `GH_TOKEN`, else the token of a signed-in [`gh`](https://cli.github.com/) (`gh auth token`). Without one, diffle runs without GitHub: the origin repository still shows, and pull request lookup and export are off. `GITHUB_API_URL` points the requests at another GitHub API root, as in Actions.
+## Send comments to GitHub
 
-Nothing is submitted for you: open the pull request on GitHub and submit the review yourself, so you can edit or drop comments first.
+The pull request icon adds one thread, or all open threads, to a pending review on the PR.
+diffle never submits it: you edit, drop, and submit the comments on GitHub yourself. Adding a
+thread again updates its comment instead of duplicating it.
 
-The GitHub button next to the comparison menu (`o`) shows the repository from your GitHub `origin`, even without a token. Pull request details load in the background by matching the old and new branches' upstreams; an explicit `diffle pr` supplies the PR directly. Discovery never changes your comparison.
+Export works when the comparison matches the PR's committed diff, so unpushed commits and
+worktree changes rule it out. Stale threads are skipped.
 
-Review export is available when the comparison matches an open PR's committed diff. Unpushed commits, worktree comparisons, and different base comparisons can show repository or PR information without enabling export. Stale threads are skipped. Threads on a whole file become GitHub file-level comments.
+diffle takes the token from `GITHUB_TOKEN`, then `GH_TOKEN`, then a signed-in
+[`gh`](https://cli.github.com/). Without one, everything except GitHub still works.
+`GITHUB_API_URL` points diffle at another GitHub API, as in Actions.
 
-Exported comments carry a hidden thread ID. Adding the same thread again at the same lines leaves its comment alone, or rewrites it when you edited the thread. Other drafts, including exports from older versions without an ID, stay untouched. The button says Added, Updated, or Already added.
+## Jump to definitions
 
-If the pending review cannot be read completely, export stops before changing it. Reviews with more than 1,000 threads exceed the lookup limit.
+diffle starts a language server for each language in the diff, if it finds one on `PATH`:
 
-## Language servers
-
-Language-server indexing can take a while, especially in large repositories.
-
-Definitions, references, hover details, and symbol search come from a language server. diffle looks for one on `PATH` for every language in the diff and starts it for the run:
-
-- `gd` or Command/Ctrl+click: definition
+- `gd` or Ctrl/Cmd+click: definition
 - `gy`: type definition
 - `gA`: references
 - `gs` / `gS`: file or repository symbols
+- `gh`: hover, including schema docs for JSON, YAML, and TOML
 
-A result outside the diff's files, such as the standard library, `site-packages`, or an ignored virtualenv, opens read-only: no comments, no further navigation.
+Results outside the diff, such as the standard library, open read-only. Large repositories can
+take a while to index.
 
-`diffle lsp` prints what each language would get, and what to install for the ones it cannot serve:
+`diffle lsp` shows which server each language gets and what to install for the rest:
 
 ```
 python    pyrefly lsp
 rust      not on PATH (tried rust-analyzer)
 ```
 
-Languages served out of the box: C/C++ (`clangd`), Go (`gopls`), Haskell, Java, JavaScript/TypeScript (`typescript-language-server`, `vtsls`), Lua, Nix, OCaml, PHP, Python (`pyrefly`, `ty`, `basedpyright`, `pyright`, `pylsp`, `jedi`), Ruby, Rust (`rust-analyzer`), shell, Swift, Terraform, Zig.
-
-JSON/JSONC (`vscode-json-language-server` or `vscode-json-languageserver`), YAML (`yaml-language-server`), and TOML (`tombi`, falling back to `taplo`) also provide schema descriptions on hover. Install the corresponding server on `PATH`; common filenames are associated through SchemaStore, and explicit `$schema` declarations or the server's schema directives can select a schema. Schema downloads require network access; diffle caches the JSON catalog and reuses it offline. As with other LSP features, hover is available on the new side when the review follows the checkout.
-
-Configuration files (JSON/JSONC, YAML, and TOML) offer schema hover with the pointer or `gh`. Clicking a key selects its line; symbol menus and definition, type-definition, and reference navigation are disabled for these formats.
-
-A client-side Tree-sitter worker suppresses hover and symbol menus on reserved keywords and in comments and string text; identifiers, including keyword spellings used as property names, and interpolated expressions remain actionable. Grammars load on demand. Haskell, Nix, Terraform, files over one million UTF-16 code units, and parser failures fall back to language-server behavior.
-
-Override a command, or turn one language off with an empty command:
+Override a server or turn one off:
 
 ```bash
 diffle config set-lsp rust "rust-analyzer"       # persistent
 diffle config set-lsp java ""                    # never start one for java
 diffle config unset-lsp rust                     # back to PATH
-diffle working --lsp python="pyrefly lsp"        # this run only, repeatable
-diffle working --no-lsp                          # no language server at all
+diffle working --lsp python="pyrefly lsp"        # this run only
+diffle working --no-lsp                          # none at all
 ```
 
-Only the languages diffle finds in the changed files get a server; a language named by `--lsp` starts whether the diff holds it or not.
+Language servers run through a shell inside the repository and can read anything your user can.
+`--no-lsp` starts none.
 
-For large repositories, raise pyrefly's indexing limit:
+## Shell completions
 
 ```bash
-diffle config set-lsp python "pyrefly lsp --indexing-mode lazy-blocking --workspace-indexing-limit 20000"
+diffle completion --shell bash > ~/.local/share/bash-completion/completions/diffle
+diffle completion --shell zsh > ~/.local/share/zsh/site-functions/_diffle   # on fpath, before compinit
+diffle completion --shell fish > ~/.config/fish/completions/diffle.fish
 ```
 
-For an `src/` layout, add this to `pyproject.toml`:
+Rerun after upgrading to pick up new commands. Revisions don't complete.
 
-```toml
-[tool.pyrefly]
-search-path = ["src"]
+## Behind a reverse proxy
+
+diffle works under a path prefix such as `https://proxy.example/diffle/` with no extra setting.
+Have the proxy strip the prefix, including for WebSocket upgrades at `/diffle/ws`, and trust its
+public origin:
+
+```bash
+diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
 ```
 
-## Security
-
-Every language-server command runs through a shell inside the repository and can read anything available to your user — the ones found on `PATH` as much as the ones you configure. `--no-lsp` starts none.
+If the proxy rewrites Host and Origin to its upstream address, such as a Kubernetes service
+name, trust that address instead. A rejected request gets a 403 naming the header that failed.
 
 ## Development
 
@@ -205,31 +173,20 @@ npm run dev -- working
 npm test && npm run typecheck && npm run build
 ```
 
-`npm run dev` builds the client, then starts the server from source. Restart it after client changes; the server always serves `dist/client`.
-
-### Testing
-
-Tests produce things you can look at. `npm run fixture -- <dir>` builds a small repository whose history covers every diff shape (renames, a binary, generated files, CRLF, a minified line, uncommitted changes) and prints the comparisons worth opening; it is the same repository the tests review. The destination must be new or empty; omit it to create a fresh temporary directory.
-
-For the same screenshot results on macOS, Windows, and Linux, start Docker and use:
+Restart `npm run dev` after client changes; the server serves `dist/client`.
+`npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
+CRLF, and more. Screenshot tests run in Docker so they match CI:
 
 ```bash
-npm ci
-npm test                                # unit and server tests
-npm run test:e2e:docker                  # the Linux x64 browser suite used in CI
-npm run test:e2e:report                  # open the saved Playwright report locally
-npm run test:e2e:docker -- -g search     # run matching scenarios
-npm run test:e2e:docker:update
+npm run test:e2e:docker                  # the browser suite
+npm run test:e2e:docker -- -g search     # matching scenarios
+npm run test:e2e:report                  # open the last report
+npm run test:e2e:docker:update           # accept new screenshots
 ```
 
-The container includes Chromium and keeps its dependencies and build output separate from your local installation. The HTML report is saved in `playwright-report/`, with failure screenshots, visual diffs, and traces; raw results are in `test-results/`. Both survive the container exiting, even when tests fail. Each run replaces the previous report: copy the whole `playwright-report/` directory to keep or share a run. Opening the report does not require Docker or a local Chromium installation.
-
-Snapshots live under `test/e2e/__snapshots__/`, grouped by behavior, in the light theme. Review their changes before committing an update. For native browser debugging, install Chromium with `npm run test:e2e:install`, then use `npm run test:e2e -- --ui`. Native screenshot comparisons can differ from the Linux baselines; use Docker to accept them.
-
-To regenerate remotely, run the **Update snapshots** workflow on your branch or comment `update-assets` on an open PR. The comment command requires repository write access and a branch in this repository (forks can use Compose locally). The workflow commits and pushes changed snapshots to that branch. Both triggers require the workflow to be on the default branch. A pull request that touches snapshots gets a report comparing every changed one side by side.
-
-See [AGENTS.md](AGENTS.md) for repository notes.
+See [AGENTS.md](AGENTS.md) for more.
 
 ## Acknowledgements
 
-This workflow and tool were inspired by [difit](https://github.com/yoshiko-pg/difit).
+diffle is inspired by [difit](https://github.com/yoshiko-pg/difit).
+Diffs are rendered with [@pierre/diffs](https://github.com/pierrecomputer/pierre).

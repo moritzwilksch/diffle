@@ -86,9 +86,8 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     root: '/r',
     mode: {
       old: 'HEAD',
-      mergeBase: false,
       new: 'worktree',
-
+      base: 'direct',
       live: 'none',
       commentKey: key,
     },
@@ -99,6 +98,8 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     context: 5,
     changed: [],
     tree,
+    commit: null,
+    commits: { list: [], total: 0 },
   };
 }
 
@@ -880,7 +881,7 @@ describe('client transitions', () => {
     expect(useStore.getState().selection).toBeNull();
 
     // zc skips collapsed files whatever their viewed state.
-    useStore.getState().unviewAll();
+    void useStore.getState().setViewedMany(['a.txt', 'b.txt', 'c.txt', 'd.txt'], false);
     useStore.setState({ collapsed: { 'b.txt': true, 'c.txt': true } });
     useStore.getState().moveFile('first');
     useStore.getState().setCollapsedAtCursor(true);

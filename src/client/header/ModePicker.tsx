@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   GitCommitHorizontal,
+  GitCommitVertical,
   GitPullRequest,
   History,
   PencilRuler,
@@ -36,6 +37,8 @@ export function ModePicker() {
   const [dots, setDots] = useState<'..' | '...'>('...');
   const [oldOffsetText, setOldOffsetText] = useState('1');
   const [newOffsetText, setNewOffsetText] = useState('0');
+  const commit = useStore((s) => s.modeCommit);
+  const setCommit = useStore((s) => s.setModeCommit);
   const [pr, setPr] = useState('');
   const [prPending, setPrPending] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export function ModePicker() {
     focusReview();
     void switchMode(req);
   };
+  const chooseCommit = (revision: string) => choose({ kind: 'revspec', args: [`${revision}^!`] });
   const openPr = async () => {
     if (prInFlight.current) return;
     prInFlight.current = true;
@@ -122,6 +126,7 @@ export function ModePicker() {
     { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
     { label: 'Last commits', icon: History, pane: 'commits' },
     { label: 'PR', icon: GitPullRequest, pane: 'pr' },
+    { label: 'Commit…', icon: GitCommitVertical, pane: 'commit' },
   ] as const;
 
   return (
@@ -190,6 +195,7 @@ export function ModePicker() {
                   choose(lastCommitsRequest(oldOffset, newOffset));
                 }
                 if (pane === 'pr') void openPr();
+                if (pane === 'commit' && commit.trim()) chooseCommit(commit.trim());
               }}
             >
               {pane === 'pr' && (
@@ -282,6 +288,25 @@ export function ModePicker() {
                   <CommitPreview oldOffset={oldOffset} newOffset={newOffset} version={snapshot?.version ?? 0} />
                 </div>
               )}
+              {pane === 'commit' && (
+                <>
+                  <div className="flex items-center gap-1.5 pt-1.5 font-mono text-[0.8125rem] leading-[1.5]">
+                    <RefInput
+                      label="Commit"
+                      value={commit}
+                      onChange={setCommit}
+                      refs={refs}
+                      worktree={false}
+                      autoFocus={!pointerPick.current}
+                      onAccept={chooseCommit}
+                    />
+                    <span>^!</span>
+                  </div>
+                  <p className="m-0 p-0 text-[0.75rem] whitespace-normal text-muted">
+                    Show this commit against its first parent.
+                  </p>
+                </>
+              )}
               {pane === 'pr' && (
                 <>
                   <label className="flex min-w-0 flex-col gap-1.5">
@@ -319,9 +344,23 @@ export function ModePicker() {
                 type="submit"
                 aria-live={pane === 'pr' ? 'polite' : undefined}
                 aria-busy={pane === 'pr' && prPending}
-                disabled={pane === 'pr' ? prPending : pane === 'refs' ? !a.trim() || !b.trim() : !validOffsets}
+                disabled={
+                  pane === 'pr'
+                    ? prPending
+                    : pane === 'refs'
+                      ? !a.trim() || !b.trim()
+                      : pane === 'commit'
+                        ? !commit.trim()
+                        : !validOffsets
+                }
               >
-                {pane === 'pr' ? (prPending ? 'Loading PR…' : 'Show PR') : 'Compare'}
+                {pane === 'pr'
+                  ? prPending
+                    ? 'Loading PR…'
+                    : 'Show PR'
+                  : pane === 'commit'
+                    ? 'Show commit'
+                    : 'Compare'}
               </Button>
             </form>
           )}

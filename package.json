@@ -1,6 +1,6 @@
 {
   "name": "@moritzwilksch/diffle",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Local git diff reviewer in the browser with line comments exported as agent prompts",
   "keywords": [
     "agent",
@@ -9,7 +9,7 @@
     "diff",
     "git"
   ],
-  "homepage": "https://github.com/moritzwilksch/diffle#readme",
+  "homepage": "https://diffle.app",
   "bugs": {
     "url": "https://github.com/moritzwilksch/diffle/issues"
   },
@@ -25,6 +25,7 @@
   "files": [
     "bin",
     "dist",
+    "!dist/sea",
     "THIRD_PARTY_NOTICES.md"
   ],
   "type": "module",
@@ -37,6 +38,7 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsdown",
+    "build:sea": "npm run build && node scripts/build-sea.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
     "lint": "oxlint",
     "format": "oxfmt",
@@ -45,7 +47,7 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:install-deps": "playwright install-deps chromium",
-    "screenshot": "tsx",
+    "screenshot": "tsx scripts/screenshot.ts",
     "test:e2e:docker": "node scripts/e2e-docker.mjs",
     "test:e2e:docker:update": "node scripts/e2e-docker.mjs --update-snapshots",
     "test:e2e:report": "playwright show-report playwright-report",

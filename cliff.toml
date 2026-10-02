@@ -1,0 +1,53 @@
+# Generates CHANGELOG.md and the next version from conventional commits: https://git-cliff.org/docs/configuration
+# The Release workflow runs it; `npx git-cliff --bump --unreleased` previews the next release locally.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project are documented in this file."""
+# The `<!-- n -->` prefixes of the group names order the sections; `striptags` hides them.
+body = """
+{%- macro remote() -%}https://github.com/moritzwilksch/diffle{%- endmacro -%}
+{%- if version and previous.version %}
+## [{{ version | trim_start_matches(pat="v") }}]({{ self::remote() }}/compare/{{ previous.version }}...{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{%- elif version %}
+## [{{ version | trim_start_matches(pat="v") }}]({{ self::remote() }}/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{%- else %}
+## Unreleased
+{%- endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {% if commit.scope %}_({{ commit.scope }})_ {% endif %}{% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | split(pat="\n") | first | upper_first | trim }}
+{%- endfor %}
+{% endfor %}"""
+trim = false
+postprocessors = [
+  { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/moritzwilksch/diffle/pull/${1}))" },
+]
+
+[git]
+conventional_commits = true
+# History before the switch to conventional commits stays out of the changelog.
+filter_unconventional = true
+protect_breaking_commits = true
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+sort_commits = "oldest"
+commit_parsers = [
+  { message = '(?i)^chore(\(.*\))?: (release|prepare)\b', skip = true },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactors" },
+  { message = "^docs", group = "<!-- 4 -->Documentation" },
+  { message = "^test", group = "<!-- 5 -->Testing" },
+  { message = "^(build|ci)", group = "<!-- 6 -->Build and CI" },
+  { message = "^revert", group = "<!-- 7 -->Reverts" },
+  { message = ".*", group = "<!-- 8 -->Other" },
+]
+
+# Before 1.0, a breaking change bumps the minor version and anything else the patch version.
+[bump]
+features_always_bump_minor = false
+breaking_always_bump_major = false

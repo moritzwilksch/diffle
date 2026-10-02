@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
 import { clearWordFocus, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
-import { currentPath } from '../model.js';
+import { currentPath, MODE_PANES } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
@@ -63,6 +63,7 @@ const KEYMAP: Record<string, Action> = {
   t: (s) => s.setTheme(nextTheme(s.theme)),
   yy: () => void copyComments(),
   Y: () => void copyComments(),
+  yp: (s) => void copyPath(s),
   '/': (s) => s.openSearch('file'),
   'g/': (s) => s.openSearch('diff'),
   gf: () => focusFileSearch(),
@@ -78,6 +79,8 @@ const KEYMAP: Record<string, Action> = {
   },
   o: (s) => s.setGithubMenuOpen(!s.githubMenuOpen),
   m: (s) => s.setModeMenuOpen(!s.modeMenuOpen),
+  '<': (s) => s.stepCommit(-1),
+  '>': (s) => s.stepCommit(1),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
 };
 
@@ -233,7 +236,7 @@ export function useKeymap(): void {
       // configuration pane keep native Enter, so Enter and Space activate the same control.
       if (s.modeMenuOpen && !s.helpOpen) {
         const step = e.key === 'j' || e.key === 'ArrowDown' ? 1 : e.key === 'k' || e.key === 'ArrowUp' ? -1 : 0;
-        const entry = /^[1-4]$/.test(e.key)
+        const entry = /^[1-5]$/.test(e.key)
           ? Number(e.key)
           : e.key === 'Enter' && !target?.closest('button, #mode-config')
             ? s.modeEntry
@@ -341,8 +344,6 @@ export function useKeymap(): void {
   }, []);
 }
 
-const MODE_PANES = [null, 'refs', 'commits', 'pr'] as const;
-
 function focusModeEntry(): void {
   document.querySelector<HTMLElement>(`[data-mode-entry="${useStore.getState().modeEntry}"]`)?.focus();
 }
@@ -377,6 +378,12 @@ function focusTree(): void {
       host?.shadowRoot?.querySelector<HTMLElement>('[role="tree"]');
     (row ?? host)?.focus();
   });
+}
+
+async function copyPath(s: ReviewState): Promise<void> {
+  const path = currentPath(s);
+  if (!path) return;
+  s.flash((await copyText(path)) ? `Copied ${path}` : 'The browser blocked clipboard access');
 }
 
 /** Move keyboard focus to the review pane, so the vim keys reach the cursor instead of the tree or a field. */

@@ -20,3 +20,130 @@ test.describe('two-dot comparison', () => {
     expect(await filePaths(page)).toContain('README.md');
   });
 });
+
+test.describe('single commit', () => {
+  test.use({ revs: ['HEAD^!'] });
+
+  test('shows the commit against its parent, with its subject', async ({ page }) => {
+    const header = page.locator('header');
+    await expect(header).toContainText('fix(cli): report an empty ledger instead of crashing');
+    await expect(header).toContainText('1 files');
+    expect(await filePaths(page)).toEqual(['tally/cli.py']);
+    await waitForHighlight(page, 'tally/cli.py');
+    await expect(page).toHaveScreenshot('commit.png');
+  });
+
+  test('steps to the parent and back toward HEAD', async ({ page }) => {
+    const header = page.locator('header');
+    const previous = page.getByRole('button', { name: 'Previous commit' });
+    const next = page.getByRole('button', { name: 'Next commit' });
+    await expect(next).toBeDisabled();
+    await previous.click();
+    await expect(header).toContainText('chore: regenerate the client, refresh the lockfile and the logo');
+    await expect(next).toBeEnabled();
+    await page.keyboard.press('>');
+    await expect(header).toContainText('fix(cli): report an empty ledger instead of crashing');
+    await expect(next).toBeDisabled();
+  });
+
+  test('picks another commit from the compare menu', async ({ page }) => {
+    await page.keyboard.press('m');
+    await page.keyboard.press('5');
+    const pane = page.getByRole('form', { name: 'Commit…' });
+    await expect(pane).toBeVisible();
+    await expect(pane).toMatchAriaSnapshot({ name: 'commit-pane.aria.yml' });
+    await page.getByRole('combobox', { name: 'Commit' }).fill('HEAD~1');
+    await page.keyboard.press('Enter');
+    const header = page.locator('header');
+    await expect(header).toContainText('chore: regenerate the client, refresh the lockfile and the logo');
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/\^!/);
+  });
+});
+
+test.describe("the range's commits", () => {
+  test('shows a hovered commit in full', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    await expect(box).toMatchAriaSnapshot({ name: 'range-commits.aria.yml' });
+    await box.getByRole('button', { name: /^fix\(cli\)/ }).hover();
+    const card = page.getByRole('tooltip');
+    await expect(card).toContainText('fix(cli): report an empty ledger instead of crashing');
+    await expect(card).toContainText('hid a wrong glob in cron jobs.');
+    await expect(card).toContainText('Grace Hopper');
+    await expect(page).toHaveScreenshot('commit-card.png');
+    await page.mouse.move(0, 0);
+    await expect(card).toHaveCount(0);
+  });
+
+  test('focuses one commit, steps through the range and returns to all changes', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const picker = page.getByTitle(/Change what is compared/);
+    const header = page.locator('header');
+    const all = box.getByRole('button', { name: /^All changes/ });
+    await expect(all).toHaveAttribute('aria-current', 'true');
+    await expect(box.getByRole('button', { name: 'Newer commit' })).toBeDisabled();
+
+    await box.getByRole('button', { name: /^refactor: move money helpers/ }).click();
+    await expect(picker).toHaveText(/main\.\.\.feature\/refunds @ 640d216/);
+    await expect(header).toContainText('refactor: move money helpers into a currency module');
+    const active = box.locator('[aria-current="true"]');
+    await expect(active).toContainText('Grace Hopper');
+    await expect(all).not.toHaveAttribute('aria-current');
+    // The range still lists all its commits while one is shown.
+    await expect(box.getByRole('listitem')).toHaveCount(4);
+    await waitForHighlight(page, 'tally/currency.py');
+    await expect(page).toHaveScreenshot('focused-commit.png');
+
+    // Focus follows the shown commit, and a key press after the click draws no ring around it.
+    await page.keyboard.press('>');
+    await expect(active).toContainText('chore: regenerate the client');
+    await expect(active.getByRole('button', { name: /^chore/ })).toBeFocused();
+    expect(await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle)).toBe('none');
+    await page.keyboard.press('>');
+    await expect(active).toContainText('fix(cli): report an empty ledger');
+    await page.keyboard.press('>');
+    await expect(all).toHaveAttribute('aria-current', 'true');
+    await expect(picker).toHaveText(/^main\.\.\.feature\/refunds/);
+    await expect(header).toContainText('17 files');
+
+    // From the range, older steps to the newest commit.
+    await box.getByRole('button', { name: 'Older commit' }).click();
+    await expect(active).toContainText('fix(cli): report an empty ledger');
+  });
+
+  test('copies a full hash and shows a check mark on it', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const box = page.getByRole('region', { name: 'Commits' });
+    await box.getByRole('button', { name: 'Copy hash 640d216' }).click();
+    await expect(box.getByRole('button', { name: 'Copied 640d216' })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^640d216[0-9a-f]{33}$/);
+    // Copying does not focus the commit.
+    await expect(box.getByRole('button', { name: /^All changes/ })).toHaveAttribute('aria-current', 'true');
+    await expect(box).toHaveScreenshot('copied-hash.png');
+    await expect(box.getByRole('button', { name: 'Copy hash 640d216' })).toBeVisible();
+  });
+
+  test('collapses to its header', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const toggle = box.getByRole('button', { name: /^Commits/ });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(box.getByRole('list')).toHaveCount(0);
+  });
+});
+
+test.describe('a long range of commits', () => {
+  test.use({ revs: ['HEAD~7..HEAD'], viewport: { width: 1440, height: 520 } });
+
+  test('starts collapsed and, opened, scrolls within its share of the panel', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const header = box.getByRole('button', { name: /^Commits/ });
+    await expect(header).toHaveAttribute('aria-expanded', 'false');
+    await header.click();
+    await expect(box.getByRole('listitem')).toHaveCount(7);
+    const [panel, own] = await Promise.all([page.locator('aside').last().boundingBox(), box.boundingBox()]);
+    expect(own!.height).toBeLessThanOrEqual(panel!.height * 0.4 + 1);
+    const list = box.getByRole('list').locator('..');
+    expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
+    await expect(page).toHaveScreenshot('long-range.png');
+  });
+});

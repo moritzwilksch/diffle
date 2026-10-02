@@ -38,7 +38,7 @@ import {
 } from './keyboard/nav.js';
 import { lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
-import type { ExportOutcome } from './model.js';
+import type { ExportOutcome, ModePane } from './model.js';
 import {
   canJumpBack,
   canJumpForward,
@@ -49,9 +49,11 @@ import {
   nextFileAfter,
   itemIdOf,
   linesOf,
+  MODE_PANES,
   OVERSIZED_LINES,
   patchBatches,
   pathFromItemId,
+  rangeStep,
   reuseThreads,
   selectionRange,
   visibleThreads,
@@ -244,14 +246,17 @@ export interface ReviewState {
   refreshGithub(): Promise<void>;
   modeMenuOpen: boolean;
   setModeMenuOpen(open: boolean): void;
-  modePane: 'refs' | 'commits' | 'pr' | null;
-  /** Compare-menu entry (1–4) that Enter picks; opening the menu highlights the first. */
+  modePane: ModePane | null;
+  /** Compare-menu entry (1–5) that Enter picks; opening the menu highlights the first. */
   modeEntry: number;
   /** Highlight entry `n`, wrapping past either end. */
   highlightModeEntry(n: number): void;
   pickModeEntry(n: number): void;
   /** Collapse the configuration pane, keeping the menu open and the highlight. */
   closeModePane(): void;
+  /** The revision in the compare menu's Commit… pane. */
+  modeCommit: string;
+  setModeCommit(revision: string): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
   treeModel: FileTree | null;
@@ -388,6 +393,13 @@ export interface ReviewState {
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
   switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
+  /** Show one listed commit of the current range, or with null the range itself. */
+  focusCommit(commit: string | null): void;
+  /**
+   * Step to the older (-1) or newer (1) entry of a range's list, the range itself past the newest; in a
+   * single-commit view, to the parent or the child toward HEAD. A no-op at either end.
+   */
+  stepCommit(direction: -1 | 1): void;
   /** Jumps to a line of a path: in its diff for a changed file, else in the file view of that file. */
   openFile(path: string, line?: number, side?: Side): Promise<void>;
   /** Full contents of one side, one request per side and path per transition, shared with hydration and the file view. */
@@ -422,8 +434,8 @@ export interface ReviewState {
   exportToGithub(threadIds?: string[]): Promise<ExportOutcome | null>;
   /** Mark a file viewed (collapsing it) or not viewed (expanding it). The cursor and viewport stay put. */
   setViewed(path: string, viewed: boolean): Promise<void>;
-  /** Mark every changed file not viewed (explicit marks override auto-viewed globs) and expand them. */
-  unviewAll(): Promise<void>;
+  /** Mark the named changed files viewed (collapsing them) or not viewed (expanding them); explicit marks override auto-viewed globs. */
+  setViewedMany(paths: readonly string[], viewed: boolean): Promise<void>;
   /** Collapse or expand a file from its header or the tree. The cursor and viewport stay put; `zc` is `setCollapsedAtCursor`. */
   toggleCollapsed(path: string): void;
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
@@ -1307,19 +1319,23 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ modeMenuOpen: open, modePane: null, modeEntry: 1, ...(open ? { githubMenuOpen: false } : {}) });
     },
     highlightModeEntry(n) {
-      const entry = ((((n - 1) % 4) + 4) % 4) + 1;
+      const entry = ((((n - 1) % 5) + 5) % 5) + 1;
       if (entry !== get().modeEntry) set({ modeEntry: entry });
     },
     pickModeEntry(n) {
       if (n === 1) {
         set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
         void get().switchMode({ kind: 'working' });
-      } else if (n >= 2 && n <= 4) {
-        set({ modeMenuOpen: true, modePane: n === 2 ? 'refs' : n === 3 ? 'commits' : 'pr', modeEntry: n });
+      } else if (n >= 2 && n <= 5) {
+        set({ modeMenuOpen: true, modePane: MODE_PANES[n - 1]!, modeEntry: n });
       }
     },
     closeModePane() {
       if (get().modePane) set({ modePane: null });
+    },
+    modeCommit: 'HEAD',
+    setModeCommit(revision) {
+      set({ modeCommit: revision });
     },
     helpOpen: false,
     setHelpOpen(open) {
@@ -2076,6 +2092,22 @@ export const useStore = create<ReviewState>((set, get) => {
       }
     },
 
+    focusCommit(commit) {
+      void get().switchMode({ kind: 'focus', commit });
+    },
+
+    stepCommit(direction) {
+      const snap = get().snapshot;
+      if (!snap) return;
+      if (snap.mode.within || snap.mode.base !== 'parent') {
+        const target = rangeStep(snap, direction);
+        if (target !== undefined) get().focusCommit(target);
+        return;
+      }
+      const target = direction < 0 ? snap.commit?.parent : snap.commit?.child;
+      if (target) void get().switchMode({ kind: 'revspec', args: [`${target}^!`] });
+    },
+
     loadFile,
 
     async openFile(path, line, side) {
@@ -2287,14 +2319,18 @@ export const useStore = create<ReviewState>((set, get) => {
       await persistViewed('Marking viewed', () => api.setViewed(path, f.blob, viewed));
     },
 
-    async unviewAll() {
-      const snap = get().snapshot;
-      if (!snap) return;
-      const entries = snap.changed.map((f) => ({ path: f.path, blob: f.blob, viewed: false }));
-      const collapsed: Record<string, boolean> = {};
-      for (const f of snap.changed) collapsed[f.path] = false;
-      set({ viewed: entries, collapsed });
-      await persistViewed('Marking all not viewed', () => api.setViewedBulk(entries));
+    async setViewedMany(paths, viewed) {
+      const wanted = new Set(paths);
+      const entries = (get().snapshot?.changed ?? [])
+        .filter((f) => wanted.has(f.path))
+        .map((f) => ({ path: f.path, blob: f.blob, viewed }));
+      if (!entries.length) return;
+      // The server drops these paths' history, so the optimistic state does too.
+      set((s) => ({
+        viewed: [...s.viewed.filter((v) => !wanted.has(v.path)), ...entries],
+        collapsed: { ...s.collapsed, ...Object.fromEntries(entries.map((e) => [e.path, viewed])) },
+      }));
+      await persistViewed(viewed ? 'Marking viewed' : 'Marking not viewed', () => api.setViewedBulk(entries));
     },
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);

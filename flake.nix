@@ -32,11 +32,9 @@
               };
 
               nodejs = pkgs.nodejs_24;
-              # To update: Replace with an emtpy string and run
-              # docker run --rm -v "$PWD:/src:ro" -w /src nixos/nix nix build 'path:/src#default' --no-link --extra-experimental-features 'nix-command flakes' 2>&1
-              # or in one:
-              # hash=$(docker run --rm -v "$PWD:/src:ro" -w /src nixos/nix nix build 'path:/src#default' --no-link --extra-experimental-features 'nix-command flakes' 2>&1 | sed -n 's/.*got: *//p' | tail -1) && test -n "$hash" && sed -i "s|npmDepsHash = \".*\";|npmDepsHash = \"$hash\";|" flake.nix
-              npmDepsHash = "sha256-8oM4kxopcJExXHmv0C7gfXg6IOqP6Fcs/Pa4OZZKS9U=";
+              # Fetches each dependency by the lockfile's integrity hash, so no aggregate hash goes stale on a version bump.
+              npmDeps = pkgs.importNpmLock { npmRoot = ./.; };
+              npmConfigHook = pkgs.importNpmLock.npmConfigHook;
 
               nativeBuildInputs = [ pkgs.makeWrapper ];
               postInstall = ''

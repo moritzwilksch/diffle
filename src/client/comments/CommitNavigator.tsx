@@ -1,0 +1,321 @@
+import { Check, ChevronDown, ChevronRight, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { twMerge } from 'tailwind-merge';
+import { comparisonLabel, type RangeCommit, type Snapshot } from '../../shared/protocol.js';
+import { copyText } from '../clipboard.js';
+import { commitBody, rangeStep } from '../model.js';
+import { useStore } from '../store.js';
+import { Button } from '../ui/Button.js';
+
+const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' });
+
+/** Longer ranges start collapsed so the threads keep the panel. */
+const OPEN_UP_TO = 5;
+/** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
+const HOVER_DELAY_MS = 250;
+/** How long a copied hash shows its check mark. */
+const COPIED_MS = 1400;
+
+/**
+ * The compared range's commits, newest first, under an entry for the range itself. Choosing a commit
+ * shows its diff alone while the list stays the range's; the shown entry is highlighted with its full
+ * message, and hovering another shows that one's in a card.
+ */
+export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
+  const { mode, commits } = snapshot;
+  const focusCommit = useStore((s) => s.focusCommit);
+  const stepCommit = useStore((s) => s.stepCommit);
+  const [open, setOpen] = useState(commits.total <= OPEN_UP_TO);
+  const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const list = useRef<HTMLDivElement>(null);
+  const cardId = useId();
+  // A single commit alone has nothing to step through; it is shown as the one active entry.
+  const range = mode.within ?? (mode.base === 'parent' ? null : mode);
+  const active = mode.base === 'parent' ? mode.new : null;
+  const older = commits.total - commits.list.length;
+
+  useEffect(() => {
+    const current = list.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    current?.scrollIntoView({ block: 'nearest' });
+    // Focus left on a row stepped away from would mark it as well as the shown one.
+    if (list.current?.contains(document.activeElement) && document.activeElement !== current)
+      (current?.matches('button') ? current : current?.querySelector<HTMLElement>('button'))?.focus({
+        preventScroll: true,
+      });
+  }, [active, open]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const hoverStart = (commit: RangeCommit, row: Element) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setHover({ commit, row: row.getBoundingClientRect() }), HOVER_DELAY_MS);
+  };
+  const hoverEnd = () => {
+    clearTimeout(timer.current);
+    setHover(null);
+  };
+
+  return (
+    <section
+      className="flex max-h-[40%] shrink-0 flex-col border-b border-b-border text-[0.8125rem]"
+      aria-label="Commits"
+    >
+      <div className="flex min-h-10 flex-none items-center gap-0.5 pr-1.5">
+        <Button
+          variant="ghost"
+          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? (
+            <ChevronDown size="0.875rem" className="text-muted" />
+          ) : (
+            <ChevronRight size="0.875rem" className="text-muted" />
+          )}
+          <GitCommitHorizontal size="0.9375rem" /> Commits
+          <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">{commits.total}</span>
+        </Button>
+        {range && (
+          <>
+            <Button
+              variant="ghost"
+              icon
+              disabled={rangeStep(snapshot, -1) === undefined}
+              onClick={() => stepCommit(-1)}
+              title="Older commit (<)"
+              aria-label="Older commit"
+            >
+              <ChevronDown size="0.875rem" />
+            </Button>
+            <Button
+              variant="ghost"
+              icon
+              disabled={rangeStep(snapshot, 1) === undefined}
+              onClick={() => stepCommit(1)}
+              title="Newer commit (>)"
+              aria-label="Newer commit"
+            >
+              <ChevronUp size="0.875rem" />
+            </Button>
+          </>
+        )}
+      </div>
+      {open && (
+        <div ref={list} className="min-h-0 overflow-auto pb-1.5" onScroll={hoverEnd}>
+          {range && (
+            <Button
+              variant="ghost"
+              className={twMerge(
+                'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem] outline-none focus-visible:bg-hover',
+                active === null && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
+              )}
+              aria-current={active === null ? 'true' : undefined}
+              onClick={() => focusCommit(null)}
+            >
+              <Layers size="0.8125rem" className={active === null ? 'text-accent' : 'text-muted'} />
+              <span className={twMerge('flex-none', active === null && 'font-semibold')}>All changes</span>
+              <span className="min-w-0 truncate font-mono text-[0.75rem] text-muted">{comparisonLabel(range)}</span>
+            </Button>
+          )}
+          <ol className="m-0 list-none p-0">
+            {commits.list.toReversed().map((commit) => (
+              <CommitRow
+                key={commit.sha}
+                commit={commit}
+                rail={commits.list.length > 1}
+                active={commit.sha === active}
+                described={hover?.commit.sha === commit.sha ? cardId : undefined}
+                onPick={range ? () => focusCommit(commit.sha) : undefined}
+                onHover={(row) => hoverStart(commit, row)}
+                onLeave={hoverEnd}
+              />
+            ))}
+          </ol>
+          {older > 0 && (
+            <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">
+              {older} older {older === 1 ? 'commit' : 'commits'} not shown
+            </p>
+          )}
+        </div>
+      )}
+      {/* The shown commit already lays its message out in the list. */}
+      {hover && hover.commit.sha !== active && <CommitCard id={cardId} commit={hover.commit} row={hover.row} />}
+    </section>
+  );
+}
+
+function CommitRow({
+  commit,
+  rail,
+  active,
+  described,
+  onPick,
+  onHover,
+  onLeave,
+}: {
+  commit: RangeCommit;
+  rail: boolean;
+  active: boolean;
+  described: string | undefined;
+  /** Absent when the commit cannot be focused: it is the comparison itself. */
+  onPick: (() => void) | undefined;
+  onHover(row: Element): void;
+  onLeave(): void;
+}) {
+  const head = (
+    <>
+      <span
+        aria-hidden
+        className={twMerge(
+          // The first line's middle, where the rail meets it.
+          'relative mt-1.25 size-2 flex-none rounded-full border-[1.5px]',
+          active ? 'border-accent bg-accent' : 'border-muted bg-surface group-hover:bg-hover',
+        )}
+      />
+      <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>
+        {subjectOf(commit)}
+      </span>
+    </>
+  );
+  return (
+    <li
+      className={twMerge(
+        'group relative',
+        active ? 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)]' : 'hover:bg-hover',
+      )}
+      aria-current={active ? 'true' : undefined}
+      onPointerEnter={(e) => onHover(e.currentTarget)}
+      onPointerLeave={onLeave}
+    >
+      {rail && (
+        // The rail between the dots: it starts at the first dot and stops at the last.
+        <span
+          aria-hidden
+          className="absolute top-0 bottom-0 left-[0.8125rem] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
+        />
+      )}
+      <div className="flex items-start pr-1.5">
+        {onPick ? (
+          <Button
+            variant="ghost"
+            className={twMerge(
+              // The list marks the shown commit itself; a ring around the clicked row would only repeat it.
+              'min-w-0 flex-1 items-start gap-2 rounded-none py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              !active && 'focus-visible:bg-hover',
+            )}
+            aria-describedby={described}
+            onClick={onPick}
+          >
+            {head}
+          </Button>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+        )}
+        <CopyHash commit={commit} />
+      </div>
+      {active && (
+        <div className="pr-2.5 pb-1.5 pl-6.5">
+          <CommitDetails commit={commit} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** The short hash; a click copies the full one and swaps the hash for a check mark, as `yy` does its button. */
+function CopyHash({ commit }: { commit: RangeCommit }) {
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const transition = '[transition:opacity_160ms_ease,transform_200ms_cubic-bezier(0.2,0.8,0.2,1)]';
+  return (
+    <Button
+      variant="ghost"
+      className="relative mt-0.5 flex-none px-1 py-px font-mono text-[0.75rem] text-muted hover:text-foreground"
+      aria-label={done ? `Copied ${commit.short}` : `Copy hash ${commit.short}`}
+      onClick={async () => {
+        if (!(await copyText(commit.sha))) return;
+        setDone(true);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), COPIED_MS);
+      }}
+    >
+      <span className={twMerge(transition, done && '[transform:scale(0.6)] opacity-0')}>{commit.short}</span>
+      <span
+        aria-hidden
+        className={twMerge(
+          'absolute inset-0 flex items-center justify-center text-add',
+          transition,
+          done ? '[transform:scale(1)_rotate(0)] opacity-100' : '[transform:scale(0.4)_rotate(-30deg)] opacity-0',
+        )}
+      >
+        <Check size="0.875rem" strokeWidth={3} />
+      </span>
+    </Button>
+  );
+}
+
+function subjectOf(commit: RangeCommit): string {
+  return commit.message.split('\n', 1)[0] || '(Empty commit message)';
+}
+
+/** A commit's body and author line; `full` adds the email, the time and the hash, for the hover card. */
+function CommitDetails({ commit, full = false }: { commit: RangeCommit; full?: boolean }) {
+  const time = (
+    <time className="flex-none" dateTime={new Date(commit.date).toISOString()} title={DATE_TIME.format(commit.date)}>
+      {(full ? DATE_TIME : DATE).format(commit.date)}
+    </time>
+  );
+  return (
+    <div className="leading-[1.4]">
+      {commitBody(commit.message).map((paragraph, i) => (
+        <p key={i} className="m-0 mb-1.5 wrap-anywhere whitespace-pre-wrap text-muted">
+          {paragraph}
+        </p>
+      ))}
+      {full ? (
+        <div className="text-[0.75rem] text-muted">
+          <p className="m-0 wrap-anywhere">
+            {commit.author} &lt;{commit.email}&gt;
+          </p>
+          <p className="m-0 flex items-center gap-1.5">
+            {time}
+            <span aria-hidden>·</span>
+            <span className="font-mono text-foreground">{commit.short}</span>
+          </p>
+        </div>
+      ) : (
+        <p className="m-0 flex min-w-0 items-center gap-1.5 text-[0.75rem] text-muted">
+          <span className="min-w-0 truncate" title={`${commit.author} <${commit.email}>`}>
+            {commit.author}
+          </span>
+          <span aria-hidden>·</span>
+          {time}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The hovered commit in full, beside the panel and level with its row, kept inside the viewport. */
+function CommitCard({ id, commit, row }: { id: string; commit: RangeCommit; row: DOMRect }) {
+  const card = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(row.top);
+  useLayoutEffect(() => {
+    const height = card.current?.offsetHeight ?? 0;
+    setTop(Math.max(8, Math.min(row.top, window.innerHeight - height - 8)));
+  }, [row]);
+  return (
+    <div
+      ref={card}
+      id={id}
+      role="tooltip"
+      className="pointer-events-none fixed z-40 max-h-[calc(100vh-1rem)] w-[26rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-border bg-canvas px-3 py-2.5 text-[0.8125rem] shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
+      style={{ top, right: window.innerWidth - row.left + 8 }}
+    >
+      <p className="m-0 mb-1.5 leading-[1.4] font-semibold wrap-anywhere">{subjectOf(commit)}</p>
+      <CommitDetails commit={commit} full />
+    </div>
+  );
+}

@@ -1,0 +1,114 @@
+name: Update snapshots
+# Commits the snapshots that CI regenerated for a pull request's head commit onto its branch.
+# It waits for that commit's e2e job to finish; the branch must live in this repository.
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.pr }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Commit regenerated snapshots
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Resolve the pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+        run: |
+          pr=$(gh api "repos/$REPOSITORY/pulls/$PR")
+          if ! echo "$pr" | jq -e --arg repo "$REPOSITORY" '.state == "open" and .head.repo.full_name == $repo' > /dev/null; then
+            echo "::error::#$PR must be an open pull request from a branch of this repository."
+            exit 1
+          fi
+          echo "branch=$(echo "$pr" | jq -r .head.ref)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(echo "$pr" | jq -r .head.sha)" >> "$GITHUB_OUTPUT"
+      # An octo-sts token rather than GITHUB_TOKEN, so that the push triggers CI.
+      - name: Obtain GitHub app token
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: update-snapshots
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+          token: ${{ steps.octo-sts.outputs.token }}
+      # Only a run of this repository's own branch: a fork's PR run of the same commit executes the fork's workflow.
+      # Waits for the e2e job alone; the rest of CI need not finish.
+      - name: Wait for the e2e job
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ steps.pr.outputs.sha }}
+        run: |
+          while :; do
+            id=$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=100" \
+              --jq "[.workflow_runs[] | select(.head_repository.full_name == \"$REPOSITORY\")] | max_by(.run_number) | .id // empty")
+            if [ -n "$id" ]; then
+              status=$(gh api "repos/$REPOSITORY/actions/runs/$id/jobs?per_page=100" \
+                --jq '.jobs[] | select(.name == "e2e") | .status')
+              [ "$status" = completed ] && break
+            fi
+            echo "Waiting for the e2e job of CI for $SHA..."
+            sleep 20
+          done
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: Download changed snapshots
+        id: download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ steps.run.outputs.id }}
+        run: |
+          artifacts=$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+            --jq '[.artifacts[] | select(.name == "e2e-snapshots" and (.expired | not))] | length')
+          if [ "$artifacts" = 0 ]; then
+            echo "CI regenerated no snapshots for this commit."
+            exit 0
+          fi
+          gh run download "$RUN_ID" --repo "$REPOSITORY" --name e2e-snapshots --dir "$RUNNER_TEMP/snapshots"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+      - name: Commit snapshots
+        if: steps.download.outputs.found == 'true'
+        id: commit
+        run: |
+          src="$RUNNER_TEMP/snapshots/test/e2e/__snapshots__"
+          if [ ! -d "$src" ] || [ -n "$(find "$src" ! -type d ! -type f)" ]; then
+            echo "::error::The artifact holds no snapshot files or holds something other than regular files."
+            exit 1
+          fi
+          cp -R "$src/." test/e2e/__snapshots__/
+          git config user.name "octo-sts[bot]"
+          git config user.email "157150467+octo-sts[bot]@users.noreply.github.com"
+          git add -A -- test/e2e/__snapshots__
+          if git diff --cached --quiet; then
+            echo "Snapshots are already up to date."
+            exit 0
+          fi
+          git commit -m "test(e2e): update snapshots"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      # Fails rather than overwrites when the branch moved since dispatch.
+      - name: Push snapshots
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ steps.pr.outputs.branch }}
+        run: git push origin "HEAD:refs/heads/$BRANCH"

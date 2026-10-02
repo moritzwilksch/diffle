@@ -51,3 +51,81 @@ test('gv marks the file above viewed and keeps the cursor in place', async ({ pa
   await expect.poll(async () => Math.abs((await cursor.boundingBox())!.y - before)).toBeLessThanOrEqual(1);
   await expect(page).toHaveScreenshot('viewed-above.png');
 });
+
+test.describe('copying a file path', () => {
+  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+  const path = 'tally/ledger.py';
+  const clipboard = (page: import('@playwright/test').Page) => page.evaluate(() => navigator.clipboard.readText());
+
+  test('the header reveals a copy button on hover', async ({ page }) => {
+    await gotoFile(page, path);
+    const title = page.locator(`[slot="header-custom"] [data-path="${path}"]`);
+    const copy = title.getByRole('button', { name: 'Copy path' });
+    await page.mouse.move(0, 0);
+    await expect(copy).toHaveCSS('opacity', '0');
+    // The app's tooltip lifts `title` only while hovered, so check with the pointer away.
+    await expect(title.locator('> div > span').first()).not.toHaveAttribute('title');
+    await title.hover();
+    await expect(copy).toHaveCSS('opacity', '1');
+    await expect(title).toHaveScreenshot('copy-path-hover.png');
+    await copy.click();
+    await expect.poll(() => clipboard(page)).toBe(path);
+    expect(await collapsed(page, path)).toBe(false);
+  });
+
+  test('dragging across the path selects it without collapsing the file', async ({ page }) => {
+    await gotoFile(page, path);
+    // The FilePath span, first after the icon; its text splits into directory and basename parts.
+    const name = page.locator(`[slot="header-custom"] [data-path="${path}"] > div > span`).first();
+    const box = (await name.boundingBox())!;
+    await page.mouse.move(box.x + 1, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(path);
+    expect(await collapsed(page, path)).toBe(false);
+  });
+
+  test('yp copies the current file path', async ({ page }) => {
+    await gotoFile(page, path);
+    await page.keyboard.press('y');
+    await page.keyboard.press('p');
+    await expect.poll(() => clipboard(page)).toBe(path);
+  });
+});
+
+test('a directory mark views every changed file under it, then un-views them', async ({ page }) => {
+  const mark = page.locator(
+    'file-tree-container [data-item-type="folder"][data-item-path="scripts/"] [data-item-section="decoration"] > span',
+  );
+  const fileMark = page.locator(
+    'file-tree-container [data-item-path="scripts/build.bat"] [data-item-section="decoration"] > span > span:last-child',
+  );
+  await expect(mark).toHaveText('○');
+  await fileMark.click();
+  await expect(mark).toHaveText('1/2○');
+  // A partly viewed directory completes; the click marks the files without folding the directory.
+  await mark.click();
+  await expect.poll(() => viewed(page, 'scripts/tally.sh')).toBe(true);
+  expect(await viewed(page, 'scripts/build.bat')).toBe(true);
+  expect(await collapsed(page, 'scripts/tally.sh')).toBe(true);
+  await expect(mark).toHaveText('✓');
+  await expect(page.locator('file-tree-container [data-item-path="scripts/"]')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(page.locator('file-tree-container')).toHaveScreenshot('viewed-directory.png');
+  await mark.click();
+  await expect.poll(() => viewed(page, 'scripts/tally.sh')).toBe(false);
+  expect(await viewed(page, 'scripts/build.bat')).toBe(false);
+  await expect(mark).toHaveText('○');
+});
+
+test('the directory context menu marks the directory viewed', async ({ page }) => {
+  await page.locator('file-tree-container [data-item-path="tally/"]').click({ button: 'right' });
+  await page.getByRole('button', { name: /Mark directory viewed/ }).click();
+  await expect.poll(() => viewed(page, 'tally/ledger.py')).toBe(true);
+  await expect(
+    page.locator('file-tree-container [data-item-path="tally/"] [data-item-section="decoration"] > span'),
+  ).toHaveText('✓');
+});
