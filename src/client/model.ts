@@ -4,6 +4,7 @@ import {
   refName,
   type ChangedFile,
   type CommentAnchor,
+  type Iteration,
   type CommentThread,
   type LspSymbol,
   type ModeRequest,
@@ -396,6 +397,24 @@ export function iterationPick(
   const next = from < to ? { from, to } : { from: to, to: from };
   if (next.from === next.to || (shown && shown.from === next.from && shown.to === next.to)) return null;
   return next;
+}
+
+/**
+ * Where `ij` / `ik` / `iJ` / `iK` take the span: its lower (`end` 'lower') or higher end moves one
+ * iteration older (-1) or newer (1) along `iterations`, through `iterationPick`. Without a span the
+ * end is the latest. Null at the list's edge or when nothing would change.
+ */
+export function iterationStep(
+  iterations: Pick<Iteration, 'n'>[],
+  shown: { from: number; to: number } | null,
+  end: 'lower' | 'higher',
+  direction: -1 | 1,
+): { from: number; to: number } | null {
+  const latest = iterations.at(-1)?.n;
+  if (latest == null) return null;
+  const current = shown ? (end === 'lower' ? shown.from : shown.to) : latest;
+  const target = iterations[iterations.findIndex((it) => it.n === current) + direction];
+  return target ? iterationPick(shown, latest, target.n, end === 'higher') : null;
 }
 
 /** Local repository name, independent of GitHub discovery. */

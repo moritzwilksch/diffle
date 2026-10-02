@@ -18,6 +18,7 @@ import {
   imageSides,
   isViewed,
   iterationPick,
+  iterationStep,
   movedLabel,
   nextFileAfter,
   relativeTime,
@@ -314,6 +315,24 @@ describe('iterationPick', () => {
     expect(iterationPick({ from: 3, to: 9 }, 10, 10, false)).toEqual({ from: 9, to: 10 });
     expect(iterationPick({ from: 3, to: 9 }, 10, 10, true)).toEqual({ from: 3, to: 10 });
     expect(iterationPick({ from: 3, to: 9 }, 10, 9, false)).toBeNull();
+  });
+});
+
+describe('iterationStep', () => {
+  const list = [1, 2, 3, 4].map((n) => ({ n }));
+  it('moves the lower end along the list, and the higher end with the shifted keys', () => {
+    expect(iterationStep(list, { from: 2, to: 4 }, 'lower', -1)).toEqual({ from: 1, to: 4 });
+    expect(iterationStep(list, { from: 2, to: 4 }, 'lower', 1)).toEqual({ from: 3, to: 4 });
+    expect(iterationStep(list, { from: 1, to: 4 }, 'higher', -1)).toEqual({ from: 1, to: 3 });
+    expect(iterationStep(list, { from: 1, to: 3 }, 'higher', 1)).toEqual({ from: 1, to: 4 });
+  });
+
+  it('starts from the latest without a span and stops at the edges', () => {
+    expect(iterationStep(list, null, 'lower', -1)).toEqual({ from: 3, to: 4 });
+    expect(iterationStep(list, null, 'lower', 1)).toBeNull();
+    expect(iterationStep(list, { from: 1, to: 4 }, 'lower', -1)).toBeNull();
+    expect(iterationStep(list, { from: 1, to: 4 }, 'higher', 1)).toBeNull();
+    expect(iterationStep([], null, 'lower', -1)).toBeNull();
   });
 });
 

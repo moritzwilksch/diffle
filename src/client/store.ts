@@ -59,6 +59,8 @@ import {
   selectionRange,
   visibleThreads,
   commentsOff,
+  iterationPick,
+  iterationStep,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 
@@ -406,6 +408,14 @@ export interface ReviewState {
   compareIterations(from: number, to: number): void;
   /** Show one pair of the current interdiff by its new-side commit, or with null the whole interdiff. */
   showPair(commit: string | null): void;
+  /** `ii`: compare the latest iteration with the one before, or from an interdiff return to the range. */
+  toggleInterdiff(): void;
+  /** `ij` / `ik` / `iJ` / `iK`: move the span's lower or higher end one iteration older (-1) or newer (1). */
+  stepIteration(end: 'lower' | 'higher', direction: -1 | 1): void;
+  /** `i1`–`i9`: compare iteration `n` with the latest. */
+  pickIteration(n: number): void;
+  /** `r`: reload where the refs point now, when they moved. */
+  reloadIfMoved(): void;
   /**
    * Step to the older (-1) or newer (1) entry of a range's list, the range itself past the newest; in a
    * single-commit view, to the parent or the child toward HEAD. A no-op at either end.
@@ -2149,6 +2159,38 @@ export const useStore = create<ReviewState>((set, get) => {
 
     showPair(commit) {
       void get().switchMode({ kind: 'pair', commit });
+    },
+
+    toggleInterdiff() {
+      const snap = get().snapshot;
+      if (!snap) return;
+      if (snap.mode.interdiff) return get().focusCommit(null);
+      const [previous, latest] = snap.iterations.slice(-2);
+      if (!previous || !latest) return get().flash('Only one iteration so far: reload once the branch moved');
+      get().compareIterations(previous.n, latest.n);
+    },
+
+    stepIteration(end, direction) {
+      const snap = get().snapshot;
+      if (!snap) return;
+      const shown = snap.mode.interdiff ? { from: snap.mode.interdiff.from.n, to: snap.mode.interdiff.to.n } : null;
+      const next = iterationStep(snap.iterations, shown, end, direction);
+      if (next) get().compareIterations(next.from, next.to);
+    },
+
+    pickIteration(n) {
+      const snap = get().snapshot;
+      const latest = snap?.iterations.at(-1);
+      if (!snap || !latest) return;
+      if (!snap.iterations.some((it) => it.n === n)) return get().flash(`No iteration #${n}`);
+      const shown = snap.mode.interdiff ? { from: snap.mode.interdiff.from.n, to: snap.mode.interdiff.to.n } : null;
+      const next = iterationPick(shown, latest.n, n, false);
+      if (next) get().compareIterations(next.from, next.to);
+    },
+
+    reloadIfMoved() {
+      if (get().moved) void get().reload();
+      else get().flash('Nothing moved since this snapshot');
     },
 
     stepCommit(direction) {

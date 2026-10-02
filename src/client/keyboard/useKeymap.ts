@@ -8,7 +8,7 @@ import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
 
 const CHORD_MS = 800;
-const PREFIXES = new Set(['g', 'd', 'y', 'z']);
+const PREFIXES = new Set(['g', 'd', 'y', 'z', 'i']);
 
 type Action = (s: ReviewState) => unknown;
 
@@ -81,6 +81,14 @@ const KEYMAP: Record<string, Action> = {
   m: (s) => s.setModeMenuOpen(!s.modeMenuOpen),
   '<': (s) => s.stepCommit(-1),
   '>': (s) => s.stepCommit(1),
+  // Iterations mirror the list's mouse rule: plain keys move the span's lower end, shifted ones its higher.
+  ii: (s) => s.toggleInterdiff(),
+  ij: (s) => s.stepIteration('lower', -1),
+  ik: (s) => s.stepIteration('lower', 1),
+  iJ: (s) => s.stepIteration('higher', -1),
+  iK: (s) => s.stepIteration('higher', 1),
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`i${n}`, (s: ReviewState) => s.pickIteration(n)])),
+  r: (s) => s.reloadIfMoved(),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
 };
 

@@ -225,7 +225,8 @@ test.describe('moved refs', () => {
     // A third push: the list picks any two. A plain click sets the span's lower number, shift-click its higher.
     const third = git('commit-tree', '-p', wip, '-m', 'wip: and more', `${wip}^{tree}`);
     git('update-ref', 'refs/heads/feature/refunds', third);
-    await notice.getByRole('button', { name: 'Reload' }).click();
+    await expect(notice).toBeVisible();
+    await page.keyboard.press('r');
     await expect(iterations.getByRole('listitem')).toHaveCount(3);
     const picker = page.getByTitle(/Change what is compared/);
     await iterations.getByRole('button', { name: /^#1/ }).click();
@@ -239,5 +240,21 @@ test.describe('moved refs', () => {
     await expect(picker).toHaveText(/#2→#3/);
     await iterations.getByRole('button', { name: /^#1/ }).click();
     await expect(picker).toHaveText(/#1→#3/);
+
+    // The same from the keyboard: ii toggles, ij / ik and iJ / iK move the ends, i2 picks, r has nothing to reload.
+    await page.keyboard.type('ii');
+    await expect(picker).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
+    await page.keyboard.type('ii');
+    await expect(picker).toHaveText(/#2→#3/);
+    await page.keyboard.type('ij');
+    await expect(picker).toHaveText(/#1→#3/);
+    await page.keyboard.type('iJ');
+    await expect(picker).toHaveText(/#1→#2/);
+    await page.keyboard.type('iK');
+    await expect(picker).toHaveText(/#1→#3/);
+    await page.keyboard.type('i2');
+    await expect(picker).toHaveText(/#2→#3/);
+    await page.keyboard.press('r');
+    await expect(page.getByText('Nothing moved since this snapshot')).toBeVisible();
   });
 });
