@@ -23,9 +23,13 @@ export function IterationList({ snapshot }: { snapshot: Snapshot }) {
     const next = iterationPick(shown, latest.n, n, shift);
     if (next) compareIterations(next.from, next.to);
   };
+  // One line per gesture, each naming what it would show; a gesture that changes nothing is left out.
   const title = (n: number) => {
-    const next = iterationPick(shown, latest.n, n, false);
-    return `${next ? `Compare #${next.from} with #${next.to}` : 'Compared now'}; shift-click sets the other end`;
+    const lines = [false, true].flatMap((shift) => {
+      const next = iterationPick(shown, latest.n, n, shift);
+      return next ? [`Compare #${next.from} with #${next.to}${shift ? ' (shift-click)' : ''}`] : [];
+    });
+    return lines.length ? lines.join('\n') : 'Compared now';
   };
   return (
     <section
