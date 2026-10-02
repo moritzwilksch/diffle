@@ -975,6 +975,20 @@ describe('replay and pins', () => {
     expect(await rrepo.patchIds([])).toEqual(new Map());
   });
 
+  it('reads the right-aligned rows of a range with ten or more commits', async () => {
+    const base = rgit('rev-parse', 'main~2');
+    rgit('checkout', '-q', '-b', 'many', base);
+    for (let i = 1; i <= 10; i++) {
+      await writeFile(join(rdir, `n${i}.txt`), `${i}\n`);
+      rgit('add', `n${i}.txt`);
+      rgit('commit', '-q', '-m', `n${i}`);
+    }
+    const rows = await rrepo.rangeDiff(`${base}..many~1`, `${base}..many`);
+    expect(rows).toHaveLength(10);
+    expect(rows.map((r) => r.marker)).toEqual([...Array<string>(9).fill('='), '>']);
+    expect(rgit('rev-parse', 'many').startsWith(rows[9]!.new!)).toBe(true);
+  });
+
   it('pins and deletes refs under refs/diffle/iterations/ only', async () => {
     const sha = rgit('rev-parse', 'feat');
     await rrepo.pin({ 'refs/diffle/iterations/x/1/new': sha });

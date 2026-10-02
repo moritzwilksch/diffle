@@ -267,7 +267,8 @@ export class GitRepo {
     ]);
     const pairs: { old: string | null; new: string | null; marker: string }[] = [];
     for (const line of out.split('\n')) {
-      const m = /^(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s+([=!<>])\s+(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s/.exec(line);
+      // Numbers are right-aligned, so rows of a range with ten or more commits start with spaces.
+      const m = /^\s*(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s+([=!<>])\s+(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s/.exec(line);
       if (m) pairs.push({ old: m[1] ?? null, new: m[3] ?? null, marker: m[2]! });
     }
     return pairs;
