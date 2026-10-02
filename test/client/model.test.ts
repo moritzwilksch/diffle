@@ -303,21 +303,17 @@ describe('iterationPick', () => {
     expect(iterationPick(null, 4, 2, true)).toEqual({ from: 2, to: 4 });
     expect(iterationPick(null, 4, 4, false)).toBeNull();
     expect(iterationPick({ from: 2, to: 4 }, 4, 2, false)).toBeNull();
+    expect(iterationPick({ from: 2, to: 4 }, 4, 4, true)).toBeNull();
   });
 
-  it('keeps the start on a plain click past it, the end otherwise; shift takes the other candidate', () => {
-    expect(iterationPick({ from: 3, to: 9 }, 10, 5, false)).toEqual({ from: 3, to: 5 });
-    expect(iterationPick({ from: 3, to: 9 }, 10, 5, true)).toEqual({ from: 5, to: 9 });
+  it('sets the lower number with a plain click and the higher with shift, in order when they cross', () => {
+    expect(iterationPick({ from: 3, to: 9 }, 10, 5, false)).toEqual({ from: 5, to: 9 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 5, true)).toEqual({ from: 3, to: 5 });
     expect(iterationPick({ from: 4, to: 10 }, 10, 2, false)).toEqual({ from: 2, to: 10 });
     expect(iterationPick({ from: 4, to: 10 }, 10, 2, true)).toEqual({ from: 2, to: 4 });
-    expect(iterationPick({ from: 3, to: 9 }, 10, 10, false)).toEqual({ from: 3, to: 10 });
-    expect(iterationPick({ from: 3, to: 9 }, 10, 10, true)).toEqual({ from: 9, to: 10 });
-  });
-
-  it('compares an end of the span with the latest', () => {
-    expect(iterationPick({ from: 1, to: 3 }, 4, 3, false)).toEqual({ from: 3, to: 4 });
-    expect(iterationPick({ from: 1, to: 3 }, 4, 1, true)).toEqual({ from: 1, to: 4 });
-    expect(iterationPick({ from: 1, to: 4 }, 4, 4, false)).toBeNull();
+    expect(iterationPick({ from: 3, to: 9 }, 10, 10, false)).toEqual({ from: 9, to: 10 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 10, true)).toEqual({ from: 3, to: 10 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 9, false)).toBeNull();
   });
 });
 

@@ -222,8 +222,7 @@ test.describe('moved refs', () => {
     await expect(page.getByTitle(/Change what is compared/)).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
     await expect(page.locator('header')).toContainText('17 files');
 
-    // A third push: the list picks any two. A plain click keeps the span's start when the row lies past it
-    // and its end otherwise; shift-click takes the other candidate; a click on an end compares it with the latest.
+    // A third push: the list picks any two. A plain click sets the span's lower number, shift-click its higher.
     const third = git('commit-tree', '-p', wip, '-m', 'wip: and more', `${wip}^{tree}`);
     git('update-ref', 'refs/heads/feature/refunds', third);
     await notice.getByRole('button', { name: 'Reload' }).click();
@@ -231,14 +230,12 @@ test.describe('moved refs', () => {
     const picker = page.getByTitle(/Change what is compared/);
     await iterations.getByRole('button', { name: /^#1/ }).click();
     await expect(picker).toHaveText(/#1→#3/);
-    await iterations.getByRole('button', { name: /^#2/ }).click();
+    await iterations.getByRole('button', { name: /^#2/ }).click({ modifiers: ['Shift'] });
     await expect(picker).toHaveText(/#1→#2/);
     await expect(iterations).toMatchAriaSnapshot({ name: 'iterations-span.aria.yml' });
+    await iterations.getByRole('button', { name: /^#3/ }).click({ modifiers: ['Shift'] });
+    await expect(picker).toHaveText(/#1→#3/);
     await iterations.getByRole('button', { name: /^#2/ }).click();
-    await expect(picker).toHaveText(/#2→#3/);
-    await iterations.getByRole('button', { name: /^#1/ }).click({ modifiers: ['Shift'] });
-    await expect(picker).toHaveText(/#1→#2/);
-    await iterations.getByRole('button', { name: /^#2/ }).click({ modifiers: ['Shift'] });
     await expect(picker).toHaveText(/#2→#3/);
     await iterations.getByRole('button', { name: /^#1/ }).click();
     await expect(picker).toHaveText(/#1→#3/);
