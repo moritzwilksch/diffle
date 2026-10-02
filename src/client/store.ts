@@ -15,6 +15,7 @@ import {
   type LspStatus,
   type LspSymbol,
   type ModeRequest,
+  type Moved,
   type SearchMatch,
   type SearchScope,
   type SearchContent,
@@ -344,6 +345,11 @@ export interface ReviewState {
   setAllCollapsed(collapsed: boolean): void;
   escape(): void;
   snapshot: Snapshot | null;
+  /** The compared refs left the snapshot behind; `reload` catches up. Null while they agree. */
+  moved: Moved | null;
+  setMoved(moved: Moved | null): void;
+  /** Recompute the snapshot where the refs point now, keeping the mode and the viewed marks. */
+  reload(): Promise<void>;
   error: string | null;
   threads: CommentThread[];
   /** Resolved threads stay hidden unless the user turns them on. */
@@ -850,7 +856,17 @@ export const useStore = create<ReviewState>((set, get) => {
     const draft = get().draft;
     const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
     resyncing = false;
-    set({ snapshot: next, loaded, contents, fileView, collapsed, error: null, draft: keepDraft ? draft : null });
+    set((s) => ({
+      snapshot: next,
+      loaded,
+      contents,
+      fileView,
+      collapsed,
+      error: null,
+      draft: keepDraft ? draft : null,
+      // A newer snapshot resolved the refs afresh; a notice about this one, or one still being fetched, stands.
+      moved: s.moved && s.moved.version < next.version ? null : s.moved,
+    }));
     void get().refreshGithub();
     if (modeChanged) {
       // Positions, matches and revealed ranges all name lines of the previous mode.
@@ -1999,12 +2015,20 @@ export const useStore = create<ReviewState>((set, get) => {
         // The language server is optional; its status failing must not take the review down.
         const lspStatus = api.lspStatus().catch((): LspStatus => ({ enabled: false, servers: [], missing: [] }));
         const tc = configSeq.start();
-        const [snap, lists, config, lsp] = await Promise.all([api.snapshot(), fetchLists(), api.config(), lspStatus]);
+        const [snap, lists, config, lsp, moved] = await Promise.all([
+          api.snapshot(),
+          fetchLists(),
+          api.config(),
+          lspStatus,
+          api.moved(),
+        ]);
         // Mode-independent, and nothing else fetches them: a pushed refresh that overtook this
         // boot must not leave them at their defaults for the session.
         set({ lsp });
         if (configSeq.latest(tc)) set({ config });
         await commitSnapshot(snap, g, lists);
+        // A notice the server raised about an older snapshot than the one fetched is settled.
+        if (current(g) && (moved == null || moved.version >= snap.version)) set({ moved });
       } catch (e) {
         if (current(g)) set({ error: errorMessage(e) });
       }
@@ -2082,6 +2106,29 @@ export const useStore = create<ReviewState>((set, get) => {
         set({ error });
         void get().refreshGithub();
         return { error };
+      } finally {
+        if (owned && snap && fetching === snap.version) fetching = 0;
+      }
+    },
+
+    moved: null,
+    setMoved(moved) {
+      set({ moved });
+    },
+
+    async reload() {
+      const g = begin();
+      let snap: Snapshot | undefined;
+      // As in switchMode: the pushed refresh normally owns the version before the response lands.
+      let owned = false;
+      try {
+        snap = await api.reload();
+        if (!current(g) || accounted(snap.version)) return;
+        fetching = snap.version;
+        owned = true;
+        await commitSnapshot(snap, g, await fetchLists());
+      } catch (e) {
+        if (current(g)) get().report('Reloading', e);
       } finally {
         if (owned && snap && fetching === snap.version) fetching = 0;
       }

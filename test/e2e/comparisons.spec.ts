@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { expect, test } from './fixtures.js';
 import { filePaths, waitForHighlight } from './browser.js';
 
@@ -145,5 +146,42 @@ test.describe('a long range of commits', () => {
     const list = box.getByRole('list').locator('..');
     expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
     await expect(page).toHaveScreenshot('long-range.png');
+  });
+});
+
+test.describe('moved refs', () => {
+  test.use({ args: ['--watch'] });
+
+  test('keeps the review while the compared branch moves, and reloads on request', async ({ page, repo }) => {
+    const git = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: repo,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+        },
+      }).trim();
+    const notice = page.locator('header').getByRole('status');
+    const box = page.getByRole('region', { name: 'Commits' });
+    await expect(notice).toHaveCount(0);
+    await expect(box.getByRole('listitem')).toHaveCount(4);
+
+    // A new commit on the branch, without touching the index or the worktree.
+    const tip = git('rev-parse', 'feature/refunds');
+    const wip = git('commit-tree', '-p', tip, '-m', 'wip: more refunds', `${tip}^{tree}`);
+    git('update-ref', 'refs/heads/feature/refunds', wip);
+    await expect(notice).toContainText(`feature/refunds ${tip.slice(0, 7)} → ${wip.slice(0, 7)}`);
+    await expect(box.getByRole('listitem')).toHaveCount(4);
+    await expect(page.locator('header')).toHaveScreenshot('moved-refs.png');
+
+    await notice.getByRole('button', { name: 'Reload' }).click();
+    await expect(notice).toHaveCount(0);
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box).toContainText('wip: more refunds');
+    await expect(page.locator('header')).toContainText('17 files');
   });
 });

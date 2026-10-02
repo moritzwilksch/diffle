@@ -90,9 +90,12 @@ export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within'>): string {
   if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
-  const name = (rev: string) =>
-    rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
-  return `${name(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${name(mode.new)}`;
+  return `${refName(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${refName(mode.new)}`;
+}
+
+/** A comparison endpoint as the user named it: without diffle's PR namespace or `refs/heads/`. */
+export function refName(rev: string): string {
+  return rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
 }
 
 export const GithubPullRequestSchema = z.object({
@@ -173,6 +176,9 @@ export const RangeCommitsSchema = z.object({
   /** Oldest first; the newest MAX_RANGE_COMMITS when there are more. */
   list: RangeCommitSchema.array(),
   total: z.number(),
+  /** The spanned comparison's resolved endpoints: the snapshot's own, or the range's when a commit is focused. */
+  oldSha: z.string(),
+  newSha: z.string(),
 });
 export type RangeCommits = z.infer<typeof RangeCommitsSchema>;
 
@@ -198,6 +204,19 @@ export const SnapshotSchema = z.object({
   commits: RangeCommitsSchema,
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
+
+/**
+ * The compared refs resolve elsewhere than when the shown snapshot was taken. A refs-live
+ * comparison is not recomputed under the reviewer; it reloads on request.
+ */
+export const MovedSchema = z.object({
+  /** The snapshot a reload would supersede. */
+  version: z.number(),
+  /** Where the comparison `Snapshot.commits` spans resolves now. */
+  oldSha: z.string(),
+  newSha: z.string(),
+});
+export type Moved = z.infer<typeof MovedSchema>;
 
 /** Body of `POST /api/patch`: the changed files whose patches to return, concatenated. Unknown paths are skipped. */
 export const PatchRequestSchema = z.object({
@@ -521,6 +540,11 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('snapshot'),
     version: z.number(),
+  }),
+  /** Null once the refs are back where the snapshot has them. */
+  z.object({
+    type: z.literal('moved'),
+    moved: MovedSchema.nullable(),
   }),
   z.object({
     type: z.literal('threads'),

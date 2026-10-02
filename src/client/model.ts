@@ -1,15 +1,17 @@
 import type { CodeViewLineSelection } from '@pierre/diffs';
 import picomatch from 'picomatch/posix';
-import type {
-  ChangedFile,
-  CommentAnchor,
-  CommentThread,
-  LspSymbol,
-  ModeRequest,
-  Side,
-  Snapshot,
-  UserConfig,
-  ViewedState,
+import {
+  refName,
+  type ChangedFile,
+  type CommentAnchor,
+  type CommentThread,
+  type LspSymbol,
+  type ModeRequest,
+  type Moved,
+  type Side,
+  type Snapshot,
+  type UserConfig,
+  type ViewedState,
 } from '../shared/protocol.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
 import type { ReviewState } from './store.js';
@@ -342,6 +344,18 @@ export type ExportOutcome = 'added' | 'updated' | 'unchanged';
 /** The green suffix the export button shows afterwards. */
 export function exportLabel(outcome: ExportOutcome): string {
   return outcome === 'updated' ? 'Updated' : outcome === 'unchanged' ? 'Already added' : 'Added';
+}
+
+/** Which end of the live comparison moved since `snapshot`, and where to: `feat 8f2c1ab → 4d9e0f2`. */
+export function movedLabel(snapshot: Snapshot, moved: Moved): string {
+  const live = snapshot.mode.within ?? snapshot.mode;
+  const { oldSha, newSha } = snapshot.commits;
+  const step = (name: string, from: string, to: string) => `${name} ${from.slice(0, 7)} → ${to.slice(0, 7)}`;
+  const ends: string[] = [];
+  if (moved.newSha !== newSha) ends.push(step(refName(live.new), newSha, moved.newSha));
+  if (moved.oldSha !== oldSha)
+    ends.push(step(live.base === 'merge-base' ? 'merge base' : refName(live.old), oldSha, moved.oldSha));
+  return ends.join(', ');
 }
 
 /** Local repository name, independent of GitHub discovery. */

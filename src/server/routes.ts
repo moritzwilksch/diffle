@@ -86,6 +86,10 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.get('/api/snapshot', async (c) => c.json(await session.snapshotter.current()));
 
+  app.get('/api/moved', (c) => c.json(session.moved));
+
+  app.post('/api/reload', async (c) => c.json(await session.reload()));
+
   app.post('/api/mode', async (c) => {
     const req = ModeRequestSchema.parse(await readJson(c));
     return c.json(await session.switchMode(req));

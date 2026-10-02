@@ -610,7 +610,7 @@ describe('a single commit', () => {
     // The merged side commit is reachable from HEAD but not from HEAD~1.
     const worktree = (await snap('HEAD~1..worktree')).commits;
     expect([worktree.total, worktree.list.at(-1)?.sha]).toEqual([2, merge]);
-    expect((await snap('HEAD..worktree')).commits).toEqual({ list: [], total: 0 });
+    expect((await snap('HEAD..worktree')).commits).toEqual({ list: [], total: 0, oldSha: merge, newSha: 'worktree' });
   });
 
   it('reports an unknown commit as a revspec error', async () => {

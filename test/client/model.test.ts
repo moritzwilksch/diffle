@@ -17,6 +17,7 @@ import {
   draftRange,
   imageSides,
   isViewed,
+  movedLabel,
   nextFileAfter,
   orderedPaths,
   rangeStep,
@@ -280,6 +281,29 @@ describe('comparisonLabel', () => {
   });
 });
 
+describe('movedLabel', () => {
+  const a = 'a'.repeat(40);
+  const b = 'b'.repeat(40);
+  const c = 'c'.repeat(40);
+  const d = 'd'.repeat(40);
+  const snap = (mode: Snapshot['mode']) =>
+    ({ mode, commits: { list: [], total: 0, oldSha: a, newSha: b } }) as unknown as Snapshot;
+  const refs = { old: 'main', new: 'refs/heads/feat', base: 'direct', live: 'refs', commentKey: 'k' } as const;
+
+  it('names the end that moved by its ref, and the merge base as such', () => {
+    expect(movedLabel(snap(refs), { version: 1, oldSha: a, newSha: c })).toBe('feat bbbbbbb → ccccccc');
+    expect(movedLabel(snap(refs), { version: 1, oldSha: d, newSha: b })).toBe('main aaaaaaa → ddddddd');
+    expect(movedLabel(snap({ ...refs, base: 'merge-base' }), { version: 1, oldSha: d, newSha: c })).toBe(
+      'feat bbbbbbb → ccccccc, merge base aaaaaaa → ddddddd',
+    );
+  });
+
+  it('describes the range a focused commit sits in, not the commit', () => {
+    const focused = { old: b, new: b, base: 'parent', live: 'refs', commentKey: `commit:${b}`, within: refs } as const;
+    expect(movedLabel(snap(focused), { version: 1, oldSha: a, newSha: c })).toBe('feat bbbbbbb → ccccccc');
+  });
+});
+
 describe('imageSides', () => {
   const file = (status: ChangedFile['status']): ChangedFile => ({
     path: 'a.png',
@@ -343,7 +367,12 @@ describe('rangeStep', () => {
     commentKey: 'range:main...feat',
   } as const;
   const commit = (sha: string) => ({ sha, short: sha.slice(0, 7), message: sha, author: 'a', email: 'a@a', date: 0 });
-  const commits = { list: [commit('a'.repeat(40)), commit('b'.repeat(40))], total: 2 };
+  const commits = {
+    list: [commit('a'.repeat(40)), commit('b'.repeat(40))],
+    total: 2,
+    oldSha: '0'.repeat(40),
+    newSha: 'b'.repeat(40),
+  };
   const focused = (sha: string) => ({
     mode: { old: sha, new: sha, base: 'parent', live: 'refs', commentKey: `commit:${sha}`, within: range } as const,
     commits,

@@ -5,6 +5,7 @@ import type {
   CommentThread,
   LspServerStatus,
   LspStatus,
+  Moved,
   Snapshot,
   UserConfig,
   ViewedEntry,
@@ -40,6 +41,7 @@ const api = {
     lspCommands: { python: 'pyrefly lsp' },
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
+  moved: vi.fn(async (): Promise<Moved | null> => null),
   lspDefinition: vi.fn(),
   lspTypeDefinition: vi.fn(),
   lspReferences: vi.fn(),
@@ -99,7 +101,7 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     changed: [],
     tree,
     commit: null,
-    commits: { list: [], total: 0 },
+    commits: { list: [], total: 0, oldSha: 'x', newSha: 'worktree' },
   };
 }
 

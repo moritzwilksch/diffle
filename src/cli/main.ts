@@ -399,7 +399,7 @@ async function serve(
     else console.error(`📝 ${n} changed file${n === 1 ? '' : 's'}  ${c.green(`+${adds}`)} ${c.red(`−${dels}`)}`);
     if (snap.mode.live !== 'none')
       console.error(
-        `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
+        `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs; moved refs show a Reload button')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
       );
     if (lsp) {
       const { servers, missing } = lsp.status();

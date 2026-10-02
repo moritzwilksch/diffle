@@ -182,7 +182,7 @@ export class GitRepo {
   }
 
   /** The commits a revision range such as `a..b` or `c^!` selects, oldest first: the newest `limit`, and the total. */
-  async rangeCommits(range: string, limit: number): Promise<RangeCommits> {
+  async rangeCommits(range: string, limit: number): Promise<Pick<RangeCommits, 'list' | 'total'>> {
     const [count, log] = await Promise.all([
       this.text(['rev-list', '--count', '--end-of-options', range, '--']),
       this.text([

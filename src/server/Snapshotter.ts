@@ -154,15 +154,19 @@ export class Snapshotter {
       const range = await resolveComparison(this.repo, this.mode.within);
       return this.spanned(range.oldSha, range.newSha, headSha);
     }
-    if (this.mode.base === 'parent') return this.repo.rangeCommits(`${newSha}^!`, MAX_RANGE_COMMITS);
+    if (this.mode.base === 'parent')
+      return { ...(await this.repo.rangeCommits(`${newSha}^!`, MAX_RANGE_COMMITS)), oldSha, newSha };
     return this.spanned(oldSha, newSha, headSha);
   }
 
-  private spanned(oldSha: string, newSha: string, headSha: string): Promise<RangeCommits> {
+  private async spanned(oldSha: string, newSha: string, headSha: string): Promise<RangeCommits> {
     const [from, to] = [oldSha, newSha].map((sha) => (sha === 'worktree' ? headSha : sha));
     // An unborn branch has no commits; its old side is then the empty tree, which no range can name.
-    if (!from || !to || from === to) return Promise.resolve({ list: [], total: 0 });
-    return this.repo.rangeCommits(`${from}..${to}`, MAX_RANGE_COMMITS);
+    const commits =
+      !from || !to || from === to
+        ? { list: [], total: 0 }
+        : await this.repo.rangeCommits(`${from}..${to}`, MAX_RANGE_COMMITS);
+    return { ...commits, oldSha, newSha };
   }
 
   /**

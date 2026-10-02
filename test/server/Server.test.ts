@@ -193,6 +193,22 @@ describe('Server', () => {
     expect(JSON.parse(response.body)).toMatchObject({ old: null, new: { message: 'base' } });
   });
 
+  it('reports no moved refs for a worktree comparison and recomputes the snapshot on POST /api/reload', async () => {
+    expect(JSON.parse((await send('GET', '/api/moved')).body)).toBeNull();
+    const before = await session.snapshotter.current();
+    const broadcast = vi.spyOn(hub, 'broadcast');
+    try {
+      const response = await send('POST', '/api/reload');
+      expect(response.status).toBe(200);
+      const snap = JSON.parse(response.body);
+      expect(snap.version).toBeGreaterThan(before.version);
+      expect(snap.mode).toEqual(before.mode);
+      expect(broadcast).toHaveBeenCalledWith({ type: 'snapshot', version: snap.version });
+    } finally {
+      broadcast.mockRestore();
+    }
+  });
+
   it('serves the API to loopback hosts', async () => {
     const r = await send('GET', '/api/snapshot');
     expect(r.status).toBe(200);

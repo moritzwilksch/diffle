@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '../../src/server/github/client.js';
@@ -381,6 +381,81 @@ describe('Session', () => {
       // the worktree watcher must stop ignoring it.
       await session.close();
       expect(target.ignored().has('secret.env')).toBe(false);
+    } finally {
+      await rmTmp(live);
+    }
+  });
+
+  it('announces moved refs instead of recomputing a refs comparison, until asked to reload', async () => {
+    const live = await mkdtemp(join(tmpdir(), 'diffle-refs-'));
+    const liveGit = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: live,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+          GIT_CONFIG_GLOBAL: '/dev/null',
+        },
+      }).trim();
+    try {
+      liveGit('init', '-q', '-b', 'main');
+      await writeFile(join(live, 'a.txt'), 'a\n');
+      liveGit('add', '.');
+      liveGit('commit', '-q', '-m', 'base');
+      liveGit('checkout', '-q', '-b', 'feat');
+      await writeFile(join(live, 'a.txt'), 'a\nb\n');
+      liveGit('commit', '-q', '-am', 'one');
+      const liveRepo = await GitRepo.open(live);
+      const watcher = new FakeWatcher(0);
+      const messages = () => hub.messages.slice(before);
+      const session = new Session(liveRepo, hub, { watch: true, context: 3, createWatcher: () => watcher });
+      let published = 0;
+      session.onSnapshot(() => published++);
+      const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
+      const before = hub.messages.length;
+      expect(first.commits).toMatchObject({ total: 1, oldSha: liveGit('rev-parse', 'main'), newSha: first.newSha });
+      expect(session.moved).toBeNull();
+
+      // A commit on the compared branch: the snapshot stands, the clients hear where the ref went.
+      await writeFile(join(live, 'a.txt'), 'a\nb\nc\n');
+      liveGit('commit', '-q', '-am', 'two');
+      const two = liveGit('rev-parse', 'feat');
+      watcher.dirty();
+      await vi.waitFor(() => expect(session.moved).not.toBeNull());
+      expect(session.moved).toEqual({ version: first.version, oldSha: first.oldSha, newSha: two });
+      expect(messages()).toEqual([{ type: 'moved', moved: session.moved }]);
+      expect(published).toBe(1);
+      expect(await session.snapshotter.current()).toBe(first);
+
+      // The same position again says nothing new; `setContext` is a queued no-op that drains the check.
+      watcher.dirty();
+      await session.setContext(3);
+      expect(messages()).toHaveLength(1);
+
+      // Back where the snapshot has it: the notice is withdrawn.
+      liveGit('reset', '-q', '--hard', first.newSha);
+      watcher.dirty();
+      await vi.waitFor(() => expect(session.moved).toBeNull());
+      expect(messages()).toEqual([
+        { type: 'moved', moved: { version: first.version, oldSha: first.oldSha, newSha: two } },
+        { type: 'moved', moved: null },
+      ]);
+
+      liveGit('reset', '-q', '--hard', two);
+      watcher.dirty();
+      await vi.waitFor(() => expect(session.moved).not.toBeNull());
+      const reloaded = await session.reload();
+      expect(reloaded.version).toBeGreaterThan(first.version);
+      expect(reloaded.newSha).toBe(two);
+      expect(reloaded.commits.list.map((c) => c.message.trim())).toEqual(['one', 'two']);
+      expect(session.moved).toBeNull();
+      expect(messages().at(-1)).toEqual({ type: 'snapshot', version: reloaded.version });
+      expect(published).toBe(2);
+      await session.close();
     } finally {
       await rmTmp(live);
     }

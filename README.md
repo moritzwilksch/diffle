@@ -63,6 +63,10 @@ diffle --help           # all commands and flags
 `diffle pr` needs a [GitHub token](#send-comments-to-github). A PR from another repository opens
 in a temporary clone.
 
+A worktree comparison follows your edits as you make them. A comparison between refs stays put
+while you review: once a ref moves (a push, a rebase, a new commit), the header says so and
+**Reload** picks the new commits up.
+
 Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
 to keep it running.
 
