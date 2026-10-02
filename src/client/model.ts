@@ -380,6 +380,29 @@ export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string |
   return mode.interdiff ? 'Comments are off while comparing iterations: leave them on the range itself' : null;
 }
 
+/**
+ * Which two iterations a click on row `n` of the list compares, given the span `shown` (null when the
+ * range itself is shown) and the `latest` iteration. A plain click compares `n` with the latest; one
+ * inside the shown span shrinks it to end at `n`; one on the span's end moves on from there. With
+ * shift, `n` becomes the other end of the shown span's start. Null when nothing would change.
+ */
+export function iterationPick(
+  shown: { from: number; to: number } | null,
+  latest: number,
+  n: number,
+  shift: boolean,
+): { from: number; to: number } | null {
+  const span = (a: number, b: number) =>
+    a === b || (shown && shown.from === Math.min(a, b) && shown.to === Math.max(a, b))
+      ? null
+      : { from: Math.min(a, b), to: Math.max(a, b) };
+  if (shift) return span(shown?.from ?? latest, n);
+  if (shown && shown.from < n && n < shown.to) return span(shown.from, n);
+  if (shown && n === shown.to && n < latest) return span(n, latest);
+  if (n === latest) return shown ? span(shown.from, latest) : null;
+  return span(n, latest);
+}
+
 /** Local repository name, independent of GitHub discovery. */
 export function repoName(snapshot: Snapshot): string {
   const parts = snapshot.root.split(/[\\/]/).filter(Boolean);

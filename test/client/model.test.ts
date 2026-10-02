@@ -17,6 +17,7 @@ import {
   draftRange,
   imageSides,
   isViewed,
+  iterationPick,
   movedLabel,
   nextFileAfter,
   relativeTime,
@@ -293,6 +294,28 @@ describe('comparisonLabel', () => {
         interdiff: { from: it(1), to: it(3), conflicts: [], pairs: [] },
       }),
     ).toBe('main...feat #1→#3');
+  });
+});
+
+describe('iterationPick', () => {
+  it('compares a clicked row with the latest, and leaves a repeated pick alone', () => {
+    expect(iterationPick(null, 4, 2, false)).toEqual({ from: 2, to: 4 });
+    expect(iterationPick(null, 4, 4, false)).toBeNull();
+    expect(iterationPick({ from: 2, to: 4 }, 4, 2, false)).toBeNull();
+    expect(iterationPick({ from: 2, to: 4 }, 4, 1, false)).toEqual({ from: 1, to: 4 });
+  });
+
+  it('shrinks the span to a row inside it, then moves on from that row', () => {
+    expect(iterationPick({ from: 1, to: 4 }, 4, 3, false)).toEqual({ from: 1, to: 3 });
+    expect(iterationPick({ from: 1, to: 3 }, 4, 3, false)).toEqual({ from: 3, to: 4 });
+    expect(iterationPick({ from: 1, to: 3 }, 4, 4, false)).toEqual({ from: 1, to: 4 });
+  });
+
+  it('makes a shift-clicked row the other end of the span', () => {
+    expect(iterationPick({ from: 2, to: 4 }, 4, 3, true)).toEqual({ from: 2, to: 3 });
+    expect(iterationPick({ from: 2, to: 3 }, 4, 1, true)).toEqual({ from: 1, to: 2 });
+    expect(iterationPick({ from: 2, to: 3 }, 4, 2, true)).toBeNull();
+    expect(iterationPick(null, 4, 1, true)).toEqual({ from: 1, to: 4 });
   });
 });
 

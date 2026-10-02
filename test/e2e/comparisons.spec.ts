@@ -199,6 +199,8 @@ test.describe('moved refs', () => {
     // Comments are off here: no file-comment button, and the panel says why.
     await expect(page.getByTitle(/Comment on this file/)).toHaveCount(0);
     await expect(page.locator('aside').last()).toContainText('Comments are off while comparing iterations');
+    // The pointer still rests on the clicked row; its tooltip must not be in the picture.
+    await page.mouse.move(0, 0);
     await expect(page).toHaveScreenshot('interdiff.png');
 
     // The commits box pairs the two iterations: four unchanged, the pushed one added; only that one opens.
@@ -219,5 +221,24 @@ test.describe('moved refs', () => {
     await box.getByRole('button', { name: /^All changes/ }).click();
     await expect(page.getByTitle(/Change what is compared/)).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
     await expect(page.locator('header')).toContainText('17 files');
+
+    // A third push: the list picks any two. A click compares with the latest, a click inside the span
+    // shrinks it, a click on its end moves on, shift-click sets the other end.
+    const third = git('commit-tree', '-p', wip, '-m', 'wip: and more', `${wip}^{tree}`);
+    git('update-ref', 'refs/heads/feature/refunds', third);
+    await notice.getByRole('button', { name: 'Reload' }).click();
+    await expect(iterations.getByRole('listitem')).toHaveCount(3);
+    const picker = page.getByTitle(/Change what is compared/);
+    await iterations.getByRole('button', { name: /^#1/ }).click();
+    await expect(picker).toHaveText(/#1→#3/);
+    await iterations.getByRole('button', { name: /^#2/ }).click();
+    await expect(picker).toHaveText(/#1→#2/);
+    await expect(iterations).toMatchAriaSnapshot({ name: 'iterations-span.aria.yml' });
+    await iterations.getByRole('button', { name: /^#2/ }).click();
+    await expect(picker).toHaveText(/#2→#3/);
+    await iterations.getByRole('button', { name: /^#1/ }).click({ modifiers: ['Shift'] });
+    await expect(picker).toHaveText(/#1→#2/);
+    await iterations.getByRole('button', { name: /^#3/ }).click();
+    await expect(picker).toHaveText(/#1→#3/);
   });
 });
