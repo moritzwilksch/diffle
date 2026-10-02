@@ -7,8 +7,21 @@
   - list:
     - listitem:
       - 'button "wip: more refunds added"'
-      - text: ——————— → b6cec17
-    - listitem: "fix(cli): report an empty ledger instead of crashing identical 1de24f1 → 1de24f1"
-    - listitem: "chore: regenerate the client, refresh the lockfile and the logo identical 97eb0c9 → 97eb0c9"
-    - listitem: "refactor: move money helpers into a currency module identical 640d216 → 640d216"
-    - listitem: "feat(ledger): support refund lines identical 5206db2 → 5206db2"
+      - text: ———————
+      - button "Copy hash b6cec17"
+    - listitem:
+      - text: "fix(cli): report an empty ledger instead of crashing identical"
+      - button "Copy hash 1de24f1"
+      - button "Copy hash 1de24f1"
+    - listitem:
+      - text: "chore: regenerate the client, refresh the lockfile and the logo identical"
+      - button "Copy hash 97eb0c9"
+      - button "Copy hash 97eb0c9"
+    - listitem:
+      - text: "refactor: move money helpers into a currency module identical"
+      - button "Copy hash 640d216"
+      - button "Copy hash 640d216"
+    - listitem:
+      - text: "feat(ledger): support refund lines identical"
+      - button "Copy hash 5206db2"
+      - button "Copy hash 5206db2"

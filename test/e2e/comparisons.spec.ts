@@ -201,6 +201,9 @@ test.describe('moved refs', () => {
     // The commits box pairs the two iterations: four unchanged, the pushed one added; only that one opens.
     await expect(box.getByRole('listitem')).toHaveCount(5);
     await expect(box).toMatchAriaSnapshot({ name: 'range-diff.aria.yml' });
+    // Both hashes of a pair, and an iteration's, copy like a commit's.
+    await expect(box.getByRole('button', { name: 'Copy hash 1de24f1' })).toHaveCount(2);
+    await expect(iterations.getByRole('button', { name: 'Copy hash 1de24f1' })).toHaveCount(1);
     await box.getByRole('button', { name: /^wip: more refunds/ }).click();
     await expect(page.getByTitle(/Change what is compared/)).toHaveText(/#1→#2 @ [0-9a-f]{7}/);
     await expect(page.locator('header')).toContainText('wip: more refunds');

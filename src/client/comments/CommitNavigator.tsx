@@ -254,8 +254,10 @@ function PairRow({
         ) : (
           <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
         )}
-        <span className="mt-0.5 flex-none px-1 py-px font-mono text-[0.75rem] text-muted">
-          {pair.old ? pair.old.short : '———————'} → {pair.new ? pair.new.short : '———————'}
+        <span className="flex flex-none items-center font-mono text-[0.75rem] text-muted">
+          {pair.old ? <CopyHash commit={pair.old} /> : <span className="px-1">———————</span>}
+          <span aria-hidden>→</span>
+          {pair.new ? <CopyHash commit={pair.new} /> : <span className="px-1">———————</span>}
         </span>
       </div>
       {active && (
@@ -357,7 +359,7 @@ function CommitRow({
 }
 
 /** The short hash; a click copies the full one and swaps the hash for a check mark, as `yy` does its button. */
-function CopyHash({ commit }: { commit: RangeCommit }) {
+export function CopyHash({ commit }: { commit: Pick<RangeCommit, 'sha' | 'short'> }) {
   const [done, setDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
