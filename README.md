@@ -72,7 +72,7 @@ them; pick an older one to see only what the branch changed since then. A rebase
 left out: the older head is replayed onto the newer base before the two are compared, and files
 the replay could not merge are flagged. The commits box then shows `git range-diff`'s pairing of
 the two iterations' commits; pick an amended, reworded or added one, or step with `<` and `>`, to
-see that commit's own change since.
+see that commit's own change since. Comments are off in these views: leave them on the range itself.
 
 Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
 to keep it running.

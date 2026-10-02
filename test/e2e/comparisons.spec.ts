@@ -196,6 +196,9 @@ test.describe('moved refs', () => {
     expect(await filePaths(page)).toEqual(['tally/refunds.py']);
     await expect(iterations.locator('[aria-current="true"]')).toContainText('#1');
     await waitForHighlight(page, 'tally/refunds.py');
+    // Comments are off here: no file-comment button, and the panel says why.
+    await expect(page.getByTitle(/Comment on this file/)).toHaveCount(0);
+    await expect(page.locator('aside').last()).toContainText('Comments are off while comparing iterations');
     await expect(page).toHaveScreenshot('interdiff.png');
 
     // The commits box pairs the two iterations: four unchanged, the pushed one added; only that one opens.

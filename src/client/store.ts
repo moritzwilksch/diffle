@@ -58,6 +58,7 @@ import {
   reuseThreads,
   selectionRange,
   visibleThreads,
+  commentsOff,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 
@@ -2247,12 +2248,16 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     async openDraft(sel) {
+      const off = get().snapshot && commentsOff(get().snapshot!.mode);
+      if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       const path = pathFromItemId(sel.id);
       set({ draft: { path, selection: sel }, selection: sel, activePath: path, replyTo: null });
     },
 
     openFileDraft(path) {
+      const off = get().snapshot && commentsOff(get().snapshot!.mode);
+      if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       // The cursor stays where the reader is when that is inside this file, so `]` and `e` carry on from
       // there; a cursor in another file gives way to this file's header as the motion stop.

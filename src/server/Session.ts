@@ -557,6 +557,8 @@ export class Session {
    * review. Goes through `readSide`, so the allowlist applies.
    */
   anchorSource(): AnchorSource {
+    // An interdiff's old side is a replayed tree, and its threads would live under a key the range never shows.
+    if (this.mode.interdiff) throw new RevspecError('comments are off while comparing iterations');
     return {
       quote: async (path, side, startLine, endLine) => {
         const snap = await this.snapshotter.current();

@@ -536,6 +536,7 @@ describe('Session', () => {
       expect(inter.commits.list.map((c) => c.message)).toEqual(['feature']);
       expect(inter.iterations).toHaveLength(2);
       expect(comparisonLabel(inter.mode)).toBe('main...feat #1→#2');
+      expect(() => session.anchorSource()).toThrow(RevspecError);
 
       // The range-diff pairs the rebased commit with its amended self; its pair shows the amend alone, too.
       const pairs = inter.mode.interdiff!.pairs;

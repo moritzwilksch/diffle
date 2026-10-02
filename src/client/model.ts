@@ -372,6 +372,14 @@ export function relativeTime(at: number, now = Date.now()): string {
   return 'just now';
 }
 
+/**
+ * Why comments are off in this comparison, or null. An interdiff's old side is a replayed tree
+ * and its threads would live under a key the range never shows again.
+ */
+export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string | null {
+  return mode.interdiff ? 'Comments are off while comparing iterations: leave them on the range itself' : null;
+}
+
 /** Local repository name, independent of GitHub discovery. */
 export function repoName(snapshot: Snapshot): string {
   const parts = snapshot.root.split(/[\\/]/).filter(Boolean);
