@@ -9,8 +9,8 @@ import { Button } from '../ui/Button.js';
 /**
  * The recorded iterations of the range, newest first; the newest is where the review stands. The
  * list is the control: a click compares that iteration with the latest; once a span is shown, a
- * plain click moves its end there and a shift-click its start, and a click on the end moves on
- * from it. A bracket marks the two compared. Shown once there is something to compare; each row's
+ * row offers two spans, one keeping the start and one the end, and shift-click takes the second.
+ * A bracket marks the two compared. Shown once there is something to compare; each row's
  * hash copies that iteration's head.
  */
 export function IterationList({ snapshot }: { snapshot: Snapshot }) {

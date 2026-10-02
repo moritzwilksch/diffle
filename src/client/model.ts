@@ -382,10 +382,11 @@ export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string |
 
 /**
  * Which two iterations a click on row `n` of the list compares, given the span `shown` (null when the
- * range itself is shown) and the `latest` iteration. A plain click moves the span's end to `n`, a
- * shift-click its start; a click past the other end moves that one instead, so the span stays in
- * order. Clicking the end itself moves on from it to the latest, clicking the start resets its end to
- * the latest. Without a span, any click compares `n` with the latest. Null when nothing would change.
+ * range itself is shown) and the `latest` iteration. A click on a row has two candidates: keep the
+ * span's start and end it at `n`, or keep its end and start it at `n`. A plain click keeps the start
+ * where `n` lies past it and the end otherwise; shift-click takes the other candidate, with `n` and
+ * the kept end put in order. Clicking an end of the span compares it with the latest; without a span,
+ * any click compares `n` with the latest. Null when nothing would change.
  */
 export function iterationPick(
   shown: { from: number; to: number } | null,
@@ -393,12 +394,14 @@ export function iterationPick(
   n: number,
   shift: boolean,
 ): { from: number; to: number } | null {
-  const span = (a: number, b: number) =>
-    a === b || (shown && shown.from === a && shown.to === b) ? null : { from: a, to: b };
-  if (!shown) return span(Math.min(n, latest), latest);
+  const span = (a: number, b: number) => {
+    const [from, to] = a < b ? [a, b] : [b, a];
+    return from === to || (shown && shown.from === from && shown.to === to) ? null : { from, to };
+  };
+  if (!shown) return span(n, latest);
   if (n === shown.to || n === shown.from) return span(n, latest);
-  if (shift ? n < shown.to : n < shown.from) return span(n, shown.to);
-  return span(shown.from, n);
+  const keepStart = n > shown.from;
+  return span(n, keepStart === !shift ? shown.from : shown.to);
 }
 
 /** Local repository name, independent of GitHub discovery. */
