@@ -610,7 +610,7 @@ describe('a single commit', () => {
     // The merged side commit is reachable from HEAD but not from HEAD~1.
     const worktree = (await snap('HEAD~1..worktree')).commits;
     expect([worktree.total, worktree.list.at(-1)?.sha]).toEqual([2, merge]);
-    expect((await snap('HEAD..worktree')).commits).toEqual({ list: [], total: 0 });
+    expect((await snap('HEAD..worktree')).commits).toEqual({ list: [], total: 0, oldSha: merge, newSha: 'worktree' });
   });
 
   it('reports an unknown commit as a revspec error', async () => {
@@ -904,5 +904,98 @@ describe('linguist-generated attribute', () => {
     } finally {
       agit('checkout', '-q', '--', '.');
     }
+  });
+});
+
+describe('replay and pins', () => {
+  let rdir: string;
+  let rrepo: GitRepo;
+  const rgit = (...args: string[]) =>
+    execFileSync('git', args, {
+      cwd: rdir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 't',
+        GIT_AUTHOR_EMAIL: 't@t',
+        GIT_COMMITTER_NAME: 't',
+        GIT_COMMITTER_EMAIL: 't@t',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+      },
+    }).trim();
+
+  beforeAll(async () => {
+    rdir = await mkdtemp(join(tmpdir(), 'diffle-replay-'));
+    rgit('init', '-q', '-b', 'main');
+    await writeFile(join(rdir, 'f.txt'), 'a\nb\nc\n');
+    rgit('add', '.');
+    rgit('commit', '-q', '-m', 'base');
+    rgit('checkout', '-q', '-b', 'feat');
+    await writeFile(join(rdir, 'f.txt'), 'a\nB\nc\n');
+    rgit('commit', '-q', '-am', 'feat');
+    rgit('checkout', '-q', 'main');
+    await writeFile(join(rdir, 'f.txt'), 'a\nb\nc\nd\n');
+    rgit('commit', '-q', '-am', 'main: append');
+    await writeFile(join(rdir, 'f.txt'), 'a\nX\nc\nd\n');
+    rgit('commit', '-q', '-am', 'main: conflict');
+    rrepo = await GitRepo.open(rdir);
+  });
+  afterAll(() => rmTmp(rdir));
+
+  it('replays a branch onto a moved base and names the files it could not merge', async () => {
+    const base = rgit('rev-parse', 'main~2');
+    const clean = await rrepo.replay(base, 'main~1', 'feat');
+    expect(clean.conflicts).toEqual([]);
+    expect((await rrepo.show(clean.tree, 'f.txt'))?.toString()).toBe('a\nB\nc\nd\n');
+    const conflicted = await rrepo.replay(base, 'main', 'feat');
+    expect(conflicted.conflicts).toEqual(['f.txt']);
+    expect((await rrepo.show(conflicted.tree, 'f.txt'))?.toString()).toContain('<<<<<<<');
+    expect(await rrepo.tree('feat')).toBe(rgit('rev-parse', 'feat^{tree}'));
+  });
+
+  it('pairs two ranges as range-diff does and tells reworded commits from amended ones by patch id', async () => {
+    // feat2: the same change as feat under a new message, plus a commit of its own.
+    const base = rgit('rev-parse', 'main~2');
+    rgit('checkout', '-q', '-b', 'feat2', base);
+    await writeFile(join(rdir, 'f.txt'), 'a\nB\nc\n');
+    rgit('commit', '-q', '-am', 'feat, reworded');
+    await writeFile(join(rdir, 'g.txt'), 'g\n');
+    rgit('add', 'g.txt');
+    rgit('commit', '-q', '-m', 'extra');
+    const [feat, reworded, extra] = ['feat', 'feat2~1', 'feat2'].map((rev) => rgit('rev-parse', rev));
+    const rows = await rrepo.rangeDiff(`${base}..feat`, `${base}..feat2`);
+    expect(rows.map((r) => r.marker)).toEqual(['!', '>']);
+    expect(feat!.startsWith(rows[0]!.old!)).toBe(true);
+    expect(reworded!.startsWith(rows[0]!.new!)).toBe(true);
+    expect(rows[1]).toMatchObject({ old: null });
+    expect(extra!.startsWith(rows[1]!.new!)).toBe(true);
+    const ids = await rrepo.patchIds([feat!, reworded!, extra!]);
+    expect(ids.get(feat!)).toBe(ids.get(reworded!));
+    expect(ids.get(extra!)).not.toBe(ids.get(feat!));
+    expect(await rrepo.patchIds([])).toEqual(new Map());
+  });
+
+  it('reads the right-aligned rows of a range with ten or more commits', async () => {
+    const base = rgit('rev-parse', 'main~2');
+    rgit('checkout', '-q', '-b', 'many', base);
+    for (let i = 1; i <= 10; i++) {
+      await writeFile(join(rdir, `n${i}.txt`), `${i}\n`);
+      rgit('add', `n${i}.txt`);
+      rgit('commit', '-q', '-m', `n${i}`);
+    }
+    const rows = await rrepo.rangeDiff(`${base}..many~1`, `${base}..many`);
+    expect(rows).toHaveLength(10);
+    expect(rows.map((r) => r.marker)).toEqual([...Array<string>(9).fill('='), '>']);
+    expect(rgit('rev-parse', 'many').startsWith(rows[9]!.new!)).toBe(true);
+  });
+
+  it('pins and deletes refs under refs/diffle/iterations/ only', async () => {
+    const sha = rgit('rev-parse', 'feat');
+    await rrepo.pin({ 'refs/diffle/iterations/x/1/new': sha });
+    expect(rgit('rev-parse', 'refs/diffle/iterations/x/1/new')).toBe(sha);
+    await rrepo.pin({ 'refs/diffle/iterations/x/1/new': null });
+    expect(rgit('for-each-ref', 'refs/diffle/iterations/')).toBe('');
+    await expect(rrepo.pin({ 'refs/heads/main': sha })).rejects.toThrow(/refusing to update/);
+    await expect(rrepo.pin({ 'refs/diffle/other/1': sha })).rejects.toThrow(/refusing to update/);
   });
 });

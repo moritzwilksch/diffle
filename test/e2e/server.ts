@@ -53,10 +53,11 @@ export async function startDiffle({
       '--port',
       '0',
       '--no-open',
-      '--no-watch',
+      // Watching is off unless a scenario asks for it with the (otherwise unknown) `--watch`.
+      ...(args.includes('--watch') ? [] : ['--no-watch']),
       ...(args.some((a) => a.startsWith('--lsp')) ? [] : ['--no-lsp']),
       ...revs,
-      ...args,
+      ...args.filter((a) => a !== '--watch'),
     ],
     {
       cwd: root,

@@ -1,7 +1,13 @@
 import { Check, ChevronDown, ChevronRight, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import { comparisonLabel, type RangeCommit, type Snapshot } from '../../shared/protocol.js';
+import {
+  comparisonLabel,
+  type PairStatus,
+  type RangeCommit,
+  type RangePair,
+  type Snapshot,
+} from '../../shared/protocol.js';
 import { copyText } from '../clipboard.js';
 import { commitBody, rangeStep } from '../model.js';
 import { useStore } from '../store.js';
@@ -20,20 +26,25 @@ const COPIED_MS = 1400;
 /**
  * The compared range's commits, newest first, under an entry for the range itself. Choosing a commit
  * shows its diff alone while the list stays the range's; the shown entry is highlighted with its full
- * message, and hovering another shows that one's in a card.
+ * message, and hovering another shows that one's in a card. Within an interdiff the list is the
+ * range-diff instead: the two iterations' commits paired, under an entry for the interdiff itself.
  */
 export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   const { mode, commits } = snapshot;
   const focusCommit = useStore((s) => s.focusCommit);
+  const showPair = useStore((s) => s.showPair);
   const stepCommit = useStore((s) => s.stepCommit);
-  const [open, setOpen] = useState(commits.total <= OPEN_UP_TO);
+  const interdiff = mode.interdiff ?? null;
+  const [open, setOpen] = useState((interdiff ? interdiff.pairs.length : commits.total) <= OPEN_UP_TO);
   const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const list = useRef<HTMLDivElement>(null);
   const cardId = useId();
   // A single commit alone has nothing to step through; it is shown as the one active entry.
   const range = mode.within ?? (mode.base === 'parent' ? null : mode);
-  const active = mode.base === 'parent' ? mode.new : null;
+  const active = mode.pair ? mode.pair.new : mode.base === 'parent' ? mode.new : null;
+  // An interdiff shows neither the range nor one of its commits; "All changes" leads back to the range.
+  const whole = active === null && !interdiff;
   const older = commits.total - commits.list.length;
 
   useEffect(() => {
@@ -56,6 +67,22 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
     setHover(null);
   };
 
+  const entry = (current: boolean, onClick: () => void, title: string, label: string) => (
+    <Button
+      variant="ghost"
+      className={twMerge(
+        'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem] outline-none focus-visible:bg-hover',
+        current && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
+      )}
+      aria-current={current ? 'true' : undefined}
+      onClick={onClick}
+    >
+      <Layers size="0.8125rem" className={current ? 'text-accent' : 'text-muted'} />
+      <span className={twMerge('flex-none', current && 'font-semibold')}>{title}</span>
+      <span className="min-w-0 truncate font-mono text-[0.75rem] text-muted">{label}</span>
+    </Button>
+  );
+
   return (
     <section
       className="flex max-h-[40%] shrink-0 flex-col border-b border-b-border text-[0.8125rem]"
@@ -74,7 +101,9 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <ChevronRight size="0.875rem" className="text-muted" />
           )}
           <GitCommitHorizontal size="0.9375rem" /> Commits
-          <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">{commits.total}</span>
+          <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">
+            {interdiff ? interdiff.pairs.length : commits.total}
+          </span>
         </Button>
         {range && (
           <>
@@ -103,36 +132,46 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
       </div>
       {open && (
         <div ref={list} className="min-h-0 overflow-auto pb-1.5" onScroll={hoverEnd}>
-          {range && (
-            <Button
-              variant="ghost"
-              className={twMerge(
-                'w-full gap-2 rounded-none py-1 pr-2.5 pl-2 text-left leading-[1.125rem] outline-none focus-visible:bg-hover',
-                active === null && 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)] hover:bg-accent/12',
-              )}
-              aria-current={active === null ? 'true' : undefined}
-              onClick={() => focusCommit(null)}
-            >
-              <Layers size="0.8125rem" className={active === null ? 'text-accent' : 'text-muted'} />
-              <span className={twMerge('flex-none', active === null && 'font-semibold')}>All changes</span>
-              <span className="min-w-0 truncate font-mono text-[0.75rem] text-muted">{comparisonLabel(range)}</span>
-            </Button>
-          )}
+          {range && entry(whole, () => focusCommit(null), 'All changes', comparisonLabel(range))}
+          {interdiff &&
+            entry(
+              active === null,
+              () => showPair(null),
+              `Since #${interdiff.from.n}`,
+              `${interdiff.pairs.filter((p) => p.status !== 'identical').length} of ${interdiff.pairs.length} commits differ`,
+            )}
           <ol className="m-0 list-none p-0">
-            {commits.list.toReversed().map((commit) => (
-              <CommitRow
-                key={commit.sha}
-                commit={commit}
-                rail={commits.list.length > 1}
-                active={commit.sha === active}
-                described={hover?.commit.sha === commit.sha ? cardId : undefined}
-                onPick={range ? () => focusCommit(commit.sha) : undefined}
-                onHover={(row) => hoverStart(commit, row)}
-                onLeave={hoverEnd}
-              />
-            ))}
+            {interdiff
+              ? interdiff.pairs.toReversed().map((pair) => {
+                  const commit = pair.new ?? pair.old!;
+                  return (
+                    <PairRow
+                      key={`${pair.old?.sha ?? '-'}:${pair.new?.sha ?? '-'}`}
+                      pair={pair}
+                      active={pair.new != null && pair.new.sha === active}
+                      described={hover?.commit.sha === commit.sha ? cardId : undefined}
+                      onPick={pair.new && pair.status !== 'identical' ? () => showPair(pair.new!.sha) : undefined}
+                      onHover={(row) => hoverStart(commit, row)}
+                      onLeave={hoverEnd}
+                    />
+                  );
+                })
+              : commits.list
+                  .toReversed()
+                  .map((commit) => (
+                    <CommitRow
+                      key={commit.sha}
+                      commit={commit}
+                      rail={commits.list.length > 1}
+                      active={commit.sha === active}
+                      described={hover?.commit.sha === commit.sha ? cardId : undefined}
+                      onPick={range ? () => focusCommit(commit.sha) : undefined}
+                      onHover={(row) => hoverStart(commit, row)}
+                      onLeave={hoverEnd}
+                    />
+                  ))}
           </ol>
-          {older > 0 && (
+          {!interdiff && older > 0 && (
             <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">
               {older} older {older === 1 ? 'commit' : 'commits'} not shown
             </p>
@@ -142,6 +181,102 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
       {/* The shown commit already lays its message out in the list. */}
       {hover && hover.commit.sha !== active && <CommitCard id={cardId} commit={hover.commit} row={hover.row} />}
     </section>
+  );
+}
+
+/** How each pair state reads and looks in the list. */
+const PAIR_STATUS: Record<PairStatus, { glyph: string; label: string; className: string }> = {
+  identical: { glyph: '=', label: 'identical', className: 'text-muted' },
+  changed: { glyph: '!', label: 'amended', className: 'text-accent' },
+  message: { glyph: '!', label: 'reworded', className: 'text-accent' },
+  added: { glyph: '+', label: 'added', className: 'text-add' },
+  dropped: { glyph: '−', label: 'dropped', className: 'text-del' },
+};
+
+/**
+ * One range-diff row: the newer commit's subject (the older one's for a dropped commit), both
+ * hashes, and the pair's state. Identical and dropped pairs are shown for orientation but have
+ * nothing to open; the shown pair lays out its new message and, when reworded, the old one.
+ */
+function PairRow({
+  pair,
+  active,
+  described,
+  onPick,
+  onHover,
+  onLeave,
+}: {
+  pair: RangePair;
+  active: boolean;
+  described: string | undefined;
+  onPick: (() => void) | undefined;
+  onHover(row: Element): void;
+  onLeave(): void;
+}) {
+  const status = PAIR_STATUS[pair.status];
+  const commit = pair.new ?? pair.old!;
+  const reworded = pair.old && pair.new && pair.old.message !== pair.new.message;
+  const head = (
+    <>
+      <span aria-hidden className={twMerge('w-2 flex-none text-center font-mono font-bold', status.className)}>
+        {status.glyph}
+      </span>
+      <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>
+        {subjectOf(commit)}
+      </span>
+      <span className={twMerge('flex-none text-[0.75rem]', status.className)}>{status.label}</span>
+    </>
+  );
+  return (
+    <li
+      className={twMerge(
+        'group relative',
+        active ? 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)]' : onPick && 'hover:bg-hover',
+        !onPick && 'opacity-70',
+      )}
+      aria-current={active ? 'true' : undefined}
+      onPointerEnter={(e) => onHover(e.currentTarget)}
+      onPointerLeave={onLeave}
+    >
+      <div className="flex items-start pr-1.5">
+        {onPick ? (
+          <Button
+            variant="ghost"
+            className={twMerge(
+              'min-w-0 flex-1 items-start gap-2 rounded-none py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              !active && 'focus-visible:bg-hover',
+            )}
+            aria-describedby={described}
+            onClick={onPick}
+          >
+            {head}
+          </Button>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+        )}
+        <span className="flex flex-none items-center font-mono text-[0.75rem] text-muted">
+          {pair.old ? <CopyHash commit={pair.old} /> : <span className="px-1">———————</span>}
+          <span aria-hidden>→</span>
+          {pair.new ? <CopyHash commit={pair.new} /> : <span className="px-1">———————</span>}
+        </span>
+      </div>
+      {active && (
+        <div className="pr-2.5 pb-1.5 pl-6.5">
+          <CommitDetails commit={commit} />
+          {reworded && pair.old && (
+            <div className="mt-1 border-l-2 border-border pl-2 text-muted">
+              <div className="text-[0.75rem] font-semibold">Previous message</div>
+              <div className="wrap-anywhere">{subjectOf(pair.old)}</div>
+              {commitBody(pair.old.message).map((paragraph, i) => (
+                <p key={i} className="m-0 mt-1 wrap-anywhere whitespace-pre-wrap">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -224,7 +359,7 @@ function CommitRow({
 }
 
 /** The short hash; a click copies the full one and swaps the hash for a check mark, as `yy` does its button. */
-function CopyHash({ commit }: { commit: RangeCommit }) {
+export function CopyHash({ commit }: { commit: Pick<RangeCommit, 'sha' | 'short'> }) {
   const [done, setDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);

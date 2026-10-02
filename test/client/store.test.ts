@@ -5,6 +5,7 @@ import type {
   CommentThread,
   LspServerStatus,
   LspStatus,
+  Moved,
   Snapshot,
   UserConfig,
   ViewedEntry,
@@ -37,9 +38,11 @@ const api = {
   config: vi.fn(async (): Promise<UserConfig> => ({
     autoViewed: [],
     contextLines: 5,
+    followRefs: false,
     lspCommands: { python: 'pyrefly lsp' },
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
+  moved: vi.fn(async (): Promise<Moved | null> => null),
   lspDefinition: vi.fn(),
   lspTypeDefinition: vi.fn(),
   lspReferences: vi.fn(),
@@ -99,7 +102,8 @@ function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt'])
     changed: [],
     tree,
     commit: null,
-    commits: { list: [], total: 0 },
+    commits: { list: [], total: 0, oldSha: 'x', newSha: 'worktree' },
+    iterations: [],
   };
 }
 
@@ -964,12 +968,12 @@ describe('client transitions', () => {
 
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
     useStore.setState({
-      config: { autoViewed: [], contextLines: 5, lspCommands: {} },
+      config: { autoViewed: [], contextLines: 5, followRefs: false, lspCommands: {} },
       lsp: LSP_OFF,
     });
     const slow = deferred<Snapshot>();
     api.snapshot.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(snap(2, 'working'));
-    api.config.mockResolvedValueOnce({ autoViewed: ['*.lock'], contextLines: 9, lspCommands: {} });
+    api.config.mockResolvedValueOnce({ autoViewed: ['*.lock'], contextLines: 9, followRefs: false, lspCommands: {} });
     api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
     const boot = useStore.getState().boot();
     // The watcher pushes while boot's requests are in flight.
@@ -1761,7 +1765,7 @@ const thread = (
   resolved: over.resolved ?? false,
   stale: false,
 });
-const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
+const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: false, lspCommands: {} };
 
 describe('request ownership', () => {
   type SearchResponse = { query: string; matches: { path: string; line: number; text: string }[]; truncated: boolean };
@@ -1997,7 +2001,12 @@ describe('request ownership', () => {
   });
 
   it('config loads and saves: the newest request wins and saves run in order', async () => {
-    const cfg = (contextLines: number): UserConfig => ({ autoViewed: [], contextLines, lspCommands: {} });
+    const cfg = (contextLines: number): UserConfig => ({
+      autoViewed: [],
+      contextLines,
+      followRefs: false,
+      lspCommands: {},
+    });
     const load = deferred<UserConfig>();
     const save = deferred<UserConfig>();
     api.config.mockReturnValueOnce(load.promise);

@@ -29,6 +29,7 @@ import { CommitStepper } from './CommitStepper.js';
 import { GithubMenu } from './GithubMenu.js';
 import { HistoryNav } from './HistoryNav.js';
 import { ModePicker } from './ModePicker.js';
+import { MovedNotice } from './MovedNotice.js';
 import { SettingsDialog } from './SettingsDialog.js';
 
 export function Header() {
@@ -71,6 +72,7 @@ export function Header() {
         </span>
       )}
       <GithubMenu />
+      <MovedNotice />
       <span className="text-muted">
         {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>
       </span>

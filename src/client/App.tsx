@@ -17,6 +17,7 @@ export function App() {
   const refreshViewed = useStore((s) => s.refreshViewed);
   const refreshConfig = useStore((s) => s.refreshConfig);
   const setLspStatus = useStore((s) => s.setLspStatus);
+  const setMoved = useStore((s) => s.setMoved);
   const toast = useStore((s) => s.toast);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
@@ -74,6 +75,9 @@ export function App() {
         case 'snapshot':
           void refreshSnapshot(msg.version);
           break;
+        case 'moved':
+          setMoved(msg.moved);
+          break;
         case 'threads':
           void refreshThreads();
           break;
@@ -90,7 +94,7 @@ export function App() {
           break;
       }
     }, resync);
-  }, [boot, refreshSnapshot, refreshThreads, refreshViewed, refreshConfig, setLspStatus]);
+  }, [boot, refreshSnapshot, refreshThreads, refreshViewed, refreshConfig, setLspStatus, setMoved]);
 
   return (
     <div className="grid h-full grid-rows-[2.5rem_1fr]" style={{ gridTemplateColumns: columns }}>

@@ -86,6 +86,12 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.get('/api/snapshot', async (c) => c.json(await session.snapshotter.current()));
 
+  app.get('/api/moved', (c) => c.json(session.moved));
+
+  app.post('/api/reload', async (c) => c.json(await session.reload()));
+
+  app.delete('/api/iterations', async (c) => c.json(await session.clearIterations()));
+
   app.post('/api/mode', async (c) => {
     const req = ModeRequestSchema.parse(await readJson(c));
     return c.json(await session.switchMode(req));
@@ -333,6 +339,7 @@ export function createApi(deps: ApiDeps): Hono {
     hub.broadcast({ type: 'config' });
     // The session keeps its own context (`--context` or the config at startup); only an explicit change moves it.
     if (body.contextLines != null) await session.setContext(deps.config.get().contextLines);
+    if (body.followRefs != null) session.setFollowRefs(deps.config.get().followRefs);
     return c.json(effectiveConfig(deps));
   });
 

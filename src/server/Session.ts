@@ -5,8 +5,13 @@ import {
   type GithubExportResponse,
   type EntryRequest,
   type GithubMetadata,
+  type Iteration,
+  MAX_RANGE_COMMITS,
   type ModeRequest,
   type ModeSpec,
+  type Moved,
+  type RangeCommit,
+  type RangePair,
   type ServerMessage,
   type Side,
   type Snapshot,
@@ -18,7 +23,8 @@ import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
-import { type ResolvedReview, resolveReview } from './mode.js';
+import { IterationStore } from './iterations.js';
+import { resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
 import { RevspecError } from './revspec.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -41,6 +47,8 @@ interface Active {
   snapshotter: Snapshotter;
   comments: CommentStore;
   watcher: WatcherLike | null;
+  /** Where a refs-live comparison's refs point now, when that differs from the snapshot; cleared by a reload. */
+  moved: Moved | null;
 }
 
 export interface SessionOptions {
@@ -49,6 +57,8 @@ export interface SessionOptions {
   github?: GithubClient;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
+  /** Recompute a review between refs when one moves, instead of announcing it. The user config; setFollowRefs() changes it. */
+  followRefs: boolean;
   /** Replaces the chokidar-backed Watcher. Test seam. */
   createWatcher?: (target: WatchTarget) => WatcherLike;
 }
@@ -61,6 +71,10 @@ export interface SessionOptions {
  * while its task holds the queue, so published versions are monotonic and the
  * active snapshotter always carries the session's context. Requests that arrive
  * before the first mode resolves await `ready()`.
+ *
+ * A worktree-live comparison recomputes on every change. A refs-live one only
+ * announces that its refs moved (`moved`) and recomputes on `reload()`, so a
+ * push or rebase does not swap the review out from under the reviewer.
  */
 export class Session {
   private active: Active | null = null;
@@ -72,6 +86,8 @@ export class Session {
   private queue: Promise<unknown> = Promise.resolve();
   /** The refresh waiting for the queue, if any. Later requests join it. */
   private queuedRefresh: Promise<void> | null = null;
+  /** The refs check waiting for the queue, if any. Later signals join it. */
+  private queuedCheck: Promise<void> | null = null;
   private readable = new WeakMap<Snapshot, ReadablePaths>();
   private snapshotListeners = new Set<(snap: Snapshot) => void>();
 
@@ -97,6 +113,21 @@ export class Session {
 
   get snapshotter(): Snapshotter {
     return this.require().snapshotter;
+  }
+
+  /** The pending reload of a refs-live comparison, for a client that connects after the push. */
+  get moved(): Moved | null {
+    return this.require().moved;
+  }
+
+  /** Whether moved refs recompute the review, as worktree edits always do, or only announce themselves. */
+  get follows(): boolean {
+    return this.require().mode.live === 'worktree' || this.opts.followRefs;
+  }
+
+  /** Change the user's choice for the running session; a pending notice stands until a reload picks the refs up. */
+  setFollowRefs(followRefs: boolean): void {
+    this.opts.followRefs = followRefs;
   }
 
   /** Cached independently of snapshot construction; callers never hold the transition queue. */
@@ -190,7 +221,13 @@ export class Session {
   async switchMode(req: ModeRequest): Promise<Snapshot> {
     const snap = await this.run(async () =>
       this.activate(
-        req.kind === 'focus' ? await this.focus(req.commit) : await resolveReview(req, this.repo, this.opts.github),
+        req.kind === 'focus'
+          ? await this.focus(req.commit)
+          : req.kind === 'interdiff'
+            ? await this.interdiff(req.from, req.to)
+            : req.kind === 'pair'
+              ? await this.pair(req.commit)
+              : await resolveReview(req, this.repo, this.opts.github),
       ),
     );
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
@@ -225,6 +262,126 @@ export class Session {
   }
 
   /**
+   * Compares two recorded iterations of the active range: `from`'s head replayed onto `to`'s base
+   * against `to`'s head, so only what the branch itself changed in between shows. The interdiff
+   * keeps its own comments and the range's PR identity; its refs keep being watched.
+   */
+  private async interdiff(from: number, to: number): Promise<ResolvedReview> {
+    const a = this.require();
+    const range = a.mode.within ?? a.mode;
+    if (range.base === 'parent') throw new RevspecError('a single commit has no iterations');
+    if (from >= to) throw new RevspecError('compare an older iteration with a newer one');
+    const store = new IterationStore(this.repo, range.commentKey);
+    const [older, newer] = await Promise.all([store.get(from), store.get(to)]);
+    if (!older || !newer) throw new RevspecError(`no iteration #${older ? to : from} of ${comparisonLabel(range)}`);
+    // The same base needs no replay: the older head's tree is what was reviewed.
+    const [{ tree, conflicts }, pairs] = await Promise.all([
+      older.oldSha === newer.oldSha
+        ? this.repo.tree(older.newSha).then((tree) => ({ tree, conflicts: [] }))
+        : this.repo.replay(older.oldSha, newer.oldSha, older.newSha),
+      this.pairs(older, newer),
+    ]);
+    return {
+      prUrl: a.prUrl,
+      mode: {
+        old: tree,
+        new: newer.newSha,
+        base: 'direct',
+        live: range.live === 'none' ? 'none' : 'refs',
+        commentKey: `${range.commentKey}:interdiff:${from}-${to}`,
+        within: range,
+        interdiff: { from: older, to: newer, conflicts, pairs },
+      },
+    };
+  }
+
+  /**
+   * Pairs the two iterations' commits as `git range-diff` does and tells a pair whose patch is
+   * the same (a reworded commit) from an amended one by patch id.
+   */
+  private async pairs(older: Iteration, newer: Iteration): Promise<RangePair[]> {
+    const oldRange = `${older.oldSha}..${older.newSha}`;
+    const newRange = `${newer.oldSha}..${newer.newSha}`;
+    const [rows, oldCommits, newCommits] = await Promise.all([
+      this.repo.rangeDiff(oldRange, newRange),
+      this.repo.rangeCommits(oldRange, MAX_RANGE_COMMITS),
+      this.repo.rangeCommits(newRange, MAX_RANGE_COMMITS),
+    ]);
+    // range-diff abbreviates; a commit beyond the listed window is looked up on its own.
+    const find = async (list: RangeCommit[], abbrev: string | null): Promise<RangeCommit | null> => {
+      if (abbrev === null) return null;
+      const listed = list.find((c) => c.sha.startsWith(abbrev));
+      return listed ?? (await this.repo.rangeCommits(`${abbrev}^!`, 1)).list[0] ?? null;
+    };
+    const paired = await Promise.all(
+      rows.map(async (row) => ({
+        old: await find(oldCommits.list, row.old),
+        new: await find(newCommits.list, row.new),
+        marker: row.marker,
+      })),
+    );
+    const changed = paired.filter((p) => p.marker === '!' && p.old && p.new);
+    const ids = await this.repo.patchIds(changed.flatMap((p) => [p.old!.sha, p.new!.sha]));
+    return paired.map(({ old, new: next, marker }) => ({
+      old,
+      new: next,
+      status:
+        marker === '='
+          ? 'identical'
+          : marker === '<'
+            ? 'dropped'
+            : marker === '>'
+              ? 'added'
+              : old && next && ids.get(old.sha) !== undefined && ids.get(old.sha) === ids.get(next.sha)
+                ? 'message'
+                : 'changed',
+    }));
+  }
+
+  /**
+   * Shows one pair of the active interdiff by its new-side commit: an added commit against its
+   * parent, an amended or reworded one against its old self replayed onto its parent. With null,
+   * the whole interdiff again. Identical pairs have nothing to show; dropped ones have no new side.
+   */
+  private async pair(commit: string | null): Promise<ResolvedReview> {
+    const a = this.require();
+    const { interdiff, within: range } = a.mode;
+    if (!interdiff || !range) throw new RevspecError('no interdiff to pick a pair from');
+    if (commit === null) return this.interdiff(interdiff.from.n, interdiff.to.n);
+    const found = interdiff.pairs.find((p) => p.new && (p.new.sha === commit || p.new.short === commit));
+    if (!found?.new) throw new RevspecError(`not a commit of ${comparisonLabel(a.mode)}: ${commit}`);
+    if (found.status === 'identical') throw new RevspecError(`${found.new.short} is identical in both iterations`);
+    const live = range.live === 'none' ? 'none' : 'refs';
+    const base = { live, within: range, interdiff } as const;
+    if (!found.old) {
+      const sha = found.new.sha;
+      return {
+        prUrl: a.prUrl,
+        mode: {
+          ...base,
+          old: sha,
+          new: sha,
+          base: 'parent',
+          commentKey: `commit:${sha}`,
+          pair: { old: null, new: sha, conflicts: [] },
+        },
+      };
+    }
+    const { tree, conflicts } = await this.repo.replay(`${found.old.sha}^`, `${found.new.sha}^`, found.old.sha);
+    return {
+      prUrl: a.prUrl,
+      mode: {
+        ...base,
+        old: tree,
+        new: found.new.sha,
+        base: 'direct',
+        commentKey: `${range.commentKey}:pair:${found.old.sha}-${found.new.sha}`,
+        pair: { old: found.old.sha, new: found.new.sha, conflicts },
+      },
+    };
+  }
+
+  /**
    * Runs `fn` after every earlier mutation settled. The only way to touch
    * `active`, `version` or `opts.context`.
    */
@@ -235,14 +392,23 @@ export class Session {
   }
 
   private async activate({ mode, prUrl }: ResolvedReview): Promise<Snapshot> {
-    const snapshotter = new Snapshotter(this.repo, mode, ++this.version, this.opts.context);
+    // A range that can move again gets its iterations recorded: one between refs, or a PR's, fetched anew each run.
+    const range = mode.within ?? mode;
+    const followed = range.base !== 'parent' && (range.live === 'refs' || prUrl != null);
+    const snapshotter = new Snapshotter(
+      this.repo,
+      mode,
+      ++this.version,
+      this.opts.context,
+      followed ? new IterationStore(this.repo, range.commentKey) : null,
+    );
     // Both awaited together: if one fails, the other's rejection is still handled.
     const [comments, snap] = await Promise.all([
       CommentStore.open(this.repo.gitDir, mode.commentKey),
       snapshotter.current(),
     ]);
     // Build the complete next state, then swap it in and retire the previous one.
-    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null };
+    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null };
     // The repository may have moved on while no server was watching it.
     await this.relocateComments(next, snap);
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);
@@ -274,23 +440,81 @@ export class Session {
     if (this.queuedRefresh) return this.queuedRefresh;
     const r = this.run(async () => {
       this.queuedRefresh = null;
-      const a = this.require();
-      a.snapshotter.invalidate(++this.version);
-      await this.publish(a);
+      await this.recompute();
     }).catch((e) => console.error('[diffle] refresh failed:', e));
     this.queuedRefresh = r;
     return r;
+  }
+
+  /** The reviewer asks for the moved refs: recompute now. Unlike `refresh`, a failure is the caller's. */
+  reload(): Promise<Snapshot> {
+    return this.run(async () => {
+      const a = this.require();
+      if (!a.mode.interdiff || !a.mode.within) return this.recompute();
+      // An interdiff is pinned; the moved refs belong to its range, where the reviewer continues.
+      return this.leaveInterdiff(a);
+    });
+  }
+
+  /** Forgets the range's recorded iterations and unpins their commits; its current state is recorded anew as #1. */
+  clearIterations(): Promise<Snapshot> {
+    return this.run(async () => {
+      const a = this.require();
+      const range = a.mode.within ?? a.mode;
+      await new IterationStore(this.repo, range.commentKey).clear();
+      // An interdiff or pair names iterations that no longer exist.
+      return a.mode.interdiff ? this.leaveInterdiff(a) : this.recompute();
+    });
+  }
+
+  private async leaveInterdiff(a: Active): Promise<Snapshot> {
+    const snap = await this.activate({ mode: a.mode.within!, prUrl: a.prUrl });
+    this.hub.broadcast({ type: 'snapshot', version: snap.version });
+    return snap;
+  }
+
+  private recompute(): Promise<Snapshot> {
+    const a = this.require();
+    a.snapshotter.invalidate(++this.version);
+    return this.publish(a);
   }
 
   /**
    * Computes `a`'s current snapshot, re-anchors its threads (hunks may have
    * grown, shrunk or moved), then broadcasts and announces it.
    */
-  private async publish(a: Active): Promise<void> {
+  private async publish(a: Active): Promise<Snapshot> {
     const snap = await a.snapshotter.current();
     await this.relocateComments(a, snap);
+    // The snapshot resolved the refs afresh; a signal arriving later compares against it.
+    a.moved = null;
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     this.announce(snap);
+    return snap;
+  }
+
+  /**
+   * Resolves the refs the live comparison follows and tells clients when they
+   * left the snapshot behind, or came back to it. At most one check waits
+   * behind the running one, as with `refresh`.
+   */
+  private checkMoved(a: Active): Promise<void> {
+    if (this.queuedCheck) return this.queuedCheck;
+    const r = this.run(async () => {
+      this.queuedCheck = null;
+      if (this.active !== a) return;
+      const snap = await a.snapshotter.current();
+      const { oldSha, newSha } = await resolveComparison(this.repo, a.mode.within ?? a.mode);
+      const moved =
+        oldSha === snap.commits.oldSha && newSha === snap.commits.newSha
+          ? null
+          : { version: snap.version, oldSha, newSha };
+      if (moved?.oldSha === a.moved?.oldSha && moved?.newSha === a.moved?.newSha) return;
+      a.moved = moved;
+      this.hub.broadcast({ type: 'moved', moved });
+    }).catch((e) => console.error('[diffle] refs check failed:', e));
+    this.queuedCheck = r;
+    return r;
   }
 
   /**
@@ -360,6 +584,8 @@ export class Session {
    * review. Goes through `readSide`, so the allowlist applies.
    */
   anchorSource(): AnchorSource {
+    // An interdiff's old side is a replayed tree, and its threads would live under a key the range never shows.
+    if (this.mode.interdiff) throw new RevspecError('comments are off while comparing iterations');
     return {
       quote: async (path, side, startLine, endLine) => {
         const snap = await this.snapshotter.current();
@@ -400,6 +626,10 @@ export class Session {
     }
     watcher.on('dirty', () => {
       if (this.active !== a) return;
+      if (!this.follows) {
+        void this.checkMoved(a);
+        return;
+      }
       void this.refresh();
       // Keep the follow-up in the queue so close() waits for its git process too.
       void this.run(async () => {

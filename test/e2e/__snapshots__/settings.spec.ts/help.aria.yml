@@ -12,6 +12,8 @@
   - heading "Code intelligence (language server)" [level=4]
   - text: "hover a symbol or gh signature and docs tooltip (gh: focused word); Esc closes click a symbol definition / type definition / references popover gd or ⌘/Ctrl+click go to the definition of the hovered symbol gy go to the definition of the hovered symbol’s type gA list references; j / k, Enter to jump, n / N to step gs / gS symbols in the current file / across the repository"
   - heading "View" [level=4]
-  - text: "zz scroll the current line to eye level zt / zb scroll the current line to the top / bottom s toggle split / unified t cycle theme ⌘/Ctrl+b toggle the file tree (Shift: comments panel) o GitHub repository and pull request m, then 1–5 open the mode picker and choose an entry < / > older / newer commit, of the range or of a single commit"
+  - text: "zz scroll the current line to eye level zt / zb scroll the current line to the top / bottom s toggle split / unified t cycle theme ⌘/Ctrl+b toggle the file tree (Shift: comments panel) o GitHub repository and pull request m, then 1–5 open the mode picker and choose an entry < / > older / newer commit or range-diff pair"
+  - heading "Iterations" [level=4]
+  - text: "r reload once the compared refs moved ii latest iteration vs. the one before; again: the range ij / ik span’s lower end one iteration older / newer iJ / iK span’s higher end one iteration older / newer i, then 1–9 compare that iteration with the latest"
   - heading "General" [level=4]
   - text: "? toggle this help Esc close composer, search, or menu; clear selection"

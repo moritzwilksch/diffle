@@ -83,7 +83,17 @@ export const COLUMNS: HelpSection[][] = [
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
         ['o', 'GitHub repository and pull request'],
         ['m, then 1–5', 'open the mode picker and choose an entry'],
-        ['< / >', 'older / newer commit, of the range or of a single commit'],
+        ['< / >', 'older / newer commit or range-diff pair'],
+      ],
+    },
+    {
+      title: 'Iterations',
+      rows: [
+        ['r', 'reload once the compared refs moved'],
+        ['ii', 'latest iteration vs. the one before; again: the range'],
+        ['ij / ik', 'span’s lower end one iteration older / newer'],
+        ['iJ / iK', 'span’s higher end one iteration older / newer'],
+        ['i, then 1–9', 'compare that iteration with the latest'],
       ],
     },
     {

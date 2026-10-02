@@ -7,12 +7,13 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommentThread, Side } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
-import { anchorLabel, exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
+import { anchorLabel, commentsOff, exportLabel, type ExportOutcome, visibleThreads } from '../model.js';
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
 import { useConfirm } from '../useConfirm.js';
 import { CommitNavigator } from './CommitNavigator.js';
+import { IterationList } from './IterationList.js';
 
 export function CommentPanel() {
   const threads = useStore((s) => s.threads);
@@ -27,6 +28,7 @@ export function CommentPanel() {
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
   const snapshot = useStore((s) => s.snapshot);
+  const off = snapshot ? commentsOff(snapshot.mode) : null;
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
@@ -79,6 +81,7 @@ export function CommentPanel() {
           // Keyed by the range, so focusing one of its commits keeps the list as it was.
           <CommitNavigator key={(snapshot.mode.within ?? snapshot.mode).commentKey} snapshot={snapshot} />
         )}
+      {snapshot && <IterationList snapshot={snapshot} />}
       <div className="flex min-h-10 items-center gap-1.5 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:px-2 [&_button]:whitespace-nowrap">
         <span className="mr-auto inline-flex min-w-0 items-center gap-1.5 truncate font-semibold">
           <MessageSquare size="0.9375rem" /> Threads
@@ -161,7 +164,10 @@ export function CommentPanel() {
         {groups.length === 0 && (
           <div className="px-3 py-6 text-center text-muted [&>p]:mt-0 [&>p]:mr-0 [&>p]:mb-1.5 [&>p]:ml-0">
             <p>{threads.length ? 'Every thread is resolved.' : 'No comments yet.'}</p>
-            <p>Click a line number to comment, drag across line numbers for a block, or press C for a whole file.</p>
+            <p>
+              {off ??
+                'Click a line number to comment, drag across line numbers for a block, or press C for a whole file.'}
+            </p>
           </div>
         )}
         {groups.map(([path, list]) => (

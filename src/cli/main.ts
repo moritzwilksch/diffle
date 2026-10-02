@@ -25,6 +25,7 @@ import {
   collectLspOverride,
   type LspOverride,
   parseContext,
+  parseOnOff,
   parseLanguage,
   parsePort,
   parseAllowedOrigin,
@@ -201,6 +202,15 @@ config
     console.log(store.get().contextLines);
   });
 config
+  .command('set-follow-refs')
+  .description('follow moved refs live (off: a Reload button)')
+  .argument('<on|off>', 'on or off', parseOnOff)
+  .action(async (followRefs: boolean) => {
+    const store = await UserConfigStore.open();
+    await store.set({ followRefs });
+    console.log(store.get().followRefs ? 'on' : 'off');
+  });
+config
   .command('set-lsp')
   .description('set the language-server command for one language')
   .addArgument(languageArgument('<language>', `one of: ${LANGUAGE_IDS.join(', ')}`).argParser(parseLanguage))
@@ -312,6 +322,7 @@ async function serve(
   const session = new Session(repo, hub, {
     watch: opts.watch,
     context: opts.context ?? config.get().contextLines,
+    followRefs: config.get().followRefs,
     github: github.client ?? undefined,
   });
   // A `--lsp` override outranks the config and starts its server whatever the diff holds.
@@ -399,7 +410,7 @@ async function serve(
     else console.error(`📝 ${n} changed file${n === 1 ? '' : 's'}  ${c.green(`+${adds}`)} ${c.red(`−${dels}`)}`);
     if (snap.mode.live !== 'none')
       console.error(
-        `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : 'watching refs')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
+        `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : session.follows ? 'watching refs' : 'watching refs; moved refs show a Reload button')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
       );
     if (lsp) {
       const { servers, missing } = lsp.status();
