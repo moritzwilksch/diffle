@@ -90,6 +90,8 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.post('/api/reload', async (c) => c.json(await session.reload()));
 
+  app.delete('/api/iterations', async (c) => c.json(await session.clearIterations()));
+
   app.post('/api/mode', async (c) => {
     const req = ModeRequestSchema.parse(await readJson(c));
     return c.json(await session.switchMode(req));

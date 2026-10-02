@@ -71,6 +71,24 @@ export class IterationStore {
       return next;
     });
   }
+
+  /** Forgets every iteration of this range and unpins their commits. */
+  async clear(): Promise<void> {
+    await withFileLock(this.file, async () => {
+      const all = await read(this.file);
+      const list = all.ranges[this.key] ?? [];
+      await this.repo.pin(
+        Object.fromEntries(
+          list.flatMap((it) => [
+            [`${this.refs}/${it.n}/old`, null],
+            [`${this.refs}/${it.n}/new`, null],
+          ]),
+        ),
+      );
+      delete all.ranges[this.key];
+      await writeFileAtomic(this.file, JSON.stringify(all, null, 2) + '\n');
+    });
+  }
 }
 
 async function read(file: string): Promise<File> {

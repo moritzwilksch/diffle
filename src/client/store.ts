@@ -353,6 +353,8 @@ export interface ReviewState {
   setMoved(moved: Moved | null): void;
   /** Recompute the snapshot where the refs point now, keeping the mode and the viewed marks. */
   reload(): Promise<void>;
+  /** Forget the range's recorded iterations; an interdiff on show returns to the range. */
+  clearIterations(): Promise<void>;
   error: string | null;
   threads: CommentThread[];
   /** Resolved threads stay hidden unless the user turns them on. */
@@ -560,6 +562,24 @@ export const useStore = create<ReviewState>((set, get) => {
     if (viewedSeq.latest(lists.tv)) set({ viewed: lists.viewed });
     if (threadsSeq.latest(lists.tt)) acceptThreads(lists.threads);
     await applySnapshot(snap, g);
+  };
+  /** A server-side change of the snapshot within the mode (reload, forgetting iterations): fetch and commit it. */
+  const transition = async (request: () => Promise<Snapshot>, what: string) => {
+    const g = begin();
+    let snap: Snapshot | undefined;
+    // As in switchMode: the pushed refresh normally owns the version before the response lands.
+    let owned = false;
+    try {
+      snap = await request();
+      if (!current(g) || accounted(snap.version)) return;
+      fetching = snap.version;
+      owned = true;
+      await commitSnapshot(snap, g, await fetchLists());
+    } catch (e) {
+      if (current(g)) get().report(what, e);
+    } finally {
+      if (owned && snap && fetching === snap.version) fetching = 0;
+    }
   };
   /** One side of a file in the current transition; rejects with an AbortError once a newer transition begins. */
   const fetchFile = (path: string, side: Side): Promise<FileResponse> => {
@@ -2131,23 +2151,9 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ moved });
     },
 
-    async reload() {
-      const g = begin();
-      let snap: Snapshot | undefined;
-      // As in switchMode: the pushed refresh normally owns the version before the response lands.
-      let owned = false;
-      try {
-        snap = await api.reload();
-        if (!current(g) || accounted(snap.version)) return;
-        fetching = snap.version;
-        owned = true;
-        await commitSnapshot(snap, g, await fetchLists());
-      } catch (e) {
-        if (current(g)) get().report('Reloading', e);
-      } finally {
-        if (owned && snap && fetching === snap.version) fetching = 0;
-      }
-    },
+    reload: () => transition(api.reload, 'Reloading'),
+
+    clearIterations: () => transition(api.clearIterations, 'Forgetting iterations'),
 
     focusCommit(commit) {
       void get().switchMode({ kind: 'focus', commit });

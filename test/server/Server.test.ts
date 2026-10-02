@@ -209,6 +209,16 @@ describe('Server', () => {
     }
   });
 
+  it('forgets iterations on DELETE /api/iterations and answers with the recomputed snapshot', async () => {
+    const before = await session.snapshotter.current();
+    const response = await send('DELETE', '/api/iterations');
+    expect(response.status).toBe(200);
+    const snap = JSON.parse(response.body);
+    expect(snap.version).toBeGreaterThan(before.version);
+    // A worktree review is not followed by iterations, so there is nothing to record anew.
+    expect(snap.iterations).toEqual([]);
+  });
+
   it('serves the API to loopback hosts', async () => {
     const r = await send('GET', '/api/snapshot');
     expect(r.status).toBe(200);

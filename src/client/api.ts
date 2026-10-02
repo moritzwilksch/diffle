@@ -93,6 +93,8 @@ export const api = {
   moved: () => json(MovedSchema.nullable(), 'api/moved'),
   /** Recompute the snapshot where the refs point now. */
   reload: () => json(SnapshotSchema, 'api/reload', { method: 'POST' }),
+  /** Forget the range's recorded iterations; the snapshot returned records its current state as #1. */
+  clearIterations: () => json(SnapshotSchema, 'api/iterations', { method: 'DELETE' }),
   switchMode: (req: ModeRequest) =>
     json(SnapshotSchema, 'api/mode', { method: 'POST', body: encode(ModeRequestSchema, req) }),
   refs: () => json(RefsResponseSchema, 'api/refs'),

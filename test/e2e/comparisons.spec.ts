@@ -150,9 +150,12 @@ test.describe('a long range of commits', () => {
 });
 
 test.describe('moved refs', () => {
-  test.use({ args: ['--watch'] });
+  // From main: a review of the checked-out branch would follow its pushes live instead.
+  test.use({ args: ['--watch'], head: 'main' });
 
   test('keeps the review while the compared branch moves, and reloads on request', async ({ page, repo }) => {
+    // Three pushes, each reloaded and compared: well over the default budget in the container.
+    test.slow();
     const git = (...args: string[]) =>
       execFileSync('git', args, {
         cwd: repo,
@@ -256,5 +259,15 @@ test.describe('moved refs', () => {
     await expect(picker).toHaveText(/#2→#3/);
     await page.keyboard.press('r');
     await expect(page.getByText('Nothing moved since this snapshot')).toBeVisible();
+
+    // Forgetting the iterations leaves the range, with its current state as the only one; the list hides.
+    const forget = iterations.getByRole('button', { name: /Forget/ });
+    await forget.click();
+    await expect(forget).toHaveText('Forget all?');
+    await forget.click();
+    await expect(picker).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
+    await expect(iterations).toHaveCount(0);
+    await page.keyboard.type('ii');
+    await expect(page.getByText('Only one iteration so far')).toBeVisible();
   });
 });
