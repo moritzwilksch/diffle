@@ -5,9 +5,13 @@ import {
   type GithubExportResponse,
   type EntryRequest,
   type GithubMetadata,
+  type Iteration,
+  MAX_RANGE_COMMITS,
   type ModeRequest,
   type ModeSpec,
   type Moved,
+  type RangeCommit,
+  type RangePair,
   type ServerMessage,
   type Side,
   type Snapshot,
@@ -209,7 +213,9 @@ export class Session {
           ? await this.focus(req.commit)
           : req.kind === 'interdiff'
             ? await this.interdiff(req.from, req.to)
-            : await resolveReview(req, this.repo, this.opts.github),
+            : req.kind === 'pair'
+              ? await this.pair(req.commit)
+              : await resolveReview(req, this.repo, this.opts.github),
       ),
     );
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
@@ -257,10 +263,12 @@ export class Session {
     const [older, newer] = await Promise.all([store.get(from), store.get(to)]);
     if (!older || !newer) throw new RevspecError(`no iteration #${older ? to : from} of ${comparisonLabel(range)}`);
     // The same base needs no replay: the older head's tree is what was reviewed.
-    const { tree, conflicts } =
+    const [{ tree, conflicts }, pairs] = await Promise.all([
       older.oldSha === newer.oldSha
-        ? { tree: await this.repo.tree(older.newSha), conflicts: [] }
-        : await this.repo.replay(older.oldSha, newer.oldSha, older.newSha);
+        ? this.repo.tree(older.newSha).then((tree) => ({ tree, conflicts: [] }))
+        : this.repo.replay(older.oldSha, newer.oldSha, older.newSha),
+      this.pairs(older, newer),
+    ]);
     return {
       prUrl: a.prUrl,
       mode: {
@@ -270,7 +278,93 @@ export class Session {
         live: range.live === 'none' ? 'none' : 'refs',
         commentKey: `${range.commentKey}:interdiff:${from}-${to}`,
         within: range,
-        interdiff: { from: older, to: newer, conflicts },
+        interdiff: { from: older, to: newer, conflicts, pairs },
+      },
+    };
+  }
+
+  /**
+   * Pairs the two iterations' commits as `git range-diff` does and tells a pair whose patch is
+   * the same (a reworded commit) from an amended one by patch id.
+   */
+  private async pairs(older: Iteration, newer: Iteration): Promise<RangePair[]> {
+    const oldRange = `${older.oldSha}..${older.newSha}`;
+    const newRange = `${newer.oldSha}..${newer.newSha}`;
+    const [rows, oldCommits, newCommits] = await Promise.all([
+      this.repo.rangeDiff(oldRange, newRange),
+      this.repo.rangeCommits(oldRange, MAX_RANGE_COMMITS),
+      this.repo.rangeCommits(newRange, MAX_RANGE_COMMITS),
+    ]);
+    // range-diff abbreviates; a commit beyond the listed window is looked up on its own.
+    const find = async (list: RangeCommit[], abbrev: string | null): Promise<RangeCommit | null> => {
+      if (abbrev === null) return null;
+      const listed = list.find((c) => c.sha.startsWith(abbrev));
+      return listed ?? (await this.repo.rangeCommits(`${abbrev}^!`, 1)).list[0] ?? null;
+    };
+    const paired = await Promise.all(
+      rows.map(async (row) => ({
+        old: await find(oldCommits.list, row.old),
+        new: await find(newCommits.list, row.new),
+        marker: row.marker,
+      })),
+    );
+    const changed = paired.filter((p) => p.marker === '!' && p.old && p.new);
+    const ids = await this.repo.patchIds(changed.flatMap((p) => [p.old!.sha, p.new!.sha]));
+    return paired.map(({ old, new: next, marker }) => ({
+      old,
+      new: next,
+      status:
+        marker === '='
+          ? 'identical'
+          : marker === '<'
+            ? 'dropped'
+            : marker === '>'
+              ? 'added'
+              : old && next && ids.get(old.sha) !== undefined && ids.get(old.sha) === ids.get(next.sha)
+                ? 'message'
+                : 'changed',
+    }));
+  }
+
+  /**
+   * Shows one pair of the active interdiff by its new-side commit: an added commit against its
+   * parent, an amended or reworded one against its old self replayed onto its parent. With null,
+   * the whole interdiff again. Identical pairs have nothing to show; dropped ones have no new side.
+   */
+  private async pair(commit: string | null): Promise<ResolvedReview> {
+    const a = this.require();
+    const { interdiff, within: range } = a.mode;
+    if (!interdiff || !range) throw new RevspecError('no interdiff to pick a pair from');
+    if (commit === null) return this.interdiff(interdiff.from.n, interdiff.to.n);
+    const found = interdiff.pairs.find((p) => p.new && (p.new.sha === commit || p.new.short === commit));
+    if (!found?.new) throw new RevspecError(`not a commit of ${comparisonLabel(a.mode)}: ${commit}`);
+    if (found.status === 'identical') throw new RevspecError(`${found.new.short} is identical in both iterations`);
+    const live = range.live === 'none' ? 'none' : 'refs';
+    const base = { live, within: range, interdiff } as const;
+    if (!found.old) {
+      const sha = found.new.sha;
+      return {
+        prUrl: a.prUrl,
+        mode: {
+          ...base,
+          old: sha,
+          new: sha,
+          base: 'parent',
+          commentKey: `commit:${sha}`,
+          pair: { old: null, new: sha, conflicts: [] },
+        },
+      };
+    }
+    const { tree, conflicts } = await this.repo.replay(`${found.old.sha}^`, `${found.new.sha}^`, found.old.sha);
+    return {
+      prUrl: a.prUrl,
+      mode: {
+        ...base,
+        old: tree,
+        new: found.new.sha,
+        base: 'direct',
+        commentKey: `${range.commentKey}:pair:${found.old.sha}-${found.new.sha}`,
+        pair: { old: found.old.sha, new: found.new.sha, conflicts },
       },
     };
   }

@@ -403,6 +403,8 @@ export interface ReviewState {
   focusCommit(commit: string | null): void;
   /** Show what the current range's iteration `to` changed since its iteration `from`. */
   compareIterations(from: number, to: number): void;
+  /** Show one pair of the current interdiff by its new-side commit, or with null the whole interdiff. */
+  showPair(commit: string | null): void;
   /**
    * Step to the older (-1) or newer (1) entry of a range's list, the range itself past the newest; in a
    * single-commit view, to the parent or the child toward HEAD. A no-op at either end.
@@ -2144,12 +2146,18 @@ export const useStore = create<ReviewState>((set, get) => {
       void get().switchMode({ kind: 'interdiff', from, to });
     },
 
+    showPair(commit) {
+      void get().switchMode({ kind: 'pair', commit });
+    },
+
     stepCommit(direction) {
       const snap = get().snapshot;
       if (!snap) return;
       if (snap.mode.within || snap.mode.base !== 'parent') {
         const target = rangeStep(snap, direction);
-        if (target !== undefined) get().focusCommit(target);
+        if (target === undefined) return;
+        if (snap.mode.interdiff) get().showPair(target);
+        else get().focusCommit(target);
         return;
       }
       const target = direction < 0 ? snap.commit?.parent : snap.commit?.child;

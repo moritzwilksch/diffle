@@ -60,10 +60,15 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
     from: z.number().int().positive(),
     to: z.number().int().positive(),
   }),
+  /** One pair of the current interdiff by its new-side commit, or with null the whole interdiff. */
+  z.object({
+    kind: z.literal('pair'),
+    commit: z.string().nullable(),
+  }),
 ]);
 export type ModeRequest = z.infer<typeof ModeRequestSchema>;
-/** A request that enters a comparison from scratch, as the CLI does; a focus or interdiff depends on the active one. */
-export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' | 'interdiff' }>;
+/** A request that enters a comparison from scratch, as the CLI does; a focus, interdiff or pair depends on the active one. */
+export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' | 'interdiff' | 'pair' }>;
 
 /**
  * One state of a reviewed range: its resolved endpoints when a snapshot of it was taken. A new
@@ -98,6 +103,46 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 
+export const CommitInfoSchema = z.object({
+  sha: z.string(),
+  short: z.string(),
+  message: z.string(),
+});
+export type CommitInfo = z.infer<typeof CommitInfoSchema>;
+
+/** A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it. */
+export const ReviewedCommitSchema = CommitInfoSchema.extend({
+  /** First parent; null for a root commit. */
+  parent: z.string().nullable(),
+  /** The commit whose first parent this is, toward HEAD; null at HEAD or off HEAD's first-parent line. */
+  child: z.string().nullable(),
+});
+export type ReviewedCommit = z.infer<typeof ReviewedCommitSchema>;
+
+/** One commit of the compared range. */
+export const RangeCommitSchema = CommitInfoSchema.extend({
+  author: z.string(),
+  email: z.string(),
+  /** Author date, epoch milliseconds. */
+  date: z.number(),
+});
+export type RangeCommit = z.infer<typeof RangeCommitSchema>;
+
+/** How a commit of the older iteration relates to one of the newer, as `git range-diff` pairs them. */
+export const PairStatusSchema = z.enum(['identical', 'changed', 'message', 'added', 'dropped']);
+export type PairStatus = z.infer<typeof PairStatusSchema>;
+
+/**
+ * One row of a range-diff: `identical` and `changed` pairs have both commits, a `message` pair
+ * the same patch under a new message, an `added` commit no old side and a `dropped` one no new side.
+ */
+export const RangePairSchema = z.object({
+  old: RangeCommitSchema.nullable(),
+  new: RangeCommitSchema.nullable(),
+  status: PairStatusSchema,
+});
+export type RangePair = z.infer<typeof RangePairSchema>;
+
 /**
  * Two iterations of a range compared. The old side is `from`'s head replayed onto `to`'s base
  * (a tree, not a commit), so a rebase in between does not show up as the upstream's changes;
@@ -108,23 +153,43 @@ export const InterdiffSchema = z.object({
   to: IterationSchema,
   /** Paths the replay could not merge; they carry conflict markers on the old side. */
   conflicts: z.string().array(),
+  /** The two ranges' commits paired, in `git range-diff` order: the newer range's, dropped commits where they were. */
+  pairs: RangePairSchema.array(),
 });
 export type Interdiff = z.infer<typeof InterdiffSchema>;
+
+/**
+ * One pair of an interdiff shown alone: `new` against `old` replayed onto `new`'s parent, so the
+ * pair's own amendments show without the rebase; an added commit (`old` null) against its parent.
+ */
+export const PairSpecSchema = z.object({
+  old: z.string().nullable(),
+  new: z.string(),
+  conflicts: z.string().array(),
+});
+export type PairSpec = z.infer<typeof PairSpecSchema>;
 
 export const ModeSpecSchema = ComparisonSchema.extend({
   /** Set while one commit of a range is focused, or two of its iterations compared: the range, whose commits the snapshot keeps listing. */
   within: ComparisonSchema.optional(),
   interdiff: InterdiffSchema.optional(),
+  /** Set with `interdiff` while one of its pairs is shown. */
+  pair: PairSpecSchema.optional(),
 });
 export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
 /**
  * Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as
- * `<sha>^!`, as `<range> @ <sha>` when focused within a range, or as `<range> #1→#2` for an interdiff.
+ * `<sha>^!`, as `<range> @ <sha>` when focused within a range, as `<range> #1→#2` for an interdiff and
+ * `<range> #1→#2 @ <sha>` for one of its pairs.
  */
-export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within' | 'interdiff'>): string {
-  if (mode.within && mode.interdiff)
-    return `${comparisonLabel(mode.within)} #${mode.interdiff.from.n}→#${mode.interdiff.to.n}`;
+export function comparisonLabel(
+  mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within' | 'interdiff' | 'pair'>,
+): string {
+  if (mode.within && mode.interdiff) {
+    const label = `${comparisonLabel(mode.within)} #${mode.interdiff.from.n}→#${mode.interdiff.to.n}`;
+    return mode.pair ? `${label} @ ${mode.pair.new.slice(0, 7)}` : label;
+  }
   if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
   return `${refName(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${refName(mode.new)}`;
@@ -179,31 +244,6 @@ export const ChangedFileSchema = z.object({
   submodule: z.literal(true).optional(),
 });
 export type ChangedFile = z.infer<typeof ChangedFileSchema>;
-
-export const CommitInfoSchema = z.object({
-  sha: z.string(),
-  short: z.string(),
-  message: z.string(),
-});
-export type CommitInfo = z.infer<typeof CommitInfoSchema>;
-
-/** A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it. */
-export const ReviewedCommitSchema = CommitInfoSchema.extend({
-  /** First parent; null for a root commit. */
-  parent: z.string().nullable(),
-  /** The commit whose first parent this is, toward HEAD; null at HEAD or off HEAD's first-parent line. */
-  child: z.string().nullable(),
-});
-export type ReviewedCommit = z.infer<typeof ReviewedCommitSchema>;
-
-/** One commit of the compared range. */
-export const RangeCommitSchema = CommitInfoSchema.extend({
-  author: z.string(),
-  email: z.string(),
-  /** Author date, epoch milliseconds. */
-  date: z.number(),
-});
-export type RangeCommit = z.infer<typeof RangeCommitSchema>;
 
 /**
  * The commits a comparison spans: old..new, with the worktree taken as HEAD, or the one commit under `parent`.

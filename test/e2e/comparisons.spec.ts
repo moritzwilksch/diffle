@@ -195,6 +195,17 @@ test.describe('moved refs', () => {
     await waitForHighlight(page, 'tally/refunds.py');
     await expect(page).toHaveScreenshot('interdiff.png');
 
+    // The commits box pairs the two iterations: four unchanged, the pushed one added; only that one opens.
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box).toMatchAriaSnapshot({ name: 'range-diff.aria.yml' });
+    await box.getByRole('button', { name: /^wip: more refunds/ }).click();
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/#1→#2 @ [0-9a-f]{7}/);
+    await expect(page.locator('header')).toContainText('wip: more refunds');
+    await expect(box.locator('[aria-current="true"]')).toContainText('added');
+    await expect(box.getByRole('button', { name: 'Older commit' })).toBeDisabled();
+    await page.keyboard.press('>');
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/#1→#2\s*$/);
+
     // "All changes" leads back to the range.
     await box.getByRole('button', { name: /^All changes/ }).click();
     await expect(page.getByTitle(/Change what is compared/)).toHaveText(/^main\.\.\.feature\/refunds\s*$/);

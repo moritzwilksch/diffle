@@ -953,6 +953,28 @@ describe('replay and pins', () => {
     expect(await rrepo.tree('feat')).toBe(rgit('rev-parse', 'feat^{tree}'));
   });
 
+  it('pairs two ranges as range-diff does and tells reworded commits from amended ones by patch id', async () => {
+    // feat2: the same change as feat under a new message, plus a commit of its own.
+    const base = rgit('rev-parse', 'main~2');
+    rgit('checkout', '-q', '-b', 'feat2', base);
+    await writeFile(join(rdir, 'f.txt'), 'a\nB\nc\n');
+    rgit('commit', '-q', '-am', 'feat, reworded');
+    await writeFile(join(rdir, 'g.txt'), 'g\n');
+    rgit('add', 'g.txt');
+    rgit('commit', '-q', '-m', 'extra');
+    const [feat, reworded, extra] = ['feat', 'feat2~1', 'feat2'].map((rev) => rgit('rev-parse', rev));
+    const rows = await rrepo.rangeDiff(`${base}..feat`, `${base}..feat2`);
+    expect(rows.map((r) => r.marker)).toEqual(['!', '>']);
+    expect(feat!.startsWith(rows[0]!.old!)).toBe(true);
+    expect(reworded!.startsWith(rows[0]!.new!)).toBe(true);
+    expect(rows[1]).toMatchObject({ old: null });
+    expect(extra!.startsWith(rows[1]!.new!)).toBe(true);
+    const ids = await rrepo.patchIds([feat!, reworded!, extra!]);
+    expect(ids.get(feat!)).toBe(ids.get(reworded!));
+    expect(ids.get(extra!)).not.toBe(ids.get(feat!));
+    expect(await rrepo.patchIds([])).toEqual(new Map());
+  });
+
   it('pins and deletes refs under refs/diffle/iterations/ only', async () => {
     const sha = rgit('rev-parse', 'feat');
     await rrepo.pin({ 'refs/diffle/iterations/x/1/new': sha });

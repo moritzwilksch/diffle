@@ -290,7 +290,7 @@ describe('comparisonLabel', () => {
         new: 'b'.repeat(40),
         base: 'direct',
         within,
-        interdiff: { from: it(1), to: it(3), conflicts: [] },
+        interdiff: { from: it(1), to: it(3), conflicts: [], pairs: [] },
       }),
     ).toBe('main...feat #1→#3');
   });
@@ -409,6 +409,38 @@ describe('rangeStep', () => {
     expect(rangeStep(focused('b'.repeat(40)), 1)).toBeNull();
     expect(rangeStep(focused('b'.repeat(40)), -1)).toBe('a'.repeat(40));
     expect(rangeStep(focused('a'.repeat(40)), -1)).toBeUndefined();
+  });
+
+  it("steps through an interdiff's pairs with something to show, skipping identical and dropped ones", () => {
+    const it = (n: number) => ({ n, oldSha: '0'.repeat(40), newSha: 'b'.repeat(40), recordedAt: 0 });
+    const pairs = [
+      { old: commit('1'.repeat(40)), new: commit('a'.repeat(40)), status: 'identical' as const },
+      { old: commit('2'.repeat(40)), new: null, status: 'dropped' as const },
+      { old: commit('3'.repeat(40)), new: commit('b'.repeat(40)), status: 'changed' as const },
+      { old: null, new: commit('c'.repeat(40)), status: 'added' as const },
+    ];
+    const interdiff = { from: it(1), to: it(2), conflicts: [], pairs };
+    const whole = {
+      mode: {
+        old: 't',
+        new: 'b'.repeat(40),
+        base: 'direct',
+        live: 'refs',
+        commentKey: 'i',
+        within: range,
+        interdiff,
+      } as const,
+      commits,
+    };
+    const pair = (sha: string) => ({
+      ...whole,
+      mode: { ...whole.mode, new: sha, pair: { old: null, new: sha, conflicts: [] } },
+    });
+    expect(rangeStep(whole, 1)).toBeUndefined();
+    expect(rangeStep(whole, -1)).toBe('c'.repeat(40));
+    expect(rangeStep(pair('c'.repeat(40)), -1)).toBe('b'.repeat(40));
+    expect(rangeStep(pair('c'.repeat(40)), 1)).toBeNull();
+    expect(rangeStep(pair('b'.repeat(40)), -1)).toBeUndefined();
   });
 
   it('steps a commit the range no longer lists newer to the range, and a lone commit nowhere', () => {

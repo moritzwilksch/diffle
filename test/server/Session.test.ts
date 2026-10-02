@@ -536,6 +536,25 @@ describe('Session', () => {
       expect(inter.iterations).toHaveLength(2);
       expect(comparisonLabel(inter.mode)).toBe('main...feat #1→#2');
 
+      // The range-diff pairs the rebased commit with its amended self; its pair shows the amend alone, too.
+      const pairs = inter.mode.interdiff!.pairs;
+      expect(pairs.map((p) => [p.status, p.old?.message, p.new?.message])).toEqual([['changed', 'feature', 'feature']]);
+      const pair = await session.switchMode({ kind: 'pair', commit: pairs[0]!.new!.short });
+      expect(pair.mode).toMatchObject({
+        new: second.newSha,
+        base: 'direct',
+        within: first.mode,
+        interdiff: inter.mode.interdiff,
+        pair: { old: first.newSha, new: second.newSha, conflicts: [] },
+      });
+      expect(pair.changed.map((f) => f.path)).toEqual(['a.txt']);
+      expect((await session.snapshotter.patch('a.txt'))?.split('\n').filter((l) => /^[+-][^+-]/.test(l))).toEqual([
+        '+amended',
+      ]);
+      expect(comparisonLabel(pair.mode)).toBe(`main...feat #1→#2 @ ${second.newSha.slice(0, 7)}`);
+      expect((await session.switchMode({ kind: 'pair', commit: null })).mode).toEqual(inter.mode);
+      await expect(session.switchMode({ kind: 'pair', commit: 'f'.repeat(40) })).rejects.toThrow(RevspecError);
+
       // A reload from the interdiff returns to the range, where the moved refs would be picked up.
       expect((await session.reload()).mode).toEqual(first.mode);
       await expect(session.switchMode({ kind: 'interdiff', from: 2, to: 1 })).rejects.toThrow(RevspecError);

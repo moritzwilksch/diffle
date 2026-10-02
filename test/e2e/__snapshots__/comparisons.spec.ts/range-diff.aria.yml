@@ -1,0 +1,14 @@
+- region "Commits":
+  - button "Commits 5" [expanded]
+  - button "Older commit"
+  - button "Newer commit" [disabled]
+  - button "All changes main...feature/refunds"
+  - 'button "Since #1 1 of 5 commits differ"'
+  - list:
+    - listitem:
+      - 'button "wip: more refunds added"'
+      - text: ——————— → 61e94d6
+    - listitem: "fix(cli): report an empty ledger instead of crashing identical 1de24f1 → 1de24f1"
+    - listitem: "chore: regenerate the client, refresh the lockfile and the logo identical 97eb0c9 → 97eb0c9"
+    - listitem: "refactor: move money helpers into a currency module identical 640d216 → 640d216"
+    - listitem: "feat(ledger): support refund lines identical 5206db2 → 5206db2"

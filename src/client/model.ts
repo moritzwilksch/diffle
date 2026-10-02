@@ -426,8 +426,12 @@ export function commitBody(message: string): string[] {
 export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, direction: -1 | 1): string | null | undefined {
   const { mode, commits } = snapshot;
   if (!mode.within && mode.base === 'parent') return undefined;
-  const order = [...commits.list.map((c) => c.sha), null];
-  const at = mode.within ? order.indexOf(mode.new) : order.length - 1;
+  // Within an interdiff the stops are its pairs with something to show, then the interdiff itself.
+  const order = mode.interdiff
+    ? [...mode.interdiff.pairs.filter((p) => p.new && p.status !== 'identical').map((p) => p.new!.sha), null]
+    : [...commits.list.map((c) => c.sha), null];
+  const shown = mode.interdiff ? (mode.pair?.new ?? null) : mode.within ? mode.new : null;
+  const at = order.indexOf(shown);
   if (at < 0) return direction > 0 ? null : undefined;
   return order[at + direction];
 }

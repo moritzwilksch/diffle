@@ -70,7 +70,9 @@ while you review: once a ref moves (a push, a rebase, a new commit), the header 
 Every state a reviewed range is loaded in is an _iteration_. Once there are two, the panel lists
 them; pick an older one to see only what the branch changed since then. A rebase in between is
 left out: the older head is replayed onto the newer base before the two are compared, and files
-the replay could not merge are flagged.
+the replay could not merge are flagged. The commits box then shows `git range-diff`'s pairing of
+the two iterations' commits; pick an amended, reworded or added one, or step with `<` and `>`, to
+see that commit's own change since.
 
 Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
 to keep it running.

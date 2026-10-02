@@ -241,6 +241,45 @@ export class GitRepo {
   }
 
   /**
+   * How `git range-diff` pairs the commits of two ranges, in its output order: abbreviated
+   * hashes, null for the side a commit has no counterpart on, and its marker (`=` identical,
+   * `!` changed, `<` only in the first range, `>` only in the second). Summary only, no patches.
+   * Ranges are given as hashes: range-diff learnt `--end-of-options` only in git 2.44.
+   */
+  async rangeDiff(
+    oldRange: string,
+    newRange: string,
+  ): Promise<{ old: string | null; new: string | null; marker: string }[]> {
+    const out = await this.text(['range-diff', '-s', '--no-color', oldRange, newRange]);
+    const pairs: { old: string | null; new: string | null; marker: string }[] = [];
+    for (const line of out.split('\n')) {
+      const m = /^(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s+([=!<>])\s+(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s/.exec(line);
+      if (m) pairs.push({ old: m[1] ?? null, new: m[3] ?? null, marker: m[2]! });
+    }
+    return pairs;
+  }
+
+  /** Each commit's stable patch id, so two commits with the same change under different messages compare equal. */
+  async patchIds(shas: string[]): Promise<Map<string, string>> {
+    const ids = new Map<string, string>();
+    if (!shas.length) return ids;
+    const patches = await this.exec([
+      'log',
+      '-p',
+      '--no-walk',
+      '--no-show-signature',
+      '--format=%H',
+      '--end-of-options',
+      ...shas,
+    ]);
+    for (const line of (await this.text(['patch-id', '--stable'], { input: patches })).split('\n')) {
+      const [id, sha] = line.split(' ');
+      if (id && sha) ids.set(sha, id);
+    }
+    return ids;
+  }
+
+  /**
    * Points refs at objects so they survive `gc` and a force-push, or with null deletes them. Refs
    * must stay inside `refs/diffle/iterations/`: nothing the user owns moves.
    */
