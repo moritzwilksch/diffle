@@ -53,6 +53,7 @@
     "test:e2e:report": "playwright show-report playwright-report",
     "test:e2e:update": "playwright test --update-snapshots",
     "snapshot-report": "tsx scripts/snapshot-report.ts",
+    "prepare": "patch-package",
     "prepack": "npm run build"
   },
   "dependencies": {
@@ -93,6 +94,7 @@
     "jsdom": "^30.0.1",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
+    "patch-package": "^8.0.1",
     "pixelmatch": "^7.2.0",
     "pngjs": "^7.0.0",
     "tailwindcss": "^4.3.3",

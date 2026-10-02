@@ -1,0 +1,209 @@
+diff --git a/node_modules/@pierre/diffs/dist/utils/createTransformerWithState.js b/node_modules/@pierre/diffs/dist/utils/createTransformerWithState.js
+index 1ed89b0..dcfde3b 100644
+--- a/node_modules/@pierre/diffs/dist/utils/createTransformerWithState.js
++++ b/node_modules/@pierre/diffs/dist/utils/createTransformerWithState.js
+@@ -3,6 +3,7 @@ import { processLine } from "./processLine.js";
+ import { wrapTokenFragments } from "./wrapTokenFragments.js";
+ import { transformerStyleToClass } from "@shikijs/transformers";
+ //#region src/utils/createTransformerWithState.ts
++const TOKEN_TYPE_ATTR = { 1: "comment", 2: "string", 3: "regex" };
+ function createTransformerWithState(useTokenTransformer = false, useCSSClasses = false) {
+ 	const state = { lineInfo: [] };
+ 	const transformers = [{
+@@ -43,6 +44,8 @@ function createTransformerWithState(useTokenTransformer = false, useCSSClasses =
+ 				if (token?.offset != null && token.content != null) {
+ 					const tokenChar = token.__lineChar;
+ 					if (tokenChar != null) hast.properties["data-char"] = tokenChar;
++					const tokenType = TOKEN_TYPE_ATTR[token.type];
++					if (tokenType != null) hast.properties["data-token-type"] = tokenType;
+ 					return hast;
+ 				}
+ 				return hast;
+diff --git a/node_modules/@pierre/diffs/dist/utils/renderDiffWithHighlighter.js b/node_modules/@pierre/diffs/dist/utils/renderDiffWithHighlighter.js
+index a6cb642..1a4888c 100644
+--- a/node_modules/@pierre/diffs/dist/utils/renderDiffWithHighlighter.js
++++ b/node_modules/@pierre/diffs/dist/utils/renderDiffWithHighlighter.js
+@@ -229,7 +229,8 @@ function renderTwoFiles({ deletionFile, additionFile, deletionInfo, additionInfo
+ 			decorations: void 0,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		} : {
+ 			...options,
+ 			lang: "text",
+@@ -238,7 +239,8 @@ function renderTwoFiles({ deletionFile, additionFile, deletionInfo, additionInfo
+ 			decorations: void 0,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 	})();
+ 	return {
+diff --git a/node_modules/@pierre/diffs/dist/utils/renderFileWithHighlighter.js b/node_modules/@pierre/diffs/dist/utils/renderFileWithHighlighter.js
+index 14391d5..05e3c4d 100644
+--- a/node_modules/@pierre/diffs/dist/utils/renderFileWithHighlighter.js
++++ b/node_modules/@pierre/diffs/dist/utils/renderFileWithHighlighter.js
+@@ -36,7 +36,8 @@ function renderFileWithHighlighter(file, highlighter, { theme = DEFAULT_THEMES,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+ 			tokenizeMaxLineLength,
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 		return {
+ 			lang,
+@@ -45,7 +46,8 @@ function renderFileWithHighlighter(file, highlighter, { theme = DEFAULT_THEMES,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+ 			tokenizeMaxLineLength,
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 	})();
+ 	const highlightedLines = getLineNodes(highlighter.codeToHast(isWindowedHighlight ? extractWindowedFileContent(lines ?? linesFromFileContents(file.contents), startingLine, totalLines) : file.contents, hastConfig));
+diff --git a/node_modules/@pierre/diffs/dist/worker/worker-portable.js b/node_modules/@pierre/diffs/dist/worker/worker-portable.js
+index 8f25249..81909c4 100644
+--- a/node_modules/@pierre/diffs/dist/worker/worker-portable.js
++++ b/node_modules/@pierre/diffs/dist/worker/worker-portable.js
+@@ -3109,6 +3109,7 @@ function codeToTokensWithThemes(primitive, code, options, codeToTokensBaseFn = c
+ 			offset: _token.offset
+ 		};
+ 		if ("includeExplanation" in options && options.includeExplanation) mergedToken.explanation = _token.explanation;
++		if (_token.type != null) mergedToken.type = _token.type;
+ 		tokens.forEach((t, themeIdx) => {
+ 			const { content: _, explanation: __, offset: ___, ...styles } = t[lineIdx][tokenIdx];
+ 			mergedToken.variants[themes[themeIdx].color] = styles;
+@@ -6332,7 +6333,8 @@ function flatTokenVariants(merged, variantsOrder, cssVariablePrefix, defaultColo
+ 	const token = {
+ 		content: merged.content,
+ 		explanation: merged.explanation,
+-		offset: merged.offset
++		offset: merged.offset,
++		type: merged.type
+ 	};
+ 	const styles = variantsOrder.map((t) => getTokenStyleObject(merged.variants[t]));
+ 	const styleKeys = new Set(styles.flatMap((t) => Object.keys(t)));
+@@ -12257,6 +12259,7 @@ function setTokenChar(node, char) {
+ }
+ //#endregion
+ //#region src/utils/createTransformerWithState.ts
++const TOKEN_TYPE_ATTR = { 1: "comment", 2: "string", 3: "regex" };
+ function createTransformerWithState(useTokenTransformer = false, useCSSClasses = false) {
+ 	const state = { lineInfo: [] };
+ 	const transformers = [{
+@@ -12297,6 +12300,8 @@ function createTransformerWithState(useTokenTransformer = false, useCSSClasses =
+ 				if (token?.offset != null && token.content != null) {
+ 					const tokenChar = token.__lineChar;
+ 					if (tokenChar != null) hast.properties["data-char"] = tokenChar;
++					const tokenType = TOKEN_TYPE_ATTR[token.type];
++					if (tokenType != null) hast.properties["data-token-type"] = tokenType;
+ 					return hast;
+ 				}
+ 				return hast;
+@@ -13345,7 +13350,8 @@ function renderTwoFiles({ deletionFile, additionFile, deletionInfo, additionInfo
+ 			decorations: void 0,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		} : {
+ 			...options,
+ 			lang: "text",
+@@ -13354,7 +13360,8 @@ function renderTwoFiles({ deletionFile, additionFile, deletionInfo, additionInfo
+ 			decorations: void 0,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 	})();
+ 	return {
+@@ -13465,7 +13472,8 @@ function renderFileWithHighlighter(file, highlighter, { theme = DEFAULT_THEMES,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+ 			tokenizeMaxLineLength,
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 		return {
+ 			lang,
+@@ -13474,7 +13482,8 @@ function renderFileWithHighlighter(file, highlighter, { theme = DEFAULT_THEMES,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+ 			tokenizeMaxLineLength,
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 	})();
+ 	const highlightedLines = getLineNodes(highlighter.codeToHast(isWindowedHighlight ? extractWindowedFileContent(lines ?? linesFromFileContents(file.contents), startingLine, totalLines) : file.contents, hastConfig));
+diff --git a/node_modules/@pierre/diffs/dist/worker/worker.js b/node_modules/@pierre/diffs/dist/worker/worker.js
+index 09c283a..5c3b2b1 100644
+--- a/node_modules/@pierre/diffs/dist/worker/worker.js
++++ b/node_modules/@pierre/diffs/dist/worker/worker.js
+@@ -571,6 +571,7 @@ function setTokenChar(node, char) {
+ }
+ //#endregion
+ //#region src/utils/createTransformerWithState.ts
++const TOKEN_TYPE_ATTR = { 1: "comment", 2: "string", 3: "regex" };
+ function createTransformerWithState(useTokenTransformer = false, useCSSClasses = false) {
+ 	const state = { lineInfo: [] };
+ 	const transformers = [{
+@@ -611,6 +612,8 @@ function createTransformerWithState(useTokenTransformer = false, useCSSClasses =
+ 				if (token?.offset != null && token.content != null) {
+ 					const tokenChar = token.__lineChar;
+ 					if (tokenChar != null) hast.properties["data-char"] = tokenChar;
++					const tokenType = TOKEN_TYPE_ATTR[token.type];
++					if (tokenType != null) hast.properties["data-token-type"] = tokenType;
+ 					return hast;
+ 				}
+ 				return hast;
+@@ -1516,7 +1519,8 @@ function renderTwoFiles({ deletionFile, additionFile, deletionInfo, additionInfo
+ 			decorations: void 0,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		} : {
+ 			...options,
+ 			lang: "text",
+@@ -1525,7 +1529,8 @@ function renderTwoFiles({ deletionFile, additionFile, deletionInfo, additionInfo
+ 			decorations: void 0,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 	})();
+ 	return {
+@@ -1636,7 +1641,8 @@ function renderFileWithHighlighter(file, highlighter, { theme = DEFAULT_THEMES,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+ 			tokenizeMaxLineLength,
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 		return {
+ 			lang,
+@@ -1645,7 +1651,8 @@ function renderFileWithHighlighter(file, highlighter, { theme = DEFAULT_THEMES,
+ 			defaultColor: false,
+ 			cssVariablePrefix: formatCSSVariablePrefix("token"),
+ 			tokenizeMaxLineLength,
+-			tokenizeTimeLimit: 0
++			tokenizeTimeLimit: 0,
++			includeExplanation: "tokenType"
+ 		};
+ 	})();
+ 	const highlightedLines = getLineNodes(highlighter.codeToHast(isWindowedHighlight ? extractWindowedFileContent(lines ?? linesFromFileContents(file.contents), startingLine, totalLines) : file.contents, hastConfig));
