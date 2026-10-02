@@ -55,6 +55,13 @@ function patchArgs(oldRev: string): string[] {
 /** An idle `cat-file --batch` is reaped after this long; the next request respawns one. */
 const CAT_FILE_IDLE_MS = 2000;
 
+/**
+ * `git range-diff` pairs two commits while the diff between their patches costs less than this
+ * percentage of a patch's size. Git's default of 60 leaves a reworded three-line commit unpaired,
+ * since the message change alone outweighs it; at 100 the message may change as much as the patch.
+ */
+const CREATION_FACTOR = 100;
+
 export class GitError extends Error {
   constructor(
     message: string,
@@ -250,7 +257,14 @@ export class GitRepo {
     oldRange: string,
     newRange: string,
   ): Promise<{ old: string | null; new: string | null; marker: string }[]> {
-    const out = await this.text(['range-diff', '-s', '--no-color', oldRange, newRange]);
+    const out = await this.text([
+      'range-diff',
+      '-s',
+      '--no-color',
+      `--creation-factor=${CREATION_FACTOR}`,
+      oldRange,
+      newRange,
+    ]);
     const pairs: { old: string | null; new: string | null; marker: string }[] = [];
     for (const line of out.split('\n')) {
       const m = /^(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s+([=!<>])\s+(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s/.exec(line);
