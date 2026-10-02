@@ -2,6 +2,7 @@
 // review state (threads, viewed marks) never leaks between scenarios and each one can pick
 // the comparison it needs with `test.use({ revs: [...] })`.
 import { test as base, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { cp, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +21,11 @@ export interface Options {
   args: string[];
   /** Extra environment for the diffle process. */
   env: NodeJS.ProcessEnv;
+  /**
+   * A branch to point HEAD at before diffle starts; the feature branch by default. Only the symbolic ref
+   * moves: the index and worktree stay as the fixture left them, so a scenario can still build on them.
+   */
+  head: string | null;
 }
 
 export interface Fixtures {
@@ -37,6 +43,7 @@ export const test = base.extend<Options & Fixtures, WorkerFixtures>({
   revs: [[`${MAIN_BRANCH}...${FEATURE_BRANCH}`], { option: true }],
   args: [[], { option: true }],
   env: [{}, { option: true }],
+  head: [null, { option: true }],
 
   // Copy the complete checkout, including staged/unstaged files; git clone would lose working-mode inputs.
   fixtureTemplate: [
@@ -54,11 +61,12 @@ export const test = base.extend<Options & Fixtures, WorkerFixtures>({
     { scope: 'worker' },
   ],
 
-  repo: async ({ fixtureTemplate }, use) => {
+  repo: async ({ fixtureTemplate, head }, use) => {
     const dir = await mkdtemp(join(tmpdir(), 'diffle-e2e-'));
     try {
       const repo = join(dir, REPO_NAME);
       await cp(fixtureTemplate, repo, { recursive: true });
+      if (head) execFileSync('git', ['symbolic-ref', 'HEAD', `refs/heads/${head}`], { cwd: repo });
       await use(repo);
     } finally {
       await rmTmp(dir);

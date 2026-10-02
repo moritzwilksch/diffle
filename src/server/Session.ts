@@ -49,6 +49,8 @@ interface Active {
   watcher: WatcherLike | null;
   /** Where a refs-live comparison's refs point now, when that differs from the snapshot; cleared by a reload. */
   moved: Moved | null;
+  /** The comparison includes the reviewer's own checkout, so a moved ref recomputes the review as a worktree edit does. */
+  follows: boolean;
 }
 
 export interface SessionOptions {
@@ -116,6 +118,11 @@ export class Session {
   /** The pending reload of a refs-live comparison, for a client that connects after the push. */
   get moved(): Moved | null {
     return this.require().moved;
+  }
+
+  /** Whether moved refs recompute the review (the comparison includes the checkout) or only announce themselves. */
+  get follows(): boolean {
+    return this.require().follows;
   }
 
   /** Cached independently of snapshot construction; callers never hold the transition queue. */
@@ -396,7 +403,8 @@ export class Session {
       snapshotter.current(),
     ]);
     // Build the complete next state, then swap it in and retire the previous one.
-    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null };
+    const follows = mode.live === 'worktree' || (mode.live === 'refs' && (await this.followsCheckout(range)));
+    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null, follows };
     // The repository may have moved on while no server was watching it.
     await this.relocateComments(next, snap);
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);
@@ -440,10 +448,37 @@ export class Session {
       const a = this.require();
       if (!a.mode.interdiff || !a.mode.within) return this.recompute();
       // An interdiff is pinned; the moved refs belong to its range, where the reviewer continues.
-      const snap = await this.activate({ mode: a.mode.within, prUrl: a.prUrl });
-      this.hub.broadcast({ type: 'snapshot', version: snap.version });
-      return snap;
+      return this.leaveInterdiff(a);
     });
+  }
+
+  /** Forgets the range's recorded iterations and unpins their commits; its current state is recorded anew as #1. */
+  clearIterations(): Promise<Snapshot> {
+    return this.run(async () => {
+      const a = this.require();
+      const range = a.mode.within ?? a.mode;
+      await new IterationStore(this.repo, range.commentKey).clear();
+      // An interdiff or pair names iterations that no longer exist.
+      return a.mode.interdiff ? this.leaveInterdiff(a) : this.recompute();
+    });
+  }
+
+  private async leaveInterdiff(a: Active): Promise<Snapshot> {
+    const snap = await this.activate({ mode: a.mode.within!, prUrl: a.prUrl });
+    this.hub.broadcast({ type: 'snapshot', version: snap.version });
+    return snap;
+  }
+
+  /**
+   * Whether the side under review is the reviewer's own checkout: HEAD, a revision relative to it,
+   * or the checked-out branch by name. Such a review follows the reviewer's commits live, as a
+   * worktree review follows edits; one of another branch waits to be reloaded, whatever its base.
+   */
+  private async followsCheckout(range: Pick<ModeSpec, 'new'>): Promise<boolean> {
+    const rev = range.new;
+    if (rev === 'worktree' || /^HEAD(?:[~^@]|$)/.test(rev)) return true;
+    const head = await this.repo.branchRef('HEAD');
+    return head != null && (await this.repo.branchRef(rev)) === head;
   }
 
   private recompute(): Promise<Snapshot> {
@@ -599,7 +634,7 @@ export class Session {
     }
     watcher.on('dirty', () => {
       if (this.active !== a) return;
-      if (a.mode.live !== 'worktree') {
+      if (!a.follows) {
         void this.checkMoved(a);
         return;
       }

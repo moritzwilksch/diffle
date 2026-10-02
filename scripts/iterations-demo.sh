@@ -22,6 +22,8 @@ prepare() {
   git reset -q --hard && git clean -fdq
   git config user.name 'Grace Hopper'
   git config user.email grace@example.com
+  # Review from main: a comparison naming the checked-out branch follows its pushes live, with no Reload button.
+  git checkout -q main
 }
 if [ -z "$ONLY" ] || [ "$ONLY" = prepare ]; then prepare; fi
 cd "$DIR"
@@ -74,7 +76,10 @@ step() {
   shift
   before=$(range)
   bold "$title"
+  # Each push happens on the branch; the review stays on main.
+  git checkout -q feature/refunds
   "$@"
+  git checkout -q main
   echo '   range-diff, previous push → this one:'
   # The same creation factor diffle uses, so the pairing matches what it shows.
   git range-diff -s --no-color --creation-factor=100 "$before" "$(range)" | sed 's/^/     /'

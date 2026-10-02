@@ -409,6 +409,8 @@ describe('Session', () => {
       liveGit('checkout', '-q', '-b', 'feat');
       await writeFile(join(live, 'a.txt'), 'a\nb\n');
       liveGit('commit', '-q', '-am', 'one');
+      // Reviewed from main: a comparison naming the checked-out branch would follow it instead.
+      liveGit('checkout', '-q', 'main');
       const liveRepo = await GitRepo.open(live);
       const watcher = new FakeWatcher(0);
       const messages = () => hub.messages.slice(before);
@@ -419,10 +421,13 @@ describe('Session', () => {
       const before = hub.messages.length;
       expect(first.commits).toMatchObject({ total: 1, oldSha: liveGit('rev-parse', 'main'), newSha: first.newSha });
       expect(session.moved).toBeNull();
+      expect(session.follows).toBe(false);
 
-      // A commit on the compared branch: the snapshot stands, the clients hear where the ref went.
+      // A push to the compared branch: the snapshot stands, the clients hear where the ref went.
+      liveGit('checkout', '-q', 'feat');
       await writeFile(join(live, 'a.txt'), 'a\nb\nc\n');
       liveGit('commit', '-q', '-am', 'two');
+      liveGit('checkout', '-q', 'main');
       const two = liveGit('rev-parse', 'feat');
       watcher.dirty();
       await vi.waitFor(() => expect(session.moved).not.toBeNull());
@@ -437,7 +442,7 @@ describe('Session', () => {
       expect(messages()).toHaveLength(1);
 
       // Back where the snapshot has it: the notice is withdrawn.
-      liveGit('reset', '-q', '--hard', first.newSha);
+      liveGit('update-ref', 'refs/heads/feat', first.newSha);
       watcher.dirty();
       await vi.waitFor(() => expect(session.moved).toBeNull());
       expect(messages()).toEqual([
@@ -445,7 +450,7 @@ describe('Session', () => {
         { type: 'moved', moved: null },
       ]);
 
-      liveGit('reset', '-q', '--hard', two);
+      liveGit('update-ref', 'refs/heads/feat', two);
       watcher.dirty();
       await vi.waitFor(() => expect(session.moved).not.toBeNull());
       const reloaded = await session.reload();
@@ -455,6 +460,59 @@ describe('Session', () => {
       expect(session.moved).toBeNull();
       expect(messages().at(-1)).toEqual({ type: 'snapshot', version: reloaded.version });
       expect(published).toBe(2);
+      await session.close();
+    } finally {
+      await rmTmp(live);
+    }
+  });
+
+  it('follows a comparison that names the checkout live, recording each state as an iteration', async () => {
+    const live = await mkdtemp(join(tmpdir(), 'diffle-follow-'));
+    const liveGit = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: live,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+          GIT_CONFIG_GLOBAL: '/dev/null',
+        },
+      }).trim();
+    try {
+      liveGit('init', '-q', '-b', 'main');
+      await writeFile(join(live, 'a.txt'), 'a\n');
+      liveGit('add', '.');
+      liveGit('commit', '-q', '-m', 'base');
+      liveGit('checkout', '-q', '-b', 'feat');
+      await writeFile(join(live, 'a.txt'), 'a\nb\n');
+      liveGit('commit', '-q', '-am', 'one');
+      const liveRepo = await GitRepo.open(live);
+      const watcher = new FakeWatcher(0);
+      const session = new Session(liveRepo, hub, { watch: true, context: 3, createWatcher: () => watcher });
+      const published: Snapshot[] = [];
+      session.onSnapshot((snap) => published.push(snap));
+      // feat is checked out: naming it, or HEAD, makes the review the reviewer's own.
+      const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
+      expect(session.follows).toBe(true);
+      await writeFile(join(live, 'a.txt'), 'a\nb\nc\n');
+      liveGit('commit', '-q', '-am', 'two');
+      watcher.dirty();
+      await vi.waitFor(() => expect(published).toHaveLength(2));
+      expect(published[1]!.newSha).toBe(liveGit('rev-parse', 'feat'));
+      expect(published[1]!.iterations.map((it) => it.n)).toEqual([1, 2]);
+      expect(session.moved).toBeNull();
+      expect(first.iterations).toHaveLength(1);
+      // A HEAD-relative new side is the reviewer's own too; only the new side counts, whatever the base.
+      await session.switchMode({ kind: 'revspec', args: ['HEAD~1..HEAD'] });
+      expect(session.follows).toBe(true);
+      liveGit('checkout', '-q', '--detach', 'main');
+      await session.switchMode({ kind: 'revspec', args: ['HEAD..feat'] });
+      expect(session.follows).toBe(false);
+      await session.switchMode({ kind: 'revspec', args: ['feat..HEAD'] });
+      expect(session.follows).toBe(true);
       await session.close();
     } finally {
       await rmTmp(live);
@@ -561,6 +619,16 @@ describe('Session', () => {
       expect((await session.reload()).mode).toEqual(first.mode);
       await expect(session.switchMode({ kind: 'interdiff', from: 2, to: 1 })).rejects.toThrow(RevspecError);
       await expect(session.switchMode({ kind: 'interdiff', from: 1, to: 3 })).rejects.toThrow(RevspecError);
+
+      // Forgetting the iterations from an interdiff returns to the range, whose state is now #1 again, unpinned otherwise.
+      await session.switchMode({ kind: 'interdiff', from: 1, to: 2 });
+      const cleared = await session.clearIterations();
+      expect(cleared.mode).toEqual(first.mode);
+      expect(cleared.iterations).toEqual([
+        { n: 1, oldSha: second.oldSha, newSha: second.newSha, recordedAt: expect.any(Number) },
+      ]);
+      const left = liveGit('for-each-ref', '--format=%(objectname)', 'refs/diffle/iterations/');
+      expect(left.split('\n').sort()).toEqual([second.oldSha, second.newSha].sort());
       await session.close();
     } finally {
       await rmTmp(live);
