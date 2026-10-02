@@ -222,8 +222,8 @@ test.describe('moved refs', () => {
     await expect(page.getByTitle(/Change what is compared/)).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
     await expect(page.locator('header')).toContainText('17 files');
 
-    // A third push: the list picks any two. A click compares with the latest, a click inside the span
-    // shrinks it, a click on its end moves on, shift-click sets the other end.
+    // A third push: the list picks any two. A plain click moves the span's end, shift its start; a click
+    // on the end moves on from it.
     const third = git('commit-tree', '-p', wip, '-m', 'wip: and more', `${wip}^{tree}`);
     git('update-ref', 'refs/heads/feature/refunds', third);
     await notice.getByRole('button', { name: 'Reload' }).click();
@@ -237,8 +237,10 @@ test.describe('moved refs', () => {
     await iterations.getByRole('button', { name: /^#2/ }).click();
     await expect(picker).toHaveText(/#2→#3/);
     await iterations.getByRole('button', { name: /^#1/ }).click({ modifiers: ['Shift'] });
-    await expect(picker).toHaveText(/#1→#2/);
-    await iterations.getByRole('button', { name: /^#3/ }).click();
+    await expect(picker).toHaveText(/#1→#3/);
+    await iterations.getByRole('button', { name: /^#2/ }).click({ modifiers: ['Shift'] });
+    await expect(picker).toHaveText(/#2→#3/);
+    await iterations.getByRole('button', { name: /^#1/ }).click();
     await expect(picker).toHaveText(/#1→#3/);
   });
 });

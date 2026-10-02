@@ -382,9 +382,10 @@ export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string |
 
 /**
  * Which two iterations a click on row `n` of the list compares, given the span `shown` (null when the
- * range itself is shown) and the `latest` iteration. A plain click compares `n` with the latest; one
- * inside the shown span shrinks it to end at `n`; one on the span's end moves on from there. With
- * shift, `n` becomes the other end of the shown span's start. Null when nothing would change.
+ * range itself is shown) and the `latest` iteration. A plain click moves the span's end to `n`, a
+ * shift-click its start; a click past the other end moves that one instead, so the span stays in
+ * order. Clicking the end itself moves on from it to the latest, clicking the start resets its end to
+ * the latest. Without a span, any click compares `n` with the latest. Null when nothing would change.
  */
 export function iterationPick(
   shown: { from: number; to: number } | null,
@@ -393,14 +394,11 @@ export function iterationPick(
   shift: boolean,
 ): { from: number; to: number } | null {
   const span = (a: number, b: number) =>
-    a === b || (shown && shown.from === Math.min(a, b) && shown.to === Math.max(a, b))
-      ? null
-      : { from: Math.min(a, b), to: Math.max(a, b) };
-  if (shift) return span(shown?.from ?? latest, n);
-  if (shown && shown.from < n && n < shown.to) return span(shown.from, n);
-  if (shown && n === shown.to && n < latest) return span(n, latest);
-  if (n === latest) return shown ? span(shown.from, latest) : null;
-  return span(n, latest);
+    a === b || (shown && shown.from === a && shown.to === b) ? null : { from: a, to: b };
+  if (!shown) return span(Math.min(n, latest), latest);
+  if (n === shown.to || n === shown.from) return span(n, latest);
+  if (shift ? n < shown.to : n < shown.from) return span(n, shown.to);
+  return span(shown.from, n);
 }
 
 /** Local repository name, independent of GitHub discovery. */

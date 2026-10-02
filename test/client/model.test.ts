@@ -300,22 +300,24 @@ describe('comparisonLabel', () => {
 describe('iterationPick', () => {
   it('compares a clicked row with the latest, and leaves a repeated pick alone', () => {
     expect(iterationPick(null, 4, 2, false)).toEqual({ from: 2, to: 4 });
+    expect(iterationPick(null, 4, 2, true)).toEqual({ from: 2, to: 4 });
     expect(iterationPick(null, 4, 4, false)).toBeNull();
     expect(iterationPick({ from: 2, to: 4 }, 4, 2, false)).toBeNull();
-    expect(iterationPick({ from: 2, to: 4 }, 4, 1, false)).toEqual({ from: 1, to: 4 });
   });
 
-  it('shrinks the span to a row inside it, then moves on from that row', () => {
-    expect(iterationPick({ from: 1, to: 4 }, 4, 3, false)).toEqual({ from: 1, to: 3 });
+  it('moves the end with a plain click and the start with shift, keeping the span in order', () => {
+    expect(iterationPick({ from: 3, to: 9 }, 10, 5, false)).toEqual({ from: 3, to: 5 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 5, true)).toEqual({ from: 5, to: 9 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 1, false)).toEqual({ from: 1, to: 9 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 1, true)).toEqual({ from: 1, to: 9 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 10, false)).toEqual({ from: 3, to: 10 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 10, true)).toEqual({ from: 3, to: 10 });
+  });
+
+  it("moves on from the span's end, and resets the start's end to the latest", () => {
     expect(iterationPick({ from: 1, to: 3 }, 4, 3, false)).toEqual({ from: 3, to: 4 });
-    expect(iterationPick({ from: 1, to: 3 }, 4, 4, false)).toEqual({ from: 1, to: 4 });
-  });
-
-  it('makes a shift-clicked row the other end of the span', () => {
-    expect(iterationPick({ from: 2, to: 4 }, 4, 3, true)).toEqual({ from: 2, to: 3 });
-    expect(iterationPick({ from: 2, to: 3 }, 4, 1, true)).toEqual({ from: 1, to: 2 });
-    expect(iterationPick({ from: 2, to: 3 }, 4, 2, true)).toBeNull();
-    expect(iterationPick(null, 4, 1, true)).toEqual({ from: 1, to: 4 });
+    expect(iterationPick({ from: 1, to: 3 }, 4, 1, true)).toEqual({ from: 1, to: 4 });
+    expect(iterationPick({ from: 1, to: 4 }, 4, 4, false)).toBeNull();
   });
 });
 
