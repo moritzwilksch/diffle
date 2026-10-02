@@ -4,39 +4,37 @@
 # feature/refunds and print what git's own range-diff makes of it. In diffle, press Reload after
 # each step and compare the new iteration with an older one.
 #
-#   scripts/iterations-demo.sh [dir]
+#   scripts/iterations-demo.sh [dir]            interactive, from a fresh fixture
+#   scripts/iterations-demo.sh <dir> prepare     build the fixture only
+#   scripts/iterations-demo.sh <dir> <n>         run push n (1-9) on it, without waiting
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DIR=${1:-$(mktemp -d "${TMPDIR:-/tmp}/diffle-iterations.XXXXXX")}
+ONLY=${2:-}
 TOOLS=$(mktemp -d "${TMPDIR:-/tmp}/diffle-iterations-tools.XXXXXX")
 trap 'rm -rf "$TOOLS"' EXIT
 
-(cd "$ROOT" && npm run fixture -- "$DIR" >/dev/null)
+prepare() {
+  (cd "$ROOT" && npm run fixture -- "$DIR" >/dev/null)
+  cd "$DIR"
+  # The fixture's staged and unstaged state is for working mode; rebases and amends need a clean tree.
+  git reset -q --hard && git clean -fdq
+  git config user.name 'Grace Hopper'
+  git config user.email grace@example.com
+}
+if [ -z "$ONLY" ] || [ "$ONLY" = prepare ]; then prepare; fi
 cd "$DIR"
-# The fixture's uncommitted state is for working mode; rebases need a clean tree.
-git checkout -q -- . && git clean -fdq
-git config user.name 'Grace Hopper'
-git config user.email grace@example.com
 export GIT_EDITOR=true
 
 bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 log() { git log --format='   %h %s' main..feature/refunds; }
 range() { echo "$(git merge-base main feature/refunds)..$(git rev-parse feature/refunds)"; }
-# Rewrite the branch with `$2...` and show how git pairs the commits before and after.
-step() {
-  local title=$1 before
-  shift
-  before=$(range)
-  bold "$title"
-  "$@"
-  echo '   range-diff, previous push → this one:'
-  # The same creation factor diffle uses, so the pairing matches what it shows.
-  git range-diff -s --no-color --creation-factor=100 "$before" "$(range)" | sed 's/^/     /'
-}
 pause() {
+  [ -n "${SKIP:-}" ] && return 0
   printf '\n   In diffle: %s\n' "$1"
-  read -r -p '   Enter for the next push… '
+  [ -z "$ONLY" ] && read -r -p '   Enter for the next push… '
+  return 0
 }
 
 # Sequence editors for `rebase -i`: tiny scripts, since the editor runs under sh with the todo file appended.
@@ -53,10 +51,34 @@ mv "$1.new" "$1"
 EOF
 chmod +x "$TOOLS"/*
 
-bold "Fixture at $DIR"
-echo "   npm run dev -- -C $DIR main...feature/refunds --no-open"
-log
-pause 'open it; iteration #1 is recorded as soon as the review loads.'
+if [ "$ONLY" = prepare ]; then
+  echo "npm run dev -- -C $DIR main...feature/refunds --no-open"
+  exit 0
+fi
+if [ -z "$ONLY" ]; then
+  bold "Fixture at $DIR"
+  echo "   npm run dev -- -C $DIR main...feature/refunds --no-open"
+  log
+  pause 'open it; iteration #1 is recorded as soon as the review loads.'
+fi
+# In single-step mode only push $ONLY runs; `step` numbers them in order.
+N=0
+step() {
+  N=$((N + 1))
+  if [ -n "$ONLY" ] && [ "$ONLY" != "$N" ]; then
+    SKIP=1
+    return 0
+  fi
+  SKIP=
+  local title=$1 before
+  shift
+  before=$(range)
+  bold "$title"
+  "$@"
+  echo '   range-diff, previous push → this one:'
+  # The same creation factor diffle uses, so the pairing matches what it shows.
+  git range-diff -s --no-color --creation-factor=100 "$before" "$(range)" | sed 's/^/     /'
+}
 
 reword() {
   git commit -q --amend -m 'fix(cli): say so instead of crashing on an empty ledger' \
@@ -145,5 +167,7 @@ merge_main() {
 step '9. main moves on and is merged into the branch' merge_main
 pause 'Reload. The merge base moved to main'"'"'s tip; the interdiff is empty and the merge commit is not a range-diff pair.'
 
-bold 'Done.'
-echo "   The repository stays at $DIR."
+if [ -z "$ONLY" ]; then
+  bold 'Done.'
+  echo "   The repository stays at $DIR."
+fi
