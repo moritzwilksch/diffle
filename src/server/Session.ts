@@ -49,8 +49,6 @@ interface Active {
   watcher: WatcherLike | null;
   /** Where a refs-live comparison's refs point now, when that differs from the snapshot; cleared by a reload. */
   moved: Moved | null;
-  /** The comparison includes the reviewer's own checkout, so a moved ref recomputes the review as a worktree edit does. */
-  follows: boolean;
 }
 
 export interface SessionOptions {
@@ -59,6 +57,8 @@ export interface SessionOptions {
   github?: GithubClient;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
+  /** Recompute a review between refs when one moves, instead of announcing it. The user config; setFollowRefs() changes it. */
+  followRefs: boolean;
   /** Replaces the chokidar-backed Watcher. Test seam. */
   createWatcher?: (target: WatchTarget) => WatcherLike;
 }
@@ -120,9 +120,14 @@ export class Session {
     return this.require().moved;
   }
 
-  /** Whether moved refs recompute the review (the comparison includes the checkout) or only announce themselves. */
+  /** Whether moved refs recompute the review, as worktree edits always do, or only announce themselves. */
   get follows(): boolean {
-    return this.require().follows;
+    return this.require().mode.live === 'worktree' || this.opts.followRefs;
+  }
+
+  /** Change the user's choice for the running session; a pending notice stands until a reload picks the refs up. */
+  setFollowRefs(followRefs: boolean): void {
+    this.opts.followRefs = followRefs;
   }
 
   /** Cached independently of snapshot construction; callers never hold the transition queue. */
@@ -403,8 +408,7 @@ export class Session {
       snapshotter.current(),
     ]);
     // Build the complete next state, then swap it in and retire the previous one.
-    const follows = mode.live === 'worktree' || (mode.live === 'refs' && (await this.followsCheckout(range)));
-    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null, follows };
+    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null };
     // The repository may have moved on while no server was watching it.
     await this.relocateComments(next, snap);
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);
@@ -467,18 +471,6 @@ export class Session {
     const snap = await this.activate({ mode: a.mode.within!, prUrl: a.prUrl });
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     return snap;
-  }
-
-  /**
-   * Whether the side under review is the reviewer's own checkout: HEAD, a revision relative to it,
-   * or the checked-out branch by name. Such a review follows the reviewer's commits live, as a
-   * worktree review follows edits; one of another branch waits to be reloaded, whatever its base.
-   */
-  private async followsCheckout(range: Pick<ModeSpec, 'new'>): Promise<boolean> {
-    const rev = range.new;
-    if (rev === 'worktree' || /^HEAD(?:[~^@]|$)/.test(rev)) return true;
-    const head = await this.repo.branchRef('HEAD');
-    return head != null && (await this.repo.branchRef(rev)) === head;
   }
 
   private recompute(): Promise<Snapshot> {
@@ -634,7 +626,7 @@ export class Session {
     }
     watcher.on('dirty', () => {
       if (this.active !== a) return;
-      if (!a.follows) {
+      if (!this.follows) {
         void this.checkMoved(a);
         return;
       }

@@ -63,9 +63,10 @@ diffle --help           # all commands and flags
 `diffle pr` needs a [GitHub token](#send-comments-to-github). A PR from another repository opens
 in a temporary clone.
 
-A review of your own checkout (the worktree, `HEAD`, or the checked-out branch) follows your edits
-and commits as you make them. A review of another branch stays put: once a ref moves (a push, a
-rebase, a fetch), the header says so and **Reload** picks the new commits up.
+A worktree review follows your edits as you make them. A review between refs stays put: once a ref
+moves (a push, a rebase, a new commit), the header says so and **Reload** picks the new commits up.
+Turn on **Follow moved refs** in the settings (or `diffle config set-follow-refs on`) to have it
+recompute right away instead.
 
 Every state a reviewed range is loaded in is an _iteration_. Once there are two, the panel lists
 them; pick an older one (or press `ii`) to see only what the branch changed since then, or

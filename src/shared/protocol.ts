@@ -488,6 +488,11 @@ export const UserConfigSchema = z.object({
   /** Unchanged lines shown around each change (git -U). Default 5. */
   contextLines: z.number(),
   /**
+   * Recompute a review between refs as soon as one of them moves, as a worktree review follows
+   * edits, instead of announcing the move and waiting for Reload. Default false.
+   */
+  followRefs: z.boolean(),
+  /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
    */
@@ -498,6 +503,7 @@ export type UserConfig = z.infer<typeof UserConfigSchema>;
 export const DEFAULT_USER_CONFIG: UserConfig = {
   autoViewed: [],
   contextLines: 5,
+  followRefs: false,
   lspCommands: {},
 };
 
@@ -740,6 +746,7 @@ function noServer(lsp: LspStatus, language?: LanguageId): string {
 export const ConfigUpdateSchema = z.object({
   autoViewed: z.string().array().optional(),
   contextLines: z.number().int().min(0).max(10_000).optional(),
+  followRefs: z.boolean().optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });

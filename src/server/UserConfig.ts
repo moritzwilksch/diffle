@@ -59,7 +59,8 @@ function normalize(c: Partial<UserConfig>): UserConfig {
     typeof c.contextLines === 'number' && Number.isFinite(c.contextLines)
       ? Math.max(0, Math.min(10_000, Math.floor(c.contextLines)))
       : DEFAULT_USER_CONFIG.contextLines;
-  return { autoViewed, contextLines, lspCommands: lspCommands(c) };
+  const followRefs = typeof c.followRefs === 'boolean' ? c.followRefs : DEFAULT_USER_CONFIG.followRefs;
+  return { autoViewed, contextLines, followRefs, lspCommands: lspCommands(c) };
 }
 
 /**

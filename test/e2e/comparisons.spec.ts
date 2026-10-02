@@ -150,8 +150,7 @@ test.describe('a long range of commits', () => {
 });
 
 test.describe('moved refs', () => {
-  // From main: a review of the checked-out branch would follow its pushes live instead.
-  test.use({ args: ['--watch'], head: 'main' });
+  test.use({ args: ['--watch'] });
 
   test('keeps the review while the compared branch moves, and reloads on request', async ({ page, repo }) => {
     // Three pushes, each reloaded and compared: well over the default budget in the container.
@@ -269,5 +268,18 @@ test.describe('moved refs', () => {
     await expect(iterations).toHaveCount(0);
     await page.keyboard.type('ii');
     await expect(page.getByText('Only one iteration so far')).toBeVisible();
+
+    // With "Follow moved refs" on, a push recomputes the review on its own: no notice, a new iteration.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('checkbox', { name: /Follow moved refs/ }).check();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    git(
+      'update-ref',
+      'refs/heads/feature/refunds',
+      git('commit-tree', '-p', third, '-m', 'wip: followed', `${third}^{tree}`),
+    );
+    await expect(iterations.getByRole('listitem')).toHaveCount(2);
+    await expect(notice).toHaveCount(0);
   });
 });

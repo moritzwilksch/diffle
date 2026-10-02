@@ -463,7 +463,7 @@ export interface ReviewState {
   toggleCollapsed(path: string): void;
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
   selectFile(path: string): void;
-  saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>): Promise<void>;
+  saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs'>>): Promise<void>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
 }

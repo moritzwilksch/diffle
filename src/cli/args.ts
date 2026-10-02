@@ -71,3 +71,10 @@ export function parseLspOverride(raw: string): LspOverride {
 export function collectLspOverride(raw: string, prev: boolean | LspOverride[]): LspOverride[] {
   return [...(Array.isArray(prev) ? prev : []), parseLspOverride(raw)];
 }
+
+/** A boolean flag value, spelled `on` or `off`. */
+export function parseOnOff(value: string): boolean {
+  if (value === 'on') return true;
+  if (value === 'off') return false;
+  throw new InvalidArgumentError('expected on or off');
+}

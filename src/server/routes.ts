@@ -339,6 +339,7 @@ export function createApi(deps: ApiDeps): Hono {
     hub.broadcast({ type: 'config' });
     // The session keeps its own context (`--context` or the config at startup); only an explicit change moves it.
     if (body.contextLines != null) await session.setContext(deps.config.get().contextLines);
+    if (body.followRefs != null) session.setFollowRefs(deps.config.get().followRefs);
     return c.json(effectiveConfig(deps));
   });
 
