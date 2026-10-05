@@ -47,125 +47,39 @@ nix run github:moritzwilksch/diffle -- working
 The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, and `#python` bundle
 language servers.
 
-## Pick what to review
-
-```bash
-diffle                  # HEAD vs worktree, like a bare `git diff`
-diffle working          # HEAD vs worktree: staged, unstaged, untracked
-diffle develop          # what this branch added since it left develop
-diffle pr 27            # GitHub PR 27, or its URL; without a number, this branch's PR
-diffle show a1b2c3d     # one commit, like `git show`
-diffle main..feat       # any git-diff revspec: <rev> | a..b | a...b | a b
-diffle main..worktree   # "worktree" names the uncommitted tree on either side
-diffle --help           # all commands and flags
-```
-
-`diffle pr` needs a [GitHub token](#send-comments-to-github). A PR from another repository opens
-in a temporary clone.
-
-Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
-to keep it running.
-
 ## Review
 
-- `j` / `k`: next or previous line (`10j`: ten lines down)
-- `J` / `K`: next or previous file
-- `]` / `[`: next or previous hunk
-- `c`: comment
-- `C`: comment on the whole file
-- `V`: select a block
-- `R`: resolve
-- `v`: mark viewed
-- `/`: search the current file
-- `g/`: search all changed files
-- `gf`: filter files
-- `F`: open the full file
-- `Ctrl+o`: go back
-- `yy`: copy all comments
-
-Press `?` for the full list.
-
-A comparison lists its commits above the threads. Pick one, or step with `<` and `>`, to see
-that commit alone; **All changes** returns to the whole range. Comments on a focused commit
-belong to that commit, as in `diffle show`.
-
-Comments live in `<git-dir>/diffle/` and never touch your worktree. They follow their text as
-the code changes and go stale once it leaves the diff.
-
-Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattributes` marks
-them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
-globs in settings or with `diffle config`.
-
-## Send comments to GitHub
-
-The pull request icon adds one thread, or all open threads, to a pending review on the PR.
-diffle never submits it: you edit, drop, and submit the comments on GitHub yourself. Adding a
-thread again updates its comment instead of duplicating it.
-
-Export works when the comparison matches the PR's committed diff, so unpushed commits and
-worktree changes rule it out. Stale threads are skipped.
-
-diffle takes the token from `GITHUB_TOKEN`, then `GH_TOKEN`, then a signed-in
-[`gh`](https://cli.github.com/). Without one, everything except GitHub still works.
-`GITHUB_API_URL` points diffle at another GitHub API, as in Actions.
-
-## Jump to definitions
-
-diffle starts a language server for each language in the diff, if it finds one on `PATH`:
-
-- `gd` or Ctrl/Cmd+click: definition
-- `gy`: type definition
-- `gA`: references
-- `gs` / `gS`: file or repository symbols
-- `gh`: hover, including schema docs for JSON, YAML, and TOML
-- `w` / `b` / `0` / `$`: step through a line's symbols; the one under the cursor or the pointer is tinted
-  wherever it recurs in the file, writes apart from reads
-
-Results outside the diff, such as the standard library, open read-only. Large repositories can
-take a while to index.
-
-`diffle lsp` shows which server each language gets and what to install for the rest:
-
-```
-python    pyrefly lsp
-rust      not on PATH (tried rust-analyzer)
+```bash
+diffle                  # your uncommitted changes
+diffle main             # what this branch added since it left main
+diffle pr 27            # GitHub PR 27, or its URL
+diffle show a1b2c3d     # one commit
+diffle main..feat       # any git-diff revspec
 ```
 
-Override a server or turn one off:
+diffle opens the review in your browser. `j` / `k` move, `J` / `K` jump between files, `c`
+comments on a line, and `?` lists every shortcut. Comments live in `<git-dir>/diffle/` and never
+touch your worktree.
+
+Close the tab, and diffle prints your open comments as a prompt for an agent:
 
 ```bash
-diffle config set-lsp rust "rust-analyzer"       # persistent
-diffle config set-lsp java ""                    # never start one for java
-diffle config unset-lsp rust                     # back to PATH
-diffle working --lsp python="pyrefly lsp"        # this run only
-diffle working --no-lsp                          # none at all
+claude "$(diffle main)"
 ```
 
-Language servers run through a shell inside the repository and can read anything your user can.
-`--no-lsp` starts none.
+Or send them to the pull request as a pending GitHub review.
 
-## Shell completions
+## Documentation
 
-```bash
-diffle completion --shell bash > ~/.local/share/bash-completion/completions/diffle
-diffle completion --shell zsh > ~/.local/share/zsh/site-functions/_diffle   # on fpath, before compinit
-diffle completion --shell fish > ~/.config/fish/completions/diffle.fish
-```
-
-Rerun after upgrading to pick up new commands. Revisions don't complete.
-
-## Behind a reverse proxy
-
-diffle works under a path prefix such as `https://proxy.example/diffle/` with no extra setting.
-Have the proxy strip the prefix, including for WebSocket upgrades at `/diffle/ws`, and trust its
-public origin:
-
-```bash
-diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
-```
-
-If the proxy rewrites Host and Origin to its upstream address, such as a Kubernetes service
-name, trust that address instead. A rejected request gets a 403 naming the header that failed.
+- [Getting started](docs/getting-started.md)
+- [Choosing a comparison](docs/guides/choosing-a-comparison.md), [commits](docs/guides/commits.md),
+  and [iterations](docs/guides/iterations.md)
+- [Threads](docs/guides/threads.md), [agent hand-off](docs/guides/agent-handoff.md), and
+  [GitHub](docs/guides/github.md)
+- [Code navigation](docs/guides/code-navigation.md) with language servers
+- [Remote and proxy setups](docs/guides/remote-and-proxy.md)
+- Reference: [keyboard shortcuts](docs/reference/keyboard.md), [CLI](docs/reference/cli.md),
+  [configuration](docs/reference/configuration.md), [storage](docs/reference/storage.md)
 
 ## Development
 
