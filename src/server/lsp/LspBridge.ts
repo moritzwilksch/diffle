@@ -8,6 +8,7 @@ import {
   type LspHoverResponse,
   type LspLocation,
   type LspLocationsResponse,
+  type LspOccurrencesResponse,
   type LspPosition,
   type LspProcessStatus,
   type LspSymbol,
@@ -57,6 +58,11 @@ interface LocationLink {
   targetUri: string;
   targetRange: Range;
   targetSelectionRange: Range;
+}
+interface DocumentHighlight {
+  range: Range;
+  /** 1 Text, 2 Read, 3 Write; absent means Text. */
+  kind?: number;
 }
 interface DocumentSymbol {
   name: string;
@@ -243,6 +249,38 @@ export class LspBridge {
       return { kind: this.tokenTypes[data[i + 3]!] ?? null };
     }
     return { kind: null };
+  }
+
+  /**
+   * Where else the symbol at `pos` occurs in its file, via `textDocument/documentHighlight`,
+   * so scope and shadowing are the server's call. A server without the method, or a
+   * position holding no symbol, yields no occurrences: the answer is advisory.
+   */
+  async occurrences(pos: LspPosition): Promise<LspOccurrencesResponse> {
+    let result: DocumentHighlight[] | null;
+    try {
+      result = await this.query<DocumentHighlight[] | null>(
+        'textDocument/documentHighlight',
+        {
+          textDocument: { uri: this.uri(pos.path) },
+          position: toLsp(pos),
+        },
+        pos.path,
+      );
+    } catch (e) {
+      if (e instanceof LspUnavailableError) throw e;
+      // Method not supported: a plain server error, not an outage.
+      return { occurrences: [] };
+    }
+    return {
+      occurrences: (result ?? []).map(({ range: { start, end }, kind }) => ({
+        line: start.line + 1,
+        col: start.character,
+        endLine: end.line + 1,
+        endCol: end.character,
+        kind: kind === 3 ? 'write' : kind === 2 ? 'read' : 'text',
+      })),
+    };
   }
 
   async references(pos: LspPosition, opts: { includeDeclaration?: boolean } = {}): Promise<LspLocationsResponse> {
@@ -493,7 +531,9 @@ export class LspBridge {
               definition: { linkSupport: true },
               typeDefinition: { linkSupport: true },
               references: {},
+              documentHighlight: {},
               hover: { contentFormat: ['markdown', 'plaintext'] },
+
               documentSymbol: { hierarchicalDocumentSymbolSupport: true },
               semanticTokens: {
                 requests: { range: true },

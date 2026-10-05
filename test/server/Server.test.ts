@@ -96,7 +96,7 @@ describe('Server', () => {
     ['PUT', '/api/viewed/bulk'],
     ['PUT', '/api/config'],
     ['POST', '/api/github/export'],
-    ...['definition', 'type-definition', 'hover', 'token-kind', 'references'].map((name) => [
+    ...['definition', 'type-definition', 'hover', 'token-kind', 'references', 'occurrences'].map((name) => [
       'POST',
       `/api/lsp/${name}`,
     ]),
@@ -134,7 +134,7 @@ describe('Server', () => {
     ['POST', '/api/threads/missing/replies', { body: '  ' }],
     ['PATCH', '/api/threads/missing/messages/missing', { body: 1 }],
     ['PUT', '/api/threads/missing/resolved', { resolved: 'false' }],
-    ...['definition', 'type-definition', 'hover', 'token-kind', 'references'].flatMap((name) =>
+    ...['definition', 'type-definition', 'hover', 'token-kind', 'references', 'occurrences'].flatMap((name) =>
       [1.5, 0, 9007199254740992].map((line): [string, string, unknown] => [
         'POST',
         `/api/lsp/${name}`,

@@ -118,6 +118,8 @@ diffle starts a language server for each language in the diff, if it finds one o
 - `gA`: references
 - `gs` / `gS`: file or repository symbols
 - `gh`: hover, including schema docs for JSON, YAML, and TOML
+- `w` / `b` / `0` / `$`: step through a line's symbols; the one under the cursor or the pointer is tinted
+  wherever it recurs in the file, writes apart from reads
 
 Results outside the diff, such as the standard library, open read-only. Large repositories can
 take a while to index.

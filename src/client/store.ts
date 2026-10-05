@@ -11,6 +11,7 @@ import {
   type CommentThread,
   type FileResponse,
   type LspLocation,
+  type LspOccurrence,
   type LspPosition,
   type LspStatus,
   type LspSymbol,
@@ -168,6 +169,12 @@ export interface HoverState {
   anchor: { left: number; top: number; bottom: number };
 }
 
+/** Where the symbol under the cursor or pointer recurs in its file, painted by `lsp/occurrences.ts`. */
+export interface OccurrencesState {
+  target: TokenTarget;
+  items: LspOccurrence[];
+}
+
 /** A line a result list jumps to: a search hit, or a language-server location that may be external. */
 export type Match = SearchMatch & Pick<LspLocation, 'external'>;
 
@@ -298,6 +305,15 @@ export interface ReviewState {
   /** Open the tooltip for the focused, else hovered, token (gh). Flashes when nothing applies. */
   showHover(): Promise<void>;
   closeHover(): void;
+  occurrences: OccurrencesState | null;
+  /**
+   * Ask the server where the symbol at `target` recurs and paint the answer. Advisory: a blocked
+   * position, a server without the method, or a failure paints nothing and says nothing. Resolves
+   * to the occurrences fetched (empty when none), or null when nothing was asked; a newer request
+   * or `clearOccurrences` keeps an earlier answer from painting.
+   */
+  requestOccurrences(target: TokenTarget): Promise<LspOccurrence[] | null>;
+  clearOccurrences(): void;
   /** Jump to the definition of `target` (default: the clicked, else the hovered token). Flashes when nothing applies. */
   goToDefinition(target?: TokenTarget | null): Promise<void>;
   /** Jump to where the type of the symbol is defined (gy). */
@@ -483,6 +499,8 @@ export const useStore = create<ReviewState>((set, get) => {
   let menuSeq = 0;
   /** Hover requests, newest wins: moving across tokens must not show an earlier token's answer. */
   let hoverSeq = 0;
+  /** Occurrence requests, newest wins, like hovers. */
+  let occurrenceSeq = 0;
   /** The typing pause a workspace symbol query is waiting out; a newer query ends it early. */
   let symbolWait: { timer: ReturnType<typeof setTimeout>; wake: () => void } | null = null;
   const cancelSymbolWait = () => {
@@ -896,6 +914,9 @@ export const useStore = create<ReviewState>((set, get) => {
     set((s) => ({
       snapshot: next,
       loaded,
+      // Painted positions name the previous text; the next focus or hover asks afresh.
+      occurrences: null,
+
       contents,
       fileView,
       collapsed,
@@ -1681,7 +1702,34 @@ export const useStore = create<ReviewState>((set, get) => {
       hoverSeq++;
       if (get().hover) set({ hover: null });
     },
-    async goToDefinition(target = get().symbolMenu?.target ?? lspTarget.get()) {
+    occurrences: null,
+    async requestOccurrences(target) {
+      const t = ++occurrenceSeq;
+      if (targetBlocker(target)) return null;
+      const g = generation;
+      try {
+        // A word in a comment or a string names no symbol; the syntax gate says so without a round trip.
+        const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
+          ensureContents(target.path, target.side),
+        );
+        if (!current(g)) return null;
+        const items = blocked
+          ? []
+          : (await api.lspOccurrences({ path: target.path, line: target.line, col: target.col })).occurrences;
+        if (!current(g)) return null;
+        if (t === occurrenceSeq) set({ occurrences: items.length ? { target, items } : null });
+        return items;
+      } catch {
+        /* advisory: a failed request paints nothing */
+        return null;
+      }
+    },
+    clearOccurrences() {
+      occurrenceSeq++;
+      if (get().occurrences) set({ occurrences: null });
+    },
+    async goToDefinition(
+target = get().symbolMenu?.target ?? lspTarget.get()) {
       await jumpToLspLocation(target, 'definition');
     },
     async goToTypeDefinition(target = get().symbolMenu?.target ?? lspTarget.get()) {

@@ -6,6 +6,7 @@ import {
   type LspHoverResponse,
   type LspLocationsResponse,
   type LspMissing,
+  type LspOccurrencesResponse,
   type LspPosition,
   type LspStatus,
   type LspSymbol,
@@ -98,6 +99,10 @@ export class LspPool {
 
   async references(pos: LspPosition): Promise<LspLocationsResponse> {
     return this.bridgeFor(pos.path).references(pos);
+  }
+
+  async occurrences(pos: LspPosition): Promise<LspOccurrencesResponse> {
+    return this.bridgeFor(pos.path).occurrences(pos);
   }
 
   async documentSymbols(path: string): Promise<LspSymbol[]> {

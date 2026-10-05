@@ -1,6 +1,6 @@
 // Minimal stdio language server for tests: answers initialize, definition, references,
-// documentSymbol, workspace/symbol, hover, semanticTokens/range, shutdown. Definitions point at line 2 of the queried
-// file plus one location outside the root; references echo the open document's text length.
+// documentSymbol, workspace/symbol, hover, semanticTokens/range, documentHighlight, shutdown. Definitions point
+// at line 2 of the queried file plus one location outside the root; references echo the open document's text length.
 import { pathToFileURL } from 'node:url';
 
 let buf = Buffer.alloc(0);
@@ -127,6 +127,31 @@ function handle(msg) {
         prevStart = m.index;
       }
       return reply(msg.id, { data });
+    }
+    case 'textDocument/documentHighlight': {
+      // FAKE_LSP_NO_HIGHLIGHT mimics a server without the method.
+      if (process.env.FAKE_LSP_NO_HIGHLIGHT === '1')
+        return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'method not found' } });
+      // The word at the position, wherever it recurs inside the enclosing top-level block (a stand-in
+      // for scope); one followed by a lone `=` counts as a write (3), the others as reads (2).
+      const lines = (docs.get(msg.params.textDocument.uri) ?? '').split('\n');
+      const { line, character } = msg.params.position;
+      const word = [...(lines[line] ?? '').matchAll(/\w+/g)].find(
+        (m) => character >= m.index && character < m.index + m[0].length,
+      )?.[0];
+      if (!word) return reply(msg.id, null);
+      let first = line;
+      while (first > 0 && !/^\S/.test(lines[first])) first--;
+      let last = line + 1;
+      while (last < lines.length && !/^\S/.test(lines[last])) last++;
+      const out = [];
+      for (let l = first; l < last; l++)
+        for (const m of lines[l].matchAll(new RegExp(`(?<!\\w)${word}(?!\\w)(\\s*=(?!=))?`, 'g')))
+          out.push({
+            range: { start: { line: l, character: m.index }, end: { line: l, character: m.index + word.length } },
+            kind: m[1] ? 3 : 2,
+          });
+      return reply(msg.id, out);
     }
     case 'textDocument/documentSymbol':
       return reply(msg.id, [
