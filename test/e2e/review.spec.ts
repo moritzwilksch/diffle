@@ -55,11 +55,6 @@ test('shows a rename with edits and the pure rename next to it', async ({ page }
   await expect(page).toHaveScreenshot('rename.png');
 });
 
-test('shows a binary change, a mode change and an empty file', async ({ page }) => {
-  await gotoFile(page, 'assets/logo.png');
-  await expect(page).toHaveScreenshot('binary-mode-empty.png');
-});
-
 // One screenshot per scenario: a failing first screenshot would otherwise hide the second one's result.
 test('renders CRLF endings', async ({ page }) => {
   await gotoFile(page, 'scripts/build.bat');

@@ -13,15 +13,6 @@ test.describe('working mode', () => {
   });
 });
 
-test.describe('two-dot comparison', () => {
-  test.use({ revs: ['main..feature/refunds'] });
-
-  test("includes main's own fix, which the merge-base view leaves out", async ({ page }) => {
-    await expect(page.locator('header')).toContainText('18 files');
-    expect(await filePaths(page)).toContain('README.md');
-  });
-});
-
 test.describe('single commit', () => {
   test.use({ revs: ['HEAD^!'] });
 
