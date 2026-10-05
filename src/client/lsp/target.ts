@@ -1,4 +1,4 @@
-import { languageOf, type Side } from '../../shared/protocol.js';
+import { languageOf, type LspLocation, type Side } from '../../shared/protocol.js';
 
 /** Configuration tokens offer schema hover, without symbol menus or navigation. */
 export function schemaHoverOnly(path: string): boolean {
@@ -15,6 +15,17 @@ export interface TokenTarget {
   /** 0-based UTF-16 offset in the line. */
   col: number;
   text: string;
+}
+
+/** Whether `loc` points into `target`'s token: a definition query asked at the definition itself. */
+export function isToken(loc: LspLocation, target: TokenTarget): boolean {
+  return (
+    !loc.external &&
+    loc.path === target.path &&
+    loc.line === target.line &&
+    loc.col >= target.col &&
+    loc.col < target.col + target.text.length
+  );
 }
 
 // Module state, not store state: hover fires constantly and must not re-render.

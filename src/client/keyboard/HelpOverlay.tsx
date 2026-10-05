@@ -67,7 +67,7 @@ export const COLUMNS: HelpSection[][] = [
       rows: [
         ['hover a symbol  or  gh', 'signature and docs tooltip (gh: focused word); Esc closes'],
         ['click a symbol', 'definition / type definition / references popover'],
-        ['gd  or  ⌘/Ctrl+click', 'go to the definition of the hovered symbol'],
+        ['gd  or  ⌘/Ctrl+click', 'go to the definition, or its references from there'],
         ['gy', 'go to the definition of the hovered symbol’s type'],
         ['gA', 'list references; j / k, Enter to jump, n / N to step'],
         ['gs / gS', 'symbols in the current file / across the repository'],
