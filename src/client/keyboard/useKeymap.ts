@@ -205,6 +205,12 @@ export function useKeymap(): void {
         if (e.key === 'k' || e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) return s.moveReference(-1);
         if (e.key === 'Enter') return s.pickReference();
         if (e.key === ' ') return s.togglePeek();
+        if (s.references.peek && (e.key === 'J' || e.key === 'K' || (e.ctrlKey && (e.key === 'd' || e.key === 'u')))) {
+          const pane = document.querySelector<HTMLElement>('[aria-label="Peek"]');
+          if (!pane) return;
+          const step = e.ctrlKey ? pane.clientHeight / 2 : 3 * parseFloat(getComputedStyle(pane).lineHeight);
+          pane.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step, behavior: 'smooth' });
+        }
         return;
       }
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'b') {

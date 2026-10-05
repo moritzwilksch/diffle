@@ -19,7 +19,7 @@ const CONTEXT = 40;
 
 /**
  * Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps,
- * Space toggles a peek of the highlighted reference in context, which scrolls natively, a click on a peeked line
+ * Space toggles a peek of the highlighted reference in context, J / K or Ctrl-d / Ctrl-u scroll it, a click on a peeked line
  * jumps there, Esc leaves the peek, then closes.
  */
 export function ReferencesList() {
@@ -97,7 +97,7 @@ export function ReferencesList() {
           {refs.peek && (
             <>
               {' '}
-              · <kbd>PgUp</kbd> <kbd>PgDn</kbd> scroll
+              · <kbd>J</kbd> <kbd>K</kbd> scroll
             </>
           )}{' '}
           · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> {refs.peek ? 'back' : 'close'}
