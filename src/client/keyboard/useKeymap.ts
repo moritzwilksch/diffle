@@ -200,6 +200,12 @@ export function useKeymap(): void {
         if (e.key === 'j' || e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) return s.moveReference(1);
         if (e.key === 'k' || e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) return s.moveReference(-1);
         if (e.key === 'Enter') return s.pickReference();
+        if (e.key === ' ') return s.togglePeek();
+        if (s.references.peek && (e.key === 'J' || e.key === 'K' || (e.ctrlKey && (e.key === 'd' || e.key === 'u')))) {
+          const pane = document.querySelector<HTMLElement>('[data-peek]');
+          const step = e.ctrlKey ? (pane?.clientHeight ?? 0) / 2 : 3 * 1.6 * 0.75 * remPx();
+          pane?.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step });
+        }
         return;
       }
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'b') {

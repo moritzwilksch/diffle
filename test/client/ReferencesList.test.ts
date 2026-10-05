@@ -28,7 +28,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   drawn.length = 0;
-  useStore.setState({ references: { open: true, kind: 'references', symbol: 'x', items, index: 0 } });
+  useStore.setState({ references: { open: true, kind: 'references', symbol: 'x', items, index: 0, peek: false } });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

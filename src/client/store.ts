@@ -186,6 +186,8 @@ export interface ReferencesState {
   symbol: string;
   items: Match[];
   index: number;
+  /** Show the highlighted reference in context beside the list (Space); sticky across lists. */
+  peek: boolean;
 }
 
 export interface SymbolsState {
@@ -327,6 +329,7 @@ export interface ReviewState {
   findReferences(target?: TokenTarget | null): Promise<void>;
   references: ReferencesState;
   moveReference(delta: 1 | -1): void;
+  togglePeek(): void;
   /** Jump to the highlighted reference; the list stays available to n / N afterwards. */
   pickReference(): void;
   closeReferences(): void;
@@ -1246,7 +1249,16 @@ export const useStore = create<ReviewState>((set, get) => {
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
-        set({ references: { open: true, kind: 'types', symbol: target!.text, items: res.locations, index: 0 } });
+        set((s) => ({
+          references: {
+            ...s.references,
+            open: true,
+            kind: 'types',
+            symbol: target!.text,
+            items: res.locations,
+            index: 0,
+          },
+        }));
         return;
       }
       await jumpToLine(loc.path, loc.line, loc.external);
@@ -1761,17 +1773,22 @@ export const useStore = create<ReviewState>((set, get) => {
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
         const index = origin === -1 ? 0 : (origin + 1) % items.length;
-        set({ references: { open: true, kind: 'references', symbol: target!.text, items, index } });
+        set((s) => ({
+          references: { ...s.references, open: true, kind: 'references', symbol: target!.text, items, index },
+        }));
       } catch (e) {
         if (current(g)) report('Find references', e);
       }
     },
-    references: { open: false, kind: 'references', symbol: '', items: [], index: -1 },
+    references: { open: false, kind: 'references', symbol: '', items: [], index: -1, peek: false },
     moveReference(delta) {
       const r = get().references;
       const n = r.items.length;
       if (!n) return;
       set({ references: { ...r, index: (Math.max(r.index, 0) + delta + n) % n } });
+    },
+    togglePeek() {
+      set((s) => ({ references: { ...s.references, peek: !s.references.peek } }));
     },
     pickReference() {
       const r = get().references;

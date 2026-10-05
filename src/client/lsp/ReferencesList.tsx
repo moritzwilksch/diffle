@@ -1,11 +1,12 @@
 import { Dialog } from '../ui/Dialog.js';
 import { twMerge } from 'tailwind-merge';
 import { FileCode2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FilePath } from '../FilePath.js';
 import { overflow } from '../review/geometry.js';
-import { useStore } from '../store.js';
-import { CodeLine, type HlToken, useHighlighted } from './highlight.js';
+import { type Match, useStore } from '../store.js';
+import type { ThemeChoice } from '../theme.js';
+import { CodeLine, type HlToken, highlightLines, useHighlighted } from './highlight.js';
 
 interface Row {
   i: number;
@@ -13,7 +14,13 @@ interface Row {
   text: string;
 }
 
-/** Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps, Esc closes. */
+/** Lines shown above and below a peeked reference. */
+const CONTEXT = 40;
+
+/**
+ * Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps,
+ * Space toggles a peek of the highlighted reference in context, J / K scroll it, Esc closes.
+ */
 export function ReferencesList() {
   const refs = useStore((s) => s.references);
   const theme = useStore((s) => s.theme);
@@ -56,11 +63,15 @@ export function ReferencesList() {
   }, [refs.index, refs.open]);
 
   if (!refs.open) return null;
+  const peeked = refs.peek ? items[refs.index] : undefined;
   return (
     <Dialog
       label="References"
       onClose={close}
-      className="flex max-h-[80vh] w-[min(60rem,_92vw)] flex-col overflow-hidden p-0"
+      className={twMerge(
+        'flex max-h-[80vh] w-[min(60rem,_92vw)] flex-col overflow-hidden p-0',
+        refs.peek && 'h-[80vh] w-[min(96rem,_96vw)]',
+      )}
     >
       <div className="flex items-baseline gap-3.5 border-b border-b-border px-4.5 pt-3.5 pb-2.5">
         <h3 className="m-0 text-[0.9375rem]">
@@ -81,35 +92,145 @@ export function ReferencesList() {
           )}
         </h3>
         <span className="ml-auto text-[0.6875rem] whitespace-nowrap text-muted">
-          <kbd>j</kbd> <kbd>k</kbd> move · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> close
+          <kbd>j</kbd> <kbd>k</kbd> move · <kbd>Space</kbd> peek
+          {refs.peek && (
+            <>
+              {' '}
+              · <kbd>J</kbd> <kbd>K</kbd> scroll
+            </>
+          )}{' '}
+          · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> close
         </span>
       </div>
-      <div className="overflow-auto px-2.5 pt-2 pb-3" ref={listRef}>
-        {groups.map((g) => (
-          <section className="[&+section]:mt-2.5" key={g.path}>
-            <header className="sticky top-0 z-1 mb-[2px] flex items-center gap-2 rounded-lg border border-border bg-hover px-2.5 py-1.5 font-mono text-[0.75rem] leading-[normal] [&>svg]:flex-none [&>svg]:text-muted">
-              <FileCode2 size="0.875rem" />
-              <FilePath path={g.path} nowrap className="flex-1" />
-              <span className="ml-auto rounded-[0.625rem] border border-border bg-canvas px-1.75 py-0 text-[0.6875rem] text-muted">
-                {g.rows.length}
-              </span>
-            </header>
-            {g.rows.map((r) => (
-              <RefRow
-                key={`${r.line}:${r.i}`}
-                row={r}
-                on={r.i === refs.index}
-                tokens={highlighted.get(`${g.path}\n${r.text}`)}
-                onPick={onPick}
-              />
-            ))}
-          </section>
-        ))}
+      <div className={twMerge('flex min-h-0 flex-1', !refs.peek && 'contents')}>
+        <div
+          className={twMerge(
+            'overflow-auto px-2.5 pt-2 pb-3',
+            refs.peek && 'w-[min(32rem,_38%)] flex-none border-r border-r-border',
+          )}
+          ref={listRef}
+        >
+          {groups.map((g) => (
+            <section className="[&+section]:mt-2.5" key={g.path}>
+              <header className="sticky top-0 z-1 mb-[2px] flex items-center gap-2 rounded-lg border border-border bg-hover px-2.5 py-1.5 font-mono text-[0.75rem] leading-[normal] [&>svg]:flex-none [&>svg]:text-muted">
+                <FileCode2 size="0.875rem" />
+                <FilePath path={g.path} nowrap className="flex-1" />
+                <span className="ml-auto rounded-[0.625rem] border border-border bg-canvas px-1.75 py-0 text-[0.6875rem] text-muted">
+                  {g.rows.length}
+                </span>
+              </header>
+              {g.rows.map((r) => (
+                <RefRow
+                  key={`${r.line}:${r.i}`}
+                  row={r}
+                  on={r.i === refs.index}
+                  tokens={highlighted.get(`${g.path}\n${r.text}`)}
+                  onPick={onPick}
+                />
+              ))}
+            </section>
+          ))}
+        </div>
+        {refs.peek && <ReferencePeek match={peeked} theme={theme} />}
       </div>
     </Dialog>
   );
 }
 
+type Peeked = { path: string; lines: string[] } | { path: string; message: string };
+
+/** The peeked reference's file around its line, highlighted and centered; the list keeps focus. */
+function ReferencePeek({ match, theme }: { match: Match | undefined; theme: ThemeChoice }) {
+  const loadFile = useStore((s) => s.loadFile);
+  const [file, setFile] = useState<Peeked | null>(null);
+  // Keyed by window so a highlight from an earlier reference never paints over the current one.
+  const [hl, setHl] = useState<{ key: string; tokens: HlToken[][] } | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const path = match?.path;
+  const line = match?.line ?? 0;
+
+  useEffect(() => {
+    if (!path) return;
+    let live = true;
+    loadFile(path, 'new')
+      .then(
+        (res) =>
+          live && setFile(res.binary ? { path, message: 'Binary file' } : { path, lines: res.contents.split('\n') }),
+      )
+      .catch(
+        (e: unknown) =>
+          live &&
+          setFile({
+            path,
+            message: e instanceof Error ? e.message : String(e),
+          }),
+      );
+    return () => {
+      live = false;
+    };
+  }, [path, loadFile]);
+
+  const loaded = file && file.path === path && 'lines' in file ? file.lines : null;
+  const first = Math.max(1, line - CONTEXT);
+  const lines = useMemo(() => loaded?.slice(first - 1, line + CONTEXT) ?? null, [loaded, first, line]);
+  const key = `${path}:${first}:${theme}`;
+
+  useEffect(() => {
+    if (!lines || !path) return;
+    let live = true;
+    highlightLines(lines, path, theme)
+      .then((tokens) => live && setHl({ key, tokens }))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [lines, path, theme, key]);
+
+  // Center the target before paint so stepping through the list never shows the window scrolled elsewhere.
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    const row = pane?.querySelector<HTMLElement>('[data-target="true"]');
+    if (!pane || !row) return;
+    pane.scrollTop = row.offsetTop - (pane.clientHeight - row.offsetHeight) / 2;
+  }, [lines]);
+
+  if (!match) return <div className="flex-1" />;
+  const tokens = hl?.key === key ? hl.tokens : undefined;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex items-center gap-2 border-b border-b-border px-3.5 py-1.5 font-mono text-[0.75rem] text-muted [&>svg]:flex-none">
+        <FileCode2 size="0.875rem" />
+        <FilePath path={match.path} nowrap className="min-w-0 flex-1" />
+        <span className="ml-auto">:{match.line}</span>
+      </div>
+      <div
+        className="relative flex-1 overflow-auto py-2 font-mono text-[0.75rem] leading-[1.6]"
+        data-peek
+        ref={paneRef}
+      >
+        {lines ? (
+          lines.map((text, i) => {
+            const n = first + i;
+            return (
+              <div
+                key={n}
+                data-target={n === line}
+                className={twMerge('grid grid-cols-[3.25rem_1fr] gap-3 pr-3.5', n === line && 'bg-hover')}
+              >
+                <span className="text-right text-muted">{n}</span>
+                <span className="whitespace-pre">
+                  <CodeLine tokens={tokens?.[i]} fallback={text} />
+                </span>
+              </div>
+            );
+          })
+        ) : file && file.path === path && 'message' in file ? (
+          <p className="px-3.5 text-muted">{file.message}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 /** One reference. Memoized on stable inputs so moving the selection rerenders two rows, not the whole list. */
 const RefRow = memo(function RefRow({
   row,
