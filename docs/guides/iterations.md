@@ -14,7 +14,7 @@ An iteration is one state of a range: the two commits its ends pointed to when d
 Whenever diffle loads the range and either end has moved (a push, a rebase, an amend), it records
 the next iteration.
 
-Iterations are recorded for ranges that can move again: comparisons between refs, and pull
+diffle records iterations for ranges that can move again: comparisons between refs, and pull
 requests. A worktree review or a single commit has none. diffle keeps the newest 50 iterations of
 each range and pins their commits under `refs/diffle/iterations/`, so a force-push or a
 garbage collection can't take away what you reviewed.
@@ -34,14 +34,14 @@ iteration onto the newer base before it compares them.
 ![The diff between iteration #1 and #2: one file changed](../assets/interdiff.png)
 
 With two iterations compared, a plain click sets the older end and a shift-click the newer one, so
-any two iterations can be compared. From the keyboard:
+you can compare any two. From the keyboard:
 
-| Keys          | Action                                                                   |
-| ------------- | ------------------------------------------------------------------------ |
-| `ii`          | The latest iteration against the one before it; again, back to the range |
-| `i`, then 1–9 | That iteration against the latest                                        |
-| `ij` / `ik`   | Move the older end one iteration back / forward                          |
-| `iJ` / `iK`   | Move the newer end one iteration back / forward                          |
+| Keys                 | Action                                                                   |
+| -------------------- | ------------------------------------------------------------------------ |
+| `ii`                 | The latest iteration against the one before it; again, back to the range |
+| `i`, then `1` to `9` | That iteration against the latest                                        |
+| `ij` / `ik`          | Move the older end one iteration back / forward                          |
+| `iJ` / `iK`          | Move the newer end one iteration back / forward                          |
 
 The [Commits](./commits.md#within-an-iteration-comparison) box shows how the commits pair up
 between the two iterations.

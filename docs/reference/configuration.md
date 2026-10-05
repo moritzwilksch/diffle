@@ -64,4 +64,4 @@ diffle config set-follow-refs off
 language off. Set these with `diffle config set-lsp`; the Settings dialog only points to them. See
 [Code navigation](../guides/code-navigation.md#override-a-server).
 
-The file is written with owner-only permissions because it can hold shell commands.
+diffle writes the file with owner-only permissions because it can hold shell commands.

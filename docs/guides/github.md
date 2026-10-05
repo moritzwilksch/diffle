@@ -47,7 +47,7 @@ Adding a thread again updates its comment instead of duplicating it.
 Export only works when your comments sit where GitHub can anchor them. Otherwise the icons don't
 appear, and the **GitHub** menu (`o`) says why. That happens when:
 
-- the pull request is not open;
+- the pull request isn't open;
 - the comparison includes your worktree, or doesn't end at the pull request head (for example,
   after unpushed commits);
 - the comparison doesn't match the pull request's diff.

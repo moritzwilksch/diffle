@@ -34,17 +34,16 @@ Click one in the list to jump to it.
 | `dd`      | Delete the thread                                       |
 | `yy`, `Y` | Copy all open threads as a [prompt](./agent-handoff.md) |
 
-Each card also has buttons to copy, edit, reply, resolve, and delete. Resolved threads are kept but
-hidden from the list; tick **Show resolved** to see them. They are left out of the prompt and of
-**Add all** on GitHub.
+Each card also has buttons to copy, edit, reply, resolve, and delete. The list hides resolved
+threads; tick **Show resolved** to see them. The prompt and **Add all** on GitHub skip them.
 
 ## Threads follow the code
 
 diffle stores the text each thread was anchored to. When the diff changes (you edit the file, a ref
 moves, you reload), every thread looks for its text again, near where it was, and moves with it.
 
-A thread whose text is gone, or no longer inside the diff, becomes **stale**. Stale threads show
-with a dashed border and stay in the list until you delete them; the list's **Delete** button next
+A thread whose text is gone, or no longer inside the diff, becomes **stale**. Stale threads have
+a dashed border and stay in the list until you delete them; the list's **Delete** button next
 to the stale count removes them all. The prompt still includes them, marked
 `(stale, was line 33)`, but they can't be added to a GitHub review.
 

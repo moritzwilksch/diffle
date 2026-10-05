@@ -19,7 +19,7 @@ on to the next commit without losing your place:
 - **All changes** returns to the whole range.
 
 The focused commit is highlighted and shows its full message. Hover over another commit to see its
-message in a card. Each hash copies on click.
+message in a card. Click a hash to copy it.
 
 Ranges with more than five commits start with the box collapsed so the threads keep their room;
 click **Commits** to open it.

@@ -87,7 +87,7 @@ curl -X POST http://127.0.0.1:4966/api/threads \
 | Field       | Meaning                                                                         |
 | ----------- | ------------------------------------------------------------------------------- |
 | `path`      | The file. Required.                                                             |
-| `startLine` | First line. Leave it out, with the next three, for a comment on the file.       |
+| `startLine` | First line. Leave it and the next three fields out to comment on the file.      |
 | `endLine`   | Last line. Defaults to `startLine`.                                             |
 | `side`      | `new` (default) or `old`.                                                       |
 | `quoted`    | The lines' text as the agent saw it. diffle reads it from the diff if left out. |

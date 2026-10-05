@@ -10,14 +10,15 @@ from the same machine.
 
 ## On another machine
 
-To review on a remote host from your local browser, either forward the port over SSH:
+To review on a remote host from your local browser, forward the port over SSH and open
+`http://127.0.0.1:4966`:
 
 ```bash
 ssh -L 4966:127.0.0.1:4966 devbox
 diffle working --no-open --keep-alive
 ```
 
-and open `http://127.0.0.1:4966`, or bind to the network:
+Or bind to the network:
 
 ```bash
 diffle working -H 0.0.0.0 --no-open

@@ -74,27 +74,27 @@ These need a [language server](../guides/code-navigation.md).
 
 ## View
 
-| Keys              | Action                                                                                              |
-| ----------------- | --------------------------------------------------------------------------------------------------- |
-| `zz`              | Scroll the current line to eye level                                                                |
-| `zt` / `zb`       | Scroll the current line to the top / bottom                                                         |
-| `s`               | Toggle split / unified                                                                              |
-| `t`               | Cycle the theme                                                                                     |
-| ⌘/Ctrl+b          | Toggle the file tree                                                                                |
-| ⌘/Ctrl+Shift+b    | Toggle the comments panel                                                                           |
-| `o`               | GitHub repository and pull request                                                                  |
-| `m`, then `1`–`5` | Open the [mode picker](../guides/choosing-a-comparison.md#with-the-mode-picker) and choose an entry |
-| `<` / `>`         | Older / newer [commit](../guides/commits.md), or range-diff pair                                    |
+| Keys                 | Action                                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `zz`                 | Scroll the current line to eye level                                                                |
+| `zt` / `zb`          | Scroll the current line to the top / bottom                                                         |
+| `s`                  | Toggle split / unified                                                                              |
+| `t`                  | Cycle the theme                                                                                     |
+| ⌘/Ctrl+b             | Toggle the file tree                                                                                |
+| ⌘/Ctrl+Shift+b       | Toggle the comments panel                                                                           |
+| `o`                  | GitHub repository and pull request                                                                  |
+| `m`, then `1` to `5` | Open the [mode picker](../guides/choosing-a-comparison.md#with-the-mode-picker) and choose an entry |
+| `<` / `>`            | Older / newer [commit](../guides/commits.md), or range-diff pair                                    |
 
 ## Iterations
 
-| Keys              | Action                                                    |
-| ----------------- | --------------------------------------------------------- |
-| `r`               | Reload once the compared refs moved                       |
-| `ii`              | Latest iteration against the one before; again, the range |
-| `ij` / `ik`       | Move the older end one iteration back / forward           |
-| `iJ` / `iK`       | Move the newer end one iteration back / forward           |
-| `i`, then `1`–`9` | Compare that iteration with the latest                    |
+| Keys                 | Action                                                    |
+| -------------------- | --------------------------------------------------------- |
+| `r`                  | Reload once the compared refs moved                       |
+| `ii`                 | Latest iteration against the one before; again, the range |
+| `ij` / `ik`          | Move the older end one iteration back / forward           |
+| `iJ` / `iK`          | Move the newer end one iteration back / forward           |
+| `i`, then `1` to `9` | Compare that iteration with the latest                    |
 
 ## General
 
