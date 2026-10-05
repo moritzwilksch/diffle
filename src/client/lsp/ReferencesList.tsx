@@ -49,19 +49,25 @@ export function ReferencesList() {
     [pick],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const list = listRef.current;
     const row = list?.querySelector<HTMLElement>('[data-active="true"]');
     if (!list || !row) return;
-    // Use the header's rendered bottom: its sticky position includes the list's top padding, and its
-    // margin preserves the normal gap before the first row. Height alone leaves both under the header.
+    // Cover what the header hides once stuck: it sticks below the list's top padding, and its margin keeps
+    // the normal gap before the first row. Its current position is no guide when it scrolled away (a wrap).
     const header = row.parentElement?.querySelector('header');
-    const view = list.getBoundingClientRect();
+    const pad = getComputedStyle(list);
     const covered = header
-      ? header.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(header).marginBottom) || 0) - view.top
+      ? (parseFloat(pad.paddingTop) || 0) +
+        header.getBoundingClientRect().height +
+        (parseFloat(getComputedStyle(header).marginBottom) || 0)
       : 0;
-    list.scrollTop += overflow(view, row.getBoundingClientRect(), Math.max(0, covered));
-  }, [refs.index, refs.open]);
+    // The bottom padding belongs to the view too: a row revealed only to the scroller's edge gets clipped.
+    const view = list.getBoundingClientRect();
+    const bottom = view.bottom - (parseFloat(pad.paddingBottom) || 0);
+    list.scrollTop += overflow({ top: view.top, bottom }, row.getBoundingClientRect(), covered);
+    // The peek resizes the list, so toggling it can push the active row out of view.
+  }, [refs.index, refs.open, refs.peek]);
 
   if (!refs.open) return null;
   const peeked = refs.peek ? items[refs.index] : undefined;

@@ -66,6 +66,7 @@ describe('ReferencesList', () => {
     const list = rows[0]!.parentElement!.parentElement!;
     const rect = (top: number, bottom: number) => ({ top, bottom, height: bottom - top }) as DOMRect;
     list.getBoundingClientRect = () => rect(0, 200);
+    list.style.paddingTop = '8px';
     for (const header of host.querySelectorAll('header')) {
       header.getBoundingClientRect = () => rect(8, 38);
       header.style.marginBottom = '2px';
@@ -81,5 +82,10 @@ describe('ReferencesList', () => {
     // Moving back down to a row already clear of the header leaves the scroll alone.
     await act(() => useStore.getState().moveReference(1));
     expect(list.scrollTop).toBe(80);
+    // A wrap lands on a row whose header has scrolled far away; it still sticks over the row once there.
+    for (const header of host.querySelectorAll('header')) header.getBoundingClientRect = () => rect(-500, -470);
+    rows[0]!.getBoundingClientRect = () => rect(-460, -440);
+    await act(() => useStore.setState((s) => ({ references: { ...s.references, index: 0 } })));
+    expect(list.scrollTop).toBe(80 - 460 - 40);
   });
 });
