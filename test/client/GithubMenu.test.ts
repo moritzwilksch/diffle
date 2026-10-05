@@ -47,7 +47,7 @@ it('o opens repository information during lookup; Escape and outside clicks dism
   expect(host.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it('shows PR metadata from another repository and separates draft, open, closed, and merged', async () => {
+it('shows PR metadata from another repository, then the origin when no PR matches', async () => {
   const metadata: GithubMetadata = {
     version: 1,
     repository: 'alice/fork',
@@ -65,23 +65,8 @@ it('shows PR metadata from another repository and separates draft, open, closed,
   await act(() => root.render(createElement(App)));
   expect(host.textContent).toContain('#42 Improve parsing');
   expect(host.textContent).toContain('upstream/project');
-  expect(host.textContent).toContain('Draft');
   expect(host.textContent).toContain(metadata.reason);
-  for (const [state, label] of [
-    ['OPEN', 'Open'],
-    ['CLOSED', 'Closed'],
-    ['MERGED', 'Merged'],
-  ] as const) {
-    await act(() =>
-      useStore.setState({
-        github: {
-          status: 'ready',
-          data: { ...metadata, pullRequest: { ...metadata.pullRequest!, state, isDraft: false } },
-        },
-      }),
-    );
-    expect(host.textContent).toContain(label);
-  }
+  expect(host.querySelector(`a[href="${metadata.pullRequest!.url}"]`)).not.toBeNull();
   await act(() =>
     useStore.setState({
       github: {

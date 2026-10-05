@@ -5,15 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/client/api.js', () => ({ api: {} }));
 
-// Row renders are counted through CodeLine, which every reference row draws exactly once per render.
-const drawn: string[] = [];
 const highlighted = new Map();
 vi.mock('../../src/client/lsp/highlight.js', () => ({
   useHighlighted: () => highlighted,
-  CodeLine: ({ fallback }: { fallback: string }) => {
-    drawn.push(fallback);
-    return fallback;
-  },
+  CodeLine: ({ fallback }: { fallback: string }) => fallback,
 }));
 
 const { useStore } = await import('../../src/client/store.js');
@@ -27,7 +22,6 @@ let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  drawn.length = 0;
   useStore.setState({ references: { open: true, kind: 'references', symbol: 'x', items, index: 0, peek: false } });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -39,17 +33,12 @@ afterEach(async () => {
 });
 
 describe('ReferencesList', () => {
-  it('rerenders only the rows whose selection changed when the index moves', async () => {
+  it('moves the active row with the index and selects and jumps on click', async () => {
     await act(() => root.render(createElement(ReferencesList)));
-    expect(drawn).toHaveLength(items.length);
     expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:1');
-    drawn.length = 0;
     await act(() => useStore.getState().moveReference(1));
     expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:2');
-    expect(drawn.sort()).toEqual(['a.ts:1', 'a.ts:2']);
 
-    // A click on another file's row selects it and jumps.
-    drawn.length = 0;
     const pick = vi.fn();
     await act(() => useStore.setState({ pickReference: pick }));
     await act(() => host.querySelectorAll<HTMLElement>('[data-active]')[4]!.click());

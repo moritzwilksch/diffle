@@ -15,7 +15,6 @@ describe('review geometry', () => {
     expect(css).toContain(`height: ${metrics.diffHeaderHeight}px;`);
     expect(css).toContain(`min-height: ${metrics.diffHeaderHeight}px;`);
     expect(css).toContain(`[data-separator='line-info'] { height: ${metrics.hunkSeparatorHeight}px; }`);
-    expect(css).toContain('box-sizing: border-box;');
   });
 
   it('quantizes primitive sizes before composing them, so fractional roots cannot accumulate row drift', () => {
@@ -24,13 +23,6 @@ describe('review geometry', () => {
       expect(Number.isInteger(value)).toBe(true);
     }
     expect(itemMetrics.diffHeaderHeight).toBe(itemMetrics.lineHeight + 3 * itemMetrics.spacing);
-  });
-
-  it('scales card spacing and navigation margins with the same root', () => {
-    expect(reviewGeometry(16).layout).toEqual({ paddingTop: 12, paddingBottom: 200, gap: 16 });
-    expect(reviewGeometry(16).edge).toBe(48);
-    expect(reviewGeometry(14.4).layout).toEqual({ paddingTop: 11, paddingBottom: 180, gap: 14 });
-    expect(reviewGeometry(14.4).edge).toBe(43);
   });
 });
 

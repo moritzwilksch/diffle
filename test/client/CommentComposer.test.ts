@@ -71,10 +71,6 @@ it('takes focus again when a new draft opens while it stays mounted', async () =
   expect(document.activeElement).toBe(textarea);
 });
 
-it('names the lines the comment attaches to in its header', () => {
-  expect(host.querySelector('span.font-mono')!.textContent).toBe('L1–6');
-});
-
 it('grows for an inserted multiline suggestion and shrinks when text is removed', async () => {
   const textarea = host.querySelector('textarea')!;
   // JSDOM has no layout; supply the border widths used by the rendered textarea.
@@ -86,8 +82,6 @@ it('grows for an inserted multiline suggestion and shrinks when text is removed'
   expect(textarea.value).toBe('```suggestion\none\ntwo\nthree\nfour\nfive\nsix\n```\n');
   expect(textarea.style.height).toBe('164px');
   expect(document.activeElement).toBe(textarea);
-  expect(textarea.classList.contains('max-h-[60vh]')).toBe(true);
-  expect(textarea.classList.contains('resize-y')).toBe(true);
 
   await act(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'short');

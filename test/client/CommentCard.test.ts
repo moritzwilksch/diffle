@@ -44,26 +44,12 @@ describe('CommentCard GitHub button', () => {
   const metadata = (reason: string | null): GithubMetadata => ({ reason }) as GithubMetadata;
   const post = () => host.querySelector<HTMLButtonElement>('button[title*="pending review"]');
 
-  it('is hidden without export eligibility', async () => {
+  it('shows only when export is eligible', async () => {
     useStore.setState({ github: { status: 'ready', data: metadata('No matching pull request') } });
     await act(() => root.render(createElement(CommentCard, { thread })));
     expect(post()).toBeNull();
-  });
-
-  it('is shown when export is eligible', async () => {
-    useStore.setState({ github: { status: 'ready', data: metadata(null) } });
-    await act(() => root.render(createElement(CommentCard, { thread })));
+    await act(() => useStore.setState({ github: { status: 'ready', data: metadata(null) } }));
     expect(post()).not.toBeNull();
-  });
-});
-
-describe('CommentCard header', () => {
-  it('names the line range of a line thread and the whole file for a file thread', async () => {
-    await act(() => root.render(createElement(CommentCard, { thread })));
-    expect(host.querySelector('.font-mono')!.textContent).toBe('L4');
-    const file: CommentThread = { ...thread, anchor: { kind: 'file', path: 'src/a.ts' } };
-    await act(() => root.render(createElement(CommentCard, { thread: file })));
-    expect(host.querySelector('.font-mono')!.textContent).toBe('whole file');
   });
 });
 

@@ -10,6 +10,7 @@ let calls = 0;
 let holdFrom = Infinity;
 let release = () => {};
 let held = Promise.resolve();
+const themeColors = new Map<string, string>();
 vi.mock('@pierre/diffs', () => ({
   getFiletypeFromFileName: () => 'typescript',
   getSharedHighlighter: async () => {
@@ -17,15 +18,15 @@ vi.mock('@pierre/diffs', () => ({
     return {
       codeToTokensBase: (line: string, opts: { theme: string }) => {
         tokenized.push(line);
-        // The literal is pinned to SHIKI_THEMES.dark by a test below; a vi.mock factory cannot read an import.
-        return [[{ content: line, color: opts.theme === 'github-dark-high-contrast' ? '#abc' : '#def' }]];
+        // Each theme gets its own color in first-use order, so the first theme rendered paints #abc.
+        if (!themeColors.has(opts.theme)) themeColors.set(opts.theme, ['#abc', '#def'][themeColors.size]!);
+        return [[{ content: line, color: themeColors.get(opts.theme) }]];
       },
     };
   },
 }));
 
 const { CodeLine, useHighlighted } = await import('../../src/client/lsp/highlight.js');
-const { SHIKI_THEMES } = await import('../../src/client/theme.js');
 
 const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
 const items = files.flatMap((path) => [0, 1, 2].map((n) => ({ path, text: `${path}:${n}` })));
@@ -72,6 +73,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   tokenized.length = 0;
+  themeColors.clear();
   calls = 0;
   holdFrom = Infinity;
   host = document.createElement('div');
@@ -161,12 +163,5 @@ describe('useHighlighted', () => {
     await flush();
     expect(host.querySelectorAll('.hl')).toHaveLength(3);
     expect(host.querySelector('.hl span')).toHaveProperty('style.color', 'rgb(221, 238, 255)');
-  });
-});
-
-describe('theme names', () => {
-  // The mock above matches on these literals; a rename here must reach it.
-  it('are the ones the mocked highlighter keys on', () => {
-    expect(SHIKI_THEMES).toEqual({ light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' });
   });
 });

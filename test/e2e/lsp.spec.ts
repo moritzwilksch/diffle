@@ -64,6 +64,13 @@ test.describe('with a language server', () => {
     // `w` moves on; held down it repeats, and only the word it settles on is asked about.
     await page.keyboard.press('w');
     await expect.poll(() => highlighted(page)).toEqual({ focus: ['self'], read: [], write: [] });
+    await page.keyboard.press('b');
+    await expect
+      .poll(() => highlighted(page))
+      .toEqual({ focus: ['amount'], read: ['amount', 'amount'], write: ['amount'] });
+    // The focus belongs to its row: moving the line cursor off it drops the focus and its tint.
+    await page.keyboard.press('j');
+    await expect.poll(() => highlighted(page)).toEqual({ focus: [], read: [], write: [] });
   });
 
   test('the resting pointer wins over the keyboard focus and hands back when it leaves', async ({ page, diffle }) => {

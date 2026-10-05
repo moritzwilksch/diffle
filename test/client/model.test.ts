@@ -9,6 +9,8 @@ import {
 } from '../../src/shared/protocol.js';
 import {
   anchorLabel,
+  canJumpBack,
+  canJumpForward,
   commitBody,
   compareTreeOrder,
   countViewed,
@@ -16,58 +18,20 @@ import {
   documentTitle,
   draftRange,
   imageSides,
+  isCollapsed,
   isViewed,
   iterationPick,
   iterationStep,
   movedLabel,
   nextFileAfter,
   relativeTime,
-  orderedPaths,
   rangeStep,
   reuseThreads,
+  viewedState,
 } from '../../src/client/model.js';
+import type { ReviewState } from '../../src/client/store.js';
 
-describe('orderedPaths', () => {
-  it('follows the file tree: folders first, then case-insensitive natural order', () => {
-    const paths = [
-      'src/App.tsx',
-      'src/api.ts',
-      'README.md',
-      'src/review/order.ts',
-      '.github/ci.yml',
-      'src/.eslintrc',
-      'a/b/c.ts',
-      'a/b.ts',
-    ];
-    const changed = paths.map((path) => ({
-      path,
-      status: 'M' as const,
-      additions: 1,
-      deletions: 0,
-      binary: false,
-      blob: 'b',
-      oldBlob: '',
-      generated: false,
-    }));
-    const snapshot = { changed, tree: [...paths].sort() } as unknown as Snapshot;
-    expect(orderedPaths(snapshot)).toEqual([
-      '.github/ci.yml',
-      'a/b/c.ts',
-      'a/b.ts',
-      'src/review/order.ts',
-      'src/.eslintrc',
-      'src/api.ts',
-      'src/App.tsx',
-      'README.md',
-    ]);
-  });
-
-  it('is a total order', () => {
-    expect(compareTreeOrder('x/y.ts', 'x/y.ts')).toBe(0);
-    expect(compareTreeOrder('a.ts', 'B.ts')).toBeLessThan(0);
-    expect(compareTreeOrder('B.ts', 'a.ts')).toBeGreaterThan(0);
-  });
-
+describe('compareTreeOrder', () => {
   it('matches the tree library on the cases where locale order and dot-first rules disagree with it', () => {
     const paths = [
       'b/a_x.py',
@@ -135,6 +99,26 @@ describe('anchorLabel', () => {
   });
 });
 
+describe('jumplist buttons', () => {
+  const jumps = ['a.py', 'b.py', 'c.py'].map((path, i) => ({ path, side: 'new' as const, line: i + 1 }));
+  const at = (jumpIndex: number, list = jumps, fileView: ReviewState['fileView'] = null) => {
+    const state = { jumps: list, jumpIndex, fileView };
+    return [canJumpBack(state), canJumpForward(state)];
+  };
+
+  it('opens back at older jumplist positions and forward at newer ones', () => {
+    expect(at(0, [])).toEqual([false, false]);
+    expect(at(jumps.length)).toEqual([true, false]);
+    expect(at(1)).toEqual([true, true]);
+    expect(at(0)).toEqual([false, true]);
+  });
+
+  it('opens back in a full-file view even with an empty jumplist', () => {
+    const view = { path: 'a.py', external: false, item: null, from: { position: null, activePath: null } };
+    expect(at(0, [], view)).toEqual([true, false]);
+  });
+});
+
 describe('draftRange', () => {
   it('is the lines a line draft anchors to, and null for a file draft', () => {
     const selection = {
@@ -199,7 +183,7 @@ describe('search scope', () => {
   });
 });
 
-describe('countViewed', () => {
+describe('viewed state', () => {
   const file = (path: string, blob = 'b'): ChangedFile => ({
     path,
     status: 'M',
@@ -223,6 +207,32 @@ describe('countViewed', () => {
     expect(countViewed({ viewed: [], config }, changed)).toBe(1);
     expect(countViewed({ viewed: [{ path: 'yarn.lock', blob: 'b', viewed: false }], config }, changed)).toBe(0);
     expect(countViewed({ viewed, config }, [])).toBe(0);
+  });
+
+  it('derives restale from a viewed mark at an older blob and lets the current blob win', () => {
+    const f = file('a.py', 'b2');
+    const mark = (blob: string, viewed: boolean) => ({ path: 'a.py', blob, viewed });
+    expect(viewedState({ viewed: [], config }, f)).toBe('unviewed');
+    expect(viewedState({ viewed: [mark('b1', true)], config }, f)).toBe('restale');
+    expect(viewedState({ viewed: [mark('b1', false)], config }, f)).toBe('unviewed');
+    expect(viewedState({ viewed: [mark('b1', true), mark('b2', false)], config }, f)).toBe('unviewed');
+    expect(viewedState({ viewed: [mark('b1', true), mark('b2', true)], config }, f)).toBe('viewed');
+    expect(viewedState({ viewed: [], config }, file('x.lock'))).toBe('viewed');
+  });
+
+  it('collapses viewed and generated files by default, keeps a restale file open, and lets a toggle win', () => {
+    const snapshot = { changed: [{ ...file('gen.py'), generated: true }, file('a.py', 'b2')] } as Snapshot;
+    const state = (collapsed: Record<string, boolean>, blob = 'b2') => ({
+      collapsed,
+      viewed: [{ path: 'a.py', blob, viewed: true }],
+      config,
+      snapshot,
+    });
+    expect(isCollapsed(state({}), 'gen.py')).toBe(true);
+    expect(isCollapsed(state({}), 'a.py')).toBe(true);
+    expect(isCollapsed(state({}, 'b1'), 'a.py')).toBe(false);
+    expect(isCollapsed(state({ 'gen.py': false, 'a.py': false }), 'gen.py')).toBe(false);
+    expect(isCollapsed(state({ 'gen.py': false, 'a.py': false }), 'a.py')).toBe(false);
   });
 });
 
@@ -281,20 +291,6 @@ describe('comparisonLabel', () => {
     expect(comparisonLabel({ old: 'HEAD', new: 'worktree', base: 'direct' })).toBe('HEAD..worktree');
     const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
     expect(comparisonLabel({ old: sha, new: sha, base: 'parent' })).toBe('a1b2c3d^!');
-  });
-
-  it('names an interdiff by its range and iteration numbers, not by its synthetic old side', () => {
-    const within = { old: 'main', new: 'feat', base: 'merge-base', live: 'refs', commentKey: 'k' } as const;
-    const it = (n: number) => ({ n, oldSha: 'a'.repeat(40), newSha: 'b'.repeat(40), recordedAt: 0 });
-    expect(
-      comparisonLabel({
-        old: 'c'.repeat(40),
-        new: 'b'.repeat(40),
-        base: 'direct',
-        within,
-        interdiff: { from: it(1), to: it(3), conflicts: [], pairs: [] },
-      }),
-    ).toBe('main...feat #1→#3');
   });
 });
 

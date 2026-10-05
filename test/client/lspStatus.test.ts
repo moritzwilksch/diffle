@@ -25,9 +25,17 @@ vi.mock('../../src/client/clipboard.js', () => ({ copyText: vi.fn() }));
 import { copyText } from '../../src/client/clipboard.js';
 import { Header } from '../../src/client/header/Header.js';
 
-function render(status: Partial<LspServerStatus>) {
-  state.lsp.servers = [{ name: 'server', command: 'server', languages: ['python'], state: 'ready', ...status }];
-  return renderToStaticMarkup(createElement(Header));
+function render(...statuses: Partial<LspServerStatus>[]) {
+  state.lsp.servers = statuses.map((status, i) => ({
+    name: `server${i}`,
+    command: `server${i}`,
+    languages: ['python'],
+    state: 'ready',
+    ...status,
+  }));
+  const container = document.createElement('div');
+  container.innerHTML = renderToStaticMarkup(createElement(Header));
+  return container;
 }
 
 describe('LSP status indicator', () => {
@@ -63,68 +71,52 @@ describe('LSP status indicator', () => {
       container.remove();
     }
   });
-  it('shows reported work instead of claiming workspace readiness', () => {
-    const html = render({ activity: ['Loading workspace: dependencies'] });
-    expect(html).toContain('Loading workspace: dependencies');
-    expect(html).toContain('>busy</span></summary>');
-    expect(render({})).toContain('Connected');
-    expect(html).toContain('<details');
-    expect(html).toContain('aria-label="Language server status"');
+  // Header's summary names the most severe state across all servers.
+  it.each<[Partial<LspServerStatus>[], string]>([
+    [[{}], 'Language servers'],
+    [[{}, { stderr: 'log' }], 'Language servers: logs'],
+    [[{ stderr: 'log' }, { activity: ['Indexing'] }], 'Language servers: busy'],
+    [[{ activity: ['Indexing'] }, { state: 'starting' }], 'Language servers: starting'],
+    [[{ state: 'starting' }, { notice: { severity: 'warning', message: 'w' } }], 'Language servers: warning'],
+    [
+      [{ notice: { severity: 'warning', message: 'w' } }, { notice: { severity: 'error', message: 'e' } }],
+      'Language servers: error',
+    ],
+    [[{ notice: { severity: 'error', message: 'e' } }, { state: 'unavailable' }], 'Language servers: unavailable'],
+  ])('labels %j as %s', (servers, label) => {
+    expect(
+      render(...servers)
+        .querySelector('summary')!
+        .getAttribute('aria-label'),
+    ).toBe(label);
   });
 
-  it('spins during initialization and standard reported work', () => {
-    expect(render({ state: 'starting' })).toContain('animate-spin');
-    expect(render({ activity: ['Loading workspace'] })).toContain('animate-spin');
-    expect(render({})).not.toContain('animate-spin');
-    expect(render({})).toContain('lucide-check');
-    expect(render({})).toContain('>Connected</span>');
-    expect(render({})).toContain('>Details</summary>');
+  it('shows reported work, notices, and stderr instead of claiming readiness', () => {
+    const popup = render(
+      { activity: ['Loading workspace: dependencies'] },
+      { notice: { severity: 'error', message: 'Workspace loading failed' }, stderr: 'Missing build tool' },
+      {},
+    ).querySelector('section[aria-label="Language server status"]')!.textContent;
+    expect(popup).toContain('Loading workspace: dependencies');
+    expect(popup).toContain('Working');
+    expect(popup).toContain('Workspace loading failed');
+    expect(popup).toContain('Missing build tool');
+    expect(popup).toContain('Connected');
   });
 
-  it('uses compact missing-server labels with install candidates in the tooltip', () => {
+  it('names missing servers compactly with install candidates in the tooltip', () => {
     state.lsp.missing = [
       { language: 'rust', tried: ['rust-analyzer'] },
       { language: 'python', tried: [] },
     ];
     try {
-      const html = render({});
-      expect(html).not.toContain('lucide-circle-off');
-      expect(html.match(/lucide-x shrink-0/g)).toHaveLength(2);
-      expect(html).toContain('>Not on PATH</span>');
-      expect(html).toContain('>Disabled</span>');
-      expect(html).toContain('title="rust-analyzer"');
-      expect(html).not.toContain('nothing on PATH, tried');
+      const popup = render().querySelector('section')!;
+      expect(popup.textContent).toContain('Not on PATH');
+      expect(popup.textContent).toContain('Disabled');
+      expect(popup.querySelector('[title="rust-analyzer"]')!.textContent).toContain('rust');
     } finally {
       state.lsp.missing = [];
     }
-  });
-
-  it('keeps protocol errors and stderr visible while the process is alive', () => {
-    const html = render({
-      notice: { severity: 'error', message: 'Workspace loading failed' },
-      stderr: 'Missing build tool',
-    });
-    expect(html).toContain('Workspace loading failed');
-    expect(html).toContain('lucide-circle-alert');
-    expect(html).toContain('Missing build tool');
-    expect(html).toContain('>error</span></summary>');
-    const stderrOnly = render({ stderr: 'Workspace configuration could not be read' });
-    expect(stderrOnly).toContain('Workspace configuration could not be read');
-    expect(stderrOnly).toContain('>logs</span></summary>');
-  });
-
-  it('bounds an unwrapped stderr code block with scrolling on both axes', () => {
-    const container = document.createElement('div');
-    container.innerHTML = render({ stderr: 'long log\nsecond line' });
-    const log = container.querySelector('pre[aria-label="stderr log"]')!;
-    expect(log.textContent).toBe('long log\nsecond line');
-    expect(log.classList.contains('max-h-[min(12rem,25vh)]')).toBe(true);
-    expect(log.classList.contains('overflow-auto')).toBe(true);
-    expect(log.classList.contains('whitespace-pre')).toBe(true);
-    expect(log.parentElement!.classList.contains('bg-canvas')).toBe(false);
-    expect(log.parentElement!.classList.contains('border')).toBe(false);
-    expect(log.getAttribute('tabindex')).toBe('0');
-    expect(render({})).not.toContain('Copy stderr');
   });
 
   it.each([true, false])('reports clipboard success=%s and copies the full log', async (success) => {

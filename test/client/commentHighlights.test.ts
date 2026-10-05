@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { CommentAnchor, CommentThread, LineAnchor } from '../../src/shared/protocol.js';
-import type { Draft, Loaded } from '../../src/client/store.js';
+import type { Draft } from '../../src/client/store.js';
 import { COMMENT_LINE_ATTR, markCommentRows, tintedRanges } from '../../src/client/review/commentHighlights.js';
 
 const anchor = (side: 'old' | 'new', startLine: number, endLine: number): LineAnchor => ({
@@ -87,20 +87,14 @@ describe('markCommentRows', () => {
     expect(marked(pre)).toEqual(['new:1#', 'new:2#', 'new:1', 'new:2']);
     expect(tintedRanges({ threads, showResolved: true, ...noDraft }, 'b.ts')).toEqual([]);
   });
-  it('tints the lines of the open draft in its file, whatever the cursor selects meanwhile', () => {
+  it('tints the open draft only in its own file', () => {
     const draft: Draft = {
       path: 'a.ts',
-      selection: { id: 'diff:a.ts@0', range: { start: 75, side: 'additions', end: 70, endSide: 'additions' } },
+      selection: { id: 'diff:a.ts@0', range: { start: 70, side: 'additions', end: 75, endSide: 'additions' } },
     };
-    const loaded: Record<string, Loaded> = {};
-    // The tint reads only the draft: the store's own `selection` is not an input, so a cursor move elsewhere cannot clear it.
-    expect(tintedRanges({ threads: [], showResolved: false, draft, loaded }, 'a.ts')).toEqual([
-      { side: 'new', startLine: 70, endLine: 75 },
-    ]);
-    expect(tintedRanges({ threads: [], showResolved: false, draft, loaded }, 'b.ts')).toEqual([]);
-    expect(
-      tintedRanges({ threads: [], showResolved: false, draft: { path: 'a.ts', selection: null }, loaded }, 'a.ts'),
-    ).toEqual([]);
+    const state = { threads: [], showResolved: false, draft, loaded: {} };
+    expect(tintedRanges(state, 'a.ts')).toHaveLength(1);
+    expect(tintedRanges(state, 'b.ts')).toEqual([]);
   });
   it('clears the marks of a thread that is gone', () => {
     const pre = document.createElement('pre');

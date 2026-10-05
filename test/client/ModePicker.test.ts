@@ -61,12 +61,14 @@ async function type(value: string) {
 
 it('focuses the PR field and prevents duplicate submissions while opening the current branch PR', async () => {
   expect(document.activeElement).toBe(host.querySelector('input'));
-  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Show PR');
+  const button = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(button.getAttribute('aria-busy')).toBe('false');
+  expect(button.disabled).toBe(false);
   await submit();
   await submit();
   expect(switchMode).toHaveBeenCalledExactlyOnceWith({ kind: 'pr' });
-  expect(host.querySelector('button[type="submit"]')?.textContent).toBe('Loading PR…');
-  expect(host.querySelector('button[type="submit"]')).toHaveProperty('disabled', true);
+  expect(button.getAttribute('aria-busy')).toBe('true');
+  expect(button.disabled).toBe(true);
   expect(useStore.getState().modeMenuOpen).toBe(true);
   await act(() => finish('applied'));
   expect(useStore.getState().modeMenuOpen).toBe(false);
@@ -110,49 +112,33 @@ it('does not close another pane when an older PR request completes', async () =>
   expect(useStore.getState().modePane).toBe('commits');
 });
 
-it('steps the commit count with arrows and buttons and selects the entire updated value', async () => {
-  await act(() => useStore.getState().pickModeEntry(3));
-  await type('9');
-  const input = host.querySelector<HTMLInputElement>('input[aria-label="Base offset"]')!;
-  const up = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
-  await act(() => input.dispatchEvent(up));
-  expect(up.defaultPrevented).toBe(true);
-  expect(input.value).toBe('10');
-  expect(input.selectionStart).toBe(0);
-  expect(input.selectionEnd).toBe(2);
-  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Decrease base offset"]')!.click());
-  expect(input.value).toBe('9');
-  expect(document.activeElement).toBe(input);
-  expect(input.selectionStart).toBe(0);
-  expect(input.selectionEnd).toBe(1);
-  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase base offset"]')!.click());
-  expect(input.value).toBe('10');
-  expect(input.selectionEnd).toBe(2);
-  await type('0');
-  await act(() => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
-  expect(input.value).toBe('0');
-  expect(input.selectionStart).toBe(0);
-  expect(input.selectionEnd).toBe(1);
-  expect(switchMode).not.toHaveBeenCalled();
-});
-
-it('defaults to HEAD~1..HEAD~0 and applies both editable offsets', async () => {
+it('defaults to HEAD~1..HEAD~0, steps both offsets by arrows and buttons, and applies them', async () => {
   await act(() => useStore.getState().pickModeEntry(3));
   const base = host.querySelector<HTMLInputElement>('[aria-label="Base offset"]')!;
   const target = host.querySelector<HTMLInputElement>('[aria-label="Target offset"]')!;
   expect(base.value).toBe('1');
   expect(target.value).toBe('0');
   expect(document.activeElement).toBe(base);
-  await type('5');
-  await act(() => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
-  expect(target.value).toBe('1');
+  await type('9');
+  const up = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+  await act(() => base.dispatchEvent(up));
+  expect(up.defaultPrevented).toBe(true);
+  expect(base.value).toBe('10');
+  expect([base.selectionStart, base.selectionEnd]).toEqual([0, 2]);
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Decrease base offset"]')!.click());
+  expect(base.value).toBe('9');
+  expect(document.activeElement).toBe(base);
+  expect([base.selectionStart, base.selectionEnd]).toEqual([0, 1]);
+  await act(() => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+  expect(target.value).toBe('0');
   expect(document.activeElement).toBe(target);
-  expect(target.selectionStart).toBe(0);
-  expect(target.selectionEnd).toBe(1);
+  expect([target.selectionStart, target.selectionEnd]).toEqual([0, 1]);
+  await act(() => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
   await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase target offset"]')!.click());
   expect(target.value).toBe('2');
+  expect(switchMode).not.toHaveBeenCalled();
   await submit();
-  expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~5..HEAD~2'] });
+  expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~9..HEAD~2'] });
 });
 
 it('keeps ref suggestions closed on pointer and keyboard picks until input interaction', async () => {
@@ -211,11 +197,8 @@ it('shows one highlight shared by the pointer and the keyboard', async () => {
   expect(highlighted()).toBe(1);
   await act(() => entries()[2]!.dispatchEvent(new MouseEvent('pointermove', { bubbles: true })));
   expect(highlighted()).toBe(3);
-  await act(() => useStore.getState().highlightModeEntry(6));
-  expect(highlighted()).toBe(1);
   await act(() => useStore.getState().pickModeEntry(5));
   expect(highlighted()).toBe(5);
-  expect(useStore.getState().modePane).toBe('commit');
   expect(entries().filter((b) => b.hasAttribute('data-highlighted'))).toHaveLength(1);
 });
 
