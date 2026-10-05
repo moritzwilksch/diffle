@@ -62,7 +62,7 @@ export function CommentComposer({ label }: { label: string }) {
   };
 
   return (
-    <div className="mx-2 my-1 overflow-hidden rounded-md border border-accent bg-surface font-sans text-[0.8125rem]">
+    <div className="@container mx-2 my-1 overflow-hidden rounded-md border border-accent bg-surface font-sans text-[0.8125rem]">
       <div className="flex items-center gap-2 border-b border-b-border bg-hover px-2.5 py-1 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
         <span className="font-mono font-semibold text-foreground">{label}</span>
@@ -79,8 +79,8 @@ export function CommentComposer({ label }: { label: string }) {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
           }}
         />
-        <div className="mt-1.5 flex items-center justify-end gap-1.5">
-          <span className="mr-auto text-[0.75rem] text-muted">
+        <div className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5">
+          <span className="mr-auto text-[0.75rem] whitespace-nowrap text-muted @max-[36rem]:hidden">
             <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
           </span>
           {!fileLevel && (
@@ -88,8 +88,9 @@ export function CommentComposer({ label }: { label: string }) {
               variant="ghost"
               onClick={() => void suggest()}
               title="Insert the selected lines as a suggestion block to edit"
+              aria-label="Suggest change"
             >
-              <FileDiff size="0.8125rem" /> Suggest change
+              <FileDiff size="0.8125rem" /> <span className="@max-[18rem]:hidden">Suggest change</span>
             </Button>
           )}
           <Button onClick={closeDraft}>Cancel</Button>

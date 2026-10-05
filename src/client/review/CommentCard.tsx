@@ -274,7 +274,7 @@ function ReplyComposer({ threadId }: { threadId: string }) {
     }
   };
   return (
-    <div className="mx-2.5 mt-0 mb-2.5 rounded-md border border-accent bg-surface p-2">
+    <div className="@container mx-2.5 mt-0 mb-2.5 rounded-md border border-accent bg-surface p-2">
       <textarea
         className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
@@ -286,8 +286,8 @@ function ReplyComposer({ threadId }: { threadId: string }) {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
       />
-      <div className="mt-1.5 flex items-center justify-end gap-1.5">
-        <span className="mr-auto text-[0.75rem] text-muted">
+      <div className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5">
+        <span className="mr-auto text-[0.75rem] whitespace-nowrap text-muted @max-[26rem]:hidden">
           <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to cancel
         </span>
         <Button onClick={closeReply}>Cancel</Button>
