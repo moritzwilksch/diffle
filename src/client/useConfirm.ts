@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 /**
  * Two-click guard for destructive buttons. The first `fire` arms the button
  * for three seconds; a second `fire` while armed runs `action` and disarms.
- * Render `armed` as the `confirm` class plus a "…?" label so the reader sees the arm.
+ * Render `armed` as `feedback="confirm"` plus a "…?" `ButtonLabel` so the reader sees the arm.
  */
 export function useConfirm(action: () => void): { armed: boolean; fire: () => void } {
   const [armed, setArmed] = useState(false);

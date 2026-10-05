@@ -7,6 +7,7 @@ import { useStore } from '../store.js';
 import { useConfirm } from '../useConfirm.js';
 import { CopyHash } from './CommitNavigator.js';
 import { Button } from '../ui/Button.js';
+import { ButtonLabel } from '../ui/ButtonLabel.js';
 
 /**
  * The recorded iterations of the range, newest first; the newest is where the review stands. The
@@ -61,7 +62,7 @@ export function IterationList({ snapshot }: { snapshot: Snapshot }) {
           onClick={forget.fire}
         >
           <Trash2 size="0.875rem" />
-          {forget.armed && 'Forget all?'}
+          <ButtonLabel text={forget.armed && 'Forget all?'} />
         </Button>
       </div>
       {open && (
@@ -146,7 +147,7 @@ function IterationRow({
         tabIndex={latest ? -1 : undefined}
         aria-hidden={latest || undefined}
         className={twMerge(
-          'px-0.75 py-[1px] text-[0.75rem] leading-[1.2] font-normal opacity-0 [transition:opacity_120ms_ease] group-focus-within/iteration:opacity-100 group-hover/iteration:opacity-100 data-[feedback=confirm]:opacity-100',
+          'px-0.75 py-[1px] text-[0.75rem] leading-[1.2] font-normal opacity-0 group-focus-within/iteration:opacity-100 group-hover/iteration:opacity-100 data-[feedback=confirm]:opacity-100',
           latest && 'invisible',
         )}
         title={del.armed ? `Click again to forget #${it.n}` : `Forget iteration #${it.n}`}
@@ -154,7 +155,7 @@ function IterationRow({
         onClick={del.fire}
       >
         <Trash2 size="0.75rem" />
-        {del.armed && 'Forget?'}
+        <ButtonLabel text={del.armed && 'Forget?'} />
       </Button>
     </li>
   );
