@@ -57,7 +57,8 @@ import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
-import { onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
+import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
+import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -113,10 +114,19 @@ const HEADER_CSS = `
 [data-diffs-header][data-sticky] { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
 .lsp-hover { text-decoration: underline; cursor: pointer; }
 ::highlight(diffle-word-focus) {
-  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
   text-decoration: underline;
   text-decoration-color: var(--accent);
 }
+/* Where the focused or hovered symbol recurs (see lsp/occurrences.ts): reads in the focus tint, fainter; writes warmer. */
+::highlight(diffle-occurrence), ::highlight(diffle-occurrence-read) {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+
+}
+::highlight(diffle-occurrence-write) {
+  background: color-mix(in srgb, var(--search-current) 50%, transparent);
+}
+
 /* Word-level changes: the library's default tint sits too close to the line tint to pick out. */
 :host {
   /* Pin the code canvas to our ground. Our palette is the same GitHub high-contrast theme, so this only
@@ -381,8 +391,13 @@ export function ReviewPane() {
     if (!scroller) return;
     return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
   }, [scroller]);
+  // And the occurrences of the focused or hovered symbol.
   useEffect(() => {
-    onSelectionChanged();
+    if (!scroller) return;
+    return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+  }, [scroller]);
+  useEffect(() => {
+    onSelectionChanged(selection);
   }, [selection]);
   // The tree's selected row mirrors the file under the reader's eyes, so wheel scrolling must move it too.
   // Not while a line or hunk is focused: the cursor names the file then, wherever the reader has scrolled
@@ -767,6 +782,7 @@ export function ReviewPane() {
           if (t?.col === shown?.col) return;
           shown = t;
           lspTarget.set(t, props.tokenElement);
+          occurrenceControl.hover(t);
           if (t) hoverControl.enter(t, props.tokenElement);
           else hoverControl.leave();
           markHover(props.tokenElement, !!t && !schemaHoverOnly(t.path) && (e.ctrlKey || e.metaKey));
@@ -779,6 +795,7 @@ export function ReviewPane() {
         untrackToken.current();
         untrackToken.current = () => {};
         lspTarget.set(null);
+        occurrenceControl.hover(null);
         hoverControl.leave();
         markHover(props.tokenElement, false);
       },
@@ -796,7 +813,8 @@ export function ReviewPane() {
         setSelection({ id: ctx.item.id, range });
         setActivePath(pathFromItemId(ctx.item.id));
       },
-      // A plain click on a symbol opens the action popover; ⌘/Ctrl+click jumps straight to the definition.
+      // A plain click on a symbol focuses it, as `w` would, and opens the action popover; ⌘/Ctrl+click jumps
+      // straight to the definition.
       onTokenClick: (
         props: TokenEventBase | DiffTokenEventBaseProps,
         event: MouseEvent,
@@ -811,6 +829,7 @@ export function ReviewPane() {
           void goToDefinition(target);
           return;
         }
+        focusToken(target, props.tokenElement);
         void openSymbolMenu(target, event.clientX, event.clientY);
       },
     }),

@@ -609,6 +609,23 @@ export const LspTokenKindResponseSchema = z.object({
 });
 export type LspTokenKindResponse = z.infer<typeof LspTokenKindResponseSchema>;
 
+/** One place a symbol occurs in its own file, from `textDocument/documentHighlight`. Same units as LspPosition. */
+export const LspOccurrenceSchema = z.object({
+  line: z.number().int().positive(),
+  col: z.number().int().nonnegative(),
+  endLine: z.number().int().positive(),
+  endCol: z.number().int().nonnegative(),
+  /** LSP DocumentHighlightKind: a plain textual match, a read, or a write. */
+  kind: z.enum(['text', 'read', 'write']),
+});
+export type LspOccurrence = z.infer<typeof LspOccurrenceSchema>;
+
+/** Every occurrence of the symbol at a position in the same file; empty when the server has none or no opinion. */
+export const LspOccurrencesResponseSchema = z.object({
+  occurrences: LspOccurrenceSchema.array(),
+});
+export type LspOccurrencesResponse = z.infer<typeof LspOccurrencesResponseSchema>;
+
 export const LspSymbolSchema = z.object({
   name: z.string(),
   /** LSP SymbolKind number; the client maps it to a label. */

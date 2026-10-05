@@ -137,6 +137,27 @@ describe('LspBridge', () => {
     await plain.bridge.close();
   });
 
+  it('maps document highlights to new-side occurrences with their kind, and stays quiet without them', async () => {
+    const { bridge } = start();
+    // The fake marks `z = ` a write and every other `z` in the enclosing block a read; the `z` outside it is out of scope.
+    files['other.py'] = 'z = 0\ndef g():\n    z = f()\n    print(z, z)\n';
+    expect(await bridge.occurrences({ path: 'other.py', line: 3, col: 4 })).toEqual({
+      occurrences: [
+        { line: 3, col: 4, endLine: 3, endCol: 5, kind: 'write' },
+        { line: 4, col: 10, endLine: 4, endCol: 11, kind: 'read' },
+        { line: 4, col: 13, endLine: 4, endCol: 14, kind: 'read' },
+      ],
+    });
+    // A position between symbols holds nothing to highlight; neither case is an error.
+    expect(await bridge.occurrences({ path: 'other.py', line: 3, col: 5 })).toEqual({ occurrences: [] });
+
+    await bridge.close();
+    const plain = start({ FAKE_LSP_NO_HIGHLIGHT: '1' });
+    expect(await plain.bridge.occurrences({ path: 'other.py', line: 3, col: 0 })).toEqual({ occurrences: [] });
+    expect(plain.bridge.status().state).toBe('ready');
+    await plain.bridge.close();
+  });
+
   it('shapes hover contents into markdown with the range in snapshot units, and null when the server has nothing', async () => {
     const { bridge } = start();
     expect(await bridge.hover({ path: 'a.py', line: 2, col: 4 })).toEqual({

@@ -330,6 +330,13 @@ export function createApi(deps: ApiDeps): Hono {
     return c.json(await r.lsp.references(pos));
   });
 
+  app.post('/api/lsp/occurrences', async (c) => {
+    const pos = LspPositionSchema.parse(await readJson(c));
+    const r = await lspFor(pos.path);
+    if ('error' in r) return c.json({ error: r.error }, 409);
+    return c.json(await r.lsp.occurrences(pos));
+  });
+
   app.get('/api/lsp/symbols', async (c) => {
     const { path, q: query } = SymbolsQuerySchema.parse(c.req.query());
     const r = await lspFor(path);

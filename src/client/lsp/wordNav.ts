@@ -4,7 +4,8 @@ import { sideOf } from '../comments/anchor.js';
 import { itemIdOf, pathFromItemId } from '../model.js';
 import { rowOf } from '../review/rows.js';
 import { useStore } from '../store.js';
-import { lspTarget } from './target.js';
+import { occurrenceControl } from './occurrences.js';
+import { lspTarget, type TokenTarget } from './target.js';
 
 /** Word runs shared by pointer hit-testing and keyboard navigation; offsets are UTF-16 columns. */
 export function wordsIn(text: string): { start: number; text: string }[] {
@@ -21,14 +22,14 @@ export function wordsIn(text: string): { start: number; text: string }[] {
 let viewer: () => CodeViewHandle<unknown> | null = () => null;
 let focusedEl: HTMLElement | null = null;
 let focusedCol: number | null = null;
+/** The new-side row the focused word is on, which the cursor must stay on for the focus to hold. */
+let focusedRow: { path: string; line: number } | null = null;
 
 interface Word {
   el: HTMLElement;
   col: number;
   text: string;
 }
-/** Set while word navigation itself moves the cursor, so the selection watcher keeps the focus. */
-let keepOnSelectionChange = false;
 
 export function setViewer(get: () => CodeViewHandle<unknown> | null): void {
   viewer = get;
@@ -38,16 +39,30 @@ export function clearWordFocus(): void {
   if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.delete('diffle-word-focus');
   focusedEl = null;
   focusedCol = null;
+  focusedRow = null;
   lspTarget.focus(null);
+  occurrenceControl.focus(null);
 }
 
-/** Called when the selection changed; drops the focus unless word navigation caused the change. */
-export function onSelectionChanged(): void {
-  if (keepOnSelectionChange) {
-    keepOnSelectionChange = false;
-    return;
+/**
+ * Called when the selection changed: the focus holds while the cursor stays on the focused
+ * word's row and drops once it leaves. Keyed on the row, not on the change itself: a click on a
+ * symbol focuses it and then moves the line cursor onto its row, and must not undo itself.
+ */
+export function onSelectionChanged(sel: CodeViewLineSelection | null): void {
+  if (!focusedRow) return;
+  if (sel) {
+    const path = pathFromItemId(sel.id);
+    const line = newSideLine(path, sel.range.end, sideOf(sel) === 'old');
+    if (path === focusedRow.path && line === focusedRow.line) return;
   }
   clearWordFocus();
+}
+
+/** Focus the clicked word, as `w` would have: the click's target names its token and column. */
+export function focusToken(target: TokenTarget, el: HTMLElement): void {
+  if (target.side !== 'new') return;
+  focusWord({ el, col: target.col, text: target.text }, target.path, target.line);
 }
 
 /**
@@ -73,7 +88,6 @@ export function moveWord(delta: 1 | -1): void {
   // Off the line, or on a deleted line that has no on-disk text: walk rendered rows until one has words.
   for (let steps = 0; steps < MAX_WALK; steps++) {
     const before = useStore.getState().selection!;
-    keepOnSelectionChange = true;
     s.moveCursor(delta);
     const after = useStore.getState().selection;
     if (!after || sameRow(before, after)) break;
@@ -88,7 +102,6 @@ export function moveWord(delta: 1 | -1): void {
       return;
     }
   }
-  keepOnSelectionChange = false;
   clearWordFocus();
 }
 
@@ -113,6 +126,7 @@ function focusWord({ el, col, text }: Word, path: string, line: number): void {
   clearWordFocus();
   focusedEl = el;
   focusedCol = col;
+  focusedRow = { path, line };
   const node = el.firstChild;
   if (
     node?.nodeType === Node.TEXT_NODE &&
@@ -124,9 +138,14 @@ function focusWord({ el, col, text }: Word, path: string, line: number): void {
     const range = document.createRange();
     range.setStart(node, start);
     range.setEnd(node, start + text.length);
-    CSS.highlights.set('diffle-word-focus', new Highlight(range));
+    const highlight = new Highlight(range);
+    // Above the occurrence tint, which paints this word too.
+    highlight.priority = 2;
+    CSS.highlights.set('diffle-word-focus', highlight);
   }
-  lspTarget.focus({ path, side: 'new', line, col, text }, el);
+  const target: TokenTarget = { path, side: 'new', line, col, text };
+  lspTarget.focus(target, el);
+  occurrenceControl.focus(target);
 }
 
 /**

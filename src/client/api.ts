@@ -18,6 +18,7 @@ import {
   LastCommitsPreviewSchema,
   LspHoverResponseSchema,
   LspLocationsResponseSchema,
+  LspOccurrencesResponseSchema,
   LspStatusSchema,
   LspSymbolSchema,
   LspTokenKindResponseSchema,
@@ -203,6 +204,9 @@ export const api = {
     json(LspTokenKindResponseSchema, 'api/lsp/token-kind', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  lspOccurrences: (pos: LspPosition) =>
+    json(LspOccurrencesResponseSchema, 'api/lsp/occurrences', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+
   /** Document symbols for a path, or workspace symbols matching a query. */
   lspSymbols: (query: SymbolsQuery) => json(LspSymbolSchema.array(), `api/lsp/symbols?${q(query)}`),
   config: () => json(UserConfigSchema, 'api/config'),
