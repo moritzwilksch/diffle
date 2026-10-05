@@ -273,16 +273,6 @@ export function FileTreePane() {
     };
   }, []);
 
-  // The selected row follows the file under the cursor, so the tree always shows where the reader is.
-  const activePath = useStore((s) => s.activePath);
-  useEffect(() => {
-    const item = model.getItem(activePath ?? '');
-    if (!activePath || !item) return;
-    for (const p of model.getSelectedPaths()) if (p !== activePath) model.getItem(p)?.deselect();
-    item.select();
-    model.scrollToPath(activePath);
-  }, [model, activePath, paths]);
-
   const setTreeModel = useStore((s) => s.setTreeModel);
   useEffect(() => {
     setTreeModel(model);
@@ -300,9 +290,20 @@ export function FileTreePane() {
     [paths, snapshot, viewed, config],
   );
   const synced = useRef<SyncKeys | null>(null);
+  const syncedScope = useRef(scope);
   useEffect(() => {
     const step = syncStep(synced.current, keys);
     synced.current = keys;
+    // A scope switch starts the folders afresh: the whole repository opens folded down to the active file.
+    if (syncedScope.current !== scope) {
+      syncedScope.current = scope;
+      const active = useStore.getState().activePath;
+      model.resetPaths(paths, {
+        initialExpandedPaths: directoriesOf(scope === 'all' ? (active ? [active] : []) : paths),
+      });
+      model.setGitStatus(gitStatus);
+      return;
+    }
     switch (step) {
       case 'reset':
         model.resetPaths(paths, {
@@ -320,7 +321,17 @@ export function FileTreePane() {
       case 'none':
         break;
     }
-  }, [model, keys, paths, gitStatus]);
+  }, [model, keys, paths, gitStatus, scope]);
+
+  // The selected row follows the file under the cursor, so the tree always shows where the reader is.
+  const activePath = useStore((s) => s.activePath);
+  useEffect(() => {
+    const item = model.getItem(activePath ?? '');
+    if (!activePath || !item) return;
+    for (const p of model.getSelectedPaths()) if (p !== activePath) model.getItem(p)?.deselect();
+    item.select();
+    model.scrollToPath(activePath);
+  }, [model, activePath, paths]);
 
   return (
     <aside className="tree-theme flex min-h-0 flex-col bg-surface">
