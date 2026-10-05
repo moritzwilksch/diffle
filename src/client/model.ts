@@ -1,15 +1,18 @@
 import type { CodeViewLineSelection } from '@pierre/diffs';
 import picomatch from 'picomatch/posix';
-import type {
-  ChangedFile,
-  CommentAnchor,
-  CommentThread,
-  LspSymbol,
-  ModeRequest,
-  Side,
-  Snapshot,
-  UserConfig,
-  ViewedState,
+import {
+  refName,
+  type ChangedFile,
+  type CommentAnchor,
+  type Iteration,
+  type CommentThread,
+  type LspSymbol,
+  type ModeRequest,
+  type Moved,
+  type Side,
+  type Snapshot,
+  type UserConfig,
+  type ViewedState,
 } from '../shared/protocol.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
 import type { ReviewState } from './store.js';
@@ -344,6 +347,76 @@ export function exportLabel(outcome: ExportOutcome): string {
   return outcome === 'updated' ? 'Updated' : outcome === 'unchanged' ? 'Already added' : 'Added';
 }
 
+/** Which end of the live comparison moved since `snapshot`, and where to: `feat 8f2c1ab → 4d9e0f2`. */
+export function movedLabel(snapshot: Snapshot, moved: Moved): string {
+  const live = snapshot.mode.within ?? snapshot.mode;
+  const { oldSha, newSha } = snapshot.commits;
+  const step = (name: string, from: string, to: string) => `${name} ${from.slice(0, 7)} → ${to.slice(0, 7)}`;
+  const ends: string[] = [];
+  if (moved.newSha !== newSha) ends.push(step(refName(live.new), newSha, moved.newSha));
+  if (moved.oldSha !== oldSha)
+    ends.push(step(live.base === 'merge-base' ? 'merge base' : refName(live.old), oldSha, moved.oldSha));
+  return ends.join(', ');
+}
+
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['day', 86_400_000],
+  ['hour', 3_600_000],
+  ['minute', 60_000],
+];
+
+/** "3 hours ago", "yesterday", or "just now" under a minute; `now` is injectable for tests. */
+export function relativeTime(at: number, now = Date.now()): string {
+  const elapsed = now - at;
+  for (const [unit, ms] of UNITS) if (elapsed >= ms) return RELATIVE.format(-Math.round(elapsed / ms), unit);
+  return 'just now';
+}
+
+/**
+ * Why comments are off in this comparison, or null. An interdiff's old side is a replayed tree
+ * and its threads would live under a key the range never shows again.
+ */
+export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string | null {
+  return mode.interdiff ? 'Comments are off while comparing iterations: leave them on the range itself' : null;
+}
+
+/**
+ * Which two iterations a click on row `n` of the list compares, given the span `shown` (null when the
+ * range itself is shown) and the `latest` iteration. A plain click sets the span's lower number to
+ * `n`, a shift-click its higher one; the two are put in order if that crosses them. Without a span,
+ * any click compares `n` with the latest. Null when nothing would change.
+ */
+export function iterationPick(
+  shown: { from: number; to: number } | null,
+  latest: number,
+  n: number,
+  shift: boolean,
+): { from: number; to: number } | null {
+  const [from, to] = shown ? (shift ? [shown.from, n] : [n, shown.to]) : [n, latest];
+  const next = from < to ? { from, to } : { from: to, to: from };
+  if (next.from === next.to || (shown && shown.from === next.from && shown.to === next.to)) return null;
+  return next;
+}
+
+/**
+ * Where `ij` / `ik` / `iJ` / `iK` take the span: its lower (`end` 'lower') or higher end moves one
+ * iteration older (-1) or newer (1) along `iterations`, through `iterationPick`. Without a span the
+ * end is the latest. Null at the list's edge or when nothing would change.
+ */
+export function iterationStep(
+  iterations: Pick<Iteration, 'n'>[],
+  shown: { from: number; to: number } | null,
+  end: 'lower' | 'higher',
+  direction: -1 | 1,
+): { from: number; to: number } | null {
+  const latest = iterations.at(-1)?.n;
+  if (latest == null) return null;
+  const current = shown ? (end === 'lower' ? shown.from : shown.to) : latest;
+  const target = iterations[iterations.findIndex((it) => it.n === current) + direction];
+  return target ? iterationPick(shown, latest, target.n, end === 'higher') : null;
+}
+
 /** Local repository name, independent of GitHub discovery. */
 export function repoName(snapshot: Snapshot): string {
   const parts = snapshot.root.split(/[\\/]/).filter(Boolean);
@@ -398,8 +471,12 @@ export function commitBody(message: string): string[] {
 export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, direction: -1 | 1): string | null | undefined {
   const { mode, commits } = snapshot;
   if (!mode.within && mode.base === 'parent') return undefined;
-  const order = [...commits.list.map((c) => c.sha), null];
-  const at = mode.within ? order.indexOf(mode.new) : order.length - 1;
+  // Within an interdiff the stops are its pairs with something to show, then the interdiff itself.
+  const order = mode.interdiff
+    ? [...mode.interdiff.pairs.filter((p) => p.new && p.status !== 'identical').map((p) => p.new!.sha), null]
+    : [...commits.list.map((c) => c.sha), null];
+  const shown = mode.interdiff ? (mode.pair?.new ?? null) : mode.within ? mode.new : null;
+  const at = order.indexOf(shown);
   if (at < 0) return direction > 0 ? null : undefined;
   return order[at + direction];
 }

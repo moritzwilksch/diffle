@@ -27,6 +27,21 @@ describe('UserConfigStore', () => {
     expect((await UserConfigStore.open(store.file)).get()).toMatchObject(expected);
   });
 
+  it('reads followRefs as on, auto or off and falls back to auto otherwise', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'diffle-config-'));
+    try {
+      const file = join(dir, 'config.json');
+      for (const stale of ['yes', true, false]) {
+        await writeFile(file, JSON.stringify({ followRefs: stale }));
+        expect((await UserConfigStore.open(file)).get().followRefs).toBe('auto');
+      }
+      await writeFile(file, JSON.stringify({ followRefs: 'on' }));
+      expect((await UserConfigStore.open(file)).get().followRefs).toBe('on');
+    } finally {
+      await rmTmp(dir);
+    }
+  });
+
   it('keeps known languages and drops the rest, including fields it does not read', async () => {
     const file = join(dir, 'config.json');
     await writeFile(file, JSON.stringify({ lspCommand: 'x', lspCommands: { go: ' gopls ', rust: '', nope: 'x' } }));

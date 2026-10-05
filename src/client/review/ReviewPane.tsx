@@ -50,6 +50,7 @@ import {
   viewedState,
   visibleThreads,
   type ItemVersion,
+  commentsOff,
 } from '../model.js';
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
@@ -1170,6 +1171,7 @@ function FileHeaderMeta({ path }: { path: string }) {
   const loadPatch = useStore((s) => s.loadPatch);
   const openFileDraft = useStore((s) => s.openFileDraft);
   const external = useStore((s) => s.fileView?.external === true && s.fileView.path === path);
+  const commentable = useStore((s) => s.snapshot == null || commentsOff(s.snapshot.mode) == null);
   return (
     <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
       {count > 0 && (
@@ -1206,7 +1208,7 @@ function FileHeaderMeta({ path }: { path: string }) {
           <RefreshCw size="0.75rem" /> changed since viewed
         </span>
       )}
-      {!external && (
+      {!external && commentable && (
         <Button variant="ghost" icon onClick={() => openFileDraft(path)} title="Comment on this file as a whole (C)">
           <MessageSquarePlus size="0.875rem" />
         </Button>

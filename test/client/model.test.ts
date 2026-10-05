@@ -17,7 +17,11 @@ import {
   draftRange,
   imageSides,
   isViewed,
+  iterationPick,
+  iterationStep,
+  movedLabel,
   nextFileAfter,
+  relativeTime,
   orderedPaths,
   rangeStep,
   reuseThreads,
@@ -206,7 +210,7 @@ describe('countViewed', () => {
     oldBlob: '',
     generated: false,
   });
-  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
+  const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: 'off' as const, lspCommands: {} };
 
   it('counts explicit marks at the current blob and auto-viewed files; a stale mark is not viewed', () => {
     const changed = [file('a.ts'), file('b.ts'), file('c.ts', 'new'), file('yarn.lock')];
@@ -233,7 +237,7 @@ describe('nextFileAfter', () => {
     oldBlob: '',
     generated: false,
   });
-  const config = { autoViewed: ['*.lock'], contextLines: 5, lspCommands: {} };
+  const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: 'off' as const, lspCommands: {} };
   const snapshot = {
     changed: [file('c.ts', 'new'), file('yarn.lock'), file('a.ts'), file('b.ts'), file('d.ts')],
   } as Snapshot;
@@ -277,6 +281,91 @@ describe('comparisonLabel', () => {
     expect(comparisonLabel({ old: 'HEAD', new: 'worktree', base: 'direct' })).toBe('HEAD..worktree');
     const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
     expect(comparisonLabel({ old: sha, new: sha, base: 'parent' })).toBe('a1b2c3d^!');
+  });
+
+  it('names an interdiff by its range and iteration numbers, not by its synthetic old side', () => {
+    const within = { old: 'main', new: 'feat', base: 'merge-base', live: 'refs', commentKey: 'k' } as const;
+    const it = (n: number) => ({ n, oldSha: 'a'.repeat(40), newSha: 'b'.repeat(40), recordedAt: 0 });
+    expect(
+      comparisonLabel({
+        old: 'c'.repeat(40),
+        new: 'b'.repeat(40),
+        base: 'direct',
+        within,
+        interdiff: { from: it(1), to: it(3), conflicts: [], pairs: [] },
+      }),
+    ).toBe('main...feat #1→#3');
+  });
+});
+
+describe('iterationPick', () => {
+  it('compares a clicked row with the latest, and leaves a repeated pick alone', () => {
+    expect(iterationPick(null, 4, 2, false)).toEqual({ from: 2, to: 4 });
+    expect(iterationPick(null, 4, 2, true)).toEqual({ from: 2, to: 4 });
+    expect(iterationPick(null, 4, 4, false)).toBeNull();
+    expect(iterationPick({ from: 2, to: 4 }, 4, 2, false)).toBeNull();
+    expect(iterationPick({ from: 2, to: 4 }, 4, 4, true)).toBeNull();
+  });
+
+  it('sets the lower number with a plain click and the higher with shift, in order when they cross', () => {
+    expect(iterationPick({ from: 3, to: 9 }, 10, 5, false)).toEqual({ from: 5, to: 9 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 5, true)).toEqual({ from: 3, to: 5 });
+    expect(iterationPick({ from: 4, to: 10 }, 10, 2, false)).toEqual({ from: 2, to: 10 });
+    expect(iterationPick({ from: 4, to: 10 }, 10, 2, true)).toEqual({ from: 2, to: 4 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 10, false)).toEqual({ from: 9, to: 10 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 10, true)).toEqual({ from: 3, to: 10 });
+    expect(iterationPick({ from: 3, to: 9 }, 10, 9, false)).toBeNull();
+  });
+});
+
+describe('iterationStep', () => {
+  const list = [1, 2, 3, 4].map((n) => ({ n }));
+  it('moves the lower end along the list, and the higher end with the shifted keys', () => {
+    expect(iterationStep(list, { from: 2, to: 4 }, 'lower', -1)).toEqual({ from: 1, to: 4 });
+    expect(iterationStep(list, { from: 2, to: 4 }, 'lower', 1)).toEqual({ from: 3, to: 4 });
+    expect(iterationStep(list, { from: 1, to: 4 }, 'higher', -1)).toEqual({ from: 1, to: 3 });
+    expect(iterationStep(list, { from: 1, to: 3 }, 'higher', 1)).toEqual({ from: 1, to: 4 });
+  });
+
+  it('starts from the latest without a span and stops at the edges', () => {
+    expect(iterationStep(list, null, 'lower', -1)).toEqual({ from: 3, to: 4 });
+    expect(iterationStep(list, null, 'lower', 1)).toBeNull();
+    expect(iterationStep(list, { from: 1, to: 4 }, 'lower', -1)).toBeNull();
+    expect(iterationStep(list, { from: 1, to: 4 }, 'higher', 1)).toBeNull();
+    expect(iterationStep([], null, 'lower', -1)).toBeNull();
+  });
+});
+
+describe('relativeTime', () => {
+  it('rounds to the largest unit that elapsed and says "just now" under a minute', () => {
+    const now = 1_700_000_000_000;
+    expect(relativeTime(now - 20_000, now)).toBe('just now');
+    expect(relativeTime(now - 90_000, now)).toBe('2 minutes ago');
+    expect(relativeTime(now - 3 * 3_600_000, now)).toBe('3 hours ago');
+    expect(relativeTime(now - 86_400_000, now)).toBe('yesterday');
+  });
+});
+
+describe('movedLabel', () => {
+  const a = 'a'.repeat(40);
+  const b = 'b'.repeat(40);
+  const c = 'c'.repeat(40);
+  const d = 'd'.repeat(40);
+  const snap = (mode: Snapshot['mode']) =>
+    ({ mode, commits: { list: [], total: 0, oldSha: a, newSha: b } }) as unknown as Snapshot;
+  const refs = { old: 'main', new: 'refs/heads/feat', base: 'direct', live: 'refs', commentKey: 'k' } as const;
+
+  it('names the end that moved by its ref, and the merge base as such', () => {
+    expect(movedLabel(snap(refs), { version: 1, oldSha: a, newSha: c })).toBe('feat bbbbbbb → ccccccc');
+    expect(movedLabel(snap(refs), { version: 1, oldSha: d, newSha: b })).toBe('main aaaaaaa → ddddddd');
+    expect(movedLabel(snap({ ...refs, base: 'merge-base' }), { version: 1, oldSha: d, newSha: c })).toBe(
+      'feat bbbbbbb → ccccccc, merge base aaaaaaa → ddddddd',
+    );
+  });
+
+  it('describes the range a focused commit sits in, not the commit', () => {
+    const focused = { old: b, new: b, base: 'parent', live: 'refs', commentKey: `commit:${b}`, within: refs } as const;
+    expect(movedLabel(snap(focused), { version: 1, oldSha: a, newSha: c })).toBe('feat bbbbbbb → ccccccc');
   });
 });
 
@@ -343,7 +432,12 @@ describe('rangeStep', () => {
     commentKey: 'range:main...feat',
   } as const;
   const commit = (sha: string) => ({ sha, short: sha.slice(0, 7), message: sha, author: 'a', email: 'a@a', date: 0 });
-  const commits = { list: [commit('a'.repeat(40)), commit('b'.repeat(40))], total: 2 };
+  const commits = {
+    list: [commit('a'.repeat(40)), commit('b'.repeat(40))],
+    total: 2,
+    oldSha: '0'.repeat(40),
+    newSha: 'b'.repeat(40),
+  };
   const focused = (sha: string) => ({
     mode: { old: sha, new: sha, base: 'parent', live: 'refs', commentKey: `commit:${sha}`, within: range } as const,
     commits,
@@ -355,6 +449,38 @@ describe('rangeStep', () => {
     expect(rangeStep(focused('b'.repeat(40)), 1)).toBeNull();
     expect(rangeStep(focused('b'.repeat(40)), -1)).toBe('a'.repeat(40));
     expect(rangeStep(focused('a'.repeat(40)), -1)).toBeUndefined();
+  });
+
+  it("steps through an interdiff's pairs with something to show, skipping identical and dropped ones", () => {
+    const it = (n: number) => ({ n, oldSha: '0'.repeat(40), newSha: 'b'.repeat(40), recordedAt: 0 });
+    const pairs = [
+      { old: commit('1'.repeat(40)), new: commit('a'.repeat(40)), status: 'identical' as const },
+      { old: commit('2'.repeat(40)), new: null, status: 'dropped' as const },
+      { old: commit('3'.repeat(40)), new: commit('b'.repeat(40)), status: 'changed' as const },
+      { old: null, new: commit('c'.repeat(40)), status: 'added' as const },
+    ];
+    const interdiff = { from: it(1), to: it(2), conflicts: [], pairs };
+    const whole = {
+      mode: {
+        old: 't',
+        new: 'b'.repeat(40),
+        base: 'direct',
+        live: 'refs',
+        commentKey: 'i',
+        within: range,
+        interdiff,
+      } as const,
+      commits,
+    };
+    const pair = (sha: string) => ({
+      ...whole,
+      mode: { ...whole.mode, new: sha, pair: { old: null, new: sha, conflicts: [] } },
+    });
+    expect(rangeStep(whole, 1)).toBeUndefined();
+    expect(rangeStep(whole, -1)).toBe('c'.repeat(40));
+    expect(rangeStep(pair('c'.repeat(40)), -1)).toBe('b'.repeat(40));
+    expect(rangeStep(pair('c'.repeat(40)), 1)).toBeNull();
+    expect(rangeStep(pair('b'.repeat(40)), -1)).toBeUndefined();
   });
 
   it('steps a commit the range no longer lists newer to the range, and a lone commit nowhere', () => {

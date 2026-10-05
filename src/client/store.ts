@@ -15,6 +15,7 @@ import {
   type LspStatus,
   type LspSymbol,
   type ModeRequest,
+  type Moved,
   type SearchMatch,
   type SearchScope,
   type SearchContent,
@@ -57,6 +58,9 @@ import {
   reuseThreads,
   selectionRange,
   visibleThreads,
+  commentsOff,
+  iterationPick,
+  iterationStep,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 
@@ -344,6 +348,15 @@ export interface ReviewState {
   setAllCollapsed(collapsed: boolean): void;
   escape(): void;
   snapshot: Snapshot | null;
+  /** The compared refs left the snapshot behind; `reload` catches up. Null while they agree. */
+  moved: Moved | null;
+  setMoved(moved: Moved | null): void;
+  /** Recompute the snapshot where the refs point now, keeping the mode and the viewed marks. */
+  reload(): Promise<void>;
+  /** Forget the range's recorded iterations; an interdiff on show returns to the range. */
+  clearIterations(): Promise<void>;
+  /** Forget one recorded iteration; an interdiff on show that names it returns to the range. */
+  deleteIteration(n: number): Promise<void>;
   error: string | null;
   threads: CommentThread[];
   /** Resolved threads stay hidden unless the user turns them on. */
@@ -395,6 +408,18 @@ export interface ReviewState {
   switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
   /** Show one listed commit of the current range, or with null the range itself. */
   focusCommit(commit: string | null): void;
+  /** Show what the current range's iteration `to` changed since its iteration `from`. */
+  compareIterations(from: number, to: number): void;
+  /** Show one pair of the current interdiff by its new-side commit, or with null the whole interdiff. */
+  showPair(commit: string | null): void;
+  /** `ii`: compare the latest iteration with the one before, or from an interdiff return to the range. */
+  toggleInterdiff(): void;
+  /** `ij` / `ik` / `iJ` / `iK`: move the span's lower or higher end one iteration older (-1) or newer (1). */
+  stepIteration(end: 'lower' | 'higher', direction: -1 | 1): void;
+  /** `i1`–`i9`: compare iteration `n` with the latest. */
+  pickIteration(n: number): void;
+  /** `r`: reload where the refs point now, when they moved. */
+  reloadIfMoved(): void;
   /**
    * Step to the older (-1) or newer (1) entry of a range's list, the range itself past the newest; in a
    * single-commit view, to the parent or the child toward HEAD. A no-op at either end.
@@ -440,7 +465,7 @@ export interface ReviewState {
   toggleCollapsed(path: string): void;
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
   selectFile(path: string): void;
-  saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines'>>): Promise<void>;
+  saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs'>>): Promise<void>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
 }
@@ -539,6 +564,24 @@ export const useStore = create<ReviewState>((set, get) => {
     if (viewedSeq.latest(lists.tv)) set({ viewed: lists.viewed });
     if (threadsSeq.latest(lists.tt)) acceptThreads(lists.threads);
     await applySnapshot(snap, g);
+  };
+  /** A server-side change of the snapshot within the mode (reload, forgetting iterations): fetch and commit it. */
+  const transition = async (request: () => Promise<Snapshot>, what: string) => {
+    const g = begin();
+    let snap: Snapshot | undefined;
+    // As in switchMode: the pushed refresh normally owns the version before the response lands.
+    let owned = false;
+    try {
+      snap = await request();
+      if (!current(g) || accounted(snap.version)) return;
+      fetching = snap.version;
+      owned = true;
+      await commitSnapshot(snap, g, await fetchLists());
+    } catch (e) {
+      if (current(g)) get().report(what, e);
+    } finally {
+      if (owned && snap && fetching === snap.version) fetching = 0;
+    }
   };
   /** One side of a file in the current transition; rejects with an AbortError once a newer transition begins. */
   const fetchFile = (path: string, side: Side): Promise<FileResponse> => {
@@ -850,7 +893,17 @@ export const useStore = create<ReviewState>((set, get) => {
     const draft = get().draft;
     const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
     resyncing = false;
-    set({ snapshot: next, loaded, contents, fileView, collapsed, error: null, draft: keepDraft ? draft : null });
+    set((s) => ({
+      snapshot: next,
+      loaded,
+      contents,
+      fileView,
+      collapsed,
+      error: null,
+      draft: keepDraft ? draft : null,
+      // A newer snapshot resolved the refs afresh; a notice about this one, or one still being fetched, stands.
+      moved: s.moved && s.moved.version < next.version ? null : s.moved,
+    }));
     void get().refreshGithub();
     if (modeChanged) {
       // Positions, matches and revealed ranges all name lines of the previous mode.
@@ -1999,12 +2052,20 @@ export const useStore = create<ReviewState>((set, get) => {
         // The language server is optional; its status failing must not take the review down.
         const lspStatus = api.lspStatus().catch((): LspStatus => ({ enabled: false, servers: [], missing: [] }));
         const tc = configSeq.start();
-        const [snap, lists, config, lsp] = await Promise.all([api.snapshot(), fetchLists(), api.config(), lspStatus]);
+        const [snap, lists, config, lsp, moved] = await Promise.all([
+          api.snapshot(),
+          fetchLists(),
+          api.config(),
+          lspStatus,
+          api.moved(),
+        ]);
         // Mode-independent, and nothing else fetches them: a pushed refresh that overtook this
         // boot must not leave them at their defaults for the session.
         set({ lsp });
         if (configSeq.latest(tc)) set({ config });
         await commitSnapshot(snap, g, lists);
+        // A notice the server raised about an older snapshot than the one fetched is settled.
+        if (current(g) && (moved == null || moved.version >= snap.version)) set({ moved });
       } catch (e) {
         if (current(g)) set({ error: errorMessage(e) });
       }
@@ -2087,8 +2148,59 @@ export const useStore = create<ReviewState>((set, get) => {
       }
     },
 
+    moved: null,
+    setMoved(moved) {
+      set({ moved });
+    },
+
+    reload: () => transition(api.reload, 'Reloading'),
+
+    clearIterations: () => transition(api.clearIterations, 'Forgetting iterations'),
+
+    deleteIteration: (n) => transition(() => api.deleteIteration(n), `Forgetting iteration #${n}`),
+
     focusCommit(commit) {
       void get().switchMode({ kind: 'focus', commit });
+    },
+
+    compareIterations(from, to) {
+      void get().switchMode({ kind: 'interdiff', from, to });
+    },
+
+    showPair(commit) {
+      void get().switchMode({ kind: 'pair', commit });
+    },
+
+    toggleInterdiff() {
+      const snap = get().snapshot;
+      if (!snap) return;
+      if (snap.mode.interdiff) return get().focusCommit(null);
+      const [previous, latest] = snap.iterations.slice(-2);
+      if (!previous || !latest) return get().flash('Only one iteration so far: reload once the branch moved');
+      get().compareIterations(previous.n, latest.n);
+    },
+
+    stepIteration(end, direction) {
+      const snap = get().snapshot;
+      if (!snap) return;
+      const shown = snap.mode.interdiff ? { from: snap.mode.interdiff.from.n, to: snap.mode.interdiff.to.n } : null;
+      const next = iterationStep(snap.iterations, shown, end, direction);
+      if (next) get().compareIterations(next.from, next.to);
+    },
+
+    pickIteration(n) {
+      const snap = get().snapshot;
+      const latest = snap?.iterations.at(-1);
+      if (!snap || !latest) return;
+      if (!snap.iterations.some((it) => it.n === n)) return get().flash(`No iteration #${n}`);
+      const shown = snap.mode.interdiff ? { from: snap.mode.interdiff.from.n, to: snap.mode.interdiff.to.n } : null;
+      const next = iterationPick(shown, latest.n, n, false);
+      if (next) get().compareIterations(next.from, next.to);
+    },
+
+    reloadIfMoved() {
+      if (get().moved) void get().reload();
+      else get().flash('Nothing moved since this snapshot');
     },
 
     stepCommit(direction) {
@@ -2096,7 +2208,9 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!snap) return;
       if (snap.mode.within || snap.mode.base !== 'parent') {
         const target = rangeStep(snap, direction);
-        if (target !== undefined) get().focusCommit(target);
+        if (target === undefined) return;
+        if (snap.mode.interdiff) get().showPair(target);
+        else get().focusCommit(target);
         return;
       }
       const target = direction < 0 ? snap.commit?.parent : snap.commit?.child;
@@ -2186,12 +2300,16 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     async openDraft(sel) {
+      const off = get().snapshot && commentsOff(get().snapshot!.mode);
+      if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       const path = pathFromItemId(sel.id);
       set({ draft: { path, selection: sel }, selection: sel, activePath: path, replyTo: null });
     },
 
     openFileDraft(path) {
+      const off = get().snapshot && commentsOff(get().snapshot!.mode);
+      if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       // The cursor stays where the reader is when that is inside this file, so `]` and `e` carry on from
       // there; a cursor in another file gives way to this file's header as the motion stop.

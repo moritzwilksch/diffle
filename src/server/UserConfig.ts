@@ -1,7 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { DEFAULT_USER_CONFIG, LANGUAGE_IDS, type LanguageId, type UserConfig } from '../shared/protocol.js';
+import {
+  DEFAULT_USER_CONFIG,
+  FollowRefsSchema,
+  LANGUAGE_IDS,
+  type LanguageId,
+  type UserConfig,
+} from '../shared/protocol.js';
 import { writeFileAtomic } from './persist.js';
 
 /** Owns `$XDG_CONFIG_HOME/diffle/config.json`. Machine-wide, not per repo. Writes are serialized. */
@@ -59,7 +65,8 @@ function normalize(c: Partial<UserConfig>): UserConfig {
     typeof c.contextLines === 'number' && Number.isFinite(c.contextLines)
       ? Math.max(0, Math.min(10_000, Math.floor(c.contextLines)))
       : DEFAULT_USER_CONFIG.contextLines;
-  return { autoViewed, contextLines, lspCommands: lspCommands(c) };
+  const followRefs = FollowRefsSchema.safeParse(c.followRefs).data ?? DEFAULT_USER_CONFIG.followRefs;
+  return { autoViewed, contextLines, followRefs, lspCommands: lspCommands(c) };
 }
 
 /**

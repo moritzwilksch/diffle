@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { expect, test } from './fixtures.js';
 import { filePaths, waitForHighlight } from './browser.js';
 
@@ -145,5 +146,140 @@ test.describe('a long range of commits', () => {
     const list = box.getByRole('list').locator('..');
     expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
     await expect(page).toHaveScreenshot('long-range.png');
+  });
+});
+
+test.describe('moved refs', () => {
+  test.use({ args: ['--watch'] });
+
+  test('keeps the review while the compared branch moves, and reloads on request', async ({ page, repo }) => {
+    // Three pushes, each reloaded and compared: well over the default budget in the container.
+    test.slow();
+    const git = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: repo,
+        encoding: 'utf8',
+        // Fixed identity and dates: the new commit's hash appears in the snapshots.
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_AUTHOR_DATE: '2024-06-01T12:00:00Z',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+          GIT_COMMITTER_DATE: '2024-06-01T12:00:00Z',
+        },
+      }).trim();
+    const notice = page.locator('header').getByRole('status');
+    const box = page.getByRole('region', { name: 'Commits' });
+    await expect(notice).toHaveCount(0);
+    await expect(box.getByRole('listitem')).toHaveCount(4);
+
+    // A new commit on the branch out of the staged change, without touching the index or the worktree.
+    const tip = git('rev-parse', 'feature/refunds');
+    const wip = git('commit-tree', '-p', tip, '-m', 'wip: more refunds', git('write-tree'));
+    git('update-ref', 'refs/heads/feature/refunds', wip);
+    await expect(notice).toContainText(`feature/refunds ${tip.slice(0, 7)} → ${wip.slice(0, 7)}`);
+    await expect(box.getByRole('listitem')).toHaveCount(4);
+    await expect(page.locator('header')).toHaveScreenshot('moved-refs.png');
+
+    await notice.getByRole('button', { name: 'Reload' }).click();
+    await expect(notice).toHaveCount(0);
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box).toContainText('wip: more refunds');
+    await expect(page.locator('header')).toContainText('17 files');
+
+    // Both loaded states are iterations; the older one opens what the branch changed since.
+    const iterations = page.getByRole('region', { name: 'Iterations' });
+    await expect(iterations.getByRole('listitem')).toHaveCount(2);
+    await iterations.getByRole('button', { name: /^#1/ }).click();
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/main\.\.\.feature\/refunds #1→#2/);
+    await expect(page.locator('header')).toContainText('1 file');
+    expect(await filePaths(page)).toEqual(['tally/refunds.py']);
+    await expect(iterations.locator('[aria-current="true"]')).toContainText('#1');
+    await waitForHighlight(page, 'tally/refunds.py');
+    // Comments are off here: no file-comment button, and the panel says why.
+    await expect(page.getByTitle(/Comment on this file/)).toHaveCount(0);
+    await expect(page.locator('aside').last()).toContainText('Comments are off while comparing iterations');
+    // The pointer still rests on the clicked row; its tooltip must not be in the picture.
+    await page.mouse.move(0, 0);
+    await expect(page).toHaveScreenshot('interdiff.png');
+
+    // The commits box pairs the two iterations: four unchanged, the pushed one added; only that one opens.
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box).toMatchAriaSnapshot({ name: 'range-diff.aria.yml' });
+    // Both hashes of a pair, and an iteration's, copy like a commit's.
+    await expect(box.getByRole('button', { name: 'Copy hash 1de24f1' })).toHaveCount(2);
+    await expect(iterations.getByRole('button', { name: 'Copy hash 1de24f1' })).toHaveCount(1);
+    await box.getByRole('button', { name: /^wip: more refunds/ }).click();
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/#1→#2 @ [0-9a-f]{7}/);
+    await expect(page.locator('header')).toContainText('wip: more refunds');
+    await expect(box.locator('[aria-current="true"]')).toContainText('added');
+    await expect(box.getByRole('button', { name: 'Older commit' })).toBeDisabled();
+    await page.keyboard.press('>');
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/#1→#2\s*$/);
+
+    // "All changes" leads back to the range.
+    await box.getByRole('button', { name: /^All changes/ }).click();
+    await expect(page.getByTitle(/Change what is compared/)).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
+    await expect(page.locator('header')).toContainText('17 files');
+
+    // A third push: the list picks any two. A plain click sets the span's lower number, shift-click its higher.
+    const third = git('commit-tree', '-p', wip, '-m', 'wip: and more', `${wip}^{tree}`);
+    git('update-ref', 'refs/heads/feature/refunds', third);
+    await expect(notice).toBeVisible();
+    await page.keyboard.press('r');
+    await expect(iterations.getByRole('listitem')).toHaveCount(3);
+    const picker = page.getByTitle(/Change what is compared/);
+    await iterations.getByRole('button', { name: /^#1/ }).click();
+    await expect(picker).toHaveText(/#1→#3/);
+    await iterations.getByRole('button', { name: /^#2/ }).click({ modifiers: ['Shift'] });
+    await expect(picker).toHaveText(/#1→#2/);
+    await expect(iterations).toMatchAriaSnapshot({ name: 'iterations-span.aria.yml' });
+    await iterations.getByRole('button', { name: /^#3/ }).click({ modifiers: ['Shift'] });
+    await expect(picker).toHaveText(/#1→#3/);
+    await iterations.getByRole('button', { name: /^#2/ }).click();
+    await expect(picker).toHaveText(/#2→#3/);
+    await iterations.getByRole('button', { name: /^#1/ }).click();
+    await expect(picker).toHaveText(/#1→#3/);
+
+    // The same from the keyboard: ii toggles, ij / ik and iJ / iK move the ends, i2 picks, r has nothing to reload.
+    await page.keyboard.type('ii');
+    await expect(picker).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
+    await page.keyboard.type('ii');
+    await expect(picker).toHaveText(/#2→#3/);
+    await page.keyboard.type('ij');
+    await expect(picker).toHaveText(/#1→#3/);
+    await page.keyboard.type('iJ');
+    await expect(picker).toHaveText(/#1→#2/);
+    await page.keyboard.type('iK');
+    await expect(picker).toHaveText(/#1→#3/);
+    await page.keyboard.type('i2');
+    await expect(picker).toHaveText(/#2→#3/);
+    await page.keyboard.press('r');
+    await expect(page.getByText('Nothing moved since this snapshot')).toBeVisible();
+
+    // Forgetting the iterations leaves the range, with its current state as the only one; the list hides.
+    const forget = iterations.getByRole('button', { name: /Forget/ });
+    await forget.click();
+    await expect(forget).toHaveText('Forget all?');
+    await forget.click();
+    await expect(picker).toHaveText(/^main\.\.\.feature\/refunds\s*$/);
+    await expect(iterations).toHaveCount(0);
+    await page.keyboard.type('ii');
+    await expect(page.getByText('Only one iteration so far')).toBeVisible();
+
+    // With "Follow moved refs" on, a push recomputes the review on its own: no notice, a new iteration.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('checkbox', { name: /Follow moved refs/ }).check();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    git(
+      'update-ref',
+      'refs/heads/feature/refunds',
+      git('commit-tree', '-p', third, '-m', 'wip: followed', `${third}^{tree}`),
+    );
+    await expect(iterations.getByRole('listitem')).toHaveCount(2);
+    await expect(notice).toHaveCount(0);
   });
 });

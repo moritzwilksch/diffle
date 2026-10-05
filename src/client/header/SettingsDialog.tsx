@@ -2,12 +2,20 @@ import { Dialog } from '../ui/Dialog.js';
 import { Button } from '../ui/Button.js';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store.js';
+import type { FollowRefs } from '../../shared/protocol.js';
+
+const FOLLOW_REFS: [FollowRefs, string][] = [
+  ['on', 'Always'],
+  ['auto', 'Auto (not on branches)'],
+  ['off', 'Never'],
+];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const config = useStore((s) => s.config);
   const saveConfig = useStore((s) => s.saveConfig);
   const [text, setText] = useState(config.autoViewed.join('\n'));
   const [context, setContext] = useState(String(config.contextLines));
+  const [followRefs, setFollowRefs] = useState(config.followRefs);
   const [saving, setSaving] = useState(false);
   const overrides = Object.entries(config.lspCommands).sort(([a], [b]) => a.localeCompare(b));
 
@@ -19,6 +27,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         .map((l) => l.trim())
         .filter(Boolean),
       contextLines: Math.max(0, Number.parseInt(context, 10) || 0),
+      followRefs,
     });
     setSaving(false);
     onClose();
@@ -80,6 +89,24 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         onChange={(e) => setContext(e.target.value)}
         className="w-[100px]"
       />
+      <h3 className="m-0 mt-[14px] mb-2">Reload behavior</h3>
+      <p className="m-0 mb-2 text-muted">
+        When a compared ref moves. Same as <code>diffle config set-follow-refs</code>.
+      </p>
+      <div role="radiogroup" aria-label="Reload behavior" className="flex flex-col gap-1">
+        {FOLLOW_REFS.map(([value, label]) => (
+          <label key={value} className="flex cursor-pointer items-center gap-1.5">
+            <input
+              type="radio"
+              name="follow-refs"
+              value={value}
+              checked={followRefs === value}
+              onChange={() => setFollowRefs(value)}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
       <h3 className="m-0 mt-[14px] mb-2">Language servers</h3>
       <p className="m-0 mb-2 text-muted">
         Go-to-definition, references and symbols come from a language server per language, found on <code>PATH</code>.{' '}

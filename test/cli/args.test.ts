@@ -3,6 +3,7 @@ import {
   collectLanguage,
   collectLspOverride,
   parseContext,
+  parseFollowRefs,
   parsePort,
   parseAllowedOrigin,
 } from '../../src/cli/args.js';
@@ -18,6 +19,13 @@ describe('CLI numeric arguments', () => {
     for (const bad of ['nope', '', '1.5', '-1', '65536'])
       expect(() => parsePort(bad)).toThrow(/integer between 0 and 65535/);
     expect(() => parseContext('10001')).toThrow(/integer between 0 and 10000/);
+  });
+});
+
+describe('set-follow-refs <mode>', () => {
+  it('accepts on, auto and off and rejects the rest as usage errors', () => {
+    for (const mode of ['on', 'auto', 'off'] as const) expect(parseFollowRefs(mode)).toBe(mode);
+    for (const bad of ['yes', 'true', '', 'ON']) expect(() => parseFollowRefs(bad)).toThrow(/on, auto or off/);
   });
 });
 

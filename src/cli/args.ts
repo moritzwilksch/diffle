@@ -1,5 +1,5 @@
 import { InvalidArgumentError } from 'commander';
-import { LANGUAGE_IDS, type LanguageId } from '../shared/protocol.js';
+import { type FollowRefs, FollowRefsSchema, LANGUAGE_IDS, type LanguageId } from '../shared/protocol.js';
 
 /** Commander parser for an integer in [min, max]; anything else is a usage error. */
 function intArg(min: number, max: number): (raw: string) => number {
@@ -70,4 +70,11 @@ export function parseLspOverride(raw: string): LspOverride {
 /** Repeated `--lsp`, in the order given; `prev` is the option's default until the first one. */
 export function collectLspOverride(raw: string, prev: boolean | LspOverride[]): LspOverride[] {
   return [...(Array.isArray(prev) ? prev : []), parseLspOverride(raw)];
+}
+
+/** A `set-follow-refs` value. */
+export function parseFollowRefs(value: string): FollowRefs {
+  const parsed = FollowRefsSchema.safeParse(value);
+  if (!parsed.success) throw new InvalidArgumentError('expected on, auto or off');
+  return parsed.data;
 }

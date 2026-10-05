@@ -32,8 +32,12 @@ import { type ParsedRevspec, parseRevspec, RevspecError } from './revspec.js';
  */
 export async function resolveComparison(
   repo: GitRepo,
-  comparison: Pick<ModeSpec, 'old' | 'new' | 'base'>,
+  comparison: Pick<ModeSpec, 'old' | 'new' | 'base' | 'interdiff'>,
 ): Promise<{ oldSha: string; newSha: string; live: ModeSpec['live'] }> {
+  // An interdiff's old side is a tree the session wrote, which no revision names; both sides are pinned.
+  // An added commit shown within one is an ordinary commit against its parent.
+  if (comparison.interdiff && comparison.base !== 'parent')
+    return { oldSha: comparison.old, newSha: comparison.new, live: 'none' };
   const endpoints = [comparison.old, comparison.new];
   const resolve = async (rev: string): Promise<string> => {
     if (rev === 'worktree') return rev;
@@ -84,6 +88,12 @@ export async function resolveComparison(
         ? 'none'
         : 'refs',
   };
+}
+
+/** Whether either endpoint names a local or remote branch, HEAD on one included. */
+export async function namesBranch(repo: GitRepo, comparison: Pick<ModeSpec, 'old' | 'new'>): Promise<boolean> {
+  const [old, next] = await Promise.all([repo.branchRef(comparison.old), repo.branchRef(comparison.new)]);
+  return old != null || next != null;
 }
 
 /** Server-only transition result; PR identity is separate from the comparison sent to the client. */

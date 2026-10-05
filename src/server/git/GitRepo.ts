@@ -55,6 +55,13 @@ function patchArgs(oldRev: string): string[] {
 /** An idle `cat-file --batch` is reaped after this long; the next request respawns one. */
 const CAT_FILE_IDLE_MS = 2000;
 
+/**
+ * `git range-diff` pairs two commits while the diff between their patches costs less than this
+ * percentage of a patch's size. Git's default of 60 leaves a reworded three-line commit unpaired,
+ * since the message change alone outweighs it; at 100 the message may change as much as the patch.
+ */
+const CREATION_FACTOR = 100;
+
 export class GitError extends Error {
   constructor(
     message: string,
@@ -140,6 +147,11 @@ export class GitRepo {
     return (await this.text(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`])).trim();
   }
 
+  /** The tree a commit points at. */
+  async tree(rev: string): Promise<string> {
+    return (await this.text(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{tree}`])).trim();
+  }
+
   /** Commit messages for two ancestor offsets, pinned to one HEAD. */
   async lastCommitsPreview(oldOffset: number, newOffset: number): Promise<LastCommitsPreview> {
     const head = await this.commitInfo('HEAD');
@@ -182,7 +194,7 @@ export class GitRepo {
   }
 
   /** The commits a revision range such as `a..b` or `c^!` selects, oldest first: the newest `limit`, and the total. */
-  async rangeCommits(range: string, limit: number): Promise<RangeCommits> {
+  async rangeCommits(range: string, limit: number): Promise<Pick<RangeCommits, 'list' | 'total'>> {
     const [count, log] = await Promise.all([
       this.text(['rev-list', '--count', '--end-of-options', range, '--']),
       this.text([
@@ -214,6 +226,86 @@ export class GitRepo {
 
   async mergeBase(a: string, b: string): Promise<string> {
     return (await this.text(['merge-base', '--end-of-options', a, b])).trim();
+  }
+
+  /**
+   * Replays what `head` changed since `base` onto `onto`, in memory: the resulting tree, and the
+   * paths the merge could not settle, which the tree holds with conflict markers. `--write-tree`
+   * needs git 2.38. With `-z`, the tree, each conflicted path and the sections end in NUL.
+   */
+  async replay(base: string, onto: string, head: string): Promise<{ tree: string; conflicts: string[] }> {
+    const out = await this.text(
+      ['merge-tree', '--write-tree', '-z', '--name-only', `--merge-base=${base}`, '--end-of-options', onto, head],
+      { okCodes: [1] },
+    );
+    const [tree = '', ...rest] = out.split('\0');
+    const conflicts: string[] = [];
+    for (const path of rest) {
+      if (path === '') break;
+      conflicts.push(path);
+    }
+    return { tree, conflicts };
+  }
+
+  /**
+   * How `git range-diff` pairs the commits of two ranges, in its output order: abbreviated
+   * hashes, null for the side a commit has no counterpart on, and its marker (`=` identical,
+   * `!` changed, `<` only in the first range, `>` only in the second). Summary only, no patches.
+   * Ranges are given as hashes: range-diff learnt `--end-of-options` only in git 2.44.
+   */
+  async rangeDiff(
+    oldRange: string,
+    newRange: string,
+  ): Promise<{ old: string | null; new: string | null; marker: string }[]> {
+    const out = await this.text([
+      'range-diff',
+      '-s',
+      '--no-color',
+      `--creation-factor=${CREATION_FACTOR}`,
+      oldRange,
+      newRange,
+    ]);
+    const pairs: { old: string | null; new: string | null; marker: string }[] = [];
+    for (const line of out.split('\n')) {
+      // Numbers are right-aligned, so rows of a range with ten or more commits start with spaces.
+      const m = /^\s*(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s+([=!<>])\s+(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s/.exec(line);
+      if (m) pairs.push({ old: m[1] ?? null, new: m[3] ?? null, marker: m[2]! });
+    }
+    return pairs;
+  }
+
+  /** Each commit's stable patch id, so two commits with the same change under different messages compare equal. */
+  async patchIds(shas: string[]): Promise<Map<string, string>> {
+    const ids = new Map<string, string>();
+    if (!shas.length) return ids;
+    const patches = await this.exec([
+      'log',
+      '-p',
+      '--no-walk',
+      '--no-show-signature',
+      '--format=%H',
+      '--end-of-options',
+      ...shas,
+    ]);
+    for (const line of (await this.text(['patch-id', '--stable'], { input: patches })).split('\n')) {
+      const [id, sha] = line.split(' ');
+      if (id && sha) ids.set(sha, id);
+    }
+    return ids;
+  }
+
+  /**
+   * Points refs at objects so they survive `gc` and a force-push, or with null deletes them. Refs
+   * must stay inside `refs/diffle/iterations/`: nothing the user owns moves.
+   */
+  async pin(refs: Record<string, string | null>): Promise<void> {
+    const lines: string[] = [];
+    for (const [ref, sha] of Object.entries(refs)) {
+      if (!ref.startsWith('refs/diffle/iterations/'))
+        throw new GitError(`refusing to update ${ref}`, ['update-ref'], null, '');
+      lines.push(sha === null ? `delete ${ref}\n` : `update ${ref} ${sha}\n`);
+    }
+    if (lines.length) await this.exec(['update-ref', '--stdin'], { input: lines.join('') });
   }
 
   /** origin/HEAD → main → master. */

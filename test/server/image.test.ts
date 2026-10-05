@@ -71,7 +71,7 @@ describe('GET /api/image', () => {
     git('commit', '-q', '-am', 'change');
     await writeFile(join(dir, 'ignored.png'), png(4));
     const hub = new WsHub();
-    session = new Session(await GitRepo.open(dir), hub, { watch: false, context: 3 });
+    session = new Session(await GitRepo.open(dir), hub, { watch: false, context: 3, followRefs: 'off' });
     const config = await UserConfigStore.open(join(dir, '.git', 'cfg', 'config.json'));
     app = createApi({ session, config, extraAutoViewed: [], hub, lsp: null });
   });

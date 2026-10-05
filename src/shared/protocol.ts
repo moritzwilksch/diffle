@@ -54,10 +54,36 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('focus'),
     commit: z.string().nullable(),
   }),
+  /** What the current range's iteration `to` changed since its iteration `from`. */
+  z.object({
+    kind: z.literal('interdiff'),
+    from: z.number().int().positive(),
+    to: z.number().int().positive(),
+  }),
+  /** One pair of the current interdiff by its new-side commit, or with null the whole interdiff. */
+  z.object({
+    kind: z.literal('pair'),
+    commit: z.string().nullable(),
+  }),
 ]);
 export type ModeRequest = z.infer<typeof ModeRequestSchema>;
-/** A request that enters a comparison from scratch, as the CLI does; a focus depends on the active one. */
-export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' }>;
+/** A request that enters a comparison from scratch, as the CLI does; a focus, interdiff or pair depends on the active one. */
+export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' | 'interdiff' | 'pair' }>;
+
+/**
+ * One state of a reviewed range: its resolved endpoints when a snapshot of it was taken. A new
+ * one is recorded whenever the endpoints differ from the last, so a push, rebase or amend
+ * yields the next iteration; the commits are pinned under `refs/diffle/iterations/`.
+ */
+export const IterationSchema = z.object({
+  /** 1-based, in recording order. */
+  n: z.number(),
+  oldSha: z.string(),
+  newSha: z.string(),
+  /** Epoch milliseconds. */
+  recordedAt: z.number(),
+});
+export type Iteration = z.infer<typeof IterationSchema>;
 
 /**
  * How the old side is derived: `old` itself, merge-base(old, new) with worktree
@@ -77,22 +103,101 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 
+export const CommitInfoSchema = z.object({
+  sha: z.string(),
+  short: z.string(),
+  message: z.string(),
+});
+export type CommitInfo = z.infer<typeof CommitInfoSchema>;
+
+/** A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it. */
+export const ReviewedCommitSchema = CommitInfoSchema.extend({
+  /** First parent; null for a root commit. */
+  parent: z.string().nullable(),
+  /** The commit whose first parent this is, toward HEAD; null at HEAD or off HEAD's first-parent line. */
+  child: z.string().nullable(),
+});
+export type ReviewedCommit = z.infer<typeof ReviewedCommitSchema>;
+
+/** One commit of the compared range. */
+export const RangeCommitSchema = CommitInfoSchema.extend({
+  author: z.string(),
+  email: z.string(),
+  /** Author date, epoch milliseconds. */
+  date: z.number(),
+});
+export type RangeCommit = z.infer<typeof RangeCommitSchema>;
+
+/** How a commit of the older iteration relates to one of the newer, as `git range-diff` pairs them. */
+export const PairStatusSchema = z.enum(['identical', 'changed', 'message', 'added', 'dropped']);
+export type PairStatus = z.infer<typeof PairStatusSchema>;
+
+/**
+ * One row of a range-diff: `identical` and `changed` pairs have both commits, a `message` pair
+ * the same patch under a new message, an `added` commit no old side and a `dropped` one no new side.
+ */
+export const RangePairSchema = z.object({
+  old: RangeCommitSchema.nullable(),
+  new: RangeCommitSchema.nullable(),
+  status: PairStatusSchema,
+});
+export type RangePair = z.infer<typeof RangePairSchema>;
+
+/**
+ * Two iterations of a range compared. The old side is `from`'s head replayed onto `to`'s base
+ * (a tree, not a commit), so a rebase in between does not show up as the upstream's changes;
+ * the new side is `to`'s head.
+ */
+export const InterdiffSchema = z.object({
+  from: IterationSchema,
+  to: IterationSchema,
+  /** Paths the replay could not merge; they carry conflict markers on the old side. */
+  conflicts: z.string().array(),
+  /** The two ranges' commits paired, in `git range-diff` order: the newer range's, dropped commits where they were. */
+  pairs: RangePairSchema.array(),
+});
+export type Interdiff = z.infer<typeof InterdiffSchema>;
+
+/**
+ * One pair of an interdiff shown alone: `new` against `old` replayed onto `new`'s parent, so the
+ * pair's own amendments show without the rebase; an added commit (`old` null) against its parent.
+ */
+export const PairSpecSchema = z.object({
+  old: z.string().nullable(),
+  new: z.string(),
+  conflicts: z.string().array(),
+});
+export type PairSpec = z.infer<typeof PairSpecSchema>;
+
 export const ModeSpecSchema = ComparisonSchema.extend({
-  /** Set while one commit of a range is focused: the range, whose commits the snapshot keeps listing. */
+  /** Set while one commit of a range is focused, or two of its iterations compared: the range, whose commits the snapshot keeps listing. */
   within: ComparisonSchema.optional(),
+  interdiff: InterdiffSchema.optional(),
+  /** Set with `interdiff` while one of its pairs is shown. */
+  pair: PairSpecSchema.optional(),
 });
 export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
 /**
  * Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as
- * `<sha>^!`, or as `<range> @ <sha>` when focused within a range.
+ * `<sha>^!`, as `<range> @ <sha>` when focused within a range, as `<range> #1→#2` for an interdiff and
+ * `<range> #1→#2 @ <sha>` for one of its pairs.
  */
-export function comparisonLabel(mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within'>): string {
+export function comparisonLabel(
+  mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within' | 'interdiff' | 'pair'>,
+): string {
+  if (mode.within && mode.interdiff) {
+    const label = `${comparisonLabel(mode.within)} #${mode.interdiff.from.n}→#${mode.interdiff.to.n}`;
+    return mode.pair ? `${label} @ ${mode.pair.new.slice(0, 7)}` : label;
+  }
   if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
-  const name = (rev: string) =>
-    rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
-  return `${name(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${name(mode.new)}`;
+  return `${refName(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${refName(mode.new)}`;
+}
+
+/** A comparison endpoint as the user named it: without diffle's PR namespace or `refs/heads/`. */
+export function refName(rev: string): string {
+  return rev.replace(/^refs\/diffle\/[^/]+\/\d+\/(?:base|head)\//, '').replace(/^refs\/(?:heads|remotes)\//, '');
 }
 
 export const GithubPullRequestSchema = z.object({
@@ -140,31 +245,6 @@ export const ChangedFileSchema = z.object({
 });
 export type ChangedFile = z.infer<typeof ChangedFileSchema>;
 
-export const CommitInfoSchema = z.object({
-  sha: z.string(),
-  short: z.string(),
-  message: z.string(),
-});
-export type CommitInfo = z.infer<typeof CommitInfoSchema>;
-
-/** A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it. */
-export const ReviewedCommitSchema = CommitInfoSchema.extend({
-  /** First parent; null for a root commit. */
-  parent: z.string().nullable(),
-  /** The commit whose first parent this is, toward HEAD; null at HEAD or off HEAD's first-parent line. */
-  child: z.string().nullable(),
-});
-export type ReviewedCommit = z.infer<typeof ReviewedCommitSchema>;
-
-/** One commit of the compared range. */
-export const RangeCommitSchema = CommitInfoSchema.extend({
-  author: z.string(),
-  email: z.string(),
-  /** Author date, epoch milliseconds. */
-  date: z.number(),
-});
-export type RangeCommit = z.infer<typeof RangeCommitSchema>;
-
 /**
  * The commits a comparison spans: old..new, with the worktree taken as HEAD, or the one commit under `parent`.
  * A focused commit lists its range's.
@@ -173,6 +253,9 @@ export const RangeCommitsSchema = z.object({
   /** Oldest first; the newest MAX_RANGE_COMMITS when there are more. */
   list: RangeCommitSchema.array(),
   total: z.number(),
+  /** The spanned comparison's resolved endpoints: the snapshot's own, or the range's when a commit is focused. */
+  oldSha: z.string(),
+  newSha: z.string(),
 });
 export type RangeCommits = z.infer<typeof RangeCommitsSchema>;
 
@@ -196,8 +279,23 @@ export const SnapshotSchema = z.object({
   /** The reviewed commit when the comparison is a single commit against its parent; otherwise null. */
   commit: ReviewedCommitSchema.nullable(),
   commits: RangeCommitsSchema,
+  /** The recorded iterations of the range `commits` spans, oldest first; empty for comparisons that are not followed. */
+  iterations: IterationSchema.array(),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
+
+/**
+ * The compared refs resolve elsewhere than when the shown snapshot was taken. A refs-live
+ * comparison is not recomputed under the reviewer; it reloads on request.
+ */
+export const MovedSchema = z.object({
+  /** The snapshot a reload would supersede. */
+  version: z.number(),
+  /** Where the comparison `Snapshot.commits` spans resolves now. */
+  oldSha: z.string(),
+  newSha: z.string(),
+});
+export type Moved = z.infer<typeof MovedSchema>;
 
 /** Body of `POST /api/patch`: the changed files whose patches to return, concatenated. Unknown paths are skipped. */
 export const PatchRequestSchema = z.object({
@@ -384,11 +482,22 @@ export const SearchResponseSchema = z.object({
 });
 export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 
+/**
+ * How a review between refs reacts when one of them moves. `on`: recompute at once, as a worktree
+ * review follows edits. `off`: announce the move and wait for Reload. `auto`: wait for Reload when an
+ * endpoint names a branch, whose pushes and rebases should not swap the review out under the
+ * reviewer; recompute at once otherwise (a detached HEAD, a tag, an expression).
+ */
+export const FollowRefsSchema = z.enum(['on', 'auto', 'off']);
+export type FollowRefs = z.infer<typeof FollowRefsSchema>;
+
 export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),
   /** Unchanged lines shown around each change (git -U). Default 5. */
   contextLines: z.number(),
+  /** When a review between refs recomputes as its refs move; see `FollowRefsSchema`. Default auto. */
+  followRefs: FollowRefsSchema,
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
@@ -400,6 +509,7 @@ export type UserConfig = z.infer<typeof UserConfigSchema>;
 export const DEFAULT_USER_CONFIG: UserConfig = {
   autoViewed: [],
   contextLines: 5,
+  followRefs: 'auto',
   lspCommands: {},
 };
 
@@ -522,6 +632,11 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('snapshot'),
     version: z.number(),
   }),
+  /** Null once the refs are back where the snapshot has them. */
+  z.object({
+    type: z.literal('moved'),
+    moved: MovedSchema.nullable(),
+  }),
   z.object({
     type: z.literal('threads'),
   }),
@@ -637,6 +752,7 @@ function noServer(lsp: LspStatus, language?: LanguageId): string {
 export const ConfigUpdateSchema = z.object({
   autoViewed: z.string().array().optional(),
   contextLines: z.number().int().min(0).max(10_000).optional(),
+  followRefs: FollowRefsSchema.optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });
