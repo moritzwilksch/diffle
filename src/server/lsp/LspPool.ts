@@ -12,6 +12,7 @@ import {
   type LspSymbol,
   type LspTokenKindResponse,
 } from '../../shared/protocol.js';
+import { fuzzyRank } from '../../shared/fuzzy.js';
 import { LspBridge, LspUnavailableError } from './LspBridge.js';
 import { resolveServers } from './registry.js';
 import { settingsFor } from './configuration.js';
@@ -110,7 +111,7 @@ export class LspPool {
   }
 
   /**
-   * Symbols matching `query` from every running server, in server order. One server
+   * Symbols matching `query` from every running server, best `fuzzyRank` match first. One server
    * failing drops its share; only an outage everywhere is an error.
    */
   async workspaceSymbols(query: string, limit = 200): Promise<LspSymbol[]> {
@@ -120,7 +121,7 @@ export class LspPool {
     const out = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
     const failed = results.find((r) => r.status === 'rejected');
     if (!out.length && failed) throw failed.reason;
-    return out.slice(0, limit);
+    return fuzzyRank(out, query, (s) => s.name).slice(0, limit);
   }
 
   /**

@@ -1756,7 +1756,7 @@ describe('symbol navigation', () => {
     }
   });
 
-  it('document symbols filter by prefix, substring, then subsequence', () => {
+  it('document symbols filter by fuzzy name match, best first', () => {
     const sym = (name: string) => ({ name, kind: 12, path: 'a.py', line: 1, endLine: 1, col: 0 });
     const all = [sym('parse_args'), sym('argparse'), sym('apply'), sym('zzz')];
     expect(filterSymbols(all, 'arg').map((s) => s.name)).toEqual(['argparse', 'parse_args']);

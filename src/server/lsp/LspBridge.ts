@@ -14,6 +14,7 @@ import {
   type LspSymbol,
   type LspTokenKindResponse,
 } from '../../shared/protocol.js';
+import { fuzzyRank } from '../../shared/fuzzy.js';
 import { mapLimit } from '../concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
@@ -379,7 +380,7 @@ export class LspBridge {
 
   /**
    * Symbols the server knows for `query`, limited to paths the snapshot
-   * exposes. Membership comes from `has`, never from reading the file: a
+   * exposes, best `fuzzyRank` match first. Membership comes from `has`, never from reading the file: a
    * per-keystroke search must not read every hit's text.
    */
   async workspaceSymbols(query: string, limit = 200): Promise<LspSymbol[]> {
@@ -391,7 +392,7 @@ export class LspBridge {
     const seen = new Set<string>();
     result.forEach((s, i) => {
       const path = paths[i];
-      if (path == null || !inside.get(path) || out.length >= limit) return;
+      if (path == null || !inside.get(path)) return;
       // pyrefly reports one entry per import site; one per definition is enough here.
       const start = 'range' in s.location ? s.location.range.start : { line: 0, character: 0 };
       const key = `${path}:${start.line}:${start.character}:${s.name}`;
@@ -408,7 +409,8 @@ export class LspBridge {
         col: start.character,
       });
     });
-    return out;
+    // Rank before the cap: servers list loose matches in their own order.
+    return fuzzyRank(out, query, (s) => s.name).slice(0, limit);
   }
 
   /**
