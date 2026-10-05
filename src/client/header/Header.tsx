@@ -58,32 +58,35 @@ export function Header() {
         <PanelLeft size="1rem" />
       </Button>
       <HistoryNav />
-      <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em]">
-        <GitCompareArrows size="1rem" /> diffle
+      <span className="inline-flex items-center gap-1.5 font-bold tracking-[0.02em] max-sm:hidden">
+        <GitCompareArrows size="1rem" /> <span className="max-lg:hidden">diffle</span>
       </span>
-      <span className="truncate font-mono text-[0.75rem] text-muted" title={snapshot?.root}>
+      <span className="truncate font-mono text-[0.75rem] text-muted max-lg:hidden" title={snapshot?.root}>
         {snapshot ? repoName(snapshot) : ''}
       </span>
       <ModePicker />
       <CommitStepper />
       {snapshot?.commit && (
-        <span className="max-w-[24rem] min-w-0 truncate text-[0.8125rem]" title={snapshot.commit.message}>
+        <span
+          className="max-w-[24rem] min-w-0 shrink-[100] truncate text-[0.8125rem] max-md:hidden"
+          title={snapshot.commit.message}
+        >
           {snapshot.commit.message.split('\n', 1)[0]}
         </span>
       )}
       <GithubMenu />
       <MovedNotice />
-      <span className="text-muted">
+      <span className="shrink-0 whitespace-nowrap text-muted max-md:hidden">
         {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
       <SegmentedControl title="Diff layout (s)">
-        <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')}>
-          <Columns2 size="0.875rem" /> Split
+        <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')} aria-label="Split">
+          <Columns2 size="0.875rem" /> <span className="max-xl:hidden">Split</span>
         </ToggleButton>
-        <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')}>
-          <Rows3 size="0.875rem" /> Unified
+        <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')} aria-label="Unified">
+          <Rows3 size="0.875rem" /> <span className="max-xl:hidden">Unified</span>
         </ToggleButton>
       </SegmentedControl>
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
@@ -92,8 +95,8 @@ export function Header() {
       <Button variant="ghost" icon onClick={() => useStore.getState().setHelpOpen(true)} title="Keyboard shortcuts (?)">
         <Keyboard size="1rem" />
       </Button>
-      <Button variant="ghost" onClick={() => setSettingsOpen(true)} title="Settings">
-        <Settings size="0.9375rem" /> Settings
+      <Button variant="ghost" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings">
+        <Settings size="0.9375rem" /> <span className="max-xl:hidden">Settings</span>
       </Button>
       <Button
         variant="ghost"
@@ -161,7 +164,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
         aria-label={`Language servers${label ? `: ${label}` : ''}`}
       >
         {busy ? <LoaderCircle size="0.875rem" className="animate-spin" /> : <Compass size="0.875rem" />}
-        {label}
+        <span className="max-lg:hidden">{label}</span>
       </summary>
       <section
         className="absolute top-[calc(100%+0.75rem)] right-0 z-100 max-h-[65vh] w-[min(28rem,85vw)] overflow-auto rounded-lg border border-border bg-surface p-2.5 text-[0.8125rem] text-foreground shadow-lg"
