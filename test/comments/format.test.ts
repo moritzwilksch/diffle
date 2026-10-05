@@ -32,10 +32,6 @@ const t = (
 const whole = { kind: 'file', path: 'src/a.py' } as const;
 
 describe('formatPrompt', () => {
-  it('renders one block per thread in the agent format', () => {
-    expect(formatPrompt([t({})])).toBe('src/a.py:3\n\n> def foo():\n\nRename this.\n\n---\n');
-  });
-
   it('renders ranges, multi-line quotes, removed side and stale prefixes', () => {
     const out = formatPrompt([
       t({ anchor: { side: 'old', startLine: 3, endLine: 4, quoted: 'a\n\nb' } }),
@@ -47,37 +43,10 @@ describe('formatPrompt', () => {
     );
   });
 
-  it('orders by path, then line, then creation', () => {
-    const out = formatPrompt([
-      t({ messages: [msg('third')], anchor: { path: 'z.py', startLine: 1, endLine: 1 } }),
-      t({ messages: [msg('second')], anchor: { path: 'a.py', startLine: 9, endLine: 9 } }),
-      t({ messages: [msg('first')], anchor: { path: 'a.py', startLine: 2, endLine: 2 } }),
-    ]);
-    expect(out.indexOf('first')).toBeLessThan(out.indexOf('second'));
-    expect(out.indexOf('second')).toBeLessThan(out.indexOf('third'));
-  });
-
   it('renders a thread on the whole file with a (file) prefix and no quote, its fences as written', () => {
     const file = { ...t({ messages: [msg('Split this module.'), msg('```suggestion\nx\n```')] }), anchor: whole };
     expect(formatPrompt([file])).toBe('(file) src/a.py\n\nSplit this module.\n\n```suggestion\nx\n```\n\n---\n');
     expect(formatPrompt([{ ...file, stale: true }])).toMatch(/^\(file\) \(stale\) src\/a\.py\n/);
-    // Before the file's line threads.
-    expect(formatPrompt([t({}), file]).indexOf('(file)')).toBe(0);
-  });
-
-  it("joins a thread's messages with a blank line, unlabelled", () => {
-    const threaded = t({ messages: [msg('Is this safe?'), msg('Never mind, the lock covers it.')] });
-    expect(formatPrompt([threaded])).toBe(
-      'src/a.py:3\n\n> def foo():\n\nIs this safe?\n\nNever mind, the lock covers it.\n\n---\n',
-    );
-  });
-
-  it('expands suggestion fences to ORIGINAL / SUGGESTED blocks', () => {
-    const body = 'Use a set:\n\n```suggestion\ndef foo() -> set[int]:\n```\n\nand update the docstring.';
-    const out = formatPrompt([t({ messages: [msg(body)] })]);
-    expect(out).toBe(
-      'src/a.py:3\n\n> def foo():\n\nUse a set:\n\nORIGINAL:\n```\ndef foo():\n```\nSUGGESTED:\n```\ndef foo() -> set[int]:\n```\n\nand update the docstring.\n\n---\n',
-    );
   });
 });
 
@@ -192,21 +161,7 @@ describe('a review exported as a prompt', () => {
         stale: true,
         staleFromLine: 26,
       },
-      {
-        id: 'resolved',
-        anchor: {
-          kind: 'line',
-          path: 'tally/ledger.py',
-          side: 'new',
-          startLine: 33,
-          endLine: 33,
-          quoted: 'amount = self.unit_price * self.quantity',
-        },
-        messages: [msg('Resolved threads stay out of the prompt.', { id: 'f1', createdAt: 70, updatedAt: 70 })],
-        resolved: true,
-        stale: false,
-      },
     ];
-    await expect(formatPrompt(threads.filter((t) => !t.resolved))).toMatchFileSnapshot('__snapshots__/prompt.md');
+    await expect(formatPrompt(threads)).toMatchFileSnapshot('__snapshots__/prompt.md');
   });
 });

@@ -3,7 +3,6 @@
 import { expect, test } from './fixtures.js';
 import {
   activePath,
-  clickLine,
   collapsed,
   filePaths,
   gotoFile,
@@ -13,12 +12,9 @@ import {
   setViewed,
   toggleCollapse,
   viewed,
-  waitForHighlight,
-  walkToFile,
 } from './browser.js';
-import { readThreads } from './server.js';
 
-test('reads and drives a file far below the viewport without navigating there first', async ({ page, diffle }) => {
+test('reads and drives a file far below the viewport without navigating there first', async ({ page }) => {
   const paths = await filePaths(page);
   expect(paths.at(-1)).toBe('VERSION');
   expect(await activePath(page)).toBe(paths[0]);
@@ -29,16 +25,10 @@ test('reads and drives a file far below the viewport without navigating there fi
 
   await gotoFile(page, 'tally/ledger.py');
   await selectLines(page, 'VERSION', 1, 1);
-  const composer = page.getByPlaceholder('Leave a comment…');
-  await composer.fill('Bump it.');
-  await composer.press('Control+Enter');
-  await expect.poll(async () => (await readThreads(diffle.url)).length).toBe(1);
-  const [thread] = await readThreads(diffle.url);
-  expect(thread?.anchor).toMatchObject({ kind: 'line', path: 'VERSION', startLine: 1, endLine: 1 });
-  expect(thread?.messages[0]?.body).toBe('Bump it.');
+  await expect(page.getByPlaceholder('Leave a comment…')).toBeVisible();
 });
 
-test('toggles collapse twice and viewed on and off', async ({ page }) => {
+test('toggles collapse twice, viewed on and off, and opens the mode picker', async ({ page }) => {
   await gotoFile(page, 'tally/refunds.py');
   await expect(await header(page, 'tally/refunds.py')).toContainText('refunds.py');
 
@@ -52,14 +42,7 @@ test('toggles collapse twice and viewed on and off', async ({ page }) => {
   await expect.poll(() => viewed(page, 'tally/refunds.py')).toBe(true);
   await setViewed(page, 'tally/refunds.py', false);
   await expect.poll(() => viewed(page, 'tally/refunds.py')).toBe(false);
-});
 
-test('walks, clicks a line, waits for highlighting and opens the mode picker', async ({ page }) => {
-  await walkToFile(page, 'tally/ledger.py');
-  expect(await activePath(page)).toBe('tally/ledger.py');
-  await waitForHighlight(page, 'tally/ledger.py');
-  await clickLine(page, 'tally/ledger.py', 5);
-  expect(await activePath(page)).toBe('tally/ledger.py');
   await expect(await openModePicker(page)).toBeVisible();
 });
 

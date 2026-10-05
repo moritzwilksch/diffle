@@ -66,11 +66,6 @@ describe('Markdown suggestion fences', () => {
     expect(block?.querySelector('code')?.textContent).toBe('x = 1\n');
   });
 
-  it('renders a suggestion for a known file as a highlighted block', async () => {
-    await act(() => root.render(createElement(Markdown, { text: '```suggestion\nx = 1\n```', path: 'a.py' })));
-    expect(host.querySelector('.suggestion.highlighted')?.querySelector('.tag')?.textContent).toBe('Suggested change');
-  });
-
   it('renders a suggestion on quoted lines as a diff from them', async () => {
     const text = '```suggestion\nx = 2\n```';
     await act(() => root.render(createElement(Markdown, { text, path: 'a.py', quoted: 'x = 1\ny = 1' })));

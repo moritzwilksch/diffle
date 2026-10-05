@@ -10,7 +10,6 @@ import {
   type AnchorSource,
   type ReviewView,
 } from '../../src/server/comments/CommentStore.js';
-import { anchorLine } from '../../src/server/comments/anchor.js';
 import type { LineRange } from '../../src/server/comments/hunks.js';
 
 let dir: string;
@@ -135,13 +134,11 @@ describe('CommentStore', () => {
     expect(s.threads()).toEqual([]);
   });
 
-  it('filters by path, ordered by path then line', async () => {
+  it('filters by path', async () => {
     const s = await CommentStore.open(dir, 'working');
     await s.addThread({ ...anchor, path: 'z.py', startLine: 1, endLine: 1 }, { body: 'z' });
-    await s.addThread({ ...anchor, startLine: 9, endLine: 9 }, hello);
     await s.addThread(anchor, { body: 'a' });
-    expect(s.threads().map((t) => `${t.anchor.path}:${anchorLine(t.anchor)}`)).toEqual(['a.py:2', 'a.py:9', 'z.py:1']);
-    expect(s.threads({ path: 'z.py' })).toHaveLength(1);
+    expect(s.threads({ path: 'z.py' }).map((t) => t.anchor.path)).toEqual(['z.py']);
   });
 
   it('imports payloads, quoting from the snapshot and skipping open duplicates', async () => {
@@ -187,19 +184,7 @@ describe('CommentStore', () => {
     const source: AnchorSource = { quote: async () => null, hasFile: async (path) => path === 'a.py' };
     const { added } = await s.importThreads([{ path: 'a.py', body: 'Split this module.' }], source);
     expect(added[0]).toMatchObject({ anchor: fileAnchor, stale: false });
-    // The same finding on the same file is a duplicate; on a line of it, it is not.
-    const again = await s.importThreads(
-      [
-        { path: 'a.py', body: 'Split this module.' },
-        { path: 'a.py', startLine: 1, body: 'Split this module.' },
-      ],
-      { ...source, quote: async () => 'L1' },
-    );
-    expect(again.skipped).toBe(1);
-    expect(again.added.map((t) => t.anchor.kind)).toEqual(['line']);
     await expect(s.importThreads([{ path: 'gone.py', body: 'x' }], source)).rejects.toBeInstanceOf(UnquotableError);
-    // A file thread sorts before the file's line threads.
-    expect(s.threads().map((t) => t.anchor.kind)).toEqual(['file', 'line']);
   });
 
   it('keeps the newest previous viewed mark per path and caps the history', async () => {

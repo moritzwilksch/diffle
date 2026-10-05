@@ -33,7 +33,7 @@ async function render(oldOffset: number | null, newOffset: number | null = 0) {
   await act(() => root.render(createElement(CommitPreview, { oldOffset, newOffset, version: 1 })));
   await act(() => vi.advanceTimersByTime(150));
 }
-it('shows endpoint messages and ignores responses for older counts', async () => {
+it('shows endpoint messages and aborts and ignores stale responses when either offset changes', async () => {
   await render(1);
   await render(2);
   expect(requests[0]!.signal?.aborted).toBe(true);
@@ -43,6 +43,14 @@ it('shows endpoint messages and ignores responses for older counts', async () =>
   expect(host.textContent).toContain('Latest commit');
   await act(() => requests[0]!.resolve({ old: commit('Stale message'), new: commit('Stale head') }));
   expect(host.textContent).not.toContain('Stale');
+
+  await render(5, 1);
+  await render(5, 2);
+  expect(requests[2]!.signal?.aborted).toBe(true);
+  await act(() => requests[3]!.resolve({ old: commit('Base'), new: commit('Target two') }));
+  await act(() => requests[2]!.resolve({ old: commit('Base'), new: commit('Target one') }));
+  expect(host.textContent).toContain('Target two');
+  expect(host.textContent).not.toContain('Target one');
 });
 it('handles missing history and clears previews for invalid input', async () => {
   await render(999);
@@ -75,15 +83,4 @@ it('preserves the measured preview height through loading and empty input', asyn
   } finally {
     measure.mockRestore();
   }
-});
-
-it('refreshes the target preview and rejects older target responses', async () => {
-  await render(5, 1);
-  await render(5, 2);
-  expect(requests[0]!.signal?.aborted).toBe(true);
-  await act(() => requests[1]!.resolve({ old: commit('Base'), new: commit('Target two') }));
-  await act(() => requests[0]!.resolve({ old: commit('Base'), new: commit('Target one') }));
-  expect(host.textContent).toContain('HEAD~2');
-  expect(host.textContent).toContain('Target two');
-  expect(host.textContent).not.toContain('Target one');
 });

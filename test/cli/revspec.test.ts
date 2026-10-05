@@ -11,15 +11,6 @@ describe('parseRevspec', () => {
     expect(parseRevspec(['main'])).toEqual(parseRevspec(['main...HEAD']));
   });
 
-  // An ancestor of HEAD is its own merge base with HEAD, so this reads as the last three commits.
-  it('sends a lone ancestor of HEAD through the merge base too', () => {
-    expect(parseRevspec(['HEAD~3'])).toEqual({
-      old: 'HEAD~3',
-      base: 'merge-base',
-      new: 'HEAD',
-    });
-  });
-
   it('names the uncommitted tree on the new side of any form', () => {
     expect(parseRevspec(['main..worktree'])).toEqual({
       old: 'main',

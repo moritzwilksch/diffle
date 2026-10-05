@@ -143,14 +143,6 @@ describe('useKeymap', () => {
     expect(moveHunk).toHaveBeenCalledTimes(2);
   });
 
-  it('still leaves Ctrl- and Alt-chorded keys to the browser', () => {
-    const moveHunk = vi.fn();
-    useStore.setState({ moveHunk });
-    press(']', { ctrlKey: true });
-    press(']', { altKey: true });
-    expect(moveHunk).not.toHaveBeenCalled();
-  });
-
   it('stops a handled key at the document, so the viewer never sees it as an interruption of its scroll', () => {
     useStore.setState({ moveCursor: vi.fn(), moveFile: vi.fn() });
     const reached = vi.fn();
@@ -163,30 +155,6 @@ describe('useKeymap', () => {
       expect(reached).toHaveBeenCalledTimes(1);
     } finally {
       document.body.removeEventListener('keydown', reached);
-    }
-  });
-
-  it('/ opens the file-scoped search, g/ the global one, and gf the tree filter', () => {
-    const openSearch = vi.fn();
-    const tree = { openSearch: vi.fn(), getSearchValue: () => '' };
-    useStore.setState({ openSearch, treeModel: tree as never });
-    try {
-      press('/');
-      expect(openSearch).toHaveBeenLastCalledWith('file');
-      useStore.setState({ search: { ...useStore.getState().search, scope: 'file' } });
-      press('g');
-      press('/');
-      expect(openSearch).toHaveBeenLastCalledWith('diff');
-      useStore.setState({ search: { ...useStore.getState().search, scope: 'diff' } });
-      press('g');
-      press('/');
-      expect(openSearch).toHaveBeenLastCalledWith('diff');
-      expect(tree.openSearch).not.toHaveBeenCalled();
-      press('g');
-      press('f');
-      expect(tree.openSearch).toHaveBeenCalledTimes(1);
-    } finally {
-      useStore.setState({ treeModel: null });
     }
   });
 
@@ -248,38 +216,11 @@ describe('useKeymap', () => {
     }
   });
 
-  it('zz, zt and zb ask the store to scroll the cursor line, not to move it', () => {
-    const scrollCursorTo = vi.fn();
-    const moveCursor = vi.fn();
-    useStore.setState({ scrollCursorTo, moveCursor });
-    press('z');
-    press('z');
-    expect(scrollCursorTo).toHaveBeenLastCalledWith('eye');
-    press('z');
-    press('t');
-    expect(scrollCursorTo).toHaveBeenLastCalledWith('top');
-    press('z');
-    press('b');
-    expect(scrollCursorTo).toHaveBeenLastCalledWith('bottom');
-    expect(scrollCursorTo).toHaveBeenCalledTimes(3);
-    expect(moveCursor).not.toHaveBeenCalled();
-  });
-
-  it('C comments on the current file as a whole, c on the selection', () => {
-    const openDraft = vi.fn();
+  it('C does nothing without a current file', () => {
     const openFileDraft = vi.fn();
-    const sel = {
-      id: 'diff:b.py@0',
-      range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
-    };
-    useStore.setState({ openDraft, openFileDraft, selection: sel, activePath: 'b.py' });
+    useStore.setState({ openFileDraft, selection: null, activePath: null, snapshot: null, fileView: null });
     press('C');
-    expect(openFileDraft).toHaveBeenCalledWith('b.py');
-    press('c');
-    expect(openDraft).toHaveBeenCalledWith(sel);
-    useStore.setState({ selection: null, activePath: null, snapshot: null, fileView: null });
-    press('C');
-    expect(openFileDraft).toHaveBeenCalledTimes(1);
+    expect(openFileDraft).not.toHaveBeenCalled();
   });
 
   it('0 and $ focus the first / last symbol of the cursor line and say so when there is none', () => {

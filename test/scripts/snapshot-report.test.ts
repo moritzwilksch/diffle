@@ -7,7 +7,8 @@ import { expect, it } from 'vitest';
 import { generateSnapshotReport } from '../../scripts/lib/snapshot-report.js';
 import { rmTmp } from '../tmp.js';
 
-it('reports additions, deletions, edited renames and differently sized images from a real repository', async () => {
+/** An empty repository and a `git` runner inside it. */
+async function repo() {
   const dir = await mkdtemp(join(tmpdir(), 'diffle-report-module-'));
   const git = (...args: string[]) =>
     execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
@@ -15,6 +16,14 @@ it('reports additions, deletions, edited renames and differently sized images fr
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
+  git('init', '-q', '--template=');
+  git('config', 'user.name', 'Report test');
+  git('config', 'user.email', 'report@example.com');
+  return { dir, git };
+}
+
+it('reports additions, deletions, edited renames and differently sized images from a real repository', async () => {
+  const { dir, git } = await repo();
   const png = (width: number, height: number, red: number) => {
     const image = new PNG({ width, height });
     for (let i = 0; i < image.data.length; i += 4) {
@@ -24,9 +33,6 @@ it('reports additions, deletions, edited renames and differently sized images fr
     return PNG.sync.write(image);
   };
   try {
-    git('init', '-q', '--template=');
-    git('config', 'user.name', 'Report test');
-    git('config', 'user.email', 'report@example.com');
     const snapshots = join(dir, 'test/__snapshots__');
     await mkdir(snapshots, { recursive: true });
     const original = Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n') + '\n';
@@ -64,6 +70,28 @@ it('reports additions, deletions, edited renames and differently sized images fr
     const image = PNG.sync.read(Buffer.from(diff!, 'base64'));
     expect({ width: image.width, height: image.height }).toEqual({ width: 4, height: 3 });
     expect(generateSnapshotReport({ cwd: dir, base: 'HEAD' })).toMatchObject({ changed: 0, unchanged: 4 });
+  } finally {
+    await rmTmp(dir);
+  }
+});
+
+// Windows cannot represent the angle brackets used by an HTML injection in filenames.
+it.skipIf(process.platform === 'win32')('escapes snapshot filenames, directories, and contents', async () => {
+  const { dir, git } = await repo();
+  try {
+    git('commit', '--allow-empty', '-qm', 'base');
+    const base = git('rev-parse', 'HEAD');
+    const snapshots = join(dir, 'test<img src=x onerror=alert(1)>', '__snapshots__');
+    await mkdir(snapshots, { recursive: true });
+    await writeFile(join(snapshots, '<img src=x onerror=alert(2)> & notes.txt'), '<script>alert(3)</script>\n');
+    git('add', '.');
+    git('commit', '-qm', 'add snapshot');
+    const { html } = generateSnapshotReport({ cwd: dir, base });
+    expect(html).toContain('&lt;img src=x onerror=alert(2)&gt; &amp; notes.txt');
+    expect(html).toContain('<span class="dim">test&lt;img src=x onerror=alert(1)&gt;</span>');
+    expect(html).toContain('&lt;script&gt;alert(3)&lt;/script&gt;');
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('<script>alert(3)');
   } finally {
     await rmTmp(dir);
   }

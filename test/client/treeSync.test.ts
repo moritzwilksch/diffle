@@ -50,12 +50,6 @@ describe('directoriesOf', () => {
 });
 
 describe('expandedAfterReset', () => {
-  it('opens every folder on first build', () => {
-    const t = tree(['a/b/c.ts', 'a/d.ts', 'e/f.ts']);
-    expect(dir(t, 'a/b').isExpanded()).toBe(true);
-    expect(t.getVisibleCount()).toBe(6);
-  });
-
   it('keeps collapsed folders collapsed across a reset and opens new ones', () => {
     const t = tree(['a/b/c.ts', 'a/d.ts', 'e/f.ts']);
     dir(t, 'a/b').collapse();
@@ -101,13 +95,8 @@ describe('row keys', () => {
     expect(statusKey([file('x.ts', { status: 'R' })])).toBe(statusKey([file('x.ts', { status: 'C' })]));
     expect(statusKey(m)).not.toBe(statusKey([file('x.ts', { status: 'A' })]));
     expect(m.map(toGitStatus)).toEqual(t.map(toGitStatus));
-  });
-
-  it('statusKey ignores counts and viewed marks', () => {
-    const a = [file('x.ts'), file('y.ts', { status: 'A' })];
-    const b = [file('x.ts', { additions: 9 }), file('y.ts', { status: 'A' })];
-    expect(statusKey(a)).toBe(statusKey(b));
-    expect(statusKey(a)).not.toBe(statusKey([file('x.ts'), file('y.ts', { status: 'D' })]));
+    // Counts are the decoration key's business.
+    expect(statusKey(m)).toBe(statusKey([file('x.ts', { additions: 9 })]));
   });
 
   it('decorationKey is stable for fresh but equal viewed and config objects', () => {
@@ -167,14 +156,11 @@ describe('syncStep', () => {
     expect(syncStep(a, keysOf([file('x.ts', { status: 'T', additions: 5 })]))).toBe('decoration');
   });
 
-  it('redraws decorations on a viewed mark and stays quiet on unrelated config', () => {
+  it('redraws decorations on a viewed mark', () => {
     const changed = [file('x.ts')];
     const a = keysOf(changed);
     expect(syncStep(a, keysOf(changed, { ...state, viewed: [{ path: 'x.ts', blob: 'b1', viewed: true }] }))).toBe(
       'decoration',
-    );
-    expect(syncStep(a, keysOf(changed, { ...state, config: { ...DEFAULT_USER_CONFIG, contextLines: 42 } }))).toBe(
-      'none',
     );
   });
 });

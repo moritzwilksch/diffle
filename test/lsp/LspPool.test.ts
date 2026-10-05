@@ -107,8 +107,9 @@ describe('LspPool', () => {
     expect(statuses.some((s) => s.servers.every((x) => x.state === 'starting'))).toBe(true);
   });
 
-  it('shares one process between languages whose command is the same', async () => {
+  it('hands a language that arrives later to the process already running its command', async () => {
     const { pool, events } = start({ c: 'clangd-ish', cpp: 'clangd-ish' });
+    await pool.track(['x.c']);
     await pool.track(['x.c', 'y.cpp']);
     await settle();
     expect([...events.keys()]).toEqual(['clangd-ish']);
