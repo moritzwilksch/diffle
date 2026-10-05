@@ -1728,8 +1728,7 @@ export const useStore = create<ReviewState>((set, get) => {
       occurrenceSeq++;
       if (get().occurrences) set({ occurrences: null });
     },
-    async goToDefinition(
-target = get().symbolMenu?.target ?? lspTarget.get()) {
+    async goToDefinition(target = get().symbolMenu?.target ?? lspTarget.get()) {
       await jumpToLspLocation(target, 'definition');
     },
     async goToTypeDefinition(target = get().symbolMenu?.target ?? lspTarget.get()) {
