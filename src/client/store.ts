@@ -186,7 +186,7 @@ export interface ReferencesState {
   symbol: string;
   items: Match[];
   index: number;
-  /** Show the highlighted reference in context beside the list (Space); sticky across lists. */
+  /** Show the highlighted reference in context beside the list (Space); sticky across lists until Esc leaves it. */
   peek: boolean;
 }
 
@@ -330,8 +330,11 @@ export interface ReviewState {
   references: ReferencesState;
   moveReference(delta: 1 | -1): void;
   togglePeek(): void;
-  /** Jump to the highlighted reference; the list stays available to n / N afterwards. */
-  pickReference(): void;
+  /**
+   * Jump to the highlighted reference, or to `line` of its file (a click in the peek); the list
+   * stays available to n / N afterwards.
+   */
+  pickReference(line?: number): void;
   closeReferences(): void;
   symbols: SymbolsState;
   /** document: symbols of the active file; workspace: symbols matching the typed query. */
@@ -1790,7 +1793,7 @@ export const useStore = create<ReviewState>((set, get) => {
     togglePeek() {
       set((s) => ({ references: { ...s.references, peek: !s.references.peek } }));
     },
-    pickReference() {
+    pickReference(line) {
       const r = get().references;
       const m = r.items[r.index];
       get().closeReferences();
@@ -1811,7 +1814,7 @@ export const useStore = create<ReviewState>((set, get) => {
           },
         }));
       }
-      void jumpToLine(m.path, m.line, m.external);
+      void jumpToLine(m.path, line ?? m.line, m.external);
     },
     closeReferences() {
       set((s) => ({ references: { ...s.references, open: false } }));
@@ -2055,6 +2058,8 @@ export const useStore = create<ReviewState>((set, get) => {
       else if (s.githubMenuOpen) set({ githubMenuOpen: false });
       else if (s.hover) s.closeHover();
       else if (s.symbolMenu) s.closeSymbolMenu();
+      // A peek is a step into the list: Esc leaves it first.
+      else if (s.references.open && s.references.peek) s.togglePeek();
       else if (s.references.open) s.closeReferences();
       else if (s.symbols.open) s.closeSymbols();
       else if (s.search.open) s.closeSearch();

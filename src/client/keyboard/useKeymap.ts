@@ -204,7 +204,7 @@ export function useKeymap(): void {
         if (s.references.peek && (e.key === 'J' || e.key === 'K' || (e.ctrlKey && (e.key === 'd' || e.key === 'u')))) {
           const pane = document.querySelector<HTMLElement>('[data-peek]');
           const step = e.ctrlKey ? (pane?.clientHeight ?? 0) / 2 : 3 * 1.6 * 0.75 * remPx();
-          pane?.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step });
+          pane?.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step, behavior: 'smooth' });
         }
         return;
       }

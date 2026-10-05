@@ -19,7 +19,8 @@ const CONTEXT = 40;
 
 /**
  * Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps,
- * Space toggles a peek of the highlighted reference in context, J / K scroll it, Esc closes.
+ * Space toggles a peek of the highlighted reference in context, J / K scroll it, a click on a peeked line
+ * jumps there, Esc leaves the peek, then closes.
  */
 export function ReferencesList() {
   const refs = useStore((s) => s.references);
@@ -99,7 +100,7 @@ export function ReferencesList() {
               · <kbd>J</kbd> <kbd>K</kbd> scroll
             </>
           )}{' '}
-          · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> close
+          · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> {refs.peek ? 'back' : 'close'}
         </span>
       </div>
       <div className={twMerge('flex min-h-0 flex-1', !refs.peek && 'contents')}>
@@ -131,7 +132,7 @@ export function ReferencesList() {
             </section>
           ))}
         </div>
-        {refs.peek && <ReferencePeek match={peeked} theme={theme} />}
+        {refs.peek && <ReferencePeek match={peeked} theme={theme} onPick={pick} />}
       </div>
     </Dialog>
   );
@@ -140,7 +141,15 @@ export function ReferencesList() {
 type Peeked = { path: string; lines: string[] } | { path: string; message: string };
 
 /** The peeked reference's file around its line, highlighted and centered; the list keeps focus. */
-function ReferencePeek({ match, theme }: { match: Match | undefined; theme: ThemeChoice }) {
+function ReferencePeek({
+  match,
+  theme,
+  onPick,
+}: {
+  match: Match | undefined;
+  theme: ThemeChoice;
+  onPick: (line: number) => void;
+}) {
   const loadFile = useStore((s) => s.loadFile);
   const [file, setFile] = useState<Peeked | null>(null);
   // Keyed by window so a highlight from an earlier reference never paints over the current one.
@@ -215,7 +224,12 @@ function ReferencePeek({ match, theme }: { match: Match | undefined; theme: Them
               <div
                 key={n}
                 data-target={n === line}
-                className={twMerge('grid grid-cols-[3.25rem_1fr] gap-3 pr-3.5', n === line && 'bg-hover')}
+                className={twMerge(
+                  'grid cursor-pointer grid-cols-[3.25rem_1fr] gap-3 pr-3.5 hover:bg-surface',
+                  n === line && 'bg-hover hover:bg-hover',
+                )}
+                // A drag that selected text is a copy, not a jump.
+                onClick={() => getSelection()?.isCollapsed !== false && onPick(n)}
               >
                 <span className="text-right text-muted">{n}</span>
                 <span className="whitespace-pre">
