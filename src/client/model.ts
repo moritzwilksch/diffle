@@ -14,6 +14,7 @@ import {
   type UserConfig,
   type ViewedState,
 } from '../shared/protocol.js';
+import { fuzzyFilter } from '../shared/fuzzy.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
 import type { ReviewState } from './store.js';
 
@@ -310,24 +311,9 @@ function matchesAutoViewed(config: UserConfig, path: string): boolean {
   return m(path);
 }
 
-/** Case-insensitive match on the symbol name: prefix matches first, then substring, then subsequence. */
+/** Symbols whose name fuzzy-matches `query` (`fuzzyScore`), best first; a blank query keeps all, in order. */
 export function filterSymbols(all: LspSymbol[], query: string): LspSymbol[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return all;
-  const scored: [number, LspSymbol][] = [];
-  for (const s of all) {
-    const name = s.name.toLowerCase();
-    if (name.startsWith(q)) scored.push([0, s]);
-    else if (name.includes(q)) scored.push([1, s]);
-    else if (isSubsequence(q, name)) scored.push([2, s]);
-  }
-  return scored.sort((a, b) => a[0] - b[0]).map((x) => x[1]);
-}
-
-function isSubsequence(needle: string, hay: string): boolean {
-  let i = 0;
-  for (const ch of hay) if (ch === needle[i] && ++i === needle.length) return true;
-  return false;
+  return fuzzyFilter(all, query, (s) => s.name);
 }
 
 /** Compare two validated, nonnegative ancestor offsets from HEAD. */

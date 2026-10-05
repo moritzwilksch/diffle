@@ -37,7 +37,7 @@ import {
   type LineRange,
   type NavItem,
 } from './keyboard/nav.js';
-import { lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
+import { isToken, lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome, ModePane } from './model.js';
 import {
@@ -313,7 +313,10 @@ export interface ReviewState {
    */
   requestOccurrences(target: TokenTarget): Promise<LspOccurrence[] | null>;
   clearOccurrences(): void;
-  /** Jump to the definition of `target` (default: the clicked, else the hovered token). Flashes when nothing applies. */
+  /**
+   * Jump to the definition of `target` (default: the clicked, else the hovered token), or list its references
+   * when `target` is the definition. Flashes when nothing applies.
+   */
   goToDefinition(target?: TokenTarget | null): Promise<void>;
   /** Jump to where the type of the symbol is defined (gy). */
   goToTypeDefinition(target?: TokenTarget | null): Promise<void>;
@@ -1229,6 +1232,10 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!current(g)) return;
       const loc = res.locations[0];
       if (!loc) return get().flash(`No ${kind} found for ${target!.text}`);
+      // Already on the definition: jumping would go nowhere, so list its uses instead, as editors do.
+      if (kind === 'definition' && res.locations.every((l) => isToken(l, target!))) {
+        return await get().findReferences(target);
+      }
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
