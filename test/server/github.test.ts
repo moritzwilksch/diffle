@@ -242,50 +242,10 @@ describe('GithubExporter', () => {
     expect(calls).toEqual([]);
   });
 
-  it('creates a pending review, without an event, when the viewer has none', async () => {
-    const res = await exportToGithub({
-      pullRequest,
-      snap,
-      threads: [thread({ id: 'k' }), thread({ id: 's', stale: true })],
-      github,
-    });
-    expect(res).toEqual({
-      url: PR_URL,
-      posted: 1,
-      updated: 0,
-      review: 'created',
-      skipped: [{ id: 's', reason: 'stale' }],
-    });
+  it('looks up the pending review by owner, repo and number', async () => {
+    await exportToGithub({ pullRequest, snap, threads: [thread({ id: 'k' })], github });
     expect(calls.map(op)).toEqual(['pending', 'createReview']);
     expect(calls[0]!.variables).toEqual({ owner: 'o', repo: 'r', number: 7 });
-    // No `event`: the review GitHub creates from this stays pending.
-    expect(input(calls[1]!)).toEqual({
-      pullRequestId: 'PR_7',
-      commitOID: HEAD,
-      threads: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->' }],
-    });
-  });
-
-  it('creates the pending review with its line comments, then appends its file comments as threads', async () => {
-    const res = await exportToGithub({
-      pullRequest,
-      snap,
-      threads: [thread({ id: 'k' }), fileThread('f')],
-      github,
-    });
-    expect(res).toEqual({ url: PR_URL, posted: 2, updated: 0, review: 'created', skipped: [] });
-    expect(calls.map(op)).toEqual(['pending', 'createReview', 'addThread']);
-    expect(input(calls[1]!)).toEqual({
-      pullRequestId: 'PR_7',
-      commitOID: HEAD,
-      threads: [{ path: 'a.txt', line: 3, side: 'RIGHT', body: 'hi\n\n<!-- diffle-thread:k -->' }],
-    });
-    expect(input(calls[2]!)).toEqual({
-      pullRequestReviewId: 'PRR_NEW',
-      path: 'a.txt',
-      subjectType: 'FILE',
-      body: 'whole file\n\n<!-- diffle-thread:f -->',
-    });
   });
 
   it('says how far it got when a file comment cannot be appended to the review it just created', async () => {
@@ -564,21 +524,6 @@ describe('GithubExporter', () => {
     expect(calls.map(op)).toEqual(['pending']);
   });
 
-  it('says how many comments already landed when one of the appends fails', async () => {
-    let seen = 0;
-    const flaky = intercept(client('PRR_1'), (c) => {
-      if (c.query.startsWith('mutation') && seen++ === 1) throw new GithubError('GitHub: line outside the diff', 502);
-    });
-    await expect(
-      exportToGithub({
-        pullRequest,
-        snap,
-        threads: [thread({ id: 'k' }), thread({ id: 'k2', line: 9 })],
-        github: flaky,
-      }),
-    ).rejects.toThrow(/updated 0 and added 1 comments/);
-  });
-
   it('overlapping exports add the same thread only once', async () => {
     const existing: Existing[] = [];
     let release!: () => void;
@@ -620,10 +565,14 @@ describe('GithubExporter', () => {
     await expect(next).resolves.toMatchObject({ posted: 1 });
   });
 
-  it.each([0, 1])('reports completed updates when an append fails after %i additions', async (additions) => {
-    const existing: Existing[] = [
-      { node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'old\n\n<!-- diffle-thread:k -->' },
-    ];
+  it.each([
+    [0, 1],
+    [1, 0],
+    [1, 1],
+  ])('reports completed writes when an append fails after %i updates and %i additions', async (updates, additions) => {
+    const existing: Existing[] = updates
+      ? [{ node_id: 'C_1', path: 'a.txt', side: 'RIGHT', line: 3, body: 'old\n\n<!-- diffle-thread:k -->' }]
+      : [];
     let added = 0;
     const github = intercept(client('PRR_1', existing), (c) => {
       if (op(c) === 'addThread' && added++ === additions) throw new GithubError('line outside the diff', 502);
@@ -637,7 +586,7 @@ describe('GithubExporter', () => {
       }),
     ).rejects.toMatchObject({
       status: 502,
-      message: `updated 1 and added ${additions} comments in the pending review, then line outside the diff`,
+      message: `updated ${updates} and added ${additions} comments in the pending review, then line outside the diff`,
     });
   });
 

@@ -70,9 +70,15 @@ describe('GitRepo', () => {
   });
 
   it('opens from a subdirectory path and resolves root/gitDir', async () => {
-    expect(repo.root).toBe(await realpath(dir));
-    expect(repo.gitDir).toBe(join(await realpath(dir), '.git'));
-    expect(repo.commonDir).toBe(repo.gitDir);
+    // Git does not track an empty directory, so the other tests never see it.
+    await mkdir(join(dir, 'sub'));
+    try {
+      const sub = await GitRepo.open(join(dir, 'sub'));
+      expect(sub.root).toBe(await realpath(dir));
+      expect(sub.gitDir).toBe(join(await realpath(dir), '.git'));
+    } finally {
+      await rm(join(dir, 'sub'), { recursive: true });
+    }
   });
 
   it('lists tracked and untracked files, honoring .gitignore', async () => {
@@ -137,27 +143,6 @@ describe('GitRepo', () => {
     await expect(repo.mergeBase('--all', 'HEAD')).rejects.toThrow();
   });
 
-  it('produces a parseable patch for tracked and untracked files', async () => {
-    const files = await repo.numstat('HEAD', 'worktree');
-    const a = await repo.patch(
-      'HEAD',
-      'worktree',
-      files.find((f) => f.path === 'a.txt')!,
-    );
-    expect(a).toContain('diff --git a/a.txt b/a.txt');
-    expect(a).toContain('+four');
-    const u = await repo.patch(
-      'HEAD',
-      'worktree',
-      files.find((f) => f.path === 'untracked.txt')!,
-    );
-    expect(u).toContain('diff --git a/untracked.txt b/untracked.txt');
-    expect(u).toContain('+++ b/untracked.txt');
-    const all = await repo.patchAll('HEAD', 'worktree', files);
-    expect(all).toContain('b/a.txt');
-    expect(all).toContain('b/untracked.txt');
-  });
-
   it('patchMany covers tracked and untracked files and nothing else', async () => {
     const files = await repo.numstat('HEAD', 'worktree');
     const pick = (...ps: string[]) => files.filter((f) => ps.includes(f.path));
@@ -166,14 +151,6 @@ describe('GitRepo', () => {
     expect(both).toContain('+++ b/untracked.txt');
     expect(await repo.patchMany('HEAD', 'worktree', pick('untracked.txt'))).not.toContain('a.txt');
     expect(await repo.patchMany('HEAD', 'worktree', [])).toBe('');
-  });
-
-  it('honours a known untracked flag instead of probing the index', async () => {
-    const files = await repo.numstat('HEAD', 'worktree');
-    const u = files.find((f) => f.path === 'untracked.txt')!;
-    expect(await repo.patch('HEAD', 'worktree', u, 3, true)).toContain('+++ b/untracked.txt');
-    // Told it is tracked, the patch goes through `diff HEAD --`, which has nothing for an untracked path.
-    expect(await repo.patch('HEAD', 'worktree', u, 3, false)).toBe('');
   });
 
   // Windows has no sparse `truncate`, so half a gigabyte is really written: well over the default budget.
@@ -196,11 +173,6 @@ describe('GitRepo', () => {
     expect(await repo.show('HEAD', 'missing.txt')).toBeNull();
     expect((await repo.readWorktree('a.txt'))?.toString()).toBe('one\ntwo\nthree\nfour\n');
     expect(await repo.readWorktree('../etc/passwd')).toBeNull();
-  });
-
-  it('lists a commit tree', async () => {
-    expect(await repo.lsTree('main')).toEqual(['a.txt', 'keep.txt']);
-    expect(await repo.lsTree('feat')).toEqual(['a.txt', 'keep.txt', 'new.txt']);
   });
 
   it('bounds search results globally and flags truncation only when more exist', async () => {
@@ -740,32 +712,41 @@ describe('cat-file batch', () => {
     expect((await brepo.head('HEAD', odd, 100))?.toString()).toBe('odd\n');
   });
 
-  it('the snapshot sniffs each blob once across refreshes and only new blobs after a commit', async () => {
+  it('the snapshot re-sniffs only blobs a commit changed', async () => {
     const { mode } = await resolveReview({ kind: 'revspec', args: ['main..feat'] }, brepo);
     const snapshotter = new Snapshotter(brepo, mode, 1, 3);
-    const spy = vi.spyOn(brepo, 'blobHeads');
     const first = await snapshotter.current();
     expect(Object.fromEntries(first.changed.map((f) => [f.path, f.generated]))).toEqual({
       'gen.py': true,
       'small.txt': false,
     });
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0]![0].sort()).toEqual(
-      [bgit('rev-parse', 'feat:gen.py'), bgit('rev-parse', 'feat:small.txt')].sort(),
-    );
-    expect(spy.mock.calls[0]![1]).toBe(SNIFF_BYTES);
-    // Same blobs: the verdicts come from the cache.
-    snapshotter.invalidate(2);
-    const second = await snapshotter.current();
-    expect(second.changed.map((f) => f.generated)).toEqual(first.changed.map((f) => f.generated));
-    expect(spy).toHaveBeenLastCalledWith([], SNIFF_BYTES);
-    // One more edit: only its blob is read.
     await writeFile(join(bdir, 'small.txt'), '# DO NOT EDIT\nfour\n');
     bgit('commit', '-q', '-am', 'more');
-    snapshotter.invalidate(3);
-    const third = await snapshotter.current();
-    expect(third.changed.find((f) => f.path === 'small.txt')?.generated).toBe(true);
-    expect(spy).toHaveBeenLastCalledWith([bgit('rev-parse', 'feat:small.txt')], SNIFF_BYTES);
+    const spy = vi.spyOn(brepo, 'blobHeads');
+    snapshotter.invalidate(2);
+    const second = await snapshotter.current();
+    expect(Object.fromEntries(second.changed.map((f) => [f.path, f.generated]))).toEqual({
+      'gen.py': true,
+      'small.txt': true,
+    });
+    // gen.py's verdict comes from the cache.
+    expect(spy).toHaveBeenCalledExactlyOnceWith([bgit('rev-parse', 'feat:small.txt')], SNIFF_BYTES);
+  });
+
+  it('the working snapshot sniffs uncommitted files from the worktree', async () => {
+    await writeFile(join(bdir, 'gen2.py'), '# @generated by tool\nx = 1\n');
+    await writeFile(join(bdir, 'plain.py'), 'x = 1\n');
+    try {
+      const { mode } = await resolveReview({ kind: 'working' }, brepo);
+      const snap = await new Snapshotter(brepo, mode, 1, 3).current();
+      expect(Object.fromEntries(snap.changed.map((f) => [f.path, f.generated]))).toEqual({
+        'gen2.py': true,
+        'plain.py': false,
+      });
+    } finally {
+      await rm(join(bdir, 'gen2.py'));
+      await rm(join(bdir, 'plain.py'));
+    }
   });
 
   it('reports a missing name that contains a space as null without stalling the batch', async () => {

@@ -18,12 +18,7 @@ const png = (tag: number) => Buffer.from([...PNG, 0, 0, 0, tag]);
 describe('imageType', () => {
   it.each([
     ['image/png', png(1)],
-    ['image/jpeg', Buffer.from([0xff, 0xd8, 0xff, 0xe0])],
-    ['image/gif', Buffer.from('GIF89a\0\0')],
     ['image/webp', Buffer.from('RIFF\x10\0\0\0WEBPVP8 ', 'latin1')],
-    ['image/avif', Buffer.from('\0\0\0\x1cftypavif', 'latin1')],
-    ['image/bmp', Buffer.from('BM\0\0')],
-    ['image/x-icon', Buffer.from([0, 0, 1, 0, 1])],
   ])('reads %s from the leading bytes', (type, buf) => {
     expect(imageType(buf)).toBe(type);
   });

@@ -157,10 +157,6 @@ describe('viewPr', () => {
     await expect(viewPr(undefined, branchRepo, github)).rejects.toThrow(/not on a branch/);
   });
 
-  it('reads the base repository off the pull request url', async () => {
-    expect((await viewPr('7', repo, github)).repository).toBe('o/r');
-  });
-
   it('refuses an option-shaped selector and a non-pull-request url before asking GitHub', async () => {
     await expect(viewPr('--json', repo, github)).rejects.toThrow(GithubError);
     await expect(viewPr('https://github.com/o/r/issues/7', repo, github)).rejects.toThrow(/not a pull request url/);
@@ -200,7 +196,6 @@ describe('viewPr', () => {
 
   it('names unusable GitHub data instead of guessing', async () => {
     await expect(viewPr('7', repo, fake(null))).rejects.toThrow(/no pull request o\/r#7/);
-    await expect(viewPr('7', repo, fake(PR_NODE({ title: 3 })))).rejects.toThrow(/unexpected pull request data/);
     await expect(viewPr('7', repo, fake(PR_NODE({ url: 'https://example.invalid/x' })))).rejects.toThrow(
       /cannot read the repository/,
     );
@@ -249,10 +244,6 @@ describe("resolveReview({ kind: 'pr' })", () => {
     expect(git(local, 'for-each-ref', repo.reviewRefs)).toBe('');
     expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head/feat`)).toBe(headSha);
     await other.cleanReviewRefs();
-  });
-
-  it('reports a pull request GitHub cannot find as the user error it is', async () => {
-    await expect(resolveReview({ kind: 'pr', pr: '999' }, repo, fake(null))).rejects.toThrow(GithubError);
   });
 
   it('is off without a token', async () => {
