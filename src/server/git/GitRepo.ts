@@ -87,7 +87,10 @@ interface RecordOptions extends ExecOptions {
   accept?: (record: string) => boolean;
 }
 
-/** The only module that spawns git. All calls run with cwd = repo root, except reading a submodule's HEAD inside it. */
+/**
+ * The only module that spawns git. All calls run with cwd = repo root, except reading a
+ * submodule's HEAD inside it and moving a worktree this session added.
+ */
 export class GitRepo {
   private constructor(
     readonly root: string,
@@ -117,6 +120,25 @@ export class GitRepo {
           .map((ref) => `delete ${ref}\n`)
           .join(''),
       });
+  }
+
+  /**
+   * Adds a detached worktree at `sha` in `dir`, which is absent or empty. Entries of worktrees
+   * whose directories are gone (a killed run's) are pruned first, as `git gc` would eventually.
+   */
+  async addWorktree(dir: string, sha: string): Promise<void> {
+    await this.exec(['worktree', 'prune']);
+    await this.exec(['worktree', 'add', '--detach', '--quiet', '--', dir, sha]);
+  }
+
+  /** Moves the worktree `addWorktree` created at `dir` to `sha`, discarding whatever was written there. */
+  async checkoutWorktree(dir: string, sha: string): Promise<void> {
+    await execGit(dir, ['checkout', '--quiet', '--force', '--detach', sha]);
+  }
+
+  /** Removes the worktree `addWorktree` created at `dir`, its files included. */
+  async removeWorktree(dir: string): Promise<void> {
+    await this.exec(['worktree', 'remove', '--force', '--', dir]);
   }
 
   /** How many `cat-file --batch` processes this repository has started. Diagnostics and tests. */

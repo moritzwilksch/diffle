@@ -6,6 +6,7 @@ import { formatPrompt } from '../server/comments/format.js';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { createGithubClient, type GithubClient, GithubError, resolveToken } from '../server/github/client.js';
 import { LspPool } from '../server/lsp/LspPool.js';
+import { LspWorkspace } from '../server/lsp/LspWorkspace.js';
 import { resolveServers } from '../server/lsp/registry.js';
 import { RevspecError } from '../server/revspec.js';
 import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
@@ -14,7 +15,6 @@ import { UserConfigStore } from '../server/UserConfig.js';
 import { WsHub } from '../server/ws.js';
 import {
   comparisonLabel,
-  followsCheckout,
   LANGUAGE_IDS,
   type LanguageId,
   type EntryRequest,
@@ -418,11 +418,14 @@ async function serve(
         `👀 ${c.dim(snap.mode.live === 'worktree' ? 'watching the worktree' : session.follows ? 'watching refs' : 'watching refs; moved refs show a Reload button')}${opts.watch ? '' : c.dim(' (disabled with --no-watch)')}`,
       );
     if (lsp) {
-      const { servers, missing } = lsp.status();
+      // The first snapshot may be checking its commit out for the servers; report what came of it.
+      await lsp.idle();
+      timing.mark('lsp');
+      const { servers, missing, blocker } = lsp.status();
       const names = servers.map((s) => `${s.name} ${c.dim(`(${s.languages.join(', ')})`)}`).join(', ');
-      if (!followsCheckout(snap))
-        console.error(`🧭 ${c.dim('no language server: symbol navigation needs the new side to be the checkout')}`);
-      else console.error(`🧭 ${c.dim('lsp')} ${names || c.dim('no language server for this diff')}`);
+      console.error(
+        `🧭 ${c.dim('lsp')} ${blocker ? c.red(blocker) : names || c.dim('no language server for this diff')}`,
+      );
       // Languages turned off in the config stay quiet; a missing program is worth saying once.
       for (const m of missing.filter((m) => m.tried.length))
         console.error(`${c.yellow('!')} no ${m.language} language server ${c.dim(`(tried ${m.tried.join(', ')})`)}`);
@@ -452,11 +455,11 @@ async function connectGithub(): Promise<ConnectedGithub> {
 
 /**
  * The pool reads new-side text through the session, so the snapshot allowlist applies to
- * every LSP path. Each snapshot decides which languages run: it re-opens the diff's files
- * in the server for their language, so references in them are found from the reviewed text
- * (see LspPool.track). Nothing starts when the new side is not the checkout: the client
- * refuses symbol navigation there, and a server would otherwise see text that contradicts
- * the disk it indexes.
+ * every LSP path. Each snapshot decides which languages run and where: it re-opens the
+ * diff's files in the server for their language, so references in them are found from the
+ * reviewed text (see LspPool.track), in the repository when the new side is the checkout
+ * and otherwise in a detached worktree at the new commit (see LspWorkspace), so a server
+ * never indexes a disk that contradicts the text it is shown.
  */
 function startLsp(
   repo: GitRepo,
@@ -465,16 +468,14 @@ function startLsp(
   overrides: Partial<Record<LanguageId, string>>,
   preload: LanguageId[],
 ): LspPool {
-  session.onSnapshot((snap) => {
-    const paths = followsCheckout(snap)
-      ? snap.changed.filter((f) => f.status !== 'D' && !f.binary).map((f) => f.path)
-      : [];
-    void lsp.track(paths);
-  });
+  session.onSnapshot((snap) => void lsp.track(snap));
   // Progress repeats the full status; print each changed warning or error once.
   const reported = new Map<string, string>();
   const lsp = new LspPool({
-    root: repo.root,
+    workspace: new LspWorkspace(repo, {
+      onCreate: (dir) => console.error(`🧭 ${c.dim('lsp')} ${c.dim(`indexing a detached checkout in ${dir}`)}`),
+    }),
+    preloadRoot: repo.root,
     overrides,
     preload,
     read: async (path) => {
@@ -483,6 +484,9 @@ function startLsp(
     },
     has: async (path) => session.hasSide(await session.snapshotter.current(), path, 'new'),
     onStatus: (status) => {
+      const blocker = status.blocker ?? '';
+      if (blocker && reported.get('') !== blocker) console.error(`${c.red('✖')} lsp: ${blocker}`);
+      reported.set('', blocker);
       for (const s of status.servers) {
         const message = s.state === 'unavailable' ? (s.message ?? 'unavailable') : s.notice?.message;
         if (!message) {

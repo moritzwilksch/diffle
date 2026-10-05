@@ -4,7 +4,6 @@ import type { FileTree } from '@pierre/trees';
 import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
-  followsCheckout,
   lspBlocker,
   type GithubMetadata,
   type ChangedFile,
@@ -1186,13 +1185,7 @@ export const useStore = create<ReviewState>((set, get) => {
    * Why symbol navigation cannot run right now, or null when it can. With a path, the
    * answer is about the server for that file's language; without one, about any of them.
    */
-  const blocker = (path?: string): string | null => {
-    const { lsp, snapshot } = get();
-    if (!lsp.enabled) return lspBlocker(lsp);
-    if (!snapshot || !followsCheckout(snapshot))
-      return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
-    return lspBlocker(lsp, path);
-  };
+  const blocker = (path?: string): string | null => lspBlocker(get().lsp, path);
 
   /** Why the server cannot be asked about `target`, or null. Only snapshot files on the new side are open in it. */
   const targetBlocker = (target: Pick<TokenTarget, 'path' | 'side'>): string | null =>
@@ -1728,8 +1721,7 @@ export const useStore = create<ReviewState>((set, get) => {
       occurrenceSeq++;
       if (get().occurrences) set({ occurrences: null });
     },
-    async goToDefinition(
-target = get().symbolMenu?.target ?? lspTarget.get()) {
+    async goToDefinition(target = get().symbolMenu?.target ?? lspTarget.get()) {
       await jumpToLspLocation(target, 'definition');
     },
     async goToTypeDefinition(target = get().symbolMenu?.target ?? lspTarget.get()) {

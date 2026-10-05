@@ -11,7 +11,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - `src/server/routes.ts`: HTTP behavior; `src/server/ws.ts`: server-to-client invalidation messages.
 - `src/server/comments/`: persistence, relocation, import, and prompt formatting.
 - `src/server/github/`: `client.ts` resolves the token and wraps `@octokit/core` (the only GitHub transport; `gh` is spawned for `gh auth token` alone); `pulls.ts` names pull requests; `review.ts` exports pending reviews.
-- `src/server/lsp/LspBridge.ts`: language-server process and JSON-RPC lifecycle.
+- `src/server/lsp/LspBridge.ts`: language-server process and JSON-RPC lifecycle. `LspPool.ts` runs one set of servers per root; `LspWorkspace.ts` picks the root: the repository, or a detached worktree at the new commit when that is not the checkout.
 - `src/client/api.ts`: the only client module that knows URLs.
 - `src/client/store.ts`: Zustand state and effects; guard async commits with the current generation.
 - `src/client/model.ts`: pure state functions and item identity, kept separate to avoid store cycles.

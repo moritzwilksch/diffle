@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
 import { LspPool } from '../../src/server/lsp/LspPool.js';
+import { LspWorkspace } from '../../src/server/lsp/LspWorkspace.js';
 import type { ApiDeps } from '../../src/server/routes.js';
 import { Session } from '../../src/server/Session.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
@@ -17,6 +18,7 @@ import type { CommentThread } from '../../src/shared/protocol.js';
 import { connect } from 'node:net';
 
 let dir: string;
+let repo: GitRepo;
 let server: Server;
 let session: Session;
 let base: URL;
@@ -70,7 +72,7 @@ beforeAll(async () => {
   await writeFile(join(dir, 'a.txt'), 'a\n');
   execFileSync('git', ['add', '.'], { cwd: dir, env });
   execFileSync('git', ['commit', '-q', '-m', 'base'], { cwd: dir, env });
-  const repo = await GitRepo.open(dir);
+  repo = await GitRepo.open(dir);
   hub = new WsHub();
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
   session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
@@ -444,7 +446,8 @@ describe('Server', () => {
         overrides: { python: 'fake' },
         preload: ['python'],
         lookup: (command) => command,
-        root: dir,
+        workspace: new LspWorkspace(repo),
+        preloadRoot: dir,
         read: async (p) => (await session.readSide(await session.snapshotter.current(), p, 'new'))?.toString() ?? null,
         has: async (p) => session.hasSide(await session.snapshotter.current(), p, 'new'),
         onStatus: () => {},
@@ -487,6 +490,68 @@ describe('Server', () => {
     expect(r.status).toBe(200);
     expect(JSON.parse(r.body).lspCommands).toEqual(before);
     expect(config.get()).toMatchObject({ lspCommands: before, contextLines: 7 });
+  });
+
+  it('answers symbol queries for a commit that is not checked out from a detached worktree', async () => {
+    const commit = (message: string, ...paths: string[]) => {
+      execFileSync('git', ['add', '--', ...paths], { cwd: dir, env });
+      execFileSync('git', ['commit', '-q', '-m', message], { cwd: dir, env });
+      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, env, encoding: 'utf8' }).trim();
+    };
+    const exists = (p: string) =>
+      access(p).then(
+        () => true,
+        () => false,
+      );
+    await writeFile(join(dir, 'lib.py'), 'import os\ndef f():\n    pass\n');
+    const reviewed = commit('lib', 'lib.py');
+    await writeFile(join(dir, 'lib.py'), 'import sys\n');
+    const head = commit('lib again', 'lib.py');
+    const cwds: string[] = [];
+    try {
+      await session.switchMode({ kind: 'revspec', args: [`${reviewed}^!`] });
+      const snap = await session.snapshotter.current();
+      expect(snap).toMatchObject({ newSha: reviewed, headSha: head });
+      deps.lsp = new LspPool({
+        overrides: { python: 'fake' },
+        lookup: (command) => command,
+        workspace: new LspWorkspace(repo),
+        read: async (p) => (await session.readSide(await session.snapshotter.current(), p, 'new'))?.toString() ?? null,
+        has: async (p) => session.hasSide(await session.snapshotter.current(), p, 'new'),
+        onStatus: () => {},
+        spawnProcess: (_command, cwd) => {
+          cwds.push(cwd);
+          return spawn(process.execPath, [join(import.meta.dirname, '..', 'lsp', 'fake-lsp.mjs')], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, FAKE_LSP_ROOT: cwd },
+          });
+        },
+      });
+      await deps.lsp.track(snap);
+      // The server runs in a worktree at the reviewed commit, not in the checkout, which stays at HEAD.
+      expect(cwds).toHaveLength(1);
+      const worktree = cwds[0]!;
+      expect(worktree).not.toBe(dir);
+      expect(await readFile(join(worktree, 'lib.py'), 'utf8')).toBe('import os\ndef f():\n    pass\n');
+      expect(await readFile(join(dir, 'lib.py'), 'utf8')).toBe('import sys\n');
+      const def = await send('POST', '/api/lsp/definition', {
+        body: JSON.stringify({ path: 'lib.py', line: 3, col: 4 }),
+      });
+      expect(def.status).toBe(200);
+      expect(JSON.parse(def.body).locations).toContainEqual({ path: 'lib.py', line: 2, col: 4, text: 'def f():' });
+      const status = JSON.parse((await send('GET', '/api/lsp/status')).body);
+      expect(status).toMatchObject({ enabled: true, servers: [{ state: 'ready', languages: ['python'] }] });
+      expect(status.blocker).toBeUndefined();
+      await deps.lsp.close();
+      expect(await exists(worktree)).toBe(false);
+      expect(
+        execFileSync('git', ['worktree', 'list'], { cwd: dir, env, encoding: 'utf8' }).trim().split('\n'),
+      ).toHaveLength(1);
+    } finally {
+      await deps.lsp?.close();
+      deps.lsp = null;
+      await session.switchMode({ kind: 'working' });
+    }
   });
 
   // Windows has no POSIX mode bits to check.
