@@ -36,6 +36,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      # The runner's system config converts line endings in every repository the tests create and commit to.
+      - name: Disable autocrlf
+        if: runner.os == 'Windows'
+        run: git config --system core.autocrlf false
       - name: Test
         run: |
           npm ci
