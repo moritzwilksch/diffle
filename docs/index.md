@@ -14,7 +14,11 @@ or whole files, and then hand those comments on:
 Everything runs locally. diffle reads your repository through `git`, never changes your worktree,
 and keeps its own state under `<git-dir>/diffle/`.
 
-![diffle reviewing a feature branch: file tree, split diff with comments, and the commits and threads panel](./assets/overview.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/overview-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="./assets/overview-light.png">
+  <img alt="diffle reviewing a feature branch: file tree, split diff with comments, and the commits and threads panel" src="./assets/overview-light.png">
+</picture>
 
 The window has three columns:
 

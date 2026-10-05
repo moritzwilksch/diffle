@@ -39,7 +39,11 @@ flag.
 Click the comparison in the header, or press `m`, to open the picker. Choose an entry with the mouse
 or with `1` to `5`.
 
-![The mode picker with Two refs selected](../assets/mode-picker.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/mode-picker-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/mode-picker-light.png">
+  <img alt="The mode picker with Two refs selected" src="../assets/mode-picker-light.png">
+</picture>
 
 | Entry            | Compares                                                                                                                                    | CLI equivalent                |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
@@ -60,7 +64,11 @@ A comparison **between refs** can change under you too, when you commit, rebase,
 push. diffle doesn't swap the review out from under you. It shows which end moved and offers
 **Reload**:
 
-![The header reporting that feature/refunds moved, with a Reload button](../assets/moved.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/moved-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/moved-light.png">
+  <img alt="The header reporting that feature/refunds moved, with a Reload button" src="../assets/moved-light.png">
+</picture>
 
 Press `r` or click **Reload** to recompute the review at the new commits. Your viewed marks carry
 over, and each reload records a new [iteration](./iterations.md).

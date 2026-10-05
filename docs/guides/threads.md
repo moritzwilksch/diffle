@@ -25,7 +25,11 @@ lines. Edit it into the code you want; the thread then shows the change as a dif
 Every thread shows inline in the diff and in the **Threads** list of the panel, grouped by file.
 Click one in the list to jump to it.
 
-![The Threads list with two line threads and a file thread](../assets/threads.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/threads-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/threads-light.png">
+  <img alt="The Threads list with two line threads and a file thread" src="../assets/threads-light.png">
+</picture>
 
 | Keys      | Action                                                  |
 | --------- | ------------------------------------------------------- |

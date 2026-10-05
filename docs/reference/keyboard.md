@@ -8,7 +8,11 @@ sidebar:
 Press `?` in diffle for this list. Keys are case-sensitive: `J` means Shift+j. A number before a
 motion repeats it or picks a line, as in Vim.
 
-![The keyboard shortcuts overlay](../assets/help.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/help-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/help-light.png">
+  <img alt="The keyboard shortcuts overlay" src="../assets/help-light.png">
+</picture>
 
 ## Move
 

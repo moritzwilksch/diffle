@@ -8,7 +8,11 @@ sidebar:
 diffle starts a language server for each language in the diff, if it finds one on `PATH`. You get
 definitions, references, symbols, and hover docs while you review, without opening an editor.
 
-![Hover docs for round_amount](../assets/lsp-hover.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/lsp-hover-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/lsp-hover-light.png">
+  <img alt="Hover docs for round_amount" src="../assets/lsp-hover-light.png">
+</picture>
 
 ## Use it
 

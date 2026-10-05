@@ -10,7 +10,11 @@ diffle has one user config for the whole machine, at `$XDG_CONFIG_HOME/diffle/co
 or with [`diffle config`](./cli.md#diffle-config); `diffle config show` prints its path and
 contents.
 
-![The Settings dialog](../assets/settings.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/settings-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/settings-light.png">
+  <img alt="The Settings dialog" src="../assets/settings-light.png">
+</picture>
 
 ```json
 {

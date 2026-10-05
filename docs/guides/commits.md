@@ -8,7 +8,11 @@ sidebar:
 When a comparison spans several commits, the **Commits** box at the top of the panel lists them,
 newest first, under an **All changes** entry for the whole range.
 
-![The commits box listing four commits under All changes](../assets/commits.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/commits-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/commits-light.png">
+  <img alt="The commits box listing four commits under All changes" src="../assets/commits-light.png">
+</picture>
 
 ## Focus a commit
 

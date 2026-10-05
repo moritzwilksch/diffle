@@ -61,7 +61,11 @@ Put the cursor on a line and press `c`, or click a line number. Drag across line
 `V` and extend the selection with `j` and `k`, to comment on a block. `C` comments on the whole
 file.
 
-![The comment composer under a line](./assets/composer.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/composer-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="./assets/composer-light.png">
+  <img alt="The comment composer under a line" src="./assets/composer-light.png">
+</picture>
 
 Comments are Markdown. **Suggest change** inserts a `suggestion` block prefilled with the selected
 lines; edit it into the code you want. See [Threads](./guides/threads.md).

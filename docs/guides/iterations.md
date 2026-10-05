@@ -24,14 +24,22 @@ garbage collection can't take away what you reviewed.
 Once a range has two iterations, the **Iterations** box appears in the panel, newest first. The
 newest is the range as it stands.
 
-![The commits box pairing two iterations above the Iterations box](../assets/iterations.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/iterations-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/iterations-light.png">
+  <img alt="The commits box pairing two iterations above the Iterations box" src="../assets/iterations-light.png">
+</picture>
 
 Click an older iteration to compare it with the latest. The header then reads, for example,
 `main...feature/refunds #1→#2`, and the diff shows only what the branch itself changed in between.
 Commits that arrived from the base branch through a rebase don't show up: diffle replays the older
 iteration onto the newer base before it compares them.
 
-![The diff between iteration #1 and #2: one file changed](../assets/interdiff.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/interdiff-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/interdiff-light.png">
+  <img alt="The diff between iteration #1 and #2: one file changed" src="../assets/interdiff-light.png">
+</picture>
 
 With two iterations compared, a plain click sets the older end and a shift-click the newer one, so
 you can compare any two. From the keyboard:
