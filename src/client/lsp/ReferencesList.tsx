@@ -19,7 +19,7 @@ const CONTEXT = 40;
 
 /**
  * Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps,
- * Space toggles a peek of the highlighted reference in context, J / K scroll it, a click on a peeked line
+ * Space toggles a peek of the highlighted reference in context, which scrolls natively, a click on a peeked line
  * jumps there, Esc leaves the peek, then closes.
  */
 export function ReferencesList() {
@@ -97,7 +97,7 @@ export function ReferencesList() {
           {refs.peek && (
             <>
               {' '}
-              · <kbd>J</kbd> <kbd>K</kbd> scroll
+              · <kbd>PgUp</kbd> <kbd>PgDn</kbd> scroll
             </>
           )}{' '}
           · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> {refs.peek ? 'back' : 'close'}
@@ -195,6 +195,13 @@ function ReferencePeek({
     };
   }, [lines, path, theme, key]);
 
+  // Focus lets the browser scroll the peek on the page keys; the keymap still owns j / k and Enter.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    paneRef.current?.focus({ preventScroll: true });
+    return () => before?.focus({ preventScroll: true });
+  }, []);
+
   // Center the target before paint so stepping through the list never shows the window scrolled elsewhere.
   useLayoutEffect(() => {
     const pane = paneRef.current;
@@ -213,8 +220,10 @@ function ReferencePeek({
         <span className="ml-auto">:{match.line}</span>
       </div>
       <div
-        className="relative flex-1 overflow-auto py-2 font-mono text-[0.75rem] leading-[1.6]"
-        data-peek
+        className="relative flex-1 overflow-auto py-2 font-mono text-[0.75rem] leading-[1.6] outline-none"
+        role="region"
+        aria-label="Peek"
+        tabIndex={-1}
         ref={paneRef}
       >
         {lines ? (
