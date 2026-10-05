@@ -25,7 +25,6 @@ import {
   ConfigUpdateSchema,
   ClearThreadsQuerySchema,
   PatchQuerySchema,
-  followsCheckout,
   lspBlocker,
 } from '../shared/protocol.js';
 import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
@@ -284,13 +283,11 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.get('/api/lsp/status', (c) => c.json(lspStatus(deps)));
 
-  /** The pool, or a 409 reason: the language server reads the checkout, so the new side must be it. */
+  /** The pool, or a 409 reason. Only the snapshot's new side is open in a server. */
   const lspFor = async (path?: string): Promise<{ lsp: LspPool } | { error: string }> => {
     // Servers off for the run; a language with no server of its own is the pool's own answer.
     if (!deps.lsp) return { error: lspBlocker(lspStatus(deps)) ?? 'language servers are off' };
     const snap = await session.snapshotter.current();
-    if (!followsCheckout(snap))
-      return { error: 'Symbol navigation needs the new side to be the worktree or the checked-out commit' };
     if (path != null && !snap.tree.includes(path)) return { error: `${path} is not in the snapshot` };
     return { lsp: deps.lsp };
   };

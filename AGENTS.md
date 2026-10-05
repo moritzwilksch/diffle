@@ -11,7 +11,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - `src/server/routes.ts`: HTTP behavior; `src/server/ws.ts`: server-to-client invalidation messages.
 - `src/server/comments/`: persistence, relocation, import, and prompt formatting.
 - `src/server/github/`: `client.ts` resolves the token and wraps `@octokit/core` (the only GitHub transport; `gh` is spawned for `gh auth token` alone); `pulls.ts` names pull requests; `review.ts` exports pending reviews.
-- `src/server/lsp/LspBridge.ts`: language-server process and JSON-RPC lifecycle.
+- `src/server/lsp/LspBridge.ts`: language-server process and JSON-RPC lifecycle. `LspPool.ts` runs one set of servers per root; `LspWorkspace.ts` picks the root: the repository, or a detached worktree at the new commit when that is not the checkout.
 - `src/client/api.ts`: the only client module that knows URLs.
 - `src/client/store.ts`: Zustand state and effects; guard async commits with the current generation.
 - `src/client/model.ts`: pure state functions and item identity, kept separate to avoid store cycles.
@@ -21,7 +21,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 
 - `Session` alone advances `Snapshot.version`; mode switches, refreshes, and context changes stay serialized.
 - `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session.readSide`; it also maps a rename's old path. The one exception is `LspBridge.readExternal`: `/api/file` serves a file outside the snapshot on the new side only after a language-server result named it.
-- Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`; keep the worktree untouched.
+- Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`. Never write to the user's checkout, and never discard anyone's changes: the only worktree diffle changes is the detached one `LspWorkspace` adds for language servers, and only while `git status` finds it clean. A modified or untracked file there fails the move (the pool reports it as the LSP blocker) and keeps the worktree in place on close; no `--force` anywhere.
 - PR fetches use session-owned `refs/diffle/` refs. `GitRepo.fetch` must reject destinations outside them.
 - Treat rendered `FileDiffMetadata` as immutable. Hydrate with `hydratePartialDiff('clone', ...)`, replace the store entry, and change its generation-backed item id.
 - Every async boot, refresh, or mode-switch result commits only while its generation is current.

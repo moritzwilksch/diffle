@@ -574,9 +574,11 @@ export type LspMissing = z.infer<typeof LspMissingSchema>;
 export const LspStatusSchema = z.object({
   /** False with `--no-lsp`: no server will start for this run. */
   enabled: z.boolean(),
-  /** One entry per started server. Empty until a snapshot names a language with a server on PATH. */
+  /** One entry per server running for the current comparison. Empty until a snapshot names a language with a server on PATH. */
   servers: LspServerStatusSchema.array(),
   missing: LspMissingSchema.array(),
+  /** Why no server answers for the current comparison: the checkout its servers need could not be prepared. */
+  blocker: z.string().optional(),
 });
 export type LspStatus = z.infer<typeof LspStatusSchema>;
 
@@ -670,7 +672,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 
-/** True when the language server's view of the disk matches the snapshot's new side. */
+/** True when the repository's own files are the snapshot's new side: the worktree, or HEAD's commit. */
 export function followsCheckout(snap: Pick<Snapshot, 'newSha' | 'headSha'>): boolean {
   return snap.newSha === 'worktree' || (snap.headSha !== '' && snap.newSha === snap.headSha);
 }
@@ -730,10 +732,11 @@ export function languageOf(path: string): LanguageId | null {
 /**
  * Why the language server cannot answer for `path` — or, with no path, for a
  * repository-wide request — and null when it can. Shared so the client's flash and the
- * API's 409 say the same thing. The caller checks `followsCheckout` itself.
+ * API's 409 say the same thing.
  */
 export function lspBlocker(lsp: LspStatus, path?: string): string | null {
   if (!lsp.enabled) return 'Language servers are off for this run (--no-lsp)';
+  if (lsp.blocker) return lsp.blocker;
   if (path == null) {
     if (!lsp.servers.length) return noServer(lsp);
     return lsp.servers.some((s) => s.state === 'ready') ? null : notReady(lsp.servers[0]!);
