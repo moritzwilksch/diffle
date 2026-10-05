@@ -65,9 +65,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     >
       <h3 className="m-0 mb-2">Auto-viewed patterns</h3>
       <p className="m-0 mb-2 text-muted">
-        Files matching these globs start collapsed and marked viewed. One per line. Patterns without a slash match the
-        file name anywhere, e.g. <code>*.lock</code>; use <code>**/generated/**</code> for paths. Same as{' '}
-        <code>diffle config add-auto-viewed</code>.
+        Matching files start collapsed and viewed. One glob per line: <code>*.lock</code> matches a file name,{' '}
+        <code>**/generated/**</code> a path.
       </p>
       <textarea
         className="min-h-40 w-full rounded-md border border-border bg-surface p-2 font-mono text-[0.75rem]"
@@ -77,10 +76,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         autoFocus
       />
       <h3 className="m-0 mt-[14px] mb-2">Context lines</h3>
-      <p className="m-0 mb-2 text-muted">
-        Unchanged lines shown around each change (<code>git diff -U&lt;n&gt;</code>). Same as <code>--context</code> or{' '}
-        <code>diffle config set-context</code>.
-      </p>
+      <p className="m-0 mb-2 text-muted">Unchanged lines around each change.</p>
       <input
         type="number"
         min={0}
@@ -90,9 +86,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         className="w-[100px]"
       />
       <h3 className="m-0 mt-[14px] mb-2">Reload behavior</h3>
-      <p className="m-0 mb-2 text-muted">
-        When a compared ref moves. Same as <code>diffle config set-follow-refs</code>.
-      </p>
+      <p className="m-0 mb-2 text-muted">Reload when a compared ref moves.</p>
       <div role="radiogroup" aria-label="Reload behavior" className="flex flex-col gap-1">
         {FOLLOW_REFS.map(([value, label]) => (
           <label key={value} className="flex cursor-pointer items-center gap-1.5">
@@ -109,14 +103,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       </div>
       <h3 className="m-0 mt-[14px] mb-2">Language servers</h3>
       <p className="m-0 mb-2 text-muted">
-        Go-to-definition, references and symbols come from a language server per language, found on <code>PATH</code>.{' '}
-        <code>diffle lsp</code> lists what each language would get,{' '}
-        <code>diffle config set-lsp &lt;language&gt; &lt;command&gt;</code> overrides one, and <code>--no-lsp</code>{' '}
-        turns them off for a run. Commands are not editable here.
+        <code>diffle lsp</code> lists them; <code>diffle config set-lsp</code> overrides one.
       </p>
       {overrides.length > 0 && (
         <p className="m-0 mb-2 text-muted">
-          Overridden in your config:{' '}
+          Overrides:{' '}
           {overrides.map(([language, command], i) => (
             <span key={language}>
               {i > 0 && ', '}
