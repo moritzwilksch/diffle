@@ -1,5 +1,6 @@
 - region "Iterations":
-  - text: ""
+  - button "Iterations 3" [expanded]
+  - button "Forget the recorded iterations of this range"
   - list:
     - listitem:
       - button "#3 just now latest"
@@ -7,6 +8,8 @@
     - listitem:
       - 'button "#2 just now compared with #1"'
       - button "Copy hash b6cec17"
+      - 'button "Forget iteration #2"'
     - listitem:
       - button "#1 just now from here"
       - button "Copy hash 1de24f1"
+      - 'button "Forget iteration #1"'

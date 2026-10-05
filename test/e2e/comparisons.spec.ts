@@ -260,7 +260,8 @@ test.describe('moved refs', () => {
     await expect(page.getByText('Nothing moved since this snapshot')).toBeVisible();
 
     // Forgetting the iterations leaves the range, with its current state as the only one; the list hides.
-    const forget = iterations.getByRole('button', { name: /Forget/ });
+    // The header's forget-all button precedes each row's own.
+    const forget = iterations.getByRole('button', { name: /Forget/ }).first();
     await forget.click();
     await expect(forget).toHaveText('Forget all?');
     await forget.click();
@@ -269,9 +270,9 @@ test.describe('moved refs', () => {
     await page.keyboard.type('ii');
     await expect(page.getByText('Only one iteration so far')).toBeVisible();
 
-    // With "Follow moved refs" on, a push recomputes the review on its own: no notice, a new iteration.
+    // Reloading "Always", a push recomputes the review on its own: no notice, a new iteration.
     await page.getByRole('button', { name: 'Settings' }).click();
-    await page.getByRole('checkbox', { name: /Follow moved refs/ }).check();
+    await page.getByRole('radio', { name: 'Always' }).check();
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     git(
