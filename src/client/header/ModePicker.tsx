@@ -130,15 +130,16 @@ export function ModePicker() {
   ] as const;
 
   return (
-    <div className="relative" ref={wrap}>
+    <div className="relative min-w-28" ref={wrap}>
       <Button
         onClick={() => setOpen(!open)}
         title="Change what is compared (m)"
         aria-expanded={open}
         aria-controls="mode-picker"
-        className="font-mono"
+        className="max-w-full font-mono"
       >
-        {snapshot ? comparisonLabel(snapshot.mode) : '…'} <ChevronDown size="0.875rem" />
+        <span className="truncate">{snapshot ? comparisonLabel(snapshot.mode) : '…'}</span>{' '}
+        <ChevronDown size="0.875rem" />
       </Button>
       {open && (
         <div

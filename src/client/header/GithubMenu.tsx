@@ -42,7 +42,7 @@ export function GithubMenu() {
         aria-controls="github-menu"
         onClick={() => setOpen(!open)}
       >
-        <GitPullRequest size="1rem" /> GitHub
+        <GitPullRequest size="1rem" /> <span className="max-lg:hidden">GitHub</span>
       </Button>
       {open && (
         <section

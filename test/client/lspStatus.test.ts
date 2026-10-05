@@ -66,7 +66,7 @@ describe('LSP status indicator', () => {
   it('shows reported work instead of claiming workspace readiness', () => {
     const html = render({ activity: ['Loading workspace: dependencies'] });
     expect(html).toContain('Loading workspace: dependencies');
-    expect(html).toContain('>busy</summary>');
+    expect(html).toContain('>busy</span></summary>');
     expect(render({})).toContain('Connected');
     expect(html).toContain('<details');
     expect(html).toContain('aria-label="Language server status"');
@@ -107,10 +107,10 @@ describe('LSP status indicator', () => {
     expect(html).toContain('Workspace loading failed');
     expect(html).toContain('lucide-circle-alert');
     expect(html).toContain('Missing build tool');
-    expect(html).toContain('>error</summary>');
+    expect(html).toContain('>error</span></summary>');
     const stderrOnly = render({ stderr: 'Workspace configuration could not be read' });
     expect(stderrOnly).toContain('Workspace configuration could not be read');
-    expect(stderrOnly).toContain('>logs</summary>');
+    expect(stderrOnly).toContain('>logs</span></summary>');
   });
 
   it('bounds an unwrapped stderr code block with scrolling on both axes', () => {
