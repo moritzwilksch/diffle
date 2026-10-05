@@ -9,6 +9,7 @@ import { focusReview } from '../keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore } from '../store.js';
+import { ButtonLabel } from '../ui/ButtonLabel.js';
 import { useConfirm } from '../useConfirm.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
@@ -347,7 +348,7 @@ export function FileTreePane() {
           onClick={unview.fire}
         >
           <EyeOff size="0.875rem" />
-          {unview.armed && 'Un-view all?'}
+          <ButtonLabel text={unview.armed && 'Un-view all?'} />
         </Button>
       </div>
       <div className="relative min-h-0 flex-1" ref={bodyRef}>

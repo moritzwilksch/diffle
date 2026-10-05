@@ -20,6 +20,7 @@ import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
 import { anchorLabel, exportLabel, type ExportOutcome } from '../model.js';
 import { useStore } from '../store.js';
+import { ButtonLabel } from '../ui/ButtonLabel.js';
 import { useConfirm } from '../useConfirm.js';
 
 /** A thread rendered inline under its last anchored line: messages, reply composer, resolve. */
@@ -108,7 +109,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             }
           >
             {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-            {post.armed ? 'Add?' : posted ? exportLabel(posted) : null}
+            <ButtonLabel text={post.armed ? 'Add?' : posted && exportLabel(posted)} />
           </Button>
         )}
         <Button
@@ -136,7 +137,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           title={del.armed ? 'Click again to delete this thread' : 'Delete thread (dd)'}
         >
           <Trash2 size="0.875rem" />
-          {del.armed && 'Delete?'}
+          <ButtonLabel text={del.armed && 'Delete?'} />
         </Button>
       </div>
       {thread.messages.map((m, i) => (
@@ -186,7 +187,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
               title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}
             >
               <Trash2 size="0.75rem" />
-              {del.armed && 'Delete?'}
+              <ButtonLabel text={del.armed && 'Delete?'} />
             </Button>
           )}
         </div>
@@ -232,7 +233,7 @@ function CopyMessageButton({ threadId, messageId, size }: { threadId: string; me
       variant="ghost"
       icon
       feedback={done ? 'copied' : undefined}
-      className="relative [transition:background_160ms_ease,_color_160ms_ease,_border-color_160ms_ease]"
+      className="relative"
       title="Copy this comment as a prompt"
       onClick={async () => {
         let text: string;

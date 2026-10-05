@@ -11,6 +11,7 @@ import { anchorLabel, commentsOff, exportLabel, type ExportOutcome, visibleThrea
 import { useStore } from '../store.js';
 import { FilePath } from '../FilePath.js';
 import { Markdown } from '../Markdown.js';
+import { ButtonLabel } from '../ui/ButtonLabel.js';
 import { useConfirm } from '../useConfirm.js';
 import { CommitNavigator } from './CommitNavigator.js';
 import { IterationList } from './IterationList.js';
@@ -116,7 +117,7 @@ export function CommentPanel() {
             onClick={post.fire}
           >
             {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}
-            {post.armed ? 'Add all?' : posted ? exportLabel(posted) : null}
+            <ButtonLabel text={post.armed ? 'Add all?' : posted && exportLabel(posted)} />
           </Button>
         )}
         <Button
@@ -129,7 +130,7 @@ export function CommentPanel() {
           onClick={clear.fire}
         >
           <Trash2 size="0.875rem" />
-          {clear.armed && 'Delete all?'}
+          <ButtonLabel text={clear.armed && 'Delete all?'} />
         </Button>
       </div>
       {staleCount > 0 && (
@@ -147,7 +148,7 @@ export function CommentPanel() {
             onClick={stale.fire}
           >
             <Trash2 size="0.75rem" />
-            {stale.armed ? 'Delete stale?' : 'Delete'}
+            <ButtonLabel text={stale.armed ? 'Delete stale?' : 'Delete'} />
           </Button>
         </div>
       )}
@@ -277,7 +278,7 @@ const ThreadRow = memo(function ThreadRow({
           danger
           icon={!del.armed}
           feedback={del.armed ? 'confirm' : undefined}
-          className="ml-auto px-0.75 py-[1px] opacity-0 [transition:opacity_120ms_ease] group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
+          className="ml-auto px-0.75 py-[1px] opacity-0 group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
           title={del.armed ? 'Click again to delete this thread' : 'Delete this thread'}
           aria-label={del.armed ? 'Delete this thread? Click again to confirm' : 'Delete this thread'}
           onClick={(e) => {
@@ -286,7 +287,7 @@ const ThreadRow = memo(function ThreadRow({
           }}
         >
           <Trash2 size="0.75rem" />
-          {del.armed && 'Delete?'}
+          <ButtonLabel text={del.armed && 'Delete?'} />
         </Button>
       </div>
       <div className="px-2.5 pt-1.5 pb-2 [&>.markdown]:font-sans [&>.markdown]:text-[0.8125rem] [&>.markdown]:leading-[1.4] [&>.markdown]:[word-break:break-word]">
@@ -328,7 +329,7 @@ function CopyButton({
     <Button
       variant={primary ? 'primary' : 'default'}
       feedback={done ? 'copied' : undefined}
-      className="relative [transition:background_160ms_ease,_color_160ms_ease,_border-color_160ms_ease]"
+      className="relative"
       disabled={disabled}
       title={title}
       onClick={async () => {
@@ -339,7 +340,7 @@ function CopyButton({
       }}
     >
       <CopyIcon done={done}>{icon}</CopyIcon>
-      {done ? 'Copied' : label}
+      <ButtonLabel text={done ? 'Copied' : label} />
     </Button>
   );
 }
