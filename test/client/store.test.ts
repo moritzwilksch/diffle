@@ -1500,6 +1500,22 @@ describe('symbol navigation', () => {
     expect(s.selection?.range.end).toBe(2);
   });
 
+  it('go to definition on the definition itself lists its references instead', async () => {
+    ready();
+    api.lspDefinition.mockResolvedValue({ locations: [{ path: 'a.py', line: 3, col: 4, text: 'def foo():' }] });
+    api.lspReferences.mockResolvedValue({
+      locations: [
+        { path: 'a.py', line: 3, col: 4, text: 'def foo():' },
+        { path: 'b.py', line: 2, col: 0, text: 'foo()' },
+      ],
+    });
+    await useStore.getState().goToDefinition(target);
+    expect(api.lspReferences).toHaveBeenCalledWith({ path: 'a.py', line: 3, col: 4 });
+    const s = useStore.getState();
+    expect(s.references).toMatchObject({ open: true, kind: 'references', symbol: 'foo', index: 1 });
+    expect(s.fileView).toBeNull();
+  });
+
   it('a hover link lands like gd and closes the tooltip', async () => {
     ready();
     api.lspHover.mockResolvedValue({ contents: 'Go to [f](diffle:b.py#L2)' });

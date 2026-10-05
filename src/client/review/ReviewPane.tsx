@@ -814,7 +814,7 @@ export function ReviewPane() {
         setActivePath(pathFromItemId(ctx.item.id));
       },
       // A plain click on a symbol focuses it, as `w` would, and opens the action popover; ⌘/Ctrl+click jumps
-      // straight to the definition.
+      // straight to the definition, or lists references from the definition itself.
       onTokenClick: (
         props: TokenEventBase | DiffTokenEventBaseProps,
         event: MouseEvent,
