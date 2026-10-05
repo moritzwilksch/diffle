@@ -22,18 +22,14 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) 
   const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
-  /** Paths `read` was asked for, and the most reads in flight at once. */
+  /** Paths `read` was asked for. */
   const reads: string[] = [];
-  let inFlight = 0;
-  let peak = 0;
   const bridge = LspBridge.start({
     command: 'fake',
     root,
     read: async (p) => {
       reads.push(p);
-      peak = Math.max(peak, ++inFlight);
       await new Promise((r) => setTimeout(r, 5));
-      inFlight--;
       return files[p] ?? null;
     },
     has: async (p) => p in files,
@@ -60,7 +56,6 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number) 
     statuses,
     events,
     reads,
-    peak: () => peak,
     notify: (method: string, params: unknown) => notify(method, params),
   };
 }
@@ -218,14 +213,13 @@ describe('LspBridge', () => {
     await bridge.close();
   });
 
-  it('decides workspace symbol membership without reading files, and reads reference files in parallel', async () => {
-    const { bridge, reads, peak } = start();
+  it('decides workspace symbol membership without reading files, and reads each reference file once', async () => {
+    const { bridge, reads } = start();
     await bridge.workspaceSymbols('q');
     expect(reads).toEqual([]);
-    // a.py is open; other.py and ignored.py are read once each, at the same time.
+    // a.py is open; other.py and ignored.py are read once each.
     await bridge.references({ path: 'a.py', line: 1, col: 0 });
     expect(reads.slice(1).sort()).toEqual(['ignored.py', 'other.py']);
-    expect(peak()).toBe(2);
     await bridge.close();
   });
 

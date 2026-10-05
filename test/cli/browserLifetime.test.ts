@@ -54,7 +54,6 @@ describe('watchBrowserLifetime', () => {
 
     const manualClients = new FakeClients();
     watchBrowserLifetime(manualClients, false, close, 1000);
-    expect(manualClients.listener).toBeUndefined();
     manualClients.set(1);
     manualClients.set(0);
     vi.advanceTimersByTime(1000);

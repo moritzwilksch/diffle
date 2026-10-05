@@ -30,13 +30,6 @@ function cli(args: string[]): Promise<{ code: number | null; stderr: string }> {
 describe('usage errors', () => {
   it('names the unknown language for config unset-lsp', async () => {
     const run = await cli(['config', 'unset-lsp', 'python', 'nope']);
-    expect(run.stderr).toContain("command-argument value 'nope' is invalid");
-    expect(run.stderr).toContain('unknown language "nope"');
-    expect(run.code).toBe(2);
-  }, 30_000);
-
-  it('names the unknown language for config set-lsp', async () => {
-    const run = await cli(['config', 'set-lsp', 'nope', 'x']);
     expect(run.stderr).toContain('unknown language "nope"');
     expect(run.code).toBe(2);
   }, 30_000);

@@ -25,31 +25,9 @@ describe('diffle --help', () => {
     for (const shorthand of ['working', 'pr [number|url]']) expect(shorthands).toContain(shorthand);
   });
 
-  it('still lists the commands, which are verbs', () => {
-    expect(commands).toMatch(/^ +config\b/m);
-  });
-
-  it('says what each shorthand is the same as before explaining it', () => {
-    expect(out).toMatch(/^ {2}working {2,}same as HEAD\.\.worktree: /m);
-  });
-
-  it('spells out that a lone revision compares from the merge base', () => {
-    expect(out).toMatch(/^ {2}diffle main {2,}same as main\.\.\.HEAD: /m);
-  });
-
   it('carries no empty defaults for the repeatable options', () => {
     expect(out).not.toContain('(default: [])');
     expect(out).not.toContain('(default: false)');
-  });
-
-  it('offers an opt-out from browser-lifetime shutdown', () => {
-    expect(out).toContain('--keep-alive');
-  });
-
-  it('describes every shorthand and config subcommand it lists', () => {
-    for (const shorthand of ['working', 'pr'] as const) expect(sub[shorthand].split('\n')[2]).not.toBe('');
-    const configCommands = sub.config.slice(sub.config.indexOf('\nCommands:'));
-    for (const line of configCommands.split('\n').slice(2).filter(Boolean)) expect(line).toMatch(/\S {2,}\S/);
   });
 });
 

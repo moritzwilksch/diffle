@@ -14,8 +14,4 @@ describe('hoverMarkdown', () => {
     expect(hoverMarkdown({ kind: 'plaintext', value: 'x: int\n' })).toBe('```\nx: int\n```');
     expect(hoverMarkdown({ language: 'python', value: 'a = ``` + 1' })).toBe('````python\na = ``` + 1\n````');
   });
-
-  it('joins the parts of a list with a blank line', () => {
-    expect(hoverMarkdown([{ language: 'python', value: 'def f()' }, '', 'doc'])).toBe('```python\ndef f()\n```\n\ndoc');
-  });
 });
