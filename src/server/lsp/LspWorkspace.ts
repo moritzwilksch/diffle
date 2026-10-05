@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { followsCheckout, type Snapshot } from '../../shared/protocol.js';
-import type { GitRepo } from '../git/GitRepo.js';
+import { GitError, type GitRepo } from '../git/GitRepo.js';
 
 /** What the pool needs from a workspace; `LspWorkspace` satisfies it, tests inject fakes. */
 export interface Workspace {
@@ -17,9 +17,10 @@ export interface Workspace {
  * the repository itself serves a snapshot whose new side is the checkout (the worktree, or
  * HEAD's commit). Any other new side (a pull request, a focused commit, an older range) gets
  * a detached worktree this session adds under the temp dir and moves to that commit. The
- * user's checkout is never touched; the worktree is removed on close. A checked-out commit
- * has no installed dependencies, so servers there resolve what the repository holds and what
- * their own caches do.
+ * user's checkout is never touched, and nothing anyone changed is ever discarded: the
+ * worktree moves only while it is clean, and one that holds changes on close stays where it
+ * is. A checked-out commit has no installed dependencies, so servers there resolve what the
+ * repository holds and what their own caches do.
  */
 export class LspWorkspace implements Workspace {
   private checkout: { dir: string; sha: string } | null = null;
@@ -30,7 +31,11 @@ export class LspWorkspace implements Workspace {
 
   constructor(
     private readonly repo: GitRepo,
-    private readonly opts: { onCreate?: (dir: string) => void } = {},
+    private readonly opts: {
+      onCreate?: (dir: string) => void;
+      /** The worktree could not be removed on close and stays at `dir`; `reason` says why. */
+      onLeave?: (dir: string, reason: string) => void;
+    } = {},
   ) {}
 
   /** The detached worktree, once a snapshot needed one. */
@@ -56,6 +61,8 @@ export class LspWorkspace implements Workspace {
         this.checkout = { dir, sha };
         this.opts.onCreate?.(dir);
       } else if (this.checkout.sha !== sha) {
+        const changes = await this.repo.worktreeChanges(this.checkout.dir);
+        if (changes.length) throw new Error(`the worktree at ${this.checkout.dir} has changes: ${changes.join(', ')}`);
         await this.repo.checkoutWorktree(this.checkout.dir, sha);
         this.checkout.sha = sha;
       }
@@ -63,17 +70,18 @@ export class LspWorkspace implements Workspace {
     });
   }
 
-  /** Removes the worktree. Callers close the servers running in it first. */
+  /** Removes the worktree, unless it holds changes: those stay, and `onLeave` says where. Callers close the servers running in it first. */
   close(): Promise<void> {
     this.closing = true;
     return this.run(async () => {
       const checkout = this.checkout;
       if (!checkout) return;
       this.checkout = null;
-      // A failed `worktree remove` (the repository is gone, or a file is held) still leaves no files behind.
-      await this.repo
-        .removeWorktree(checkout.dir)
-        .catch(() => rm(checkout.dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+      try {
+        await this.repo.removeWorktree(checkout.dir);
+      } catch (e) {
+        this.opts.onLeave?.(checkout.dir, e instanceof GitError ? e.stderr.trim() || e.message : String(e));
+      }
     });
   }
 

@@ -131,14 +131,22 @@ export class GitRepo {
     await this.exec(['worktree', 'add', '--detach', '--quiet', '--', dir, sha]);
   }
 
-  /** Moves the worktree `addWorktree` created at `dir` to `sha`, discarding whatever was written there. */
-  async checkoutWorktree(dir: string, sha: string): Promise<void> {
-    await execGit(dir, ['checkout', '--quiet', '--force', '--detach', sha]);
+  /** Modified, added, deleted and untracked paths of the worktree at `dir`, as `git status --porcelain` lists them; empty when clean. */
+  async worktreeChanges(dir: string): Promise<string[]> {
+    return (await execGit(dir, ['status', '--porcelain'])).toString('utf8').split('\n').filter(Boolean);
   }
 
-  /** Removes the worktree `addWorktree` created at `dir`, its files included. */
+  /**
+   * Moves the worktree `addWorktree` created at `dir` to `sha`. Never forced: the caller
+   * checks `worktreeChanges` first, and git refuses to overwrite a change it finds anyway.
+   */
+  async checkoutWorktree(dir: string, sha: string): Promise<void> {
+    await execGit(dir, ['checkout', '--quiet', '--detach', sha]);
+  }
+
+  /** Removes the worktree `addWorktree` created at `dir`. Fails, like git, while it holds changes or untracked files. */
   async removeWorktree(dir: string): Promise<void> {
-    await this.exec(['worktree', 'remove', '--force', '--', dir]);
+    await this.exec(['worktree', 'remove', '--', dir]);
   }
 
   /** How many `cat-file --batch` processes this repository has started. Diagnostics and tests. */

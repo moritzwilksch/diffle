@@ -474,6 +474,7 @@ function startLsp(
   const lsp = new LspPool({
     workspace: new LspWorkspace(repo, {
       onCreate: (dir) => console.error(`🧭 ${c.dim('lsp')} ${c.dim(`indexing a detached checkout in ${dir}`)}`),
+      onLeave: (dir, reason) => console.error(`${c.yellow('!')} lsp: left the checkout at ${dir} in place: ${reason}`),
     }),
     preloadRoot: repo.root,
     overrides,

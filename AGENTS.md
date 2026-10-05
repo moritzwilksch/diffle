@@ -21,7 +21,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 
 - `Session` alone advances `Snapshot.version`; mode switches, refreshes, and context changes stay serialized.
 - `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session.readSide`; it also maps a rename's old path. The one exception is `LspBridge.readExternal`: `/api/file` serves a file outside the snapshot on the new side only after a language-server result named it.
-- Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`; keep the worktree untouched.
+- Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`. Never write to the user's checkout, and never discard anyone's changes: the only worktree diffle changes is the detached one `LspWorkspace` adds for language servers, and only while `git status` finds it clean. A modified or untracked file there fails the move (the pool reports it as the LSP blocker) and keeps the worktree in place on close; no `--force` anywhere.
 - PR fetches use session-owned `refs/diffle/` refs. `GitRepo.fetch` must reject destinations outside them.
 - Treat rendered `FileDiffMetadata` as immutable. Hydrate with `hydratePartialDiff('clone', ...)`, replace the store entry, and change its generation-backed item id.
 - Every async boot, refresh, or mode-switch result commits only while its generation is current.

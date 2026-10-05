@@ -107,6 +107,28 @@ describe('LspWorkspace', () => {
     await expect(w.rootFor({ newSha: first, headSha: second })).rejects.toThrow(/shutting down/);
   });
 
+  it('never discards a change made in the worktree: it blocks the move and survives close', async () => {
+    const left: [string, string][] = [];
+    const w = workspace({ onLeave: (d, reason) => left.push([d, reason]) });
+    const root = await w.rootFor({ newSha: first, headSha: second });
+    await writeFile(join(root, 'a.py'), 'edited here\n');
+    await writeFile(join(root, 'scratch.txt'), 'untracked\n');
+    await expect(w.rootFor({ newSha: second, headSha: 'worktree' })).rejects.toThrow(
+      `the worktree at ${root} has changes:  M a.py, ?? scratch.txt`,
+    );
+    expect(await readFile(join(root, 'a.py'), 'utf8')).toBe('edited here\n');
+    // Still the same worktree, at the commit it had; a later clean request moves it again.
+    expect(w.dir).toBe(root);
+    await w.close();
+    expect(await exists(join(root, 'a.py'))).toBe(true);
+    expect(await exists(join(root, 'scratch.txt'))).toBe(true);
+    expect(left).toHaveLength(1);
+    expect(left[0]![0]).toBe(root);
+    expect(left[0]![1]).toMatch(/contains modified or untracked files/);
+    expect(await worktrees()).toEqual(await real(repo.root, root));
+    git('worktree', 'remove', '--force', root);
+  });
+
   it('leaves nothing behind when the checkout fails, and prunes what a killed run left', async () => {
     // A worktree whose directory vanished, as after a kill: git refuses nothing, but the entry lingers.
     const stale = await mkdtemp(join(tmpdir(), 'diffle-lsp-stale-'));

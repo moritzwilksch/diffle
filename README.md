@@ -127,8 +127,10 @@ take a while to index.
 Servers index the files on disk. When the new side is not your checkout, as for a pull request, a
 focused commit, or an older range, diffle checks that commit out into a detached worktree under
 the temp directory and runs the servers there; your checkout is left alone and the worktree goes
-when diffle stops. Dependencies installed in your checkout are not in it, so servers there resolve
-what the repository holds and what their own caches do.
+when diffle stops. diffle never discards changes: if something edits files in that worktree, it
+stops following commits until they are gone and stays in place on exit, and diffle says where it
+is. Dependencies installed in your checkout are not in it, so servers there resolve what the
+repository holds and what their own caches do.
 
 `diffle lsp` shows which server each language gets and what to install for the rest:
 
