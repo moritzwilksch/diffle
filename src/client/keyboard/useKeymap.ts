@@ -209,7 +209,7 @@ export function useKeymap(): void {
           const pane = document.querySelector<HTMLElement>('[aria-label="Peek"]');
           if (!pane) return;
           const step = e.ctrlKey ? pane.clientHeight / 2 : 3 * parseFloat(getComputedStyle(pane).lineHeight);
-          pane.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step, behavior: 'smooth' });
+          pane.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step });
         }
         return;
       }
