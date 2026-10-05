@@ -186,6 +186,8 @@ export interface ReferencesState {
   symbol: string;
   items: Match[];
   index: number;
+  /** Show the highlighted reference in context beside the list (Space); sticky across lists until Esc leaves it. */
+  peek: boolean;
 }
 
 export interface SymbolsState {
@@ -327,8 +329,12 @@ export interface ReviewState {
   findReferences(target?: TokenTarget | null): Promise<void>;
   references: ReferencesState;
   moveReference(delta: 1 | -1): void;
-  /** Jump to the highlighted reference; the list stays available to n / N afterwards. */
-  pickReference(): void;
+  togglePeek(): void;
+  /**
+   * Jump to the highlighted reference, or to `line` of its file (a click in the peek); the list
+   * stays available to n / N afterwards.
+   */
+  pickReference(line?: number): void;
   closeReferences(): void;
   symbols: SymbolsState;
   /** document: symbols of the active file; workspace: symbols matching the typed query. */
@@ -1246,7 +1252,16 @@ export const useStore = create<ReviewState>((set, get) => {
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
-        set({ references: { open: true, kind: 'types', symbol: target!.text, items: res.locations, index: 0 } });
+        set((s) => ({
+          references: {
+            ...s.references,
+            open: true,
+            kind: 'types',
+            symbol: target!.text,
+            items: res.locations,
+            index: 0,
+          },
+        }));
         return;
       }
       await jumpToLine(loc.path, loc.line, loc.external);
@@ -1761,19 +1776,24 @@ export const useStore = create<ReviewState>((set, get) => {
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
         const index = origin === -1 ? 0 : (origin + 1) % items.length;
-        set({ references: { open: true, kind: 'references', symbol: target!.text, items, index } });
+        set((s) => ({
+          references: { ...s.references, open: true, kind: 'references', symbol: target!.text, items, index },
+        }));
       } catch (e) {
         if (current(g)) report('Find references', e);
       }
     },
-    references: { open: false, kind: 'references', symbol: '', items: [], index: -1 },
+    references: { open: false, kind: 'references', symbol: '', items: [], index: -1, peek: false },
     moveReference(delta) {
       const r = get().references;
       const n = r.items.length;
       if (!n) return;
       set({ references: { ...r, index: (Math.max(r.index, 0) + delta + n) % n } });
     },
-    pickReference() {
+    togglePeek() {
+      set((s) => ({ references: { ...s.references, peek: !s.references.peek } }));
+    },
+    pickReference(line) {
       const r = get().references;
       const m = r.items[r.index];
       get().closeReferences();
@@ -1794,7 +1814,7 @@ export const useStore = create<ReviewState>((set, get) => {
           },
         }));
       }
-      void jumpToLine(m.path, m.line, m.external);
+      void jumpToLine(m.path, line ?? m.line, m.external);
     },
     closeReferences() {
       set((s) => ({ references: { ...s.references, open: false } }));
@@ -2038,6 +2058,8 @@ export const useStore = create<ReviewState>((set, get) => {
       else if (s.githubMenuOpen) set({ githubMenuOpen: false });
       else if (s.hover) s.closeHover();
       else if (s.symbolMenu) s.closeSymbolMenu();
+      // A peek is a step into the list: Esc leaves it first.
+      else if (s.references.open && s.references.peek) s.togglePeek();
       else if (s.references.open) s.closeReferences();
       else if (s.symbols.open) s.closeSymbols();
       else if (s.search.open) s.closeSearch();

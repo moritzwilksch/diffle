@@ -9,6 +9,8 @@ import { nextTheme } from '../theme.js';
 
 const CHORD_MS = 800;
 const PREFIXES = new Set(['g', 'd', 'y', 'z', 'i']);
+/** Keys the browser scrolls a focused scroller with; the references peek leaves them native. */
+const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']);
 
 type Action = (s: ReviewState) => unknown;
 
@@ -195,11 +197,20 @@ export function useKeymap(): void {
       }
       // The references overlay owns the keys while open, wherever focus sits.
       if (s.references.open) {
-        e.preventDefault();
         e.stopPropagation();
+        // The focused peek scrolls natively on the page keys.
+        if (s.references.peek && SCROLL_KEYS.has(e.key)) return;
+        e.preventDefault();
         if (e.key === 'j' || e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) return s.moveReference(1);
         if (e.key === 'k' || e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) return s.moveReference(-1);
         if (e.key === 'Enter') return s.pickReference();
+        if (e.key === ' ') return s.togglePeek();
+        if (s.references.peek && (e.key === 'J' || e.key === 'K' || (e.ctrlKey && (e.key === 'd' || e.key === 'u')))) {
+          const pane = document.querySelector<HTMLElement>('[aria-label="Peek"]');
+          if (!pane) return;
+          const step = e.ctrlKey ? pane.clientHeight / 2 : 3 * parseFloat(getComputedStyle(pane).lineHeight);
+          pane.scrollBy({ top: e.key === 'J' || e.key === 'd' ? step : -step });
+        }
         return;
       }
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'b') {

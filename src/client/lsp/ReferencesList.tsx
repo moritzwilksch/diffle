@@ -1,11 +1,12 @@
 import { Dialog } from '../ui/Dialog.js';
 import { twMerge } from 'tailwind-merge';
 import { FileCode2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FilePath } from '../FilePath.js';
 import { overflow } from '../review/geometry.js';
-import { useStore } from '../store.js';
-import { CodeLine, type HlToken, useHighlighted } from './highlight.js';
+import { type Match, useStore } from '../store.js';
+import type { ThemeChoice } from '../theme.js';
+import { CodeLine, type HlToken, highlightLines, useHighlighted } from './highlight.js';
 
 interface Row {
   i: number;
@@ -13,7 +14,14 @@ interface Row {
   text: string;
 }
 
-/** Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps, Esc closes. */
+/** Lines shown above and below a peeked reference. */
+const CONTEXT = 40;
+
+/**
+ * Overlay listing a symbol's references grouped by file. j / k or arrows move, Enter or click jumps,
+ * Space toggles a peek of the highlighted reference in context, J / K or Ctrl-d / Ctrl-u scroll it, a click on a peeked line
+ * jumps there, Esc leaves the peek, then closes.
+ */
 export function ReferencesList() {
   const refs = useStore((s) => s.references);
   const theme = useStore((s) => s.theme);
@@ -41,26 +49,35 @@ export function ReferencesList() {
     [pick],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const list = listRef.current;
     const row = list?.querySelector<HTMLElement>('[data-active="true"]');
     if (!list || !row) return;
-    // Use the header's rendered bottom: its sticky position includes the list's top padding, and its
-    // margin preserves the normal gap before the first row. Height alone leaves both under the header.
+    // Cover what the header hides once stuck: it sticks below the list's top padding, and its margin keeps
+    // the normal gap before the first row. Its current position is no guide when it scrolled away (a wrap).
     const header = row.parentElement?.querySelector('header');
-    const view = list.getBoundingClientRect();
+    const pad = getComputedStyle(list);
     const covered = header
-      ? header.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(header).marginBottom) || 0) - view.top
+      ? (parseFloat(pad.paddingTop) || 0) +
+        header.getBoundingClientRect().height +
+        (parseFloat(getComputedStyle(header).marginBottom) || 0)
       : 0;
-    list.scrollTop += overflow(view, row.getBoundingClientRect(), Math.max(0, covered));
-  }, [refs.index, refs.open]);
+    // The bottom padding belongs to the view too: a row revealed only to the scroller's edge gets clipped.
+    const view = list.getBoundingClientRect();
+    const bottom = view.bottom - (parseFloat(pad.paddingBottom) || 0);
+    list.scrollTop += overflow({ top: view.top, bottom }, row.getBoundingClientRect(), covered);
+    // The peek resizes the list, so toggling it can push the active row out of view.
+  }, [refs.index, refs.open, refs.peek]);
 
   if (!refs.open) return null;
   return (
     <Dialog
       label="References"
       onClose={close}
-      className="flex max-h-[80vh] w-[min(60rem,_92vw)] flex-col overflow-hidden p-0"
+      className={twMerge(
+        'flex max-h-[80vh] w-[min(60rem,_92vw)] flex-col overflow-hidden p-0',
+        refs.peek && 'h-[80vh] w-[min(96rem,_96vw)]',
+      )}
     >
       <div className="flex items-baseline gap-3.5 border-b border-b-border px-4.5 pt-3.5 pb-2.5">
         <h3 className="m-0 text-[0.9375rem]">
@@ -81,32 +98,179 @@ export function ReferencesList() {
           )}
         </h3>
         <span className="ml-auto text-[0.6875rem] whitespace-nowrap text-muted">
-          <kbd>j</kbd> <kbd>k</kbd> move · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> close
+          <kbd>j</kbd> <kbd>k</kbd> move · <kbd>Space</kbd> peek
+          {refs.peek && (
+            <>
+              {' '}
+              · <kbd>J</kbd> <kbd>K</kbd> scroll
+            </>
+          )}{' '}
+          · <kbd>Enter</kbd> jump · <kbd>Esc</kbd> {refs.peek ? 'back' : 'close'}
         </span>
       </div>
-      <div className="overflow-auto px-2.5 pt-2 pb-3" ref={listRef}>
-        {groups.map((g) => (
-          <section className="[&+section]:mt-2.5" key={g.path}>
-            <header className="sticky top-0 z-1 mb-[2px] flex items-center gap-2 rounded-lg border border-border bg-hover px-2.5 py-1.5 font-mono text-[0.75rem] leading-[normal] [&>svg]:flex-none [&>svg]:text-muted">
-              <FileCode2 size="0.875rem" />
-              <FilePath path={g.path} nowrap className="flex-1" />
-              <span className="ml-auto rounded-[0.625rem] border border-border bg-canvas px-1.75 py-0 text-[0.6875rem] text-muted">
-                {g.rows.length}
-              </span>
-            </header>
-            {g.rows.map((r) => (
-              <RefRow
-                key={`${r.line}:${r.i}`}
-                row={r}
-                on={r.i === refs.index}
-                tokens={highlighted.get(`${g.path}\n${r.text}`)}
-                onPick={onPick}
-              />
-            ))}
-          </section>
-        ))}
+      <div className={twMerge('flex min-h-0 flex-1', !refs.peek && 'contents')}>
+        <div
+          className={twMerge(
+            'overflow-auto px-2.5 pt-2 pb-3',
+            refs.peek && 'w-[min(32rem,_38%)] flex-none border-r border-r-border',
+          )}
+          ref={listRef}
+        >
+          {groups.map((g) => (
+            <section className="[&+section]:mt-2.5" key={g.path}>
+              <header className="sticky top-0 z-1 mb-[2px] flex items-center gap-2 rounded-lg border border-border bg-hover px-2.5 py-1.5 font-mono text-[0.75rem] leading-[normal] [&>svg]:flex-none [&>svg]:text-muted">
+                <FileCode2 size="0.875rem" />
+                <FilePath path={g.path} nowrap className="flex-1" />
+                <span className="ml-auto rounded-[0.625rem] border border-border bg-canvas px-1.75 py-0 text-[0.6875rem] text-muted">
+                  {g.rows.length}
+                </span>
+              </header>
+              {g.rows.map((r) => (
+                <RefRow
+                  key={`${r.line}:${r.i}`}
+                  row={r}
+                  on={r.i === refs.index}
+                  tokens={highlighted.get(`${g.path}\n${r.text}`)}
+                  onPick={onPick}
+                />
+              ))}
+            </section>
+          ))}
+        </div>
+        {refs.peek && <ReferencePeek items={items} index={refs.index} theme={theme} onPick={pick} />}
       </div>
     </Dialog>
+  );
+}
+
+type Peeked = { lines: string[] } | { message: string };
+
+/**
+ * The highlighted reference's file around its line, highlighted and centered; the list keeps focus.
+ * Files of the references next to it load ahead, so stepping with j / k never paints an empty pane.
+ */
+function ReferencePeek({
+  items,
+  index,
+  theme,
+  onPick,
+}: {
+  items: Match[];
+  index: number;
+  theme: ThemeChoice;
+  onPick: (line: number) => void;
+}) {
+  const loadFile = useStore((s) => s.loadFile);
+  const [files, setFiles] = useState<ReadonlyMap<string, Peeked>>(new Map());
+  const requested = useRef(new Set<string>());
+  // Tokens by `${path}\n${text}`, kept across windows so lines already seen never flash plain again.
+  const [hl, setHl] = useState<{ theme: ThemeChoice; tokens: ReadonlyMap<string, HlToken[]> }>({
+    theme,
+    tokens: new Map(),
+  });
+  const paneRef = useRef<HTMLDivElement>(null);
+  const match = items[index];
+  const path = match?.path;
+  const line = match?.line ?? 0;
+
+  useEffect(() => {
+    for (const m of [items[index], items[index + 1], items[index - 1]]) {
+      if (!m || requested.current.has(m.path)) continue;
+      const p = m.path;
+      requested.current.add(p);
+      const settle = (peeked: Peeked) => setFiles((prev) => new Map(prev).set(p, peeked));
+      loadFile(p, 'new')
+        .then((res) => settle(res.binary ? { message: 'Binary file' } : { lines: res.contents.split('\n') }))
+        .catch((e: unknown) => settle({ message: e instanceof Error ? e.message : String(e) }));
+    }
+  }, [items, index, loadFile]);
+
+  const file = path ? files.get(path) : undefined;
+  const loaded = file && 'lines' in file ? file.lines : null;
+  const first = Math.max(1, line - CONTEXT);
+  const lines = useMemo(() => loaded?.slice(first - 1, line + CONTEXT) ?? null, [loaded, first, line]);
+  const tokens = hl.theme === theme ? hl.tokens : undefined;
+
+  useEffect(() => {
+    if (!lines || !path) return;
+    const known = hl.theme === theme ? hl.tokens : new Map<string, HlToken[]>();
+    const missing = [...new Set(lines)].filter((text) => !known.has(`${path}\n${text}`));
+    if (missing.length === 0) return;
+    let live = true;
+    highlightLines(missing, path, theme)
+      .then((rows) => {
+        if (!live) return;
+        setHl((prev) => {
+          const next = new Map(prev.theme === theme ? prev.tokens : []);
+          rows.forEach((row, i) => next.set(`${path}\n${missing[i]}`, row));
+          return { theme, tokens: next };
+        });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [lines, path, theme, hl]);
+
+  // Focus lets the browser scroll the peek on the page keys; the keymap still owns j / k and Enter.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    paneRef.current?.focus({ preventScroll: true });
+    return () => before?.focus({ preventScroll: true });
+  }, []);
+
+  // Center the target before paint so stepping through the list never shows the window scrolled elsewhere.
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    const row = pane?.querySelector<HTMLElement>('[data-target="true"]');
+    if (!pane || !row) return;
+    pane.scrollTop = row.offsetTop - (pane.clientHeight - row.offsetHeight) / 2;
+  }, [lines]);
+
+  if (!match) return <div className="flex-1" />;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex items-center gap-2 border-b border-b-border px-3.5 py-1.5 font-mono text-[0.75rem] text-muted [&>svg]:flex-none">
+        <FileCode2 size="0.875rem" />
+        <FilePath path={match.path} nowrap className="min-w-0 flex-1" />
+        <span className="ml-auto">:{match.line}</span>
+      </div>
+      <div
+        className="relative flex-1 overflow-auto py-2 font-mono text-[0.75rem] leading-[1.6] outline-none"
+        role="region"
+        aria-label="Peek"
+        tabIndex={-1}
+        ref={paneRef}
+      >
+        {lines ? (
+          lines.map((text, i) => {
+            const n = first + i;
+            return (
+              <div
+                key={n}
+                data-target={n === line}
+                className={twMerge(
+                  'group grid cursor-pointer grid-cols-[3.25rem_1fr] gap-3 pr-3.5',
+                  n === line && 'bg-hover',
+                )}
+                // A drag that selected text is a copy, not a jump.
+                onClick={() => getSelection()?.isCollapsed !== false && onPick(n)}
+              >
+                {/* Hover tints the line number alone, as the diff view does. */}
+                <span className="pr-1.5 text-right text-muted group-hover:bg-hover group-hover:text-foreground">
+                  {n}
+                </span>
+                <span className="whitespace-pre">
+                  <CodeLine tokens={tokens?.get(`${match.path}\n${text}`)} fallback={text} />
+                </span>
+              </div>
+            );
+          })
+        ) : file && 'message' in file ? (
+          <p className="px-3.5 text-muted">{file.message}</p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
