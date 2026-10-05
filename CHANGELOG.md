@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0](https://github.com/moritzwilksch/diffle/compare/v0.1.9...v0.2.0) - 2026-10-05
+
+### Features
+
+- _(session)_ [**breaking**] Reload a refs comparison on request instead of recomputing it ([#267](https://github.com/moritzwilksch/diffle/pull/267))
+- _(lsp)_ Highlight occurrences on hovering ([#275](https://github.com/moritzwilksch/diffle/pull/275))
+- _(tree)_ Fold all files down to the active file ([#276](https://github.com/moritzwilksch/diffle/pull/276))
+- _(lsp)_ Match symbols by word-start prefixes, case-insensitively ([#278](https://github.com/moritzwilksch/diffle/pull/278))
+- _(lsp)_ Peek the highlighted reference in context ([#282](https://github.com/moritzwilksch/diffle/pull/282))
+
+### Bug fixes
+
+- _(settings)_ Trim dialog prose to essentials ([#272](https://github.com/moritzwilksch/diffle/pull/272))
+- _(ui)_ Reflow header and comment forms gracefully at narrow widths ([#273](https://github.com/moritzwilksch/diffle/pull/273))
+- _(ui)_ Ease guarded button arm, disarm, and feedback labels ([#271](https://github.com/moritzwilksch/diffle/pull/271))
+- _(lsp)_ List references when going to a definition from itself ([#280](https://github.com/moritzwilksch/diffle/pull/280))
+
+### Documentation
+
+- Use https://diffle.app for installer script ([#264](https://github.com/moritzwilksch/diffle/pull/264))
+- _(readme)_ Refresh light and dark screenshots ([#270](https://github.com/moritzwilksch/diffle/pull/270))
+- _(readme)_ Refresh screenshots, re-accept e2e snapshots ([#274](https://github.com/moritzwilksch/diffle/pull/274))
+- _(readme)_ Refresh screenshots, re-accept keyboard help snapshot ([#283](https://github.com/moritzwilksch/diffle/pull/283))
+
+### Testing
+
+- Drop low-value tests, give each rule one owner ([#284](https://github.com/moritzwilksch/diffle/pull/284))
+
+### Build and CI
+
+- Add git-cliff for release notes generation ([#265](https://github.com/moritzwilksch/diffle/pull/265))
+- Give tests a Windows timeout budget and stop autocrlf rewrites ([#285](https://github.com/moritzwilksch/diffle/pull/285))
+- Give tests a Windows timeout budget and stop autocrlf rewrites ([#285](https://github.com/moritzwilksch/diffle/pull/285))
+
 ## [0.1.9](https://github.com/moritzwilksch/diffle/compare/v0.1.8...v0.1.9) - 2026-10-01
 
 ### Features
