@@ -95,6 +95,8 @@ export const api = {
   reload: () => json(SnapshotSchema, 'api/reload', { method: 'POST' }),
   /** Forget the range's recorded iterations; the snapshot returned records its current state as #1. */
   clearIterations: () => json(SnapshotSchema, 'api/iterations', { method: 'DELETE' }),
+  /** Forget one recorded iteration; the latest cannot go. */
+  deleteIteration: (n: number) => json(SnapshotSchema, `api/iterations/${n}`, { method: 'DELETE' }),
   switchMode: (req: ModeRequest) =>
     json(SnapshotSchema, 'api/mode', { method: 'POST', body: encode(ModeRequestSchema, req) }),
   refs: () => json(RefsResponseSchema, 'api/refs'),

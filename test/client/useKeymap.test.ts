@@ -8,7 +8,7 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async () => []),
   viewed: vi.fn(async () => []),
-  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: false, lspCommands: {} })),
+  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: 'off', lspCommands: {} })),
   lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   exportComments: vi.fn(),
 };

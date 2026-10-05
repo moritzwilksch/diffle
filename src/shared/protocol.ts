@@ -482,16 +482,22 @@ export const SearchResponseSchema = z.object({
 });
 export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 
+/**
+ * How a review between refs reacts when one of them moves. `on`: recompute at once, as a worktree
+ * review follows edits. `off`: announce the move and wait for Reload. `auto`: wait for Reload when an
+ * endpoint names a branch, whose pushes and rebases should not swap the review out under the
+ * reviewer; recompute at once otherwise (a detached HEAD, a tag, an expression).
+ */
+export const FollowRefsSchema = z.enum(['on', 'auto', 'off']);
+export type FollowRefs = z.infer<typeof FollowRefsSchema>;
+
 export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),
   /** Unchanged lines shown around each change (git -U). Default 5. */
   contextLines: z.number(),
-  /**
-   * Recompute a review between refs as soon as one of them moves, as a worktree review follows
-   * edits, instead of announcing the move and waiting for Reload. Default false.
-   */
-  followRefs: z.boolean(),
+  /** When a review between refs recomputes as its refs move; see `FollowRefsSchema`. Default auto. */
+  followRefs: FollowRefsSchema,
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
@@ -503,7 +509,7 @@ export type UserConfig = z.infer<typeof UserConfigSchema>;
 export const DEFAULT_USER_CONFIG: UserConfig = {
   autoViewed: [],
   contextLines: 5,
-  followRefs: false,
+  followRefs: 'auto',
   lspCommands: {},
 };
 
@@ -746,7 +752,7 @@ function noServer(lsp: LspStatus, language?: LanguageId): string {
 export const ConfigUpdateSchema = z.object({
   autoViewed: z.string().array().optional(),
   contextLines: z.number().int().min(0).max(10_000).optional(),
-  followRefs: z.boolean().optional(),
+  followRefs: FollowRefsSchema.optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });

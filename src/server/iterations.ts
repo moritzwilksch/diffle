@@ -72,6 +72,21 @@ export class IterationStore {
     });
   }
 
+  /** Forgets the iteration numbered `n`, if recorded, and unpins its commits. The rest keep their numbers. */
+  async remove(n: number): Promise<Iteration[]> {
+    return withFileLock(this.file, async () => {
+      const all = await read(this.file);
+      const list = all.ranges[this.key] ?? [];
+      if (!list.some((it) => it.n === n)) return list;
+      await this.repo.pin({ [`${this.refs}/${n}/old`]: null, [`${this.refs}/${n}/new`]: null });
+      const next = list.filter((it) => it.n !== n);
+      if (next.length) all.ranges[this.key] = next;
+      else delete all.ranges[this.key];
+      await writeFileAtomic(this.file, JSON.stringify(all, null, 2) + '\n');
+      return next;
+    });
+  }
+
   /** Forgets every iteration of this range and unpins their commits. */
   async clear(): Promise<void> {
     await withFileLock(this.file, async () => {

@@ -355,6 +355,8 @@ export interface ReviewState {
   reload(): Promise<void>;
   /** Forget the range's recorded iterations; an interdiff on show returns to the range. */
   clearIterations(): Promise<void>;
+  /** Forget one recorded iteration; an interdiff on show that names it returns to the range. */
+  deleteIteration(n: number): Promise<void>;
   error: string | null;
   threads: CommentThread[];
   /** Resolved threads stay hidden unless the user turns them on. */
@@ -2154,6 +2156,8 @@ export const useStore = create<ReviewState>((set, get) => {
     reload: () => transition(api.reload, 'Reloading'),
 
     clearIterations: () => transition(api.clearIterations, 'Forgetting iterations'),
+
+    deleteIteration: (n) => transition(() => api.deleteIteration(n), `Forgetting iteration #${n}`),
 
     focusCommit(commit) {
       void get().switchMode({ kind: 'focus', commit });

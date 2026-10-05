@@ -210,7 +210,7 @@ describe('countViewed', () => {
     oldBlob: '',
     generated: false,
   });
-  const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: false, lspCommands: {} };
+  const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: 'off' as const, lspCommands: {} };
 
   it('counts explicit marks at the current blob and auto-viewed files; a stale mark is not viewed', () => {
     const changed = [file('a.ts'), file('b.ts'), file('c.ts', 'new'), file('yarn.lock')];
@@ -237,7 +237,7 @@ describe('nextFileAfter', () => {
     oldBlob: '',
     generated: false,
   });
-  const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: false, lspCommands: {} };
+  const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: 'off' as const, lspCommands: {} };
   const snapshot = {
     changed: [file('c.ts', 'new'), file('yarn.lock'), file('a.ts'), file('b.ts'), file('d.ts')],
   } as Snapshot;

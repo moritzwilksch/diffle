@@ -27,14 +27,16 @@ describe('UserConfigStore', () => {
     expect((await UserConfigStore.open(store.file)).get()).toMatchObject(expected);
   });
 
-  it('reads followRefs as a boolean and falls back to the default otherwise', async () => {
+  it('reads followRefs as on, auto or off and falls back to auto otherwise', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'diffle-config-'));
     try {
       const file = join(dir, 'config.json');
-      await writeFile(file, JSON.stringify({ followRefs: 'yes' }));
-      expect((await UserConfigStore.open(file)).get().followRefs).toBe(false);
-      await writeFile(file, JSON.stringify({ followRefs: true }));
-      expect((await UserConfigStore.open(file)).get().followRefs).toBe(true);
+      for (const stale of ['yes', true, false]) {
+        await writeFile(file, JSON.stringify({ followRefs: stale }));
+        expect((await UserConfigStore.open(file)).get().followRefs).toBe('auto');
+      }
+      await writeFile(file, JSON.stringify({ followRefs: 'on' }));
+      expect((await UserConfigStore.open(file)).get().followRefs).toBe('on');
     } finally {
       await rmTmp(dir);
     }

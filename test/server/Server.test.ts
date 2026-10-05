@@ -73,7 +73,7 @@ beforeAll(async () => {
   const repo = await GitRepo.open(dir);
   hub = new WsHub();
   config = await UserConfigStore.open(join(dir, 'cfg', 'config.json'));
-  session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+  session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
   deps = { session, config, extraAutoViewed: [], hub, lsp: null };
   server = new Server(deps, { port: 0, host: '127.0.0.1', allowedOrigin: 'https://proxy.example', dev: false });
   base = await server.listen();
@@ -217,6 +217,14 @@ describe('Server', () => {
     expect(snap.version).toBeGreaterThan(before.version);
     // A worktree review is not followed by iterations, so there is nothing to record anew.
     expect(snap.iterations).toEqual([]);
+  });
+
+  it('refuses DELETE /api/iterations/:n for an iteration it does not have or a number it cannot read', async () => {
+    for (const path of ['/api/iterations/1', '/api/iterations/x', '/api/iterations/0']) {
+      const response = await send('DELETE', path);
+      expect(response.status).toBe(400);
+      expect(JSON.parse(response.body).error).toMatch(/iteration/);
+    }
   });
 
   it('serves the API to loopback hosts', async () => {

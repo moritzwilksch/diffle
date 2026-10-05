@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import {
@@ -93,13 +93,9 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
           variant="ghost"
           className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold"
           aria-expanded={open}
+          title={open ? 'Collapse the commits' : 'Expand the commits'}
           onClick={() => setOpen(!open)}
         >
-          {open ? (
-            <ChevronDown size="0.875rem" className="text-muted" />
-          ) : (
-            <ChevronRight size="0.875rem" className="text-muted" />
-          )}
           <GitCommitHorizontal size="0.9375rem" /> Commits
           <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">
             {interdiff ? interdiff.pairs.length : commits.total}

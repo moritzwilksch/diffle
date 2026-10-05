@@ -90,6 +90,12 @@ export async function resolveComparison(
   };
 }
 
+/** Whether either endpoint names a local or remote branch, HEAD on one included. */
+export async function namesBranch(repo: GitRepo, comparison: Pick<ModeSpec, 'old' | 'new'>): Promise<boolean> {
+  const [old, next] = await Promise.all([repo.branchRef(comparison.old), repo.branchRef(comparison.new)]);
+  return old != null || next != null;
+}
+
 /** Server-only transition result; PR identity is separate from the comparison sent to the client. */
 export interface ResolvedReview {
   mode: ModeSpec;

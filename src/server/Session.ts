@@ -4,6 +4,7 @@ import {
   type GithubExportRequest,
   type GithubExportResponse,
   type EntryRequest,
+  type FollowRefs,
   type GithubMetadata,
   type Iteration,
   MAX_RANGE_COMMITS,
@@ -24,7 +25,7 @@ import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
 import { IterationStore } from './iterations.js';
-import { resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
+import { namesBranch, resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
 import { RevspecError } from './revspec.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -49,6 +50,8 @@ interface Active {
   watcher: WatcherLike | null;
   /** Where a refs-live comparison's refs point now, when that differs from the snapshot; cleared by a reload. */
   moved: Moved | null;
+  /** Whether an endpoint of the followed range names a branch; decides what `auto` does with a move. */
+  branches: boolean;
 }
 
 export interface SessionOptions {
@@ -57,8 +60,8 @@ export interface SessionOptions {
   github?: GithubClient;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
-  /** Recompute a review between refs when one moves, instead of announcing it. The user config; setFollowRefs() changes it. */
-  followRefs: boolean;
+  /** What a review between refs does when one moves. The user config; setFollowRefs() changes it. */
+  followRefs: FollowRefs;
   /** Replaces the chokidar-backed Watcher. Test seam. */
   createWatcher?: (target: WatchTarget) => WatcherLike;
 }
@@ -122,11 +125,20 @@ export class Session {
 
   /** Whether moved refs recompute the review, as worktree edits always do, or only announce themselves. */
   get follows(): boolean {
-    return this.require().mode.live === 'worktree' || this.opts.followRefs;
+    const a = this.require();
+    if (a.mode.live === 'worktree') return true;
+    switch (this.opts.followRefs) {
+      case 'on':
+        return true;
+      case 'off':
+        return false;
+      case 'auto':
+        return !a.branches;
+    }
   }
 
   /** Change the user's choice for the running session; a pending notice stands until a reload picks the refs up. */
-  setFollowRefs(followRefs: boolean): void {
+  setFollowRefs(followRefs: FollowRefs): void {
     this.opts.followRefs = followRefs;
   }
 
@@ -402,13 +414,14 @@ export class Session {
       this.opts.context,
       followed ? new IterationStore(this.repo, range.commentKey) : null,
     );
-    // Both awaited together: if one fails, the other's rejection is still handled.
-    const [comments, snap] = await Promise.all([
+    // All awaited together: if one fails, the others' rejections are still handled.
+    const [comments, snap, branches] = await Promise.all([
       CommentStore.open(this.repo.gitDir, mode.commentKey),
       snapshotter.current(),
+      range.live === 'refs' && namesBranch(this.repo, range),
     ]);
     // Build the complete next state, then swap it in and retire the previous one.
-    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null };
+    const next: Active = { mode, prUrl, snapshotter, comments, watcher: null, moved: null, branches };
     // The repository may have moved on while no server was watching it.
     await this.relocateComments(next, snap);
     if (this.opts.watch && mode.live !== 'none') next.watcher = await this.startWatcher(next);
@@ -464,6 +477,25 @@ export class Session {
       await new IterationStore(this.repo, range.commentKey).clear();
       // An interdiff or pair names iterations that no longer exist.
       return a.mode.interdiff ? this.leaveInterdiff(a) : this.recompute();
+    });
+  }
+
+  /**
+   * Forgets one recorded iteration and unpins its commits. The latest stays: it is the range's
+   * current state and would be recorded again at once.
+   */
+  deleteIteration(n: number): Promise<Snapshot> {
+    return this.run(async () => {
+      const a = this.require();
+      const range = a.mode.within ?? a.mode;
+      const store = new IterationStore(this.repo, range.commentKey);
+      const list = await store.list();
+      if (!list.some((it) => it.n === n)) throw new RevspecError(`no iteration #${n}`);
+      if (list.at(-1)!.n === n) throw new RevspecError(`#${n} is the latest iteration, the range's current state`);
+      await store.remove(n);
+      const inter = a.mode.interdiff;
+      // An interdiff or pair that names the forgotten iteration has nothing to compare any more.
+      return inter && (inter.from.n === n || inter.to.n === n) ? this.leaveInterdiff(a) : this.recompute();
     });
   }
 

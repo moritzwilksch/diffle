@@ -88,7 +88,7 @@ describe('sidePath', () => {
 
 describe('Session', () => {
   it('reads both sides of a renamed file by its new path and relocates comments on it', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     const snap = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     expect(snap.tree).toEqual(['.gitignore', 'link.txt', 'new.txt', 'same.txt']);
     expect((await session.readSide(snap, 'new.txt', 'old'))?.toString()).toBe('alpha\nbeta\ngamma\n');
@@ -115,7 +115,7 @@ describe('Session', () => {
         return new Promise<T>((r) => (answer = r as (v: unknown) => void));
       },
     };
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false, github });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off', github });
     const resolving = session.resolve({ kind: 'pr', pr: 'https://github.com/o/r/pull/7' });
     await lookup;
     let closed = false;
@@ -128,7 +128,7 @@ describe('Session', () => {
   });
 
   it('flags threads stale whose lines left the diff, on start and on context change', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 0, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 0, followRefs: 'off' });
     await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     await session.comments.clear();
     // Context 0 shows only `delta`; `alpha` exists on both sides but is outside every hunk.
@@ -162,7 +162,7 @@ describe('Session', () => {
     await session.close();
 
     // A fresh session relocates against the snapshot before serving anything.
-    const again = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const again = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     await again.start(await again.resolve({ kind: 'revspec', args: ['main..feat'] }));
     expect(again.comments.get(outside.id)?.stale).toBe(false);
     await again.comments.clear();
@@ -170,7 +170,7 @@ describe('Session', () => {
   });
 
   it('notifies snapshot listeners on start, refresh, context change and mode switch, in version order', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 0, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 0, followRefs: 'off' });
     const seen: number[] = [];
     const off = session.onSnapshot((snap) => seen.push(snap.version));
     const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
@@ -187,7 +187,7 @@ describe('Session', () => {
   });
 
   it('focuses one listed commit of a range, keeps listing the range, and returns to it', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     const range = await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     const [commit] = range.commits.list;
     const focused = await session.switchMode({ kind: 'focus', commit: commit!.short });
@@ -211,7 +211,7 @@ describe('Session', () => {
   });
 
   it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     const { quote, hasFile } = session.anchorSource();
     expect(await quote('new.txt', 'new', 2, 4)).toBe('beta\ngamma\ndelta');
@@ -226,7 +226,7 @@ describe('Session', () => {
   });
 
   it('keeps a file thread fresh while its file is in the review and flags it when the comparison drops the file', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     await session.comments.clear();
     const renamed = await session.comments.addThread({ kind: 'file', path: 'new.txt' }, { body: 'split this' });
@@ -246,7 +246,7 @@ describe('Session', () => {
     await writeFile(join(dir, 'plain.py'), 'x = 1\n');
     await writeFile(join(dir, 'yarn.lock'), '# yarn\n');
     try {
-      const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+      const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
       const snap = await session.start(await session.resolve({ kind: 'working' }));
       const gen = Object.fromEntries(snap.changed.map((f) => [f.path, f.generated]));
       expect(gen).toMatchObject({ 'gen.py': true, 'plain.py': false, 'yarn.lock': true });
@@ -259,7 +259,7 @@ describe('Session', () => {
   });
 
   it('refuses ignored files, git internals, traversal, and returns a symlink as its target string', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     const snap = await session.start(await session.resolve({ kind: 'working' }));
     expect(await session.readSide(snap, 'secret.env', 'new')).toBeNull();
     expect(await session.readSide(snap, '.git/config', 'new')).toBeNull();
@@ -273,7 +273,7 @@ describe('Session', () => {
 
   it('keeps versions monotonic and the context agreed when a context change and a refresh interleave a slow mode switch', async () => {
     const slow = gatedRepo();
-    const session = new Session(slow.repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(slow.repo, hub, { watch: false, context: 3, followRefs: 'off' });
     const seen: Snapshot[] = [];
     session.onSnapshot((snap) => seen.push(snap));
     await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
@@ -297,7 +297,7 @@ describe('Session', () => {
 
   it('coalesces refreshes: at most one waits behind the running one', async () => {
     const slow = gatedRepo();
-    const session = new Session(slow.repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(slow.repo, hub, { watch: false, context: 3, followRefs: 'off' });
     await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));
     slow.hold();
     const running = session.refresh();
@@ -339,7 +339,7 @@ describe('Session', () => {
       const session = new Session(liveRepo, hub, {
         watch: true,
         context: 3,
-        followRefs: false,
+        followRefs: 'off',
         createWatcher: (target) => {
           targets.push(target);
           return watcher;
@@ -418,7 +418,7 @@ describe('Session', () => {
       const session = new Session(liveRepo, hub, {
         watch: true,
         context: 3,
-        followRefs: false,
+        followRefs: 'off',
         createWatcher: () => watcher,
       });
       let published = 0;
@@ -500,7 +500,7 @@ describe('Session', () => {
       const session = new Session(liveRepo, hub, {
         watch: true,
         context: 3,
-        followRefs: true,
+        followRefs: 'on',
         createWatcher: () => watcher,
       });
       const published: Snapshot[] = [];
@@ -517,13 +517,28 @@ describe('Session', () => {
       expect(session.moved).toBeNull();
 
       // Turned off at runtime: the next move is announced instead.
-      session.setFollowRefs(false);
+      session.setFollowRefs('off');
       expect(session.follows).toBe(false);
       await writeFile(join(live, 'a.txt'), 'a\nb\nc\nd\n');
       liveGit('commit', '-q', '-am', 'three');
       watcher.dirty();
       await vi.waitFor(() => expect(session.moved).not.toBeNull());
       expect(published).toHaveLength(2);
+
+      // auto: a comparison naming a branch keeps waiting for Reload ...
+      session.setFollowRefs('auto');
+      expect(session.follows).toBe(false);
+      // ... while one between a detached HEAD and an expression follows the commits as they land.
+      liveGit('checkout', '-q', '--detach');
+      await session.switchMode({ kind: 'revspec', args: ['HEAD~1..HEAD'] });
+      expect(session.follows).toBe(true);
+      const before = published.length;
+      await writeFile(join(live, 'a.txt'), 'a\nb\nc\nd\ne\n');
+      liveGit('commit', '-q', '-am', 'four');
+      watcher.dirty();
+      await vi.waitFor(() => expect(published).toHaveLength(before + 1));
+      expect(published.at(-1)!.newSha).toBe(liveGit('rev-parse', 'HEAD'));
+      expect(session.moved).toBeNull();
       await session.close();
     } finally {
       await rmTmp(live);
@@ -556,7 +571,7 @@ describe('Session', () => {
       await writeFile(join(live, 'a.txt'), 'a\nfeature\n');
       liveGit('commit', '-q', '-am', 'feature');
       const liveRepo = await GitRepo.open(live);
-      const session = new Session(liveRepo, hub, { watch: false, context: 3, followRefs: false });
+      const session = new Session(liveRepo, hub, { watch: false, context: 3, followRefs: 'off' });
       const first = await session.start(await session.resolve({ kind: 'revspec', args: ['main...feat'] }));
       expect(first.iterations).toEqual([
         { n: 1, oldSha: first.oldSha, newSha: first.newSha, recordedAt: expect.any(Number) },
@@ -631,8 +646,19 @@ describe('Session', () => {
       await expect(session.switchMode({ kind: 'interdiff', from: 2, to: 1 })).rejects.toThrow(RevspecError);
       await expect(session.switchMode({ kind: 'interdiff', from: 1, to: 3 })).rejects.toThrow(RevspecError);
 
-      // Forgetting the iterations from an interdiff returns to the range, whose state is now #1 again, unpinned otherwise.
+      // One iteration can go, but not the latest: it is the current state. Forgetting the one an interdiff
+      // compares from returns to the range; only the kept iteration's commits stay pinned.
       await session.switchMode({ kind: 'interdiff', from: 1, to: 2 });
+      await expect(session.deleteIteration(2)).rejects.toThrow(RevspecError);
+      await expect(session.deleteIteration(9)).rejects.toThrow(RevspecError);
+      const dropped = await session.deleteIteration(1);
+      expect(dropped.mode).toEqual(first.mode);
+      expect(dropped.iterations.map((it) => it.n)).toEqual([2]);
+      expect(liveGit('for-each-ref', '--format=%(objectname)', 'refs/diffle/iterations/').split('\n').sort()).toEqual(
+        [second.oldSha, second.newSha].sort(),
+      );
+
+      // Forgetting all of them records the current state as #1 again, unpinned otherwise.
       const cleared = await session.clearIterations();
       expect(cleared.mode).toEqual(first.mode);
       expect(cleared.iterations).toEqual([
@@ -652,7 +678,7 @@ describe('Session', () => {
     const session = new Session(repo, hub, {
       watch: true,
       context: 3,
-      followRefs: false,
+      followRefs: 'off',
       createWatcher: () => {
         const w = new FakeWatcher(delay);
         delay = 0; // only the first watcher is slow
@@ -726,7 +752,7 @@ class FakeWatcher implements WatcherLike {
 
 describe('old-side worktree reads', () => {
   it('maps reverse rename anchors into the worktree and preserves the new-side allowlist', async () => {
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: false });
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     try {
       const snap = await session.start(await session.resolve({ kind: 'revspec', args: ['worktree..main'] }));
       const renamed = snap.changed.find((file) => file.path === 'old.txt')!;

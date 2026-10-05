@@ -2,6 +2,13 @@ import { Dialog } from '../ui/Dialog.js';
 import { Button } from '../ui/Button.js';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store.js';
+import type { FollowRefs } from '../../shared/protocol.js';
+
+const FOLLOW_REFS: [FollowRefs, string][] = [
+  ['on', 'Always'],
+  ['auto', 'Auto (not on branches)'],
+  ['off', 'Never'],
+];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const config = useStore((s) => s.config);
@@ -82,16 +89,24 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         onChange={(e) => setContext(e.target.value)}
         className="w-[100px]"
       />
-      <h3 className="m-0 mt-[14px] mb-2">Moved refs</h3>
+      <h3 className="m-0 mt-[14px] mb-2">Reload behavior</h3>
       <p className="m-0 mb-2 text-muted">
-        A review between refs stays put while a ref moves (a push, a rebase, a new commit) and offers{' '}
-        <strong>Reload</strong>; a review of the worktree always follows your edits. Same as{' '}
-        <code>diffle config set-follow-refs</code>.
+        When a compared ref moves. Same as <code>diffle config set-follow-refs</code>.
       </p>
-      <label className="flex cursor-pointer items-center gap-1.5">
-        <input type="checkbox" checked={followRefs} onChange={(e) => setFollowRefs(e.target.checked)} />
-        Follow moved refs: recompute the review right away, as for the worktree
-      </label>
+      <div role="radiogroup" aria-label="Reload behavior" className="flex flex-col gap-1">
+        {FOLLOW_REFS.map(([value, label]) => (
+          <label key={value} className="flex cursor-pointer items-center gap-1.5">
+            <input
+              type="radio"
+              name="follow-refs"
+              value={value}
+              checked={followRefs === value}
+              onChange={() => setFollowRefs(value)}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
       <h3 className="m-0 mt-[14px] mb-2">Language servers</h3>
       <p className="m-0 mb-2 text-muted">
         Go-to-definition, references and symbols come from a language server per language, found on <code>PATH</code>.{' '}

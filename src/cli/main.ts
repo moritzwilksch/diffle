@@ -19,13 +19,14 @@ import {
   type LanguageId,
   type EntryRequest,
   type UserConfig,
+  type FollowRefs,
 } from '../shared/protocol.js';
 import {
   collectLanguage,
   collectLspOverride,
   type LspOverride,
   parseContext,
-  parseOnOff,
+  parseFollowRefs,
   parseLanguage,
   parsePort,
   parseAllowedOrigin,
@@ -203,12 +204,16 @@ config
   });
 config
   .command('set-follow-refs')
-  .description('follow moved refs live (off: a Reload button)')
-  .argument('<on|off>', 'on or off', parseOnOff)
-  .action(async (followRefs: boolean) => {
+  .description('follow moved refs: on, auto (not branches), off')
+  .argument(
+    '<mode>',
+    'on: reload at once; auto: so unless a branch is compared; off: offer a Reload button',
+    parseFollowRefs,
+  )
+  .action(async (followRefs: FollowRefs) => {
     const store = await UserConfigStore.open();
     await store.set({ followRefs });
-    console.log(store.get().followRefs ? 'on' : 'off');
+    console.log(store.get().followRefs);
   });
 config
   .command('set-lsp')

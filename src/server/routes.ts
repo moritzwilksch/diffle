@@ -92,6 +92,12 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.delete('/api/iterations', async (c) => c.json(await session.clearIterations()));
 
+  app.delete('/api/iterations/:n', async (c) => {
+    const n = Number(c.req.param('n'));
+    if (!Number.isInteger(n) || n < 1) throw new RevspecError(`not an iteration number: ${c.req.param('n')}`);
+    return c.json(await session.deleteIteration(n));
+  });
+
   app.post('/api/mode', async (c) => {
     const req = ModeRequestSchema.parse(await readJson(c));
     return c.json(await session.switchMode(req));

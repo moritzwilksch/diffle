@@ -63,19 +63,6 @@ diffle --help           # all commands and flags
 `diffle pr` needs a [GitHub token](#send-comments-to-github). A PR from another repository opens
 in a temporary clone.
 
-A worktree review follows your edits as you make them. A review between refs stays put: once a ref
-moves (a push, a rebase, a new commit), the header says so and **Reload** picks the new commits up.
-Turn on **Follow moved refs** in the settings (or `diffle config set-follow-refs on`) to have it
-recompute right away instead.
-
-Every state a reviewed range is loaded in is an _iteration_. Once there are two, the panel lists
-them; pick an older one (or press `ii`) to see only what the branch changed since then, or
-shift-click to compare any two. A rebase in between is
-left out: the older head is replayed onto the newer base before the two are compared, and files
-the replay could not merge are flagged. The commits box then shows `git range-diff`'s pairing of
-the two iterations' commits; pick an amended, reworded or added one, or step with `<` and `>`, to
-see that commit's own change since. Comments are off in these views: leave them on the range itself.
-
 Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
 to keep it running.
 

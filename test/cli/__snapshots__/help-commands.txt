@@ -34,7 +34,7 @@ Commands:
   show                          print the config file path and contents
   add-auto-viewed <glob...>     add patterns for files that start viewed
   set-context <n>               set context lines around changes
-  set-follow-refs <on|off>      follow moved refs live (off: a Reload button)
+  set-follow-refs <mode>        follow moved refs: on, auto (not branches), off
   set-lsp <language> <command>  set the language-server command for one language
   unset-lsp <language...>       forget a language-server override, back to PATH
   remove-auto-viewed <glob...>  remove patterns for files that start viewed

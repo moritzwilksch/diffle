@@ -38,7 +38,7 @@ const api = {
   config: vi.fn(async (): Promise<UserConfig> => ({
     autoViewed: [],
     contextLines: 5,
-    followRefs: false,
+    followRefs: 'off',
     lspCommands: { python: 'pyrefly lsp' },
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
@@ -968,12 +968,17 @@ describe('client transitions', () => {
 
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
     useStore.setState({
-      config: { autoViewed: [], contextLines: 5, followRefs: false, lspCommands: {} },
+      config: { autoViewed: [], contextLines: 5, followRefs: 'off' as const, lspCommands: {} },
       lsp: LSP_OFF,
     });
     const slow = deferred<Snapshot>();
     api.snapshot.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(snap(2, 'working'));
-    api.config.mockResolvedValueOnce({ autoViewed: ['*.lock'], contextLines: 9, followRefs: false, lspCommands: {} });
+    api.config.mockResolvedValueOnce({
+      autoViewed: ['*.lock'],
+      contextLines: 9,
+      followRefs: 'off' as const,
+      lspCommands: {},
+    });
     api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
     const boot = useStore.getState().boot();
     // The watcher pushes while boot's requests are in flight.
@@ -1765,7 +1770,7 @@ const thread = (
   resolved: over.resolved ?? false,
   stale: false,
 });
-const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: false, lspCommands: {} };
+const config = { autoViewed: ['*.lock'], contextLines: 5, followRefs: 'off' as const, lspCommands: {} };
 
 describe('request ownership', () => {
   type SearchResponse = { query: string; matches: { path: string; line: number; text: string }[]; truncated: boolean };
@@ -2004,7 +2009,7 @@ describe('request ownership', () => {
     const cfg = (contextLines: number): UserConfig => ({
       autoViewed: [],
       contextLines,
-      followRefs: false,
+      followRefs: 'off',
       lspCommands: {},
     });
     const load = deferred<UserConfig>();
