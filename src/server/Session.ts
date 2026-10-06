@@ -7,13 +7,12 @@ import {
   type FollowRefs,
   type GithubMetadata,
   type Iteration,
-  MAX_RANGE_COMMITS,
   type ModeRequest,
   type ModeSpec,
   type Moved,
-  type RangeCommit,
-  type RangePair,
+  type RangeSide,
   type ServerMessage,
+  shownIterations,
   type Side,
   type Snapshot,
 } from '../shared/protocol.js';
@@ -25,7 +24,8 @@ import { discoverGithub } from './GithubMetadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
 import { IterationStore } from './iterations.js';
-import { namesBranch, resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
+import { namesBranch, rangeDiffReview, resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
+import { compareRanges } from './rangediff.js';
 import { RevspecError } from './revspec.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
@@ -274,9 +274,9 @@ export class Session {
   }
 
   /**
-   * Compares two recorded iterations of the active range: `from`'s head replayed onto `to`'s base
-   * against `to`'s head, so only what the branch itself changed in between shows. The interdiff
-   * keeps its own comments and the range's PR identity; its refs keep being watched.
+   * Compares two recorded iterations of the active range, so only what the branch itself changed
+   * in between shows. The interdiff keeps its own comments and the range's PR identity; its refs
+   * keep being watched.
    */
   private async interdiff(from: number, to: number): Promise<ResolvedReview> {
     const a = this.require();
@@ -286,68 +286,14 @@ export class Session {
     const store = new IterationStore(this.repo, range.commentKey);
     const [older, newer] = await Promise.all([store.get(from), store.get(to)]);
     if (!older || !newer) throw new RevspecError(`no iteration #${older ? to : from} of ${comparisonLabel(range)}`);
-    // The same base needs no replay: the older head's tree is what was reviewed.
-    const [{ tree, conflicts }, pairs] = await Promise.all([
-      older.oldSha === newer.oldSha
-        ? this.repo.tree(older.newSha).then((tree) => ({ tree, conflicts: [] }))
-        : this.repo.replay(older.oldSha, newer.oldSha, older.newSha),
-      this.pairs(older, newer),
-    ]);
-    return {
-      prUrl: a.prUrl,
-      mode: {
-        old: tree,
-        new: newer.newSha,
-        base: 'direct',
-        live: range.live === 'none' ? 'none' : 'refs',
-        commentKey: `${range.commentKey}:interdiff:${from}-${to}`,
-        within: range,
-        interdiff: { from: older, to: newer, conflicts, pairs },
-      },
-    };
-  }
-
-  /**
-   * Pairs the two iterations' commits as `git range-diff` does and tells a pair whose patch is
-   * the same (a reworded commit) from an amended one by patch id.
-   */
-  private async pairs(older: Iteration, newer: Iteration): Promise<RangePair[]> {
-    const oldRange = `${older.oldSha}..${older.newSha}`;
-    const newRange = `${newer.oldSha}..${newer.newSha}`;
-    const [rows, oldCommits, newCommits] = await Promise.all([
-      this.repo.rangeDiff(oldRange, newRange),
-      this.repo.rangeCommits(oldRange, MAX_RANGE_COMMITS),
-      this.repo.rangeCommits(newRange, MAX_RANGE_COMMITS),
-    ]);
-    // range-diff abbreviates; a commit beyond the listed window is looked up on its own.
-    const find = async (list: RangeCommit[], abbrev: string | null): Promise<RangeCommit | null> => {
-      if (abbrev === null) return null;
-      const listed = list.find((c) => c.sha.startsWith(abbrev));
-      return listed ?? (await this.repo.rangeCommits(`${abbrev}^!`, 1)).list[0] ?? null;
-    };
-    const paired = await Promise.all(
-      rows.map(async (row) => ({
-        old: await find(oldCommits.list, row.old),
-        new: await find(newCommits.list, row.new),
-        marker: row.marker,
-      })),
-    );
-    const changed = paired.filter((p) => p.marker === '!' && p.old && p.new);
-    const ids = await this.repo.patchIds(changed.flatMap((p) => [p.old!.sha, p.new!.sha]));
-    return paired.map(({ old, new: next, marker }) => ({
-      old,
-      new: next,
-      status:
-        marker === '='
-          ? 'identical'
-          : marker === '<'
-            ? 'dropped'
-            : marker === '>'
-              ? 'added'
-              : old && next && ids.get(old.sha) !== undefined && ids.get(old.sha) === ids.get(next.sha)
-                ? 'message'
-                : 'changed',
-    }));
+    const side = (it: Iteration): RangeSide => ({
+      old: it.oldSha,
+      new: it.newSha,
+      oldSha: it.oldSha,
+      newSha: it.newSha,
+      iteration: it.n,
+    });
+    return { prUrl: a.prUrl, mode: await compareRanges(this.repo, range, side(older), side(newer)) };
   }
 
   /**
@@ -359,10 +305,11 @@ export class Session {
     const a = this.require();
     const { interdiff, within: range } = a.mode;
     if (!interdiff || !range) throw new RevspecError('no interdiff to pick a pair from');
-    if (commit === null) return this.interdiff(interdiff.from.n, interdiff.to.n);
+    if (commit === null)
+      return { prUrl: a.prUrl, mode: await compareRanges(this.repo, range, interdiff.from, interdiff.to) };
     const found = interdiff.pairs.find((p) => p.new && (p.new.sha === commit || p.new.short === commit));
     if (!found?.new) throw new RevspecError(`not a commit of ${comparisonLabel(a.mode)}: ${commit}`);
-    if (found.status === 'identical') throw new RevspecError(`${found.new.short} is identical in both iterations`);
+    if (found.status === 'identical') throw new RevspecError(`${found.new.short} is identical in both ranges`);
     const live = range.live === 'none' ? 'none' : 'refs';
     const base = { live, within: range, interdiff } as const;
     if (!found.old) {
@@ -463,9 +410,9 @@ export class Session {
   reload(): Promise<Snapshot> {
     return this.run(async () => {
       const a = this.require();
-      if (!a.mode.interdiff || !a.mode.within) return this.recompute();
-      // An interdiff is pinned; the moved refs belong to its range, where the reviewer continues.
-      return this.leaveInterdiff(a);
+      // Two iterations are pinned; the moved refs belong to their range, where the reviewer continues.
+      if (a.mode.within && shownIterations(a.mode)) return this.leaveInterdiff(a);
+      return this.recompute();
     });
   }
 
@@ -475,8 +422,8 @@ export class Session {
       const a = this.require();
       const range = a.mode.within ?? a.mode;
       await new IterationStore(this.repo, range.commentKey).clear();
-      // An interdiff or pair names iterations that no longer exist.
-      return a.mode.interdiff ? this.leaveInterdiff(a) : this.recompute();
+      // An interdiff or pair of two iterations names iterations that no longer exist.
+      return shownIterations(a.mode) ? this.leaveInterdiff(a) : this.recompute();
     });
   }
 
@@ -493,20 +440,32 @@ export class Session {
       if (!list.some((it) => it.n === n)) throw new RevspecError(`no iteration #${n}`);
       if (list.at(-1)!.n === n) throw new RevspecError(`#${n} is the latest iteration, the range's current state`);
       await store.remove(n);
-      const inter = a.mode.interdiff;
+      const shown = shownIterations(a.mode);
       // An interdiff or pair that names the forgotten iteration has nothing to compare any more.
-      return inter && (inter.from.n === n || inter.to.n === n) ? this.leaveInterdiff(a) : this.recompute();
+      return shown && (shown.from === n || shown.to === n) ? this.leaveInterdiff(a) : this.recompute();
     });
   }
 
-  private async leaveInterdiff(a: Active): Promise<Snapshot> {
-    const snap = await this.activate({ mode: a.mode.within!, prUrl: a.prUrl });
+  private leaveInterdiff(a: Active): Promise<Snapshot> {
+    return this.enter({ mode: a.mode.within!, prUrl: a.prUrl });
+  }
+
+  /** Activates a review in place of the current one, as a switch does, and tells clients. */
+  private async enter(review: ResolvedReview): Promise<Snapshot> {
+    const snap = await this.activate(review);
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
     return snap;
   }
 
+  /**
+   * Recomputes the active snapshot. A range-diff of two named ranges resolves them again
+   * instead, since its sides are pinned trees: that is how it follows the refs it was named by.
+   */
   private recompute(): Promise<Snapshot> {
     const a = this.require();
+    const inter = a.mode.interdiff;
+    if (inter && !shownIterations(a.mode) && !a.mode.pair)
+      return rangeDiffReview(this.repo, [inter.from, inter.to], a.prUrl).then((review) => this.enter(review));
     a.snapshotter.invalidate(++this.version);
     return this.publish(a);
   }
@@ -617,7 +576,10 @@ export class Session {
    */
   anchorSource(): AnchorSource {
     // An interdiff's old side is a replayed tree, and its threads would live under a key the range never shows.
-    if (this.mode.interdiff) throw new RevspecError('comments are off while comparing iterations');
+    if (this.mode.interdiff)
+      throw new RevspecError(
+        shownIterations(this.mode) ? 'comments are off while comparing iterations' : 'comments are off in a range-diff',
+      );
     return {
       quote: async (path, side, startLine, endLine) => {
         const snap = await this.snapshotter.current();

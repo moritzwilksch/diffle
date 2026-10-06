@@ -1,0 +1,11 @@
+- form "Range diff…":
+  - text: Old range
+  - combobox "Old base": main
+  - text: ..
+  - combobox "Old tip"
+  - text: New range
+  - combobox "New base": main
+  - text: ..
+  - combobox "New tip": HEAD
+  - paragraph: How the old range’s commits became the new range’s, like git range-diff.
+  - button "Compare" [disabled]

@@ -1,7 +1,7 @@
 import { History, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import type { Iteration, Snapshot } from '../../shared/protocol.js';
+import { type Iteration, type Snapshot, shownIterations } from '../../shared/protocol.js';
 import { iterationPick, relativeTime } from '../model.js';
 import { useStore } from '../store.js';
 import { useConfirm } from '../useConfirm.js';
@@ -24,7 +24,7 @@ export function IterationList({ snapshot }: { snapshot: Snapshot }) {
   const { iterations, mode } = snapshot;
   const latest = iterations.at(-1);
   if (!latest || iterations.length < 2) return null;
-  const shown = mode.interdiff ? { from: mode.interdiff.from.n, to: mode.interdiff.to.n } : null;
+  const shown = shownIterations(mode);
   const pick = (n: number, shift: boolean) => {
     const next = iterationPick(shown, latest.n, n, shift);
     if (next) compareIterations(next.from, next.to);

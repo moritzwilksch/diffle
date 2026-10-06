@@ -448,7 +448,13 @@ describe('rangeStep', () => {
   });
 
   it("steps through an interdiff's pairs with something to show, skipping identical and dropped ones", () => {
-    const it = (n: number) => ({ n, oldSha: '0'.repeat(40), newSha: 'b'.repeat(40), recordedAt: 0 });
+    const it = (n: number) => ({
+      old: '0'.repeat(40),
+      new: 'b'.repeat(40),
+      oldSha: '0'.repeat(40),
+      newSha: 'b'.repeat(40),
+      iteration: n,
+    });
     const pairs = [
       { old: commit('1'.repeat(40)), new: commit('a'.repeat(40)), status: 'identical' as const },
       { old: commit('2'.repeat(40)), new: null, status: 'dropped' as const },

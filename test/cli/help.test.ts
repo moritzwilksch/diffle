@@ -14,15 +14,17 @@ function help(...args: string[]): string {
 
 // Spawned once at collection, outside any test's timeout: each tsx start takes over a second on Windows.
 const out = help();
-const sub = { working: help('working'), pr: help('pr'), config: help('config') };
+const sub = { working: help('working'), pr: help('pr'), 'range-diff': help('range-diff'), config: help('config') };
 
 describe('diffle --help', () => {
   const commands = out.slice(out.indexOf('\nCommands:')).split('\nShorthands')[0]!;
 
   it('keeps the shorthands out of the command list, in a section of their own', () => {
-    for (const shorthand of ['working', 'pr']) expect(commands).not.toMatch(new RegExp(`^ +${shorthand}\\b`, 'm'));
+    for (const shorthand of ['working', 'pr', 'range-diff'])
+      expect(commands).not.toMatch(new RegExp(`^ +${shorthand}\\b`, 'm'));
     const shorthands = out.slice(out.indexOf('Shorthands'));
-    for (const shorthand of ['working', 'pr [number|url]']) expect(shorthands).toContain(shorthand);
+    for (const shorthand of ['working', 'pr [number|url]', 'range-diff <ranges...>'])
+      expect(shorthands).toContain(shorthand);
   });
 
   it('carries no empty defaults for the repeatable options', () => {
@@ -37,7 +39,9 @@ describe('help text', () => {
     await expect(out).toMatchFileSnapshot('__snapshots__/help.txt');
   });
   it('is the committed text for the shorthands and config', async () => {
-    const sections = (['working', 'pr', 'config'] as const).map((cmd) => `$ diffle ${cmd} --help\n\n${sub[cmd]}`);
+    const sections = (['working', 'pr', 'range-diff', 'config'] as const).map(
+      (cmd) => `$ diffle ${cmd} --help\n\n${sub[cmd]}`,
+    );
     await expect(sections.join('\n')).toMatchFileSnapshot('__snapshots__/help-commands.txt');
   });
 });
