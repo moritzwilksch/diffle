@@ -2,7 +2,7 @@
   - heading "Keyboard shortcuts" [level=3]
   - link "Docs":
     - /url: https://diffle.app
-  - link "GitHub":
+  - link "GitHub repository":
     - /url: https://github.com/moritzwilksch/diffle
   - button "Close"
   - heading "Move" [level=4]
