@@ -1,5 +1,9 @@
 - dialog "Keyboard shortcuts":
   - heading "Keyboard shortcuts" [level=3]
+  - link "Docs":
+    - /url: https://diffle.app
+  - link "GitHub":
+    - /url: https://github.com/moritzwilksch/diffle
   - button "Close"
   - heading "Move" [level=4]
   - text: "j / k or ↓ / ↑ next / previous line {n}j / {n}k n lines down / up Ctrl+d / Ctrl+u half a page down / up Ctrl+o / Ctrl+i jump back / forward in history ← or ⌘/Ctrl+Shift+e / → focus the file tree / back to the diff V, then j / k extend a block selection"

@@ -1,3 +1,4 @@
+import { ExternalLink } from 'lucide-react';
 import { Dialog } from '../ui/Dialog.js';
 import { Button } from '../ui/Button.js';
 import { useStore } from '../store.js';
@@ -106,6 +107,11 @@ export const COLUMNS: HelpSection[][] = [
   ],
 ];
 
+const LINKS: [label: string, href: string][] = [
+  ['Docs', 'https://diffle.app'],
+  ['GitHub', 'https://github.com/moritzwilksch/diffle'],
+];
+
 export function HelpOverlay() {
   const open = useStore((s) => s.helpOpen);
   const setOpen = useStore((s) => s.setHelpOpen);
@@ -118,7 +124,21 @@ export function HelpOverlay() {
     >
       <div className="flex items-center justify-between border-b border-b-border px-4.5 pt-3 pb-2.5">
         <h3 className="m-0 text-[0.9375rem]">Keyboard shortcuts</h3>
-        <Button onClick={() => setOpen(false)}>Close</Button>
+        <div className="flex items-center gap-3 text-[0.75rem]">
+          {LINKS.map(([label, href]) => (
+            <a
+              key={href}
+              className="inline-flex items-center gap-1 text-muted hover:text-accent hover:underline"
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {label}
+              <ExternalLink size="0.75rem" />
+            </a>
+          ))}
+          <Button onClick={() => setOpen(false)}>Close</Button>
+        </div>
       </div>
       <div className="grid grid-cols-[auto_auto] items-start gap-x-10 overflow-auto px-4.5 pt-2.5 pb-3.5 text-[0.75rem] whitespace-nowrap">
         {COLUMNS.map((sections, col) => (

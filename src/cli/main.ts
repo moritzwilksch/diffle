@@ -142,7 +142,10 @@ Without revisions, diffle compares HEAD..worktree.
 
 Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
 closing the last auto-opened browser tab stops diffle and prints the open comments as a prompt for an agent.
-Ctrl+C always stops it.`,
+Ctrl+C always stops it.
+
+Docs: https://diffle.app
+Source and issues: https://github.com/moritzwilksch/diffle`,
   )
   .action(async (revs: string[], _o, cmd: Command) => {
     // No revisions: review the working tree, like a bare `git diff`.
