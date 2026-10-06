@@ -255,7 +255,7 @@ export function useKeymap(): void {
       // configuration pane keep native Enter, so Enter and Space activate the same control.
       if (s.modeMenuOpen && !s.helpOpen) {
         const step = e.key === 'j' || e.key === 'ArrowDown' ? 1 : e.key === 'k' || e.key === 'ArrowUp' ? -1 : 0;
-        const entry = /^[1-5]$/.test(e.key)
+        const entry = new RegExp(`^[1-${MODE_PANES.length}]$`).test(e.key)
           ? Number(e.key)
           : e.key === 'Enter' && !target?.closest('button, #mode-config')
             ? s.modeEntry

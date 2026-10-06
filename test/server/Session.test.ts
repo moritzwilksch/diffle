@@ -587,7 +587,11 @@ describe('Session', () => {
         live: 'refs',
         commentKey: `${first.mode.commentKey}:interdiff:1-2`,
         within: first.mode,
-        interdiff: { from: second.iterations[0], to: second.iterations[1], conflicts: [] },
+        interdiff: {
+          from: { old: first.oldSha, new: first.newSha, oldSha: first.oldSha, newSha: first.newSha, iteration: 1 },
+          to: { old: second.oldSha, new: second.newSha, oldSha: second.oldSha, newSha: second.newSha, iteration: 2 },
+          conflicts: [],
+        },
       });
       expect(inter.mode.old).not.toBe(first.newSha);
       expect(inter.changed.map((f) => f.path)).toEqual(['a.txt']);
@@ -649,6 +653,131 @@ describe('Session', () => {
       await rmTmp(live);
     }
   });
+
+  it('compares two named ranges like git range-diff and resolves them again on reload', async () => {
+    const live = await mkdtemp(join(tmpdir(), 'diffle-rangediff-'));
+    const liveGit = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: live,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 't',
+          GIT_AUTHOR_EMAIL: 't@t',
+          GIT_COMMITTER_NAME: 't',
+          GIT_COMMITTER_EMAIL: 't@t',
+          GIT_CONFIG_GLOBAL: '/dev/null',
+        },
+      }).trim();
+    try {
+      liveGit('init', '-q', '-b', 'main');
+      await writeFile(join(live, 'a.txt'), 'a\n');
+      await writeFile(join(live, 'b.txt'), 'b\n');
+      liveGit('add', '.');
+      liveGit('commit', '-q', '-m', 'base');
+      const base = liveGit('rev-parse', 'HEAD');
+      liveGit('checkout', '-q', '-b', 'feat');
+      await writeFile(join(live, 'a.txt'), 'a\nfeature\n');
+      liveGit('commit', '-q', '-am', 'feature');
+      const v1 = liveGit('rev-parse', 'feat');
+      // Upstream moves on; the branch is rebased onto it, amended and extended. Nobody reviewed it in between.
+      liveGit('checkout', '-q', 'main');
+      await writeFile(join(live, 'b.txt'), 'b\nupstream\n');
+      liveGit('commit', '-q', '-am', 'upstream');
+      const main = liveGit('rev-parse', 'main');
+      liveGit('checkout', '-q', 'feat');
+      liveGit('rebase', '-q', 'main');
+      await writeFile(join(live, 'a.txt'), 'a\nfeature\namended\n');
+      liveGit('commit', '-q', '--amend', '--no-edit', '-a');
+      await writeFile(join(live, 'c.txt'), 'c\n');
+      liveGit('add', 'c.txt');
+      liveGit('commit', '-q', '-m', 'extra');
+      const v2 = liveGit('rev-parse', 'feat');
+
+      const liveRepo = await GitRepo.open(live);
+      const session = new Session(liveRepo, hub, { watch: false, context: 3, followRefs: 'off' });
+      const snap = await session.start(
+        await session.resolve({ kind: 'range-diff', args: [`${base}..${v1}`, 'main..feat'] }),
+      );
+      const range = {
+        old: 'main',
+        new: 'feat',
+        base: 'direct',
+        live: 'refs',
+        commentKey: 'range:refs/heads/main..refs/heads/feat',
+      };
+      expect(snap.mode).toMatchObject({
+        new: v2,
+        base: 'direct',
+        live: 'refs',
+        commentKey: `range-diff:${base}..${v1}:${main}..${v2}`,
+        within: range,
+        interdiff: {
+          from: { old: base, new: v1, oldSha: base, newSha: v1, iteration: null },
+          to: { old: 'main', new: 'feat', oldSha: main, newSha: v2, iteration: null },
+          conflicts: [],
+        },
+      });
+      // The amend and the extra commit show; the upstream change is on both sides after the replay.
+      expect(snap.changed.map((f) => f.path)).toEqual(['a.txt', 'c.txt']);
+      expect((await session.snapshotter.patch('a.txt'))?.split('\n').filter((l) => /^[+-][^+-]/.test(l))).toEqual([
+        '+amended',
+      ]);
+      expect((await session.readSide(snap, 'b.txt', 'old'))?.toString()).toBe('b\nupstream\n');
+      expect(snap.mode.interdiff!.pairs.map((p) => [p.status, p.old?.message, p.new?.message])).toEqual([
+        ['changed', 'feature', 'feature'],
+        ['added', undefined, 'extra'],
+      ]);
+      // The newer range is where the reviewer continues: its commits are listed and its state recorded.
+      expect(snap.commits.list.map((c) => c.message)).toEqual(['feature', 'extra']);
+      expect(snap.iterations).toMatchObject([{ n: 1, oldSha: main, newSha: v2 }]);
+      expect(comparisonLabel(snap.mode)).toBe(`${base.slice(0, 7)}..${v1.slice(0, 7)} → main..feat`);
+      expect(() => session.anchorSource()).toThrow('comments are off in a range-diff');
+
+      // A pair shows the amend alone, and the whole range-diff is where it returns to.
+      const pair = await session.switchMode({ kind: 'pair', commit: snap.mode.interdiff!.pairs[0]!.new!.short });
+      expect(pair.mode).toMatchObject({ within: range, pair: { old: v1, new: liveGit('rev-parse', 'feat^') } });
+      expect(comparisonLabel(pair.mode)).toBe(
+        `${comparisonLabel(snap.mode)} @ ${liveGit('rev-parse', '--short=7', 'feat^')}`,
+      );
+      expect((await session.switchMode({ kind: 'pair', commit: null })).mode).toEqual(snap.mode);
+      // Focusing a commit of the newer range leads back to it as well.
+      expect((await session.switchMode({ kind: 'focus', commit: null })).mode).toEqual(range);
+
+      // The branch moves on: a reload resolves both ranges again, so the new commit joins the pairs.
+      await session.switchMode({ kind: 'range-diff', args: [`${base}..${v1}`, 'main..feat'] });
+      await writeFile(join(live, 'd.txt'), 'd\n');
+      liveGit('add', 'd.txt');
+      liveGit('commit', '-q', '-m', 'more');
+      const v3 = liveGit('rev-parse', 'feat');
+      const reloaded = await session.reload();
+      expect(reloaded.mode.interdiff).toMatchObject({
+        from: { oldSha: base, newSha: v1 },
+        to: { oldSha: main, newSha: v3 },
+      });
+      expect(reloaded.mode.interdiff!.pairs.map((p) => p.new?.message)).toEqual(['feature', 'extra', 'more']);
+      expect(reloaded.iterations.map((it) => it.n)).toEqual([1, 2]);
+      // Forgetting the newer range's iterations keeps the range-diff on show.
+      expect((await session.clearIterations()).mode.interdiff).toMatchObject({ to: { newSha: v3 } });
+
+      // Equivalent forms, and the errors a typo earns.
+      const three = await session.resolve({ kind: 'range-diff', args: [base, v1, 'feat'] });
+      expect(three.mode.interdiff).toMatchObject({
+        from: { oldSha: base, newSha: v1 },
+        to: { old: base, new: 'feat', oldSha: base, newSha: v3 },
+      });
+      await expect(session.resolve({ kind: 'range-diff', args: ['main..worktree', 'main..feat'] })).rejects.toThrow(
+        RevspecError,
+      );
+      await expect(session.resolve({ kind: 'range-diff', args: ['main..nope', 'main..feat'] })).rejects.toThrow(
+        RevspecError,
+      );
+      await expect(session.resolve({ kind: 'range-diff', args: ['main..feat'] })).rejects.toThrow(RevspecError);
+      await session.close();
+    } finally {
+      await rmTmp(live);
+    }
+  }, 20_000);
 
   it('serializes concurrent mode switches: the last request wins and owns the only watcher', async () => {
     const watchers: FakeWatcher[] = [];

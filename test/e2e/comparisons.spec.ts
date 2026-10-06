@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { FEATURE_BRANCH, MAIN_BRANCH, TAG } from '../fixture/repo.js';
 import { expect, test } from './fixtures.js';
 import { filePaths, waitForHighlight } from './browser.js';
 
@@ -137,6 +138,50 @@ test.describe('a long range of commits', () => {
     const list = box.getByRole('list').locator('..');
     expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
     await expect(page).toHaveScreenshot('long-range.png');
+  });
+});
+
+test.describe('a range-diff', () => {
+  const label = /^v0\.1\.0\.\.main → v0\.1\.0\.\.feature\/refunds\s*$/;
+
+  test('compares two ranges from the compare menu, opens a pair and returns to the newer range', async ({ page }) => {
+    await page.keyboard.press('m');
+    await page.keyboard.press('6');
+    const pane = page.getByRole('form', { name: 'Range diff…' });
+    await expect(pane).toBeVisible();
+    await expect(pane).toMatchAriaSnapshot({ name: 'range-diff-pane.aria.yml' });
+    // Since the tag, main took a ledger fix and the branch four commits on top of the one they share;
+    // range-diff pairs the fix with the branch's ledger commit as amended.
+    await page.getByRole('combobox', { name: 'Old base' }).fill(TAG);
+    await page.getByRole('combobox', { name: 'Old tip' }).fill(MAIN_BRANCH);
+    await page.getByRole('combobox', { name: 'New base' }).fill(TAG);
+    await page.getByRole('combobox', { name: 'New tip' }).fill(FEATURE_BRANCH);
+    await pane.getByRole('button', { name: 'Compare' }).click();
+    const picker = page.getByTitle(/Change what is compared/);
+    await expect(picker).toHaveText(label);
+    await expect(page.locator('aside').last()).toContainText('Comments are off in a range-diff');
+    const box = page.getByRole('region', { name: 'Commits' });
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box).toMatchAriaSnapshot({ name: 'named-range-diff.aria.yml' });
+    await waitForHighlight(page, 'tally/refunds.py');
+    await page.mouse.move(0, 0);
+    await expect(page).toHaveScreenshot('named-range-diff.png');
+
+    // The amended pair opens alone; "All changes" leads to the newer range.
+    await box.getByRole('button', { name: /^feat\(ledger\): support refund lines/ }).click();
+    await expect(picker).toHaveText(/→ v0\.1\.0\.\.feature\/refunds @ [0-9a-f]{7}\s*$/);
+    await expect(box.locator('[aria-current="true"]')).toContainText('amended');
+    await box.getByRole('button', { name: /^All changes/ }).click();
+    await expect(picker).toHaveText(/^v0\.1\.0\.\.feature\/refunds\s*$/);
+  });
+
+  test.describe('from the command line', () => {
+    test.use({ revs: ['range-diff', TAG, MAIN_BRANCH, FEATURE_BRANCH] });
+
+    test('starts on the two ranges', async ({ page }) => {
+      await expect(page.getByTitle(/Change what is compared/)).toHaveText(label);
+      await expect(page.getByRole('region', { name: 'Commits' }).getByRole('listitem')).toHaveCount(5);
+    });
   });
 });
 

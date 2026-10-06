@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import {
   comparisonLabel,
+  rangeLabel,
   type PairStatus,
   type RangeCommit,
   type RangePair,
@@ -133,7 +134,9 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             entry(
               active === null,
               () => showPair(null),
-              `Since #${interdiff.from.n}`,
+              interdiff.from.iteration != null
+                ? `Since #${interdiff.from.iteration}`
+                : `Since ${rangeLabel(interdiff.from)}`,
               `${interdiff.pairs.filter((p) => p.status !== 'identical').length} of ${interdiff.pairs.length} commits differ`,
             )}
           <ol className="m-0 list-none p-0">

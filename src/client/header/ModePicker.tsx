@@ -7,6 +7,7 @@ import {
   ChevronRight,
   GitCommitHorizontal,
   GitCommitVertical,
+  GitCompareArrows,
   GitPullRequest,
   History,
   PencilRuler,
@@ -35,6 +36,10 @@ export function ModePicker() {
   const [a, setA] = useState('');
   const [b, setB] = useState('HEAD');
   const [dots, setDots] = useState<'..' | '...'>('...');
+  // A range-diff's two ranges, `old..new` each; the bases follow the default branch until typed.
+  const [ranges, setRanges] = useState({ oldBase: '', oldTip: '', newBase: '', newTip: 'HEAD' });
+  const setRange = (key: keyof typeof ranges) => (value: string) =>
+    setRanges((current) => ({ ...current, [key]: value }));
   const [oldOffsetText, setOldOffsetText] = useState('1');
   const [newOffsetText, setNewOffsetText] = useState('0');
   const commit = useStore((s) => s.modeCommit);
@@ -60,6 +65,8 @@ export function ModePicker() {
 
   const wrap = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLInputElement>(null);
+  /** The range-diff pane's tip inputs at odd indices, so Enter in one input moves to the next. */
+  const rangeInputs = useRef<(HTMLInputElement | null)[]>([]);
   const comparisonToggle = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,7 +77,9 @@ export function ModePicker() {
       .then((r) => {
         if (!current) return;
         setRefs(r);
-        setA((cur) => cur || r.defaultBranch || r.branches[0] || 'HEAD');
+        const base = r.defaultBranch || r.branches[0] || 'HEAD';
+        setA((cur) => cur || base);
+        setRanges((cur) => ({ ...cur, oldBase: cur.oldBase || base, newBase: cur.newBase || base }));
       })
       .catch((e) => {
         if (current) useStore.getState().report('Loading refs', e);
@@ -121,12 +130,16 @@ export function ModePicker() {
     setA(b);
     setB(a);
   };
+  const rangeArgs = Object.values(ranges).every((v) => v.trim())
+    ? [`${ranges.oldBase.trim()}..${ranges.oldTip.trim()}`, `${ranges.newBase.trim()}..${ranges.newTip.trim()}`]
+    : null;
   const entries = [
     { label: 'Working', icon: PencilRuler, pane: null },
     { label: 'Two refs…', icon: GitCommitHorizontal, pane: 'refs' },
     { label: 'Last commits', icon: History, pane: 'commits' },
     { label: 'PR', icon: GitPullRequest, pane: 'pr' },
     { label: 'Commit…', icon: GitCommitVertical, pane: 'commit' },
+    { label: 'Range diff…', icon: GitCompareArrows, pane: 'range-diff' },
   ] as const;
 
   return (
@@ -197,6 +210,7 @@ export function ModePicker() {
                 }
                 if (pane === 'pr') void openPr();
                 if (pane === 'commit' && commit.trim()) chooseCommit(commit.trim());
+                if (pane === 'range-diff' && rangeArgs) choose({ kind: 'range-diff', args: rangeArgs });
               }}
             >
               {pane === 'pr' && (
@@ -308,6 +322,45 @@ export function ModePicker() {
                   </p>
                 </>
               )}
+              {pane === 'range-diff' && (
+                <>
+                  {(['old', 'new'] as const).map((side, i) => (
+                    <div key={side} className={`flex flex-col gap-1 ${i === 0 ? 'pt-1.5' : ''}`}>
+                      <span className="text-[0.75rem] text-muted">{side === 'old' ? 'Old range' : 'New range'}</span>
+                      <div className="flex items-center gap-1.5 font-mono text-[0.8125rem] leading-[1.5]">
+                        <RefInput
+                          label={`${side === 'old' ? 'Old' : 'New'} base`}
+                          value={ranges[`${side}Base`]}
+                          onChange={setRange(`${side}Base`)}
+                          refs={refs}
+                          worktree={false}
+                          autoFocus={i === 0 && !pointerPick.current}
+                          onAccept={() => rangeInputs.current[i * 2 + 1]?.focus()}
+                        />
+                        <span>..</span>
+                        <RefInput
+                          label={`${side === 'old' ? 'Old' : 'New'} tip`}
+                          value={ranges[`${side}Tip`]}
+                          onChange={setRange(`${side}Tip`)}
+                          refs={refs}
+                          worktree={false}
+                          inputRef={(el) => {
+                            rangeInputs.current[i * 2 + 1] = el;
+                          }}
+                          onAccept={() =>
+                            i === 0
+                              ? rangeInputs.current[3]?.focus()
+                              : rangeArgs && choose({ kind: 'range-diff', args: rangeArgs })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <p className="m-0 p-0 text-[0.75rem] whitespace-normal text-muted">
+                    How the old range’s commits became the new range’s, like git range-diff.
+                  </p>
+                </>
+              )}
               {pane === 'pr' && (
                 <>
                   <label className="flex min-w-0 flex-col gap-1.5">
@@ -352,7 +405,9 @@ export function ModePicker() {
                       ? !a.trim() || !b.trim()
                       : pane === 'commit'
                         ? !commit.trim()
-                        : !validOffsets
+                        : pane === 'range-diff'
+                          ? !rangeArgs
+                          : !validOffsets
                 }
               >
                 {pane === 'pr'

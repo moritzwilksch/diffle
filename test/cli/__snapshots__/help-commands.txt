@@ -21,6 +21,20 @@ Arguments:
 Options:
   -h, --help  display help for command
 
+$ diffle range-diff --help
+
+Usage: diffle range-diff [options] <ranges...>
+
+How one series of commits became another, as git range-diff shows it: the older
+range replayed onto the newer one’s base against the newer range, with the
+commits paired.
+
+Arguments:
+  ranges      two ranges: <a>..<b> <c>..<d>, <base> <b> <d>, or <b>...<d>
+
+Options:
+  -h, --help  display help for command
+
 $ diffle config --help
 
 Usage: diffle config [options] [command]

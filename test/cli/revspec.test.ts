@@ -1,5 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { parseRevspec, RevspecError } from '../../src/server/revspec.js';
+import { parseRangeDiff, parseRevspec, RevspecError } from '../../src/server/revspec.js';
+
+describe('parseRangeDiff', () => {
+  it('takes two ranges, each old..new with empty sides defaulting to HEAD', () => {
+    expect(parseRangeDiff(['main..v1', 'main..v2'])).toEqual([
+      { old: 'main', new: 'v1' },
+      { old: 'main', new: 'v2' },
+    ]);
+    expect(parseRangeDiff(['main..', '..v2'])).toEqual([
+      { old: 'main', new: 'HEAD' },
+      { old: 'HEAD', new: 'v2' },
+    ]);
+  });
+
+  it('takes a base and two tips as git range-diff does', () => {
+    expect(parseRangeDiff(['main', 'v1', 'v2'])).toEqual(parseRangeDiff(['main..v1', 'main..v2']));
+  });
+
+  it("takes rev1...rev2 as each tip's commits since the other", () => {
+    expect(parseRangeDiff(['v1...v2'])).toEqual(parseRangeDiff(['v2..v1', 'v1..v2']));
+    expect(parseRangeDiff(['v1...'])).toEqual(parseRangeDiff(['HEAD..v1', 'v1..HEAD']));
+  });
+
+  it('takes ^! as the one commit', () => {
+    expect(parseRangeDiff(['a^!', 'b^!'])).toEqual([
+      { old: 'a^', new: 'a' },
+      { old: 'b^', new: 'b' },
+    ]);
+  });
+
+  it('rejects the worktree, lone revisions and mixed forms', () => {
+    expect(() => parseRangeDiff(['main..worktree', 'main..v2'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['main', 'worktree', 'v2'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['main..v1'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['main', 'v1'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['main...v1', 'main..v2'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['main..a', 'v1', 'v2'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['a..b^!', 'c..d'])).toThrow(RevspecError);
+    expect(() => parseRangeDiff([])).toThrow(RevspecError);
+    expect(() => parseRangeDiff(['a', 'b', 'c', 'd'])).toThrow(RevspecError);
+  });
+});
 
 describe('parseRevspec', () => {
   it('single rev diffs its merge base with HEAD against HEAD', () => {

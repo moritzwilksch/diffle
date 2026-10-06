@@ -116,7 +116,7 @@ const program = new Command()
     // a static completion script cannot ask.
     completionHint(new Argument('[revs...]', 'git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>'), {
       kind: 'choices',
-      values: ['working', 'pr'],
+      values: ['working', 'pr', 'range-diff'],
     }),
   )
   .addHelpText(
@@ -127,6 +127,8 @@ Shorthands (in place of <revs>):
   pr [number|url]          a GitHub pull request: its base...head, fetched if needed
                            (without an argument: the pull request for this branch)
   show [rev]               same as <rev>^!: one commit against its first parent, pinned (default: HEAD)
+  range-diff <ranges...>   how one series of commits became another, like git range-diff:
+                           <a>..<b> <c>..<d> | <base> <b> <d> | <b>...<d>
 
 Revisions follow git diff, except that a lone one compares from the merge base:
   diffle main              same as main...HEAD: what this branch added since it left main
@@ -173,6 +175,17 @@ program
   .description('A GitHub pull request, as GitHub shows it: merge-base(base, head) vs head.')
   .action(async (pr: string | undefined, _o, cmd: Command) =>
     run({ kind: 'pr', pr }, cmd.optsWithGlobals<GlobalOpts>()),
+  );
+
+program
+  .command('range-diff', { hidden: true })
+  .argument('<ranges...>', 'two ranges: <a>..<b> <c>..<d>, <base> <b> <d>, or <b>...<d>')
+  .summary('two series of commits')
+  .description(
+    'How one series of commits became another, as git range-diff shows it: the older range replayed onto the newer one’s base against the newer range, with the commits paired.',
+  )
+  .action(async (ranges: string[], _o, cmd: Command) =>
+    run({ kind: 'range-diff', args: ranges }, cmd.optsWithGlobals<GlobalOpts>()),
   );
 
 const config = program.command('config').description('show or edit the user config (same settings as the UI dialog)');

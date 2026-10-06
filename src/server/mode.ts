@@ -1,8 +1,9 @@
-import type { EntryRequest, ModeSpec } from '../shared/protocol.js';
+import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '../shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { githubRepository, type PullRequest, viewPr } from './github/pulls.js';
-import { type ParsedRevspec, parseRevspec, RevspecError } from './revspec.js';
+import { compareRanges } from './rangediff.js';
+import { type ParsedRange, type ParsedRevspec, parseRangeDiff, parseRevspec, RevspecError } from './revspec.js';
 
 /**
  * Resolves a comparison to Git endpoints for initial mode setup, PR setup after
@@ -105,6 +106,7 @@ export interface ResolvedReview {
 /** Resolves an input command into a comparison and optional explicit PR identity. */
 export async function resolveReview(req: EntryRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
   if (req.kind === 'pr') return resolvePr(req, repo, github);
+  if (req.kind === 'range-diff') return rangeDiffReview(repo, parseRangeDiff(req.args));
   const parsed: ParsedRevspec =
     req.kind === 'working' ? { old: 'HEAD', new: 'worktree', base: 'direct' } : parseRevspec(req.args);
   // A commit is pinned when entered: moving the ref it was named by, e.g. amending HEAD, makes a different commit.
@@ -112,14 +114,35 @@ export async function resolveReview(req: EntryRequest, repo: GitRepo, github?: G
     const { newSha: sha } = await resolveComparison(repo, parsed);
     return { mode: { old: sha, new: sha, base: 'parent', live: 'none', commentKey: `commit:${sha}` } };
   }
+  return { mode: await resolveRange(repo, parsed, req.kind === 'working' ? 'working' : undefined) };
+}
+
+/** A range as a comparison: resolved for its liveness and keyed for its comments, unless `key` names them. */
+async function resolveRange(repo: GitRepo, parsed: ParsedRevspec, key?: string): Promise<Comparison> {
   const { oldSha, newSha, live } = await resolveComparison(repo, parsed);
-  return {
-    mode: {
-      ...parsed,
-      live,
-      commentKey: req.kind === 'working' ? 'working' : await commentKey(repo, parsed, oldSha, newSha),
-    },
+  return { ...parsed, live, commentKey: key ?? (await commentKey(repo, parsed, oldSha, newSha)) };
+}
+
+/**
+ * Two ranges the reviewer named, compared. Both resolve now and the comparison is pinned; the
+ * newer range is where "All changes" leads and whose refs are watched. Resolving again, as a
+ * reload does, follows the revisions either range was named by.
+ */
+export async function rangeDiffReview(
+  repo: GitRepo,
+  [older, newer]: [ParsedRange, ParsedRange],
+  prUrl?: string,
+): Promise<ResolvedReview> {
+  const resolveSide = async (parsed: ParsedRange): Promise<RangeSide> => {
+    const { oldSha, newSha } = await resolveComparison(repo, { ...parsed, base: 'direct' });
+    return { old: parsed.old, new: parsed.new, oldSha, newSha, iteration: null };
   };
+  const [range, from, to] = await Promise.all([
+    resolveRange(repo, { ...newer, base: 'direct' }),
+    resolveSide(older),
+    resolveSide(newer),
+  ]);
+  return { prUrl, mode: await compareRanges(repo, range, from, to) };
 }
 
 /**

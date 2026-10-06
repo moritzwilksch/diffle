@@ -60,6 +60,11 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
     from: z.number().int().positive(),
     to: z.number().int().positive(),
   }),
+  /** Two ranges compared as `git range-diff` takes them: `<a>..<b> <c>..<d>`, `<base> <b> <d>` or `<b>...<d>`. */
+  z.object({
+    kind: z.literal('range-diff'),
+    args: z.string().array(),
+  }),
   /** One pair of the current interdiff by its new-side commit, or with null the whole interdiff. */
   z.object({
     kind: z.literal('pair'),
@@ -144,13 +149,27 @@ export const RangePairSchema = z.object({
 export type RangePair = z.infer<typeof RangePairSchema>;
 
 /**
- * Two iterations of a range compared. The old side is `from`'s head replayed onto `to`'s base
- * (a tree, not a commit), so a rebase in between does not show up as the upstream's changes;
- * the new side is `to`'s head.
+ * One range of a range-diff, `old..new`: the revisions that named it, so moved refs can be
+ * resolved again, and the commits they resolved to. A recorded iteration of the enclosing
+ * range carries its number; a range the reviewer named carries null.
+ */
+export const RangeSideSchema = z.object({
+  old: z.string(),
+  new: z.string(),
+  oldSha: z.string(),
+  newSha: z.string(),
+  iteration: z.number().nullable(),
+});
+export type RangeSide = z.infer<typeof RangeSideSchema>;
+
+/**
+ * Two ranges compared: two iterations of one range, or any two the reviewer named. The old
+ * side is `from`'s head replayed onto `to`'s base (a tree, not a commit), so a rebase in
+ * between does not show up as the upstream's changes; the new side is `to`'s head.
  */
 export const InterdiffSchema = z.object({
-  from: IterationSchema,
-  to: IterationSchema,
+  from: RangeSideSchema,
+  to: RangeSideSchema,
   /** Paths the replay could not merge; they carry conflict markers on the old side. */
   conflicts: z.string().array(),
   /** The two ranges' commits paired, in `git range-diff` order: the newer range's, dropped commits where they were. */
@@ -170,7 +189,10 @@ export const PairSpecSchema = z.object({
 export type PairSpec = z.infer<typeof PairSpecSchema>;
 
 export const ModeSpecSchema = ComparisonSchema.extend({
-  /** Set while one commit of a range is focused, or two of its iterations compared: the range, whose commits the snapshot keeps listing. */
+  /**
+   * Set while one commit of a range is focused or two ranges are compared: the range, whose commits the
+   * snapshot keeps listing. For a range-diff it is the newer range, where the reviewer continues.
+   */
   within: ComparisonSchema.optional(),
   interdiff: InterdiffSchema.optional(),
   /** Set with `interdiff` while one of its pairs is shown. */
@@ -180,19 +202,37 @@ export type ModeSpec = z.infer<typeof ModeSpecSchema>;
 
 /**
  * Display comparison endpoints with branch names instead of internal ref namespaces; a single commit as
- * `<sha>^!`, as `<range> @ <sha>` when focused within a range, as `<range> #1→#2` for an interdiff and
- * `<range> #1→#2 @ <sha>` for one of its pairs.
+ * `<sha>^!`, as `<range> @ <sha>` when focused within a range, as `<range> #1→#2` for two of its
+ * iterations, as `<a>..<b> → <c>..<d>` for two named ranges, and with ` @ <sha>` for one pair of either.
  */
 export function comparisonLabel(
   mode: Pick<ModeSpec, 'old' | 'new' | 'base' | 'within' | 'interdiff' | 'pair'>,
 ): string {
   if (mode.within && mode.interdiff) {
-    const label = `${comparisonLabel(mode.within)} #${mode.interdiff.from.n}→#${mode.interdiff.to.n}`;
+    const { from, to } = mode.interdiff;
+    const iterations = shownIterations(mode);
+    const label = iterations
+      ? `${comparisonLabel(mode.within)} #${iterations.from}→#${iterations.to}`
+      : `${rangeLabel(from)} → ${rangeLabel(to)}`;
     return mode.pair ? `${label} @ ${mode.pair.new.slice(0, 7)}` : label;
   }
   if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
   return `${refName(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${refName(mode.new)}`;
+}
+
+/** One side of a range-diff as the reviewer named it, `<old>..<new>`, with full hashes abbreviated. */
+export function rangeLabel(side: Pick<RangeSide, 'old' | 'new'>): string {
+  const short = (rev: string) => (/^[0-9a-f]{40}$/.test(rev) ? rev.slice(0, 7) : refName(rev));
+  return `${short(side.old)}..${short(side.new)}`;
+}
+
+/** The iteration numbers an interdiff compares, or null when it compares ranges the reviewer named. */
+export function shownIterations(mode: Pick<ModeSpec, 'interdiff'>): { from: number; to: number } | null {
+  const inter = mode.interdiff;
+  return inter && inter.from.iteration != null && inter.to.iteration != null
+    ? { from: inter.from.iteration, to: inter.to.iteration }
+    : null;
 }
 
 /** A comparison endpoint as the user named it: without diffle's PR namespace or `refs/heads/`. */

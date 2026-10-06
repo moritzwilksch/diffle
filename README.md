@@ -57,6 +57,7 @@ diffle pr 27            # GitHub PR 27, or its URL; without a number, this branc
 diffle show a1b2c3d     # one commit, like `git show`
 diffle main..feat       # any git-diff revspec: <rev> | a..b | a...b | a b
 diffle main..worktree   # "worktree" names the uncommitted tree on either side
+diffle range-diff main..v1 main..v2   # how a series of commits was reworked, like `git range-diff`
 diffle --help           # all commands and flags
 ```
 

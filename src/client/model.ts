@@ -2,6 +2,7 @@ import type { CodeViewLineSelection } from '@pierre/diffs';
 import picomatch from 'picomatch/posix';
 import {
   refName,
+  shownIterations,
   type ChangedFile,
   type CommentAnchor,
   type Iteration,
@@ -317,8 +318,8 @@ export function filterSymbols(all: LspSymbol[], query: string): LspSymbol[] {
 }
 
 /** Compare two validated, nonnegative ancestor offsets from HEAD. */
-/** The compare menu's entries by position (keys 1–5); Working acts at once and has no pane. */
-export const MODE_PANES = [null, 'refs', 'commits', 'pr', 'commit'] as const;
+/** The compare menu's entries by position (keys 1–6); Working acts at once and has no pane. */
+export const MODE_PANES = [null, 'refs', 'commits', 'pr', 'commit', 'range-diff'] as const;
 export type ModePane = NonNullable<(typeof MODE_PANES)[number]>;
 
 export function lastCommitsRequest(n: number, m: number): ModeRequest {
@@ -364,7 +365,10 @@ export function relativeTime(at: number, now = Date.now()): string {
  * and its threads would live under a key the range never shows again.
  */
 export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string | null {
-  return mode.interdiff ? 'Comments are off while comparing iterations: leave them on the range itself' : null;
+  if (!mode.interdiff) return null;
+  return shownIterations(mode)
+    ? 'Comments are off while comparing iterations: leave them on the range itself'
+    : 'Comments are off in a range-diff: leave them on either range itself';
 }
 
 /**

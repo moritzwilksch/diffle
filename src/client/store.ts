@@ -6,6 +6,7 @@ import {
   DEFAULT_USER_CONFIG,
   followsCheckout,
   lspBlocker,
+  shownIterations,
   type GithubMetadata,
   type ChangedFile,
   type CommentThread,
@@ -1415,14 +1416,15 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ modeMenuOpen: open, modePane: null, modeEntry: 1, ...(open ? { githubMenuOpen: false } : {}) });
     },
     highlightModeEntry(n) {
-      const entry = ((((n - 1) % 5) + 5) % 5) + 1;
+      const count = MODE_PANES.length;
+      const entry = ((((n - 1) % count) + count) % count) + 1;
       if (entry !== get().modeEntry) set({ modeEntry: entry });
     },
     pickModeEntry(n) {
       if (n === 1) {
         set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
         void get().switchMode({ kind: 'working' });
-      } else if (n >= 2 && n <= 5) {
+      } else if (n >= 2 && n <= MODE_PANES.length) {
         set({ modeMenuOpen: true, modePane: MODE_PANES[n - 1]!, modeEntry: n });
       }
     },
@@ -2259,8 +2261,7 @@ export const useStore = create<ReviewState>((set, get) => {
     stepIteration(end, direction) {
       const snap = get().snapshot;
       if (!snap) return;
-      const shown = snap.mode.interdiff ? { from: snap.mode.interdiff.from.n, to: snap.mode.interdiff.to.n } : null;
-      const next = iterationStep(snap.iterations, shown, end, direction);
+      const next = iterationStep(snap.iterations, shownIterations(snap.mode), end, direction);
       if (next) get().compareIterations(next.from, next.to);
     },
 
@@ -2269,8 +2270,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const latest = snap?.iterations.at(-1);
       if (!snap || !latest) return;
       if (!snap.iterations.some((it) => it.n === n)) return get().flash(`No iteration #${n}`);
-      const shown = snap.mode.interdiff ? { from: snap.mode.interdiff.from.n, to: snap.mode.interdiff.to.n } : null;
-      const next = iterationPick(shown, latest.n, n, false);
+      const next = iterationPick(shownIterations(snap.mode), latest.n, n, false);
       if (next) get().compareIterations(next.from, next.to);
     },
 
