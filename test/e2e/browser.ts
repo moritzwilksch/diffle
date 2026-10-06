@@ -310,10 +310,11 @@ export async function clickLine(page: Page, path: string, number: number, side: 
 }
 
 /**
- * Rest the pointer on a token starting with `text`, the way a reader hovers a symbol: the first one
- * on `side` (new by default, the side a language server can answer for), inside `path` or anywhere
- * rendered. The viewer arms the tooltip on pointer movement inside the token, so a plain `hover()`
- * (one move onto the centre) shows nothing; a short drift inside the token does.
+ * Rest the pointer on the word `text`, the way a reader hovers a symbol: its first occurrence as a
+ * whole word on `side` (new by default, the side a language server can answer for), inside `path`
+ * or anywhere rendered. A token can hold several words, and a word-level diff mark nests spans
+ * inside it. The viewer arms the tooltip on pointer movement inside the token, so a plain `hover()`
+ * (one move onto the centre) shows nothing; a short drift inside the word does.
  */
 export async function hoverSymbol(
   page: Page,
@@ -321,19 +322,38 @@ export async function hoverSymbol(
   { path, side = 'new' }: { path?: string; side?: 'old' | 'new' } = {},
 ): Promise<void> {
   const root = path ? await fileItem(page, path, gotoFile) : page;
-  const pattern = new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{N}_])${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`,
+    'u',
+  );
   const tokens = root.locator('span[data-char]', { hasText: pattern });
-  const boxes = await tokens.evaluateAll((elements) =>
-    elements.map((element) => {
-      const { x, y, width, height } = element.getBoundingClientRect();
-      // The column the token sits in: past the midpoint of its diff container in split view.
-      const container = element.closest('[data-diff]') ?? element.closest('diffs-container');
-      const middle = container ? container.getBoundingClientRect().x + container.getBoundingClientRect().width / 2 : 0;
-      return { x, y, width, height, right: x >= middle };
-    }),
+  const boxes = await tokens.evaluateAll(
+    (elements, source) =>
+      elements.map((element) => {
+        const word = new RegExp(source, 'u');
+        // The word's own box: walk the token's text nodes to the one holding it.
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let rect: DOMRect | null = null;
+        for (let node = walker.nextNode(); node && !rect; node = walker.nextNode()) {
+          const match = word.exec(node.textContent ?? '');
+          if (!match) continue;
+          const range = document.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          rect = range.getBoundingClientRect();
+        }
+        const { x, y, width, height } = rect ?? new DOMRect();
+        // The column the token sits in: past the midpoint of its diff container in split view.
+        const container = element.closest('[data-diff]') ?? element.closest('diffs-container');
+        const middle = container
+          ? container.getBoundingClientRect().x + container.getBoundingClientRect().width / 2
+          : 0;
+        return { x, y, width, height, right: x >= middle };
+      }),
+    pattern.source,
   );
   const box = boxes.find((b) => b.width > 0 && b.right === (side === 'new'));
-  if (!box) throw new Error(`no token starting with ${text} on the ${side} side`);
+  if (!box) throw new Error(`no word ${text} on the ${side} side`);
   await page.mouse.move(box.x + 2, box.y + box.height / 2);
   await page.mouse.move(box.x + Math.min(8, box.width - 2), box.y + box.height / 2, { steps: 3 });
 }

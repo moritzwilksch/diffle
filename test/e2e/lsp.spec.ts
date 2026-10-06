@@ -113,4 +113,18 @@ test.describe('with a language server', () => {
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expect.poll(() => highlighted(page)).toEqual({ focus: [], read: [], write: [] });
   });
+
+  test('a word inside a word-level diff mark hovers, clicks and focuses like any other', async ({ page, diffle }) => {
+    // ledger.py line 12 adds `Literal` to an import; the mark nests it in spans inside its token.
+    await gotoFile(page, 'tally/ledger.py');
+    await waitForLsp(diffle.url);
+    await expect(async () => {
+      await hoverSymbol(page, 'Literal', { path: 'tally/ledger.py' });
+      await expect(page.getByRole('tooltip')).toContainText('def f() -> None', { timeout: 2000 });
+    }).toPass({ timeout: 10000 });
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect.poll(async () => (await highlighted(page)).focus).toEqual(['Literal']);
+  });
 });

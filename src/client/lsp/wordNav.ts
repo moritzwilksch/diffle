@@ -6,6 +6,7 @@ import { rowOf } from '../review/rows.js';
 import { useStore } from '../store.js';
 import { occurrenceControl } from './occurrences.js';
 import { lspTarget, type TokenTarget } from './target.js';
+import { tokenRange } from './tokenText.js';
 
 /** Word runs shared by pointer hit-testing and keyboard navigation; offsets are UTF-16 columns. */
 export function wordsIn(text: string): { start: number; text: string }[] {
@@ -127,17 +128,9 @@ function focusWord({ el, col, text }: Word, path: string, line: number): void {
   focusedEl = el;
   focusedCol = col;
   focusedRow = { path, line };
-  const node = el.firstChild;
-  if (
-    node?.nodeType === Node.TEXT_NODE &&
-    typeof CSS !== 'undefined' &&
-    'highlights' in CSS &&
-    typeof Highlight !== 'undefined'
-  ) {
-    const start = col - Number(el.dataset.char);
-    const range = document.createRange();
-    range.setStart(node, start);
-    range.setEnd(node, start + text.length);
+  const start = col - Number(el.dataset.char);
+  const range = tokenRange(el, start, start + text.length);
+  if (range && typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined') {
     const highlight = new Highlight(range);
     // Above the occurrence tint, which paints this word too.
     highlight.priority = 2;
