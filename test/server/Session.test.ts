@@ -773,6 +773,21 @@ describe('Session', () => {
         RevspecError,
       );
       await expect(session.resolve({ kind: 'range-diff', args: ['main..feat'] })).rejects.toThrow(RevspecError);
+
+      // A reload from a pair resolves both ranges again too, and returns to the whole range-diff.
+      const shown = await session.switchMode({ kind: 'range-diff', args: [`${base}..${v1}`, 'main..feat'] });
+      await session.switchMode({ kind: 'pair', commit: shown.mode.interdiff!.pairs.at(-1)!.new!.short });
+      await writeFile(join(live, 'e.txt'), 'e\n');
+      liveGit('add', 'e.txt');
+      liveGit('commit', '-q', '-m', 'last');
+      const v4 = liveGit('rev-parse', 'feat');
+      const fromPair = await session.reload();
+      expect(fromPair.mode.pair).toBeUndefined();
+      expect(fromPair.newSha).toBe(v4);
+      expect(fromPair.mode.interdiff).toMatchObject({ to: { oldSha: main, newSha: v4 } });
+      expect(fromPair.mode.interdiff!.pairs.map((p) => p.new?.message)).toEqual(['feature', 'extra', 'more', 'last']);
+      expect(fromPair.changed.map((f) => f.path)).toContain('e.txt');
+      expect(session.moved).toBeNull();
       await session.close();
     } finally {
       await rmTmp(live);

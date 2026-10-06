@@ -460,11 +460,12 @@ export class Session {
   /**
    * Recomputes the active snapshot. A range-diff of two named ranges resolves them again
    * instead, since its sides are pinned trees: that is how it follows the refs it was named by.
+   * From one of its pairs too, back to the whole range-diff: the pair may no longer exist.
    */
   private recompute(): Promise<Snapshot> {
     const a = this.require();
     const inter = a.mode.interdiff;
-    if (inter && !shownIterations(a.mode) && !a.mode.pair)
+    if (inter && !shownIterations(a.mode))
       return rangeDiffReview(this.repo, [inter.from, inter.to], a.prUrl).then((review) => this.enter(review));
     a.snapshotter.invalidate(++this.version);
     return this.publish(a);
