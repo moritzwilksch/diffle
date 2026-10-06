@@ -59,6 +59,7 @@ import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
 import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
+import { tokenRange } from '../lsp/tokenText.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -213,15 +214,10 @@ function served(path: string): boolean {
 
 /** The identifier under `clientX` inside a token span: its text and its offset within the token, or null on punctuation or space. */
 function wordAtPoint(el: HTMLElement, clientX: number, config = false): { start: number; text: string } | null {
-  const node = el.firstChild;
-  if (!node || node.nodeType !== Node.TEXT_NODE || el.childNodes.length !== 1) return null;
-  const text = node.textContent ?? '';
-  const range = document.createRange();
+  const text = el.textContent ?? '';
   let at = -1;
   for (let i = 0; i < text.length; i++) {
-    range.setStart(node, i);
-    range.setEnd(node, i + 1);
-    const r = range.getBoundingClientRect();
+    const r = tokenRange(el, i, i + 1)!.getBoundingClientRect();
     if (clientX >= r.left && clientX <= r.right) {
       at = i;
       break;
