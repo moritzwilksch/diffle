@@ -4,6 +4,7 @@ import { pathFromItemId } from '../model.js';
 import { isDeletionRow, watchRenderedRows } from '../review/rows.js';
 import { useStore } from '../store.js';
 import type { TokenTarget } from './target.js';
+import { tokenRange } from './tokenText.js';
 
 /**
  * Occurrence highlighting: when the keyboard word focus (w / b / 0 / $) lands on a
@@ -45,42 +46,17 @@ export function occurrenceRanges(
   const out: { range: Range; kind: LspOccurrence['kind'] }[] = [];
   for (const token of row.querySelectorAll<HTMLElement>('span[data-char]')) {
     const start = Number(token.dataset.char);
-    const nodes = textNodes(token);
-    const length = nodes.reduce((n, t) => n + t.data.length, 0);
+    const length = token.textContent?.length ?? 0;
     if (!Number.isFinite(start) || !length) continue;
     for (const o of here) {
       const from = Math.max(o.line === line ? o.col : 0, start);
       const to = Math.min(o.endLine === line ? o.endCol : Infinity, start + length);
       if (from >= to) continue;
-      const range = row.ownerDocument.createRange();
-      const [sNode, sOff] = locate(nodes, from - start);
-      const [eNode, eOff] = locate(nodes, to - start, true);
-      range.setStart(sNode, sOff);
-      range.setEnd(eNode, eOff);
-      out.push({ range, kind: o.kind });
+      const range = tokenRange(token, from - start, to - start);
+      if (range) out.push({ range, kind: o.kind });
     }
   }
   return out;
-}
-
-function textNodes(el: Element): Text[] {
-  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
-  return nodes;
-}
-
-/** Text node and offset for an offset into the token's text; `end` keeps a boundary inside the earlier node. */
-function locate(nodes: Text[], offset: number, end = false): [Text, number] {
-  let at = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i]!;
-    const next = at + node.data.length;
-    if (end ? offset <= next : offset < next) return [node, offset - at];
-    at = next;
-  }
-  const last = nodes[nodes.length - 1]!;
-  return [last, last.data.length];
 }
 
 // Module state, not store state: pointer enter / leave fire constantly and must not re-render.
