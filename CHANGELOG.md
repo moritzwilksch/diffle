@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.2.0](https://github.com/moritzwilksch/diffle/compare/v0.1.9...v0.2.0) - 2026-10-05
+## [0.2.1](https://github.com/moritzwilksch/diffle/compare/v0.2.0...v0.2.1) - 2026-10-06
+
+### Features
+
+- _(compare)_ Compare two named ranges like git range-diff ([#286](https://github.com/moritzwilksch/diffle/pull/286))
+
+## [0.2.0](https://github.com/moritzwilksch/diffle/compare/v0.1.9...v0.2.0) - 2026-10-06
 
 ### Features
 
