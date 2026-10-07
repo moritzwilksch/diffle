@@ -1,34 +1,19 @@
-import { languageOf } from '../../shared/protocol.js';
+import { getFiletypeFromFileName, resolveLanguage, type SupportedLanguages } from '@pierre/diffs';
+import type { LanguageRegistration } from 'shiki/core';
 
-export const GRAMMARS = {
-  python: 'python',
-  javascript: 'javascript',
-  javascriptreact: 'javascript',
-  typescript: 'typescript',
-  typescriptreact: 'tsx',
-  rust: 'rust',
-  go: 'go',
-  c: 'c',
-  cpp: 'cpp',
-  ruby: 'ruby',
-  java: 'java',
-  lua: 'lua',
-  zig: 'zig',
-  swift: 'swift',
-  php: 'php',
-  shellscript: 'bash',
-  ocaml: 'ocaml',
-} as const;
+type Language = Exclude<SupportedLanguages, 'text' | 'ansi'>;
 
-export function grammarOf(path: string): string | null {
-  const language = languageOf(path);
-  return language && language in GRAMMARS ? GRAMMARS[language as keyof typeof GRAMMARS] : null;
+export function languageOf(path: string): Language | null {
+  const lang = getFiletypeFromFileName(path);
+  return lang === 'text' || lang === 'ansi' ? null : lang;
 }
 
 export interface SyntaxRequest {
   id: number;
   key: string;
-  grammar: string;
+  lang: string;
+  /** The language's grammars, sent once per worker: grammars resolve on the main thread only. */
+  grammars?: LanguageRegistration[];
   contents: string;
   line: number;
   col: number;
@@ -43,6 +28,7 @@ let worker: Worker | null = null;
 let unavailable = false;
 let sequence = 0;
 const pending = new Map<number, (blocked: boolean) => void>();
+const grammars = new Map<Language, Promise<LanguageRegistration[]>>();
 
 function stop(): void {
   unavailable = true;
@@ -52,7 +38,10 @@ function stop(): void {
   pending.clear();
 }
 
-/** Advisory syntax gate. Positions use 1-based lines and UTF-16 columns, like LSP targets. */
+/**
+ * Advisory syntax gate: true when the word at the position sits in a comment, a string, or a
+ * keyword. Positions use 1-based lines and UTF-16 columns, like LSP targets.
+ */
 export async function blocksSymbol(
   path: string,
   side: string,
@@ -60,12 +49,19 @@ export async function blocksSymbol(
   col: number,
   contents: () => Promise<string>,
 ): Promise<boolean> {
-  const grammar = grammarOf(path);
-  if (!grammar || unavailable || typeof Worker === 'undefined') return false;
+  const lang = languageOf(path);
+  if (!lang || unavailable || typeof Worker === 'undefined') return false;
   try {
     const text = await contents();
-    // Large files remain usable without copying and parsing them for an advisory popup.
+    // Large files remain usable without copying and tokenizing them for an advisory popup.
     if (text.length > 1_000_000 || unavailable) return false;
+    // The request that starts resolving a language carries its grammars, and posts first: it
+    // awaits the shared promise before any later request does.
+    let loading = grammars.get(lang);
+    const first = !loading;
+    if (!loading) grammars.set(lang, (loading = resolveLanguage(lang).then((resolved) => resolved.data)));
+    const data = await loading;
+    if (unavailable) return false;
     if (!worker) {
       worker = new Worker(new URL('./syntax.worker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }: MessageEvent<SyntaxResponse>) => {
@@ -84,7 +80,15 @@ export async function blocksSymbol(
         resolve(blocked);
       });
       try {
-        worker!.postMessage({ id, key: `${side}:${path}`, grammar, contents: text, line, col } satisfies SyntaxRequest);
+        worker!.postMessage({
+          id,
+          key: `${side}:${path}`,
+          lang,
+          grammars: first ? data : undefined,
+          contents: text,
+          line,
+          col,
+        } satisfies SyntaxRequest);
       } catch {
         stop();
       }

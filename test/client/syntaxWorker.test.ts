@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SyntaxRequest, SyntaxResponse } from '../../src/client/lsp/syntax.js';
 
 class WorkerStub {
-  static instance: WorkerStub;
+  static instance?: WorkerStub;
   onmessage?: (event: { data: SyntaxResponse }) => void;
   onerror?: () => void;
   onmessageerror?: () => void;
@@ -18,6 +18,7 @@ class WorkerStub {
 
 beforeEach(() => {
   vi.resetModules();
+  WorkerStub.instance = undefined;
   vi.stubGlobal('Worker', WorkerStub);
 });
 afterEach(() => {
@@ -28,19 +29,21 @@ afterEach(() => {
 it('loads contents only for supported languages and routes out-of-order answers', async () => {
   const { blocksSymbol } = await import('../../src/client/lsp/syntax.js');
   const contents = vi.fn().mockResolvedValue('# comment');
-  expect(await blocksSymbol('a.nix', 'new', 1, 2, contents)).toBe(false);
+  expect(await blocksSymbol('notes.txt', 'new', 1, 2, contents)).toBe(false);
   expect(contents).not.toHaveBeenCalled();
   const first = blocksSymbol('a.py', 'old', 1, 2, contents);
   const second = blocksSymbol('a.py', 'new', 1, 2, contents);
-  await Promise.resolve();
-  const worker = WorkerStub.instance;
+  await vi.waitFor(() => expect(WorkerStub.instance?.postMessage).toHaveBeenCalledTimes(2));
+  const worker = WorkerStub.instance!;
   expect(worker.postMessage.mock.calls[0]![0]).toMatchObject({
     key: 'old:a.py',
-    grammar: 'python',
+    lang: 'python',
     contents: '# comment',
     line: 1,
     col: 2,
   });
+  expect(worker.postMessage.mock.calls[0]![0].grammars?.map((g) => g.name)).toEqual(['python']);
+  expect(worker.postMessage.mock.calls[1]![0].grammars).toBeUndefined();
   worker.answer(1, false);
   worker.answer(0, true);
   expect(await first).toBe(true);
@@ -61,8 +64,8 @@ it.each(['error', 'timeout'])('releases pending requests after a worker %s', asy
   vi.useFakeTimers();
   const { blocksSymbol } = await import('../../src/client/lsp/syntax.js');
   const result = blocksSymbol('a.py', 'new', 1, 2, async () => '# comment');
-  await Promise.resolve();
-  const worker = WorkerStub.instance;
+  await vi.waitFor(() => expect(WorkerStub.instance?.postMessage).toHaveBeenCalledOnce());
+  const worker = WorkerStub.instance!;
   if (failure === 'error') worker.onerror!();
   else await vi.advanceTimersByTimeAsync(5000);
   expect(await result).toBe(false);
