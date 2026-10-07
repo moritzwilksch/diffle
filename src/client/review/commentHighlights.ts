@@ -55,7 +55,7 @@ export function tintedRanges(
 }
 
 export function installCommentHighlights(
-  viewer: () => CodeViewHandle<unknown> | null,
+  viewer: () => CodeViewHandle<unknown, undefined> | null,
   scroller: HTMLElement,
 ): () => void {
   return watchRenderedRows(

@@ -103,7 +103,7 @@ export class MatchCache {
 const supported = (): boolean => typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
 
 export function installSearchHighlights(
-  viewer: () => CodeViewHandle<unknown> | null,
+  viewer: () => CodeViewHandle<unknown, undefined> | null,
   scroller: HTMLElement,
 ): () => void {
   if (!supported()) return () => {};

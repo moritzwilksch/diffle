@@ -59,7 +59,7 @@ import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
 import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
-import { tokenRange } from '../lsp/tokenText.js';
+import { charAtPoint } from '../lsp/tokenText.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -184,13 +184,13 @@ const HEADER_CSS = `
 function targetOf(
   props: TokenEventBase | DiffTokenEventBaseProps,
   itemId: string,
-  clientX: number,
+  event: MouseEvent,
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
   // No server for this language means no hover, no menu: a target would only produce blockers.
   if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const word = wordAtPoint(props.tokenElement, clientX, schemaHoverOnly(path));
+  const word = wordAtPoint(props.tokenElement, event, schemaHoverOnly(path));
   if (!word) return null;
   let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
   let line = props.lineNumber;
@@ -212,17 +212,10 @@ function served(path: string): boolean {
   return language != null && lsp.enabled && lsp.servers.some((s) => s.languages.includes(language));
 }
 
-/** The identifier under `clientX` inside a token span: its text and its offset within the token, or null on punctuation or space. */
-function wordAtPoint(el: HTMLElement, clientX: number, config = false): { start: number; text: string } | null {
+/** The identifier under the pointer inside a token span: its text and its offset within the token, or null on punctuation or space. */
+function wordAtPoint(el: HTMLElement, event: MouseEvent, config = false): { start: number; text: string } | null {
   const text = el.textContent ?? '';
-  let at = -1;
-  for (let i = 0; i < text.length; i++) {
-    const r = tokenRange(el, i, i + 1)!.getBoundingClientRect();
-    if (clientX >= r.left && clientX <= r.right) {
-      at = i;
-      break;
-    }
-  }
+  const at = charAtPoint(el, event.clientX, event.clientY);
   // Schema hovers describe keys and values, including quotes, hyphens, and numeric literals.
   if (config) return at >= 0 && /\S/.test(text[at]!) ? { start: at, text } : null;
   return wordsIn(text).find((word) => at >= word.start && at < word.start + word.text.length) ?? null;
@@ -291,7 +284,7 @@ export function ReviewPane() {
   const scrollTarget = useStore((s) => s.scrollTarget);
   const reveal = useStore((s) => s.reveal);
   const setActivePath = useStore((s) => s.setActivePath);
-  const viewerRef = useRef<CodeViewHandle<Annot> | null>(null);
+  const viewerRef = useRef<CodeViewHandle<Annot, undefined> | null>(null);
   const workerPool = useWorkerPool();
   const lookahead = useRef<HighlightLookahead>({
     runningKey: null,
@@ -374,23 +367,23 @@ export function ReviewPane() {
 
   // Word navigation (w / b) reads tokens from the rendered DOM through the viewer handle.
   useEffect(() => {
-    setViewer(() => viewerRef.current as CodeViewHandle<unknown> | null);
+    setViewer(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null);
     return () => setViewer(() => null);
   }, []);
   // Search-match highlights read the same rendered DOM; the scroller drives re-paints as rows virtualize.
   useEffect(() => {
     if (!scroller) return;
-    return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   // So do the tints on the lines saved and draft comments refer to.
   useEffect(() => {
     if (!scroller) return;
-    return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   // And the occurrences of the focused or hovered symbol.
   useEffect(() => {
     if (!scroller) return;
-    return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   useEffect(() => {
     onSelectionChanged(selection);
@@ -774,7 +767,7 @@ export function ReviewPane() {
         // of the previous token already ran, so nothing is targeted when the pointer arrives.
         let shown: TokenTarget | null = null;
         const point = (e: PointerEvent) => {
-          const t = targetOf(props, ctx.item.id, e.clientX);
+          const t = targetOf(props, ctx.item.id, e);
           if (t?.col === shown?.col) return;
           shown = t;
           lspTarget.set(t, props.tokenElement);
@@ -816,7 +809,7 @@ export function ReviewPane() {
         event: MouseEvent,
         ctx: { item: { id: string } },
       ) => {
-        const target = targetOf(props, ctx.item.id, event.clientX);
+        const target = targetOf(props, ctx.item.id, event);
         if (!target || schemaHoverOnly(target.path)) return;
         markHover(props.tokenElement, false);
         hoverControl.cancel();
@@ -1007,13 +1000,7 @@ function toItem(
     return {
       id,
       type: 'file',
-      // `prevName` is not in FileContents' type, but the library's header renderer picks it up with an
-      // `in` check and draws the rename arrow.
-      file: {
-        name: path,
-        contents: '',
-        prevName: changed.status === 'R' ? changed.oldPath : undefined,
-      } as FileContents,
+      file: emptyFile(path, changed.status === 'R' ? changed.oldPath : undefined),
       annotations: fileLevel,
       version,
       collapsed,
@@ -1027,7 +1014,7 @@ function toItem(
           ? (['error', loaded.message] as const)
           : (['loading', 'Loading…'] as const);
     fileLevel.unshift(standIn(path, loaded, undefined, placeholder, message));
-    return { id, type: 'file', file: { name: path, contents: '' }, annotations: fileLevel, version, collapsed };
+    return { id, type: 'file', file: emptyFile(path), annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   const annotations: LineAnnotation<Annot>[] = fileLevel;
@@ -1039,6 +1026,21 @@ function toItem(
     annotations.push({ lineNumber: lineBounds(draft.selection).endLine, metadata: { kind: 'draft' } });
   }
   return { id, type: 'file', file: loaded.file, annotations, version, collapsed };
+}
+
+const emptyFiles = new Map<string, FileContents>();
+
+/**
+ * The bodiless file a placeholder item renders, the same object on every rebuild: an unchanged item's
+ * render throws in the viewer when its file is equal but not identical to the one it last rendered.
+ */
+function emptyFile(path: string, prevName?: string): FileContents {
+  const key = `${path}\0${prevName ?? ''}`;
+  let file = emptyFiles.get(key);
+  // `prevName` is not in FileContents' type, but the library's header renderer picks it up with an
+  // `in` check and draws the rename arrow.
+  if (!file) emptyFiles.set(key, (file = { name: path, contents: '', prevName } as FileContents));
+  return file;
 }
 
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */

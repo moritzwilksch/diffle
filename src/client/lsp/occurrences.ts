@@ -151,7 +151,7 @@ function byLine(items: readonly LspOccurrence[]): Map<number, LspOccurrence[]> {
 
 /** Repaints the occurrences of the store's target as the rendered rows change. Returns the teardown. */
 export function installOccurrenceHighlights(
-  viewer: () => CodeViewHandle<unknown> | null,
+  viewer: () => CodeViewHandle<unknown, undefined> | null,
   scroller: HTMLElement,
 ): () => void {
   if (!supported()) return () => {};

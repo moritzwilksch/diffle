@@ -20,7 +20,7 @@ export function wordsIn(text: string): { start: number; text: string }[] {
  * lines. Works on the rendered DOM, since tokens exist only there; a CSS
  * highlight marks the focused word without changing the viewer's DOM.
  */
-let viewer: () => CodeViewHandle<unknown> | null = () => null;
+let viewer: () => CodeViewHandle<unknown, undefined> | null = () => null;
 let focusedEl: HTMLElement | null = null;
 let focusedCol: number | null = null;
 /** The new-side row the focused word is on, which the cursor must stay on for the focus to hold. */
@@ -32,7 +32,7 @@ interface Word {
   text: string;
 }
 
-export function setViewer(get: () => CodeViewHandle<unknown> | null): void {
+export function setViewer(get: () => CodeViewHandle<unknown, undefined> | null): void {
   viewer = get;
 }
 
