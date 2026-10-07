@@ -326,7 +326,7 @@ function CommitRow({
         // The rail between the dots: it starts at the first dot and stops at the last.
         <span
           aria-hidden
-          className="absolute top-0 bottom-0 left-[0.8125rem] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
+          className="absolute top-0 bottom-0 left-[calc(0.875rem-0.5px)] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
         />
       )}
       <div className="flex items-start pr-1.5">
@@ -335,7 +335,7 @@ function CommitRow({
             variant="ghost"
             className={twMerge(
               // The list marks the shown commit itself; a ring around the clicked row would only repeat it.
-              'min-w-0 flex-1 items-start gap-2 rounded-none py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              'min-w-0 flex-1 items-start gap-2 rounded-none border-0 py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
               !active && 'focus-visible:bg-hover',
             )}
             aria-describedby={described}
