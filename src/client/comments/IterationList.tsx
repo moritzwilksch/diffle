@@ -45,7 +45,7 @@ export function IterationList({ snapshot }: { snapshot: Snapshot }) {
       <div className="flex min-h-10 flex-none items-center gap-1.5 pr-1.5">
         <Button
           variant="ghost"
-          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold"
+          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold outline-none focus-visible:bg-hover"
           aria-expanded={open}
           title={open ? 'Collapse the iterations' : 'Expand the iterations'}
           onClick={() => setOpen(!open)}

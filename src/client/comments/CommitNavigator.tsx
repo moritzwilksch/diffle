@@ -17,8 +17,6 @@ import { Button } from '../ui/Button.js';
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' });
 
-/** Longer ranges start collapsed so the threads keep the panel. */
-const OPEN_UP_TO = 5;
 /** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
 const HOVER_DELAY_MS = 250;
 /** How long a copied hash shows its check mark. */
@@ -36,7 +34,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   const showPair = useStore((s) => s.showPair);
   const stepCommit = useStore((s) => s.stepCommit);
   const interdiff = mode.interdiff ?? null;
-  const [open, setOpen] = useState((interdiff ? interdiff.pairs.length : commits.total) <= OPEN_UP_TO);
+  const [open, setOpen] = useState(true);
   const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const list = useRef<HTMLDivElement>(null);
@@ -92,7 +90,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
       <div className="flex min-h-10 flex-none items-center gap-0.5 pr-1.5">
         <Button
           variant="ghost"
-          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold"
+          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold outline-none focus-visible:bg-hover"
           aria-expanded={open}
           title={open ? 'Collapse the commits' : 'Expand the commits'}
           onClick={() => setOpen(!open)}
@@ -107,6 +105,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               icon
+              className="outline-none focus-visible:bg-hover"
               disabled={rangeStep(snapshot, -1) === undefined}
               onClick={() => stepCommit(-1)}
               title="Older commit (<)"
@@ -117,6 +116,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               icon
+              className="outline-none focus-visible:bg-hover"
               disabled={rangeStep(snapshot, 1) === undefined}
               onClick={() => stepCommit(1)}
               title="Newer commit (>)"
