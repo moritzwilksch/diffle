@@ -76,6 +76,24 @@ async function tokenize(entry: Entry): Promise<void> {
   entry.run = null;
 }
 
+/** Advances `state` from line `from` to `to`, yielding between slices; undefined once `deadline` passes. */
+async function walk(
+  entry: Entry,
+  from: number,
+  to: number,
+  state: State,
+  deadline: number,
+): Promise<State | undefined> {
+  let row = from;
+  while (row < to) {
+    if (performance.now() >= deadline) return undefined;
+    const until = Math.min(performance.now() + SLICE_MS, deadline);
+    while (row < to && performance.now() < until) state = advance(entry, row++, state);
+    if (row < to) await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return state;
+}
+
 /** Bounded per-file cache of TextMate states, tokenized in slices so a query can give up while tokenizing continues. */
 export class SyntaxClassifier {
   private entries = new Map<string, Entry>();
@@ -89,6 +107,7 @@ export class SyntaxClassifier {
     const text = entry.lines[row];
     if (text == null || col >= text.length || text.length > MAX_LINE) return false;
     const k = Math.floor(row / STEP);
+    const deadline = performance.now() + BUDGET_MS;
     if (entry.states.length <= k) {
       entry.target = Math.max(entry.target, k);
       entry.run ??= tokenize(entry);
@@ -98,8 +117,9 @@ export class SyntaxClassifier {
       clearTimeout(timer);
       if (entry.states.length <= k) return false;
     }
-    let state: State = entry.states[k]!;
-    for (let r = k * STEP; r < row; r++) state = advance(entry, r, state);
+    // The lines past the checkpoint share the budget: pathological lines can take far longer than a slice.
+    const state = await walk(entry, k * STEP, row, entry.states[k]!, deadline);
+    if (state === undefined) return false;
     const token = entry.grammar.tokenizeLine(text, state).tokens.find((t) => col < t.endIndex);
     return token ? blocksScopes(token.scopes, text.slice(token.startIndex, token.endIndex)) : false;
   }

@@ -144,6 +144,23 @@ describe('client syntax classification', () => {
     expect(await classifier.blocked('file', 'typescript', source, 120, 0)).toBe(true);
   });
 
+  it('yields and gives up on slow lines between a checkpoint and the query', async () => {
+    const grammar = highlighter.getLanguage('cpp');
+    const slow = new SyntaxClassifier(() => ({
+      ...grammar,
+      tokenizeLine(text, state) {
+        for (const until = performance.now() + 20; performance.now() < until;);
+        return grammar.tokenizeLine(text, state);
+      },
+    }));
+    let yielded = false;
+    setTimeout(() => (yielded = true), 0);
+    const start = performance.now();
+    expect(await slow.blocked('file', 'cpp', `${'int value;\n'.repeat(99)}// comment`, 100, 3)).toBe(false);
+    expect(yielded).toBe(true);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
   it('leaves plain text, overlong lines, and oversized files alone', async () => {
     expect(languageOf('notes.txt')).toBeNull();
     expect(languageOf('file.tsx')).toBe('tsx');
