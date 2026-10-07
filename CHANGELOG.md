@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.4](https://github.com/moritzwilksch/diffle/compare/v0.2.3...v0.2.4) - 2026-10-07
+
+### Features
+
+- _(comments)_ Acknowledge `yy` on the copy-all button ([#302](https://github.com/moritzwilksch/diffle/pull/302))
+
+### Bug fixes
+
+- _(lsp)_ Hit-test hovered words by pointer, upgrade `@pierre/diffs` ([#303](https://github.com/moritzwilksch/diffle/pull/303))
+
+### Refactors
+
+- _(lsp)_ Classify symbol targets with Shiki scopes, drop tree-sitter ([#304](https://github.com/moritzwilksch/diffle/pull/304))
+
+### Documentation
+
+- _(readme)_ Refresh screenshots for v0.2.3 ([#297](https://github.com/moritzwilksch/diffle/pull/297))
+
 ## [0.2.3](https://github.com/moritzwilksch/diffle/compare/v0.2.2...v0.2.3) - 2026-10-07
 
 ### Features
