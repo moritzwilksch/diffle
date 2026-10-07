@@ -421,5 +421,6 @@ async function copyComments(): Promise<void> {
     return s.report('Copying comments', e);
   }
   const ok = await copyText(text);
+  if (ok) s.noteCopiedAll();
   s.flash(ok ? 'Copied all comments' : 'Clipboard blocked; use the panel buttons');
 }

@@ -277,6 +277,9 @@ export interface ReviewState {
   setTreeModel(model: FileTree | null): void;
   toast: string | null;
   flash(message: string): void;
+  /** Bumped when a keyboard chord copies all comments, so the panel's copy button acknowledges it too. */
+  copiedAll: number;
+  noteCopiedAll(): void;
   /** Toast for a failed fire-and-forget action: `${what} failed: <message>`. */
   report(what: string, e: unknown): void;
   search: SearchState;
@@ -1449,6 +1452,10 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ toast: message });
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
+    },
+    copiedAll: 0,
+    noteCopiedAll() {
+      set({ copiedAll: get().copiedAll + 1 });
     },
     search: {
       open: false,
