@@ -22,11 +22,11 @@ const PROSE = /^(string|meta\.jsx\.children)/;
 /** Scopes of keywords, and of some type names. */
 const WORDS = /^(keyword|storage)/;
 /**
- * Grammars also scope type names as `storage` or `keyword` (`int`, `string`, Java's `String`), and
- * Kotlin scopes interpolated identifiers as `storage.modifier.other`. Keywords are never capitalized.
+ * Grammars also scope names as `storage` or `keyword`: types (`int`, `string`, Java's `String`) and
+ * Ruby's keyword-like methods (`new`, `include`, `attr_reader`). Keywords are never capitalized.
  */
-const TYPE =
-  /^(storage\.type\.(primitive|built-in|numeric|string|generic)|keyword\.(other\.)?type\b|storage\.modifier\.other)/;
+const NAMES =
+  /^(storage\.type\.(primitive|built-in|numeric|string|generic)|keyword\.(other\.)?type\b|keyword\.other\.special-method\.ruby)/;
 
 /** Scopes run outermost first, as TextMate reports them. Comments win; otherwise the innermost match decides. */
 function blocksScopes(scopes: readonly string[], word: string): boolean {
@@ -36,7 +36,7 @@ function blocksScopes(scopes: readonly string[], word: string): boolean {
     const scope = scopes[i]!;
     if (CODE.test(scope)) return false;
     if (PROSE.test(scope)) return true;
-    if (WORDS.test(scope)) return !TYPE.test(scope) && !/^\p{Lu}/u.test(word);
+    if (WORDS.test(scope)) return !NAMES.test(scope) && !/^\p{Lu}/u.test(word);
   }
   return false;
 }

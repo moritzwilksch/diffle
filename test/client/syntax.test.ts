@@ -74,6 +74,7 @@ describe('client syntax classification', () => {
     ['c', 'static void value() { return; }', ['static', 'return']],
     ['cpp', 'namespace value { class Thing {}; }', ['namespace', 'class']],
     ['ruby', 'def value\n  return local\nend', ['def', 'return', 'end']],
+    ['kotlin', 'private val a = 1\noverride fun b() {}', ['private', 'val', 'override', 'fun']],
     ['java', 'public class Value { static void value() {} }', ['public', 'class', 'static']],
     ['lua', 'local function value() return localValue end', ['local', 'function', 'return', 'end']],
     ['zig', 'pub fn value() void { const local = 1; }', ['pub', 'fn', 'const']],
@@ -130,7 +131,9 @@ describe('client syntax classification', () => {
     ['c', 'char *value; size_t size;', 'size_t'],
     ['csharp', 'int value;', 'int'],
     ['kotlin', 'val s = "literal ${symbol}"', 'symbol'],
-  ])('keeps type names and Kotlin interpolations actionable in %s: %s', async (lang, source, text) => {
+    ['ruby', 'Widget.new', 'new'],
+    ['ruby', 'object.include(value)', 'include'],
+  ])('keeps type names, interpolations, and methods actionable in %s: %s', async (lang, source, text) => {
     expect(await blocked(lang, source, text)).toBe(false);
   });
 
