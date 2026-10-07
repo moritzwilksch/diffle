@@ -43,6 +43,12 @@ const LANE_CSS = `
 [data-item-section="decoration"] { flex: 1 0 auto; overflow: visible; }
 [data-item-section="decoration"] > span { gap: 0.375rem; overflow: visible; font-variant-numeric: tabular-nums; }
 [data-item-section="decoration"] > span > span:last-child { min-width: 1ch; text-align: center; }
+/* The library's ellipsis overlays the clipped text and leaves a sliver of the cut glyph beside it.
+   The native ellipsis drops whole glyphs; the marker stays, invisible, as the truncation signal. */
+[data-truncate-content="visible"] { overflow: hidden; text-overflow: ellipsis; }
+[data-truncate-marker] { visibility: hidden; }
+/* Keep room for the ellipsis: a narrower box clips the text without one. */
+[data-truncate-segment-priority="2"] { min-width: 1em; }
 /* The library butts the search box against the toolbar above; give it the toolbar's own vertical rhythm. */
 [data-file-tree-search-container] { padding-top: 0.5rem; }
 :host([data-search-empty]) [data-file-tree-virtualized-scroll] { display: none; }
