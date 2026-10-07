@@ -267,7 +267,7 @@ function PairRow({
             {head}
           </Button>
         ) : (
-          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+          <div className="flex min-w-0 flex-1 items-start py-1 pr-1 pl-6.5 leading-[1.125rem]">{head}</div>
         )}
         <span className="flex flex-none items-center font-mono text-[0.75rem] text-muted">
           {pair.old ? <CopyHash commit={pair.old} /> : <span className="px-1">———————</span>}
@@ -325,7 +325,41 @@ function BeadRow({
 }) {
   const Dot = dashed ? CircleDashed : Circle;
   const head = (
-    <>
+    <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>{label}</span>
+  );
+  // The dot and both rail segments share one anchor and transform, so no browser rounds them apart.
+  const anchor = 'pointer-events-none absolute left-3.5 -translate-x-1/2';
+  const segment = `${anchor} w-px bg-border`;
+  return (
+    <li
+      className={twMerge(
+        'group relative',
+        active ? 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)]' : 'hover:bg-hover',
+      )}
+      data-dashed={dashed || undefined}
+      aria-current={active ? 'true' : undefined}
+      onPointerEnter={onHover && ((e) => onHover(e.currentTarget))}
+      onPointerLeave={onLeave}
+    >
+      {rail && (
+        <>
+          {/* Down to this dot's top edge, from the one above; a dashed dot's segment reaches it instead. */}
+          <span
+            aria-hidden
+            className={twMerge(segment, 'top-0 h-[0.5625rem] group-first:hidden [[data-dashed]+li>&]:hidden')}
+          />
+          {/* From this dot's bottom edge down to the next one; dashed, it runs on to the next dot over that row. */}
+          <span
+            aria-hidden
+            className={twMerge(
+              segment,
+              'top-[1.0625rem] bottom-0 group-last:hidden',
+              dashed &&
+                '-bottom-[0.5625rem] z-1 bg-transparent bg-[linear-gradient(var(--color-border)_50%,transparent_50%)] bg-size-[1px_4px]',
+            )}
+          />
+        </>
+      )}
       <Dot
         aria-hidden
         size="0.5rem"
@@ -334,8 +368,9 @@ function BeadRow({
         // Round caps would close the dashes' gaps at this size.
         strokeLinecap={dashed ? 'butt' : undefined}
         className={twMerge(
-          // The first line's middle, where the rail meets it.
-          'relative mt-1.25 flex-none overflow-visible',
+          // The first line's middle.
+          anchor,
+          'top-[0.5625rem] overflow-visible',
           active
             ? dashed
               ? 'fill-surface text-accent'
@@ -343,33 +378,13 @@ function BeadRow({
             : 'fill-surface text-muted group-hover:fill-hover',
         )}
       />
-      <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>{label}</span>
-    </>
-  );
-  return (
-    <li
-      className={twMerge(
-        'group relative',
-        active ? 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)]' : 'hover:bg-hover',
-      )}
-      aria-current={active ? 'true' : undefined}
-      onPointerEnter={onHover && ((e) => onHover(e.currentTarget))}
-      onPointerLeave={onLeave}
-    >
-      {rail && (
-        // The rail between the dots, edge to edge: a dashed dot has no fill to hide it.
-        <span
-          aria-hidden
-          className="absolute top-0 bottom-0 left-[calc(0.875rem-0.5px)] w-px bg-border group-first:top-[1.0625rem] group-last:bottom-auto group-last:h-[0.5625rem]"
-        />
-      )}
       <div className="flex items-start pr-1.5">
         {onPick ? (
           <Button
             variant="ghost"
             className={twMerge(
               // The list marks the shown bead itself; a ring around the clicked row would only repeat it.
-              'min-w-0 flex-1 items-start gap-2 rounded-none border-0 py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              'min-w-0 flex-1 items-start rounded-none border-0 py-1 pr-1 pl-6.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
               !active && 'focus-visible:bg-hover',
             )}
             aria-describedby={described}
@@ -378,7 +393,7 @@ function BeadRow({
             {head}
           </Button>
         ) : (
-          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+          <div className="flex min-w-0 flex-1 items-start py-1 pr-1 pl-6.5 leading-[1.125rem]">{head}</div>
         )}
         {trailing}
       </div>
