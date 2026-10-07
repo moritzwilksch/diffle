@@ -33,3 +33,29 @@ function locate(nodes: Text[], offset: number, end = false): [Text, number] {
   const last = nodes[nodes.length - 1]!;
   return [last, last.data.length];
 }
+
+/**
+ * Offset of the character under a viewport point inside the token, or -1 off its text. Takes y as well as x:
+ * a wrapped token's characters share x positions across visual lines.
+ */
+export function charAtPoint(el: Element, x: number, y: number): number {
+  const root = el.getRootNode();
+  const caret = el.ownerDocument.caretPositionFromPoint(
+    x,
+    y,
+    root instanceof ShadowRoot ? { shadowRoots: [root] } : undefined,
+  );
+  const nodes = textNodes(el);
+  const node = nodes.indexOf(caret?.offsetNode as Text);
+  if (!caret || node < 0) return -1;
+  const offset = nodes.slice(0, node).reduce((at, n) => at + n.data.length, caret.offset);
+  const length = nodes.reduce((at, n) => at + n.data.length, 0);
+  // The caret lands on the boundary nearer the point: the character under it starts there or ends there.
+  return (
+    [offset - 1, offset].find((i) => {
+      if (i < 0 || i >= length) return false;
+      const r = tokenRange(el, i, i + 1)!.getBoundingClientRect();
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }) ?? -1
+  );
+}

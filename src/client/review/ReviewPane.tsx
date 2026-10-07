@@ -59,7 +59,7 @@ import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
 import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
-import { tokenRange } from '../lsp/tokenText.js';
+import { charAtPoint } from '../lsp/tokenText.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -184,13 +184,13 @@ const HEADER_CSS = `
 function targetOf(
   props: TokenEventBase | DiffTokenEventBaseProps,
   itemId: string,
-  clientX: number,
+  event: MouseEvent,
 ): TokenTarget | null {
   const path = pathFromItemId(itemId);
   // No server for this language means no hover, no menu: a target would only produce blockers.
   if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const word = wordAtPoint(props.tokenElement, clientX, schemaHoverOnly(path));
+  const word = wordAtPoint(props.tokenElement, event, schemaHoverOnly(path));
   if (!word) return null;
   let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
   let line = props.lineNumber;
@@ -212,17 +212,10 @@ function served(path: string): boolean {
   return language != null && lsp.enabled && lsp.servers.some((s) => s.languages.includes(language));
 }
 
-/** The identifier under `clientX` inside a token span: its text and its offset within the token, or null on punctuation or space. */
-function wordAtPoint(el: HTMLElement, clientX: number, config = false): { start: number; text: string } | null {
+/** The identifier under the pointer inside a token span: its text and its offset within the token, or null on punctuation or space. */
+function wordAtPoint(el: HTMLElement, event: MouseEvent, config = false): { start: number; text: string } | null {
   const text = el.textContent ?? '';
-  let at = -1;
-  for (let i = 0; i < text.length; i++) {
-    const r = tokenRange(el, i, i + 1)!.getBoundingClientRect();
-    if (clientX >= r.left && clientX <= r.right) {
-      at = i;
-      break;
-    }
-  }
+  const at = charAtPoint(el, event.clientX, event.clientY);
   // Schema hovers describe keys and values, including quotes, hyphens, and numeric literals.
   if (config) return at >= 0 && /\S/.test(text[at]!) ? { start: at, text } : null;
   return wordsIn(text).find((word) => at >= word.start && at < word.start + word.text.length) ?? null;
@@ -774,7 +767,7 @@ export function ReviewPane() {
         // of the previous token already ran, so nothing is targeted when the pointer arrives.
         let shown: TokenTarget | null = null;
         const point = (e: PointerEvent) => {
-          const t = targetOf(props, ctx.item.id, e.clientX);
+          const t = targetOf(props, ctx.item.id, e);
           if (t?.col === shown?.col) return;
           shown = t;
           lspTarget.set(t, props.tokenElement);
@@ -816,7 +809,7 @@ export function ReviewPane() {
         event: MouseEvent,
         ctx: { item: { id: string } },
       ) => {
-        const target = targetOf(props, ctx.item.id, event.clientX);
+        const target = targetOf(props, ctx.item.id, event);
         if (!target || schemaHoverOnly(target.path)) return;
         markHover(props.tokenElement, false);
         hoverControl.cancel();
