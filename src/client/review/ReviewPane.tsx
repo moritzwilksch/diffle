@@ -1000,13 +1000,7 @@ function toItem(
     return {
       id,
       type: 'file',
-      // `prevName` is not in FileContents' type, but the library's header renderer picks it up with an
-      // `in` check and draws the rename arrow.
-      file: {
-        name: path,
-        contents: '',
-        prevName: changed.status === 'R' ? changed.oldPath : undefined,
-      } as FileContents,
+      file: emptyFile(path, changed.status === 'R' ? changed.oldPath : undefined),
       annotations: fileLevel,
       version,
       collapsed,
@@ -1020,7 +1014,7 @@ function toItem(
           ? (['error', loaded.message] as const)
           : (['loading', 'Loading…'] as const);
     fileLevel.unshift(standIn(path, loaded, undefined, placeholder, message));
-    return { id, type: 'file', file: { name: path, contents: '' }, annotations: fileLevel, version, collapsed };
+    return { id, type: 'file', file: emptyFile(path), annotations: fileLevel, version, collapsed };
   }
   // The file view shows the new side whole: only new-side threads have a line to sit on.
   const annotations: LineAnnotation<Annot>[] = fileLevel;
@@ -1032,6 +1026,21 @@ function toItem(
     annotations.push({ lineNumber: lineBounds(draft.selection).endLine, metadata: { kind: 'draft' } });
   }
   return { id, type: 'file', file: loaded.file, annotations, version, collapsed };
+}
+
+const emptyFiles = new Map<string, FileContents>();
+
+/**
+ * The bodiless file a placeholder item renders, the same object on every rebuild: an unchanged item's
+ * render throws in the viewer when its file is equal but not identical to the one it last rendered.
+ */
+function emptyFile(path: string, prevName?: string): FileContents {
+  const key = `${path}\0${prevName ?? ''}`;
+  let file = emptyFiles.get(key);
+  // `prevName` is not in FileContents' type, but the library's header renderer picks it up with an
+  // `in` check and draws the rename arrow.
+  if (!file) emptyFiles.set(key, (file = { name: path, contents: '', prevName } as FileContents));
+  return file;
 }
 
 /** The viewer renders an annotation at line 0 above the file's first line: the slot for threads on the whole file. */
