@@ -64,7 +64,7 @@ export function topRow(items: RenderedRoot[], top: number, bottom: number): RowA
  * and whenever `subscribe`'s callback fires. Passes coalesce to one per frame. Returns the teardown.
  */
 export function watchRenderedRows(
-  viewer: () => CodeViewHandle<unknown> | null,
+  viewer: () => CodeViewHandle<unknown, undefined> | null,
   scroller: HTMLElement,
   subscribe: (schedule: () => void) => () => void,
   apply: (items: RenderedRoot[]) => void,

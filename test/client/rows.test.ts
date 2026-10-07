@@ -14,7 +14,7 @@ describe('watchRenderedRows', () => {
     const viewer = () =>
       ({
         getInstance: () => ({ getRenderedItems: () => [{ id: 'diff:a.ts:1', element: item }] }),
-      }) as unknown as CodeViewHandle<unknown>;
+      }) as unknown as CodeViewHandle<unknown, undefined>;
     let notify = () => {};
     const apply = vi.fn();
     const onMutation = vi.fn();

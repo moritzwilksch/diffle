@@ -291,7 +291,7 @@ export function ReviewPane() {
   const scrollTarget = useStore((s) => s.scrollTarget);
   const reveal = useStore((s) => s.reveal);
   const setActivePath = useStore((s) => s.setActivePath);
-  const viewerRef = useRef<CodeViewHandle<Annot> | null>(null);
+  const viewerRef = useRef<CodeViewHandle<Annot, undefined> | null>(null);
   const workerPool = useWorkerPool();
   const lookahead = useRef<HighlightLookahead>({
     runningKey: null,
@@ -374,23 +374,23 @@ export function ReviewPane() {
 
   // Word navigation (w / b) reads tokens from the rendered DOM through the viewer handle.
   useEffect(() => {
-    setViewer(() => viewerRef.current as CodeViewHandle<unknown> | null);
+    setViewer(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null);
     return () => setViewer(() => null);
   }, []);
   // Search-match highlights read the same rendered DOM; the scroller drives re-paints as rows virtualize.
   useEffect(() => {
     if (!scroller) return;
-    return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installSearchHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   // So do the tints on the lines saved and draft comments refer to.
   useEffect(() => {
     if (!scroller) return;
-    return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   // And the occurrences of the focused or hovered symbol.
   useEffect(() => {
     if (!scroller) return;
-    return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown> | null, scroller);
+    return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   useEffect(() => {
     onSelectionChanged(selection);

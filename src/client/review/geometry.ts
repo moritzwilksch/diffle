@@ -28,8 +28,8 @@ export function reviewGeometry(rem: number) {
 [data-separator='line-info'] { height: ${hunkSeparatorHeight}px; }
 `;
   return { itemMetrics, layout, css, edge: px(3) } satisfies {
-    itemMetrics: CodeViewOptions<unknown>['itemMetrics'];
-    layout: CodeViewOptions<unknown>['layout'];
+    itemMetrics: CodeViewOptions<unknown, undefined>['itemMetrics'];
+    layout: CodeViewOptions<unknown, undefined>['layout'];
     css: string;
     edge: number;
   };
