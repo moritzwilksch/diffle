@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Circle, CircleDashed, GitCommitHorizontal, Layers } from 'lucide-react';
 import { type ComponentProps, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import {
@@ -323,19 +323,24 @@ function BeadRow({
   trailing?: ReactNode;
   details?: ReactNode;
 }) {
+  const Dot = dashed ? CircleDashed : Circle;
   const head = (
     <>
-      <span
+      <Dot
         aria-hidden
+        size="0.5rem"
+        // About 1.5px in the 24-unit box; overflow keeps its outer edge, which passes the box, round.
+        strokeWidth={5}
+        // Round caps would close the dashes' gaps at this size.
+        strokeLinecap={dashed ? 'butt' : undefined}
         className={twMerge(
           // The first line's middle, where the rail meets it.
-          'relative mt-1.25 size-2 flex-none rounded-full border-[1.5px]',
-          dashed && 'border-dashed',
+          'relative mt-1.25 flex-none overflow-visible',
           active
             ? dashed
-              ? 'border-accent bg-surface'
-              : 'border-accent bg-accent'
-            : 'border-muted bg-surface group-hover:bg-hover',
+              ? 'fill-surface text-accent'
+              : 'fill-accent text-accent'
+            : 'fill-surface text-muted group-hover:fill-hover',
         )}
       />
       <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>{label}</span>
@@ -352,10 +357,10 @@ function BeadRow({
       onPointerLeave={onLeave}
     >
       {rail && (
-        // The rail between the dots: it starts at the first dot and stops at the last.
+        // The rail between the dots, edge to edge: a dashed dot has no fill to hide it.
         <span
           aria-hidden
-          className="absolute top-0 bottom-0 left-[calc(0.875rem-0.5px)] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
+          className="absolute top-0 bottom-0 left-[calc(0.875rem-0.5px)] w-px bg-border group-first:top-[1.0625rem] group-last:bottom-auto group-last:h-[0.5625rem]"
         />
       )}
       <div className="flex items-start pr-1.5">
