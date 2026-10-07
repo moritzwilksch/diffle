@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.3](https://github.com/moritzwilksch/diffle/compare/v0.2.2...v0.2.3) - 2026-10-07
+
+### Features
+
+- _(sidebar)_ Expand the commit list, list uncommitted changes ([#295](https://github.com/moritzwilksch/diffle/pull/295))
+
 ## [0.2.2](https://github.com/moritzwilksch/diffle/compare/v0.2.1...v0.2.2) - 2026-10-06
 
 ### Features
