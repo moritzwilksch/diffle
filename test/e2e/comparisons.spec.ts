@@ -140,12 +140,15 @@ test.describe("the range's commits", () => {
   test('copies a full hash and shows a check mark on it', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const box = page.getByRole('region', { name: 'Commits' });
+    // The check mark lasts 1.4s; a frozen clock holds it while the screenshot settles.
+    await page.clock.install();
     await box.getByRole('button', { name: 'Copy hash 640d216' }).click();
     await expect(box.getByRole('button', { name: 'Copied 640d216' })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^640d216[0-9a-f]{33}$/);
     // Copying does not focus the commit.
     await expect(box.getByRole('button', { name: /^All changes/ })).toHaveAttribute('aria-current', 'true');
     await expect(box).toHaveScreenshot('copied-hash.png');
+    await page.clock.fastForward(1400);
     await expect(box.getByRole('button', { name: 'Copy hash 640d216' })).toBeVisible();
   });
 
