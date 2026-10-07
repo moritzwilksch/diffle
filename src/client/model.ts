@@ -453,10 +453,16 @@ export function commitBody(message: string): string[] {
   );
 }
 
+/** Whether the range lists its uncommitted changes as a stop of their own: it ends at the worktree, past a commit. */
+export function listsWorktree(snapshot: Pick<Snapshot, 'mode' | 'commits'>): boolean {
+  const { mode, commits } = snapshot;
+  return !mode.interdiff && (mode.within ?? mode).new === 'worktree' && commits.total > 0;
+}
+
 /**
- * Where `direction` steps through a range's list, older (-1) or newer (1), the range itself past the newest:
- * a commit's hash, null for the range, or undefined past either end and outside a range. A focused commit
- * no longer listed steps newer to the range.
+ * Where `direction` steps through a range's list, older (-1) or newer (1), the uncommitted changes past the
+ * newest commit, then the range itself: a commit's hash, `worktree`, null for the range, or undefined past
+ * either end and outside a range. A focused commit no longer listed steps newer to the range.
  */
 export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, direction: -1 | 1): string | null | undefined {
   const { mode, commits } = snapshot;
@@ -464,7 +470,7 @@ export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, directio
   // Within an interdiff the stops are its pairs with something to show, then the interdiff itself.
   const order = mode.interdiff
     ? [...mode.interdiff.pairs.filter((p) => p.new && p.status !== 'identical').map((p) => p.new!.sha), null]
-    : [...commits.list.map((c) => c.sha), null];
+    : [...commits.list.map((c) => c.sha), ...(listsWorktree(snapshot) ? ['worktree'] : []), null];
   const shown = mode.interdiff ? (mode.pair?.new ?? null) : mode.within ? mode.new : null;
   const at = order.indexOf(shown);
   if (at < 0) return direction > 0 ? null : undefined;

@@ -210,6 +210,20 @@ describe('Session', () => {
     await session.close();
   });
 
+  it('focuses the uncommitted changes of a range that ends at the worktree', async () => {
+    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
+    const working = await session.start(await session.resolve({ kind: 'working' }));
+    const range = await session.switchMode({ kind: 'revspec', args: ['main..worktree'] });
+    const focused = await session.switchMode({ kind: 'focus', commit: 'worktree' });
+    expect(focused.mode).toEqual({ ...working.mode, within: range.mode });
+    expect(focused.changed).toEqual(working.changed);
+    expect(focused.commits.list).toEqual(range.commits.list);
+    expect(comparisonLabel(focused.mode)).toBe('main..worktree @ worktree');
+    await session.switchMode({ kind: 'revspec', args: ['main..feat'] });
+    await expect(session.switchMode({ kind: 'focus', commit: 'worktree' })).rejects.toThrow(RevspecError);
+    await session.close();
+  });
+
   it('quotes a range from the snapshot for imports and refuses ranges it cannot read', async () => {
     const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off' });
     await session.start(await session.resolve({ kind: 'revspec', args: ['main..feat'] }));

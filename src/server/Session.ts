@@ -247,8 +247,10 @@ export class Session {
   }
 
   /**
-   * Focuses `commit`, by hash or short hash, of the active range's listed commits, or with null returns to
-   * the range. A focused commit keeps its own comments, as when entered alone, and the range's PR identity.
+   * Focuses `commit`, by hash or short hash, of the active range's listed commits, `worktree` for the
+   * uncommitted changes of a range that ends there, or with null returns to the range. A focused commit
+   * keeps its own comments, as when entered alone, and the range's PR identity; the uncommitted changes
+   * share `working`'s.
    */
   private async focus(commit: string | null): Promise<ResolvedReview> {
     const a = this.require();
@@ -256,6 +258,13 @@ export class Session {
     if (!within && self.base === 'parent') throw new RevspecError('a single commit has no commits to focus');
     const range = within ?? self;
     if (commit === null) return { mode: range, prUrl: a.prUrl };
+    if (commit === 'worktree') {
+      if (range.new !== 'worktree') throw new RevspecError(`${comparisonLabel(range)} has no uncommitted changes`);
+      return {
+        prUrl: a.prUrl,
+        mode: { old: 'HEAD', new: 'worktree', base: 'direct', live: 'worktree', commentKey: 'working', within: range },
+      };
+    }
     const listed = (await a.snapshotter.current()).commits.list;
     const sha = listed.find((c) => c.sha === commit || c.short === commit)?.sha;
     if (!sha) throw new RevspecError(`not a listed commit of ${comparisonLabel(range)}: ${commit}`);

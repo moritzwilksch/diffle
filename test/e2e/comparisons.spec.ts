@@ -12,6 +12,40 @@ test.describe('working mode', () => {
     await waitForHighlight(page, 'tally/refunds.py');
     await expect(page).toHaveScreenshot('working.png');
   });
+
+  test('lists the uncommitted changes as the one, shown entry', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    await expect(box.getByRole('listitem')).toHaveCount(1);
+    await expect(box.locator('[aria-current="true"]')).toHaveText('Uncommitted changes');
+    await expect(box.getByRole('button', { name: /^All changes/ })).toHaveCount(0);
+  });
+});
+
+test.describe('a range that ends at the worktree', () => {
+  test.use({ revs: [`${MAIN_BRANCH}...worktree`] });
+
+  test('focuses the uncommitted changes above the newest commit and steps through them', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const picker = page.getByTitle(/Change what is compared/);
+    const header = page.locator('header');
+    const active = box.locator('[aria-current="true"]');
+    const uncommitted = box.getByRole('button', { name: 'Uncommitted changes' });
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box.getByRole('listitem').first()).toHaveText('Uncommitted changes');
+
+    await uncommitted.click();
+    await expect(picker).toHaveText(/main\.\.\.worktree @ worktree/);
+    await expect(header).toContainText('4 files');
+    await expect(active).toHaveText('Uncommitted changes');
+    await expect(box).toHaveScreenshot('uncommitted.png');
+
+    await page.keyboard.press('<');
+    await expect(active).toContainText('fix(cli): report an empty ledger');
+    await page.keyboard.press('>');
+    await expect(active).toHaveText('Uncommitted changes');
+    await page.keyboard.press('>');
+    await expect(box.getByRole('button', { name: /^All changes/ })).toHaveAttribute('aria-current', 'true');
+  });
 });
 
 test.describe('single commit', () => {
