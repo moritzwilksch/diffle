@@ -127,4 +127,24 @@ test.describe('with a language server', () => {
     await expect(page.getByRole('menu')).toBeVisible();
     await expect.poll(async () => (await highlighted(page)).focus).toEqual(['Literal']);
   });
+
+  test('a click on a wrapped row targets the word under the pointer, not the one above it', async ({
+    page,
+    diffle,
+  }) => {
+    // ledger.py line 3 is a docstring line long enough to wrap; `negative` ends it, on a lower row.
+    await gotoFile(page, 'tally/ledger.py');
+    await waitForLsp(diffle.url);
+    await hoverSymbol(page, 'negative', { path: 'tally/ledger.py' });
+    const rows = await page
+      .locator('span[data-char]', { hasText: 'count negative' })
+      .first()
+      .evaluate((token) => new Set([...token.getClientRects()].map((rect) => Math.round(rect.top))).size);
+    expect(rows).toBeGreaterThan(1);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect.poll(async () => (await highlighted(page)).focus).toEqual(['negative']);
+    // A word in a string names no symbol: the syntax gate keeps the popover closed.
+    await expect(page.getByRole('menu')).toHaveCount(0);
+  });
 });
