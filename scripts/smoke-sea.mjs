@@ -43,11 +43,13 @@ try {
   const html = await fetchOk('/', 'text/html');
   const find = (re, text, what) => re.exec(text)?.[0] ?? fail(`found no ${what}`);
   const script = find(/assets\/index-[\w-]+\.js/, html, 'entry script');
-  const worker = find(/syntax\.worker-[\w-]+\.js/, await fetchOk(script, 'text/javascript'), 'worker');
-  const wasm = find(/tree-sitter-[\w-]+\.wasm/, await fetchOk(`assets/${worker}`, 'text/javascript'), 'grammar');
-  await fetchOk(`assets/${wasm}`, 'application/wasm');
+  const entry = await fetchOk(script, 'text/javascript');
+  const worker = find(/syntax\.worker-[\w-]+\.js/, entry, 'worker');
+  const grammar = find(/typescript-[\w-]+\.js/, entry, 'grammar');
+  await fetchOk(`assets/${worker}`, 'text/javascript');
+  await fetchOk(`assets/${grammar}`, 'text/javascript');
   await fetchOk('api/snapshot', 'application/json');
-  console.error(`smoke ok: ${base} served ${script}, ${worker}, ${wasm}, and api/snapshot`);
+  console.error(`smoke ok: ${base} served ${script}, ${worker}, ${grammar}, and api/snapshot`);
 } finally {
   child.kill();
   await new Promise((res) => (child.exitCode == null ? child.once('exit', res) : res()));
