@@ -127,11 +127,9 @@ test.describe("the range's commits", () => {
 test.describe('a long range of commits', () => {
   test.use({ revs: ['HEAD~7..HEAD'], viewport: { width: 1440, height: 520 } });
 
-  test('starts collapsed and, opened, scrolls within its share of the panel', async ({ page }) => {
+  test('starts open and scrolls within its share of the panel', async ({ page }) => {
     const box = page.getByRole('region', { name: 'Commits' });
-    const header = box.getByRole('button', { name: /^Commits/ });
-    await expect(header).toHaveAttribute('aria-expanded', 'false');
-    await header.click();
+    await expect(box.getByRole('button', { name: /^Commits/ })).toHaveAttribute('aria-expanded', 'true');
     await expect(box.getByRole('listitem')).toHaveCount(7);
     const [panel, own] = await Promise.all([page.locator('aside').last().boundingBox(), box.boundingBox()]);
     expect(own!.height).toBeLessThanOrEqual(panel!.height * 0.4 + 1);
