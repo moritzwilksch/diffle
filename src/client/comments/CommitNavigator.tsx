@@ -1,5 +1,5 @@
-import { Check, ChevronDown, ChevronUp, GitCommitHorizontal, Layers } from 'lucide-react';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, Circle, CircleDashed, GitCommitHorizontal, Layers } from 'lucide-react';
+import { type ComponentProps, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import {
   comparisonLabel,
@@ -10,23 +10,22 @@ import {
   type Snapshot,
 } from '../../shared/protocol.js';
 import { copyText } from '../clipboard.js';
-import { commitBody, rangeStep } from '../model.js';
+import { commitBody, listsWorktree, rangeStep } from '../model.js';
 import { useStore } from '../store.js';
 import { Button } from '../ui/Button.js';
 
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' });
 
-/** Longer ranges start collapsed so the threads keep the panel. */
-const OPEN_UP_TO = 5;
 /** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
 const HOVER_DELAY_MS = 250;
 /** How long a copied hash shows its check mark. */
 const COPIED_MS = 1400;
 
 /**
- * The compared range's commits, newest first, under an entry for the range itself. Choosing a commit
- * shows its diff alone while the list stays the range's; the shown entry is highlighted with its full
+ * The compared range's commits, newest first, under an entry for the range itself and, when the range
+ * ends at the worktree, one for its uncommitted changes. Choosing a commit or the uncommitted changes
+ * shows that diff alone while the list stays the range's; the shown entry is highlighted with its full
  * message, and hovering another shows that one's in a card. Within an interdiff the list is the
  * range-diff instead: the two iterations' commits paired, under an entry for the interdiff itself.
  */
@@ -36,16 +35,19 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   const showPair = useStore((s) => s.showPair);
   const stepCommit = useStore((s) => s.stepCommit);
   const interdiff = mode.interdiff ?? null;
-  const [open, setOpen] = useState((interdiff ? interdiff.pairs.length : commits.total) <= OPEN_UP_TO);
+  const [open, setOpen] = useState(true);
   const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const list = useRef<HTMLDivElement>(null);
   const cardId = useId();
   // A single commit alone has nothing to step through; it is shown as the one active entry.
   const range = mode.within ?? (mode.base === 'parent' ? null : mode);
-  const active = mode.pair ? mode.pair.new : mode.base === 'parent' ? mode.new : null;
+  const active = mode.pair ? mode.pair.new : mode.base === 'parent' || (mode.within && !interdiff) ? mode.new : null;
   // An interdiff shows neither the range nor one of its commits; "All changes" leads back to the range.
   const whole = active === null && !interdiff;
+  const uncommitted = listsWorktree(snapshot);
+  // Without a commit, the uncommitted changes are the whole range: one entry, already shown.
+  const onlyUncommitted = range?.new === 'worktree' && commits.total === 0;
   const older = commits.total - commits.list.length;
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
       <div className="flex min-h-10 flex-none items-center gap-0.5 pr-1.5">
         <Button
           variant="ghost"
-          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold"
+          className="min-w-0 flex-1 gap-1.5 self-stretch rounded-none px-2.5 py-1.5 text-left font-semibold outline-none focus-visible:bg-hover"
           aria-expanded={open}
           title={open ? 'Collapse the commits' : 'Expand the commits'}
           onClick={() => setOpen(!open)}
@@ -107,6 +109,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               icon
+              className="outline-none focus-visible:bg-hover"
               disabled={rangeStep(snapshot, -1) === undefined}
               onClick={() => stepCommit(-1)}
               title="Older commit (<)"
@@ -117,6 +120,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             <Button
               variant="ghost"
               icon
+              className="outline-none focus-visible:bg-hover"
               disabled={rangeStep(snapshot, 1) === undefined}
               onClick={() => stepCommit(1)}
               title="Newer commit (>)"
@@ -129,7 +133,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
       </div>
       {open && (
         <div ref={list} className="min-h-0 overflow-auto pb-1.5" onScroll={hoverEnd}>
-          {range && entry(whole, () => focusCommit(null), 'All changes', comparisonLabel(range))}
+          {range && !onlyUncommitted && entry(whole, () => focusCommit(null), 'All changes', comparisonLabel(range))}
           {interdiff &&
             entry(
               active === null,
@@ -140,6 +144,15 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
               `${interdiff.pairs.filter((p) => p.status !== 'identical').length} of ${interdiff.pairs.length} commits differ`,
             )}
           <ol className="m-0 list-none p-0">
+            {(uncommitted || onlyUncommitted) && (
+              <BeadRow
+                label="Uncommitted changes"
+                dashed
+                rail={uncommitted}
+                active={onlyUncommitted || active === 'worktree'}
+                onPick={uncommitted ? () => focusCommit('worktree') : undefined}
+              />
+            )}
             {interdiff
               ? interdiff.pairs.toReversed().map((pair) => {
                   const commit = pair.new ?? pair.old!;
@@ -161,7 +174,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
                     <CommitRow
                       key={commit.sha}
                       commit={commit}
-                      rail={commits.list.length > 1}
+                      rail={commits.list.length + (uncommitted ? 1 : 0) > 1}
                       active={commit.sha === active}
                       described={hover?.commit.sha === commit.sha ? cardId : undefined}
                       onPick={range ? () => focusCommit(commit.sha) : undefined}
@@ -170,6 +183,9 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
                     />
                   ))}
           </ol>
+          {range && !interdiff && commits.total === 0 && !onlyUncommitted && (
+            <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">No commits</p>
+          )}
           {!interdiff && older > 0 && (
             <p className="m-0 px-2.5 py-1 text-[0.75rem] text-muted">
               {older} older {older === 1 ? 'commit' : 'commits'} not shown
@@ -251,7 +267,7 @@ function PairRow({
             {head}
           </Button>
         ) : (
-          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+          <div className="flex min-w-0 flex-1 items-start py-1 pr-1 pl-6.5 leading-[1.125rem]">{head}</div>
         )}
         <span className="flex flex-none items-center font-mono text-[0.75rem] text-muted">
           {pair.old ? <CopyHash commit={pair.old} /> : <span className="px-1">———————</span>}
@@ -279,63 +295,96 @@ function PairRow({
   );
 }
 
-function CommitRow({
-  commit,
+/**
+ * One bead of the commit necklace: a dot on the rail and a label. A dashed dot marks what is not a
+ * commit yet. The shown bead is highlighted; `trailing` and `details` follow its label and, shown, sit below it.
+ */
+function BeadRow({
+  label,
+  dashed = false,
   rail,
   active,
   described,
   onPick,
   onHover,
   onLeave,
+  trailing,
+  details,
 }: {
-  commit: RangeCommit;
+  label: string;
+  dashed?: boolean;
   rail: boolean;
   active: boolean;
-  described: string | undefined;
-  /** Absent when the commit cannot be focused: it is the comparison itself. */
+  described?: string;
+  /** Absent when the bead cannot be focused: it is the comparison itself. */
   onPick: (() => void) | undefined;
-  onHover(row: Element): void;
-  onLeave(): void;
+  onHover?(row: Element): void;
+  onLeave?(): void;
+  trailing?: ReactNode;
+  details?: ReactNode;
 }) {
+  const Dot = dashed ? CircleDashed : Circle;
   const head = (
-    <>
-      <span
-        aria-hidden
-        className={twMerge(
-          // The first line's middle, where the rail meets it.
-          'relative mt-1.25 size-2 flex-none rounded-full border-[1.5px]',
-          active ? 'border-accent bg-accent' : 'border-muted bg-surface group-hover:bg-hover',
-        )}
-      />
-      <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>
-        {subjectOf(commit)}
-      </span>
-    </>
+    <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>{label}</span>
   );
+  // The dot and both rail segments share one anchor and transform, so no browser rounds them apart.
+  const anchor = 'pointer-events-none absolute left-3.5 -translate-x-1/2';
+  const segment = `${anchor} w-px bg-border`;
   return (
     <li
       className={twMerge(
         'group relative',
         active ? 'bg-accent/12 shadow-[inset_2px_0_0_var(--accent)]' : 'hover:bg-hover',
       )}
+      data-dashed={dashed || undefined}
       aria-current={active ? 'true' : undefined}
-      onPointerEnter={(e) => onHover(e.currentTarget)}
+      onPointerEnter={onHover && ((e) => onHover(e.currentTarget))}
       onPointerLeave={onLeave}
     >
       {rail && (
-        // The rail between the dots: it starts at the first dot and stops at the last.
-        <span
-          aria-hidden
-          className="absolute top-0 bottom-0 left-[0.8125rem] w-px bg-border group-first:top-[0.8125rem] group-last:bottom-auto group-last:h-[0.8125rem]"
-        />
+        <>
+          {/* Down to this dot's top edge, from the one above; a dashed dot's segment reaches it instead. */}
+          <span
+            aria-hidden
+            className={twMerge(segment, 'top-0 h-[0.5625rem] group-first:hidden [[data-dashed]+li>&]:hidden')}
+          />
+          {/* From this dot's bottom edge down to the next one; dashed, it runs on to the next dot over that row. */}
+          <span
+            aria-hidden
+            className={twMerge(
+              segment,
+              'top-[1.0625rem] bottom-0 group-last:hidden',
+              dashed &&
+                '-bottom-[0.5625rem] z-1 bg-transparent bg-[linear-gradient(var(--color-border)_50%,transparent_50%)] bg-size-[1px_4px]',
+            )}
+          />
+        </>
       )}
+      <Dot
+        aria-hidden
+        size="0.5rem"
+        // About 1.5px in the 24-unit box; overflow keeps its outer edge, which passes the box, round.
+        strokeWidth={5}
+        // Round caps would close the dashes' gaps at this size.
+        strokeLinecap={dashed ? 'butt' : undefined}
+        className={twMerge(
+          // The first line's middle.
+          anchor,
+          'top-[0.5625rem] overflow-visible',
+          active
+            ? dashed
+              ? 'fill-surface text-accent'
+              : 'fill-accent text-accent'
+            : 'fill-surface text-muted group-hover:fill-hover',
+        )}
+      />
       <div className="flex items-start pr-1.5">
         {onPick ? (
           <Button
             variant="ghost"
             className={twMerge(
-              // The list marks the shown commit itself; a ring around the clicked row would only repeat it.
-              'min-w-0 flex-1 items-start gap-2 rounded-none py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              // The list marks the shown bead itself; a ring around the clicked row would only repeat it.
+              'min-w-0 flex-1 items-start rounded-none border-0 py-1 pr-1 pl-6.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
               !active && 'focus-visible:bg-hover',
             )}
             aria-describedby={described}
@@ -344,16 +393,29 @@ function CommitRow({
             {head}
           </Button>
         ) : (
-          <div className="flex min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 leading-[1.125rem]">{head}</div>
+          <div className="flex min-w-0 flex-1 items-start py-1 pr-1 pl-6.5 leading-[1.125rem]">{head}</div>
         )}
-        <CopyHash commit={commit} />
+        {trailing}
       </div>
-      {active && (
-        <div className="pr-2.5 pb-1.5 pl-6.5">
-          <CommitDetails commit={commit} />
-        </div>
-      )}
+      {active && details && <div className="pr-2.5 pb-1.5 pl-6.5">{details}</div>}
     </li>
+  );
+}
+
+function CommitRow({
+  commit,
+  ...row
+}: { commit: RangeCommit } & Pick<
+  ComponentProps<typeof BeadRow>,
+  'rail' | 'active' | 'described' | 'onPick' | 'onHover' | 'onLeave'
+>) {
+  return (
+    <BeadRow
+      {...row}
+      label={subjectOf(commit)}
+      trailing={<CopyHash commit={commit} />}
+      details={<CommitDetails commit={commit} />}
+    />
   );
 }
 

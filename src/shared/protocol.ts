@@ -49,7 +49,7 @@ export const ModeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('revspec'),
     args: z.string().array(),
   }),
-  /** One listed commit of the current range against its first parent, or with null the range itself. */
+  /** One listed commit of the current range against its first parent, `worktree` its uncommitted changes, or with null the range itself. */
   z.object({
     kind: z.literal('focus'),
     commit: z.string().nullable(),
@@ -190,7 +190,7 @@ export type PairSpec = z.infer<typeof PairSpecSchema>;
 
 export const ModeSpecSchema = ComparisonSchema.extend({
   /**
-   * Set while one commit of a range is focused or two ranges are compared: the range, whose commits the
+   * Set while one commit of a range, or its uncommitted changes, is focused or two ranges are compared: the range, whose commits the
    * snapshot keeps listing. For a range-diff it is the newer range, where the reviewer continues.
    */
   within: ComparisonSchema.optional(),
@@ -216,7 +216,8 @@ export function comparisonLabel(
       : `${rangeLabel(from)} → ${rangeLabel(to)}`;
     return mode.pair ? `${label} @ ${mode.pair.new.slice(0, 7)}` : label;
   }
-  if (mode.within) return `${comparisonLabel(mode.within)} @ ${mode.new.slice(0, 7)}`;
+  if (mode.within)
+    return `${comparisonLabel(mode.within)} @ ${mode.new === 'worktree' ? 'worktree' : mode.new.slice(0, 7)}`;
   if (mode.base === 'parent') return `${mode.new.slice(0, 7)}^!`;
   return `${refName(mode.old)}${mode.base === 'merge-base' ? '...' : '..'}${refName(mode.new)}`;
 }

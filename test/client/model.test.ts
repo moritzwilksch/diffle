@@ -447,6 +447,28 @@ describe('rangeStep', () => {
     expect(rangeStep(focused('a'.repeat(40)), -1)).toBeUndefined();
   });
 
+  it('stops at the uncommitted changes between the newest commit and a range that ends at the worktree', () => {
+    const toWorktree = { ...range, new: 'worktree', live: 'worktree' } as const;
+    const within = (sha: string) => ({ ...focused(sha), mode: { ...focused(sha).mode, within: toWorktree } });
+    const uncommitted = {
+      mode: {
+        old: 'HEAD',
+        new: 'worktree',
+        base: 'direct',
+        live: 'worktree',
+        commentKey: 'working',
+        within: toWorktree,
+      },
+      commits,
+    } as const;
+    expect(rangeStep({ mode: toWorktree, commits }, -1)).toBe('worktree');
+    expect(rangeStep(uncommitted, -1)).toBe('b'.repeat(40));
+    expect(rangeStep(uncommitted, 1)).toBeNull();
+    expect(rangeStep(within('b'.repeat(40)), 1)).toBe('worktree');
+    // Without a commit, the uncommitted changes are the whole range.
+    expect(rangeStep({ mode: toWorktree, commits: { ...commits, list: [], total: 0 } }, -1)).toBeUndefined();
+  });
+
   it("steps through an interdiff's pairs with something to show, skipping identical and dropped ones", () => {
     const it = (n: number) => ({
       old: '0'.repeat(40),

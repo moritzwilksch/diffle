@@ -12,6 +12,40 @@ test.describe('working mode', () => {
     await waitForHighlight(page, 'tally/refunds.py');
     await expect(page).toHaveScreenshot('working.png');
   });
+
+  test('lists the uncommitted changes as the one, shown entry', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    await expect(box.getByRole('listitem')).toHaveCount(1);
+    await expect(box.locator('[aria-current="true"]')).toHaveText('Uncommitted changes');
+    await expect(box.getByRole('button', { name: /^All changes/ })).toHaveCount(0);
+  });
+});
+
+test.describe('a range that ends at the worktree', () => {
+  test.use({ revs: [`${MAIN_BRANCH}...worktree`] });
+
+  test('focuses the uncommitted changes above the newest commit and steps through them', async ({ page }) => {
+    const box = page.getByRole('region', { name: 'Commits' });
+    const picker = page.getByTitle(/Change what is compared/);
+    const header = page.locator('header');
+    const active = box.locator('[aria-current="true"]');
+    const uncommitted = box.getByRole('button', { name: 'Uncommitted changes' });
+    await expect(box.getByRole('listitem')).toHaveCount(5);
+    await expect(box.getByRole('listitem').first()).toHaveText('Uncommitted changes');
+
+    await uncommitted.click();
+    await expect(picker).toHaveText(/main\.\.\.worktree @ worktree/);
+    await expect(header).toContainText('4 files');
+    await expect(active).toHaveText('Uncommitted changes');
+    await expect(box).toHaveScreenshot('uncommitted.png');
+
+    await page.keyboard.press('<');
+    await expect(active).toContainText('fix(cli): report an empty ledger');
+    await page.keyboard.press('>');
+    await expect(active).toHaveText('Uncommitted changes');
+    await page.keyboard.press('>');
+    await expect(box.getByRole('button', { name: /^All changes/ })).toHaveAttribute('aria-current', 'true');
+  });
 });
 
 test.describe('single commit', () => {
@@ -106,12 +140,15 @@ test.describe("the range's commits", () => {
   test('copies a full hash and shows a check mark on it', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const box = page.getByRole('region', { name: 'Commits' });
+    // The check mark lasts 1.4s; a frozen clock holds it while the screenshot settles.
+    await page.clock.install();
     await box.getByRole('button', { name: 'Copy hash 640d216' }).click();
     await expect(box.getByRole('button', { name: 'Copied 640d216' })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^640d216[0-9a-f]{33}$/);
     // Copying does not focus the commit.
     await expect(box.getByRole('button', { name: /^All changes/ })).toHaveAttribute('aria-current', 'true');
     await expect(box).toHaveScreenshot('copied-hash.png');
+    await page.clock.fastForward(1400);
     await expect(box.getByRole('button', { name: 'Copy hash 640d216' })).toBeVisible();
   });
 
@@ -127,11 +164,9 @@ test.describe("the range's commits", () => {
 test.describe('a long range of commits', () => {
   test.use({ revs: ['HEAD~7..HEAD'], viewport: { width: 1440, height: 520 } });
 
-  test('starts collapsed and, opened, scrolls within its share of the panel', async ({ page }) => {
+  test('starts open and scrolls within its share of the panel', async ({ page }) => {
     const box = page.getByRole('region', { name: 'Commits' });
-    const header = box.getByRole('button', { name: /^Commits/ });
-    await expect(header).toHaveAttribute('aria-expanded', 'false');
-    await header.click();
+    await expect(box.getByRole('button', { name: /^Commits/ })).toHaveAttribute('aria-expanded', 'true');
     await expect(box.getByRole('listitem')).toHaveCount(7);
     const [panel, own] = await Promise.all([page.locator('aside').last().boundingBox(), box.boundingBox()]);
     expect(own!.height).toBeLessThanOrEqual(panel!.height * 0.4 + 1);

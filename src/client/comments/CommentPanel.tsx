@@ -77,11 +77,10 @@ export function CommentPanel() {
 
   return (
     <aside className="flex min-h-0 flex-col bg-surface">
-      {snapshot &&
-        snapshot.commits.total > 0 && (
-          // Keyed by the range, so focusing one of its commits keeps the list as it was.
-          <CommitNavigator key={(snapshot.mode.within ?? snapshot.mode).commentKey} snapshot={snapshot} />
-        )}
+      {snapshot && (
+        // Keyed by the range, so focusing one of its commits keeps the list as it was.
+        <CommitNavigator key={(snapshot.mode.within ?? snapshot.mode).commentKey} snapshot={snapshot} />
+      )}
       {snapshot && <IterationList snapshot={snapshot} />}
       <div className="flex min-h-10 items-center gap-1.5 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:px-2 [&_button]:whitespace-nowrap">
         <span className="mr-auto inline-flex min-w-0 items-center gap-1.5 truncate font-semibold">
