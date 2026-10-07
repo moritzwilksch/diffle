@@ -28,6 +28,7 @@ export function CommentPanel() {
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
+  const copiedAll = useStore((s) => s.copiedAll);
   const snapshot = useStore((s) => s.snapshot);
   const off = snapshot ? commentsOff(snapshot.mode) : null;
   const [posting, setPosting] = useState(false);
@@ -96,6 +97,7 @@ export function CommentPanel() {
           disabled={open.length === 0}
           title="Copy all open threads as a prompt (yy)"
           onCopy={() => copy()}
+          pulse={copiedAll}
         />
         {canExport && (
           <Button
@@ -305,11 +307,15 @@ const ThreadRow = memo(function ThreadRow({
   );
 });
 
-/** Button that briefly morphs into a check mark after a successful copy. */
+/**
+ * Button that briefly morphs into a check mark after a successful copy. A change of `pulse`
+ * plays the same acknowledgement for a copy made elsewhere, such as by a keyboard chord.
+ */
 function CopyButton({
   label,
   icon,
   onCopy,
+  pulse,
   primary,
   disabled,
   title,
@@ -317,6 +323,7 @@ function CopyButton({
   label: string;
   icon: React.ReactNode;
   onCopy: () => Promise<boolean>;
+  pulse?: number;
   primary?: boolean;
   disabled?: boolean;
   title?: string;
@@ -324,6 +331,17 @@ function CopyButton({
   const [done, setDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const acknowledge = () => {
+    setDone(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDone(false), 1400);
+  };
+  const seen = useRef(pulse);
+  useEffect(() => {
+    if (pulse === seen.current) return;
+    seen.current = pulse;
+    acknowledge();
+  }, [pulse]);
   return (
     <Button
       variant={primary ? 'primary' : 'default'}
@@ -332,10 +350,7 @@ function CopyButton({
       disabled={disabled}
       title={title}
       onClick={async () => {
-        if (!(await onCopy())) return;
-        setDone(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), 1400);
+        if (await onCopy()) acknowledge();
       }}
     >
       <CopyIcon done={done}>{icon}</CopyIcon>
