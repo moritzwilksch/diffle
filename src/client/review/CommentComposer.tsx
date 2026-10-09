@@ -1,6 +1,7 @@
 import { Button } from '../ui/Button.js';
 import { FileDiff, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { composerKey } from '../model.js';
 import { useStore } from '../store.js';
 
 /**
@@ -15,7 +16,11 @@ export function CommentComposer({ label }: { label: string }) {
   const draft = useStore((s) => s.draft);
   // A comment on the whole file has no lines to suggest a replacement for.
   const fileLevel = draft != null && draft.selection == null;
-  const [text, setText] = useState('');
+  // The text outlives the composer, so Esc or Cancel and reopening on the same lines resumes it.
+  const key = useStore((s) => composerKey(s, { kind: 'draft' }));
+  const text = useStore((s) => (key ? (s.unsent[key] ?? '') : ''));
+  const setUnsent = useStore((s) => s.setUnsent);
+  const setText = (t: string) => key && setUnsent(key, t);
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -57,7 +62,7 @@ export function CommentComposer({ label }: { label: string }) {
   const suggest = async () => {
     const quoted = await draftQuote();
     const block = `\`\`\`suggestion\n${quoted}\n\`\`\``;
-    setText((t) => (t.trim() ? `${t.replace(/\s+$/, '')}\n\n${block}\n` : `${block}\n`));
+    setText(text.trim() ? `${text.replace(/\s+$/, '')}\n\n${block}\n` : `${block}\n`);
     ref.current?.focus();
   };
 

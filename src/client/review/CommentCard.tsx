@@ -18,7 +18,7 @@ import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import { Markdown } from '../Markdown.js';
-import { anchorLabel, exportLabel, type ExportOutcome } from '../model.js';
+import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '../model.js';
 import { useStore } from '../store.js';
 import { ButtonLabel } from '../ui/ButtonLabel.js';
 import { useConfirm } from '../useConfirm.js';
@@ -153,11 +153,12 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
   const deleteMessage = useStore((s) => s.deleteMessage);
   const editing = useStore((s) => s.editingId === message.id);
   const setEditingId = useStore((s) => s.setEditingId);
-  const [text, setText] = useState(message.body);
+  // An edit left with Esc is kept and resumed on the next `e`; text equal to the body is no edit.
+  const key = useStore((s) => composerKey(s, { kind: 'edit', messageId: message.id }));
+  const text = useStore((s) => (key ? (s.unsent[key] ?? message.body) : message.body));
+  const setUnsent = useStore((s) => s.setUnsent);
+  const setText = (t: string) => key && setUnsent(key, t === message.body ? '' : t);
   const del = useConfirm(() => void deleteMessage(thread.id, message.id));
-  useEffect(() => {
-    if (editing) setText(message.body);
-  }, [editing, message.body]);
   const threaded = thread.messages.length > 1;
   const save = () => {
     void editMessage(thread.id, message.id, text);
@@ -259,7 +260,10 @@ function CopyMessageButton({ threadId, messageId, size }: { threadId: string; me
 function ReplyComposer({ threadId }: { threadId: string }) {
   const submitReply = useStore((s) => s.submitReply);
   const closeReply = useStore((s) => s.closeReply);
-  const [text, setText] = useState('');
+  const key = useStore((s) => composerKey(s, { kind: 'reply', threadId }));
+  const text = useStore((s) => (key ? (s.unsent[key] ?? '') : ''));
+  const setUnsent = useStore((s) => s.setUnsent);
+  const setText = (t: string) => key && setUnsent(key, t);
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {

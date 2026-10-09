@@ -43,6 +43,7 @@ import { isToken, lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/tar
 import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome, ModePane } from './model.js';
 import {
+  composerKey,
   canJumpBack,
   canJumpForward,
   currentPath,
@@ -153,6 +154,17 @@ function readLayout(): LayoutState {
   }
 }
 
+// Unsent comment text lives for the tab, so a reload or an accidental Esc does not lose it.
+const UNSENT_KEY = 'diffle:unsent';
+function readUnsent(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem(UNSENT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Small action popover anchored at a clicked symbol. */
 export interface SymbolMenuState {
   target: TokenTarget;
@@ -244,6 +256,10 @@ export interface ReviewState {
   // Keyboard navigation and transient UI state.
   /** Anchor row while in visual (block) mode. */
   visualAnchor: Cursor | null;
+  /** Text typed into comment editors but not yet saved, by `composerKey`; closing an editor keeps it. */
+  unsent: Record<string, string>;
+  /** Empty text forgets the entry. */
+  setUnsent(key: string, text: string): void;
   /** Message being edited inline. */
   editingId: string | null;
   setEditingId(id: string | null): void;
@@ -1375,6 +1391,17 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ theme });
     },
     visualAnchor: null,
+    unsent: readUnsent(),
+    setUnsent(key, text) {
+      const { [key]: _, ...rest } = get().unsent;
+      const unsent = text ? { ...rest, [key]: text } : rest;
+      try {
+        sessionStorage.setItem(UNSENT_KEY, JSON.stringify(unsent));
+      } catch {
+        /* ignore */
+      }
+      set({ unsent });
+    },
     editingId: null,
     setEditingId(id) {
       set({ editingId: id });
@@ -2431,12 +2458,14 @@ export const useStore = create<ReviewState>((set, get) => {
     async submitDraft(body) {
       const d = get().draft;
       if (!d || !body.trim()) return;
+      const key = composerKey(get(), { kind: 'draft' });
       if (!d.selection) {
         try {
           await api.addThread({ path: d.path, body });
         } catch (e) {
           return report('Posting the comment', e);
         }
+        if (key) get().setUnsent(key, '');
         set({ draft: null });
         await get().refreshThreads();
         return;
@@ -2449,6 +2478,7 @@ export const useStore = create<ReviewState>((set, get) => {
       } catch (e) {
         return report('Posting the comment', e);
       }
+      if (key) get().setUnsent(key, '');
       // Keep the cursor on the commented line so `e` / `dd` apply to it.
       const s = d.selection.range;
       set({
@@ -2464,17 +2494,27 @@ export const useStore = create<ReviewState>((set, get) => {
 
     async submitReply(threadId, body) {
       if (!body.trim()) return;
+      const key = composerKey(get(), { kind: 'reply', threadId });
       try {
         await api.reply(threadId, { body });
       } catch (e) {
         return report('Posting the reply', e);
       }
+      if (key) get().setUnsent(key, '');
       if (get().replyTo === threadId) set({ replyTo: null });
       await get().refreshThreads();
     },
 
-    editMessage: (threadId, messageId, body) =>
-      mutateThreads('Editing the message', () => api.editMessage(threadId, messageId, body)),
+    async editMessage(threadId, messageId, body) {
+      const key = composerKey(get(), { kind: 'edit', messageId });
+      try {
+        await api.editMessage(threadId, messageId, body);
+      } catch (e) {
+        return report('Editing the message', e);
+      }
+      if (key) get().setUnsent(key, '');
+      await get().refreshThreads();
+    },
     deleteMessage: (threadId, messageId) =>
       mutateThreads('Deleting the message', () => api.deleteMessage(threadId, messageId)),
     setResolved: (threadId, resolved) =>

@@ -253,6 +253,31 @@ export function draftRange(state: Pick<ReviewState, 'draft' | 'loaded'>): Resolv
   return d?.selection ? selectionRange(state, d.path, d.selection) : null;
 }
 
+/** A comment editor whose unsent text the store keeps: the open draft, a reply, or an edit. */
+export type ComposerTarget =
+  | { kind: 'draft' }
+  | { kind: 'reply'; threadId: string }
+  | { kind: 'edit'; messageId: string };
+
+/**
+ * Where `target`'s unsent text lives in `ReviewState.unsent`: the comment's anchor within the current
+ * review, so reopening an editor on the same lines, file, thread or message brings the text back.
+ * Null without a snapshot or an open draft.
+ */
+export function composerKey(
+  state: Pick<ReviewState, 'snapshot' | 'draft' | 'loaded'>,
+  target: ComposerTarget,
+): string | null {
+  if (!state.snapshot) return null;
+  const review = state.snapshot.mode.commentKey;
+  if (target.kind === 'reply') return `${review}\0reply\0${target.threadId}`;
+  if (target.kind === 'edit') return `${review}\0edit\0${target.messageId}`;
+  if (!state.draft) return null;
+  const r = draftRange(state);
+  const at = r ? `${r.side}\0${r.startLine}\0${r.endLine}` : 'file';
+  return `${review}\0draft\0${state.draft.path}\0${at}`;
+}
+
 export function threadOfMessage(threads: CommentThread[], messageId: string): CommentThread | undefined {
   return threads.find((t) => t.messages.some((m) => m.id === messageId));
 }
