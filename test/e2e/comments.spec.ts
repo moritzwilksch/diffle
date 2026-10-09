@@ -83,3 +83,39 @@ test('regression: deleting a thread needs a second click and confirmation expire
   await expect.poll(() => readThreads(diffle.url)).toEqual([]);
   await expect(page.locator('aside').last()).toContainText('No comments yet.');
 });
+
+test('regression: closing a composer keeps its text until the comment is posted', async ({ page, diffle }) => {
+  await gotoFile(page, 'tally/ledger.py');
+  await selectLines(page, 'tally/ledger.py', 3, 4);
+  const composer = page.getByPlaceholder('Leave a comment…');
+  await composer.fill('A long thought, half written.');
+  await composer.press('Escape');
+  await expect(composer).toBeHidden();
+
+  // Another target starts empty; the first comes back, across a reload too.
+  await page.keyboard.press('C');
+  await expect(composer).toHaveValue('');
+  await composer.fill('About the whole file.');
+  await composer.press('Escape');
+  await page.reload();
+  await gotoFile(page, 'tally/ledger.py');
+  await selectLines(page, 'tally/ledger.py', 3, 4);
+  await expect(composer).toHaveValue('A long thought, half written.');
+  await composer.press('Control+Enter');
+  await expect.poll(async () => (await readThreads(diffle.url)).length).toBe(1);
+
+  const reply = page.getByPlaceholder('Reply…');
+  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
+  await reply.fill('And one more thing.');
+  await reply.press('Escape');
+  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
+  await expect(reply).toHaveValue('And one more thing.');
+
+  // Posting forgets the text: the same lines open an empty composer.
+  await reply.press('Escape');
+  await selectLines(page, 'tally/ledger.py', 3, 4);
+  await expect(composer).toHaveValue('');
+  await composer.press('Escape');
+  await page.keyboard.press('C');
+  await expect(composer).toHaveValue('About the whole file.');
+});

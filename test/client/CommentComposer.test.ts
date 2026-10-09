@@ -3,6 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CommentComposer } from '../../src/client/review/CommentComposer.js';
+import type { Snapshot } from '../../src/shared/protocol.js';
 import { useStore } from '../../src/client/store.js';
 
 let root: Root;
@@ -33,7 +34,12 @@ beforeEach(async () => {
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
     return this instanceof HTMLTextAreaElement ? this.value.split('\n').length * 18 : 0;
   });
-  useStore.setState({ draftQuote: vi.fn(async () => 'one\ntwo\nthree\nfour\nfive\nsix') });
+  // The viewer renders the composer only for an open draft, whose text is keyed by the review.
+  useStore.setState({
+    draftQuote: vi.fn(async () => 'one\ntwo\nthree\nfour\nfive\nsix'),
+    snapshot: { mode: { commentKey: 'review' } } as Snapshot,
+    draft: { path: 'a.txt', selection: { id: 'a.txt', range: { start: 1, end: 6, side: 'additions' } } },
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -43,7 +49,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
-  useStore.setState({ draftQuote: originalDraftQuote, draft: null });
+  useStore.setState({ draftQuote: originalDraftQuote, snapshot: null, draft: null, unsent: {} });
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
