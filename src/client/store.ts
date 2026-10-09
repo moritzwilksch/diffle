@@ -283,8 +283,8 @@ export interface ReviewState {
   /** Toast for a failed fire-and-forget action: `${what} failed: <message>`. */
   report(what: string, e: unknown): void;
   search: SearchState;
-  /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → diff). */
-  openSearch(scope?: SearchState['scope']): void;
+  /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → diff); `prefill` replaces the input. */
+  openSearch(scope?: SearchState['scope'], prefill?: string): void;
   setSearchInput(value: string): void;
   blurSearchInput(): void;
   typeSearchInput(key: string): void;
@@ -1475,7 +1475,7 @@ export const useStore = create<ReviewState>((set, get) => {
       loading: false,
       truncated: false,
     },
-    openSearch(scope) {
+    openSearch(scope, prefill) {
       searchSeq.start();
       set((s) => {
         const nextScope = scope ?? s.search.scope;
@@ -1492,7 +1492,7 @@ export const useStore = create<ReviewState>((set, get) => {
             index: sameSearch ? s.search.index : -1,
             truncated: sameSearch && s.search.truncated,
             loading: false,
-            input: s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query,
+            input: prefill ?? (s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query),
             editing: true,
             path,
             focusNonce: s.search.focusNonce + 1,

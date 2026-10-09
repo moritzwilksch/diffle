@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js';
-import { gotoFile } from './browser.js';
+import { clickLine, gotoFile } from './browser.js';
 
 test('searches the current file and highlights the matches', async ({ page }) => {
   await gotoFile(page, 'tally/ledger.py');
@@ -9,6 +9,29 @@ test('searches the current file and highlights the matches', async ({ page }) =>
   await search.press('Enter');
   await expect(page.getByText(/^1 \/ \d+$/)).toBeVisible();
   await expect(page).toHaveScreenshot('search.png');
+});
+
+test('/ prefills the search with the selected text', async ({ page }) => {
+  await gotoFile(page, 'tally/ledger.py');
+  await page
+    .locator('span[data-char]', { hasText: /^amount$/ })
+    .first()
+    .dblclick();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('amount');
+  await page.keyboard.press('/');
+  await expect(page.locator('[data-content-search]')).toHaveValue('amount');
+});
+
+test('/ prefills the search with the word `w` focused', async ({ page }) => {
+  await gotoFile(page, 'tally/ledger.py');
+  // Line 33 is `amount = self.unit_price * self.quantity`.
+  await clickLine(page, 'tally/ledger.py', 33);
+  await page.mouse.move(0, 0);
+  await page.keyboard.press('w');
+  await page.keyboard.press('w');
+  await page.keyboard.press('w');
+  await page.keyboard.press('/');
+  await expect(page.locator('[data-content-search]')).toHaveValue('unit_price');
 });
 
 test('regression: opening and closing local search does not accumulate scroll drift', async ({ page }) => {

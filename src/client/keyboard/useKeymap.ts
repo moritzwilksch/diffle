@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
-import { clearWordFocus, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
+import { clearWordFocus, focusedWord, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '../model.js';
 import { remPx } from '../scale.js';
+import { escapeRegex } from '../search/highlight.js';
 import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
 
@@ -66,8 +67,8 @@ const KEYMAP: Record<string, Action> = {
   yy: () => void copyComments(),
   Y: () => void copyComments(),
   yp: (s) => void copyPath(s),
-  '/': (s) => s.openSearch('file'),
-  'g/': (s) => s.openSearch('diff'),
+  '/': (s) => s.openSearch('file', selectedQuery(s)),
+  'g/': (s) => s.openSearch('diff', selectedQuery(s)),
   gf: () => focusFileSearch(),
   gd: (s) => s.goToDefinition(),
   gy: (s) => s.goToTypeDefinition(),
@@ -93,6 +94,13 @@ const KEYMAP: Record<string, Action> = {
   r: (s) => s.reloadIfMoved(),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
 };
+
+/** The page's text selection, else the focused word (`w`), as a search query: one line only, escaped when regex search is on. */
+function selectedQuery(s: ReviewState): string | undefined {
+  const text = window.getSelection()?.toString().trim() || focusedWord();
+  if (!text || text.includes('\n')) return undefined;
+  return s.search.regex ? escapeRegex(text) : text;
+}
 
 /** Real target, looking through shadow roots (the tree and diffs retarget events to their hosts). */
 function realTarget(e: Event): HTMLElement | null {

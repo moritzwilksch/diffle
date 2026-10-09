@@ -23,6 +23,7 @@ export function wordsIn(text: string): { start: number; text: string }[] {
 let viewer: () => CodeViewHandle<unknown, undefined> | null = () => null;
 let focusedEl: HTMLElement | null = null;
 let focusedCol: number | null = null;
+let focusedText: string | null = null;
 /** The new-side row the focused word is on, which the cursor must stay on for the focus to hold. */
 let focusedRow: { path: string; line: number } | null = null;
 
@@ -30,6 +31,11 @@ interface Word {
   el: HTMLElement;
   col: number;
   text: string;
+}
+
+/** The keyboard- or click-focused word, if any. */
+export function focusedWord(): string | null {
+  return focusedText;
 }
 
 export function setViewer(get: () => CodeViewHandle<unknown, undefined> | null): void {
@@ -40,6 +46,7 @@ export function clearWordFocus(): void {
   if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.delete('diffle-word-focus');
   focusedEl = null;
   focusedCol = null;
+  focusedText = null;
   focusedRow = null;
   lspTarget.focus(null);
   occurrenceControl.focus(null);
@@ -127,6 +134,7 @@ function focusWord({ el, col, text }: Word, path: string, line: number): void {
   clearWordFocus();
   focusedEl = el;
   focusedCol = col;
+  focusedText = text;
   focusedRow = { path, line };
   const start = col - Number(el.dataset.char);
   const range = tokenRange(el, start, start + text.length);

@@ -1458,6 +1458,19 @@ describe('symbol navigation', () => {
     useStore.setState((s) => ({ search: { ...s.search, scope: 'diff', content: { file: 'diff', diff: 'diff' } } }));
   });
 
+  it('a prefill replaces the search input; reopening without one keeps it', () => {
+    ready();
+    useStore.setState({ activePath: 'b.py' });
+    useStore.getState().openSearch('file', 'total');
+    expect(useStore.getState().search.input).toBe('total');
+    useStore.getState().openSearch('file');
+    expect(useStore.getState().search.input).toBe('total');
+    useStore.getState().openSearch('diff', 'amount');
+    expect(useStore.getState().search.input).toBe('amount');
+    useStore.getState().closeSearch();
+    useStore.setState((s) => ({ search: { ...s.search, scope: 'diff', input: '' } }));
+  });
+
   it('a file search with no file to pin to says so instead of querying', async () => {
     useStore.setState({ snapshot: snap(1, 'working', []), activePath: null, fileView: null });
     useStore.getState().openSearch('file');
