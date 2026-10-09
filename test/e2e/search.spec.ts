@@ -11,6 +11,17 @@ test('searches the current file and highlights the matches', async ({ page }) =>
   await expect(page).toHaveScreenshot('search.png');
 });
 
+test('/ prefills the search with the selected text', async ({ page }) => {
+  await gotoFile(page, 'tally/ledger.py');
+  await page
+    .locator('span[data-char]', { hasText: /^amount$/ })
+    .first()
+    .dblclick();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('amount');
+  await page.keyboard.press('/');
+  await expect(page.locator('[data-content-search]')).toHaveValue('amount');
+});
+
 test('regression: opening and closing local search does not accumulate scroll drift', async ({ page }) => {
   await gotoFile(page, 'tally/ledger.py');
   const scroller = page.locator('.codeview');
