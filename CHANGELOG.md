@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.5](https://github.com/moritzwilksch/diffle/compare/v0.2.4...v0.2.5) - 2026-10-09
+
+### Features
+
+- _(comments)_ Keep unsent comment text across close and reload ([#306](https://github.com/moritzwilksch/diffle/pull/306))
+
 ## [0.2.4](https://github.com/moritzwilksch/diffle/compare/v0.2.3...v0.2.4) - 2026-10-07
 
 ### Features
