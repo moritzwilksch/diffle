@@ -16,10 +16,15 @@ import { useStore, type SearchState } from '../store.js';
 const ALL = 'diffle-search';
 const CURRENT = 'diffle-search-current';
 
+/** `text` as a regex source that matches it literally. */
+export function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** The regex the highlighter paints for `search`; null when nothing verbatim is active. */
 export function matchPattern(search: SearchState): RegExp | null {
   if (!search.open || !search.query || search.matches.length === 0) return null;
-  const literal = search.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const literal = escapeRegex(search.query);
   try {
     if (search.kind === 'word') return new RegExp(`(?<![\\p{L}\\p{N}_])${literal}(?![\\p{L}\\p{N}_])`, 'gu');
     if (search.kind === 'text')
