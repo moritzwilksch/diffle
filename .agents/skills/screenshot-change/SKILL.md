@@ -42,6 +42,16 @@ npm run screenshot -- <scenario.ts> --before origin/main --out <scratch>/shots
 
 The runner builds what is stale and runs the scenario against this checkout and, with `--before`, against that revision's own server and client (cached per commit). It prints only paths: each `<label>-<side>.png` and a labelled `<label>-compare.png`. Read the compare image; attach the per-side crops to the PR. A failure prints the error, the scenario line, and `failure-<side>.png`, and exits 1.
 
+## Attach to the PR
+
+Images go into the description as GitHub attachments, not as files in the repository or a branch:
+
+```sh
+gh pr edit <number> --body-file body.md --attach './<label>-before.png#<alt text>' --attach './<label>-after.png#<alt text>'
+```
+
+Reference each file in `body.md` as `![alt](./<label>-after.png)`; `--attach` uploads it and rewrites the reference to the uploaded asset. Run it from the directory holding the pngs. Without a body flag the images are appended to the existing description.
+
 ## Rules
 
 - **Assert, don't hope.** Check state with the verbs and `readThreads()`, not pixels. A thread's path is `anchor.path` and its text `messages[0].body`; scenarios run untyped, so check `CommentThread` in `src/shared/protocol.ts`. For video, assert after each beat: `J`/`K` move file (the first `J` lands on the first file), `v` views, `zc` collapses, `V`…`c` comments.
