@@ -665,6 +665,36 @@ export function ReviewPane() {
         ?.getBoundingClientRect().height;
       return overflow(scroller.getBoundingClientRect(), row.getBoundingClientRect(), measuredHeader ?? header);
     };
+    // Half a device pixel is as close as the scroller can get. A looser bound lets consecutive
+    // jumps rest a pixel or more apart, which reads as the header jiggling.
+    const reached = (d: number) => Math.abs(d) * devicePixelRatio <= 0.5;
+    // The offset as last issued: each correction folds its residue into the one before.
+    let issued = target.offset ?? 0;
+    // Moves the landed element onto its mark, rendering synchronously after each correction.
+    const settle = () => {
+      const viewer = viewerRef.current;
+      const instance = viewer?.getInstance();
+      if (!viewer || !instance) return;
+      for (let i = 0; i < 4; i++) {
+        const d = drift();
+        if (Number.isNaN(d)) {
+          viewer.scrollTo({ ...target, offset: issued });
+          instance.render(true);
+          continue;
+        }
+        if (reached(d)) break;
+        issued -= d;
+        viewer.scrollTo({ ...target, offset: issued });
+        instance.render(true);
+        // Past the document's end the viewer clamps and reports the mark as reached, even when a
+        // re-layout left the scroller short of that clamp. If the reissue moved nothing, the scroller
+        // closes the residue itself, before paint; what lies past the document's end stays out of reach.
+        if (drift() !== d || !containerRef.current) continue;
+        containerRef.current.scrollTop += d;
+        instance.render(true);
+        if (drift() === d) break;
+      }
+    };
     // One synchronous landing; false when the item is not in the viewer yet.
     const land = (): boolean => {
       const viewer = viewerRef.current;
@@ -680,35 +710,31 @@ export function ReviewPane() {
         }
         return true;
       }
-      for (let i = 0; i < 4; i++) {
-        const d = drift();
-        if (Number.isNaN(d)) {
-          viewer.scrollTo(target);
-          instance.render(true);
-          continue;
-        }
-        if (Math.abs(d) <= 1) break;
-        viewer.scrollTo({ ...target, offset: (target.offset ?? 0) - d });
-        instance.render(true);
-        // Past the document's end the viewer clamps and reports the mark as reached, even when a
-        // re-layout left the scroller short of that clamp. If the reissue moved nothing, the scroller
-        // closes the residue itself, before paint; what lies past the document's end stays out of reach.
-        if (drift() !== d || !containerRef.current) continue;
-        containerRef.current.scrollTop += d;
-        instance.render(true);
-        if (drift() === d) break;
-      }
+      settle();
       return true;
     };
     let cancelled = false;
-    let checks = 0;
-    const verify = () => {
-      setTimeout(() => {
-        if (cancelled) return;
-        const d = drift();
-        if (!Number.isNaN(d) && Math.abs(d) > 1 && containerRef.current) containerRef.current.scrollTop += d;
-        if (checks++ < 2) verify();
-      }, 100);
+    // Content that resizes after the landing (an image, a comment card, a row the viewer only
+    // estimated) shifts the element, and the viewer re-anchors to its estimate, not to the mark.
+    // Resize observers run after layout and before paint, so settling there keeps the shift unseen.
+    // The hold ends after a second, on reader input, or with the next jump.
+    let unpin: (() => void) | undefined;
+    const pin = () => {
+      const scroller = containerRef.current;
+      const content = viewerRef.current?.getInstance()?.getRenderedItems()[0]?.element.parentElement;
+      if (!scroller || !content) return;
+      const observer = new ResizeObserver(settle);
+      observer.observe(content);
+      const input = ['wheel', 'pointerdown', 'touchstart'] as const;
+      const timer = setTimeout(() => unpin?.(), 1000);
+      unpin = () => {
+        unpin = undefined;
+        observer.disconnect();
+        clearTimeout(timer);
+        for (const type of input) scroller.removeEventListener(type, onInput);
+      };
+      const onInput = () => unpin?.();
+      for (const type of input) scroller.addEventListener(type, onInput, { passive: true });
     };
     // Items may still be loading; retry briefly.
     let tries = 0;
@@ -724,11 +750,12 @@ export function ReviewPane() {
       }
       show();
       release();
-      if (exact) verify();
+      if (exact) pin();
     };
     attempt();
     return () => {
       cancelled = true;
+      unpin?.();
       if (settled) clearTimeout(settled);
     };
   }, [scrollTarget, geometry, scrollPlan]);
