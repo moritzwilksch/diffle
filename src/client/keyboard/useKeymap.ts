@@ -136,11 +136,14 @@ function isEditable(el: HTMLElement | null): boolean {
 
 /**
  * Vim-style keymap. Single keys act immediately; `g`, `d`, `y`, `z` start a
- * chord that resolves on the next key or expires. Ignored while typing in a
- * field, except Escape.
+ * chord that resolves on the next key or expires. While a prefix is held down,
+ * every key pressed resolves against it, so holding `z` makes `h` / `l` repeat
+ * `zh` / `zl`. Ignored while typing in a field, except Escape.
  */
 export function useKeymap(): void {
   const pending = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  // The prefix key physically down, from its press to its release.
+  const held = useRef<string | null>(null);
   // Digits typed before a chord, as in vim; any key that is not part of the count or a counted chord drops it.
   const count = useRef('');
 
@@ -319,7 +322,13 @@ export function useKeymap(): void {
         s.setHelpOpen(false);
         return;
       }
-      const prefix = pending.current?.key;
+      // Auto-repeat of a held prefix is not a second press: holding `z` must not fire `zz`.
+      if (e.repeat && e.key === held.current) {
+        e.preventDefault();
+        return;
+      }
+      // A held prefix applies only where it forms a chord, so a key rolled over its release still acts alone.
+      const prefix = pending.current?.key ?? (held.current && KEYMAP[held.current + e.key] ? held.current : undefined);
       clearPending();
       // A count starts with 1-9 (`0` alone is a motion) and grows with any digit.
       if (!prefix && /^[0-9]$/.test(e.key) && (typed || e.key !== '0')) {
@@ -331,6 +340,7 @@ export function useKeymap(): void {
         // `g` alone also has no action; wait for the second key, which the count outlives (`10gg`).
         count.current = typed;
         pending.current = { key: e.key, timer: setTimeout(clearPending, CHORD_MS) };
+        held.current = e.key;
         return;
       }
       const chord = prefix ? prefix + e.key : e.key;
@@ -359,6 +369,13 @@ export function useKeymap(): void {
       count.current = '';
     };
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
+    // Capture phase and window blur: a release the page never sees would leave later keys chorded.
+    const onRelease = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === held.current) held.current = null;
+    };
+    const onBlur = () => {
+      held.current = null;
+    };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || realTarget(e)?.getAttribute('role') === 'combobox') return;
       // Escape that only closed a configuration pane leaves focus on the entry list.
@@ -370,10 +387,14 @@ export function useKeymap(): void {
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keyup', onKeyUp);
+    document.addEventListener('keyup', onRelease, true);
+    window.addEventListener('blur', onBlur);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keyup', onKeyUp);
+      document.removeEventListener('keyup', onRelease, true);
+      window.removeEventListener('blur', onBlur);
       clearPending();
       count.current = '';
     };

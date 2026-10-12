@@ -84,9 +84,15 @@ test('scrolls a minified line to its last word with wrapping off', async ({ page
   const end = await scrolledSideways(page);
   await page.keyboard.press('z');
   await page.keyboard.press('h');
-  await expect.poll(() => scrolledSideways(page)).toBeLessThan(end);
-  await page.keyboard.press('z');
+  const once = await scrolledSideways(page);
+  expect(once).toBeLessThan(end);
+  // Holding z repeats the chord without pressing z again.
+  await page.keyboard.down('z');
+  await page.keyboard.press('h');
+  await expect.poll(() => scrolledSideways(page)).toBeLessThan(once);
   await page.keyboard.press('l');
+  await page.keyboard.press('l');
+  await page.keyboard.up('z');
   await expect.poll(() => scrolledSideways(page)).toBe(end);
 });
 
