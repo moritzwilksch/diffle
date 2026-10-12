@@ -19,7 +19,11 @@ test('/ prefills the search with the selected text', async ({ page }) => {
     .dblclick();
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('amount');
   await page.keyboard.press('/');
-  await expect(page.locator('[data-content-search]')).toHaveValue('amount');
+  const search = page.locator('[data-content-search]');
+  await expect(search).toHaveValue('amount');
+  // The prefill is selected, so typing replaces an accidental one.
+  await page.keyboard.type('total');
+  await expect(search).toHaveValue('total');
 });
 
 test('/ prefills the search with the word `w` focused', async ({ page }) => {

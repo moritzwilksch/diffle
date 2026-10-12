@@ -127,6 +127,8 @@ export interface SearchState {
   focusNonce: number;
   /** Unsubmitted text survives the file header being virtualized away. */
   input: string;
+  /** A prefilled input stays selected until edited, so typing replaces it. */
+  selected: boolean;
   editing: boolean;
   query: string;
   matches: Match[];
@@ -1468,6 +1470,7 @@ export const useStore = create<ReviewState>((set, get) => {
       path: null,
       focusNonce: 0,
       input: '',
+      selected: false,
       editing: false,
       query: '',
       matches: [],
@@ -1493,6 +1496,7 @@ export const useStore = create<ReviewState>((set, get) => {
             truncated: sameSearch && s.search.truncated,
             loading: false,
             input: prefill ?? (s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query),
+            selected: prefill !== undefined,
             editing: true,
             path,
             focusNonce: s.search.focusNonce + 1,
@@ -1511,7 +1515,7 @@ export const useStore = create<ReviewState>((set, get) => {
       });
     },
     setSearchInput(input) {
-      set((s) => ({ search: { ...s.search, input, editing: true } }));
+      set((s) => ({ search: { ...s.search, input, selected: false, editing: true } }));
     },
     blurSearchInput() {
       set((s) => ({ search: { ...s.search, editing: false } }));
@@ -1520,7 +1524,14 @@ export const useStore = create<ReviewState>((set, get) => {
       set((s) => ({
         search: {
           ...s.search,
-          input: key === 'Backspace' ? Array.from(s.search.input).slice(0, -1).join('') : s.search.input + key,
+          input: s.search.selected
+            ? key === 'Backspace'
+              ? ''
+              : key
+            : key === 'Backspace'
+              ? Array.from(s.search.input).slice(0, -1).join('')
+              : s.search.input + key,
+          selected: false,
           editing: true,
           focusNonce: s.search.focusNonce + 1,
         },

@@ -23,8 +23,10 @@ function SearchForm() {
 
   useEffect(() => {
     // Virtualization can remount this input during a wheel gesture; focus must not move the viewport.
-    if (search.editing) ref.current?.focus({ preventScroll: true });
-  }, [search.editing, search.focusNonce]);
+    if (!search.editing) return;
+    ref.current?.focus({ preventScroll: true });
+    if (search.selected) ref.current?.select();
+  }, [search.editing, search.focusNonce, search.selected]);
 
   const n = search.matches.length;
   if (search.kind !== 'text') {

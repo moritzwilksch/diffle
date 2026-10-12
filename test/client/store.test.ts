@@ -1471,6 +1471,20 @@ describe('symbol navigation', () => {
     useStore.setState((s) => ({ search: { ...s.search, scope: 'diff', input: '' } }));
   });
 
+  it('a key typed into a prefilled search replaces the selected prefill', () => {
+    ready();
+    useStore.setState({ activePath: 'b.py' });
+    useStore.getState().openSearch('file', 'total');
+    expect(useStore.getState().search.selected).toBe(true);
+    useStore.getState().typeSearchInput('x');
+    useStore.getState().typeSearchInput('y');
+    expect(useStore.getState().search).toMatchObject({ input: 'xy', selected: false });
+    useStore.getState().openSearch('file');
+    expect(useStore.getState().search.selected).toBe(false);
+    useStore.getState().closeSearch();
+    useStore.setState((s) => ({ search: { ...s.search, scope: 'diff', input: '' } }));
+  });
+
   it('a file search with no file to pin to says so instead of querying', async () => {
     useStore.setState({ snapshot: snap(1, 'working', []), activePath: null, fileView: null });
     useStore.getState().openSearch('file');

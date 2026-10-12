@@ -14,6 +14,7 @@ const base: SearchState = {
   path: null,
   focusNonce: 0,
   input: 'a.b',
+  selected: false,
   editing: false,
   query: 'a.b',
   matches: [{ path: 'x', line: 1, text: '' }],
