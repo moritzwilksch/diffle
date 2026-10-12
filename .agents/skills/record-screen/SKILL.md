@@ -34,7 +34,7 @@ export default async ({ page, shot, selectLines }: ScenarioContext) => {
 ## Run it
 
 ```sh
-npm run screenshot -- <scenario.ts> --before origin/main --out <scratch>/shots
+npm run screenshot -- <scenario.ts> --before origin/main --out <out>
 ```
 
 It prints only paths: `<label>-<side>.webp` per `shot`, a labelled `<label>-compare.webp` per pair, and `<scenario>-<side>.webm` per video. Read the compare image to verify. A failure prints the error, the scenario line, and `failure-<side>.png`, and exits 1.
@@ -43,17 +43,17 @@ It prints only paths: `<label>-<side>.webp` per `shot`, a labelled `<label>-comp
 
 Always upload captures with `--attach` on `gh pr create`, `gh pr edit`, or `gh pr comment`. GitHub then hosts them as user attachments, outside the repository.
 
-In the body, reference each file by the path you pass to `--attach`; gh matches absolute paths and rewrites each reference to the uploaded URL:
+In the body, reference each file by the path you pass to `--attach`. gh matches the two by absolute path, so keep `<out>` absolute and gh runs from any directory; it rewrites each reference to the uploaded URL:
 
 ```md
-![Composer before](/abs/shots/composer-before.webp) ![Composer after](/abs/shots/composer-after.webp)
+![Composer before](<out>/composer-before.webp) ![Composer after](<out>/composer-after.webp)
 
-![](/abs/shots/demo-after.webm)
+![](<out>/demo-after.webm)
 ```
 
 ```sh
 gh pr edit <number> --body-file body.md \
-  --attach /abs/shots/composer-before.webp --attach /abs/shots/composer-after.webp --attach /abs/shots/demo-after.webm
+  --attach <out>/composer-before.webp --attach <out>/composer-after.webp --attach <out>/demo-after.webm
 ```
 
 - **Video:** write `![](path.webm)` alone in its paragraph; gh turns it into the bare URL GitHub renders as a player. Anywhere else, or as `[text](path)`, it becomes a plain link.
