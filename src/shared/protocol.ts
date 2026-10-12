@@ -539,6 +539,8 @@ export const UserConfigSchema = z.object({
   contextLines: z.number(),
   /** When a review between refs recomputes as its refs move; see `FollowRefsSchema`. Default auto. */
   followRefs: FollowRefsSchema,
+  /** Wrap long lines in the viewer instead of scrolling them sideways. Default true. */
+  lineWrap: z.boolean(),
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
@@ -551,6 +553,7 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   autoViewed: [],
   contextLines: 5,
   followRefs: 'auto',
+  lineWrap: true,
   lspCommands: {},
 };
 
@@ -811,6 +814,7 @@ export const ConfigUpdateSchema = z.object({
   autoViewed: z.string().array().optional(),
   contextLines: z.number().int().min(0).max(10_000).optional(),
   followRefs: FollowRefsSchema.optional(),
+  lineWrap: z.boolean().optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });

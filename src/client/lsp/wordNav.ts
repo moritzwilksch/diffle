@@ -2,6 +2,7 @@ import type { CodeViewHandle } from '@pierre/diffs/react';
 import type { CodeViewLineSelection } from '@pierre/diffs';
 import { sideOf } from '../comments/anchor.js';
 import { itemIdOf, pathFromItemId } from '../model.js';
+import { revealInline, scrollInline } from '../review/inline.js';
 import { rowOf } from '../review/rows.js';
 import { useStore } from '../store.js';
 import { occurrenceControl } from './occurrences.js';
@@ -144,6 +145,7 @@ function focusWord({ el, col, text }: Word, path: string, line: number): void {
     highlight.priority = 2;
     CSS.highlights.set('diffle-word-focus', highlight);
   }
+  revealInline(range ?? el);
   const target: TokenTarget = { path, side: 'new', line, col, text };
   lspTarget.focus(target, el);
   occurrenceControl.focus(target);
@@ -161,6 +163,21 @@ function newSideLine(path: string, line: number, onOldSide: boolean): number | n
   if (!row || !row.dataset.lineType?.startsWith('context')) return null;
   const alt = Number(row.dataset.altLine);
   return Number.isFinite(alt) ? alt : null;
+}
+
+/**
+ * Scroll the code column under the cursor sideways by half its visible width (zh / zl); without a
+ * cursor, the active file's new side. Nothing moves while lines wrap.
+ */
+export function scrollCursorInline(dir: 1 | -1): void {
+  const { selection, activePath } = useStore.getState();
+  const path = selection ? pathFromItemId(selection.id) : activePath;
+  const root = path && rootOf(path);
+  if (!root) return;
+  const code = selection
+    ? rowOf(root, selection.range.end, sideOf(selection))?.closest<HTMLElement>('[data-code]')
+    : root.querySelector<HTMLElement>('[data-code]:not([data-deletions])');
+  if (code) scrollInline(code, dir / 2);
 }
 
 function rootOf(path: string): ShadowRoot | HTMLElement | null {

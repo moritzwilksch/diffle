@@ -1,8 +1,9 @@
 // The review as it opens on the feature branch: the file tree, every kind of changed file,
 // and the layouts a reader switches between. Judge changes in the screenshots under
 // `__snapshots__/review.spec.ts/`.
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
-import { collapsed, filePaths, gotoFile, header, waitForHighlight, walkToFile } from './browser.js';
+import { clickLine, collapsed, filePaths, gotoFile, header, waitForHighlight, walkToFile } from './browser.js';
 
 test('opens on the first changed file with the tree and threads panel', async ({ page }) => {
   await expect(page.locator('header')).toContainText('17 files');
@@ -64,6 +65,43 @@ test('renders CRLF endings', async ({ page }) => {
 test('renders a minified line and a missing trailing newline', async ({ page }) => {
   await gotoFile(page, 'web/vendor/sparkline.min.js');
   await expect(page).toHaveScreenshot('minified-line.png');
+});
+
+/** How far the furthest-scrolled code column sits from its start, in pixels. */
+const scrolledSideways = (page: Page) =>
+  page.locator('[data-code]').evaluateAll((codes) => Math.max(0, ...codes.map((c) => c.scrollLeft)));
+
+test('scrolls a minified line to its last word with wrapping off', async ({ page }) => {
+  await gotoFile(page, 'web/vendor/sparkline.min.js');
+  await page.keyboard.press('z');
+  await page.keyboard.press('w');
+  await expect(page.locator('pre[data-overflow="scroll"]').first()).toBeAttached();
+  await clickLine(page, 'web/vendor/sparkline.min.js', 1);
+  expect(await scrolledSideways(page)).toBe(0);
+  await page.keyboard.press('$');
+  await expect.poll(() => scrolledSideways(page)).toBeGreaterThan(0);
+  await expect(page).toHaveScreenshot('no-wrap-last-word.png');
+  const end = await scrolledSideways(page);
+  await page.keyboard.press('z');
+  await page.keyboard.press('h');
+  await expect.poll(() => scrolledSideways(page)).toBeLessThan(end);
+  await page.keyboard.press('z');
+  await page.keyboard.press('l');
+  await expect.poll(() => scrolledSideways(page)).toBe(end);
+});
+
+test('scrolls a search match into view with wrapping off', async ({ page }) => {
+  await gotoFile(page, 'web/vendor/sparkline.min.js');
+  await page.keyboard.press('z');
+  await page.keyboard.press('w');
+  await expect(page.locator('pre[data-overflow="scroll"]').first()).toBeAttached();
+  await page.keyboard.press('/');
+  const search = page.locator('[data-content-search]');
+  await search.fill('strokeWidth');
+  await search.press('Enter');
+  await expect(page.getByText(/^1 \/ 1$/)).toBeVisible();
+  await expect.poll(() => scrolledSideways(page)).toBeGreaterThan(0);
+  await expect(page).toHaveScreenshot('no-wrap-search.png');
 });
 
 test('switches to the unified layout', async ({ page }) => {

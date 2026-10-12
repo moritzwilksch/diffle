@@ -8,7 +8,8 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async () => []),
   viewed: vi.fn(async () => []),
-  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: 'off', lspCommands: {} })),
+  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: 'off', lineWrap: true, lspCommands: {} })),
+  saveConfig: vi.fn(async (update: object) => ({ ...useStore.getState().config, ...update })),
   lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   exportComments: vi.fn(),
 };
@@ -337,6 +338,19 @@ describe('useKeymap', () => {
     expect(useStore.getState().theme).not.toBe(before);
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(useStore.getState().toast).toBeNull();
+  });
+
+  it('zw saves the flipped line wrapping', async () => {
+    expect(useStore.getState().config.lineWrap).toBe(true);
+    press('z');
+    press('w');
+    await flush();
+    expect(api.saveConfig).toHaveBeenCalledWith({ lineWrap: false });
+    expect(useStore.getState().config.lineWrap).toBe(false);
+    press('z');
+    press('w');
+    await flush();
+    expect(useStore.getState().config.lineWrap).toBe(true);
   });
 
   it('reports a failed export instead of leaving the rejection unhandled', async () => {

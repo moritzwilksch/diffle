@@ -55,11 +55,12 @@ import {
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
+import { revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
 import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
-import { charAtPoint } from '../lsp/tokenText.js';
+import { charAtPoint, tokenRange } from '../lsp/tokenText.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -234,7 +235,6 @@ const codeViewOptions = {
   // Token hit-testing (data-char spans); also set on the worker pool in main.tsx, whose options win when the pool renders.
   useTokenTransformer: true,
   lineHoverHighlight: 'number',
-  overflow: 'wrap',
 } as const;
 
 const LOADING: Loaded = { kind: 'loading' };
@@ -293,6 +293,7 @@ export function ReviewPane() {
   });
   const theme = useStore((s) => s.theme);
   const diffStyle = useStore((s) => s.diffStyle);
+  const lineWrap = useStore((s) => s.config.lineWrap);
 
   // CodeView re-renders an item only when its version changes, so each path's version is derived
   // here from what the item paints (its threads, draft, composers, collapsed state); no manual bump.
@@ -456,14 +457,15 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified) or remounts the viewer (theme). Neither is
+  // A display toggle re-lays the rows out (split / unified, wrap) or remounts the viewer (theme). Neither is
   // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
   // renders the change, and the request to land it at the same pixel goes out in the same update, so
   // the jump effect below places it before anything paints. No row on screen means nothing to hold.
   useEffect(
     () =>
       useStore.subscribe((s, prev) => {
-        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle) return;
+        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle && s.config.lineWrap === prev.config.lineWrap)
+          return;
         const scroller = containerRef.current;
         const items = viewerRef.current?.getInstance()?.getRenderedItems();
         if (!scroller || !items) return;
@@ -512,6 +514,7 @@ export function ReviewPane() {
               id: reveal.id,
               line: reveal.line,
               side: 'new',
+              col: reveal.col,
               align: 'eye',
               nonce: (s.scrollTarget?.nonce ?? 0) + 1,
             },
@@ -697,6 +700,15 @@ export function ReviewPane() {
     };
     // One synchronous landing; false when the item is not in the viewer yet.
     const land = (): boolean => {
+      if (!landRow()) return false;
+      // Sideways scrolling leaves row heights alone, so the column follows the settled row in the same frame.
+      const { col } = scrollTarget;
+      const row = col != null ? renderedRow(scrollTarget) : null;
+      const range = row && col != null ? tokenRange(row, col, col + 1) : null;
+      if (range) revealInline(range);
+      return true;
+    };
+    const landRow = (): boolean => {
       const viewer = viewerRef.current;
       const instance = viewer?.getInstance();
       if (!viewer || !instance || !viewer.getItem(scrollTarget.id)) return false;
@@ -780,6 +792,7 @@ export function ReviewPane() {
       hunkSeparators: 'line-info' as const,
       themeType: theme,
       diffStyle,
+      overflow: lineWrap ? ('wrap' as const) : ('scroll' as const),
       onLineSelectionEnd: () => {
         const sel = viewerRef.current?.getSelectedLines();
         if (sel) void openDraft(sel);
@@ -849,7 +862,7 @@ export function ReviewPane() {
         void openSymbolMenu(target, event.clientX, event.clientY);
       },
     }),
-    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, geometry],
+    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, lineWrap, geometry],
   );
 
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {

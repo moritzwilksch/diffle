@@ -80,6 +80,8 @@ export const COLUMNS: HelpSection[][] = [
         ['zz', 'scroll the current line to eye level'],
         ['zt / zb', 'scroll the current line to the top / bottom'],
         ['s', 'toggle split / unified'],
+        ['zw', 'toggle line wrapping'],
+        ['zh / zl', 'scroll long lines left / right'],
         ['t', 'cycle theme'],
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
         ['o', 'GitHub repository and pull request'],
