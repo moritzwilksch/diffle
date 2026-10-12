@@ -631,8 +631,8 @@ export function ReviewPane() {
       if (containerRef.current) containerRef.current.style.visibility = '';
     };
     // How far the landed element sits below its mark, NaN while it is not rendered: the row below the
-    // gaze point for a line jump, the file card below the pane's top padding for an item jump (J / K),
-    // so a header always stops at the same pixel whatever the estimates above it were.
+    // gaze point for a line jump; for an item jump (J / K), the file card one pixel above the pane's
+    // top edge, so its header sticks and CSS, not a sub-pixel scroll residue, pins it to the edge.
     const drift = () => {
       const scroller = containerRef.current;
       if (!scroller) return NaN;
@@ -642,7 +642,7 @@ export function ReviewPane() {
           ?.getInstance()
           ?.getRenderedItems()
           .find((r) => r.id === scrollTarget.id)?.element;
-        return card ? card.getBoundingClientRect().top - (base + geometry.layout.paddingTop) : NaN;
+        return card ? card.getBoundingClientRect().top - (base - 1) : NaN;
       }
       const top = renderedRow(scrollTarget)?.getBoundingClientRect().top ?? NaN;
       return top - (base + offset + header);
