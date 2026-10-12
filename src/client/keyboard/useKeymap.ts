@@ -368,7 +368,6 @@ export function useKeymap(): void {
       clearPending();
       count.current = '';
     };
-    // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     // Capture phase and window blur: a release the page never sees would leave later keys chorded.
     const onRelease = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === held.current) held.current = null;
@@ -376,6 +375,7 @@ export function useKeymap(): void {
     const onBlur = () => {
       held.current = null;
     };
+    // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || realTarget(e)?.getAttribute('role') === 'combobox') return;
       // Escape that only closed a configuration pane leaves focus on the entry list.

@@ -2,6 +2,7 @@ import { prepareFileTreeInput } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
 import {
   comparisonLabel,
+  DEFAULT_USER_CONFIG,
   type ChangedFile,
   type CommentThread,
   type GithubMetadata,
@@ -194,13 +195,7 @@ describe('viewed state', () => {
     oldBlob: '',
     generated: false,
   });
-  const config = {
-    autoViewed: ['*.lock'],
-    contextLines: 5,
-    followRefs: 'off' as const,
-    lineWrap: true,
-    lspCommands: {},
-  };
+  const config = { ...DEFAULT_USER_CONFIG, autoViewed: ['*.lock'], followRefs: 'off' as const };
 
   it('counts explicit marks at the current blob and auto-viewed files; a stale mark is not viewed', () => {
     const changed = [file('a.ts'), file('b.ts'), file('c.ts', 'new'), file('yarn.lock')];
@@ -253,13 +248,7 @@ describe('nextFileAfter', () => {
     oldBlob: '',
     generated: false,
   });
-  const config = {
-    autoViewed: ['*.lock'],
-    contextLines: 5,
-    followRefs: 'off' as const,
-    lineWrap: true,
-    lspCommands: {},
-  };
+  const config = { ...DEFAULT_USER_CONFIG, autoViewed: ['*.lock'], followRefs: 'off' as const };
   const snapshot = {
     changed: [file('c.ts', 'new'), file('yarn.lock'), file('a.ts'), file('b.ts'), file('d.ts')],
   } as Snapshot;
