@@ -67,6 +67,27 @@ test('renders a minified line and a missing trailing newline', async ({ page }) 
   await expect(page).toHaveScreenshot('minified-line.png');
 });
 
+// `minified-line.png` pins how the wrapped line looks; this pins that turning wrapping back on restores it.
+test('wraps the minified line to the same height after turning wrapping off and on', async ({ page }) => {
+  const path = 'web/vendor/sparkline.min.js';
+  const card = page.locator('diffs-container').filter({ has: page.locator(`[data-path="${path}"]`) });
+  const heights = () =>
+    card.evaluate((el) => {
+      const row = el.shadowRoot!.querySelector('[data-line="1"]')!;
+      return { card: el.getBoundingClientRect().height, row: row.getBoundingClientRect().height };
+    });
+  await gotoFile(page, path);
+  const wrapped = await heights();
+  await page.keyboard.press('z');
+  await page.keyboard.press('w');
+  await expect(page.locator('pre[data-overflow="scroll"]').first()).toBeAttached();
+  expect((await heights()).row).toBeLessThan(wrapped.row);
+  await page.keyboard.press('z');
+  await page.keyboard.press('w');
+  await expect(page.locator('pre[data-overflow="wrap"]').first()).toBeAttached();
+  await expect.poll(heights).toEqual(wrapped);
+});
+
 /** How far the furthest-scrolled code column sits from its start, in pixels. */
 const scrolledSideways = (page: Page) =>
   page.locator('[data-code]').evaluateAll((codes) => Math.max(0, ...codes.map((c) => c.scrollLeft)));
