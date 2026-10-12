@@ -1,4 +1,5 @@
 import type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -102,53 +103,41 @@ export async function newVideoPage(
 }
 
 /**
- * Close the recording context, convert the webm to mp4 (GitHub plays mp4 inline, not webm), and
- * drop the webm. Needs a system ffmpeg with libx264; Playwright's bundled ffmpeg lacks it.
+ * Close the recording context and re-encode Playwright's VP8 webm as VP9 webm at `webmPath`.
+ * VP9 at CRF 40 keeps UI text legible at about half the bytes of H.264. Needs a system ffmpeg
+ * with libvpx-vp9; Playwright's bundled ffmpeg lacks it.
  */
 export async function saveVideo(
   context: BrowserContext,
   video: { path(): Promise<string> },
-  mp4Path: string,
+  webmPath: string,
 ): Promise<string> {
-  const webm = await video.path();
+  const recorded = await video.path();
   await context.close();
-  await mkdir(dirname(mp4Path), { recursive: true });
+  await mkdir(dirname(webmPath), { recursive: true });
   quiet('ffmpeg', [
     '-y',
     '-v',
     'error',
     '-i',
-    webm,
+    recorded,
     '-c:v',
-    'libx264',
-    '-pix_fmt',
-    'yuv420p',
-    '-movflags',
-    '+faststart',
-    mp4Path,
+    'libvpx-vp9',
+    '-crf',
+    '40',
+    '-b:v',
+    '0',
+    '-row-mt',
+    '1',
+    webmPath,
   ]);
-  rmSync(webm, { force: true });
-  return mp4Path;
+  rmSync(recorded, { force: true });
+  return webmPath;
 }
 
-/** One video frame at `seconds` as a png. Cheaper than reading whole frames when verifying a take. */
-export async function frame(mp4Path: string, seconds: number, pngPath: string): Promise<string> {
-  await mkdir(dirname(pngPath), { recursive: true });
-  quiet('ffmpeg', ['-y', '-v', 'error', '-ss', String(seconds), '-i', mp4Path, '-frames:v', '1', pngPath]);
-  return pngPath;
-}
-
-/** Duration of a recorded mp4 in seconds, for picking a frame to probe. */
-export function videoDuration(mp4Path: string): number {
-  const out = quiet('ffprobe', [
-    '-v',
-    'error',
-    '-show_entries',
-    'format=duration',
-    '-of',
-    'default=nw=1:nk=1',
-    mp4Path,
-  ]);
+/** Duration of a video in seconds. */
+export function videoDuration(path: string): number {
+  const out = quiet('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', path]);
   return Number(out.trim());
 }
 
@@ -157,9 +146,8 @@ export function videoDuration(mp4Path: string): number {
  * its read-back cost) to the changed surface instead of a full frame.
  */
 export async function crop(page: Page, target: string | Locator, path: string): Promise<string> {
-  await mkdir(dirname(path), { recursive: true });
   const locator = typeof target === 'string' ? page.locator(target) : target;
-  await locator.first().screenshot({ path, animations: 'disabled' });
+  await writeWebp(await locator.first().screenshot({ animations: 'disabled' }), path);
   return path;
 }
 
@@ -169,19 +157,37 @@ export async function clip(
   box: { x: number; y: number; width: number; height: number },
   path: string,
 ): Promise<string> {
-  await mkdir(dirname(path), { recursive: true });
-  await page.screenshot({ path, clip: box, animations: 'disabled' });
+  await writeWebp(await page.screenshot({ clip: box, animations: 'disabled' }), path);
   return path;
 }
 
-/** Width and height of a png, read from its header. */
-export function pngSize(path: string): { width: number; height: number } {
-  const header = readFileSync(path).subarray(16, 24);
-  return { width: header.readUInt32BE(0), height: header.readUInt32BE(4) };
+/**
+ * Encode a png as lossless webp: pixel-exact, and under half the bytes of the png for UI text,
+ * where lossy webp comes out larger. Webp caps each side at 16383 px.
+ */
+async function writeWebp(png: Buffer, path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const args = ['-y', '-v', 'error', '-f', 'png_pipe', '-i', 'pipe:0'];
+  try {
+    execFileSync('ffmpeg', [...args, '-c:v', 'libwebp', '-lossless', '1', '-compression_level', '6', path], {
+      input: png,
+      stdio: ['pipe', 'ignore', 'pipe'],
+    });
+  } catch (error) {
+    throw new Error(`ffmpeg could not write ${path}\n${String((error as { stderr?: Buffer }).stderr ?? '').trim()}`);
+  }
+}
+
+/** Width and height of a webp `writeWebp` wrote, read from its lossless header. */
+export function webpSize(path: string): { width: number; height: number } {
+  const header = readFileSync(path).subarray(0, 25);
+  if (header.toString('latin1', 12, 16) !== 'VP8L') throw new Error(`${path} is not a lossless webp`);
+  const bits = header.readUInt32LE(21);
+  return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
 }
 
 /**
- * Before and after pngs side by side (stacked when wide), labelled, in one 1x image, so one read
+ * Before and after webps side by side (stacked when wide), labelled, in one 1x image, so one read
  * verifies a change. `scale` is the crops' DPR; they render at their CSS size.
  */
 export async function compare(
@@ -196,9 +202,9 @@ export async function compare(
 ): Promise<string> {
   const cell = async (label: string, path: string) => {
     const data = (await readFile(path)).toString('base64');
-    return `<figure><figcaption>${label}</figcaption><img src="data:image/png;base64,${data}" style="width:${pngSize(path).width / scale}px"></figure>`;
+    return `<figure><figcaption>${label}</figcaption><img src="data:image/webp;base64,${data}" style="width:${webpSize(path).width / scale}px"></figure>`;
   };
-  const row = Math.max(pngSize(before).width, pngSize(after).width) / scale <= 700;
+  const row = Math.max(webpSize(before).width, webpSize(after).width) / scale <= 700;
   const context = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: 100, height: 100 } });
   try {
     const page = await context.newPage();
@@ -206,8 +212,7 @@ export async function compare(
       `<style>body{margin:0;font:600 13px system-ui;background:#fff}main{display:inline-flex;flex-direction:${row ? 'row' : 'column'};gap:12px;padding:12px}figure{margin:0}figcaption{margin-bottom:4px;color:#555}img{display:block;outline:1px solid #ddd}</style>` +
         `<main>${await cell(labels[0], before)}${await cell(labels[1], after)}</main>`,
     );
-    await mkdir(dirname(out), { recursive: true });
-    await page.locator('main').screenshot({ path: out });
+    await writeWebp(await page.locator('main').screenshot(), out);
   } finally {
     await context.close();
   }
