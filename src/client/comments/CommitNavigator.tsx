@@ -15,10 +15,7 @@ import { useStore } from '../store.js';
 import { Button } from '../ui/Button.js';
 
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
-const DATE_TIME = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'full',
-  timeStyle: 'long',
-});
+const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' });
 
 /** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
 const HOVER_DELAY_MS = 250;
@@ -39,10 +36,7 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   const stepCommit = useStore((s) => s.stepCommit);
   const interdiff = mode.interdiff ?? null;
   const [open, setOpen] = useState(true);
-  const [hover, setHover] = useState<{
-    commit: RangeCommit;
-    row: DOMRect;
-  } | null>(null);
+  const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const list = useRef<HTMLDivElement>(null);
   const cardId = useId();
