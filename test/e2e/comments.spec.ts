@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js';
-import { clickLine, gotoFile, selectLines } from './browser.js';
+import { clickLine, gotoFile, selectLines, settle } from './browser.js';
 import { readPrompt, readThreads } from './server.js';
 
 test('comments on a line range and lists the thread in the panel', async ({ page, diffle }) => {
@@ -98,6 +98,7 @@ test('regression: closing a composer keeps its text until the comment is posted'
   await composer.fill('About the whole file.');
   await composer.press('Escape');
   await page.reload();
+  await settle(page);
   await gotoFile(page, 'tally/ledger.py');
   await selectLines(page, 'tally/ledger.py', 3, 4);
   await expect(composer).toHaveValue('A long thought, half written.');

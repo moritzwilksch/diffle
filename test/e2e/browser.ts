@@ -177,7 +177,13 @@ export async function activePath(page: Page): Promise<string | null> {
  */
 export async function gotoFile(page: Page, path: string): Promise<void> {
   const row = page.locator(`file-tree-container [data-item-type="file"][data-item-path=${JSON.stringify(path)}]`);
-  if ((await row.count()) === 0) throw new Error(`not a changed file: ${path}`);
+  // Wait for the row: right after a load or reload the tree may not have rendered yet.
+  await row
+    .first()
+    .waitFor({ state: 'attached', timeout: 5000 })
+    .catch(() => {
+      throw new Error(`not a changed file: ${path}`);
+    });
   await row.first().click();
   for (let i = 0; i < 50; i++) {
     if ((await activePath(page)) === path) return settleScroll(page, path);
