@@ -217,6 +217,15 @@ test.describe('a range-diff', () => {
       await expect(page.getByTitle(/Change what is compared/)).toHaveText(label);
       await expect(page.getByRole('region', { name: 'Commits' }).getByRole('listitem')).toHaveCount(5);
     });
+
+    test('wraps a shown pair’s long subject clear of its state and hashes', async ({ page }) => {
+      const box = page.getByRole('region', { name: 'Commits' });
+      await box.getByRole('button', { name: /^chore: regenerate the client/ }).click();
+      await expect(box.locator('[aria-current="true"]')).toContainText('added');
+      await page.mouse.move(0, 0);
+      // The identical pair below lines its glyph and subject up with the pairs that open.
+      await expect(box).toHaveScreenshot('range-diff-long-subject.png');
+    });
   });
 });
 

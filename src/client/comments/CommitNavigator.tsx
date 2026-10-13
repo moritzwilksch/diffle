@@ -15,7 +15,10 @@ import { useStore } from '../store.js';
 import { Button } from '../ui/Button.js';
 
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
-const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' });
+const DATE_TIME = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'full',
+  timeStyle: 'long',
+});
 
 /** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
 const HOVER_DELAY_MS = 250;
@@ -36,7 +39,10 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
   const stepCommit = useStore((s) => s.stepCommit);
   const interdiff = mode.interdiff ?? null;
   const [open, setOpen] = useState(true);
-  const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
+  const [hover, setHover] = useState<{
+    commit: RangeCommit;
+    row: DOMRect;
+  } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const list = useRef<HTMLDivElement>(null);
   const cardId = useId();
@@ -208,6 +214,9 @@ const PAIR_STATUS: Record<PairStatus, { glyph: string; label: string; className:
   dropped: { glyph: '−', label: 'dropped', className: 'text-del' },
 };
 
+/** A pair's glyph, subject and state, laid out alike whether the pair opens or not. */
+const pairHead = 'min-w-0 flex-1 items-start gap-2 py-1 pr-1 pl-2.5 text-left leading-[1.125rem]';
+
 /**
  * One range-diff row: the newer commit's subject (the older one's for a dropped commit), both
  * hashes, and the pair's state. Identical and dropped pairs are shown for orientation but have
@@ -236,7 +245,9 @@ function PairRow({
       <span aria-hidden className={twMerge('w-2 flex-none text-center font-mono font-bold', status.className)}>
         {status.glyph}
       </span>
-      <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>
+      <span
+        className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere whitespace-normal' : 'truncate')}
+      >
         {subjectOf(commit)}
       </span>
       <span className={twMerge('flex-none text-[0.75rem]', status.className)}>{status.label}</span>
@@ -258,7 +269,8 @@ function PairRow({
           <Button
             variant="ghost"
             className={twMerge(
-              'min-w-0 flex-1 items-start gap-2 rounded-none py-1 pr-1 pl-2.5 text-left leading-[1.125rem] outline-none hover:bg-transparent',
+              pairHead,
+              'rounded-none border-0 outline-none hover:bg-transparent',
               !active && 'focus-visible:bg-hover',
             )}
             aria-describedby={described}
@@ -267,7 +279,7 @@ function PairRow({
             {head}
           </Button>
         ) : (
-          <div className="flex min-w-0 flex-1 items-start py-1 pr-1 pl-6.5 leading-[1.125rem]">{head}</div>
+          <div className={twMerge('flex', pairHead)}>{head}</div>
         )}
         <span className="flex flex-none items-center font-mono text-[0.75rem] text-muted">
           {pair.old ? <CopyHash commit={pair.old} /> : <span className="px-1">———————</span>}
@@ -325,7 +337,9 @@ function BeadRow({
 }) {
   const Dot = dashed ? CircleDashed : Circle;
   const head = (
-    <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere' : 'truncate')}>{label}</span>
+    <span className={twMerge('min-w-0 flex-1', active ? 'font-semibold wrap-anywhere whitespace-normal' : 'truncate')}>
+      {label}
+    </span>
   );
   // The dot and both rail segments share one anchor and transform, so no browser rounds them apart.
   const anchor = 'pointer-events-none absolute left-3.5 -translate-x-1/2';
