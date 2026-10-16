@@ -105,6 +105,8 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: ['ruby'], command: 'ruby-lsp' },
   { languages: ['ruby'], command: 'solargraph stdio' },
   { languages: ['java'], command: 'jdtls' },
+  // Roslyn loads no project unless asked, and C# answers little without the solution behind the file.
+  { languages: ['csharp'], command: 'roslyn-language-server --stdio --autoLoadProjects' },
   { languages: ['lua'], command: 'lua-language-server' },
   { languages: ['nix'], command: 'nixd' },
   { languages: ['nix'], command: 'nil' },
