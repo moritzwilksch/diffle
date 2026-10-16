@@ -77,6 +77,13 @@
             pkgs.gh
             pkgs.pyrefly
           ];
+          csharp = mkDiffle [
+            pkgs.gh
+            # nixpkgs packages Roslyn under its assembly name rather than the .NET tool name.
+            (pkgs.writeShellScriptBin "roslyn-language-server" ''
+              exec ${pkgs.lib.getExe pkgs.roslyn-ls} "$@"
+            '')
+          ];
         }
       );
 

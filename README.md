@@ -44,7 +44,7 @@ npx @moritzwilksch/diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
 
-The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, and `#python` bundle
+The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, `#python`, and `#csharp` bundle
 language servers.
 
 ## Pick what to review
