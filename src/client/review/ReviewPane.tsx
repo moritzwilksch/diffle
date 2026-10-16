@@ -55,7 +55,7 @@ import {
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
-import { revealInline } from './inline.js';
+import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
@@ -385,6 +385,11 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
+  }, [scroller]);
+  // Sideways wheel gestures move both columns of a split diff together; see installInlineWheel.
+  useEffect(() => {
+    if (!scroller) return;
+    return installInlineWheel(scroller);
   }, [scroller]);
   useEffect(() => {
     onSelectionChanged(selection);

@@ -1,7 +1,7 @@
 // The review as it opens on the feature branch: the file tree, every kind of changed file,
 // and the layouts a reader switches between. Judge changes in the screenshots under
 // `__snapshots__/review.spec.ts/`.
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
 import { clickLine, collapsed, filePaths, gotoFile, header, waitForHighlight, walkToFile } from './browser.js';
 
@@ -129,6 +129,48 @@ test('scrolls a search match into view with wrapping off', async ({ page }) => {
   await expect(page.getByText(/^1 \/ 1$/)).toBeVisible();
   await expect.poll(() => scrolledSideways(page)).toBeGreaterThan(0);
   await expect(page).toHaveScreenshot('no-wrap-search.png');
+});
+
+// A trackpad swipe over one column of a split diff moves the other with it, to the same offset.
+test('scrolls both columns of a split diff together under the wheel with wrapping off', async ({ page }) => {
+  const path = 'tally/ledger.py';
+  await gotoFile(page, path);
+  await page.keyboard.press('z');
+  await page.keyboard.press('w');
+  await expect(page.locator('pre[data-overflow="scroll"]').first()).toBeAttached();
+  const columns = page
+    .locator('diffs-container')
+    .filter({ has: page.locator(`[data-path="${path}"]`) })
+    .locator('[data-code]');
+  await expect(columns).toHaveCount(2);
+  const offsets = () => columns.evaluateAll((codes) => codes.map((c) => c.scrollLeft));
+  // Rest the pointer on the first row of the column: hovering the column itself would scroll its middle
+  // into view and lose the file. The viewer re-renders the file after the wrap toggle and its rows take
+  // no pointer events for a moment, so wait until a hit-test at the point reaches the diff.
+  const pointAt = async (column: Locator) => {
+    const row = column.locator('[data-line="1"]').first();
+    const point = () =>
+      row.evaluate((el) => {
+        // Across the column, not the row: a scrolled row starts left of the column's visible area.
+        const column = el.closest('[data-code]')!.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const x = column.left + column.width / 2;
+        const y = rect.top + rect.height / 2;
+        return { x, y, hit: document.elementFromPoint(x, y)?.tagName };
+      });
+    await expect.poll(async () => (await point()).hit).toBe('DIFFS-CONTAINER');
+    const { x, y } = await point();
+    await page.mouse.move(x, y);
+  };
+  expect(await offsets()).toEqual([0, 0]);
+  await pointAt(columns.last());
+  await page.mouse.wheel(120, 0);
+  await expect.poll(offsets).toEqual([120, 120]);
+  await expect(page).toHaveScreenshot('no-wrap-split-wheel.png');
+  // And back from the other column, by less than the way out.
+  await pointAt(columns.first());
+  await page.mouse.wheel(-40, 0);
+  await expect.poll(offsets).toEqual([80, 80]);
 });
 
 test('switches to the unified layout', async ({ page }) => {
