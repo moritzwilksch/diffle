@@ -169,6 +169,16 @@ const HEADER_CSS = `
 }
 ::highlight(diffle-search) { background: var(--search-match); }
 ::highlight(diffle-search-current) { background: var(--search-current); color: var(--search-current-fg); }
+/* With wrapping off, each code column scrolls sideways under a bar at its foot. The library paints the thumb
+   only while the pointer is over the diff, in a context tint our dark palette makes invisible, so a line that
+   ran off-screen gave no sign of it. Paint it whenever the column overflows: auto drops the bar from columns
+   that fit, and the library's stable gutter keeps row heights the same either way. */
+:host { --diffs-overflow-override: auto; }
+[data-code]::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--fg-2) 55%, transparent); }
+:is([data-diff], [data-file]):hover [data-code]::-webkit-scrollbar-thumb { background-color: var(--fg-2); }
+@supports (-moz-appearance: none) {
+  [data-code] { scrollbar-color: color-mix(in srgb, var(--fg-2) 55%, transparent) transparent; }
+}
 /* A placeholder replaces the body (binary, empty, moved, oversized, failed): the banner alone fills the width.
    The viewer still lays out a gutter, an empty row and, in split view, an old-side column; drop them all.
    The banner marks its host (see PlaceholderBanner). */

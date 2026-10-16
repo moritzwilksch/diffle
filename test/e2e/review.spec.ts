@@ -101,6 +101,16 @@ test('scrolls a minified line to its last word with wrapping off', async ({ page
   expect(await scrolledSideways(page)).toBe(0);
   await page.keyboard.press('$');
   await expect.poll(() => scrolledSideways(page)).toBeGreaterThan(0);
+  // The bar under the line is painted with the pointer off the diff, where the library alone hides its thumb.
+  // Headless Chromium leaves scrollbars out of screenshots, so the computed colour stands in for the paint.
+  await page.mouse.move(125, 850);
+  const column = page
+    .locator('diffs-container')
+    .filter({ has: page.locator('[data-path="web/vendor/sparkline.min.js"]') })
+    .locator('[data-code]');
+  expect(await column.evaluate((c) => getComputedStyle(c, '::-webkit-scrollbar-thumb').backgroundColor)).not.toBe(
+    'rgba(0, 0, 0, 0)',
+  );
   await expect(page).toHaveScreenshot('no-wrap-last-word.png');
   const end = await scrolledSideways(page);
   await page.keyboard.press('z');
