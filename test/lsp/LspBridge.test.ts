@@ -334,6 +334,35 @@ describe('LspBridge', () => {
     }
   });
 
+  it('rejects an empty answer when the server complains during the request', async () => {
+    const { bridge } = start({ FAKE_LSP_NOTICE_DURING_QUERY: '1' });
+    try {
+      await expect(bridge.hover({ path: 'a.py', line: 1, col: 0 })).rejects.toThrow(
+        'last server warning: Project has unresolved dependencies',
+      );
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it('does not blame a later empty answer on a warning the server already got past', async () => {
+    const { bridge, notify } = start();
+    try {
+      notify('window/logMessage', { type: 2, message: 'Falling back to the in-process file watcher' });
+      await expect
+        .poll(() => bridge.status().notice)
+        .toEqual({
+          severity: 'warning',
+          message: 'Falling back to the in-process file watcher',
+        });
+      expect(await bridge.hover({ path: 'a.py', line: 1, col: 0 })).toEqual({ contents: null });
+      // The warning still stands in the header, where a reader can act on it.
+      expect(bridge.status().notice?.severity).toBe('warning');
+    } finally {
+      await bridge.close();
+    }
+  });
+
   it('exposes stderr while the server remains alive', async () => {
     const { bridge } = start();
     try {

@@ -633,13 +633,18 @@ export class LspBridge {
       const rpc = path == null ? await this.ensureReady() : await this.sync(path);
       try {
         const pending = busyReason(this.current);
+        const standing = this.current.notice;
         const result = await rpc.request<T>(method, params);
         if (result == null || (Array.isArray(result) && !result.length)) {
           // Background work does not prevent useful answers, but makes empty answers inconclusive.
           const busy = busyReason(this.current) ?? pending;
           if (busy) throw new LspUnavailableError(busy);
-          if (this.current.notice) {
-            const { severity, message } = this.current.notice;
+          // A notice that arrived with the answer explains it. An older one does only when it is an error,
+          // which the server means as still broken: a standing warning is often just a limit it has settled
+          // for (Roslyn warns once that we offer no file watching), and the header keeps it either way.
+          const notice = this.current.notice;
+          if (notice && (notice !== standing || notice.severity === 'error')) {
+            const { severity, message } = notice;
             throw new LspUnavailableError(
               `${this.current.name} returned no result; last server ${severity}: ${message}`,
             );

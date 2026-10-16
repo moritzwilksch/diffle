@@ -91,7 +91,17 @@ function handle(msg) {
     }
     case 'textDocument/hover':
       // Empty text at line 1: nothing to say. Elsewhere: markdown plus a legacy language block.
-      if (msg.params.position.line === 0) return reply(msg.id, null);
+      if (msg.params.position.line === 0) {
+        // FAKE_LSP_NOTICE_DURING_QUERY mimics a server that complains mid-request, the way Roslyn does when
+        // a project will not resolve, so the notice belongs to this answer rather than to startup.
+        if (process.env.FAKE_LSP_NOTICE_DURING_QUERY === '1')
+          send({
+            jsonrpc: '2.0',
+            method: 'window/logMessage',
+            params: { type: 2, message: 'Project has unresolved dependencies' },
+          });
+        return reply(msg.id, null);
+      }
       // FAKE_LSP_HOVER_LINKS mimics pyright's "Go to X" links: one inside the root, one outside it.
       if (process.env.FAKE_LSP_HOVER_LINKS === '1')
         return reply(msg.id, {
