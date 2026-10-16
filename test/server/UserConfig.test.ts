@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmTmp } from '../tmp.js';
-import { UserConfigStore } from '../../src/server/UserConfig.js';
+import { UserConfigStore } from '@/server/UserConfig.js';
 
 let dir: string;
 beforeEach(async () => {

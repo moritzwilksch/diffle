@@ -1,4 +1,4 @@
-import { languageOf, type LspLocation, type Side } from '../../shared/protocol.js';
+import { languageOf, type LspLocation, type Side } from '@/shared/protocol.js';
 
 /** Configuration tokens offer schema hover, without symbol menus or navigation. */
 export function schemaHoverOnly(path: string): boolean {

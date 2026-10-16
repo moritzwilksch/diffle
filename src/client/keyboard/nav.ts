@@ -1,7 +1,7 @@
 import type { CodeViewLineSelection, FileDiffMetadata, SelectionSide } from '@pierre/diffs';
-import type { Snapshot } from '../../shared/protocol.js';
-import { itemId, orderedPaths } from '../model.js';
-import type { DiffStyle, FileView, Loaded } from '../store.js';
+import type { Snapshot } from '@/shared/protocol.js';
+import { itemId, orderedPaths } from '@/client/model.js';
+import type { DiffStyle, FileView, Loaded } from '@/client/store.js';
 
 export interface Row {
   side: SelectionSide;

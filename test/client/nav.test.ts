@@ -1,6 +1,6 @@
 import { parsePatchFiles } from '@pierre/diffs';
 import { describe, expect, it } from 'vitest';
-import { cursorFromSelection, diffRows, step, stepFile, type NavItem } from '../../src/client/keyboard/nav.js';
+import { cursorFromSelection, diffRows, step, stepFile, type NavItem } from '@/client/keyboard/nav.js';
 
 const patch = `diff --git a/f.txt b/f.txt
 --- a/f.txt

@@ -6,7 +6,7 @@ import {
   type CommentThread,
   type GithubMetadata,
   type Snapshot,
-} from '../../src/shared/protocol.js';
+} from '@/shared/protocol.js';
 import {
   anchorLabel,
   canJumpBack,
@@ -28,8 +28,8 @@ import {
   rangeStep,
   reuseThreads,
   viewedState,
-} from '../../src/client/model.js';
-import type { ReviewState } from '../../src/client/store.js';
+} from '@/client/model.js';
+import type { ReviewState } from '@/client/store.js';
 
 describe('compareTreeOrder', () => {
   it('matches the tree library on the cases where locale order and dot-first rules disagree with it', () => {

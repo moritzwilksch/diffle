@@ -14,7 +14,7 @@ class FakeWebSocket {
   }
 }
 
-const { connectWs } = await import('../../src/client/api.js');
+const { connectWs } = await import('@/client/api.js');
 
 beforeEach(() => {
   FakeWebSocket.instances = [];
@@ -70,7 +70,7 @@ describe('proxy paths', () => {
       .mockResolvedValueOnce(new Response('patch'))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);
-    const { api } = await import('../../src/client/api.js');
+    const { api } = await import('@/client/api.js');
     await api.threads();
     await api.patch('a & b.txt');
     await api.deleteThread('id/with slash');
@@ -91,7 +91,7 @@ describe('proxy paths', () => {
 
 describe('api validation', () => {
   it('validates response fields instead of trusting the requested type', async () => {
-    const { api } = await import('../../src/client/api.js');
+    const { api } = await import('@/client/api.js');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ path: 'a.txt', contents: 3, binary: false }))),
@@ -100,7 +100,7 @@ describe('api validation', () => {
   });
 
   it('accepts valid JSON and empty delete responses', async () => {
-    const { api } = await import('../../src/client/api.js');
+    const { api } = await import('@/client/api.js');
     const file = { path: 'a.txt', contents: 'hello', binary: false };
     vi.stubGlobal(
       'fetch',
@@ -116,7 +116,7 @@ describe('api validation', () => {
   });
 
   it('rejects an unexpected empty response and preserves useful HTTP errors', async () => {
-    const { api } = await import('../../src/client/api.js');
+    const { api } = await import('@/client/api.js');
     vi.stubGlobal(
       'fetch',
       vi
@@ -131,7 +131,7 @@ describe('api validation', () => {
   });
 
   it('validates outgoing bodies before fetching', async () => {
-    const { api } = await import('../../src/client/api.js');
+    const { api } = await import('@/client/api.js');
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
     expect(() => api.lspDefinition({ path: 'a.ts', line: 1.5, col: 0 })).toThrow(/line/);

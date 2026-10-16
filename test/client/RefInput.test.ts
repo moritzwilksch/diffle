@@ -2,7 +2,7 @@
 import { act, createElement, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { RefInput } from '../../src/client/header/RefInput.js';
+import { RefInput } from '@/client/header/RefInput.js';
 
 let root: Root;
 let host: HTMLDivElement;

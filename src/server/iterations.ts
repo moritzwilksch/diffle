@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { IterationSchema, type Iteration } from '../shared/protocol.js';
+import { IterationSchema, type Iteration } from '@/shared/protocol.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { withFileLock, writeFileAtomic } from './persist.js';
 

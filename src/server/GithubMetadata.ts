@@ -1,4 +1,4 @@
-import type { GithubMetadata, Snapshot } from '../shared/protocol.js';
+import type { GithubMetadata, Snapshot } from '@/shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { githubRepository, originRepository, type PullRequest, pullRequestsForHead, viewPr } from './github/pulls.js';

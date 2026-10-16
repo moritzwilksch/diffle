@@ -27,7 +27,7 @@ import {
   PatchQuerySchema,
   followsCheckout,
   lspBlocker,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import { mapLimit } from './concurrency.js';

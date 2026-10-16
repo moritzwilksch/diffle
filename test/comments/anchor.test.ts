@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { compareThreads, quoteLines, relocate } from '../../src/server/comments/anchor.js';
-import type { CommentThread, LineAnchor } from '../../src/shared/protocol.js';
+import { compareThreads, quoteLines, relocate } from '@/server/comments/anchor.js';
+import type { CommentThread, LineAnchor } from '@/shared/protocol.js';
 
 const anchor = (startLine: number, quoted: string): LineAnchor => ({
   kind: 'line',

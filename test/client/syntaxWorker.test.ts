@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { SyntaxRequest, SyntaxResponse } from '../../src/client/lsp/syntax.js';
+import type { SyntaxRequest, SyntaxResponse } from '@/client/lsp/syntax.js';
 
 class WorkerStub {
   static instance?: WorkerStub;
@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 it('loads contents only for supported languages and routes out-of-order answers', async () => {
-  const { blocksSymbol } = await import('../../src/client/lsp/syntax.js');
+  const { blocksSymbol } = await import('@/client/lsp/syntax.js');
   const contents = vi.fn().mockResolvedValue('# comment');
   expect(await blocksSymbol('notes.txt', 'new', 1, 2, contents)).toBe(false);
   expect(contents).not.toHaveBeenCalled();
@@ -51,7 +51,7 @@ it('loads contents only for supported languages and routes out-of-order answers'
 });
 
 it('fails open on missing contents or oversized files', async () => {
-  const { blocksSymbol } = await import('../../src/client/lsp/syntax.js');
+  const { blocksSymbol } = await import('@/client/lsp/syntax.js');
   expect(
     await blocksSymbol('a.py', 'new', 1, 0, async () => {
       throw new Error('gone');
@@ -62,7 +62,7 @@ it('fails open on missing contents or oversized files', async () => {
 
 it.each(['error', 'timeout'])('releases pending requests after a worker %s', async (failure) => {
   vi.useFakeTimers();
-  const { blocksSymbol } = await import('../../src/client/lsp/syntax.js');
+  const { blocksSymbol } = await import('@/client/lsp/syntax.js');
   const result = blocksSymbol('a.py', 'new', 1, 2, async () => '# comment');
   await vi.waitFor(() => expect(WorkerStub.instance?.postMessage).toHaveBeenCalledOnce());
   const worker = WorkerStub.instance!;

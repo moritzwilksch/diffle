@@ -26,7 +26,7 @@ vi.mock('@pierre/diffs', () => ({
   },
 }));
 
-const { CodeLine, useHighlighted } = await import('../../src/client/lsp/highlight.js');
+const { CodeLine, useHighlighted } = await import('@/client/lsp/highlight.js');
 
 const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
 const items = files.flatMap((path) => [0, 1, 2].map((n) => ({ path, text: `${path}:${n}` })));

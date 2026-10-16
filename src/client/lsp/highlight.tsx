@@ -1,6 +1,6 @@
 import { getFiletypeFromFileName, getSharedHighlighter, type SupportedLanguages } from '@pierre/diffs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SHIKI_THEMES, type ThemeChoice } from '../theme.js';
+import { SHIKI_THEMES, type ThemeChoice } from '@/client/theme.js';
 
 export interface HlToken {
   text: string;

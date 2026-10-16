@@ -6,7 +6,7 @@ import {
   type RangeCommit,
   type RangePair,
   type RangeSide,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { RevspecError } from './revspec.js';
 

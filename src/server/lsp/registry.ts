@@ -1,4 +1,4 @@
-import type { LanguageId, LspMissing } from '../../shared/protocol.js';
+import type { LanguageId, LspMissing } from '@/shared/protocol.js';
 import { argv0, findOnPath } from './which.js';
 
 /** A server diffle knows how to start, and the languages it answers for. */

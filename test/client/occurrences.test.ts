@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LspOccurrence } from '../../src/shared/protocol.js';
+import type { LspOccurrence } from '@/shared/protocol.js';
 
 const store = {
   snapshot: { version: 1 } as { version: number } | null,
@@ -10,14 +10,14 @@ const store = {
     store.occurrences = null;
   }),
 };
-vi.mock('../../src/client/store.js', () => ({
+vi.mock('@/client/store.js', () => ({
   useStore: {
     getState: () => store,
     setState: (patch: Partial<typeof store>) => Object.assign(store, patch),
   },
 }));
 
-const { KEY_MS, occurrenceControl, occurrenceRanges, POINTER_MS } = await import('../../src/client/lsp/occurrences.js');
+const { KEY_MS, occurrenceControl, occurrenceRanges, POINTER_MS } = await import('@/client/lsp/occurrences.js');
 
 const occ = (line: number, col: number, endCol: number, kind: LspOccurrence['kind'] = 'read'): LspOccurrence => ({
   line,

@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
-import { BIG_FILE_THRESHOLD, GitRepo } from '../../src/server/git/GitRepo.js';
-import { SNIFF_BYTES } from '../../src/server/generated.js';
-import { resolveReview } from '../../src/server/mode.js';
-import { Snapshotter } from '../../src/server/Snapshotter.js';
+import { BIG_FILE_THRESHOLD, GitRepo } from '@/server/git/GitRepo.js';
+import { SNIFF_BYTES } from '@/server/generated.js';
+import { resolveReview } from '@/server/mode.js';
+import { Snapshotter } from '@/server/Snapshotter.js';
 
 // Windows rejects `\n` in a filename, so those fixtures only exist on POSIX.
 const NEWLINE_NAMES = process.platform !== 'win32';

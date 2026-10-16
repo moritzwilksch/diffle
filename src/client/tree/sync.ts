@@ -1,7 +1,7 @@
 import type { FileTree, FileTreeDirectoryHandle, GitStatusEntry } from '@pierre/trees';
-import type { ChangedFile } from '../../shared/protocol.js';
-import type { ReviewState } from '../store.js';
-import { viewedState } from '../model.js';
+import type { ChangedFile } from '@/shared/protocol.js';
+import type { ReviewState } from '@/client/store.js';
+import { viewedState } from '@/client/model.js';
 
 /** Every ancestor directory of `paths`, without trailing slash, in first-seen order. */
 export function directoriesOf(paths: readonly string[]): string[] {

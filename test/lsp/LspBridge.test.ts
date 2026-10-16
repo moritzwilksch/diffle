@@ -3,8 +3,8 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
-import { type LspProcessStatus } from '../../src/shared/protocol.js';
+import { LspBridge, LspUnavailableError } from '@/server/lsp/LspBridge.js';
+import { type LspProcessStatus } from '@/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');

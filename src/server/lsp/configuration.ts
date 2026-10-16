@@ -2,8 +2,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { LanguageId } from '../../shared/protocol.js';
-import { writeFileAtomic } from '../persist.js';
+import type { LanguageId } from '@/shared/protocol.js';
+import { writeFileAtomic } from '@/server/persist.js';
 import { argv0 } from './which.js';
 import { JsonRpcError } from './JsonRpc.js';
 

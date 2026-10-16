@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { canJumpBack, canJumpForward } from '../model.js';
-import { useStore } from '../store.js';
-import { Button } from '../ui/Button.js';
+import { canJumpBack, canJumpForward } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
 
 /**
  * Back and forward through the jump list, the mouse's share of Ctrl+o / Ctrl+i. Always in place

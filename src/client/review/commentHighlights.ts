@@ -1,8 +1,8 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import type { LineAnchor } from '../../shared/protocol.js';
-import type { ResolvedRange } from '../comments/anchor.js';
-import { draftRange, pathFromItemId, visibleThreads } from '../model.js';
-import { useStore, type ReviewState } from '../store.js';
+import type { LineAnchor } from '@/shared/protocol.js';
+import type { ResolvedRange } from '@/client/comments/anchor.js';
+import { draftRange, pathFromItemId, visibleThreads } from '@/client/model.js';
+import { useStore, type ReviewState } from '@/client/store.js';
 import { isDeletionRow, watchRenderedRows } from './rows.js';
 
 /**

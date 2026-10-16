@@ -1,4 +1,4 @@
-import type { CommentAnchor, CommentThread, LineAnchor } from '../../shared/protocol.js';
+import type { CommentAnchor, CommentThread, LineAnchor } from '@/shared/protocol.js';
 
 function splitLines(contents: string): string[] {
   const lines = contents.split('\n');

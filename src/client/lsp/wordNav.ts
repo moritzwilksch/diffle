@@ -1,9 +1,9 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import type { CodeViewLineSelection } from '@pierre/diffs';
-import { sideOf } from '../comments/anchor.js';
-import { itemIdOf, pathFromItemId } from '../model.js';
-import { rowOf } from '../review/rows.js';
-import { useStore } from '../store.js';
+import { sideOf } from '@/client/comments/anchor.js';
+import { itemIdOf, pathFromItemId } from '@/client/model.js';
+import { rowOf } from '@/client/review/rows.js';
+import { useStore } from '@/client/store.js';
 import { occurrenceControl } from './occurrences.js';
 import { lspTarget, type TokenTarget } from './target.js';
 import { tokenRange } from './tokenText.js';

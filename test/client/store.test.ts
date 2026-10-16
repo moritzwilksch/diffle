@@ -9,7 +9,7 @@ import type {
   Snapshot,
   UserConfig,
   ViewedEntry,
-} from '../../src/shared/protocol.js';
+} from '@/shared/protocol.js';
 
 /** One python server in `state`; LSP_OFF is a run started with --no-lsp. */
 const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStatus> = {}): LspStatus => ({
@@ -62,11 +62,11 @@ const api = {
   saveConfig: vi.fn(),
   exportToGithub: vi.fn(),
 };
-vi.mock('../../src/client/api.js', () => ({ api }));
+vi.mock('@/client/api.js', () => ({ api }));
 const { blocksSymbol } = vi.hoisted(() => ({ blocksSymbol: vi.fn() }));
-vi.mock('../../src/client/lsp/syntax.js', () => ({ blocksSymbol }));
+vi.mock('@/client/lsp/syntax.js', () => ({ blocksSymbol }));
 
-const { useStore, TOAST_MS, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('../../src/client/store.js');
+const { useStore, TOAST_MS, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('@/client/store.js');
 const {
   viewedState,
   isCollapsed,
@@ -77,11 +77,11 @@ const {
   OVERSIZED_LINES,
   PATCH_BATCH_LINES,
   PATCH_BATCH_FILES,
-} = await import('../../src/client/model.js');
+} = await import('@/client/model.js');
 /** A one-line patch per path, so a `patches` mock can answer any batch. */
 const patchesFor = (paths: string[]) =>
   paths.map((p) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -1,1 +1,1 @@\n-x\n+y\n`).join('');
-const { lspTarget } = await import('../../src/client/lsp/target.js');
+const { lspTarget } = await import('@/client/lsp/target.js');
 
 const file = (over: Partial<ChangedFile>): ChangedFile => ({
   path: 'a.py',

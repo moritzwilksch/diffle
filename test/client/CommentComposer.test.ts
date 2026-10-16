@@ -2,9 +2,9 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { CommentComposer } from '../../src/client/review/CommentComposer.js';
-import type { Snapshot } from '../../src/shared/protocol.js';
-import { useStore } from '../../src/client/store.js';
+import { CommentComposer } from '@/client/review/CommentComposer.js';
+import type { Snapshot } from '@/shared/protocol.js';
+import { useStore } from '@/client/store.js';
 
 let root: Root;
 let host: HTMLDivElement;

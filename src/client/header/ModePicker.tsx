@@ -1,6 +1,6 @@
-import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
+import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { twMerge } from 'tailwind-merge';
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import {
   ArrowLeftRight,
   ChevronDown,
@@ -13,11 +13,11 @@ import {
   PencilRuler,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { comparisonLabel, type ModeRequest, type RefsResponse } from '../../shared/protocol.js';
-import { api } from '../api.js';
-import { focusReview } from '../keyboard/useKeymap.js';
-import { lastCommitsRequest } from '../model.js';
-import { useStore } from '../store.js';
+import { comparisonLabel, type ModeRequest, type RefsResponse } from '@/shared/protocol.js';
+import { api } from '@/client/api.js';
+import { focusReview } from '@/client/keyboard/useKeymap.js';
+import { lastCommitsRequest } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
 import { RefInput } from './RefInput.js';
 import { CommitOffsetInput, parseOffset } from './CommitOffsetInput.js';
 import { CommitPreview } from './CommitPreview.js';

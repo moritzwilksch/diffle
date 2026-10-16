@@ -1,7 +1,7 @@
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { LastCommitsPreview } from '../../shared/protocol.js';
-import { api } from '../api.js';
+import type { LastCommitsPreview } from '@/shared/protocol.js';
+import { api } from '@/client/api.js';
 
 /** Live endpoint messages; obsolete requests cannot replace a newer count's preview. */
 export function CommitPreview({

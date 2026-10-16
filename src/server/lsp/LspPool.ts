@@ -11,8 +11,8 @@ import {
   type LspStatus,
   type LspSymbol,
   type LspTokenKindResponse,
-} from '../../shared/protocol.js';
-import { fuzzyRank } from '../../shared/fuzzy.js';
+} from '@/shared/protocol.js';
+import { fuzzyRank } from '@/shared/fuzzy.js';
 import { LspBridge, LspUnavailableError } from './LspBridge.js';
 import { resolveServers } from './registry.js';
 import { settingsFor } from './configuration.js';

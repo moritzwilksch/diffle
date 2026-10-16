@@ -12,10 +12,10 @@ const api = {
   lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   exportComments: vi.fn(),
 };
-vi.mock('../../src/client/api.js', () => ({ api }));
+vi.mock('@/client/api.js', () => ({ api }));
 
-const { useStore } = await import('../../src/client/store.js');
-const { hasModifier, useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
+const { useStore } = await import('@/client/store.js');
+const { hasModifier, useKeymap } = await import('@/client/keyboard/useKeymap.js');
 
 function Keys() {
   useKeymap();

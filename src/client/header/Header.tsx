@@ -1,6 +1,6 @@
-import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
+import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { twMerge } from 'tailwind-merge';
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import {
   X,
   Check,
@@ -20,11 +20,11 @@ import {
   Sun,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
-import { repoName } from '../model.js';
-import { copyText } from '../clipboard.js';
-import { useStore } from '../store.js';
-import { nextTheme, type ThemeChoice } from '../theme.js';
+import type { LspServerStatus, LspStatus } from '@/shared/protocol.js';
+import { repoName } from '@/client/model.js';
+import { copyText } from '@/client/clipboard.js';
+import { useStore } from '@/client/store.js';
+import { nextTheme, type ThemeChoice } from '@/client/theme.js';
 import { CommitStepper } from './CommitStepper.js';
 import { GithubMenu } from './GithubMenu.js';
 import { HistoryNav } from './HistoryNav.js';

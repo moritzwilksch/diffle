@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/client/api.js', () => ({ api: {} }));
+vi.mock('@/client/api.js', () => ({ api: {} }));
 
-const { COLUMNS } = await import('../../src/client/keyboard/HelpOverlay.js');
+const { COLUMNS } = await import('@/client/keyboard/HelpOverlay.js');
 
 describe('HelpOverlay', () => {
   it('lists every shortcut once across two columns of titled sections', () => {

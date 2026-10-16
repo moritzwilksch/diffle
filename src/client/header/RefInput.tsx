@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useId, useRef, useState, type Ref } from 'react';
-import type { RefsResponse } from '../../shared/protocol.js';
+import type { RefsResponse } from '@/shared/protocol.js';
 
 /** Editable revision with suggestions; arbitrary Git revisions remain valid input. */
 export function RefInput({

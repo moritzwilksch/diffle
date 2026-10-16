@@ -3,11 +3,11 @@ import { act, createElement, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/client/api.js', () => ({ api: {} }));
+vi.mock('@/client/api.js', () => ({ api: {} }));
 vi.mock('@pierre/diffs/react', () => ({ File: () => null, useWorkerPool: () => null }));
 
-const { useStore } = await import('../../src/client/store.js');
-const { HoverTooltip, hoverControl, LINGER_MS } = await import('../../src/client/lsp/HoverTooltip.js');
+const { useStore } = await import('@/client/store.js');
+const { HoverTooltip, hoverControl, LINGER_MS } = await import('@/client/lsp/HoverTooltip.js');
 
 const target = { path: 'a.py', side: 'new' as const, line: 1, col: 0, text: 'foo' };
 const hover = { target, contents: 'foo: int', anchor: { left: 10, top: 20, bottom: 36 } };

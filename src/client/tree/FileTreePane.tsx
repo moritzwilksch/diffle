@@ -1,16 +1,16 @@
-import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
-import { Button } from '../ui/Button.js';
+import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
+import { Button } from '@/client/ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangedFile, ViewedState } from '../../shared/protocol.js';
-import { focusReview } from '../keyboard/useKeymap.js';
-import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '../model.js';
-import { remPx } from '../scale.js';
-import { useStore } from '../store.js';
-import { ButtonLabel } from '../ui/ButtonLabel.js';
-import { useConfirm } from '../useConfirm.js';
+import type { ChangedFile, ViewedState } from '@/shared/protocol.js';
+import { focusReview } from '@/client/keyboard/useKeymap.js';
+import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '@/client/model.js';
+import { remPx } from '@/client/scale.js';
+import { useStore } from '@/client/store.js';
+import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
+import { useConfirm } from '@/client/useConfirm.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
 

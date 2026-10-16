@@ -1,7 +1,7 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import { pathFromItemId } from '../model.js';
-import { isDeletionRow, watchRenderedRows } from '../review/rows.js';
-import { useStore, type SearchState } from '../store.js';
+import { pathFromItemId } from '@/client/model.js';
+import { isDeletionRow, watchRenderedRows } from '@/client/review/rows.js';
+import { useStore, type SearchState } from '@/client/store.js';
 
 /**
  * Paint every occurrence of the current verbatim search (g/ text, * / # word)

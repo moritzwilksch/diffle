@@ -29,6 +29,22 @@
   },
   "overrides": [
     {
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**", "!../**/package.json"],
+                "message": "Import across directories through the `@/` alias (`src/*`); `./` stays for siblings."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["test/**"],
       "plugins": ["vitest"],
       "rules": {
@@ -39,7 +55,14 @@
         "vitest/valid-expect": "off",
         // These cases assert that a call rejects; the message is git's or the
         // platform's, not a contract of ours.
-        "vitest/require-to-throw-message": "off"
+        "vitest/require-to-throw-message": "off",
+        // App code is reached through `@/`; `../` stays for the helpers beside the tests.
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [{ "regex": "^(\\.\\./)+src/", "message": "Import app code through the `@/` alias (`src/*`)." }]
+          }
+        ]
       }
     }
   ]

@@ -2,16 +2,16 @@
 import { Argument, Command, CommanderError, Option } from 'commander';
 import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
-import { formatPrompt } from '../server/comments/format.js';
-import { GitError, GitRepo } from '../server/git/GitRepo.js';
-import { createGithubClient, type GithubClient, GithubError, resolveToken } from '../server/github/client.js';
-import { LspPool } from '../server/lsp/LspPool.js';
-import { resolveServers } from '../server/lsp/registry.js';
-import { RevspecError } from '../server/revspec.js';
-import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
-import { Session } from '../server/Session.js';
-import { UserConfigStore } from '../server/UserConfig.js';
-import { WsHub } from '../server/ws.js';
+import { formatPrompt } from '@/server/comments/format.js';
+import { GitError, GitRepo } from '@/server/git/GitRepo.js';
+import { createGithubClient, type GithubClient, GithubError, resolveToken } from '@/server/github/client.js';
+import { LspPool } from '@/server/lsp/LspPool.js';
+import { resolveServers } from '@/server/lsp/registry.js';
+import { RevspecError } from '@/server/revspec.js';
+import { DEFAULT_PORT, hasClientBuild, Server } from '@/server/Server.js';
+import { Session } from '@/server/Session.js';
+import { UserConfigStore } from '@/server/UserConfig.js';
+import { WsHub } from '@/server/ws.js';
 import {
   comparisonLabel,
   followsCheckout,
@@ -20,7 +20,7 @@ import {
   type EntryRequest,
   type UserConfig,
   type FollowRefs,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import {
   collectLanguage,
   collectLspOverride,

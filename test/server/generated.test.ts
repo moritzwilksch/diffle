@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { looksGenerated, SNIFF_BYTES } from '../../src/server/generated.js';
+import { looksGenerated, SNIFF_BYTES } from '@/server/generated.js';
 
 const buf = (s: string) => Buffer.from(s, 'utf8');
 

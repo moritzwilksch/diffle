@@ -1,8 +1,8 @@
-import { Dialog } from '../ui/Dialog.js';
-import { Button } from '../ui/Button.js';
+import { Dialog } from '@/client/ui/Dialog.js';
+import { Button } from '@/client/ui/Button.js';
 import { useEffect, useRef, useState } from 'react';
-import { useStore } from '../store.js';
-import type { FollowRefs } from '../../shared/protocol.js';
+import { useStore } from '@/client/store.js';
+import type { FollowRefs } from '@/shared/protocol.js';
 
 const FOLLOW_REFS: [FollowRefs, string][] = [
   ['on', 'Always'],

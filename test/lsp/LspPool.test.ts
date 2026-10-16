@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
-import { LspPool, type LspPoolOptions } from '../../src/server/lsp/LspPool.js';
-import type { LanguageId, LspStatus } from '../../src/shared/protocol.js';
+import { LspUnavailableError } from '@/server/lsp/LspBridge.js';
+import { LspPool, type LspPoolOptions } from '@/server/lsp/LspPool.js';
+import type { LanguageId, LspStatus } from '@/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');

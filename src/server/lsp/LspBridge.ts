@@ -13,9 +13,9 @@ import {
   type LspProcessStatus,
   type LspSymbol,
   type LspTokenKindResponse,
-} from '../../shared/protocol.js';
-import { fuzzyRank } from '../../shared/fuzzy.js';
-import { mapLimit } from '../concurrency.js';
+} from '@/shared/protocol.js';
+import { fuzzyRank } from '@/shared/fuzzy.js';
+import { mapLimit } from '@/server/concurrency.js';
 import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
 import { argv0 } from './which.js';

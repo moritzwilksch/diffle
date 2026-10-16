@@ -1,4 +1,4 @@
-import type { Side } from '../../shared/protocol.js';
+import type { Side } from '@/shared/protocol.js';
 
 /** 1-based inclusive line range. */
 export type LineRange = [start: number, end: number];

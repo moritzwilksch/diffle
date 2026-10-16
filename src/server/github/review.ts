@@ -4,8 +4,8 @@ import type {
   GithubExportResponse,
   GithubPullRequest,
   Snapshot,
-} from '../../shared/protocol.js';
-import { compareThreads } from '../comments/anchor.js';
+} from '@/shared/protocol.js';
+import { compareThreads } from '@/server/comments/anchor.js';
 import { type GithubClient, GithubError } from './client.js';
 import { repoOfPrUrl } from './pulls.js';
 

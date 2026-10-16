@@ -6,7 +6,7 @@ import {
   parseFollowRefs,
   parsePort,
   parseAllowedOrigin,
-} from '../../src/cli/args.js';
+} from '@/cli/args.js';
 
 describe('CLI numeric arguments', () => {
   it('accepts integers in range', () => {

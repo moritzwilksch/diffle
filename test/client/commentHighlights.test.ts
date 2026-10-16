@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import type { CommentAnchor, CommentThread, LineAnchor } from '../../src/shared/protocol.js';
-import type { Draft } from '../../src/client/store.js';
-import { COMMENT_LINE_ATTR, markCommentRows, tintedRanges } from '../../src/client/review/commentHighlights.js';
+import type { CommentAnchor, CommentThread, LineAnchor } from '@/shared/protocol.js';
+import type { Draft } from '@/client/store.js';
+import { COMMENT_LINE_ATTR, markCommentRows, tintedRanges } from '@/client/review/commentHighlights.js';
 
 const anchor = (side: 'old' | 'new', startLine: number, endLine: number): LineAnchor => ({
   kind: 'line',

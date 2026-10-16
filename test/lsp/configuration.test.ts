@@ -2,14 +2,9 @@ import { mkdtemp, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  configurationItems,
-  loadSchemaCatalog,
-  schemaAssociations,
-  settingsFor,
-} from '../../src/server/lsp/configuration.js';
+import { configurationItems, loadSchemaCatalog, schemaAssociations, settingsFor } from '@/server/lsp/configuration.js';
 import { rmTmp } from '../tmp.js';
-import { JsonRpcError } from '../../src/server/lsp/JsonRpc.js';
+import { JsonRpcError } from '@/server/lsp/JsonRpc.js';
 
 const dirs: string[] = [];
 afterEach(async () => {

@@ -1,4 +1,4 @@
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import type {
   CodeViewItem,
   CodeViewLineSelection,
@@ -25,17 +25,17 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
-import { copyText } from '../clipboard.js';
-import { FilePath } from '../FilePath.js';
-import { CopyIcon } from '../ui/CopyIcon.js';
-import { lineBounds, sideOf } from '../comments/anchor.js';
-import { SearchBar } from '../keyboard/SearchBar.js';
-import { HoverTooltip, hoverControl } from '../lsp/HoverTooltip.js';
-import { ReferencesList } from '../lsp/ReferencesList.js';
-import { SymbolMenu } from '../lsp/SymbolMenu.js';
-import { SymbolPicker } from '../lsp/SymbolPicker.js';
-import { lspTarget, schemaHoverOnly, type TokenTarget } from '../lsp/target.js';
+import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '@/shared/protocol.js';
+import { copyText } from '@/client/clipboard.js';
+import { FilePath } from '@/client/FilePath.js';
+import { CopyIcon } from '@/client/ui/CopyIcon.js';
+import { lineBounds, sideOf } from '@/client/comments/anchor.js';
+import { SearchBar } from '@/client/keyboard/SearchBar.js';
+import { HoverTooltip, hoverControl } from '@/client/lsp/HoverTooltip.js';
+import { ReferencesList } from '@/client/lsp/ReferencesList.js';
+import { SymbolMenu } from '@/client/lsp/SymbolMenu.js';
+import { SymbolPicker } from '@/client/lsp/SymbolPicker.js';
+import { lspTarget, schemaHoverOnly, type TokenTarget } from '@/client/lsp/target.js';
 import {
   draftRange,
   imageSides,
@@ -51,16 +51,16 @@ import {
   visibleThreads,
   type ItemVersion,
   commentsOff,
-} from '../model.js';
-import { remPx } from '../scale.js';
-import { SHIKI_THEMES } from '../theme.js';
-import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
+} from '@/client/model.js';
+import { remPx } from '@/client/scale.js';
+import { SHIKI_THEMES } from '@/client/theme.js';
+import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
-import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
-import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
-import { charAtPoint } from '../lsp/tokenText.js';
-import { installSearchHighlights } from '../search/highlight.js';
+import { installOccurrenceHighlights, occurrenceControl } from '@/client/lsp/occurrences.js';
+import { focusToken, onSelectionChanged, setViewer, wordsIn } from '@/client/lsp/wordNav.js';
+import { charAtPoint } from '@/client/lsp/tokenText.js';
+import { installSearchHighlights } from '@/client/search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';

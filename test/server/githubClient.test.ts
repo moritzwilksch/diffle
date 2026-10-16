@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGithubClient, GithubError, resolveToken } from '../../src/server/github/client.js';
+import { createGithubClient, GithubError, resolveToken } from '@/server/github/client.js';
 
 describe('resolveToken', () => {
   it('prefers GITHUB_TOKEN, then GH_TOKEN, then what gh holds', async () => {

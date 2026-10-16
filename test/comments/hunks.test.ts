@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isShown, shownRanges } from '../../src/server/comments/hunks.js';
+import { isShown, shownRanges } from '@/server/comments/hunks.js';
 
 const patch = [
   'diff --git a/f.txt b/f.txt',

@@ -1,4 +1,4 @@
-import type { ModeSpec } from '../shared/protocol.js';
+import type { ModeSpec } from '@/shared/protocol.js';
 
 export type ParsedRevspec = Pick<ModeSpec, 'old' | 'new' | 'base'>;
 

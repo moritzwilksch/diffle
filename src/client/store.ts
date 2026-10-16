@@ -25,7 +25,7 @@ import {
   type Snapshot,
   type UserConfig,
   type ViewedEntry,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
 import {

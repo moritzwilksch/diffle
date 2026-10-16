@@ -1,6 +1,6 @@
-import { CopyIcon } from '../ui/CopyIcon.js';
+import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { twMerge } from 'tailwind-merge';
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import {
   AlertTriangle,
   Check,
@@ -14,14 +14,14 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
-import { api } from '../api.js';
-import { copyText } from '../clipboard.js';
-import { Markdown } from '../Markdown.js';
-import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '../model.js';
-import { useStore } from '../store.js';
-import { ButtonLabel } from '../ui/ButtonLabel.js';
-import { useConfirm } from '../useConfirm.js';
+import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
+import { api } from '@/client/api.js';
+import { copyText } from '@/client/clipboard.js';
+import { Markdown } from '@/client/Markdown.js';
+import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
+import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
+import { useConfirm } from '@/client/useConfirm.js';
 
 /** A thread rendered inline under its last anchored line: messages, reply composer, resolve. */
 export function CommentCard({ thread }: { thread: CommentThread }) {

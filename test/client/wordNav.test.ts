@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { wordsIn } from '../../src/client/lsp/wordNav.js';
+import { wordsIn } from '@/client/lsp/wordNav.js';
 
 it('uses UTF-16 offsets for Unicode words and skips punctuation', () => {
   expect(wordsIn('𐐀.x_2 + 42')).toEqual([

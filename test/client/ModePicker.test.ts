@@ -3,7 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/client/api.js', () => ({
+vi.mock('@/client/api.js', () => ({
   api: {
     lastCommitsPreview: vi.fn(async () => ({ old: null, new: null })),
     refs: vi.fn(async () => ({
@@ -16,9 +16,9 @@ vi.mock('../../src/client/api.js', () => ({
     })),
   },
 }));
-const { useStore } = await import('../../src/client/store.js');
-const { ModePicker } = await import('../../src/client/header/ModePicker.js');
-const { useKeymap } = await import('../../src/client/keyboard/useKeymap.js');
+const { useStore } = await import('@/client/store.js');
+const { ModePicker } = await import('@/client/header/ModePicker.js');
+const { useKeymap } = await import('@/client/keyboard/useKeymap.js');
 type Result = Awaited<ReturnType<typeof originalSwitchMode>>;
 let root: Root;
 let host: HTMLDivElement;

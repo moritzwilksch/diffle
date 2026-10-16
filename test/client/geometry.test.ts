@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overflow, reviewGeometry } from '../../src/client/review/geometry.js';
+import { overflow, reviewGeometry } from '@/client/review/geometry.js';
 
 describe('review geometry', () => {
   it.each([

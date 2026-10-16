@@ -29,7 +29,7 @@ import {
   SnapshotSchema,
   UserConfigSchema,
   ViewedEntrySchema,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import type {
   GithubExportRequest,
   LspPosition,
@@ -44,7 +44,7 @@ import type {
   ViewedEntry,
   ConfigUpdate,
   SymbolsQuery,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 
 // The only module that knows URLs.
 

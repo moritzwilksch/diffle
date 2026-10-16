@@ -1,4 +1,4 @@
-import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '../shared/protocol.js';
+import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '@/shared/protocol.js';
 import { GitError, type GitRepo } from './git/GitRepo.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { githubRepository, type PullRequest, viewPr } from './github/pulls.js';

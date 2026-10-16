@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ImportError, isDuplicate, parseImports } from '../../src/server/comments/import.js';
-import type { CommentThread } from '../../src/shared/protocol.js';
+import { ImportError, isDuplicate, parseImports } from '@/server/comments/import.js';
+import type { CommentThread } from '@/shared/protocol.js';
 
 describe('parseImports', () => {
   it('accepts one object or an array, as JSON text or a parsed value, and keeps only known fields', () => {

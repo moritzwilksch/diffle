@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { candidatesFor, CANDIDATES, resolveServers } from '../../src/server/lsp/registry.js';
-import { LANGUAGE_IDS } from '../../src/shared/protocol.js';
+import { candidatesFor, CANDIDATES, resolveServers } from '@/server/lsp/registry.js';
+import { LANGUAGE_IDS } from '@/shared/protocol.js';
 
 /** A PATH holding exactly `programs`. */
 const path =

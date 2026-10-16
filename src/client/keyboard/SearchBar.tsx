@@ -1,8 +1,8 @@
 import { twMerge } from 'tailwind-merge';
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import { FileDiff, FileSearch, Link2, Search, WholeWord, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { useStore } from '../store.js';
+import { useStore } from '@/client/store.js';
 
 /** Content search (/ in the current file, g/ across changed files), the references of a symbol (gA), or a word's occurrences (* / #). Enter runs a search; n / N step through matches. */
 export function SearchBar({ path }: { path?: string }) {

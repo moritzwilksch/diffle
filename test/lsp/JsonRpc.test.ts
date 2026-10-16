@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 import { expect, it } from 'vitest';
-import { JsonRpcConnection, JsonRpcError } from '../../src/server/lsp/JsonRpc.js';
+import { JsonRpcConnection, JsonRpcError } from '@/server/lsp/JsonRpc.js';
 
 it('answers asynchronous server requests and returns handler errors without losing the connection', async () => {
   const input = new PassThrough();

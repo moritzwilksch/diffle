@@ -3,9 +3,9 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/client/api.js', () => ({ api: {} }));
-const { useStore } = await import('../../src/client/store.js');
-const { SearchBar } = await import('../../src/client/keyboard/SearchBar.js');
+vi.mock('@/client/api.js', () => ({ api: {} }));
+const { useStore } = await import('@/client/store.js');
+const { SearchBar } = await import('@/client/keyboard/SearchBar.js');
 
 let host: HTMLDivElement;
 let root: Root;

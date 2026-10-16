@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/client/api.js', () => ({ api: {} }));
+vi.mock('@/client/api.js', () => ({ api: {} }));
 const diffs = vi.hoisted(() => ({ rendered: [] as FileDiffMetadata[] }));
 vi.mock('@pierre/diffs/react', () => ({
   File: () => null,
@@ -15,8 +15,8 @@ vi.mock('@pierre/diffs/react', () => ({
   useWorkerPool: () => null,
 }));
 
-const { useStore } = await import('../../src/client/store.js');
-const { Markdown } = await import('../../src/client/Markdown.js');
+const { useStore } = await import('@/client/store.js');
+const { Markdown } = await import('@/client/Markdown.js');
 
 let root: Root;
 let host: HTMLDivElement;
