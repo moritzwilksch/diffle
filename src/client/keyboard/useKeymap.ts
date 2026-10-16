@@ -1,13 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
-import {
-  clearWordFocus,
-  focusedWord,
-  moveWord,
-  moveWordToEdge,
-  scrollCursorInline,
-} from '../lsp/wordNav.js';
+import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '../lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '../model.js';
 import { remPx } from '../scale.js';
 import { escapeRegex } from '../search/highlight.js';
