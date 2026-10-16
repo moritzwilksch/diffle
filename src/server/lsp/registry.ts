@@ -107,6 +107,9 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: ['java'], command: 'jdtls' },
   // Roslyn loads no project unless asked, and C# answers little without the solution behind the file.
   { languages: ['csharp'], command: 'roslyn-language-server --stdio --autoLoadProjects' },
+  // The pinned nixpkgs roslyn-ls package exposes the assembly name.
+  { languages: ['csharp'], command: 'Microsoft.CodeAnalysis.LanguageServer --stdio --autoLoadProjects' },
+  { languages: ['csharp'], command: 'csharp-ls' },
   { languages: ['lua'], command: 'lua-language-server' },
   { languages: ['nix'], command: 'nixd' },
   { languages: ['nix'], command: 'nil' },
