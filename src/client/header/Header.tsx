@@ -20,7 +20,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { languagesLabel, type LspServerStatus, type LspStatus } from '../../shared/protocol.js';
+import { languagesLabel, type LspLogEntry, type LspServerStatus, type LspStatus } from '../../shared/protocol.js';
 import { repoName } from '../model.js';
 import { copyText } from '../clipboard.js';
 import { useStore } from '../store.js';
@@ -146,7 +146,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
   const broken = lsp.servers.some((s) => s.state === 'unavailable');
   const error = lsp.servers.some((s) => s.notice?.severity === 'error');
   const warning = lsp.servers.some((s) => s.notice?.severity === 'warning');
-  const logs = lsp.servers.some((s) => s.stderr);
+  const logs = lsp.servers.some((s) => s.log.seq > 0);
   const label =
     (broken && 'unavailable') ||
     (error && 'error') ||
@@ -237,46 +237,83 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
       <details className="ml-5.5 text-[0.6875rem] text-muted">
         <summary className="cursor-pointer">Details</summary>
         <pre className="my-2 font-mono wrap-anywhere whitespace-pre-wrap">{s.command}</pre>
-        {s.stderr && <StderrLog text={s.stderr} />}
+        <ServerLog server={s} />
       </details>
     </div>
   );
 }
 
-function StderrLog({ text }: { text: string }) {
+/** A log line as the copy button writes it. */
+function logLine(e: LspLogEntry): string {
+  return `${e.level.padEnd(7)} ${e.source.padEnd(7)} ${e.message}${e.count > 1 ? ` ×${e.count}` : ''}`;
+}
+
+/**
+ * The server's output channel: shown messages, log messages and stderr, fetched while
+ * this panel is open and again whenever the status says the log moved.
+ */
+function ServerLog({ server: s }: { server: LspServerStatus }) {
+  const [open, setOpen] = useState(false);
+  const entries = useStore((st) => st.lspLogs[s.command]?.entries);
+  const watch = useStore((st) => st.watchLspLog);
+  useEffect(() => {
+    if (!open) return;
+    void watch(s.command, true);
+    return () => void watch(s.command, false);
+  }, [open, s.command, watch]);
   const [result, setResult] = useState<'copied' | 'failed' | null>(null);
   useEffect(() => {
     if (!result) return;
     const timer = setTimeout(() => setResult(null), 3000);
     return () => clearTimeout(timer);
   }, [result]);
+  const { errors, warnings } = s.log;
+  const counts = [
+    errors && `${errors} error${errors === 1 ? '' : 's'}`,
+    warnings && `${warnings} warning${warnings === 1 ? '' : 's'}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
   return (
-    <div className="my-2">
-      <div className="flex items-center justify-between py-1">
-        <span>stderr</span>
-        <Button
-          variant="ghost"
-          type="button"
-          aria-label="Copy stderr"
-          onClick={async () => setResult((await copyText(text)) ? 'copied' : 'failed')}
-        >
-          {result === 'copied' ? <Check size="0.75rem" /> : <Copy size="0.75rem" />}
-          <span aria-live="polite">{result === 'copied' ? 'Copied' : 'Copy'}</span>
-        </Button>
-      </div>
-      {result === 'failed' && (
-        <p role="status" className="m-2 text-warn">
-          Copy failed. Select the log and press Ctrl/⌘+C.
-        </p>
+    <details className="my-2" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary className="cursor-pointer">Log{counts ? ` (${counts})` : s.log.seq ? '' : ' (empty)'}</summary>
+      {entries && (
+        <>
+          <div className="flex items-center justify-end py-1">
+            <Button
+              variant="ghost"
+              type="button"
+              aria-label="Copy log"
+              onClick={async () => setResult((await copyText(entries.map(logLine).join('\n'))) ? 'copied' : 'failed')}
+            >
+              {result === 'copied' ? <Check size="0.75rem" /> : <Copy size="0.75rem" />}
+              <span aria-live="polite">{result === 'copied' ? 'Copied' : 'Copy'}</span>
+            </Button>
+          </div>
+          {result === 'failed' && (
+            <p role="status" className="m-2 text-warn">
+              Copy failed. Select the log and press Ctrl/⌘+C.
+            </p>
+          )}
+          <ol
+            aria-label="server log"
+            tabIndex={0}
+            className="m-0 max-h-[min(12rem,25vh)] list-none overflow-auto overscroll-contain p-2 font-mono text-foreground"
+          >
+            {entries.length === 0 && <li className="text-muted">Nothing logged yet</li>}
+            {entries.map((e) => (
+              <li key={e.id} className="wrap-anywhere whitespace-pre-wrap">
+                <span className={e.level === 'error' || e.level === 'warning' ? 'text-warn' : 'text-muted'}>
+                  {e.level}
+                </span>{' '}
+                <span className="text-muted">{e.source}</span> {e.message}
+                {e.count > 1 && <span className="text-muted"> ×{e.count}</span>}
+              </li>
+            ))}
+          </ol>
+        </>
       )}
-      <pre
-        aria-label="stderr log"
-        tabIndex={0}
-        className="m-0 max-h-[min(12rem,25vh)] overflow-auto overscroll-contain p-2 font-mono whitespace-pre text-foreground"
-      >
-        {text}
-      </pre>
-    </div>
+    </details>
   );
 }
 

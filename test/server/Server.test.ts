@@ -449,6 +449,13 @@ describe('Server', () => {
       // Only the new side, and only paths the server returned: a neighbour file stays unreadable.
       expect((await file(site, 'old')).status).toBe(404);
       expect((await file(secret)).status).toBe(404);
+      // The log is listed by command; the fake writes each document it opens to stderr.
+      const log = await send('GET', '/api/lsp/log?server=fake');
+      expect(log.status).toBe(200);
+      expect(JSON.parse(log.body).entries).toContainEqual(
+        expect.objectContaining({ source: 'stderr', level: 'log', message: 'open source.py v1', count: 1 }),
+      );
+      expect((await send('GET', '/api/lsp/log?server=other')).status).toBe(404);
     } finally {
       await deps.lsp?.close();
       deps.lsp = null;

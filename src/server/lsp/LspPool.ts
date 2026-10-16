@@ -5,6 +5,7 @@ import {
   type LanguageId,
   type LspHoverResponse,
   type LspLocationsResponse,
+  type LspLogEntry,
   type LspMissing,
   type LspOccurrencesResponse,
   type LspPosition,
@@ -78,6 +79,11 @@ export class LspPool {
       })),
       missing: this.missing,
     };
+  }
+
+  /** The retained log lines of the server started from `command`, or null when none was. */
+  log(command: string): LspLogEntry[] | null {
+    return this.entries.get(command)?.bridge.entries() ?? null;
   }
 
   /** Reads an external file only if a running server named it. */

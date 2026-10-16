@@ -593,17 +593,51 @@ export const LspProcessStatusSchema = z.object({
   message: z.string().optional(),
   /** Active work reported through LSP work-done progress; absent when none is reported. */
   activity: z.string().array().optional(),
-  /** Last warning or error reported by the server, not a process failure. */
+  /**
+   * What the server last said to the reader through `window/showMessage`, when it was a
+   * warning or an error. Its log never stands here: that is `log`.
+   */
   notice: z
     .object({
       severity: z.enum(['warning', 'error']),
       message: z.string(),
     })
     .optional(),
-  /** Bounded stderr tail for servers that report failures only through their process output. */
-  stderr: z.string().optional(),
+  /** The server's output channel in brief; `GET /api/lsp/log` lists the lines. */
+  log: z.object({
+    /** Changes whenever a line is added or repeated, so a reader showing the log knows to fetch again. */
+    seq: z.number().int().nonnegative(),
+    /** Error and warning lines since the server started, kept or not. */
+    errors: z.number().int().nonnegative(),
+    warnings: z.number().int().nonnegative(),
+  }),
 });
 export type LspProcessStatus = z.infer<typeof LspProcessStatusSchema>;
+
+/** Where a log line came from: `window/showMessage`, `window/logMessage`, or the process's stderr. */
+export const LspLogSourceSchema = z.enum(['message', 'log', 'stderr']);
+export type LspLogSource = z.infer<typeof LspLogSourceSchema>;
+export const LspLogLevelSchema = z.enum(['error', 'warning', 'info', 'log']);
+export type LspLogLevel = z.infer<typeof LspLogLevelSchema>;
+
+/** One line of a server's output channel. The bridge keeps a bounded number of recent ones. */
+export const LspLogEntrySchema = z.object({
+  /** Stable identity of the line within the run. */
+  id: z.number().int().positive(),
+  /** Milliseconds since the epoch, of its latest repeat. */
+  time: z.number(),
+  source: LspLogSourceSchema,
+  level: LspLogLevelSchema,
+  message: z.string(),
+  /** How many times in a row the server said exactly this. */
+  count: z.number().int().positive(),
+});
+export type LspLogEntry = z.infer<typeof LspLogEntrySchema>;
+
+/** `GET /api/lsp/log?server=<command>`: the retained lines of one server, oldest first. */
+export const LspLogQuerySchema = z.object({ server: z.string().min(1) });
+export const LspLogResponseSchema = z.object({ entries: LspLogEntrySchema.array() });
+export type LspLogResponse = z.infer<typeof LspLogResponseSchema>;
 
 /** A process plus the languages the pool routes to it. */
 export const LspServerStatusSchema = LspProcessStatusSchema.extend({

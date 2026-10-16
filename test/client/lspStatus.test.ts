@@ -3,13 +3,15 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
+import type { LspLogEntry, LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
 
 const { state } = vi.hoisted(() => ({
   state: {
     snapshot: null,
     github: { status: 'idle' },
     lsp: { enabled: true, servers: [], missing: [] } as LspStatus,
+    lspLogs: {} as Record<string, { seq: number; entries: LspLogEntry[] }>,
+    watchLspLog: () => {},
     layout: { treeVisible: true, panelVisible: true },
     theme: 'dark',
     diffStyle: 'split',
@@ -32,6 +34,7 @@ function render(...statuses: Partial<LspServerStatus>[]) {
     languages: ['python'],
     joins: [],
     state: 'ready',
+    log: { seq: 0, errors: 0, warnings: 0 },
     ...status,
   }));
   const container = document.createElement('div');
@@ -75,8 +78,8 @@ describe('LSP status indicator', () => {
   // Header's summary names the most severe state across all servers.
   it.each<[Partial<LspServerStatus>[], string]>([
     [[{}], 'Language servers'],
-    [[{}, { stderr: 'log' }], 'Language servers: logs'],
-    [[{ stderr: 'log' }, { activity: ['Indexing'] }], 'Language servers: busy'],
+    [[{}, { log: { seq: 3, errors: 0, warnings: 0 } }], 'Language servers: logs'],
+    [[{ log: { seq: 3, errors: 2, warnings: 1 } }, { activity: ['Indexing'] }], 'Language servers: busy'],
     [[{ activity: ['Indexing'] }, { state: 'starting' }], 'Language servers: starting'],
     [[{ state: 'starting' }, { notice: { severity: 'warning', message: 'w' } }], 'Language servers: warning'],
     [
@@ -92,17 +95,33 @@ describe('LSP status indicator', () => {
     ).toBe(label);
   });
 
-  it('shows reported work, notices, and stderr instead of claiming readiness', () => {
-    const popup = render(
-      { activity: ['Loading workspace: dependencies'] },
-      { notice: { severity: 'error', message: 'Workspace loading failed' }, stderr: 'Missing build tool' },
-      {},
-    ).querySelector('section[aria-label="Language server status"]')!.textContent;
-    expect(popup).toContain('Loading workspace: dependencies');
-    expect(popup).toContain('Working');
-    expect(popup).toContain('Workspace loading failed');
-    expect(popup).toContain('Missing build tool');
-    expect(popup).toContain('Connected');
+  it('shows reported work, notices, and the log instead of claiming readiness', () => {
+    state.lspLogs = {
+      server1: {
+        seq: 2,
+        entries: [
+          { id: 1, time: 0, source: 'stderr', level: 'log', message: 'Missing build tool', count: 1 },
+          { id: 2, time: 0, source: 'log', level: 'warning', message: 'languageId not found', count: 3 },
+        ],
+      },
+    };
+    try {
+      const popup = render(
+        { activity: ['Loading workspace: dependencies'] },
+        { notice: { severity: 'error', message: 'Workspace loading failed' }, log: { seq: 2, errors: 1, warnings: 3 } },
+        {},
+      ).querySelector('section[aria-label="Language server status"]')!;
+      const text = popup.textContent;
+      expect(text).toContain('Loading workspace: dependencies');
+      expect(text).toContain('Working');
+      expect(text).toContain('Workspace loading failed');
+      expect(text).toContain('Log (1 error, 3 warnings)');
+      expect(text).toContain('Connected');
+      const lines = [...popup.querySelectorAll('ol[aria-label="server log"] li')].map((li) => li.textContent);
+      expect(lines).toEqual(['log stderr Missing build tool', 'warning log languageId not found ×3']);
+    } finally {
+      state.lspLogs = {};
+    }
   });
 
   it('names missing servers compactly with install candidates in the tooltip', () => {
@@ -121,19 +140,29 @@ describe('LSP status indicator', () => {
   });
 
   it.each([true, false])('reports clipboard success=%s and copies the full log', async (success) => {
-    const text = 'first line\n' + 'long line '.repeat(200);
-    render({ stderr: text });
+    const long = 'long line '.repeat(200).trim();
+    state.lspLogs = {
+      server0: {
+        seq: 1,
+        entries: [
+          { id: 1, time: 0, source: 'stderr', level: 'log', message: 'first line', count: 1 },
+          { id: 2, time: 0, source: 'message', level: 'error', message: long, count: 2 },
+        ],
+      },
+    };
+    render({ log: { seq: 1, errors: 1, warnings: 0 } });
     vi.mocked(copyText).mockResolvedValue(success);
     const container = document.createElement('div');
     const root = createRoot(container);
     try {
       await act(async () => root.render(createElement(Header)));
-      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Copy stderr"]')!.click());
-      expect(copyText).toHaveBeenLastCalledWith(text);
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Copy log"]')!.click());
+      expect(copyText).toHaveBeenLastCalledWith(`log     stderr  first line\nerror   message ${long} ×2`);
       expect(container.textContent).toContain(success ? 'Copied' : 'Copy failed. Select the log');
-      expect(container.querySelector('pre[aria-label="stderr log"]')!.textContent).toBe(text);
+      expect(container.querySelectorAll('ol[aria-label="server log"] li')).toHaveLength(2);
     } finally {
       await act(async () => root.unmount());
+      state.lspLogs = {};
     }
   });
 });

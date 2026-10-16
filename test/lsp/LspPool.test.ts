@@ -209,6 +209,13 @@ describe('LspPool', () => {
     });
   });
 
+  it('hands out one server’s log by command', async () => {
+    const { pool } = start({ python: 'py-server' });
+    await pool.track(['a.py']);
+    await expect.poll(() => pool.log('py-server')?.map((e) => e.message)).toContain('open a.py v1');
+    expect(pool.log('go-server')).toBeNull();
+  });
+
   it('has nothing to say once closed', async () => {
     const { pool, statuses } = start({ python: 'py-server' }, { preload: ['python'] });
     await pool.close();

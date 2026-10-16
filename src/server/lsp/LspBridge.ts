@@ -13,6 +13,9 @@ import {
   type LspProcessStatus,
   type LspSymbol,
   type LspTokenKindResponse,
+  type LspLogEntry,
+  type LspLogLevel,
+  type LspLogSource,
 } from '../../shared/protocol.js';
 import { fuzzyRank } from '../../shared/fuzzy.js';
 import { mapLimit } from '../concurrency.js';
@@ -112,7 +115,8 @@ const DEFAULT_TOKEN_TYPES = [
   'decorator',
 ];
 
-const STDERR_TAIL = 2000;
+/** Log lines kept per server; older ones are dropped. */
+const LOG_CAPACITY = 200;
 const INIT_TIMEOUT_MS = 60_000;
 /**
  * Navigation opens whatever file a query lands in. Without a cap every path
@@ -143,7 +147,13 @@ export class LspBridge {
   private rpc: JsonRpcConnection | null = null;
   private current: LspProcessStatus;
   private ready: Promise<void>;
-  private stderr = '';
+  /** The server's output channel, oldest first: what it showed, what it logged, what it wrote to stderr. */
+  private log: LspLogEntry[] = [];
+  private nextLogId = 1;
+  private logSummary = { seq: 0, errors: 0, warnings: 0 };
+  /** stderr bytes since the last newline. */
+  private stderrTail = '';
+  private lastStderr = '';
   private progress = new Map<string | number, { title: string; message?: string; percentage?: number }>();
   /** Open documents, least recently synced first. */
   private open = new Map<string, { version: number; text: string }>();
@@ -163,7 +173,7 @@ export class LspBridge {
 
   private constructor(private readonly opts: LspBridgeOptions) {
     this.realRoot = safeRealpathSync(opts.root);
-    this.current = { name: programName(opts.command), command: opts.command, state: 'starting' };
+    this.current = { name: programName(opts.command), command: opts.command, state: 'starting', log: this.logSummary };
     this.ready = this.launch();
     this.ready.catch(() => {});
   }
@@ -174,6 +184,11 @@ export class LspBridge {
 
   status(): LspProcessStatus {
     return this.current;
+  }
+
+  /** The retained log lines, oldest first. */
+  entries(): LspLogEntry[] {
+    return this.log.map((e) => ({ ...e }));
   }
 
   async definition(pos: LspPosition): Promise<LspLocationsResponse> {
@@ -493,18 +508,12 @@ export class LspBridge {
       throw e;
     }
     this.child = child;
-    child.stderr?.on('data', (d: Buffer) => {
-      const chunk = d.toString('utf8');
-      this.stderr = (this.stderr + chunk).slice(-STDERR_TAIL);
-      if (!this.closing && this.current.state !== 'unavailable')
-        this.set({ ...this.current, stderr: this.stderr.trim() });
-    });
+    child.stderr?.on('data', (d: Buffer) => this.readStderr(d.toString('utf8')));
     child.on('error', (e) => this.fail(`cannot start "${this.opts.command}": ${e.message}`));
     child.on('exit', (code, signal) => {
       if (this.closing) return;
-      this.fail(
-        `"${this.opts.command}" exited (${signal ?? code})${this.stderr.trim() ? `: ${lastLine(this.stderr)}` : ''}`,
-      );
+      this.readStderr('\n');
+      this.fail(`"${this.opts.command}" exited (${signal ?? code})${this.lastStderr ? `: ${this.lastStderr}` : ''}`);
     });
     if (!child.stdin || !child.stdout) {
       this.fail(`cannot start "${this.opts.command}": no stdio`);
@@ -547,7 +556,13 @@ export class LspBridge {
                 formats: ['relative'],
               },
             },
-            workspace: { symbol: {}, workspaceFolders: true, configuration: true },
+            // A refresh is honored trivially: token kinds are asked for afresh on every use.
+            workspace: {
+              symbol: {},
+              workspaceFolders: true,
+              configuration: true,
+              semanticTokens: { refreshSupport: true },
+            },
           },
         },
         INIT_TIMEOUT_MS,
@@ -566,12 +581,52 @@ export class LspBridge {
     if (this.current.state === 'starting') this.set({ ...this.current, state: 'ready' });
   }
 
+  /** Whole stderr lines go to the log; the exit message quotes the last one. */
+  private readStderr(chunk: string): void {
+    const lines = (this.stderrTail + chunk).split('\n');
+    this.stderrTail = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      this.lastStderr = line.trim();
+      this.record('stderr', 'log', line);
+    }
+  }
+
+  /**
+   * Appends to the log, folding a line the server repeats into the previous entry's
+   * count, and tells the status the log moved. Only the summary travels with the
+   * status: the lines are fetched by whoever shows them.
+   */
+  private record(source: LspLogSource, level: LspLogLevel, message: string): void {
+    const text = message.trim();
+    if (!text) return;
+    const last = this.log[this.log.length - 1];
+    if (last && last.source === source && last.level === level && last.message === text) {
+      last.count += 1;
+      last.time = Date.now();
+    } else {
+      this.log.push({ id: this.nextLogId++, time: Date.now(), source, level, message: text, count: 1 });
+      if (this.log.length > LOG_CAPACITY) this.log.shift();
+    }
+    this.logSummary = {
+      seq: this.logSummary.seq + 1,
+      errors: this.logSummary.errors + (level === 'error' ? 1 : 0),
+      warnings: this.logSummary.warnings + (level === 'warning' ? 1 : 0),
+    };
+    if (!this.closing && this.current.state !== 'unavailable') this.set({ ...this.current, log: this.logSummary });
+  }
+
   private noteWorkspace(method: string, params: unknown): void {
     if (!params || typeof params !== 'object' || this.closing || this.current.state === 'unavailable') return;
     const p = params as Record<string, unknown>;
     if (method === 'window/showMessage' || method === 'window/logMessage' || method === 'window/showMessageRequest') {
-      if ((p.type !== 1 && p.type !== 2) || typeof p.message !== 'string' || !p.message.trim()) return;
-      const notice = { severity: p.type === 1 ? ('error' as const) : ('warning' as const), message: p.message };
+      if (typeof p.message !== 'string' || !p.message.trim()) return;
+      const level = MESSAGE_LEVELS[p.type as number] ?? 'log';
+      // Everything lands in the log. Only what the server shows the reader, and only a problem,
+      // stands as the notice: an editor pops those up and files the rest in an output channel.
+      this.record(method === 'window/logMessage' ? 'log' : 'message', level, p.message);
+      if (method === 'window/logMessage' || (level !== 'error' && level !== 'warning')) return;
+      const notice = { severity: level, message: p.message.trim() };
       if (notice.severity !== this.current.notice?.severity || notice.message !== this.current.notice?.message)
         this.set({ ...this.current, notice });
       return;
@@ -602,7 +657,13 @@ export class LspBridge {
 
   private fail(message: string): void {
     if (this.current.state === 'unavailable') return;
-    this.set({ name: this.current.name, command: this.opts.command, state: 'unavailable', message });
+    this.set({
+      name: this.current.name,
+      command: this.opts.command,
+      state: 'unavailable',
+      message,
+      log: this.logSummary,
+    });
     this.rpc?.dispose(new LspUnavailableError(message));
   }
 
@@ -639,14 +700,9 @@ export class LspBridge {
         const result = await rpc.request<T>(method, params);
         if (result == null || (Array.isArray(result) && !result.length)) {
           // Background work does not prevent useful answers, but makes empty answers inconclusive.
+          // Nothing else does: an empty answer from an idle server is an answer, whatever it logged.
           const busy = busyReason(this.current) ?? pending;
           if (busy) throw new LspUnavailableError(busy);
-          if (this.current.notice) {
-            const { severity, message } = this.current.notice;
-            throw new LspUnavailableError(
-              `${this.current.name} returned no result; last server ${severity}: ${message}`,
-            );
-          }
         }
         return result;
       } catch (e) {
@@ -873,10 +929,8 @@ function lineAt(text: string, line: number): string {
   return (end === -1 ? text.slice(start) : text.slice(start, end)).replace(/\r$/, '');
 }
 
-function lastLine(s: string): string {
-  const lines = s.trim().split('\n');
-  return lines[lines.length - 1] ?? '';
-}
+/** LSP `MessageType` numbers; anything else, such as the newer Debug, reads as a plain log line. */
+const MESSAGE_LEVELS: Record<number, LspLogLevel> = { 1: 'error', 2: 'warning', 3: 'info', 4: 'log' };
 
 /** Why an empty result may be incomplete while the server reports background work. */
 function busyReason(s: LspProcessStatus): string | null {

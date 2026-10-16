@@ -27,6 +27,7 @@ import {
   PatchQuerySchema,
   followsCheckout,
   lspBlocker,
+  LspLogQuerySchema,
 } from '../shared/protocol.js';
 import { NotFoundError, UnquotableError } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
@@ -283,6 +284,14 @@ export function createApi(deps: ApiDeps): Hono {
   });
 
   app.get('/api/lsp/status', (c) => c.json(lspStatus(deps)));
+
+  // Readable whatever the snapshot shows: a log explains a server that cannot answer right now.
+  app.get('/api/lsp/log', (c) => {
+    const { server } = LspLogQuerySchema.parse(c.req.query());
+    const entries = deps.lsp?.log(server);
+    if (entries == null) return c.json({ error: 'no such language server' }, 404);
+    return c.json({ entries });
+  });
 
   /** The pool, or a 409 reason: the language server reads the checkout, so the new side must be it. */
   const lspFor = async (path?: string): Promise<{ lsp: LspPool } | { error: string }> => {

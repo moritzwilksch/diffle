@@ -302,8 +302,8 @@ describe('LspBridge', () => {
     }
   });
 
-  it.each(['window/showMessage', 'window/logMessage', 'window/showMessageRequest'])(
-    'surfaces %s errors without killing a usable server',
+  it.each(['window/showMessage', 'window/showMessageRequest'])(
+    'keeps a %s error as the notice without killing a usable server',
     async (method) => {
       const { bridge, notify } = start();
       try {
@@ -313,9 +313,8 @@ describe('LspBridge', () => {
           .poll(() => bridge.status().notice)
           .toEqual({ severity: 'error', message: 'Failed to load workspace' });
         expect((await bridge.definition({ path: 'a.py', line: 3, col: 4 })).locations).toHaveLength(1);
-        await expect(bridge.hover({ path: 'a.py', line: 1, col: 0 })).rejects.toThrow(
-          'last server error: Failed to load workspace',
-        );
+        // An empty answer is an answer: the notice does not explain it away.
+        expect(await bridge.hover({ path: 'a.py', line: 1, col: 0 })).toEqual({ contents: null });
         notify(method, { type: 3, message: 'An unrelated info message' });
         notify('$/progress', { token: 2, value: [1, 2, 3] });
         await settle();
@@ -326,6 +325,36 @@ describe('LspBridge', () => {
       }
     },
   );
+
+  it('files shown messages, log messages and stderr in one log, and lets only shown problems stand as the notice', async () => {
+    const { bridge, notify } = start();
+    try {
+      await bridge.track(['a.py']);
+      notify('window/logMessage', { type: 2, message: 'languageId not found for x.mmd' });
+      notify('window/logMessage', { type: 2, message: 'languageId not found for x.mmd' });
+      notify('window/logMessage', { type: 1, message: 'Unhandled exception' });
+      notify('window/showMessage', { type: 3, message: 'Indexing done' });
+      notify('window/showMessage', { type: 2, message: 'Could not find Astro' });
+      await expect.poll(() => bridge.status().notice).toEqual({ severity: 'warning', message: 'Could not find Astro' });
+      // Log messages never become the notice, and a warning in the log is no reason to doubt an empty answer.
+      expect(await bridge.hover({ path: 'a.py', line: 1, col: 0 })).toEqual({ contents: null });
+      const entries = bridge.entries();
+      expect(entries.map((e) => [e.source, e.level, e.message, e.count])).toEqual([
+        ['stderr', 'log', 'open a.py v1', 1],
+        ['log', 'warning', 'languageId not found for x.mmd', 2],
+        ['log', 'error', 'Unhandled exception', 1],
+        ['message', 'info', 'Indexing done', 1],
+        ['message', 'warning', 'Could not find Astro', 1],
+      ]);
+      expect(entries.map((e) => e.id)).toEqual([1, 2, 3, 4, 5]);
+      // Two warnings from the repeated line count once each, so the summary says how chatty the server is.
+      expect(bridge.status().log).toEqual({ seq: 6, errors: 1, warnings: 3 });
+      // The lines travel only on request; the status carries the summary.
+      expect(bridge.status()).not.toHaveProperty('stderr');
+    } finally {
+      await bridge.close();
+    }
+  });
 
   it('rejects an empty answer when standard progress begins during the request', async () => {
     const { bridge } = start({ FAKE_LSP_LOADING_DURING_QUERY: '1' });
@@ -347,12 +376,14 @@ describe('LspBridge', () => {
     }
   });
 
-  it('exposes stderr while the server remains alive', async () => {
+  it('logs stderr by whole line while the server remains alive', async () => {
     const { bridge } = start();
     try {
       await bridge.track(['a.py']);
-      await expect.poll(() => bridge.status().stderr).toContain('open a.py');
+      await expect.poll(() => bridge.entries().map((e) => e.message)).toContain('open a.py v1');
+      expect(bridge.entries().every((e) => e.source === 'stderr' && e.level === 'log')).toBe(true);
       expect(bridge.status().state).toBe('ready');
+      expect(bridge.status().log.seq).toBeGreaterThan(0);
     } finally {
       await bridge.close();
     }
