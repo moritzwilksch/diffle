@@ -5,6 +5,8 @@ import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
   followsCheckout,
+  joinedBy,
+  languageOf,
   lspBlocker,
   shownIterations,
   type GithubMetadata,
@@ -1775,9 +1777,15 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().symbolMenu || targetBlocker(target)) return;
       const g = generation;
       try {
-        const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
-          ensureContents(target.path, target.side),
-        );
+        // A word in a string or a comment names no symbol to the owner, so the syntax gate spares the
+        // round trip. A server joining the language answers there, though: Tailwind's classes live in strings.
+        const language = languageOf(target.path);
+        const blocked =
+          language != null && joinedBy(get().lsp, language)
+            ? false
+            : await blocksSymbol(target.path, target.side, target.line, target.col, () =>
+                ensureContents(target.path, target.side),
+              );
         if (!current(g) || t !== hoverSeq || get().symbolMenu) return;
         if (blocked) {
           set({ hover: null });

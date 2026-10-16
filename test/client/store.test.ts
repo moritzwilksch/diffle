@@ -1110,6 +1110,36 @@ describe('symbol navigation', () => {
     expect(useStore.getState().hover).toEqual({ target: comment, contents: 'Referenced symbol', anchor });
   });
 
+  it('asks for a hover inside prose anyway when a server joins the language', async () => {
+    ready();
+    const joiner = {
+      ...lspStatus('ready').servers[0]!,
+      name: 'tailwind',
+      command: 'tailwind',
+      languages: [],
+      joins: ['python' as const],
+    };
+    useStore.setState({
+      symbolMenu: null,
+      hover: null,
+      lsp: { enabled: true, servers: [...lspStatus('ready').servers, joiner], missing: [] },
+    });
+    blocksSymbol.mockResolvedValue(true);
+    api.lspHover.mockResolvedValue({ contents: '.foo { margin: 0 }' });
+    const anchor = { left: 0, top: 0, bottom: 0 };
+    await useStore.getState().requestHover(target, anchor);
+    expect(blocksSymbol).not.toHaveBeenCalled();
+    expect(useStore.getState().hover).toEqual({ target, contents: '.foo { margin: 0 }', anchor });
+    // A joining server still starting is no reason to skip the gate.
+    useStore.setState({
+      hover: null,
+      lsp: { enabled: true, servers: [...lspStatus('ready').servers, { ...joiner, state: 'starting' }], missing: [] },
+    });
+    await useStore.getState().requestHover(target, anchor);
+    expect(blocksSymbol).toHaveBeenCalledTimes(1);
+    expect(useStore.getState().hover).toBeNull();
+  });
+
   it('suppresses hover and menus on syntax-classified prose, including the old side', async () => {
     ready();
     useStore.setState({ symbolMenu: null, hover: null });

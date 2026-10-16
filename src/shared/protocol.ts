@@ -841,6 +841,11 @@ export function serves(server: LspServerStatus, language: LanguageId): boolean {
   return server.languages.includes(language) || server.joins.includes(language);
 }
 
+/** Whether a running server joins `language` beside its owner, and so may answer where the owner would not. */
+export function joinedBy(lsp: LspStatus, language: LanguageId): boolean {
+  return lsp.servers.some((s) => s.state === 'ready' && s.joins.includes(language));
+}
+
 /** A server's languages for a status line: the ones it owns, then the ones it joins marked `+`. */
 export function languagesLabel(server: Pick<LspServerStatus, 'languages' | 'joins'>): string {
   return [...server.languages, ...server.joins.map((l) => `+${l}`)].join(', ');
