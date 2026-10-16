@@ -39,6 +39,7 @@ const api = {
     autoViewed: [],
     contextLines: 5,
     followRefs: 'off',
+    lineWrap: true,
     lspCommands: { python: 'pyrefly lsp' },
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
@@ -748,7 +749,7 @@ describe('client transitions', () => {
 
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
     useStore.setState({
-      config: { autoViewed: [], contextLines: 5, followRefs: 'off' as const, lspCommands: {} },
+      config: { autoViewed: [], contextLines: 5, followRefs: 'off' as const, lineWrap: true, lspCommands: {} },
       lsp: LSP_OFF,
     });
     const slow = deferred<Snapshot>();
@@ -757,6 +758,7 @@ describe('client transitions', () => {
       autoViewed: ['*.lock'],
       contextLines: 9,
       followRefs: 'off' as const,
+      lineWrap: true,
       lspCommands: {},
     });
     api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
@@ -1786,6 +1788,7 @@ describe('request ownership', () => {
       autoViewed: [],
       contextLines,
       followRefs: 'off',
+      lineWrap: true,
       lspCommands: {},
     });
     const load = deferred<UserConfig>();

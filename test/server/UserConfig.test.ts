@@ -42,6 +42,15 @@ describe('UserConfigStore', () => {
     }
   });
 
+  it('wraps lines by default and keeps an explicit choice across reopening', async () => {
+    const file = join(dir, 'config.json');
+    await writeFile(file, JSON.stringify({ lineWrap: 'no' }));
+    const store = await UserConfigStore.open(file);
+    expect(store.get().lineWrap).toBe(true);
+    await store.set({ lineWrap: false });
+    expect((await UserConfigStore.open(file)).get().lineWrap).toBe(false);
+  });
+
   it('keeps known languages and drops the rest, including fields it does not read', async () => {
     const file = join(dir, 'config.json');
     await writeFile(file, JSON.stringify({ lspCommand: 'x', lspCommands: { go: ' gopls ', rust: '', nope: 'x' } }));

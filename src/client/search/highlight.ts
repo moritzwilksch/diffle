@@ -1,6 +1,8 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import { pathFromItemId } from '../model.js';
+import { revealInline } from '../review/inline.js';
 import { isDeletionRow, watchRenderedRows } from '../review/rows.js';
+import type { SearchMatch } from '../../shared/protocol.js';
 import { useStore, type SearchState } from '../store.js';
 
 /**
@@ -113,6 +115,8 @@ export function installSearchHighlights(
 ): () => void {
   if (!supported()) return () => {};
   const cache = new MatchCache();
+  // The match last scrolled into view sideways; later passes leave the reader's horizontal scroll alone.
+  let revealed: SearchMatch | null = null;
   const stop = watchRenderedRows(
     viewer,
     scroller,
@@ -142,6 +146,10 @@ export function installSearchHighlights(
       }
       CSS.highlights.set(ALL, new Highlight(...all));
       CSS.highlights.set(CURRENT, new Highlight(...cur));
+      if (current && current !== revealed && cur[0]) {
+        revealed = current;
+        revealInline(cur[0]);
+      }
     },
     (records) => {
       for (const r of records) cache.invalidate(r.target);

@@ -66,7 +66,8 @@ function normalize(c: Partial<UserConfig>): UserConfig {
       ? Math.max(0, Math.min(10_000, Math.floor(c.contextLines)))
       : DEFAULT_USER_CONFIG.contextLines;
   const followRefs = FollowRefsSchema.safeParse(c.followRefs).data ?? DEFAULT_USER_CONFIG.followRefs;
-  return { autoViewed, contextLines, followRefs, lspCommands: lspCommands(c) };
+  const lineWrap = typeof c.lineWrap === 'boolean' ? c.lineWrap : DEFAULT_USER_CONFIG.lineWrap;
+  return { autoViewed, contextLines, followRefs, lineWrap, lspCommands: lspCommands(c) };
 }
 
 /**
