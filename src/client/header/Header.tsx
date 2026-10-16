@@ -256,6 +256,8 @@ function ServerLog({ server: s }: { server: LspServerStatus }) {
   const [open, setOpen] = useState(false);
   const entries = useStore((st) => st.lspLogs[s.command]?.entries);
   const watch = useStore((st) => st.watchLspLog);
+  // Follows the diff's wrap setting: unwrapped, a stack trace scrolls sideways like a long line does.
+  const lineWrap = useStore((st) => st.config.lineWrap);
   useEffect(() => {
     if (!open) return;
     void watch(s.command, true);
@@ -302,7 +304,7 @@ function ServerLog({ server: s }: { server: LspServerStatus }) {
           >
             {entries.length === 0 && <li className="text-muted">Nothing logged yet</li>}
             {entries.map((e) => (
-              <li key={e.id} className="wrap-anywhere whitespace-pre-wrap">
+              <li key={e.id} className={lineWrap ? 'wrap-anywhere whitespace-pre-wrap' : 'whitespace-pre'}>
                 <span className={e.level === 'error' || e.level === 'warning' ? 'text-warn' : 'text-muted'}>
                   {e.level}
                 </span>{' '}

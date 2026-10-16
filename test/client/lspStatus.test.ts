@@ -12,6 +12,7 @@ const { state } = vi.hoisted(() => ({
     lsp: { enabled: true, servers: [], missing: [] } as LspStatus,
     lspLogs: {} as Record<string, { seq: number; entries: LspLogEntry[] }>,
     watchLspLog: () => {},
+    config: { lineWrap: true },
     layout: { treeVisible: true, panelVisible: true },
     theme: 'dark',
     diffStyle: 'split',
@@ -121,6 +122,24 @@ describe('LSP status indicator', () => {
       expect(lines).toEqual(['log stderr Missing build tool', 'warning log languageId not found ×3']);
     } finally {
       state.lspLogs = {};
+    }
+  });
+
+  it('wraps log lines with the diff, and scrolls them sideways without', () => {
+    state.lspLogs = {
+      server0: { seq: 1, entries: [{ id: 1, time: 0, source: 'stderr', level: 'log', message: 'x', count: 1 }] },
+    };
+    try {
+      const line = () =>
+        render({ log: { seq: 1, errors: 0, warnings: 0 } }).querySelector('ol[aria-label="server log"] li')!;
+      expect(line().className).toContain('whitespace-pre-wrap');
+      state.config.lineWrap = false;
+      expect(line().className).toBe('whitespace-pre');
+      // The list itself scrolls, so an unwrapped line gets a horizontal bar there.
+      expect(line().closest('ol')!.className).toContain('overflow-auto');
+    } finally {
+      state.lspLogs = {};
+      state.config.lineWrap = true;
     }
   });
 
