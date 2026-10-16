@@ -7,6 +7,7 @@ import { writeFileAtomic } from '../persist.js';
 import { argv0, findOnPath } from './which.js';
 import { JsonRpcError } from './JsonRpc.js';
 import { VUE_PLUGIN, vuePluginLocation } from './vue.js';
+import { tsdkLocation } from './tsdk.js';
 
 export const SCHEMA_CATALOG = 'https://www.schemastore.org/api/json/catalog.json';
 const MAX_AGE = 24 * 60 * 60 * 1000;
@@ -98,15 +99,28 @@ export async function settingsFor(
 
 /**
  * `initializationOptions` for a process, or undefined when the server takes none:
- * typescript-language-server loads tsserver plugins from here. `lookup` is a test seam.
+ * typescript-language-server loads tsserver plugins from here, and astro-ls the
+ * TypeScript it embeds, found in `root` or beside a server on PATH. `lookup` is a test seam.
  */
 export function initializationOptionsFor(
   command: string,
+  root: string,
   lookup: (command: string) => string | null = findOnPath,
 ): LspSettings | undefined {
-  if (programOf(command) !== 'typescript-language-server') return undefined;
-  const plugin = vuePlugin(lookup);
-  return plugin ? { plugins: [plugin] } : undefined;
+  const program = programOf(command);
+  if (program === 'typescript-language-server') {
+    const plugin = vuePlugin(lookup);
+    return plugin ? { plugins: [plugin] } : undefined;
+  }
+  if (program === 'astro-ls') {
+    // Without a tsdk the server refuses to initialize; its own message then names the option.
+    const tsdk = tsdkLocation(
+      root,
+      [command, 'typescript-language-server', 'vtsls'].map((c) => lookup(c)),
+    );
+    return tsdk ? { typescript: { tsdk } } : undefined;
+  }
+  return undefined;
 }
 
 /**

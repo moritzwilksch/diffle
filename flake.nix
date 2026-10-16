@@ -63,6 +63,7 @@
             pkgs.gh
             pkgs.typescript-language-server
             pkgs.vue-language-server
+            pkgs.astro-language-server
             pkgs.vscode-langservers-extracted
             pkgs.yaml-language-server
             pkgs.tombi

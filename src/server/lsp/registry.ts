@@ -31,6 +31,8 @@ export const CANDIDATES: ServerCandidate[] = [
   // that ships with vue-language-server; the TypeScript servers load it (configuration.ts).
   { languages: ['vue'], command: 'typescript-language-server --stdio', requires: 'vue-language-server' },
   { languages: ['vue'], command: 'vtsls --stdio', requires: 'vue-language-server' },
+  // Needs a TypeScript to load, handed over at initialize (configuration.ts).
+  { languages: ['astro'], command: 'astro-ls --stdio' },
   { languages: ['rust'], command: 'rust-analyzer' },
   { languages: ['go'], command: 'gopls' },
   { languages: ['c', 'cpp'], command: 'clangd' },

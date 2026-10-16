@@ -190,7 +190,7 @@ export class LspPool {
       bridge: LspBridge.start({
         command,
         settings: settingsFor(languages, command, this.opts.lookup),
-        initializationOptions: initializationOptionsFor(command, this.opts.lookup),
+        initializationOptions: initializationOptionsFor(command, this.opts.root, this.opts.lookup),
         root: this.opts.root,
         read: this.opts.read,
         has: this.opts.has,

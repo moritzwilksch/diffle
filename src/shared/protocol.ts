@@ -6,6 +6,7 @@ import { z } from 'zod';
  * server is told in `didOpen`, so it must be the spec's spelling, not ours.
  */
 export const LanguageIdSchema = z.enum([
+  'astro',
   'c',
   'cpp',
   'go',
@@ -722,6 +723,7 @@ export function followsCheckout(snap: Pick<Snapshot, 'newSha' | 'headSha'>): boo
 
 /** Extension (no dot, lowercase) → language. `.h` goes to c because clangd serves both. */
 const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
+  astro: 'astro',
   bash: 'shellscript',
   c: 'c',
   cc: 'cpp',

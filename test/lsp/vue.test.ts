@@ -94,11 +94,11 @@ describe('TypeScript servers load the plugin', () => {
     const location = pkg(join(root, 'lib', 'language-tools', 'packages', 'language-server'), '@vue/language-server');
     pkg(join(location, 'node_modules', '@vue', 'typescript-plugin'), '@vue/typescript-plugin', 'index.js');
     const found = lookup(executable(join(root, 'bin', 'vue-language-server')));
-    expect(initializationOptionsFor('typescript-language-server --stdio', found)).toEqual({
+    expect(initializationOptionsFor('typescript-language-server --stdio', root, found)).toEqual({
       plugins: [{ name: '@vue/typescript-plugin', location, languages: ['vue'] }],
     });
-    expect(initializationOptionsFor('typescript-language-server --stdio', lookup(null))).toBeUndefined();
-    expect(initializationOptionsFor('vtsls --stdio', found)).toBeUndefined();
+    expect(initializationOptionsFor('typescript-language-server --stdio', root, lookup(null))).toBeUndefined();
+    expect(initializationOptionsFor('vtsls --stdio', root, found)).toBeUndefined();
   });
 
   it('as settings for vtsls', async () => {
