@@ -65,6 +65,7 @@
             pkgs.vue-language-server
             pkgs.astro-language-server
             pkgs.vscode-langservers-extracted
+            pkgs.tailwindcss-language-server
             pkgs.yaml-language-server
             pkgs.tombi
           ];

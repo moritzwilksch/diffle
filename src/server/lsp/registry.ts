@@ -8,6 +8,12 @@ export interface ServerCandidate {
   command: string;
   /** A second program that must be on PATH too: the one shipping a plugin `command` loads. */
   requires?: string;
+  /**
+   * Languages it answers for beside their owner, as an editor extension would: started
+   * whenever one of them is in the diff, never counted as serving it, and running alone
+   * for a language nothing owns.
+   */
+  joins?: LanguageId[];
 }
 
 /**
@@ -55,12 +61,23 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: ['yaml'], command: 'yaml-language-server --stdio' },
   { languages: ['toml'], command: 'tombi lsp' },
   { languages: ['toml'], command: 'taplo lsp stdio' },
+  { languages: ['css'], command: 'vscode-css-language-server --stdio' },
+  { languages: ['html'], command: 'vscode-html-language-server --stdio' },
+  // Class hovers wherever Tailwind classes appear, beside whatever owns the file.
+  {
+    languages: [],
+    joins: ['astro', 'css', 'html', 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'vue'],
+    command: 'tailwindcss-language-server --stdio',
+  },
 ];
 
 /** One process to start: its command and every language routed to it. */
 export interface ResolvedServer {
   command: string;
+  /** Languages it owns: it answers first and alone for highlights, tokens and outlines. */
   languages: LanguageId[];
+  /** Languages it answers for beside their owner. */
+  joins: LanguageId[];
 }
 
 export interface Resolution {
@@ -80,8 +97,9 @@ export function candidatesFor(language: LanguageId): string[] {
  * should surface as the server failing to start, not as silence. An override of `''`
  * turns the language off. Languages resolving to the same command line share one
  * process. A missing language's `tried` names the programs that were not on PATH, so
- * a candidate needing two programs lists only the absent one. `lookup` is a test
- * seam for the PATH probe.
+ * a candidate needing two programs lists only the absent one. A candidate joining a
+ * requested language starts too, when on PATH, whatever owns it; its absence is no one's
+ * missing server. `lookup` is a test seam for the PATH probe.
  */
 export function resolveServers(
   languages: Iterable<LanguageId>,
@@ -97,7 +115,8 @@ export function resolveServers(
   const servers = new Map<string, ResolvedServer>();
   const missing: LspMissing[] = [];
   // Sorted so the status, the startup line and `diffle lsp` list servers the same way every run.
-  for (const language of [...new Set(languages)].sort()) {
+  const asked = [...new Set(languages)].sort();
+  for (const language of asked) {
     let command = overrides[language]?.trim();
     // An empty override is a deliberate off switch, and names nothing to install.
     const tried: string[] = [];
@@ -120,7 +139,15 @@ export function resolveServers(
     }
     const server = servers.get(command);
     if (server) server.languages.push(language);
-    else servers.set(command, { command, languages: [language] });
+    else servers.set(command, { command, languages: [language], joins: [] });
+  }
+  for (const candidate of CANDIDATES) {
+    const joins = candidate.joins ?? [];
+    if (!joins.some((l) => asked.includes(l))) continue;
+    if (![candidate.command, candidate.requires].every((c) => c == null || found(c))) continue;
+    const server = servers.get(candidate.command) ?? { command: candidate.command, languages: [], joins: [] };
+    servers.set(candidate.command, server);
+    for (const l of joins) if (!server.languages.includes(l) && !server.joins.includes(l)) server.joins.push(l);
   }
   return { servers: [...servers.values()], missing };
 }

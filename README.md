@@ -131,6 +131,12 @@ Astro files get `astro-ls` (`npm install -g @astrojs/language-server`), which lo
 or 6 from the repository's `node_modules` or from beside itself or a TypeScript server on `PATH`;
 TypeScript 7 lacks the `typescript.js` it needs.
 
+A server can also answer beside the one that owns a language, as an editor extension would:
+`tailwindcss-language-server` (`npm install -g @tailwindcss/language-server`) adds class hovers to
+CSS, HTML, JavaScript, TypeScript, Vue, and Astro files whenever it is on `PATH`, and serves a file
+alone when nothing else does. Hovers from every server show together and definitions and references
+are merged; highlights, token kinds, and outlines come from the owner.
+
 `diffle lsp` shows which server each language gets and what to install for the rest:
 
 ```

@@ -9,8 +9,10 @@ export const LanguageIdSchema = z.enum([
   'astro',
   'c',
   'cpp',
+  'css',
   'go',
   'haskell',
+  'html',
   'java',
   'javascript',
   'javascriptreact',
@@ -605,7 +607,10 @@ export type LspProcessStatus = z.infer<typeof LspProcessStatusSchema>;
 
 /** A process plus the languages the pool routes to it. */
 export const LspServerStatusSchema = LspProcessStatusSchema.extend({
+  /** Languages it owns: asked first, and alone for highlights, token kinds and outlines. */
   languages: LanguageIdSchema.array(),
+  /** Languages it answers for beside their owner, such as Tailwind's class hovers in markup. */
+  joins: LanguageIdSchema.array(),
 });
 export type LspServerStatus = z.infer<typeof LspServerStatusSchema>;
 
@@ -729,6 +734,7 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   cc: 'cpp',
   cjs: 'javascript',
   cpp: 'cpp',
+  css: 'css',
   cts: 'typescript',
   cxx: 'cpp',
   go: 'go',
@@ -736,6 +742,8 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   hh: 'cpp',
   hpp: 'cpp',
   hs: 'haskell',
+  htm: 'html',
+  html: 'html',
   hxx: 'cpp',
   java: 'java',
   js: 'javascript',
@@ -788,9 +796,20 @@ export function lspBlocker(lsp: LspStatus, path?: string): string | null {
   }
   const language = languageOf(path);
   if (!language) return `No language server for ${/(\.[^./\\]+)$/.exec(path)?.[1] ?? 'these'} files`;
-  const server = lsp.servers.find((s) => s.languages.includes(language));
+  const server =
+    lsp.servers.find((s) => s.languages.includes(language)) ?? lsp.servers.find((s) => s.joins.includes(language));
   if (!server) return noServer(lsp, language);
   return server.state === 'ready' ? null : notReady(server);
+}
+
+/** Whether `server` answers for `language`, as its owner or beside one. */
+export function serves(server: LspServerStatus, language: LanguageId): boolean {
+  return server.languages.includes(language) || server.joins.includes(language);
+}
+
+/** A server's languages for a status line: the ones it owns, then the ones it joins marked `+`. */
+export function languagesLabel(server: Pick<LspServerStatus, 'languages' | 'joins'>): string {
+  return [...server.languages, ...server.joins.map((l) => `+${l}`)].join(', ');
 }
 
 function notReady(s: LspServerStatus): string {

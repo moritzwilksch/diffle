@@ -20,7 +20,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { LspServerStatus, LspStatus } from '../../shared/protocol.js';
+import { languagesLabel, type LspServerStatus, type LspStatus } from '../../shared/protocol.js';
 import { repoName } from '../model.js';
 import { copyText } from '../clipboard.js';
 import { useStore } from '../store.js';
@@ -226,7 +226,7 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
           {label}
         </span>
       </div>
-      <div className="mt-0.5 mb-0.5 ml-5.5 text-[0.6875rem] text-muted">{s.languages.join(', ')}</div>
+      <div className="mt-0.5 mb-0.5 ml-5.5 text-[0.6875rem] text-muted">{languagesLabel(s)}</div>
       {s.activity?.map((activity, i) => (
         <p className="my-1.5 ml-5.5 wrap-anywhere" key={i}>
           {activity}

@@ -78,6 +78,12 @@ it('answers whole and dotted configuration sections in request order', async () 
 
 it('leaves Tombi defaults intact and sends Taplo settings only to Taplo', async () => {
   expect(await settingsFor(['toml'], 'tombi lsp')).toEqual({});
+  // The VS Code CSS server's linter crashes on a null `lint` section, and nobody reads its diagnostics.
+  expect(await settingsFor(['css'], 'vscode-css-language-server --stdio')).toEqual({
+    css: { validate: false },
+    less: { validate: false },
+    scss: { validate: false },
+  });
   expect(await settingsFor(['toml'], '"C:\\tools\\taplo.exe" lsp stdio')).toHaveProperty(
     'evenBetterToml.schema.enabled',
     true,

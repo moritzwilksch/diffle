@@ -89,6 +89,11 @@ export async function settingsFor(
   if (languages.includes('toml') && program === 'taplo')
     settings.evenBetterToml = { schema: { enabled: true, catalogs: [SCHEMA_CATALOG] } };
   if (languages.some((l) => l === 'json' || l === 'jsonc')) settings.json = { schemas: await loadSchemaCatalog() };
+  if (program === 'vscode-css-language-server') {
+    // Diagnostics go unread, and the server's linter crashes on a missing `lint` section.
+    const off = { validate: false };
+    Object.assign(settings, { css: off, less: off, scss: off });
+  }
   if (program === 'vtsls') {
     // vtsls takes tsserver plugins as settings; the namespace is where Vue's plugin reads its options.
     const plugin = vuePlugin(lookup);

@@ -14,7 +14,7 @@ import type {
 /** One python server in `state`; LSP_OFF is a run started with --no-lsp. */
 const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStatus> = {}): LspStatus => ({
   enabled: true,
-  servers: [{ name: 'pyrefly', command: 'pyrefly lsp', state, languages: ['python'], ...extra }],
+  servers: [{ name: 'pyrefly', command: 'pyrefly lsp', state, languages: ['python'], joins: [], ...extra }],
   missing: [],
 });
 const LSP_OFF: LspStatus = { enabled: false, servers: [], missing: [] };

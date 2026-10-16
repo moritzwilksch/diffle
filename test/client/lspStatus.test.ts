@@ -30,6 +30,7 @@ function render(...statuses: Partial<LspServerStatus>[]) {
     name: `server${i}`,
     command: `server${i}`,
     languages: ['python'],
+    joins: [],
     state: 'ready',
     ...status,
   }));

@@ -14,6 +14,8 @@ const files: Record<string, string> = {
   'c.txt': 'plain\n',
   'x.c': 'int main(void) { return 0; }\n',
   'y.cpp': 'int main() { return 0; }\n',
+  'a.tsx': 'const f = 1;\nf;\nf;\n\nexport {};\n',
+  'b.js': 'f();\nf();\n',
 };
 
 interface Started {
@@ -136,6 +138,75 @@ describe('LspPool', () => {
     expect([...events.keys()]).toEqual(['py-server']);
     expect(pool.status().servers.map((s) => s.state)).toEqual(['starting']);
     expect(await pool.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
+  });
+
+  describe('a server joining languages beside their owner', () => {
+    const TAILWIND = 'tailwindcss-language-server --stdio';
+    /** PATH holds Tailwind alone; the tagged fake stands in for it, and `env` tunes one command's fake. */
+    const overlay = (
+      overrides: Partial<Record<LanguageId, string>>,
+      env: Record<string, Record<string, string>> = {},
+    ) =>
+      start(overrides, {
+        lookup: (c) => (c.startsWith('tailwindcss-language-server') ? '/usr/bin/tailwindcss-language-server' : null),
+        spawnProcess: (command) =>
+          spawn(process.execPath, [FAKE], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+              ...process.env,
+              FAKE_LSP_ROOT: ROOT,
+              ...(command === TAILWIND ? { FAKE_LSP_TAG: 'tailwind' } : {}),
+              ...env[command],
+            },
+          }),
+      });
+    const ownerHover = {
+      contents: '```python\ndef f() -> None\n```\n\nDoes the `f` thing.',
+      range: { line: 2, col: 4, endLine: 2, endCol: 5 },
+    };
+
+    it('starts for a joined language and merges its hovers and locations after the owner’s', async () => {
+      const { pool } = overlay({ typescriptreact: 'ts-server' });
+      await pool.track(['a.tsx']);
+      expect(pool.status().servers).toMatchObject([
+        { command: 'ts-server', languages: ['typescriptreact'], joins: [] },
+        { command: TAILWIND, languages: [], joins: expect.arrayContaining(['typescriptreact', 'css']) },
+      ]);
+      expect(await pool.hover({ path: 'a.tsx', line: 2, col: 0 })).toEqual({
+        ...ownerHover,
+        contents: `${ownerHover.contents}\n\n---\n\ntailwind says hi`,
+      });
+      expect((await pool.definition({ path: 'a.tsx', line: 2, col: 0 })).locations).toEqual([
+        { path: 'a.tsx', line: 2, col: 4, text: 'f;' },
+        { path: 'a.tsx', line: 5, col: 0, text: 'export {};' },
+      ]);
+      // Highlights come from the owner alone: the joined fake would double them.
+      expect((await pool.occurrences({ path: 'a.tsx', line: 2, col: 0 })).occurrences).toHaveLength(1);
+    });
+
+    it('serves a language nothing owns by itself', async () => {
+      const { pool } = overlay({});
+      await pool.track(['b.js']);
+      const status = pool.status();
+      expect(status.servers.map((s) => s.command)).toEqual([TAILWIND]);
+      expect(status.missing).toEqual([{ language: 'javascript', tried: ['typescript-language-server', 'vtsls'] }]);
+      expect(await pool.hover({ path: 'b.js', line: 2, col: 0 })).toEqual({ contents: 'tailwind says hi' });
+      expect((await pool.occurrences({ path: 'b.js', line: 2, col: 0 })).occurrences).toHaveLength(1);
+    });
+
+    it('keeps the owner’s answer when the joined server is gone, and the owner’s error when nothing answers', async () => {
+      const { pool } = overlay({ typescriptreact: 'ts-server' }, { [TAILWIND]: { FAKE_LSP_DIE: '1' } });
+      await pool.track(['a.tsx']);
+      await expect.poll(() => pool.status().servers[1]?.state).toBe('unavailable');
+      expect(await pool.hover({ path: 'a.tsx', line: 2, col: 0 })).toEqual(ownerHover);
+
+      const dead = overlay({ typescriptreact: 'ts-server' }, { 'ts-server': { FAKE_LSP_DIE: '1' } });
+      await dead.pool.track(['a.tsx']);
+      await expect.poll(() => dead.pool.status().servers[0]?.state).toBe('unavailable');
+      expect(await dead.pool.hover({ path: 'a.tsx', line: 2, col: 0 })).toEqual({ contents: 'tailwind says hi' });
+      // Line 1 has no hover anywhere, so the owner's outage is the answer.
+      await expect(dead.pool.hover({ path: 'a.tsx', line: 1, col: 0 })).rejects.toThrow(/"ts-server" exited/);
+    });
   });
 
   it('has nothing to say once closed', async () => {

@@ -11,15 +11,15 @@ const path =
 describe('resolveServers', () => {
   it('takes the first candidate on PATH and names the rest as missing', () => {
     const { servers, missing } = resolveServers(['python', 'go'], {}, path('pylsp', 'jedi-language-server'));
-    expect(servers).toEqual([{ command: 'pylsp', languages: ['python'] }]);
+    expect(servers).toEqual([{ command: 'pylsp', languages: ['python'], joins: [] }]);
     expect(missing).toEqual([{ language: 'go', tried: ['gopls'] }]);
   });
 
   it('groups languages that share a command into one server', () => {
     const { servers } = resolveServers(['cpp', 'c', 'typescript', 'javascript'], {}, path('clangd', 'vtsls'));
     expect(servers).toEqual([
-      { command: 'clangd', languages: ['c', 'cpp'] },
-      { command: 'vtsls --stdio', languages: ['javascript', 'typescript'] },
+      { command: 'clangd', languages: ['c', 'cpp'], joins: [] },
+      { command: 'vtsls --stdio', languages: ['javascript', 'typescript'], joins: [] },
     ]);
   });
 
@@ -41,7 +41,7 @@ describe('resolveServers', () => {
         return null;
       },
     );
-    expect(servers).toEqual([{ command: 'my-server --stdio', languages: ['python'] }]);
+    expect(servers).toEqual([{ command: 'my-server --stdio', languages: ['python'], joins: [] }]);
     // An off language names nothing to install; a language with no server on PATH does.
     expect(missing).toEqual([
       { language: 'go', tried: ['gopls'] },
@@ -64,8 +64,30 @@ describe('resolveServers', () => {
       {},
       path('typescript-language-server', 'vue-language-server'),
     );
-    expect(servers).toEqual([{ command: 'typescript-language-server --stdio', languages: ['typescript', 'vue'] }]);
+    expect(servers).toEqual([
+      { command: 'typescript-language-server --stdio', languages: ['typescript', 'vue'], joins: [] },
+    ]);
     expect(missing).toEqual([]);
+  });
+
+  it('starts a joining server for any language it joins, whatever owns it', () => {
+    const tailwind = 'tailwindcss-language-server --stdio';
+    const both = resolveServers(['typescriptreact', 'python'], {}, path('vtsls', 'tailwindcss-language-server'));
+    expect(both.servers).toEqual([
+      { command: 'vtsls --stdio', languages: ['typescriptreact'], joins: [] },
+      {
+        command: tailwind,
+        languages: [],
+        joins: ['astro', 'css', 'html', 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'vue'],
+      },
+    ]);
+    // Python is not joined, so it is missing as before; an absent joiner is nobody's missing server.
+    expect(both.missing).toEqual([{ language: 'python', tried: candidatesFor('python').map((c) => c.split(' ')[0]) }]);
+    expect(resolveServers(['python'], {}, path('tailwindcss-language-server')).servers).toEqual([]);
+    const alone = resolveServers(['css'], {}, path('tailwindcss-language-server'));
+    expect(alone.servers.map((s) => s.command)).toEqual([tailwind]);
+    expect(alone.missing).toEqual([{ language: 'css', tried: ['vscode-css-language-server'] }]);
+    expect(resolveServers(['css'], {}, path()).servers).toEqual([]);
   });
 
   it('probes each candidate once, however many languages ask for it', () => {
