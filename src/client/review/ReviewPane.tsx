@@ -55,11 +55,12 @@ import {
 import { remPx } from '../scale.js';
 import { SHIKI_THEMES } from '../theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '../store.js';
+import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { installOccurrenceHighlights, occurrenceControl } from '../lsp/occurrences.js';
 import { focusToken, onSelectionChanged, setViewer, wordsIn } from '../lsp/wordNav.js';
-import { charAtPoint } from '../lsp/tokenText.js';
+import { charAtPoint, tokenRange } from '../lsp/tokenText.js';
 import { installSearchHighlights } from '../search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { CommentCard } from './CommentCard.js';
@@ -168,6 +169,16 @@ const HEADER_CSS = `
 }
 ::highlight(diffle-search) { background: var(--search-match); }
 ::highlight(diffle-search-current) { background: var(--search-current); color: var(--search-current-fg); }
+/* With wrapping off, each code column scrolls sideways under a bar at its foot. The library paints the thumb
+   only while the pointer is over the diff, in a context tint our dark palette makes invisible, so a line that
+   ran off-screen gave no sign of it. Paint it whenever the column overflows: auto drops the bar from columns
+   that fit, and the library's stable gutter keeps row heights the same either way. */
+:host { --diffs-overflow-override: auto; }
+[data-code]::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--fg-2) 55%, transparent); }
+:is([data-diff], [data-file]):hover [data-code]::-webkit-scrollbar-thumb { background-color: var(--fg-2); }
+@supports (-moz-appearance: none) {
+  [data-code] { scrollbar-color: color-mix(in srgb, var(--fg-2) 55%, transparent) transparent; }
+}
 /* A placeholder replaces the body (binary, empty, moved, oversized, failed): the banner alone fills the width.
    The viewer still lays out a gutter, an empty row and, in split view, an old-side column; drop them all.
    The banner marks its host (see PlaceholderBanner). */
@@ -234,7 +245,6 @@ const codeViewOptions = {
   // Token hit-testing (data-char spans); also set on the worker pool in main.tsx, whose options win when the pool renders.
   useTokenTransformer: true,
   lineHoverHighlight: 'number',
-  overflow: 'wrap',
 } as const;
 
 const LOADING: Loaded = { kind: 'loading' };
@@ -293,6 +303,7 @@ export function ReviewPane() {
   });
   const theme = useStore((s) => s.theme);
   const diffStyle = useStore((s) => s.diffStyle);
+  const lineWrap = useStore((s) => s.config.lineWrap);
 
   // CodeView re-renders an item only when its version changes, so each path's version is derived
   // here from what the item paints (its threads, draft, composers, collapsed state); no manual bump.
@@ -385,6 +396,11 @@ export function ReviewPane() {
     if (!scroller) return;
     return installOccurrenceHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
+  // Sideways wheel gestures move both columns of a split diff together; see installInlineWheel.
+  useEffect(() => {
+    if (!scroller) return;
+    return installInlineWheel(scroller);
+  }, [scroller]);
   useEffect(() => {
     onSelectionChanged(selection);
   }, [selection]);
@@ -456,14 +472,15 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified) or remounts the viewer (theme). Neither is
+  // A display toggle re-lays the rows out (split / unified, wrap) or remounts the viewer (theme). Neither is
   // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
   // renders the change, and the request to land it at the same pixel goes out in the same update, so
   // the jump effect below places it before anything paints. No row on screen means nothing to hold.
   useEffect(
     () =>
       useStore.subscribe((s, prev) => {
-        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle) return;
+        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle && s.config.lineWrap === prev.config.lineWrap)
+          return;
         const scroller = containerRef.current;
         const items = viewerRef.current?.getInstance()?.getRenderedItems();
         if (!scroller || !items) return;
@@ -512,6 +529,7 @@ export function ReviewPane() {
               id: reveal.id,
               line: reveal.line,
               side: 'new',
+              col: reveal.col,
               align: 'eye',
               nonce: (s.scrollTarget?.nonce ?? 0) + 1,
             },
@@ -631,8 +649,8 @@ export function ReviewPane() {
       if (containerRef.current) containerRef.current.style.visibility = '';
     };
     // How far the landed element sits below its mark, NaN while it is not rendered: the row below the
-    // gaze point for a line jump, the file card below the pane's top padding for an item jump (J / K),
-    // so a header always stops at the same pixel whatever the estimates above it were.
+    // gaze point for a line jump; for an item jump (J / K), the file card one pixel above the pane's
+    // top edge, so its header sticks and CSS, not a sub-pixel scroll residue, pins it to the edge.
     const drift = () => {
       const scroller = containerRef.current;
       if (!scroller) return NaN;
@@ -642,7 +660,7 @@ export function ReviewPane() {
           ?.getInstance()
           ?.getRenderedItems()
           .find((r) => r.id === scrollTarget.id)?.element;
-        return card ? card.getBoundingClientRect().top - (base + geometry.layout.paddingTop) : NaN;
+        return card ? card.getBoundingClientRect().top - (base - 1) : NaN;
       }
       const top = renderedRow(scrollTarget)?.getBoundingClientRect().top ?? NaN;
       return top - (base + offset + header);
@@ -665,8 +683,47 @@ export function ReviewPane() {
         ?.getBoundingClientRect().height;
       return overflow(scroller.getBoundingClientRect(), row.getBoundingClientRect(), measuredHeader ?? header);
     };
+    // Half a device pixel is as close as the scroller can get. A looser bound lets consecutive
+    // jumps rest a pixel or more apart, which reads as the header jiggling.
+    const reached = (d: number) => Math.abs(d) * devicePixelRatio <= 0.5;
+    // The offset as last issued: each correction folds its residue into the one before.
+    let issued = target.offset ?? 0;
+    // Moves the landed element onto its mark, rendering synchronously after each correction.
+    const settle = () => {
+      const viewer = viewerRef.current;
+      const instance = viewer?.getInstance();
+      if (!viewer || !instance) return;
+      for (let i = 0; i < 4; i++) {
+        const d = drift();
+        if (Number.isNaN(d)) {
+          viewer.scrollTo({ ...target, offset: issued });
+          instance.render(true);
+          continue;
+        }
+        if (reached(d)) break;
+        issued -= d;
+        viewer.scrollTo({ ...target, offset: issued });
+        instance.render(true);
+        // Past the document's end the viewer clamps and reports the mark as reached, even when a
+        // re-layout left the scroller short of that clamp. If the reissue moved nothing, the scroller
+        // closes the residue itself, before paint; what lies past the document's end stays out of reach.
+        if (drift() !== d || !containerRef.current) continue;
+        containerRef.current.scrollTop += d;
+        instance.render(true);
+        if (drift() === d) break;
+      }
+    };
     // One synchronous landing; false when the item is not in the viewer yet.
     const land = (): boolean => {
+      if (!landRow()) return false;
+      // Sideways scrolling leaves row heights alone, so the column follows the settled row in the same frame.
+      const { col } = scrollTarget;
+      const row = col != null ? renderedRow(scrollTarget) : null;
+      const range = row && col != null ? tokenRange(row, col, col + 1) : null;
+      if (range) revealInline(range);
+      return true;
+    };
+    const landRow = (): boolean => {
       const viewer = viewerRef.current;
       const instance = viewer?.getInstance();
       if (!viewer || !instance || !viewer.getItem(scrollTarget.id)) return false;
@@ -680,35 +737,31 @@ export function ReviewPane() {
         }
         return true;
       }
-      for (let i = 0; i < 4; i++) {
-        const d = drift();
-        if (Number.isNaN(d)) {
-          viewer.scrollTo(target);
-          instance.render(true);
-          continue;
-        }
-        if (Math.abs(d) <= 1) break;
-        viewer.scrollTo({ ...target, offset: (target.offset ?? 0) - d });
-        instance.render(true);
-        // Past the document's end the viewer clamps and reports the mark as reached, even when a
-        // re-layout left the scroller short of that clamp. If the reissue moved nothing, the scroller
-        // closes the residue itself, before paint; what lies past the document's end stays out of reach.
-        if (drift() !== d || !containerRef.current) continue;
-        containerRef.current.scrollTop += d;
-        instance.render(true);
-        if (drift() === d) break;
-      }
+      settle();
       return true;
     };
     let cancelled = false;
-    let checks = 0;
-    const verify = () => {
-      setTimeout(() => {
-        if (cancelled) return;
-        const d = drift();
-        if (!Number.isNaN(d) && Math.abs(d) > 1 && containerRef.current) containerRef.current.scrollTop += d;
-        if (checks++ < 2) verify();
-      }, 100);
+    // Content that resizes after the landing (an image, a comment card, a row the viewer only
+    // estimated) shifts the element, and the viewer re-anchors to its estimate, not to the mark.
+    // Resize observers run after layout and before paint, so settling there keeps the shift unseen.
+    // The hold ends after a second, on reader input, or with the next jump.
+    let unpin: (() => void) | undefined;
+    const pin = () => {
+      const scroller = containerRef.current;
+      const content = viewerRef.current?.getInstance()?.getRenderedItems()[0]?.element.parentElement;
+      if (!scroller || !content) return;
+      const observer = new ResizeObserver(settle);
+      observer.observe(content);
+      const input = ['wheel', 'pointerdown', 'touchstart'] as const;
+      const timer = setTimeout(() => unpin?.(), 1000);
+      unpin = () => {
+        unpin = undefined;
+        observer.disconnect();
+        clearTimeout(timer);
+        for (const type of input) scroller.removeEventListener(type, onInput);
+      };
+      const onInput = () => unpin?.();
+      for (const type of input) scroller.addEventListener(type, onInput, { passive: true });
     };
     // Items may still be loading; retry briefly.
     let tries = 0;
@@ -724,11 +777,12 @@ export function ReviewPane() {
       }
       show();
       release();
-      if (exact) verify();
+      if (exact) pin();
     };
     attempt();
     return () => {
       cancelled = true;
+      unpin?.();
       if (settled) clearTimeout(settled);
     };
   }, [scrollTarget, geometry, scrollPlan]);
@@ -753,6 +807,7 @@ export function ReviewPane() {
       hunkSeparators: 'line-info' as const,
       themeType: theme,
       diffStyle,
+      overflow: lineWrap ? ('wrap' as const) : ('scroll' as const),
       onLineSelectionEnd: () => {
         const sel = viewerRef.current?.getSelectedLines();
         if (sel) void openDraft(sel);
@@ -822,7 +877,7 @@ export function ReviewPane() {
         void openSymbolMenu(target, event.clientX, event.clientY);
       },
     }),
-    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, geometry],
+    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, lineWrap, geometry],
   );
 
   const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {

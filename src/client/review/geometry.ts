@@ -9,7 +9,7 @@ export function reviewGeometry(rem: number) {
   const diffHeaderHeight = lineHeight + 3 * spacing;
   const hunkSeparatorHeight = px(2);
   const itemMetrics = { lineHeight, spacing, diffHeaderHeight, hunkSeparatorHeight };
-  const layout = { paddingTop: px(0.75), paddingBottom: px(12.5), gap: px(1) };
+  const layout = { paddingTop: 0, paddingBottom: px(12.5), gap: px(1) };
   const css = `
 :host {
   --diffle-header-height: ${diffHeaderHeight}px;

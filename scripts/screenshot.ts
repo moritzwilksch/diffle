@@ -18,9 +18,9 @@ import {
   crop,
   demoRepo,
   newVideoPage,
-  pngSize,
   saveVideo,
   videoDuration,
+  webpSize,
   type DemoRepoSpec,
 } from '../test/e2e/capture.js';
 import {
@@ -65,7 +65,7 @@ export interface ScenarioContext extends PageVerbs {
   repo: string;
   side: 'before' | 'after';
   assert: typeof assert;
-  /** Crop a selector or locator, or clip a CSS-pixel box, to `<label>-<side>.png`. */
+  /** Crop a selector or locator, or clip a CSS-pixel box, to `<label>-<side>.webp`. */
   shot(label: string, target?: string | ReturnType<Page['locator']> | Box): Promise<string>;
   seedThreads: (threads: Parameters<typeof seedThreads>[1]) => ReturnType<typeof seedThreads>;
   readThreads: () => ReturnType<typeof readThreads>;
@@ -91,7 +91,7 @@ export interface Scenario {
   /** Runs before the page opens; seed server state here. */
   setup?: (ctx: Pick<ScenarioContext, 'url' | 'repo' | 'side' | 'seedThreads'>) => Promise<unknown>;
   viewport?: browser.PageOptions;
-  /** Record each side to `<scenario>-<side>.mp4` at 1x instead of opening a still page. */
+  /** Record each side to `<scenario>-<side>.webm` at 1x instead of opening a still page. */
   video?: boolean;
   default: (ctx: ScenarioContext) => Promise<void>;
 }
@@ -113,7 +113,7 @@ const out = resolve(values.out ?? join(tmpdir(), 'diffle-shots', name));
 await mkdir(out, { recursive: true });
 // Drop the previous run's outputs, so a failed or renamed shot cannot pass for a fresh one.
 for (const entry of readdirSync(out)) {
-  if (/-(before|after|compare)\.(png|mp4)$|^failure-/.test(entry)) rmSync(join(out, entry));
+  if (/-(before|after|compare)\.(webp|webm)$|^failure-/.test(entry)) rmSync(join(out, entry));
 }
 
 const spec = scenario.repo ?? 'fixture';
@@ -169,11 +169,11 @@ try {
         ]),
       ) as PageVerbs;
       const shot: ScenarioContext['shot'] = async (label, target = 'body') => {
-        const path = join(out, `${label}-${side}.png`);
+        const path = join(out, `${label}-${side}.webp`);
         if (typeof target === 'object' && 'x' in target) await clip(page, target, path);
         else await crop(page, target, path);
         shots[side].add(label);
-        const { width, height } = pngSize(path);
+        const { width, height } = webpSize(path);
         lines.push(`  ${basename(path)} ${width}×${height}`);
         return path;
       };
@@ -190,8 +190,8 @@ try {
         lines.push(`  ${basename(failure)} (viewport at failure)`);
       } finally {
         if (recording) {
-          const mp4 = await saveVideo(recording.context, recording.video, join(out, `${name}-${side}.mp4`));
-          lines.push(`  ${basename(mp4)} ${videoDuration(mp4).toFixed(1)}s`);
+          const webm = await saveVideo(recording.context, recording.video, join(out, `${name}-${side}.webm`));
+          lines.push(`  ${basename(webm)} ${videoDuration(webm).toFixed(1)}s`);
         } else await page.context().close();
       }
     });
@@ -199,13 +199,13 @@ try {
   for (const label of shots.after) {
     if (!shots.before.has(label)) continue;
     const path = await compare(chromium, {
-      before: join(out, `${label}-before.png`),
-      after: join(out, `${label}-after.png`),
-      out: join(out, `${label}-compare.png`),
+      before: join(out, `${label}-before.webp`),
+      after: join(out, `${label}-after.webp`),
+      out: join(out, `${label}-compare.webp`),
       labels: [`Before (${values.before})`, 'After'],
       scale: scenario.viewport?.scale ?? 2,
     });
-    const { width, height } = pngSize(path);
+    const { width, height } = webpSize(path);
     lines.push(`  ${basename(path)} ${width}×${height}  ← read this to verify`);
   }
 } finally {

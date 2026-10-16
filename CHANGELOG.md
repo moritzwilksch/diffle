@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.5](https://github.com/moritzwilksch/diffle/compare/v0.2.4...v0.2.5) - 2026-10-12
+
+### Features
+
+- _(comments)_ Keep unsent comment text across close and reload ([#306](https://github.com/moritzwilksch/diffle/pull/306))
+- _(screenshot)_ Capture webp and webm, rename skill to `record-screen` ([#313](https://github.com/moritzwilksch/diffle/pull/313))
+- _(search)_ Prefill `/` and `g/` with the selected text ([#307](https://github.com/moritzwilksch/diffle/pull/307))
+
+### Bug fixes
+
+- _(tree)_ Hide the ellipsis on names that fit at fractional browser zoom ([#311](https://github.com/moritzwilksch/diffle/pull/311))
+- _(review)_ Pin file headers flush to the pane's top edge ([#315](https://github.com/moritzwilksch/diffle/pull/315))
+
 ## [0.2.4](https://github.com/moritzwilksch/diffle/compare/v0.2.3...v0.2.4) - 2026-10-07
 
 ### Features

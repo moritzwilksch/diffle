@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '../clipboard.js';
 import { api } from '../api.js';
-import { clearWordFocus, moveWord, moveWordToEdge } from '../lsp/wordNav.js';
+import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '../lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '../model.js';
 import { remPx } from '../scale.js';
+import { escapeRegex } from '../search/highlight.js';
 import { useStore, type ReviewState } from '../store.js';
 import { nextTheme } from '../theme.js';
 
@@ -61,13 +62,16 @@ const KEYMAP: Record<string, Action> = {
   zt: (s) => s.scrollCursorTo('top'),
   zb: (s) => s.scrollCursorTo('bottom'),
   zz: (s) => s.scrollCursorTo('eye'),
+  zw: (s) => s.saveConfig({ lineWrap: !s.config.lineWrap }),
+  zh: () => scrollCursorInline(-1),
+  zl: () => scrollCursorInline(1),
   s: (s) => s.setDiffStyle(s.diffStyle === 'split' ? 'unified' : 'split'),
   t: (s) => s.setTheme(nextTheme(s.theme)),
   yy: () => void copyComments(),
   Y: () => void copyComments(),
   yp: (s) => void copyPath(s),
-  '/': (s) => s.openSearch('file'),
-  'g/': (s) => s.openSearch('diff'),
+  '/': (s) => s.openSearch('file', selectedQuery(s)),
+  'g/': (s) => s.openSearch('diff', selectedQuery(s)),
   gf: () => focusFileSearch(),
   gd: (s) => s.goToDefinition(),
   gy: (s) => s.goToTypeDefinition(),
@@ -94,6 +98,13 @@ const KEYMAP: Record<string, Action> = {
   '?': (s) => s.setHelpOpen(!s.helpOpen),
 };
 
+/** The page's text selection, else the focused word (`w`), as a search query: one line only, escaped when regex search is on. */
+function selectedQuery(s: ReviewState): string | undefined {
+  const text = window.getSelection()?.toString().trim() || focusedWord();
+  if (!text || text.includes('\n')) return undefined;
+  return s.search.regex ? escapeRegex(text) : text;
+}
+
 /** Real target, looking through shadow roots (the tree and diffs retarget events to their hosts). */
 function realTarget(e: Event): HTMLElement | null {
   const path = e.composedPath();
@@ -119,11 +130,14 @@ function isEditable(el: HTMLElement | null): boolean {
 
 /**
  * Vim-style keymap. Single keys act immediately; `g`, `d`, `y`, `z` start a
- * chord that resolves on the next key or expires. Ignored while typing in a
- * field, except Escape.
+ * chord that resolves on the next key or expires. While a prefix is held down,
+ * every key pressed resolves against it, so holding `z` makes `h` / `l` repeat
+ * `zh` / `zl`. Ignored while typing in a field, except Escape.
  */
 export function useKeymap(): void {
   const pending = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  // The prefix key physically down, from its press to its release.
+  const held = useRef<string | null>(null);
   // Digits typed before a chord, as in vim; any key that is not part of the count or a counted chord drops it.
   const count = useRef('');
 
@@ -302,7 +316,13 @@ export function useKeymap(): void {
         s.setHelpOpen(false);
         return;
       }
-      const prefix = pending.current?.key;
+      // Auto-repeat of a held prefix is not a second press: holding `z` must not fire `zz`.
+      if (e.repeat && e.key === held.current) {
+        e.preventDefault();
+        return;
+      }
+      // A held prefix applies only where it forms a chord, so a key rolled over its release still acts alone.
+      const prefix = pending.current?.key ?? (held.current && KEYMAP[held.current + e.key] ? held.current : undefined);
       clearPending();
       // A count starts with 1-9 (`0` alone is a motion) and grows with any digit.
       if (!prefix && /^[0-9]$/.test(e.key) && (typed || e.key !== '0')) {
@@ -314,6 +334,7 @@ export function useKeymap(): void {
         // `g` alone also has no action; wait for the second key, which the count outlives (`10gg`).
         count.current = typed;
         pending.current = { key: e.key, timer: setTimeout(clearPending, CHORD_MS) };
+        held.current = e.key;
         return;
       }
       const chord = prefix ? prefix + e.key : e.key;
@@ -341,6 +362,13 @@ export function useKeymap(): void {
       clearPending();
       count.current = '';
     };
+    // Capture phase and window blur: a release the page never sees would leave later keys chorded.
+    const onRelease = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === held.current) held.current = null;
+    };
+    const onBlur = () => {
+      held.current = null;
+    };
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || realTarget(e)?.getAttribute('role') === 'combobox') return;
@@ -353,10 +381,14 @@ export function useKeymap(): void {
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keyup', onKeyUp);
+    document.addEventListener('keyup', onRelease, true);
+    window.addEventListener('blur', onBlur);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keyup', onKeyUp);
+      document.removeEventListener('keyup', onRelease, true);
+      window.removeEventListener('blur', onBlur);
       clearPending();
       count.current = '';
     };

@@ -8,7 +8,8 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async () => []),
   viewed: vi.fn(async () => []),
-  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: 'off', lspCommands: {} })),
+  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: 'off', lineWrap: true, lspCommands: {} })),
+  saveConfig: vi.fn(async (update: object) => ({ ...useStore.getState().config, ...update })),
   lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   exportComments: vi.fn(),
 };
@@ -337,6 +338,44 @@ describe('useKeymap', () => {
     expect(useStore.getState().theme).not.toBe(before);
     expect(useStore.getState().scrollTarget).toBeNull();
     expect(useStore.getState().toast).toBeNull();
+  });
+
+  it('zw saves the flipped line wrapping', async () => {
+    expect(useStore.getState().config.lineWrap).toBe(true);
+    press('z');
+    press('w');
+    await flush();
+    expect(api.saveConfig).toHaveBeenCalledWith({ lineWrap: false });
+    expect(useStore.getState().config.lineWrap).toBe(false);
+    press('z');
+    press('w');
+    await flush();
+    expect(useStore.getState().config.lineWrap).toBe(true);
+  });
+
+  it('repeats a chord while its prefix is held and stops on release', () => {
+    const { scrollCursorTo, moveCursor } = useStore.getState();
+    const scroll = vi.fn();
+    const move = vi.fn();
+    useStore.setState({ scrollCursorTo: scroll, moveCursor: move });
+    const release = (key: string) => document.body.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+    try {
+      press('z');
+      press('z', { repeat: true });
+      expect(scroll).not.toHaveBeenCalled();
+      press('t');
+      press('t', { repeat: true });
+      press('b');
+      expect(scroll.mock.calls).toEqual([['top'], ['top'], ['bottom']]);
+      // No `zj`: a key that forms no chord with the held prefix acts alone.
+      press('j');
+      expect(move).toHaveBeenCalledWith(1);
+      release('z');
+      press('t');
+      expect(scroll).toHaveBeenCalledTimes(3);
+    } finally {
+      useStore.setState({ scrollCursorTo, moveCursor });
+    }
   });
 
   it('reports a failed export instead of leaving the rejection unhandled', async () => {

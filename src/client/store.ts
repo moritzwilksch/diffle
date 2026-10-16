@@ -128,6 +128,8 @@ export interface SearchState {
   focusNonce: number;
   /** Unsubmitted text survives the file header being virtualized away. */
   input: string;
+  /** A prefilled input stays selected until edited, so typing replaces it. */
+  selected: boolean;
   editing: boolean;
   query: string;
   matches: Match[];
@@ -189,7 +191,7 @@ export interface OccurrencesState {
 }
 
 /** A line a result list jumps to: a search hit, or a language-server location that may be external. */
-export type Match = SearchMatch & Pick<LspLocation, 'external'>;
+export type Match = SearchMatch & Pick<LspLocation, 'external'> & Partial<Pick<LspLocation, 'col'>>;
 
 /** Full-screen list of a symbol's references; Enter jumps to the highlighted one. */
 export interface ReferencesState {
@@ -299,8 +301,8 @@ export interface ReviewState {
   /** Toast for a failed fire-and-forget action: `${what} failed: <message>`. */
   report(what: string, e: unknown): void;
   search: SearchState;
-  /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → diff). */
-  openSearch(scope?: SearchState['scope']): void;
+  /** Open the text search box; `scope` replaces the remembered scope (`/` → file, `g/` → diff); `prefill` replaces the input. */
+  openSearch(scope?: SearchState['scope'], prefill?: string): void;
   setSearchInput(value: string): void;
   blurSearchInput(): void;
   typeSearchInput(key: string): void;
@@ -423,7 +425,7 @@ export interface ReviewState {
   draft: Draft | null;
   activePath: string | null;
   /** Ask the viewer to expand collapsed context so `line` (new side) is rendered, then center it. */
-  reveal: { id: string; path: string; line: number; nonce: number } | null;
+  reveal: { id: string; path: string; line: number; col?: number; nonce: number } | null;
   /** Context lines the viewer has expanded, by item id, so the cursor can walk them. */
   revealed: Record<string, LineRange[]>;
   addRevealed(id: string, start: number, end: number): void;
@@ -436,6 +438,8 @@ export interface ReviewState {
     id: string;
     line?: number;
     side?: Side;
+    /** New-side column (UTF-16) to scroll into view sideways once the line lands. */
+    col?: number;
     align?: 'start' | 'center' | 'nearest' | 'eye' | 'top' | 'bottom' | 'keep';
     offset?: number;
     /** Leave the viewport alone while that part of this item is on screen: its search form whole, or its top edge. */
@@ -510,7 +514,9 @@ export interface ReviewState {
   toggleCollapsed(path: string): void;
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
   selectFile(path: string): void;
-  saveConfig(config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs'>>): Promise<void>;
+  saveConfig(
+    config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs' | 'lineWrap'>>,
+  ): Promise<void>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
 }
@@ -1162,7 +1168,7 @@ export const useStore = create<ReviewState>((set, get) => {
     return { id: sel.id, line: sel.range.end, side: sideOf(sel), align: edge, nonce: (s.scrollTarget?.nonce ?? 0) + 1 };
   };
 
-  const placeCursor = (cur: Cursor | null, keepAnchor = false, align: 'nearest' | 'eye' = 'nearest') => {
+  const placeCursor = (cur: Cursor | null, keepAnchor = false, align: 'nearest' | 'eye' = 'nearest', col?: number) => {
     if (!cur) return;
     if (align === 'eye') recordJump();
     const items = nav();
@@ -1180,14 +1186,18 @@ export const useStore = create<ReviewState>((set, get) => {
         id: item.id,
         line: row.line,
         side: row.side === 'deletions' ? 'old' : 'new',
+        col,
         align,
         nonce: (s.scrollTarget?.nonce ?? 0) + 1,
       },
     }));
   };
 
-  /** Open `path` and put the cursor on its new-side `line` at eye level, expanding collapsed context if needed. */
-  const jumpToLine = async (path: string, line: number, external = false) => {
+  /**
+   * Open `path` and put the cursor on its new-side `line` at eye level, expanding collapsed context if needed.
+   * A `col` from a language server scrolls sideways to it.
+   */
+  const jumpToLine = async (path: string, line: number, external = false, col?: number) => {
     // One jumplist entry per jump, taken at the origin. Opening the file parks the cursor on its
     // first hunk on the way; recording that would make Ctrl+o land somewhere the reader never was.
     recordJump();
@@ -1199,7 +1209,7 @@ export const useStore = create<ReviewState>((set, get) => {
     const item = items[itemIndex]!;
     const rowIndex = item.rows.findIndex((r) => r.side === 'additions' && r.line === line);
     if (rowIndex !== -1) {
-      quietly(() => placeCursor({ itemIndex, rowIndex }, false, 'eye'));
+      quietly(() => placeCursor({ itemIndex, rowIndex }, false, 'eye', col));
       return;
     }
     // The line sits in collapsed context: have the viewer expand it, then center it.
@@ -1207,7 +1217,7 @@ export const useStore = create<ReviewState>((set, get) => {
       selection: { id: item.id, range: { start: line, side: 'additions', end: line, endSide: 'additions' } },
       activePath: path,
       visualAnchor: null,
-      reveal: { id: item.id, path, line, nonce: (s.reveal?.nonce ?? 0) + 1 },
+      reveal: { id: item.id, path, line, col, nonce: (s.reveal?.nonce ?? 0) + 1 },
     }));
   };
 
@@ -1284,7 +1294,7 @@ export const useStore = create<ReviewState>((set, get) => {
         }));
         return;
       }
-      await jumpToLine(loc.path, loc.line, loc.external);
+      await jumpToLine(loc.path, loc.line, loc.external, loc.col);
     } catch (e) {
       if (current(g)) report(kind === 'definition' ? 'Go to definition' : 'Go to type definition', e);
     }
@@ -1495,6 +1505,7 @@ export const useStore = create<ReviewState>((set, get) => {
       path: null,
       focusNonce: 0,
       input: '',
+      selected: false,
       editing: false,
       query: '',
       matches: [],
@@ -1502,7 +1513,7 @@ export const useStore = create<ReviewState>((set, get) => {
       loading: false,
       truncated: false,
     },
-    openSearch(scope) {
+    openSearch(scope, prefill) {
       searchSeq.start();
       set((s) => {
         const nextScope = scope ?? s.search.scope;
@@ -1519,7 +1530,8 @@ export const useStore = create<ReviewState>((set, get) => {
             index: sameSearch ? s.search.index : -1,
             truncated: sameSearch && s.search.truncated,
             loading: false,
-            input: s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query,
+            input: prefill ?? (s.search.open && s.search.kind === 'text' ? s.search.input : s.search.query),
+            selected: prefill !== undefined,
             editing: true,
             path,
             focusNonce: s.search.focusNonce + 1,
@@ -1538,7 +1550,7 @@ export const useStore = create<ReviewState>((set, get) => {
       });
     },
     setSearchInput(input) {
-      set((s) => ({ search: { ...s.search, input, editing: true } }));
+      set((s) => ({ search: { ...s.search, input, selected: false, editing: true } }));
     },
     blurSearchInput() {
       set((s) => ({ search: { ...s.search, editing: false } }));
@@ -1547,7 +1559,14 @@ export const useStore = create<ReviewState>((set, get) => {
       set((s) => ({
         search: {
           ...s.search,
-          input: key === 'Backspace' ? Array.from(s.search.input).slice(0, -1).join('') : s.search.input + key,
+          input: s.search.selected
+            ? key === 'Backspace'
+              ? ''
+              : key
+            : key === 'Backspace'
+              ? Array.from(s.search.input).slice(0, -1).join('')
+              : s.search.input + key,
+          selected: false,
           editing: true,
           focusNonce: s.search.focusNonce + 1,
         },
@@ -1637,7 +1656,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const index = ((search.index < 0 ? (d === 1 ? -1 : 0) : search.index) + d + n) % n;
       const m = search.matches[index]!;
       set({ search: { ...search, index } });
-      void jumpToLine(m.path, m.line, m.external);
+      void jumpToLine(m.path, m.line, m.external, m.col);
     },
     async searchWord(delta) {
       const word = lspTarget.get()?.text;
@@ -1850,7 +1869,8 @@ export const useStore = create<ReviewState>((set, get) => {
           },
         }));
       }
-      void jumpToLine(m.path, line ?? m.line, m.external);
+      // A picked line other than the reference's own has no column to aim at.
+      void jumpToLine(m.path, line ?? m.line, m.external, line == null || line === m.line ? m.col : undefined);
     },
     closeReferences() {
       set((s) => ({ references: { ...s.references, open: false } }));
@@ -1930,7 +1950,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const s = get().symbols;
       const sym = s.items[s.index];
       get().closeSymbols();
-      if (sym) void jumpToLine(sym.path, sym.line);
+      if (sym) void jumpToLine(sym.path, sym.line, false, sym.col);
     },
     closeSymbols() {
       set((s) => ({ symbols: { ...s.symbols, open: false, items: [], all: [], index: -1, loading: false } }));
