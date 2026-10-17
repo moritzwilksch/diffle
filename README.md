@@ -176,6 +176,7 @@ npm run dev -- working
 npm test && npm run typecheck && npm run build
 ```
 
+`npm install` also installs a pre-commit hook that checks file-size and folder limits across the whole tree; CI runs the same check.
 Restart `npm run dev` after client changes; the server serves `dist/client`.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. Screenshot tests run in Docker so they match CI:

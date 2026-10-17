@@ -1,0 +1,6 @@
+# Folders the commit gate does not count (see "Commit gate" in AGENTS.md).
+#
+# TODO: src/server held 17 source files, over the 15-file cap, when the gate was adopted.
+# Move a domain (for example the Session and Snapshotter pair) into a subfolder, then delete
+# this line.
+src/server # TODO: carve subfolders

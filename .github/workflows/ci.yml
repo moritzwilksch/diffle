@@ -102,6 +102,9 @@ jobs:
         run: npm run typecheck
       - name: Check formatting
         run: npm run format:check
+      # The pre-commit hook's check, over the whole tree, so a commit made with --no-verify still fails here.
+      - name: Quality gate
+        run: npm run quality-gate
 
   build:
     runs-on: ${{ matrix.os }}

@@ -54,6 +54,8 @@
     "test:e2e:report": "playwright show-report playwright-report",
     "test:e2e:update": "playwright test --update-snapshots",
     "snapshot-report": "tsx scripts/snapshot-report.ts",
+    "quality-gate": "tsx scripts/quality-gate.ts",
+    "prepare": "node scripts/install-hooks.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {

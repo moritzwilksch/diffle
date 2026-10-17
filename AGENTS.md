@@ -17,6 +17,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - `src/client/model.ts`: pure state functions and item identity, kept separate to avoid store cycles.
 - `src/client/review/ReviewPane.tsx`: `CodeView` rendering, measurement, and scroll placement.
 - `src/client/ui/dialog.tsx`, `tooltip.tsx`: shadcn components on Base UI (`components.json`, `@/` alias). We own them, restyled to the theme tokens; add another with `npx shadcn add`, then restyle it the same way. Not `button`: it would collide with `Button.tsx` on case-insensitive filesystems. `TipSurface` hangs a tip at a viewport box; `TitleTooltips` turns every `title` into one.
+- `scripts/lib/quality-gate/`: the commit gate. `guards.ts` holds the pure rules, `tree.ts` reads the working tree, `run.ts` words the messages.
 
 ## Preserve these invariants
 
@@ -49,6 +50,12 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 - CI runs the tests and the build on Linux, macOS, and Windows, x64 and arm64. `skipIf` what Windows cannot express, with a note: a `"` or a newline in a filename, POSIX mode bits, a POSIX-shell probe.
 - Remove temp directories with `rmTmp` from `test/tmp.ts`: an idle `cat-file --batch` holds the repo root as its cwd, and Windows refuses to remove it until the child is reaped.
 - Comments explain why in one or two lines. Exported doc comments state contracts, not implementations.
+
+## Commit gate
+
+- `npm install` points git at `.githooks` (the `prepare` script), and `.githooks/pre-commit` runs `scripts/quality-gate.ts` over the whole working tree. The CI `lint` job runs the same `npm run quality-gate`, so a `--no-verify` commit still fails there. The hook has no environment switch and fails when `node_modules` is missing.
+- A source file stays within 330 lines, and a folder holds at most 15 source files. Tests (`*.test.*`, `*.spec.*`, and files under `test`, `tests`, `__tests__`, `e2e`, `fixtures`, `testdata`, `__snapshots__`), generated files, package roots and the repository root are never counted. Nothing requires a test for new code.
+- Split along a real responsibility, never a line-count saw-cut. The only way past the gate is `.locignore` (files) or `.folderignore` (folders), one glob per line with `#` comments: a pattern without `/` matches the basename, one with `/` the whole path. List only a cohesive unit (generated code, a data catalog), with the reason on the same line. A `TODO` entry is debt: delete it when its file shrinks under the cap.
 
 ## Conventional commits
 
