@@ -125,6 +125,18 @@ diffle starts a language server for each language in the diff, if it finds one o
 Results outside the diff, such as the standard library, open read-only. Large repositories can
 take a while to index.
 
+Vue files are served by the TypeScript server once `vue-language-server` is on `PATH` too
+(`npm install -g @vue/language-server`): tsserver loads the plugin that ships with it.
+Astro files get `astro-ls` (`npm install -g @astrojs/language-server`), which loads TypeScript 5
+or 6 from the repository's `node_modules` or from beside itself or a TypeScript server on `PATH`;
+TypeScript 7 lacks the `typescript.js` it needs.
+
+A server can also answer beside the one that owns a language, as an editor extension would:
+`tailwindcss-language-server` (`npm install -g @tailwindcss/language-server`) adds class hovers to
+CSS, HTML, JavaScript, TypeScript, Vue, and Astro files whenever it is on `PATH`, and serves a file
+alone when nothing else does. Hovers from every server show together and definitions and references
+are merged; highlights, token kinds, and outlines come from the owner.
+
 `diffle lsp` shows which server each language gets and what to install for the rest:
 
 ```

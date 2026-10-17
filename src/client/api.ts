@@ -20,6 +20,7 @@ import {
   LspLocationsResponseSchema,
   LspOccurrencesResponseSchema,
   LspStatusSchema,
+  LspLogResponseSchema,
   LspSymbolSchema,
   LspTokenKindResponseSchema,
   MovedSchema,
@@ -189,6 +190,8 @@ export const api = {
       body: encode(ViewedEntrySchema, { path, blob, viewed }),
     }),
   lspStatus: () => json(LspStatusSchema, 'api/lsp/status'),
+  /** The retained log lines of the server started from `command`. */
+  lspLog: (command: string) => json(LspLogResponseSchema, `api/lsp/log?${q({ server: command })}`),
   lspDefinition: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/definition', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   lspTypeDefinition: (pos: LspPosition) =>

@@ -34,6 +34,9 @@ const span = (startLine, endLine, ch = 0) => ({
   end: { line: endLine, character: 0 },
 });
 
+// FAKE_LSP_TAG: a server joining another on the same file; its answers say who spoke.
+const TAG = process.env.FAKE_LSP_TAG;
+
 /** FAKE_LSP_MODIFIED: refuse this many document requests with ContentModified before answering. */
 let modified = Number(process.env.FAKE_LSP_MODIFIED ?? 0);
 
@@ -47,6 +50,7 @@ function handle(msg) {
     case 'initialize':
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);
       if (!msg.params.capabilities.window?.workDoneProgress) process.exit(4);
+      if (msg.params.initializationOptions) log('init ' + JSON.stringify(msg.params.initializationOptions));
       return reply(msg.id, { capabilities: {} });
     case 'test/notification':
       return send({ jsonrpc: '2.0', method: msg.params.method, params: msg.params.params });
@@ -61,6 +65,7 @@ function handle(msg) {
       docs.delete(msg.params.textDocument.uri);
       return log(`close ${base(msg.params.textDocument.uri)}`);
     case 'textDocument/definition': {
+      if (TAG) return reply(msg.id, [{ uri: msg.params.textDocument.uri, range: range(4) }]);
       if (process.env.FAKE_LSP_LOADING_DURING_QUERY === '1') {
         send({
           jsonrpc: '2.0',
@@ -92,6 +97,7 @@ function handle(msg) {
     case 'textDocument/hover':
       // Empty text at line 1: nothing to say. Elsewhere: markdown plus a legacy language block.
       if (msg.params.position.line === 0) return reply(msg.id, null);
+      if (TAG) return reply(msg.id, { contents: { kind: 'markdown', value: `${TAG} says hi` } });
       // FAKE_LSP_HOVER_LINKS mimics pyright's "Go to X" links: one inside the root, one outside it.
       if (process.env.FAKE_LSP_HOVER_LINKS === '1')
         return reply(msg.id, {

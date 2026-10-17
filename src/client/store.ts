@@ -5,6 +5,8 @@ import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
   followsCheckout,
+  joinedBy,
+  languageOf,
   lspBlocker,
   shownIterations,
   type GithubMetadata,
@@ -25,6 +27,7 @@ import {
   type Snapshot,
   type UserConfig,
   type ViewedEntry,
+  type LspLogEntry,
 } from '../shared/protocol.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
@@ -315,6 +318,10 @@ export interface ReviewState {
   searchWord(delta: 1 | -1): Promise<void>;
   lsp: LspStatus;
   setLspStatus(status: LspStatus): void;
+  /** The log of each server whose log is on screen, by command, with the status seq it was fetched at. */
+  lspLogs: Record<string, { seq: number; entries: LspLogEntry[] }>;
+  /** Shows or hides a server's log: fetched while shown, again whenever the status says it moved. */
+  watchLspLog(command: string, shown: boolean): Promise<void>;
   symbolMenu: SymbolMenuState | null;
   /** Opens the popover unless LSP is off, syntax blocks the target, or the server identifies a keyword. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
@@ -1702,6 +1709,29 @@ export const useStore = create<ReviewState>((set, get) => {
     lsp: { enabled: false, servers: [], missing: [] },
     setLspStatus(status) {
       set({ lsp: status });
+      for (const s of status.servers) {
+        const held = get().lspLogs[s.command];
+        if (held && held.seq !== s.log.seq) void get().watchLspLog(s.command, true);
+      }
+    },
+    lspLogs: {},
+    async watchLspLog(command, shown) {
+      if (!shown) {
+        set((s) => {
+          const { [command]: _, ...rest } = s.lspLogs;
+          return { lspLogs: rest };
+        });
+        return;
+      }
+      const seq = get().lsp.servers.find((s) => s.command === command)?.log.seq ?? 0;
+      // Registered before the fetch, so a status change meanwhile asks again, and a hide meanwhile wins.
+      set((s) => ({ lspLogs: { ...s.lspLogs, [command]: s.lspLogs[command] ?? { seq: -1, entries: [] } } }));
+      try {
+        const { entries } = await api.lspLog(command);
+        set((s) => (s.lspLogs[command] ? { lspLogs: { ...s.lspLogs, [command]: { seq, entries } } } : {}));
+      } catch (e) {
+        report('Language server log', e);
+      }
     },
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {
@@ -1747,9 +1777,15 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().symbolMenu || targetBlocker(target)) return;
       const g = generation;
       try {
-        const blocked = await blocksSymbol(target.path, target.side, target.line, target.col, () =>
-          ensureContents(target.path, target.side),
-        );
+        // A word in a string or a comment names no symbol to the owner, so the syntax gate spares the
+        // round trip. A server joining the language answers there, though: Tailwind's classes live in strings.
+        const language = languageOf(target.path);
+        const blocked =
+          language != null && joinedBy(get().lsp, language)
+            ? false
+            : await blocksSymbol(target.path, target.side, target.line, target.col, () =>
+                ensureContents(target.path, target.side),
+              );
         if (!current(g) || t !== hoverSeq || get().symbolMenu) return;
         if (blocked) {
           set({ hover: null });
