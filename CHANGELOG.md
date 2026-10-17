@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.7](https://github.com/moritzwilksch/diffle/compare/v0.2.6...v0.2.7) - 2026-10-17
+
+### Features
+
+- _(tree)_ Scroll long names sideways, with a toggle to shorten them ([#325](https://github.com/moritzwilksch/diffle/pull/325))
+
+### Refactors
+
+- _(ui)_ Build dialogs and tooltips on shadcn with Base UI ([#323](https://github.com/moritzwilksch/diffle/pull/323))
+
 ## [0.2.6](https://github.com/moritzwilksch/diffle/compare/v0.2.5...v0.2.6) - 2026-10-16
 
 ### Features
