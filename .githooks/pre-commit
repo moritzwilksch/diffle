@@ -1,6 +1,0 @@
-#!/bin/sh
-# Installed by `npm install` (the prepare script); CI runs the same check. See "Commit gate" in AGENTS.md.
-root=$(cd "$(dirname "$0")/.." && pwd)
-tsx="$root/node_modules/.bin/tsx"
-[ -x "$tsx" ] || { echo "pre-commit: dependencies are missing; run npm ci" >&2; exit 1; }
-exec "$tsx" "$root/scripts/quality-gate.ts"

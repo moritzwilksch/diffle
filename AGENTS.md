@@ -53,7 +53,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 
 ## Commit gate
 
-- `npm install` points git at `.githooks` (the `prepare` script), and `.githooks/pre-commit` runs `scripts/quality-gate.ts` over the whole working tree. The CI `lint` job runs the same `npm run quality-gate`, so a `--no-verify` commit still fails there. The hook has no environment switch and fails when `node_modules` is missing.
+- `.lefthook.yml` defines the pre-commit hook: `npm run format` and `npm run lint` over the staged files, then `npm run typecheck` and `npm run quality-gate` over the whole working tree. It is not installed automatically (`no_auto_install`); run `npm run install-hooks` once per clone. The CI `lint` job runs `npm run check`, the same hook over every file, where `fail_on_changes: ci` turns a formatter rewrite into a failure, so a `--no-verify` commit still fails there.
 - A source file stays within 330 lines, and a folder holds at most 15 source files. Tests (`*.test.*`, `*.spec.*`, and files under `test`, `tests`, `__tests__`, `e2e`, `fixtures`, `testdata`, `__snapshots__`), generated files, package roots and the repository root are never counted. Nothing requires a test for new code.
 - Split along a real responsibility, never a line-count saw-cut. The only way past the gate is `.locignore` (files) or `.folderignore` (folders), one glob per line with `#` comments: a pattern without `/` matches the basename, one with `/` the whole path. List only a cohesive unit (generated code, a data catalog), with the reason on the same line. A `TODO` entry is debt: delete it when its file shrinks under the cap.
 

@@ -55,7 +55,8 @@
     "test:e2e:update": "playwright test --update-snapshots",
     "snapshot-report": "tsx scripts/snapshot-report.ts",
     "quality-gate": "tsx scripts/quality-gate.ts",
-    "prepare": "node scripts/install-hooks.mjs",
+    "install-hooks": "lefthook install",
+    "check": "lefthook run pre-commit --all-files",
     "prepack": "npm run build"
   },
   "dependencies": {
@@ -94,6 +95,7 @@
     "@vitejs/plugin-react": "^5",
     "eslint-plugin-better-tailwindcss": "^4.7.0",
     "jsdom": "^30.0.1",
+    "lefthook": "^2.2.2",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
     "pixelmatch": "^7.2.0",

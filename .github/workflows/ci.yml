@@ -94,17 +94,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Lint
-        run: |
-          npm ci
-          npm run lint
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Check formatting
-        run: npm run format:check
-      # The pre-commit hook's check, over the whole tree, so a commit made with --no-verify still fails here.
-      - name: Quality gate
-        run: npm run quality-gate
+      - name: Install
+        run: npm ci
+      - name: Pre-commit hook
+        run: npm run check
 
   build:
     runs-on: ${{ matrix.os }}

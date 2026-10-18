@@ -1,0 +1,13 @@
+no_auto_install: true
+
+pre-commit:
+  fail_on_changes: ci
+  jobs:
+    - name: format
+      run: npm run format -- {staged_files}
+    - name: lint
+      run: npm run lint -- {staged_files}
+    - name: typecheck
+      run: npm run typecheck
+    - name: quality-gate
+      run: npm run quality-gate

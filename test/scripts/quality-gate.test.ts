@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { runGate } from '../../scripts/lib/quality-gate/run.js';
 import { rmTmp } from '../tmp.js';
 
@@ -132,70 +132,5 @@ describe('folder guard', () => {
       await write({ '.folderignore': '# one flat registry\nsrc/flat\n' });
       expect(gate()).toEqual(clean);
     });
-  });
-});
-
-describe('pre-commit hook', () => {
-  /** Installs the real hook in `dir`, with a `tsx` shim that runs this checkout's gate. */
-  async function installHook(dir: string, git: (...args: string[]) => string) {
-    await mkdir(join(dir, '.githooks'));
-    await copyFile(join(process.cwd(), '.githooks/pre-commit'), join(dir, '.githooks/pre-commit'));
-    await chmod(join(dir, '.githooks/pre-commit'), 0o755);
-    await mkdir(join(dir, 'node_modules/.bin'), { recursive: true });
-    const shim = join(dir, 'node_modules/.bin/tsx');
-    const gate = join(process.cwd(), 'scripts/quality-gate.ts');
-    await writeFile(shim, `#!/bin/sh\nexec "${join(process.cwd(), 'node_modules/.bin/tsx')}" "${gate}"\n`);
-    await chmod(shim, 0o755);
-    git('config', 'core.hooksPath', '.githooks');
-  }
-
-  it.skipIf(process.platform === 'win32')(
-    'blocks a commit over a file it does not touch, whatever the environment says',
-    async () => {
-      await withRepo({ 'src/legacy.ts': lines(400) }, async ({ dir, git, write }) => {
-        await installHook(dir, git);
-        await write({ 'src/small.ts': 'export const small = 1;\n' });
-        git('add', 'src/small.ts');
-        expect(() => git('commit', '-q', '-m', 'small')).toThrow(/src\/legacy\.ts is 400 lines/);
-        vi.stubEnv('QUALITY_GUARDS', 'off');
-        try {
-          expect(() => git('commit', '-q', '-m', 'small')).toThrow(/src\/legacy\.ts is 400 lines/);
-        } finally {
-          vi.unstubAllEnvs();
-        }
-        await write({ '.locignore': 'src/legacy.ts # TODO: split\n' });
-        git('add', '-A');
-        git('commit', '-q', '-m', 'small');
-        expect(git('log', '--format=%s', '-1')).toBe('small');
-      });
-    },
-  );
-
-  it.skipIf(process.platform === 'win32')(
-    'refuses to run without dependencies instead of skipping the gate',
-    async () => {
-      await withRepo({}, async ({ dir, git }) => {
-        await installHook(dir, git);
-        await rm(join(dir, 'node_modules'), { recursive: true });
-        expect(() => git('commit', '-q', '--allow-empty', '-m', 'empty')).toThrow(/run npm ci/);
-      });
-    },
-  );
-});
-
-describe('install-hooks script', () => {
-  const run = (cwd: string) => execFileSync('node', [join(process.cwd(), 'scripts/install-hooks.mjs')], { cwd });
-
-  it('points a checkout at .githooks and leaves a directory without .git alone', async () => {
-    await withRepo({}, async ({ dir, git }) => {
-      run(dir);
-      expect(git('config', 'core.hooksPath')).toBe('.githooks');
-    });
-    const bare = await mkdtemp(join(tmpdir(), 'diffle-nogit-'));
-    try {
-      expect(run(bare).toString()).toBe('');
-    } finally {
-      await rmTmp(bare);
-    }
   });
 });
