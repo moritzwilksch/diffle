@@ -9,6 +9,8 @@ const ALL: LspServerStatus['supports'] = [
   'references',
   'documentSymbol',
   'workspaceSymbol',
+  'semanticTokens',
+  'documentHighlight',
 ];
 const server = (extra: Partial<LspServerStatus> = {}): LspServerStatus => ({
   name: 'pyrefly',

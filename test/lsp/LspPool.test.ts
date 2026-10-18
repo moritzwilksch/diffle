@@ -108,7 +108,16 @@ describe('LspPool', () => {
         command: 'py-server',
         state: 'ready',
         languages: ['python'],
-        supports: ['definition', 'typeDefinition', 'hover', 'references', 'documentSymbol', 'workspaceSymbol'],
+        supports: [
+          'definition',
+          'typeDefinition',
+          'hover',
+          'references',
+          'documentSymbol',
+          'workspaceSymbol',
+          'semanticTokens',
+          'documentHighlight',
+        ],
       },
     ]);
     expect(status.missing).toEqual([

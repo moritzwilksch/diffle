@@ -17,7 +17,7 @@ import { Documents } from './Documents.js';
 import { hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcError } from './JsonRpc.js';
 import { Locator, type Range } from './Locator.js';
-import { LspProcess, LspUnavailableError, type LspProcessOptions } from './LspProcess.js';
+import { LspProcess, LspUnavailableError, LspUnsupportedError, type LspProcessOptions } from './LspProcess.js';
 import {
   type DocumentHighlight,
   type DocumentSymbol,
@@ -44,8 +44,6 @@ export interface LspBridgeOptions extends LspProcessOptions {
 
 /** LSP `ContentModified`: the document moved under the request, so the answer would be stale. */
 const CONTENT_MODIFIED = -32801;
-/** LSP `MethodNotFound`: the server does not implement the request. */
-const METHOD_NOT_FOUND = -32601;
 /** Waits before re-asking a request the server refused as stale, one per attempt. */
 const CONTENT_MODIFIED_BACKOFF_MS = [40, 120];
 
@@ -118,7 +116,7 @@ export class LspBridge {
 
   /**
    * The semantic token class at a position, via `textDocument/semanticTokens/range`
-   * on that one line. A server without the request, or a position between tokens,
+   * on that one line. A server not offering the request, or a position between tokens,
    * yields null, so callers treat null as "no opinion".
    */
   async tokenKind(pos: LspPosition): Promise<LspTokenKindResponse> {
@@ -130,13 +128,14 @@ export class LspBridge {
         range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } },
       },
       pos.path,
-    ).catch(unimplemented(null));
+      'semanticTokens',
+    ).catch(unsupported(null));
     return { kind: tokenAt(result?.data ?? [], line, pos.col, this.process.tokenTypes) };
   }
 
   /**
    * Where else the symbol at `pos` occurs in its file, via `textDocument/documentHighlight`,
-   * so scope and shadowing are the server's call. A server without the request, or a
+   * so scope and shadowing are the server's call. A server not offering the request, or a
    * position holding no symbol, yields no occurrences: the answer is advisory.
    */
   async occurrences(pos: LspPosition): Promise<LspOccurrencesResponse> {
@@ -144,7 +143,8 @@ export class LspBridge {
       'textDocument/documentHighlight',
       { textDocument: { uri: this.uri(pos.path) }, position: toLsp(pos) },
       pos.path,
-    ).catch(unimplemented(null));
+      'documentHighlight',
+    ).catch(unsupported(null));
     return {
       occurrences: (result ?? []).map(({ range, kind }) => ({
         ...fromLsp(range),
@@ -243,7 +243,7 @@ export class LspBridge {
       if (path != null) await this.documents.sync(path);
       const rpc = await this.process.connection();
       if (feature && !this.process.supports(feature))
-        throw new LspUnavailableError(`${this.process.name} offers no ${LSP_FEATURE_LABELS[feature]}`);
+        throw new LspUnsupportedError(`${this.process.name} offers no ${LSP_FEATURE_LABELS[feature]}`);
       try {
         const pending = this.process.busy();
         const result = await rpc.request<T>(method, params);
@@ -265,10 +265,10 @@ export class LspBridge {
   }
 }
 
-/** A catch handler answering `result` for a request the server does not implement; anything else propagates. */
-function unimplemented<T>(result: T): (e: unknown) => { result: T; busy: null } {
+/** A catch handler answering `result` for a request the server does not offer; anything else propagates. */
+function unsupported<T>(result: T): (e: unknown) => { result: T; busy: null } {
   return (e) => {
-    if (e instanceof JsonRpcError && e.code === METHOD_NOT_FOUND) return { result, busy: null };
+    if (e instanceof LspUnsupportedError) return { result, busy: null };
     throw e;
   };
 }

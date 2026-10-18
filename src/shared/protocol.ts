@@ -640,9 +640,9 @@ export const LspLogResponseSchema = z.object({ entries: LspLogEntrySchema.array(
 export type LspLogResponse = z.infer<typeof LspLogResponseSchema>;
 
 /**
- * A request the bridge asks a server for only when its `initialize` result advertised it.
- * Token kinds and occurrences are not gated: they are advisory, and some servers answer
- * them without advertising.
+ * A request the bridge sends a server only once it advertised the capability, in its
+ * `initialize` result or by registering it later, as an editor does. Semantic tokens and
+ * document highlights are advisory: without them the answer is empty, never an error.
  */
 export const LspFeatureSchema = z.enum([
   'definition',
@@ -651,6 +651,8 @@ export const LspFeatureSchema = z.enum([
   'references',
   'documentSymbol',
   'workspaceSymbol',
+  'semanticTokens',
+  'documentHighlight',
 ]);
 export type LspFeature = z.infer<typeof LspFeatureSchema>;
 

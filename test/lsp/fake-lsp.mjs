@@ -40,7 +40,19 @@ const TAG = process.env.FAKE_LSP_TAG;
 /** FAKE_LSP_MODIFIED: refuse this many document requests with ContentModified before answering. */
 let modified = Number(process.env.FAKE_LSP_MODIFIED ?? 0);
 
+const ALL_FEATURES =
+  'definition,typeDefinition,hover,references,documentSymbol,workspaceSymbol,semanticTokens,documentHighlight';
+/** FAKE_LSP_OFFERS: the providers to advertise at initialize, comma-separated; FAKE_LSP_WITHOUT: ones to leave out. */
+const offers = (process.env.FAKE_LSP_OFFERS ?? ALL_FEATURES)
+  .split(',')
+  .filter((f) => f && !(process.env.FAKE_LSP_WITHOUT ?? '').split(',').includes(f));
+/** FAKE_LSP_REGISTERS: features registered after `initialized` instead of advertised, with a legend for semantic tokens. */
+const registers = (process.env.FAKE_LSP_REGISTERS ?? '').split(',').filter(Boolean);
+let nextId = 1000;
+
 function handle(msg) {
+  // A response to a request of ours: nothing to do with it.
+  if (!msg.method) return;
   if (modified > 0 && msg.id != null && msg.method?.startsWith('textDocument/')) {
     modified--;
     log(`refused ${msg.method}`);
@@ -51,15 +63,37 @@ function handle(msg) {
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);
       if (!msg.params.capabilities.window?.workDoneProgress) process.exit(4);
       if (msg.params.initializationOptions) log('init ' + JSON.stringify(msg.params.initializationOptions));
-      // FAKE_LSP_OFFERS: the providers to advertise, comma-separated; every one by default.
+      // A server may only register later what the client allowed it to.
+      for (const f of registers) {
+        const section =
+          f === 'workspaceSymbol'
+            ? msg.params.capabilities.workspace?.symbol
+            : msg.params.capabilities.textDocument?.[f];
+        if (!section?.dynamicRegistration) process.exit(5);
+      }
       return reply(msg.id, {
         capabilities: Object.fromEntries(
-          (process.env.FAKE_LSP_OFFERS ?? 'definition,typeDefinition,hover,references,documentSymbol,workspaceSymbol')
-            .split(',')
-            .filter(Boolean)
-            .map((f) => [`${f}Provider`, true]),
+          offers.filter((f) => !registers.includes(f)).map((f) => [`${f}Provider`, true]),
         ),
       });
+    case 'initialized':
+      if (!registers.length) return;
+      // Registered under a legend of our own, so a test can tell it from the default numbering.
+      return send({
+        jsonrpc: '2.0',
+        id: nextId++,
+        method: 'client/registerCapability',
+        params: {
+          registrations: registers.map((f) => ({
+            id: `reg-${f}`,
+            method: f === 'workspaceSymbol' ? 'workspace/symbol' : `textDocument/${f}`,
+            registerOptions:
+              f === 'semanticTokens' ? { legend: { tokenTypes: Array.from({ length: 16 }, (_, i) => `t${i}`) } } : {},
+          })),
+        },
+      });
+    case 'test/request':
+      return send({ jsonrpc: '2.0', id: nextId++, method: msg.params.method, params: msg.params.params });
     case 'test/notification':
       return send({ jsonrpc: '2.0', method: msg.params.method, params: msg.params.params });
     // Document lifecycle goes to stderr so tests can observe what the bridge opened.
@@ -119,9 +153,6 @@ function handle(msg) {
         range: range(msg.params.position.line, 4),
       });
     case 'textDocument/semanticTokens/range': {
-      // FAKE_LSP_NO_TOKENS mimics a server without semantic tokens (open-source pyright).
-      if (process.env.FAKE_LSP_NO_TOKENS === '1')
-        return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'method not found' } });
       // Every word of the requested line, relative-encoded; `if`/`else`/`import`/`pass` are keywords (15), the rest variables (8).
       const text = docs.get(msg.params.textDocument.uri) ?? '';
       const lineNo = msg.params.range.start.line;
@@ -143,9 +174,6 @@ function handle(msg) {
       return reply(msg.id, { data });
     }
     case 'textDocument/documentHighlight': {
-      // FAKE_LSP_NO_HIGHLIGHT mimics a server without the method.
-      if (process.env.FAKE_LSP_NO_HIGHLIGHT === '1')
-        return send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'method not found' } });
       // The word at the position, wherever it recurs inside the enclosing top-level block (a stand-in
       // for scope); one followed by a lone `=` counts as a write (3), the others as reads (2).
       const lines = (docs.get(msg.params.textDocument.uri) ?? '').split('\n');

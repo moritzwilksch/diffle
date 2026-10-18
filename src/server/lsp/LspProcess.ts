@@ -1,9 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { z } from 'zod';
 import type { LspFeature, LspLogEntry, LspProcessStatus } from '../../shared/protocol.js';
 import { configurationItems, type LspSettings } from './configuration.js';
-import { JsonRpcConnection } from './JsonRpc.js';
+import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
 import { ServerOutput } from './ServerOutput.js';
+import { CLIENT_CAPABILITIES, DEFAULT_TOKEN_TYPES, FEATURES, featureOf } from './shapes.js';
 import { programOf } from './which.js';
 
 export interface LspProcessOptions {
@@ -22,47 +24,15 @@ export interface LspProcessOptions {
 
 /** The server is off, still starting, gone, or does not offer what was asked. Routes answer 409. */
 export class LspUnavailableError extends Error {}
+/** The server never advertised the feature, in `initialize` or since. Advisory requests answer nothing instead. */
+export class LspUnsupportedError extends LspUnavailableError {}
 
-/**
- * Token types by index when the server publishes no legend. The LSP spec's own
- * enumeration; pyrefly answers semantic token requests without advertising the
- * provider and numbers its tokens this way.
- */
-export const DEFAULT_TOKEN_TYPES = [
-  'namespace',
-  'type',
-  'class',
-  'enum',
-  'interface',
-  'struct',
-  'typeParameter',
-  'parameter',
-  'variable',
-  'property',
-  'enumMember',
-  'event',
-  'function',
-  'method',
-  'macro',
-  'keyword',
-  'modifier',
-  'comment',
-  'string',
-  'number',
-  'regexp',
-  'operator',
-  'decorator',
-];
-
-/** The `initialize` capability each feature needs; a provider is a boolean or an options object. */
-const PROVIDERS: Record<LspFeature, string> = {
-  definition: 'definitionProvider',
-  typeDefinition: 'typeDefinitionProvider',
-  hover: 'hoverProvider',
-  references: 'referencesProvider',
-  documentSymbol: 'documentSymbolProvider',
-  workspaceSymbol: 'workspaceSymbolProvider',
-};
+// Params of the registration requests a server sends; the misspelling is the spec's.
+const RegistrationsSchema = z.object({
+  registrations: z.array(z.object({ id: z.string(), method: z.string(), registerOptions: z.unknown().optional() })),
+});
+const UnregistrationsSchema = z.object({ unregisterations: z.array(z.object({ id: z.string() })) });
+const LegendSchema = z.object({ legend: z.object({ tokenTypes: z.string().array() }) });
 
 const INIT_TIMEOUT_MS = 60_000;
 /** Graceful shutdown budget. Both together stay under the CLI's hard exit deadline (main.ts). */
@@ -93,7 +63,10 @@ export class LspProcess {
   private readonly output = new ServerOutput((change) => {
     if (!this.closing && this.current.state !== 'unavailable') this.set({ ...this.current, ...change });
   });
+  /** Features the server offers, from `initialize` and from registrations since. */
   private advertised = new Set<LspFeature>();
+  /** Dynamic registrations by their id, so an unregistration knows which feature it ends. */
+  private registrations = new Map<string, LspFeature>();
   /** Semantic token legend from the server's capabilities, else the spec's default numbering. */
   tokenTypes: string[] = DEFAULT_TOKEN_TYPES;
 
@@ -122,7 +95,7 @@ export class LspProcess {
     return this.output.entries();
   }
 
-  /** Whether the `initialize` result advertised `feature`. False until initialized. */
+  /** Whether the server advertised `feature`, at `initialize` or by registering it since. False until initialized. */
   supports(feature: LspFeature): boolean {
     return this.advertised.has(feature);
   }
@@ -229,6 +202,8 @@ export class LspProcess {
     rpc.onRequest('workspace/configuration', async (params) =>
       configurationItems((await this.opts.settings) ?? {}, params),
     );
+    rpc.onRequest('client/registerCapability', (params) => this.register(params));
+    rpc.onRequest('client/unregisterCapability', (params) => this.unregister(params));
     const rootUri = pathToFileURL(this.opts.root).href;
     try {
       const init = await rpc.request<{
@@ -242,36 +217,12 @@ export class LspProcess {
           rootPath: this.opts.root,
           workspaceFolders: [{ uri: rootUri, name: 'workspace' }],
           initializationOptions: this.opts.initializationOptions,
-          capabilities: {
-            window: { workDoneProgress: true },
-            textDocument: {
-              synchronization: { didSave: false },
-              definition: { linkSupport: true },
-              typeDefinition: { linkSupport: true },
-              references: {},
-              documentHighlight: {},
-              hover: { contentFormat: ['markdown', 'plaintext'] },
-              documentSymbol: { hierarchicalDocumentSymbolSupport: true },
-              semanticTokens: {
-                requests: { range: true },
-                tokenTypes: DEFAULT_TOKEN_TYPES,
-                tokenModifiers: [],
-                formats: ['relative'],
-              },
-            },
-            // A refresh is honored trivially: token kinds are asked for afresh on every use.
-            workspace: {
-              symbol: {},
-              workspaceFolders: true,
-              configuration: true,
-              semanticTokens: { refreshSupport: true },
-            },
-          },
+          capabilities: CLIENT_CAPABILITIES,
         },
         INIT_TIMEOUT_MS,
       );
       const capabilities = init?.capabilities ?? {};
-      for (const [feature, provider] of Object.entries(PROVIDERS) as [LspFeature, string][])
+      for (const [feature, { provider }] of Object.entries(FEATURES) as [LspFeature, { provider: string }][])
         if (capabilities[provider]) this.advertised.add(feature);
       const legend = capabilities.semanticTokensProvider?.legend?.tokenTypes;
       if (legend?.length) this.tokenTypes = legend;
@@ -285,6 +236,38 @@ export class LspProcess {
       throw e;
     }
     if (this.current.state === 'starting') this.set({ ...this.current, state: 'ready' });
+  }
+
+  /**
+   * A feature the server offers from now on, as an editor takes it: counted like one
+   * advertised at `initialize`, with a semantic token legend read from the options.
+   */
+  private register(params: unknown): null {
+    const request = RegistrationsSchema.safeParse(params);
+    if (!request.success) throw new JsonRpcError(-32602, 'Invalid client/registerCapability parameters');
+    for (const { id, method, registerOptions } of request.data.registrations) {
+      const feature = featureOf(method);
+      if (!feature) continue;
+      this.registrations.set(id, feature);
+      this.advertised.add(feature);
+      const legend = feature === 'semanticTokens' ? LegendSchema.safeParse(registerOptions) : null;
+      if (legend?.success && legend.data.legend.tokenTypes.length) this.tokenTypes = legend.data.legend.tokenTypes;
+    }
+    this.opts.onStatus(this.current);
+    return null;
+  }
+
+  private unregister(params: unknown): null {
+    const request = UnregistrationsSchema.safeParse(params);
+    if (!request.success) throw new JsonRpcError(-32602, 'Invalid client/unregisterCapability parameters');
+    for (const { id } of request.data.unregisterations) {
+      const feature = this.registrations.get(id);
+      if (!feature) continue;
+      this.registrations.delete(id);
+      this.advertised.delete(feature);
+    }
+    this.opts.onStatus(this.current);
+    return null;
   }
 
   private fail(message: string): void {

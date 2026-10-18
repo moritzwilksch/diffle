@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LspSettings } from '../../src/server/lsp/configuration.js';
 import { LspBridge } from '../../src/server/lsp/LspBridge.js';
 import { LspUnavailableError } from '../../src/server/lsp/LspProcess.js';
@@ -21,6 +21,7 @@ const files: Record<string, string> = {
 
 function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, initializationOptions?: LspSettings) {
   let notify: (method: string, params: unknown) => void;
+  let request: (method: string, params: unknown) => void;
   const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
@@ -43,13 +44,15 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, 
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, FAKE_LSP_ROOT: root, ...env },
       });
-      notify = (method, params) => {
+      const tell = (kind: string, method: string, params: unknown) => {
         const body = Buffer.from(
-          JSON.stringify({ jsonrpc: '2.0', method: 'test/notification', params: { method, params } }),
+          JSON.stringify({ jsonrpc: '2.0', method: `test/${kind}`, params: { method, params } }),
         );
         child.stdin.write(`Content-Length: ${body.length}\r\n\r\n`);
         child.stdin.write(body);
       };
+      notify = (method, params) => tell('notification', method, params);
+      request = (method, params) => tell('request', method, params);
       child.stderr.on('data', (d: Buffer) => events.push(...d.toString().split('\n').filter(Boolean)));
       return child;
     },
@@ -60,6 +63,7 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, 
     events,
     reads,
     notify: (method: string, params: unknown) => notify(method, params),
+    request: (method: string, params: unknown) => request(method, params),
   };
 }
 
@@ -130,7 +134,7 @@ describe('LspBridge', () => {
     expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 6 })).toEqual({ kind: null });
     expect(await bridge.tokenKind({ path: 'a.py', line: 3, col: 4 })).toEqual({ kind: 'keyword' });
     await bridge.close();
-    const plain = start({ FAKE_LSP_NO_TOKENS: '1' });
+    const plain = start({ FAKE_LSP_WITHOUT: 'semanticTokens' });
     expect(await plain.bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
     await plain.bridge.close();
   });
@@ -150,7 +154,7 @@ describe('LspBridge', () => {
     expect(await bridge.occurrences({ path: 'other.py', line: 3, col: 5 })).toEqual({ occurrences: [] });
 
     await bridge.close();
-    const plain = start({ FAKE_LSP_NO_HIGHLIGHT: '1' });
+    const plain = start({ FAKE_LSP_WITHOUT: 'documentHighlight' });
     expect(await plain.bridge.occurrences({ path: 'other.py', line: 3, col: 0 })).toEqual({ occurrences: [] });
     expect(plain.bridge.status().state).toBe('ready');
     await plain.bridge.close();
@@ -422,8 +426,27 @@ describe('LspBridge', () => {
       );
       await expect(bridge.references({ path: 'a.py', line: 3, col: 4 })).rejects.toThrow(/offers no references/);
       await expect(bridge.workspaceSymbols('q')).rejects.toThrow(/offers no workspace symbols/);
-      // Token kinds and occurrences are asked for regardless: pyrefly answers them without advertising.
-      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
+      // Token kinds and occurrences are advisory: not offered means no opinion, never an error.
+      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
+      expect(await bridge.occurrences({ path: 'a.py', line: 1, col: 0 })).toEqual({ occurrences: [] });
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it('takes a feature the server registers after initialize, legend included, until it unregisters', async () => {
+    const { bridge, request } = start({ FAKE_LSP_REGISTERS: 'semanticTokens,references' });
+    try {
+      expect((await bridge.hover({ path: 'a.py', line: 2, col: 4 })).contents).toContain('def f()');
+      await vi.waitFor(() => expect(bridge.features()).toContain('semanticTokens'));
+      expect(bridge.features()).toContain('references');
+      // The fake's legend names type 15 `t15`; the default numbering would say `keyword`.
+      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 't15' });
+      expect((await bridge.references({ path: 'a.py', line: 1, col: 0 })).locations.length).toBeGreaterThan(0);
+      request('client/unregisterCapability', { unregisterations: [{ id: 'reg-semanticTokens', method: 'x' }] });
+      await vi.waitFor(() => expect(bridge.features()).not.toContain('semanticTokens'));
+      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
+      expect(bridge.features()).toContain('references');
     } finally {
       await bridge.close();
     }

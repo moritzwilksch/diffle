@@ -1,5 +1,88 @@
-import type { LspPosition, LspSymbol } from '../../shared/protocol.js';
+import type { LspFeature, LspPosition, LspSymbol } from '../../shared/protocol.js';
 import type { Range } from './Locator.js';
+
+/**
+ * Token types by index when the server publishes no legend. The LSP spec's own
+ * enumeration; pyrefly numbers its tokens this way.
+ */
+export const DEFAULT_TOKEN_TYPES = [
+  'namespace',
+  'type',
+  'class',
+  'enum',
+  'interface',
+  'struct',
+  'typeParameter',
+  'parameter',
+  'variable',
+  'property',
+  'enumMember',
+  'event',
+  'function',
+  'method',
+  'macro',
+  'keyword',
+  'modifier',
+  'comment',
+  'string',
+  'number',
+  'regexp',
+  'operator',
+  'decorator',
+];
+
+/**
+ * How a server advertises each feature: the `initialize` capability (a boolean or an
+ * options object) and the method a later `client/registerCapability` names.
+ */
+export const FEATURES: Record<LspFeature, { provider: string; method: string }> = {
+  definition: { provider: 'definitionProvider', method: 'textDocument/definition' },
+  typeDefinition: { provider: 'typeDefinitionProvider', method: 'textDocument/typeDefinition' },
+  hover: { provider: 'hoverProvider', method: 'textDocument/hover' },
+  references: { provider: 'referencesProvider', method: 'textDocument/references' },
+  documentSymbol: { provider: 'documentSymbolProvider', method: 'textDocument/documentSymbol' },
+  workspaceSymbol: { provider: 'workspaceSymbolProvider', method: 'workspace/symbol' },
+  semanticTokens: { provider: 'semanticTokensProvider', method: 'textDocument/semanticTokens' },
+  documentHighlight: { provider: 'documentHighlightProvider', method: 'textDocument/documentHighlight' },
+};
+
+/** The feature a registration's method names, or null for one diffle never asks for. */
+export function featureOf(method: string): LspFeature | null {
+  for (const [feature, { method: m }] of Object.entries(FEATURES) as [LspFeature, { method: string }][])
+    if (m === method) return feature;
+  return null;
+}
+
+/**
+ * What diffle tells a server it can do. Every feature allows dynamic registration, so a
+ * server that advertises after `initialize` (semantic tokens, often) is still asked.
+ */
+export const CLIENT_CAPABILITIES = {
+  window: { workDoneProgress: true },
+  textDocument: {
+    synchronization: { didSave: false },
+    definition: { dynamicRegistration: true, linkSupport: true },
+    typeDefinition: { dynamicRegistration: true, linkSupport: true },
+    references: { dynamicRegistration: true },
+    documentHighlight: { dynamicRegistration: true },
+    hover: { dynamicRegistration: true, contentFormat: ['markdown', 'plaintext'] },
+    documentSymbol: { dynamicRegistration: true, hierarchicalDocumentSymbolSupport: true },
+    semanticTokens: {
+      dynamicRegistration: true,
+      requests: { range: true },
+      tokenTypes: DEFAULT_TOKEN_TYPES,
+      tokenModifiers: [],
+      formats: ['relative'],
+    },
+  },
+  // A refresh is honored trivially: token kinds are asked for afresh on every use.
+  workspace: {
+    symbol: { dynamicRegistration: true },
+    workspaceFolders: true,
+    configuration: true,
+    semanticTokens: { refreshSupport: true },
+  },
+};
 
 // LSP wire shapes, only the fields read here, and how they become diffle's answers.
 export interface Location {
