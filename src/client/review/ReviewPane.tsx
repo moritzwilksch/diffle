@@ -64,6 +64,7 @@ import { focusToken, onSelectionChanged, setViewer, wordsIn } from '@/client/lsp
 import { charAtPoint, tokenRange } from '@/client/lsp/tokenText.js';
 import { installSearchHighlights } from '@/client/search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
+import { installWhitespaceMarks, WHITESPACE_CSS } from './whitespace.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
@@ -391,6 +392,11 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
+  }, [scroller]);
+  // And the visible spaces and tabs, while the setting is on.
+  useEffect(() => {
+    if (!scroller) return;
+    return installWhitespaceMarks(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   // And the occurrences of the focused or hovered symbol.
   useEffect(() => {
@@ -802,7 +808,7 @@ export function ReviewPane() {
   const options = useMemo(
     () => ({
       ...codeViewOptions,
-      unsafeCSS: HEADER_CSS + geometry.css,
+      unsafeCSS: HEADER_CSS + WHITESPACE_CSS + geometry.css,
       layout: geometry.layout,
       itemMetrics: geometry.itemMetrics,
       hunkSeparators: 'line-info' as const,

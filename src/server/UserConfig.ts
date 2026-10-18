@@ -67,7 +67,8 @@ function normalize(c: Partial<UserConfig>): UserConfig {
       : DEFAULT_USER_CONFIG.contextLines;
   const followRefs = FollowRefsSchema.safeParse(c.followRefs).data ?? DEFAULT_USER_CONFIG.followRefs;
   const lineWrap = typeof c.lineWrap === 'boolean' ? c.lineWrap : DEFAULT_USER_CONFIG.lineWrap;
-  return { autoViewed, contextLines, followRefs, lineWrap, lspCommands: lspCommands(c) };
+  const showWhitespace = typeof c.showWhitespace === 'boolean' ? c.showWhitespace : DEFAULT_USER_CONFIG.showWhitespace;
+  return { autoViewed, contextLines, followRefs, lineWrap, showWhitespace, lspCommands: lspCommands(c) };
 }
 
 /**
