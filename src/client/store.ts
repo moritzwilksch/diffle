@@ -837,7 +837,16 @@ export const useStore = create<ReviewState>((set, get) => {
       hydrationWorkers--;
     }
   };
-  const hydrateOne = async ({ path, file: f, replaces, g }: HydrationJob) => {
+  /** Hydrations in flight by path, so a jump can wait for the one it needs. */
+  const hydrating = new Map<string, Promise<void>>();
+  const hydrateOne = (job: HydrationJob): Promise<void> => {
+    const run = fetchHydrated(job).finally(() => {
+      if (hydrating.get(job.path) === run) hydrating.delete(job.path);
+    });
+    hydrating.set(job.path, run);
+    return run;
+  };
+  const fetchHydrated = async ({ path, file: f, replaces, g }: HydrationJob) => {
     const stale = () => !current(g) || get().loaded[path] !== replaces;
     try {
       const oldPath = f.prevName ?? f.name;
@@ -899,6 +908,20 @@ export const useStore = create<ReviewState>((set, get) => {
         ),
       };
     });
+  };
+
+  /** Hydrate `path` ahead of the queue and commit it at once. Resolves to whether its diff is hydrated. */
+  const hydrateNow = async (path: string): Promise<boolean> => {
+    // A reload can queue the file again behind its stale job; only the live one hydrates what is shown.
+    const queued = hydrationQueue.findIndex(
+      (j) => j.path === path && current(j.g) && get().loaded[path] === j.replaces,
+    );
+    if (queued !== -1) await hydrateOne(hydrationQueue.splice(queued, 1)[0]!);
+    else await hydrating.get(path);
+    // The frame's flush would land after the jump; the queued one then finds nothing left.
+    if (hydratedFlush) flushHydrated();
+    const entry = get().loaded[path];
+    return entry?.kind === 'diff' && !entry.fileDiff.isPartial;
   };
 
   const applySnapshot = async (next: Snapshot, g: number) => {
@@ -1229,12 +1252,34 @@ export const useStore = create<ReviewState>((set, get) => {
       return;
     }
     // The line sits in collapsed context: have the viewer expand it, then center it.
+    if (partial(path) && !(await hydrateToReveal(path, line))) return;
+    const id = itemIdOf(get(), path);
     set((s) => ({
-      selection: { id: item.id, range: { start: line, side: 'additions', end: line, endSide: 'additions' } },
+      selection: { id, range: { start: line, side: 'additions', end: line, endSide: 'additions' } },
       activePath: path,
       visualAnchor: null,
-      reveal: { id: item.id, path, line, col, nonce: (s.reveal?.nonce ?? 0) + 1 },
+      reveal: { id, path, line, col, nonce: (s.reveal?.nonce ?? 0) + 1 },
     }));
+  };
+
+  /** Whether `path` shows a patch-only diff, whose collapsed context the viewer cannot expand. */
+  const partial = (path: string): boolean => {
+    const entry = get().loaded[path];
+    return !get().fileView && entry?.kind === 'diff' && entry.fileDiff.isPartial;
+  };
+
+  /**
+   * Hydrate a `partial` diff ahead of the queue so its folded new-side `line` can be revealed; failing that,
+   * show the line in the whole file instead. False when nothing is left to reveal: the jump went to the
+   * file view, or a transition overtook it.
+   */
+  const hydrateToReveal = async (path: string, line: number): Promise<boolean> => {
+    const g = generation;
+    const hydrated = await hydrateNow(path);
+    if (!current(g)) return false;
+    if (hydrated) return true;
+    await quietly(() => get().openFullFile(path, line));
+    return false;
   };
 
   /**
@@ -2676,7 +2721,16 @@ export const useStore = create<ReviewState>((set, get) => {
           get().loaded[path]?.kind === 'diff' &&
           !item.rows.some((r) => r.side === 'additions' && r.line === line);
         if (folded) {
-          set((s) => ({ activePath: path, reveal: { id, path, line, nonce: (s.reveal?.nonce ?? 0) + 1 } }));
+          const reveal = () =>
+            set((s) => ({
+              activePath: path,
+              reveal: { id: itemIdOf(s, path), path, line, nonce: (s.reveal?.nonce ?? 0) + 1 },
+            }));
+          if (!partial(path)) reveal();
+          else {
+            set({ activePath: path });
+            void hydrateToReveal(path, line).then((ready) => ready && reveal());
+          }
           return;
         }
       }
