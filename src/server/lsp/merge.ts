@@ -1,4 +1,4 @@
-import type { LspHoverResponse, LspLocationsResponse } from '../../shared/protocol.js';
+import type { LspHoverResponse, LspLocationsResponse } from '@/shared/protocol.js';
 
 /** An answer whose emptiness may have a reason. */
 export interface Answer {

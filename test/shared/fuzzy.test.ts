@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fuzzyFilter, fuzzyRank, fuzzyScore } from '../../src/shared/fuzzy.js';
+import { fuzzyFilter, fuzzyRank, fuzzyScore } from '@/shared/fuzzy.js';
 
 const names = [
   'AbstractBuilderFactory',

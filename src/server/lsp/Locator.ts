@@ -2,8 +2,8 @@ import { realpathSync } from 'node:fs';
 import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { LspLocation } from '../../shared/protocol.js';
-import { mapLimit } from '../concurrency.js';
+import type { LspLocation } from '@/shared/protocol.js';
+import { mapLimit } from '@/server/concurrency.js';
 import { fileLinkUris } from './hover.js';
 
 export interface LocatorOptions {

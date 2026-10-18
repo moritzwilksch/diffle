@@ -2,16 +2,16 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommentThread, GithubMetadata } from '../../src/shared/protocol.js';
+import type { CommentThread, GithubMetadata } from '@/shared/protocol.js';
 
 const api = { exportComment: vi.fn() };
 const copyText = vi.fn();
-vi.mock('../../src/client/api.js', () => ({ api }));
-vi.mock('../../src/client/clipboard.js', () => ({ copyText }));
-vi.mock('../../src/client/Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => text }));
+vi.mock('@/client/api.js', () => ({ api }));
+vi.mock('@/client/clipboard.js', () => ({ copyText }));
+vi.mock('@/client/Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => text }));
 
-const { useStore } = await import('../../src/client/store.js');
-const { CommentCard } = await import('../../src/client/review/CommentCard.js');
+const { useStore } = await import('@/client/store.js');
+const { CommentCard } = await import('@/client/review/CommentCard.js');
 
 const thread: CommentThread = {
   id: 'thread-1',

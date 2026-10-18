@@ -1,4 +1,4 @@
-import { languageOf } from '../../shared/protocol.js';
+import { languageOf } from '@/shared/protocol.js';
 import type { JsonRpcConnection } from './JsonRpc.js';
 import { LspUnavailableError } from './LspProcess.js';
 

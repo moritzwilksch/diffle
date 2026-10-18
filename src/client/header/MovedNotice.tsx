@@ -1,7 +1,7 @@
 import { RefreshCw } from 'lucide-react';
-import { movedLabel } from '../model.js';
-import { useStore } from '../store.js';
-import { Button } from '../ui/Button.js';
+import { movedLabel } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
 
 /**
  * A refs-live comparison is not swapped out under the reviewer: once its refs move, this names

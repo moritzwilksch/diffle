@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { MatchCache, matchPattern } from '../../src/client/search/highlight.js';
-import type { SearchState } from '../../src/client/store.js';
+import { MatchCache, matchPattern } from '@/client/search/highlight.js';
+import type { SearchState } from '@/client/store.js';
 
 const base: SearchState = {
   open: true,

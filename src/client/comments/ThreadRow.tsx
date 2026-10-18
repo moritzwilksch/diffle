@@ -1,12 +1,12 @@
 import { twMerge } from 'tailwind-merge';
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import { AlertTriangle, Check, MessageSquare, Trash2 } from 'lucide-react';
 import { memo } from 'react';
-import type { CommentThread, Side } from '../../shared/protocol.js';
-import { anchorLabel } from '../model.js';
-import { Markdown } from '../Markdown.js';
-import { ButtonLabel } from '../ui/ButtonLabel.js';
-import { useConfirm } from '../useConfirm.js';
+import type { CommentThread, Side } from '@/shared/protocol.js';
+import { anchorLabel } from '@/client/model.js';
+import { Markdown } from '@/client/Markdown.js';
+import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
+import { useConfirm } from '@/client/useConfirm.js';
 
 /**
  * One thread. Memoized on the thread object and the store's stable actions, so

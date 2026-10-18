@@ -1,8 +1,8 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import type { LspOccurrence } from '../../shared/protocol.js';
-import { pathFromItemId } from '../model.js';
-import { isDeletionRow, watchRenderedRows } from '../review/rows.js';
-import { useStore } from '../store.js';
+import type { LspOccurrence } from '@/shared/protocol.js';
+import { pathFromItemId } from '@/client/model.js';
+import { isDeletionRow, watchRenderedRows } from '@/client/review/rows.js';
+import { useStore } from '@/client/store.js';
 import type { TokenTarget } from './target.js';
 import { tokenRange } from './tokenText.js';
 

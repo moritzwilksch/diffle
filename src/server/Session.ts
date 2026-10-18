@@ -15,7 +15,7 @@ import {
   shownIterations,
   type Side,
   type Snapshot,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { watchBrowserLifetime } from '../../src/cli/browserLifetime.js';
+import { watchBrowserLifetime } from '@/cli/browserLifetime.js';
 
 class FakeClients {
   listener?: (count: number) => void;

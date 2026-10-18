@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { argv0, findOnPath } from '../../src/server/lsp/which.js';
+import { argv0, findOnPath } from '@/server/lsp/which.js';
 
 let dir: string;
 let bin: string;

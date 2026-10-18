@@ -1,8 +1,8 @@
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import { FileDiff, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { composerKey } from '../model.js';
-import { useStore } from '../store.js';
+import { composerKey } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
 
 /**
  * Inline comment editor rendered as an annotation at the selection's last line. Its header names the

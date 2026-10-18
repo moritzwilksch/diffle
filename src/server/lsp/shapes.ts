@@ -1,4 +1,4 @@
-import type { LspFeature, LspPosition, LspSymbol } from '../../shared/protocol.js';
+import type { LspFeature, LspPosition, LspSymbol } from '@/shared/protocol.js';
 import type { Range } from './Locator.js';
 
 /**

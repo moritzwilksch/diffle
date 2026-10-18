@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useStore } from '../store.js';
-import { Button } from '../ui/Button.js';
+import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
 
 /**
  * Previous / next commit in a single-commit view, the mouse's share of < / >. Next walks

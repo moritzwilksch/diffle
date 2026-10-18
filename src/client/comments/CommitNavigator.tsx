@@ -8,11 +8,11 @@ import {
   type RangeCommit,
   type RangePair,
   type Snapshot,
-} from '../../shared/protocol.js';
-import { copyText } from '../clipboard.js';
-import { commitBody, listsWorktree, rangeStep } from '../model.js';
-import { useStore } from '../store.js';
-import { Button } from '../ui/Button.js';
+} from '@/shared/protocol.js';
+import { copyText } from '@/client/clipboard.js';
+import { commitBody, listsWorktree, rangeStep } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
 
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' });

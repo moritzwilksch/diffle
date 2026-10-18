@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
-import type { ServerMessage } from '../shared/protocol.js';
+import type { ServerMessage } from '@/shared/protocol.js';
 import type { RequestGuard } from './guard.js';
 
 /** Clients send nothing; anything larger than a ping is not a client. */

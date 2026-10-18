@@ -1,4 +1,4 @@
-import type { ChangedFile, ViewedState } from '../../shared/protocol.js';
+import type { ChangedFile, ViewedState } from '@/shared/protocol.js';
 
 // The decoration lane holds one span of colored text parts: the file's +/− counts, then
 // the viewed mark as a glyph (the lane takes either text or one icon, not both).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
-import { hoverOnly, lspBlocker } from '../../src/shared/lsp.js';
+import type { LspServerStatus, LspStatus } from '@/shared/protocol.js';
+import { hoverOnly, lspBlocker } from '@/shared/lsp.js';
 
 const ALL: LspServerStatus['supports'] = [
   'definition',

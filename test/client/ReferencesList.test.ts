@@ -3,16 +3,16 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/client/api.js', () => ({ api: {} }));
+vi.mock('@/client/api.js', () => ({ api: {} }));
 
 const highlighted = new Map();
-vi.mock('../../src/client/lsp/highlight.js', () => ({
+vi.mock('@/client/lsp/highlight.js', () => ({
   useHighlighted: () => highlighted,
   CodeLine: ({ fallback }: { fallback: string }) => fallback,
 }));
 
-const { useStore } = await import('../../src/client/store.js');
-const { ReferencesList } = await import('../../src/client/lsp/ReferencesList.js');
+const { useStore } = await import('@/client/store.js');
+const { ReferencesList } = await import('@/client/lsp/ReferencesList.js');
 
 const items = ['a.ts', 'b.ts'].flatMap((path) =>
   [1, 2, 3].map((line) => ({ path, line, text: `  ${path}:${line}  ` })),

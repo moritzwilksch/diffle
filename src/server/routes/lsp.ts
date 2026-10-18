@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
-import { LspPositionSchema, type LspStatus, LspLogQuerySchema, SymbolsQuerySchema } from '../../shared/protocol.js';
-import { lspBlocker, type LspQuery } from '../../shared/lsp.js';
-import type { LspPool } from '../lsp/LspPool.js';
+import { LspPositionSchema, type LspStatus, LspLogQuerySchema, SymbolsQuerySchema } from '@/shared/protocol.js';
+import { lspBlocker, type LspQuery } from '@/shared/lsp.js';
+import type { LspPool } from '@/server/lsp/LspPool.js';
 import type { ApiDeps } from './api.js';
 import { readJson } from './body.js';
 

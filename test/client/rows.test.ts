@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import { watchRenderedRows } from '../../src/client/review/rows.js';
+import { watchRenderedRows } from '@/client/review/rows.js';
 
 const frame = () => new Promise((r) => requestAnimationFrame(() => r(undefined)));
 

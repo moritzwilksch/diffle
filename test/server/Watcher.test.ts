@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { metaPaths, type WatchTarget } from '../../src/server/Watcher.js';
+import { metaPaths, type WatchTarget } from '@/server/Watcher.js';
 
 describe('metaPaths', () => {
   const gitDir = join('/repo', '.git');

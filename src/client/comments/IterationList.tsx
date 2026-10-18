@@ -1,13 +1,13 @@
 import { History, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import { type Iteration, type Snapshot, shownIterations } from '../../shared/protocol.js';
-import { iterationPick, relativeTime } from '../model.js';
-import { useStore } from '../store.js';
-import { useConfirm } from '../useConfirm.js';
+import { type Iteration, type Snapshot, shownIterations } from '@/shared/protocol.js';
+import { iterationPick, relativeTime } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
+import { useConfirm } from '@/client/useConfirm.js';
 import { CopyHash } from './CommitNavigator.js';
-import { Button } from '../ui/Button.js';
-import { ButtonLabel } from '../ui/ButtonLabel.js';
+import { Button } from '@/client/ui/Button.js';
+import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 
 /**
  * The recorded iterations of the range, newest first; the newest is where the review stands. The

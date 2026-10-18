@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CommentThread } from '../../src/shared/protocol.js';
-import { type GithubClient, GithubError } from '../../src/server/github/client.js';
-import { repoOfPrUrl } from '../../src/server/github/pulls.js';
-import { buildReview, GithubExporter, formatBody, type ExportInput } from '../../src/server/github/review.js';
+import type { CommentThread } from '@/shared/protocol.js';
+import { type GithubClient, GithubError } from '@/server/github/client.js';
+import { repoOfPrUrl } from '@/server/github/pulls.js';
+import { buildReview, GithubExporter, formatBody, type ExportInput } from '@/server/github/review.js';
 
 const PR_URL = 'https://github.com/o/r/pull/7';
 

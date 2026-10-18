@@ -1,7 +1,7 @@
 import { BookOpen } from 'lucide-react';
-import { Dialog, DialogContent } from '../ui/dialog.js';
-import { Button } from '../ui/Button.js';
-import { useStore } from '../store.js';
+import { Dialog, DialogContent } from '@/client/ui/dialog.js';
+import { Button } from '@/client/ui/Button.js';
+import { useStore } from '@/client/store.js';
 
 type Row = [keys: string, action: string];
 export type HelpSection = { title: string; rows: Row[] };

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { type GithubPullRequest, GithubPullRequestSchema } from '../../shared/protocol.js';
-import type { GitRepo } from '../git/GitRepo.js';
+import { type GithubPullRequest, GithubPullRequestSchema } from '@/shared/protocol.js';
+import type { GitRepo } from '@/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from './client.js';
 
 /** GitHub.com identity from a configured HTTPS, SSH, or scp-style remote URL. */

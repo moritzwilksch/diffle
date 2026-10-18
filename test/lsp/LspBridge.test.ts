@@ -3,10 +3,10 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { LspSettings } from '../../src/server/lsp/configuration.js';
-import { LspBridge } from '../../src/server/lsp/LspBridge.js';
-import { LspUnavailableError } from '../../src/server/lsp/LspProcess.js';
-import type { LspProcessStatus } from '../../src/shared/protocol.js';
+import type { LspSettings } from '@/server/lsp/configuration.js';
+import { LspBridge } from '@/server/lsp/LspBridge.js';
+import { LspUnavailableError } from '@/server/lsp/LspProcess.js';
+import type { LspProcessStatus } from '@/shared/protocol.js';
 import { flush } from './flush.js';
 
 const ROOT = '/repo';

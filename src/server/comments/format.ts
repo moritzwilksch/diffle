@@ -1,4 +1,4 @@
-import type { CommentMessage, CommentThread } from '../../shared/protocol.js';
+import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { compareThreads } from './anchor.js';
 
 /**

@@ -2,8 +2,8 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { candidatesFor, CANDIDATES, definitionOf, resolveServers } from '../../src/server/lsp/registry.js';
-import { LANGUAGE_IDS } from '../../src/shared/protocol.js';
+import { candidatesFor, CANDIDATES, definitionOf, resolveServers } from '@/server/lsp/registry.js';
+import { LANGUAGE_IDS } from '@/shared/protocol.js';
 import { rmTmp } from '../tmp.js';
 
 const dirs: string[] = [];

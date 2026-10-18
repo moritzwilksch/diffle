@@ -1,4 +1,4 @@
-import type { LanguageId, LspMissing } from '../../shared/protocol.js';
+import type { LanguageId, LspMissing } from '@/shared/protocol.js';
 import { loadSchemaCatalog, SCHEMA_CATALOG, type LspSettings } from './configuration.js';
 import { tsdkLocation } from './tsdk.js';
 import { VUE_PLUGIN, vuePlugin, vuePluginLocation } from './vue.js';

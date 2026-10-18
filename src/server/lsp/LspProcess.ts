@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
-import type { LspFeature, LspLogEntry, LspProcessStatus } from '../../shared/protocol.js';
+import type { LspFeature, LspLogEntry, LspProcessStatus } from '@/shared/protocol.js';
 import { configurationItems, type LspSettings } from './configuration.js';
 import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
 import { ServerOutput } from './ServerOutput.js';

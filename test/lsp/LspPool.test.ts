@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LspUnavailableError } from '../../src/server/lsp/LspProcess.js';
-import { LspPool, type LspPoolOptions } from '../../src/server/lsp/LspPool.js';
-import type { LanguageId, LspStatus } from '../../src/shared/protocol.js';
+import { LspUnavailableError } from '@/server/lsp/LspProcess.js';
+import { LspPool, type LspPoolOptions } from '@/server/lsp/LspPool.js';
+import type { LanguageId, LspStatus } from '@/shared/protocol.js';
 import { flush } from './flush.js';
 
 /** A worktree snapshot changing `paths`. */

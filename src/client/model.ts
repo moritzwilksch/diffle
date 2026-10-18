@@ -14,8 +14,8 @@ import {
   type Snapshot,
   type UserConfig,
   type ViewedState,
-} from '../shared/protocol.js';
-import { fuzzyFilter } from '../shared/fuzzy.js';
+} from '@/shared/protocol.js';
+import { fuzzyFilter } from '@/shared/fuzzy.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
 import type { ReviewState } from './store.js';
 
@@ -441,7 +441,7 @@ export function repoName(snapshot: Snapshot): string {
 /** Browser tab title; the PR number tells tabs of one repository apart. */
 export function documentTitle(
   snapshot: Snapshot,
-  github: import('../shared/protocol.js').GithubMetadata | null = null,
+  github: import('@/shared/protocol.js').GithubMetadata | null = null,
 ): string {
   const pr = github?.pullRequest;
   return pr ? `diffle: ${pr.repository} #${pr.number}` : `diffle: ${repoName(snapshot)}`;

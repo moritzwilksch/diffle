@@ -13,20 +13,20 @@ import {
   SearchQuerySchema,
   ConfigUpdateSchema,
   PatchQuerySchema,
-} from '../../shared/protocol.js';
-import { NotFoundError, UnquotableError } from '../comments/CommentStore.js';
-import { shownRanges } from '../comments/hunks.js';
-import { mapLimit } from '../concurrency.js';
-import { ImportError } from '../comments/import.js';
-import { GitError, isBinary } from '../git/GitRepo.js';
-import { GithubError } from '../github/client.js';
-import { imageType } from '../image.js';
-import { LspUnavailableError } from '../lsp/LspProcess.js';
-import type { LspPool } from '../lsp/LspPool.js';
-import { RevspecError } from '../mode/revspec.js';
-import type { Session } from '../Session.js';
-import type { UserConfigStore } from '../UserConfig.js';
-import type { WsHub } from '../ws.js';
+} from '@/shared/protocol.js';
+import { NotFoundError, UnquotableError } from '@/server/comments/CommentStore.js';
+import { shownRanges } from '@/server/comments/hunks.js';
+import { mapLimit } from '@/server/concurrency.js';
+import { ImportError } from '@/server/comments/import.js';
+import { GitError, isBinary } from '@/server/git/GitRepo.js';
+import { GithubError } from '@/server/github/client.js';
+import { imageType } from '@/server/image.js';
+import { LspUnavailableError } from '@/server/lsp/LspProcess.js';
+import type { LspPool } from '@/server/lsp/LspPool.js';
+import { RevspecError } from '@/server/mode/revspec.js';
+import type { Session } from '@/server/Session.js';
+import type { UserConfigStore } from '@/server/UserConfig.js';
+import type { WsHub } from '@/server/ws.js';
 import { readJson } from './body.js';
 import { commentRoutes } from './comments.js';
 import { lspRoutes } from './lsp.js';

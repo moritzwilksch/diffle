@@ -1,5 +1,5 @@
 // GraphQL operations on the viewer's pending review: find it, read its comments, create it, extend it.
-import type { GithubPullRequest } from '../../shared/protocol.js';
+import type { GithubPullRequest } from '@/shared/protocol.js';
 import { type GithubClient, GithubError } from './client.js';
 import { repoOfPrUrl } from './pulls.js';
 

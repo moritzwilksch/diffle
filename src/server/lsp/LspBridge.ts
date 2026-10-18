@@ -10,8 +10,8 @@ import type {
   LspProcessStatus,
   LspSymbol,
   LspSymbolsResponse,
-} from '../../shared/protocol.js';
-import { LSP_FEATURE_LABELS } from '../../shared/lsp.js';
+} from '@/shared/protocol.js';
+import { LSP_FEATURE_LABELS } from '@/shared/lsp.js';
 import { Documents } from './Documents.js';
 import { hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcError } from './JsonRpc.js';

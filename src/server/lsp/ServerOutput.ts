@@ -1,4 +1,4 @@
-import type { LspLogEntry, LspLogLevel, LspLogSource, LspProcessStatus } from '../../shared/protocol.js';
+import type { LspLogEntry, LspLogLevel, LspLogSource, LspProcessStatus } from '@/shared/protocol.js';
 
 /** The status fields one piece of output moves. */
 export type OutputChange =

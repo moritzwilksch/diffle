@@ -1,8 +1,8 @@
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
 import { useMemo } from 'react';
-import { countViewed, filesUnder, isCollapsed, isViewed } from '../model.js';
-import { useStore } from '../store.js';
-import { Button } from '../ui/Button.js';
+import { countViewed, filesUnder, isCollapsed, isViewed } from '@/client/model.js';
+import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
 
 /** Flips a directory as one: all viewed becomes none, anything less becomes all. */
 export function toggleDirectoryViewed(dir: string) {

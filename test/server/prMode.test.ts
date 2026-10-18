@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
-import { openReviewRepository } from '../../src/cli/repository.js';
-import { GitRepo } from '../../src/server/git/GitRepo.js';
-import { type GithubClient, GithubError } from '../../src/server/github/client.js';
-import { viewPr } from '../../src/server/github/pulls.js';
-import { resolveReview } from '../../src/server/mode/resolve.js';
+import { openReviewRepository } from '@/cli/repository.js';
+import { GitRepo } from '@/server/git/GitRepo.js';
+import { type GithubClient, GithubError } from '@/server/github/client.js';
+import { viewPr } from '@/server/github/pulls.js';
+import { resolveReview } from '@/server/mode/resolve.js';
 
 /**
  * The temp root as git reports it: macOS reaches `os.tmpdir()` through a symlink

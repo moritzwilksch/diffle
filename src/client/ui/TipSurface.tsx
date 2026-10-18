@@ -1,5 +1,5 @@
 import { useMemo, type ComponentProps } from 'react';
-import { Tooltip, TooltipContent } from '@/ui/tooltip';
+import { Tooltip, TooltipContent } from '@/client/ui/tooltip';
 
 /** Space between the anchor and the tip. */
 const GAP = 6;

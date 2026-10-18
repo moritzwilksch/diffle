@@ -3,7 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { LspLogEntry, LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
+import type { LspLogEntry, LspServerStatus, LspStatus } from '@/shared/protocol.js';
 
 const { state } = vi.hoisted(() => ({
   state: {
@@ -21,12 +21,12 @@ const { state } = vi.hoisted(() => ({
     fileView: null,
   },
 }));
-vi.mock('../../src/client/store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
-vi.mock('../../src/client/header/ModePicker.js', () => ({ ModePicker: () => null }));
-vi.mock('../../src/client/header/SettingsDialog.js', () => ({ SettingsDialog: () => null }));
-vi.mock('../../src/client/clipboard.js', () => ({ copyText: vi.fn() }));
-import { copyText } from '../../src/client/clipboard.js';
-import { Header } from '../../src/client/header/Header.js';
+vi.mock('@/client/store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
+vi.mock('@/client/header/ModePicker.js', () => ({ ModePicker: () => null }));
+vi.mock('@/client/header/SettingsDialog.js', () => ({ SettingsDialog: () => null }));
+vi.mock('@/client/clipboard.js', () => ({ copyText: vi.fn() }));
+import { copyText } from '@/client/clipboard.js';
+import { Header } from '@/client/header/Header.js';
 
 function render(...statuses: Partial<LspServerStatus>[]) {
   state.lsp.servers = statuses.map((status, i) => ({

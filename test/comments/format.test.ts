@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatPrompt, parseSuggestions } from '../../src/server/comments/format.js';
-import type { CommentMessage, CommentThread } from '../../src/shared/protocol.js';
+import { formatPrompt, parseSuggestions } from '@/server/comments/format.js';
+import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 
 const msg = (body: string, over: Partial<CommentMessage> = {}): CommentMessage => ({
   id: 'm',

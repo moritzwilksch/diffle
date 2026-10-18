@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { copyFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { withFileLock, writeFileAtomic } from '../persist.js';
+import { withFileLock, writeFileAtomic } from '@/server/persist.js';
 import type {
   CommentAnchor,
   CommentMessage,
@@ -13,7 +13,7 @@ import type {
   ThreadCreate,
   ThreadQuery,
   ViewedEntry,
-} from '../../shared/protocol.js';
+} from '@/shared/protocol.js';
 import { compareThreads, relocate } from './anchor.js';
 import { isShown, type LineRange } from './hunks.js';
 import { isDuplicate } from './import.js';

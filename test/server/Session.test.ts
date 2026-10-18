@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
-import { GitRepo } from '../../src/server/git/GitRepo.js';
-import { type GithubClient, GithubError } from '../../src/server/github/client.js';
-import { RevspecError } from '../../src/server/mode/revspec.js';
-import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
-import type { WatchTarget } from '../../src/server/Watcher.js';
-import { comparisonLabel, type ServerMessage, type Snapshot } from '../../src/shared/protocol.js';
+import { GitRepo } from '@/server/git/GitRepo.js';
+import { type GithubClient, GithubError } from '@/server/github/client.js';
+import { RevspecError } from '@/server/mode/revspec.js';
+import { Session, sidePath, readablePaths, type WatcherLike } from '@/server/Session.js';
+import type { WatchTarget } from '@/server/Watcher.js';
+import { comparisonLabel, type ServerMessage, type Snapshot } from '@/shared/protocol.js';
 
 let dir: string;
 let outside: string;

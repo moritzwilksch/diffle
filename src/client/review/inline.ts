@@ -1,4 +1,4 @@
-import { remPx } from '../scale.js';
+import { remPx } from '@/client/scale.js';
 import { overflow } from './geometry.js';
 
 /** Room kept between a revealed target and the edges of its code column, in rem. */

@@ -13,8 +13,8 @@ import {
   type LspStatus,
   type LspSymbolsResponse,
   type Snapshot,
-} from '../../shared/protocol.js';
-import { fuzzyRank } from '../../shared/fuzzy.js';
+} from '@/shared/protocol.js';
+import { fuzzyRank } from '@/shared/fuzzy.js';
 import { LspBridge } from './LspBridge.js';
 import { type Answer, mergeHovers, mergeLocations, union } from './merge.js';
 import { LspUnavailableError } from './LspProcess.js';

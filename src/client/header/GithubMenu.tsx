@@ -1,7 +1,7 @@
 import { GitPullRequest, ExternalLink } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { useStore } from '../store.js';
-import { Button } from '../ui/Button.js';
+import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
 
 /** GitHub metadata loads independently of the diff. */
 export function GithubMenu() {

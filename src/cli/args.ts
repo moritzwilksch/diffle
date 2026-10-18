@@ -1,5 +1,5 @@
 import { InvalidArgumentError } from 'commander';
-import { type FollowRefs, FollowRefsSchema, LANGUAGE_IDS, type LanguageId } from '../shared/protocol.js';
+import { type FollowRefs, FollowRefsSchema, LANGUAGE_IDS, type LanguageId } from '@/shared/protocol.js';
 
 /** Commander parser for an integer in [min, max]; anything else is a usage error. */
 function intArg(min: number, max: number): (raw: string) => number {

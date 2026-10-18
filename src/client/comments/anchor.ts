@@ -1,5 +1,5 @@
 import type { CodeViewLineSelection, FileDiffMetadata } from '@pierre/diffs';
-import type { LineAnchor, Side } from '../../shared/protocol.js';
+import type { LineAnchor, Side } from '@/shared/protocol.js';
 
 export interface ResolvedRange {
   side: Side;

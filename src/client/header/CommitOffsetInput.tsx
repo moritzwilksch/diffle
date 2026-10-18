@@ -1,4 +1,4 @@
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 

@@ -1,5 +1,5 @@
-import { MAX_RANGE_COMMITS } from '../shared/protocol.js';
-import type { ChangedFile, Iteration, ModeSpec, RangeCommits, ReviewedCommit, Snapshot } from '../shared/protocol.js';
+import { MAX_RANGE_COMMITS } from '@/shared/protocol.js';
+import type { ChangedFile, Iteration, ModeSpec, RangeCommits, ReviewedCommit, Snapshot } from '@/shared/protocol.js';
 import { mapLimit } from './concurrency.js';
 import { looksGenerated, SNIFF_BYTES } from './generated.js';
 import type { GitRepo } from './git/GitRepo.js';

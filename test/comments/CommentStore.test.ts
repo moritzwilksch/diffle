@@ -9,8 +9,8 @@ import {
   UnquotableError,
   type AnchorSource,
   type ReviewView,
-} from '../../src/server/comments/CommentStore.js';
-import type { LineRange } from '../../src/server/comments/hunks.js';
+} from '@/server/comments/CommentStore.js';
+import type { LineRange } from '@/server/comments/hunks.js';
 
 let dir: string;
 beforeEach(async () => {

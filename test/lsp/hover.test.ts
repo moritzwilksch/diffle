@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hoverMarkdown } from '../../src/server/lsp/hover.js';
+import { hoverMarkdown } from '@/server/lsp/hover.js';
 
 describe('hoverMarkdown', () => {
   it('passes markdown through and drops empty results', () => {

@@ -2,7 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { writeFileAtomic } from '../persist.js';
+import { writeFileAtomic } from '@/server/persist.js';
 import { JsonRpcError } from './JsonRpc.js';
 
 export const SCHEMA_CATALOG = 'https://www.schemastore.org/api/json/catalog.json';

@@ -3,7 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-const { TooltipHost } = await import('../../src/client/ui/TitleTooltips.js');
+const { TooltipHost } = await import('@/client/ui/TitleTooltips.js');
 
 let root: Root;
 let host: HTMLDivElement;

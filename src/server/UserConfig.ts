@@ -7,7 +7,7 @@ import {
   LANGUAGE_IDS,
   type LanguageId,
   type UserConfig,
-} from '../shared/protocol.js';
+} from '@/shared/protocol.js';
 import { writeFileAtomic } from './persist.js';
 
 /** Owns `$XDG_CONFIG_HOME/diffle/config.json`. Machine-wide, not per repo. Writes are serialized. */

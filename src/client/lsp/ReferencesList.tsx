@@ -1,12 +1,12 @@
-import { Dialog, DialogContent } from '../ui/dialog.js';
+import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { twMerge } from 'tailwind-merge';
 import { FileCode2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FilePath } from '../FilePath.js';
-import { focusReview } from '../keyboard/useKeymap.js';
-import { overflow } from '../review/geometry.js';
-import { type Match, useStore } from '../store.js';
-import type { ThemeChoice } from '../theme.js';
+import { FilePath } from '@/client/FilePath.js';
+import { focusReview } from '@/client/keyboard/useKeymap.js';
+import { overflow } from '@/client/review/geometry.js';
+import { type Match, useStore } from '@/client/store.js';
+import type { ThemeChoice } from '@/client/theme.js';
 import { CodeLine, type HlToken, highlightLines, useHighlighted } from './highlight.js';
 
 interface Row {

@@ -1,5 +1,5 @@
-import { ThreadCreateSchema } from '../../shared/protocol.js';
-import type { CommentThread, ThreadCreate } from '../../shared/protocol.js';
+import { ThreadCreateSchema } from '@/shared/protocol.js';
+import type { CommentThread, ThreadCreate } from '@/shared/protocol.js';
 
 /** A payload that is not valid JSON or not a ThreadCreate. The caller's fault. */
 export class ImportError extends Error {}

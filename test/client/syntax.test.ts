@@ -1,7 +1,7 @@
 import { createHighlighter, createJavaScriptRegexEngine, type Highlighter } from 'shiki';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { SyntaxClassifier } from '../../src/client/lsp/SyntaxClassifier.js';
-import { languageOf } from '../../src/client/lsp/syntax.js';
+import { SyntaxClassifier } from '@/client/lsp/SyntaxClassifier.js';
+import { languageOf } from '@/client/lsp/syntax.js';
 
 // prettier-ignore
 const LANGS = ['python', 'javascript', 'typescript', 'tsx', 'rust', 'go', 'c', 'cpp', 'ruby', 'java', 'lua', 'zig', 'swift', 'php', 'shellscript', 'ocaml', 'csharp', 'kotlin'];

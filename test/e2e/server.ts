@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { rmTmp } from '../tmp.js';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CommentThread, ThreadCreate } from '../../src/shared/protocol.js';
+import type { CommentThread, ThreadCreate } from '@/shared/protocol.js';
 
 /** The diffle checkout that contains this file. */
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requestGuard } from '../../src/server/guard.js';
+import { requestGuard } from '@/server/guard.js';
 
 describe('requestGuard', () => {
   const loop = requestGuard('127.0.0.1');

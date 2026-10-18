@@ -10,8 +10,8 @@ import type {
   RangeCommit,
   RangeCommits,
   RefsResponse,
-} from '../../shared/protocol.js';
-import { mapLimit } from '../concurrency.js';
+} from '@/shared/protocol.js';
+import { mapLimit } from '@/server/concurrency.js';
 
 const MAX_BUFFER = 512 * 1024 * 1024;
 /** A search that runs this long is a runaway regex, not a slow repository. */

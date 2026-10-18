@@ -2,8 +2,8 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { definitionOf } from '../../src/server/lsp/registry.js';
-import { tsdkLocation } from '../../src/server/lsp/tsdk.js';
+import { definitionOf } from '@/server/lsp/registry.js';
+import { tsdkLocation } from '@/server/lsp/tsdk.js';
 import { rmTmp } from '../tmp.js';
 
 const dirs: string[] = [];

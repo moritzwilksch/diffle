@@ -1,9 +1,9 @@
 import { twMerge } from 'tailwind-merge';
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import { Hash, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { FilePath } from '../FilePath.js';
-import { useStore } from '../store.js';
+import { FilePath } from '@/client/FilePath.js';
+import { useStore } from '@/client/store.js';
 import { KIND_LABEL, kindGroup } from './symbolKind.js';
 
 /** Symbol search (gs: current file, gS: repository). Type to filter, ↑/↓ or Ctrl+n/p to move, Enter to jump. */

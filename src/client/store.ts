@@ -26,8 +26,8 @@ import {
   type UserConfig,
   type ViewedEntry,
   type LspLogEntry,
-} from '../shared/protocol.js';
-import { hoverOnly, joinedBy, lspBlocker } from '../shared/lsp.js';
+} from '@/shared/protocol.js';
+import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
 import {

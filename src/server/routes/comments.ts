@@ -8,10 +8,10 @@ import {
   ThreadQuerySchema,
   ViewedBulkRequestSchema,
   ViewedEntrySchema,
-} from '../../shared/protocol.js';
-import { NotFoundError } from '../comments/CommentStore.js';
-import { formatPrompt } from '../comments/format.js';
-import { parseImports } from '../comments/import.js';
+} from '@/shared/protocol.js';
+import { NotFoundError } from '@/server/comments/CommentStore.js';
+import { formatPrompt } from '@/server/comments/format.js';
+import { parseImports } from '@/server/comments/import.js';
 import type { ApiDeps } from './api.js';
 import { readJson } from './body.js';
 

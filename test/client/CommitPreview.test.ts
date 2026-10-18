@@ -2,11 +2,11 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { LastCommitsPreview } from '../../src/shared/protocol.js';
+import type { LastCommitsPreview } from '@/shared/protocol.js';
 
-vi.mock('../../src/client/api.js', () => ({ api: { lastCommitsPreview: vi.fn() } }));
-const { api } = await import('../../src/client/api.js');
-const { CommitPreview } = await import('../../src/client/header/CommitPreview.js');
+vi.mock('@/client/api.js', () => ({ api: { lastCommitsPreview: vi.fn() } }));
+const { api } = await import('@/client/api.js');
+const { CommitPreview } = await import('@/client/header/CommitPreview.js');
 let root: Root;
 let host: HTMLDivElement;
 const requests: { signal?: AbortSignal; resolve: (result: LastCommitsPreview) => void }[] = [];

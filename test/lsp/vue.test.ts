@@ -2,8 +2,8 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { definitionOf } from '../../src/server/lsp/registry.js';
-import { vuePluginLocation } from '../../src/server/lsp/vue.js';
+import { definitionOf } from '@/server/lsp/registry.js';
+import { vuePluginLocation } from '@/server/lsp/vue.js';
 import { rmTmp } from '../tmp.js';
 
 const dirs: string[] = [];

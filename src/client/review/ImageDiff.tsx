@@ -1,9 +1,9 @@
 import { useEffect, useReducer, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { imageKey, type Side } from '../../shared/protocol.js';
-import { api } from '../api.js';
-import type { ImageSides } from '../model.js';
-import { useStore, type ImageCompare, IMAGE_COMPARES } from '../store.js';
-import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
+import { imageKey, type Side } from '@/shared/protocol.js';
+import { api } from '@/client/api.js';
+import type { ImageSides } from '@/client/model.js';
+import { useStore, type ImageCompare, IMAGE_COMPARES } from '@/client/store.js';
+import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { useStandIn } from './PlaceholderBanner.js';
 
 interface Size {

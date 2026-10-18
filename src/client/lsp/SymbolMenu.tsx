@@ -1,8 +1,8 @@
-import { Button } from '../ui/Button.js';
+import { Button } from '@/client/ui/Button.js';
 import { Crosshair, Link2, Shapes } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import { remPx } from '../scale.js';
-import { useStore } from '../store.js';
+import { remPx } from '@/client/scale.js';
+import { useStore } from '@/client/store.js';
 import { CodeLine, useHighlighted } from './highlight.js';
 
 /** Popover at a clicked symbol: go to definition, list references, or go to its type's definition. Any other click, scroll, or Esc closes it. */

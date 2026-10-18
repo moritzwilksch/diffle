@@ -1,10 +1,10 @@
 import type { FileTreeDirectoryHandle } from '@pierre/trees';
 import { FileTree } from '@pierre/trees';
 import { describe, expect, it } from 'vitest';
-import type { ReviewState } from '../../src/client/store.js';
-import type { ChangedFile } from '../../src/shared/protocol.js';
-import { DEFAULT_USER_CONFIG } from '../../src/shared/protocol.js';
-import type { SyncKeys } from '../../src/client/tree/sync.js';
+import type { ReviewState } from '@/client/store.js';
+import type { ChangedFile } from '@/shared/protocol.js';
+import { DEFAULT_USER_CONFIG } from '@/shared/protocol.js';
+import type { SyncKeys } from '@/client/tree/sync.js';
 import {
   decorationKey,
   directoriesOf,
@@ -12,7 +12,7 @@ import {
   statusKey,
   syncStep,
   toGitStatus,
-} from '../../src/client/tree/sync.js';
+} from '@/client/tree/sync.js';
 
 function file(path: string, extra: Partial<ChangedFile> = {}): ChangedFile {
   return {

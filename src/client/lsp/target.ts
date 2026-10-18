@@ -1,4 +1,4 @@
-import type { LspLocation, Side } from '../../shared/protocol.js';
+import type { LspLocation, Side } from '@/shared/protocol.js';
 
 /** The token `gd` / `gA` act on: keyboard-focused (w / b) first, else under the pointer. */
 export interface TokenTarget {
