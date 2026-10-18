@@ -1,0 +1,3 @@
+quality gate: src/edge.ts is 331 lines; the cap is 330.
+  Move code into a module with its own responsibility, or list a cohesive unit
+  (generated code, a data catalog) in .locignore with a reason.

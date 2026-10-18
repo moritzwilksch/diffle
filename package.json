@@ -1,6 +1,6 @@
 {
   "name": "@moritzwilksch/diffle",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Local git diff reviewer in the browser with line comments exported as agent prompts",
   "keywords": [
     "agent",
@@ -48,14 +48,19 @@
     "test:e2e:install": "playwright install chromium",
     "test:e2e:install-deps": "playwright install-deps chromium",
     "screenshot": "tsx scripts/screenshot.ts",
+    "videos": "tsx scripts/record-videos.ts",
     "test:e2e:docker": "node scripts/e2e-docker.mjs",
     "test:e2e:docker:update": "node scripts/e2e-docker.mjs --update-snapshots",
     "test:e2e:report": "playwright show-report playwright-report",
     "test:e2e:update": "playwright test --update-snapshots",
     "snapshot-report": "tsx scripts/snapshot-report.ts",
+    "quality-gate": "tsx scripts/quality-gate.ts",
+    "install-hooks": "lefthook install",
+    "check": "lefthook run pre-commit --all-files",
     "prepack": "npm run build"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@hono/node-server": "^1.14.0",
     "@octokit/core": "^7.0.8",
     "@pierre/diffs": "1.5.2",
@@ -90,6 +95,7 @@
     "@vitejs/plugin-react": "^5",
     "eslint-plugin-better-tailwindcss": "^4.7.0",
     "jsdom": "^30.0.1",
+    "lefthook": "^2.2.2",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
     "pixelmatch": "^7.2.0",

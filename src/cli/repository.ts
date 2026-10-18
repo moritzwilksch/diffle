@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { type GithubClient, GithubError, NO_TOKEN } from '../server/github/client.js';
 import { viewPr } from '../server/github/pulls.js';
-import { remoteSlug } from '../server/mode.js';
+import { remoteSlug } from '../server/mode/resolve.js';
 import type { EntryRequest } from '../shared/protocol.js';
 
 /** Foreign PRs live in a disposable clone, never in the caller's object database. */

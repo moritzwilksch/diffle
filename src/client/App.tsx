@@ -8,7 +8,7 @@ import { documentTitle } from './model.js';
 import { ReviewPane } from './review/ReviewPane.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
-import { TooltipHost } from './ui/Tooltip.js';
+import { TooltipHost } from './ui/TitleTooltips.js';
 
 export function App() {
   const boot = useStore((s) => s.boot);

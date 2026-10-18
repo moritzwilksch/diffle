@@ -75,6 +75,12 @@ test.describe('copying a file path', () => {
 
   test('dragging across the path selects it without collapsing the file', async ({ page }) => {
     await gotoFile(page, path);
+    // The jump parks the header at the pane's top edge, where Chromium autoscrolls a drag-selection
+    // and drags its anchor off the path; bring it down out of that belt first.
+    const scroller = page.locator('.codeview');
+    const top = await scroller.evaluate((el) => el.scrollTop);
+    await scroller.evaluate((el) => el.scrollBy(0, -80));
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(top - 80);
     // The FilePath span, first after the icon; its text splits into directory and basename parts.
     const name = page.locator(`[slot="header-custom"] [data-path="${path}"] > div > span`).first();
     const box = (await name.boundingBox())!;

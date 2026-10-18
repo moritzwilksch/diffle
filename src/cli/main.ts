@@ -7,7 +7,7 @@ import { GitError, GitRepo } from '../server/git/GitRepo.js';
 import { createGithubClient, type GithubClient, GithubError, resolveToken } from '../server/github/client.js';
 import { LspPool } from '../server/lsp/LspPool.js';
 import { resolveServers } from '../server/lsp/registry.js';
-import { RevspecError } from '../server/revspec.js';
+import { RevspecError } from '../server/mode/revspec.js';
 import { DEFAULT_PORT, hasClientBuild, Server } from '../server/Server.js';
 import { Session } from '../server/Session.js';
 import { UserConfigStore } from '../server/UserConfig.js';

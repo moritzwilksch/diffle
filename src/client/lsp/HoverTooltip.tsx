@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { Markdown } from '../Markdown.js';
 import { useStore, type HoverState } from '../store.js';
-import { TooltipSurface } from '../ui/Tooltip.js';
+import { TipSurface } from '../ui/TipSurface.js';
 import type { TokenTarget } from './target.js';
 
 /** Pointer rest before the server is asked; moving across tokens asks nothing. */
@@ -103,21 +103,21 @@ export function HoverTooltip() {
     };
   }, []);
   if (!hover) return null;
-  return <Tip hover={hover} boxRef={ref} />;
+  return <Tip hover={hover} ref={ref} />;
 }
 
-function Tip({ hover, boxRef }: { hover: HoverState; boxRef: RefObject<HTMLDivElement | null> }) {
+function Tip({ hover, ref }: { hover: HoverState; ref: RefObject<HTMLDivElement | null> }) {
   // Dismissed from under the pointer (a key, a click elsewhere), the box gets no pointer leave.
   useEffect(() => hoverControl.tipLeave, []);
   return (
-    <TooltipSurface
-      boxRef={boxRef}
+    <TipSurface
+      ref={ref}
       anchor={hover.anchor}
       className="hover-markdown max-h-[45vh] max-w-[min(40rem,_90vw)] overflow-auto"
       onPointerEnter={hoverControl.tipEnter}
       onPointerLeave={hoverControl.tipLeave}
     >
       <Markdown text={hover.contents} path={hover.target.path} highlight />
-    </TooltipSurface>
+    </TipSurface>
   );
 }

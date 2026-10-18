@@ -36,6 +36,13 @@
   }
 }
 
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
 @keyframes flash-in {
   from {
     opacity: 0;

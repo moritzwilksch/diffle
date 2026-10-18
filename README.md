@@ -10,9 +10,9 @@ Review a Git diff in the browser and comment on lines, blocks, or whole files. T
 comments to an agent as a prompt, or to GitHub as a pending review.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/diffle-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset=".github/assets/diffle-light.png">
-  <img alt="diffle reviewing a git diff" src=".github/assets/diffle-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/review-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/review-light.gif">
+  <img alt="A review in diffle: two comments on a rate-limiting change, then yy copies them as one prompt" src=".github/assets/videos/review-light.gif">
 </picture>
 
 ## Install
@@ -188,6 +188,7 @@ npm run dev -- working
 npm test && npm run typecheck && npm run build
 ```
 
+`npm run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `npm run check` runs the same hook over every file, as CI does.
 Restart `npm run dev` after client changes; the server serves `dist/client`.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. Screenshot tests run in Docker so they match CI:

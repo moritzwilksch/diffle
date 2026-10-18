@@ -24,3 +24,15 @@ test('masks the version in the settings dialog', async ({ page }) => {
   // does not depend on the version's length.
   await expect(page).toHaveScreenshot('settings.png', { mask: [page.getByTitle('Installed diffle version')] });
 });
+
+test('closes the settings dialog on Escape and on a click outside it', async ({ page }) => {
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(dialog).toHaveCount(0);
+});

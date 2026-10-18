@@ -11,6 +11,8 @@ export default defineConfig({
   root: clientRoot,
   base: './',
   plugins: [react(), tailwindcss()],
+  // The `@/` alias the shadcn CLI writes into components (see components.json).
+  resolve: { alias: { '@': clientRoot } },
   appType: 'spa',
   // The client ships inside the same package as the server, so the build-time version is the running one.
   define: { __DIFFLE_VERSION__: JSON.stringify(pkg.version) },

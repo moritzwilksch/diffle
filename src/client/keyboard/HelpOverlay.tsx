@@ -1,5 +1,5 @@
 import { BookOpen } from 'lucide-react';
-import { Dialog } from '../ui/Dialog.js';
+import { Dialog, DialogContent } from '../ui/dialog.js';
 import { Button } from '../ui/Button.js';
 import { useStore } from '../store.js';
 
@@ -125,55 +125,64 @@ const LINK =
 export function HelpOverlay() {
   const open = useStore((s) => s.helpOpen);
   const setOpen = useStore((s) => s.setHelpOpen);
-  if (!open) return null;
   return (
-    <Dialog
-      label="Keyboard shortcuts"
-      onClose={() => setOpen(false)}
-      className="flex max-h-[calc(100vh_-_2rem)] w-max max-w-[96vw] flex-col overflow-hidden p-0"
-    >
-      <div className="flex items-center justify-between border-b border-b-border px-4.5 pt-3 pb-2.5">
-        <h3 className="m-0 text-[0.9375rem]">Keyboard shortcuts</h3>
-        <div className="flex items-center">
-          <a className={LINK} href="https://diffle.app" target="_blank" rel="noreferrer" aria-label="Docs" title="Docs">
-            <BookOpen size="1rem" aria-hidden="true" />
-          </a>
-          <a
-            className={LINK}
-            href="https://github.com/moritzwilksch/diffle"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="GitHub repository"
-            title="GitHub repository"
-          >
-            <GithubMark />
-          </a>
-          <Button className="ml-2" onClick={() => setOpen(false)}>
-            Close
-          </Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-[auto_auto] items-start gap-x-10 overflow-auto px-4.5 pt-2.5 pb-3.5 text-[0.75rem] whitespace-nowrap">
-        {COLUMNS.map((sections, col) => (
-          <div key={col} className="grid grid-cols-[max-content_1fr] content-start gap-x-3">
-            {sections.map((section) => (
-              <section className="col-span-full mb-2.5 grid grid-cols-subgrid last:mb-0" key={section.title}>
-                <h4 className="col-span-full m-0 mb-0.5 text-[0.75rem] font-semibold text-muted">{section.title}</h4>
-                {section.rows.map(([k, a]) => (
-                  <div key={k} className="col-span-full grid grid-cols-subgrid items-baseline leading-[1.7]">
-                    <span className="inline-flex gap-1.5">
-                      {k.split(/\s{2,}/).map((part, i) => (
-                        <kbd key={i}>{part}</kbd>
-                      ))}
-                    </span>
-                    <span>{a}</span>
-                  </div>
-                ))}
-              </section>
-            ))}
+    <Dialog open={open} onOpenChange={setOpen}>
+      {/* Nothing here takes input, and the first tabbable (the Docs link) would open ringed. */}
+      <DialogContent
+        initialFocus={false}
+        aria-label="Keyboard shortcuts"
+        className="flex max-h-[calc(100vh_-_2rem)] w-max max-w-[96vw] flex-col overflow-hidden p-0"
+      >
+        <div className="flex items-center justify-between border-b border-b-border px-4.5 pt-3 pb-2.5">
+          <h3 className="m-0 text-[0.9375rem]">Keyboard shortcuts</h3>
+          <div className="flex items-center">
+            <a
+              className={LINK}
+              href="https://diffle.app"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Docs"
+              title="Docs"
+            >
+              <BookOpen size="1rem" aria-hidden="true" />
+            </a>
+            <a
+              className={LINK}
+              href="https://github.com/moritzwilksch/diffle"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub repository"
+              title="GitHub repository"
+            >
+              <GithubMark />
+            </a>
+            <Button className="ml-2" onClick={() => setOpen(false)}>
+              Close
+            </Button>
           </div>
-        ))}
-      </div>
+        </div>
+        <div className="grid grid-cols-[auto_auto] items-start gap-x-10 overflow-auto px-4.5 pt-2.5 pb-3.5 text-[0.75rem] whitespace-nowrap">
+          {COLUMNS.map((sections, col) => (
+            <div key={col} className="grid grid-cols-[max-content_1fr] content-start gap-x-3">
+              {sections.map((section) => (
+                <section className="col-span-full mb-2.5 grid grid-cols-subgrid last:mb-0" key={section.title}>
+                  <h4 className="col-span-full m-0 mb-0.5 text-[0.75rem] font-semibold text-muted">{section.title}</h4>
+                  {section.rows.map(([k, a]) => (
+                    <div key={k} className="col-span-full grid grid-cols-subgrid items-baseline leading-[1.7]">
+                      <span className="inline-flex gap-1.5">
+                        {k.split(/\s{2,}/).map((part, i) => (
+                          <kbd key={i}>{part}</kbd>
+                        ))}
+                      </span>
+                      <span>{a}</span>
+                    </div>
+                  ))}
+                </section>
+              ))}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -1,7 +1,7 @@
-import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '../shared/protocol.js';
-import { GitError, type GitRepo } from './git/GitRepo.js';
-import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
-import { githubRepository, type PullRequest, viewPr } from './github/pulls.js';
+import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '../../shared/protocol.js';
+import { GitError, type GitRepo } from '../git/GitRepo.js';
+import { type GithubClient, GithubError, NO_TOKEN } from '../github/client.js';
+import { githubRepository, type PullRequest, viewPr } from '../github/pulls.js';
 import { compareRanges } from './rangediff.js';
 import { type ParsedRange, type ParsedRevspec, parseRangeDiff, parseRevspec, RevspecError } from './revspec.js';
 

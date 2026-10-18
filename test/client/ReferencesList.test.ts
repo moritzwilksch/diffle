@@ -32,16 +32,17 @@ afterEach(async () => {
   host.remove();
 });
 
+// The dialog renders in a portal on the body, outside `host`, so rows are found on `document`.
 describe('ReferencesList', () => {
   it('moves the active row with the index and selects and jumps on click', async () => {
     await act(() => root.render(createElement(ReferencesList)));
-    expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:1');
+    expect(document.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:1');
     await act(() => useStore.getState().moveReference(1));
-    expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:2');
+    expect(document.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:2');
 
     const pick = vi.fn();
     await act(() => useStore.setState({ pickReference: pick }));
-    await act(() => host.querySelectorAll<HTMLElement>('[data-active]')[4]!.click());
+    await act(() => document.querySelectorAll<HTMLElement>('[data-active]')[4]!.click());
     expect(pick).toHaveBeenCalledOnce();
     expect(useStore.getState().references.index).toBe(4);
   });
@@ -51,12 +52,12 @@ describe('ReferencesList', () => {
     await act(() => root.render(createElement(ReferencesList)));
     // jsdom has no layout: model the list scrolled so its 8px top padding precedes the sticky header.
     // The selected row is inside the scroller box but hidden under that header and its 2px margin.
-    const rows = host.querySelectorAll<HTMLElement>('[data-active]');
+    const rows = document.querySelectorAll<HTMLElement>('[data-active]');
     const list = rows[0]!.parentElement!.parentElement!;
     const rect = (top: number, bottom: number) => ({ top, bottom, height: bottom - top }) as DOMRect;
     list.getBoundingClientRect = () => rect(0, 200);
     list.style.paddingTop = '8px';
-    for (const header of host.querySelectorAll('header')) {
+    for (const header of document.querySelectorAll('header')) {
       header.getBoundingClientRect = () => rect(8, 38);
       header.style.marginBottom = '2px';
     }
@@ -65,14 +66,14 @@ describe('ReferencesList', () => {
     list.scrollTop = 100;
 
     await act(() => useStore.getState().moveReference(-1));
-    expect(host.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:3');
+    expect(document.querySelector('[data-active="true"]')?.textContent).toContain('a.ts:3');
     expect(list.scrollTop).toBe(80);
 
     // Moving back down to a row already clear of the header leaves the scroll alone.
     await act(() => useStore.getState().moveReference(1));
     expect(list.scrollTop).toBe(80);
     // A wrap lands on a row whose header has scrolled far away; it still sticks over the row once there.
-    for (const header of host.querySelectorAll('header')) header.getBoundingClientRect = () => rect(-500, -470);
+    for (const header of document.querySelectorAll('header')) header.getBoundingClientRect = () => rect(-500, -470);
     rows[0]!.getBoundingClientRect = () => rect(-460, -440);
     await act(() => useStore.setState((s) => ({ references: { ...s.references, index: 0 } })));
     expect(list.scrollTop).toBe(80 - 460 - 40);

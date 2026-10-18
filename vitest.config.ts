@@ -1,8 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
   define: { __DIFFLE_VERSION__: JSON.stringify(pkg.version) },
+  resolve: { alias: { '@': fileURLToPath(new URL('./src/client', import.meta.url)) } },
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',

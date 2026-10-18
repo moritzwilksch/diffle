@@ -3,5 +3,13 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
-  "include": ["test/e2e", "scripts/screenshot.ts", "test/fixture", "test/tmp.ts", "src/shared", "playwright.config.ts"]
+  "include": [
+    "test/e2e",
+    "scripts/screenshot.ts",
+    "scripts/record-videos.ts",
+    "test/fixture",
+    "test/tmp.ts",
+    "src/shared",
+    "playwright.config.ts"
+  ]
 }

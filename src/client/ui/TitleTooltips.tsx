@@ -1,60 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { twMerge } from 'tailwind-merge';
+import { useEffect, useState } from 'react';
+import { TipSurface, type TipAnchor } from './TipSurface.js';
 
 /** Pointer rest before a control's tooltip appears; the browser's own `title` tip waits about a second. */
 const SHOW_MS = 250;
-/** Space between the anchor and the tip. */
-const GAP = 6;
-/** Shared skin. Fixed positioning keeps tooltips out of every scroll container's clipping. */
-const SURFACE =
-  'fixed z-40 rounded-lg border border-border bg-canvas px-3 py-2 text-[0.75rem] shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]';
-
-/** Viewport box a tooltip hangs from. */
-export interface TipAnchor {
-  left: number;
-  top: number;
-  bottom: number;
-}
-
-/** Tooltip box below its anchor, above it near the bottom edge, clamped to the viewport's sides. */
-export function TooltipSurface({
-  boxRef,
-  anchor,
-  className,
-  children,
-  onPointerEnter,
-  onPointerLeave,
-}: {
-  boxRef?: RefObject<HTMLDivElement | null>;
-  anchor: TipAnchor;
-  className?: string;
-  children: ReactNode;
-  onPointerEnter?: () => void;
-  onPointerLeave?: () => void;
-}) {
-  const own = useRef<HTMLDivElement>(null);
-  const ref = boxRef ?? own;
-  // Place after measuring, before paint: the reader never sees the tip jump from its fallback spot.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const below = anchor.bottom + GAP + height <= window.innerHeight;
-    el.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8))}px`;
-    el.style.top = `${below ? anchor.bottom + GAP : Math.max(8, anchor.top - GAP - height)}px`;
-  }, [anchor, ref]);
-  return (
-    <div
-      ref={ref}
-      role="tooltip"
-      className={twMerge(SURFACE, className)}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-    >
-      {children}
-    </div>
-  );
-}
+/** A tip that opens within this long of the last one closing skips the pointer-rest delay, so sweeping across rows reads as one tip following the pointer. */
+const WARM_MS = 400;
 
 interface PlainTip {
   text: string;
@@ -73,6 +23,8 @@ export function TooltipHost() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let active: HTMLElement | null = null;
     let stashed: string | null = null;
+    let drawn = false;
+    let closedAt = -Infinity;
 
     const stop = () => {
       if (timer !== null) clearTimeout(timer);
@@ -84,11 +36,14 @@ export function TooltipHost() {
       if (active && stashed !== null && !active.hasAttribute('title')) active.setAttribute('title', stashed);
       active = null;
       stashed = null;
+      if (drawn) closedAt = performance.now();
+      drawn = false;
       setTip(null);
     };
     const show = (el: HTMLElement, text: string, delay: number) => {
       stop();
       const draw = () => {
+        drawn = true;
         const r = el.getBoundingClientRect();
         setTip({ text, anchor: { left: r.left, top: r.top, bottom: r.bottom } });
       };
@@ -107,7 +62,7 @@ export function TooltipHost() {
       active = el;
       stashed = text;
       el.removeAttribute('title');
-      show(el, text, delay);
+      show(el, text, performance.now() - closedAt < WARM_MS ? 0 : delay);
     };
     // `e.target` is retargeted to the shadow host for a node inside a shadow root; the composed path keeps the node.
     const target = (e: Event): HTMLElement | null => {
@@ -198,11 +153,11 @@ export function TooltipHost() {
 
   if (!tip) return null;
   return (
-    <TooltipSurface
+    <TipSurface
       anchor={tip.anchor}
-      className="pointer-events-none max-w-[min(28rem,_90vw)] wrap-anywhere whitespace-pre-line"
+      className="pointer-events-none max-w-[min(28rem,_90vw)] origin-top-left [animation:tip-in_150ms_ease-out] wrap-anywhere whitespace-pre-line motion-reduce:animate-none"
     >
       {tip.text}
-    </TooltipSurface>
+    </TipSurface>
   );
 }

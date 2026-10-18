@@ -1,0 +1,3 @@
+quality gate: src/lib holds 16 source files; the cap is 15.
+  Group related files into a domain subfolder instead of adding another sibling,
+  or list a folder that must stay flat in .folderignore with a reason.

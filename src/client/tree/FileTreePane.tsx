@@ -2,96 +2,22 @@ import { SegmentedControl, ToggleButton } from '../ui/ToggleButton.js';
 import { Button } from '../ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
-import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeftRight, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangedFile, ViewedState } from '../../shared/protocol.js';
 import { focusReview } from '../keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore } from '../store.js';
 import { ButtonLabel } from '../ui/ButtonLabel.js';
 import { useConfirm } from '../useConfirm.js';
+import { useCutNameTitles } from './cutNames.js';
+import { directoryDecoration, rowDecoration } from './decoration.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
+import { TREE_CSS } from './treeCss.js';
+import { toggleDirectoryViewed, TreeMenu } from './TreeMenu.js';
 
 type Scope = 'changed' | 'all';
-
-// The decoration lane holds one span of colored text parts: the file's +/− counts, then
-// the viewed mark as a glyph (the lane takes either text or one icon, not both).
-const MARK: Record<ViewedState, { glyph: string; color: string; title: string }> = {
-  viewed: {
-    glyph: '✓',
-    color: 'var(--add)',
-    title: 'Viewed · click or v to toggle',
-  },
-  unviewed: {
-    glyph: '○',
-    color: 'var(--fg-2)',
-    title: 'Not viewed · click or v to toggle',
-  },
-  restale: {
-    glyph: '◐',
-    color: 'var(--warn)',
-    title: 'Changed since you viewed it · click or v to mark viewed again',
-  },
-};
-
-// Injected into the tree's shadow root: parts are flex items, so spacing is a gap (leading
-// spaces would collapse). The lane grows but never shrinks, so it sits flush against the
-// git lane -- the viewed marks line up in a column -- and the file name ellipsizes first.
-const LANE_CSS = `
-[data-item-section="decoration"] { flex: 1 0 auto; overflow: visible; }
-[data-item-section="decoration"] > span { gap: 0.375rem; overflow: visible; font-variant-numeric: tabular-nums; }
-[data-item-section="decoration"] > span > span:last-child { min-width: 1ch; text-align: center; }
-/* The tree shows a name's ellipsis once a hidden wrapping copy makes its cell taller than 1lh. At a
- * fractional browser zoom (110%) fixed-point rounding leaves every cell a hair taller, and the marker
- * then paints over names that fit (pierrecomputer/pierre#816). A wrapped copy is at least 2lh tall. */
-@container measure (height < 1.5lh) { [data-truncate-marker] { opacity: 0; } }
-/* The library butts the search box against the toolbar above; give it the toolbar's own vertical rhythm. */
-[data-file-tree-search-container] { padding-top: 0.5rem; }
-:host([data-search-empty]) [data-file-tree-virtualized-scroll] { display: none; }
-`;
-
-function rowDecoration(f: ChangedFile, state: ViewedState) {
-  const parts: { text: string; color?: string }[] = [];
-  if (f.additions > 0) parts.push({ text: `+${f.additions}`, color: 'var(--add)' });
-  if (f.deletions > 0) parts.push({ text: `−${f.deletions}`, color: 'var(--del)' });
-  const mark = MARK[state];
-  parts.push({ text: mark.glyph, color: mark.color });
-  const counts = f.binary ? 'binary' : `+${f.additions} −${f.deletions}`;
-  return {
-    text: parts.map((p) => p.text).join(' '),
-    parts,
-    title: `${counts} · ${mark.title}`,
-  };
-}
-
-// A directory's mark sums its changed files: a check once all are viewed, else the progress so far.
-function directoryDecoration(viewedCount: number, total: number) {
-  if (viewedCount === total) {
-    const title = `All ${total} changed file(s) viewed · click to mark them not viewed`;
-    return {
-      text: MARK.viewed.glyph,
-      parts: [{ text: MARK.viewed.glyph, color: MARK.viewed.color }],
-      title,
-    };
-  }
-  const parts: { text: string; color?: string }[] = [];
-  if (viewedCount > 0) parts.push({ text: `${viewedCount}/${total}`, color: 'var(--fg-2)' });
-  parts.push({ text: MARK.unviewed.glyph, color: MARK.unviewed.color });
-  const title = `${viewedCount} of ${total} changed file(s) viewed · click to mark all viewed`;
-  return { text: parts.map((p) => p.text).join(' '), parts, title };
-}
-
-/** Flips a directory as one: all viewed becomes none, anything less becomes all. */
-function toggleDirectoryViewed(dir: string) {
-  const s = useStore.getState();
-  const files = filesUnder(s.snapshot?.changed ?? [], dir);
-  void s.setViewedMany(
-    files.map((f) => f.path),
-    !files.every((f) => isViewed(s, f)),
-  );
-}
 
 export function FileTreePane() {
   const snapshot = useStore((s) => s.snapshot);
@@ -129,7 +55,7 @@ export function FileTreePane() {
     itemHeight: Math.round(1.875 * remPx()),
     density: remPx() / 16,
     icons: { set: 'standard' },
-    unsafeCSS: LANE_CSS,
+    unsafeCSS: TREE_CSS,
     onSelectionChange: (selected) => {
       const path = selected[0];
       // The active file is mirrored into the selection below; only a change of file is a request to open one.
@@ -154,12 +80,16 @@ export function FileTreePane() {
 
   // A click on the decoration toggles viewed without selecting (or, on a directory, folding) the row. The tree renders in
   // a shadow root, so the hit test walks the composed path from the pointer target. Only the
-  // decoration's own <span>s count: the lane stretches to the row's end, and a click in that
-  // empty space must select the row, not toggle viewed.
+  // decoration's own <span>s count: a click on the lane's padding must select the row, not toggle viewed.
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bodyRef.current?.firstElementChild?.toggleAttribute('data-search-empty', searchEmpty);
   }, [searchEmpty]);
+  const scrolls = useStore((s) => s.layout.treeScroll);
+  const setLayout = useStore((s) => s.setLayout);
+  useEffect(() => {
+    bodyRef.current?.firstElementChild?.toggleAttribute('data-hscroll', scrolls);
+  }, [scrolls]);
 
   useEffect(() => {
     const body = bodyRef.current;
@@ -247,34 +177,13 @@ export function FileTreePane() {
     };
   }, []);
 
-  // The tree ellipsizes a long name in the middle and offers no tooltip of its own. On entry into
-  // a row, its full name becomes the row's `title` while an ellipsis marker shows (the tree's own
-  // truncation signal), and `TooltipHost` reads it right after: this capture listener on the
-  // shadow root runs before the host's. Rows are recycled across paths, so nothing is cached.
+  useCutNameTitles(bodyRef);
+
   useEffect(() => {
-    const shadow = bodyRef.current?.firstElementChild?.shadowRoot;
-    if (!shadow) return;
-    const searchInput = shadow.querySelector<HTMLInputElement>('[data-file-tree-search-input]');
-    if (searchInput) searchInput.placeholder = 'Search files…';
-    const onEnter = (e: Event) => {
-      const row = (e.composedPath() as HTMLElement[]).find(
-        (n) => n instanceof HTMLElement && n.dataset.itemPath != null,
-      );
-      const from = (e as PointerEvent | FocusEvent).relatedTarget;
-      // Crossing between a row's own parts changes nothing.
-      if (!row || (from instanceof Node && row.contains(from))) return;
-      const ellipsized = Array.from(row.querySelectorAll('[data-truncate-marker]')).some(
-        (m) => getComputedStyle(m).opacity !== '0',
-      );
-      if (ellipsized) row.title = row.getAttribute('aria-label') ?? '';
-      else row.removeAttribute('title');
-    };
-    shadow.addEventListener('pointerover', onEnter, true);
-    shadow.addEventListener('focusin', onEnter, true);
-    return () => {
-      shadow.removeEventListener('pointerover', onEnter, true);
-      shadow.removeEventListener('focusin', onEnter, true);
-    };
+    const input = bodyRef.current?.firstElementChild?.shadowRoot?.querySelector<HTMLInputElement>(
+      '[data-file-tree-search-input]',
+    );
+    if (input) input.placeholder = 'Search files…';
   }, []);
 
   const setTreeModel = useStore((s) => s.setTreeModel);
@@ -339,7 +248,7 @@ export function FileTreePane() {
 
   return (
     <aside className="tree-theme flex min-h-0 flex-col bg-surface">
-      <div className="flex items-center gap-2 border-b border-b-border px-2.5 py-1.5 text-muted [&_button]:flex-none [&_button]:whitespace-nowrap">
+      <div className="@container flex items-center gap-2 border-b border-b-border px-2.5 py-1.5 text-muted [&_button]:flex-none [&_button]:whitespace-nowrap">
         <SegmentedControl>
           <ToggleButton selected={scope === 'changed'} onClick={() => setScope('changed')}>
             Changed
@@ -348,23 +257,39 @@ export function FileTreePane() {
             All files
           </ToggleButton>
         </SegmentedControl>
-        <span className="ml-auto">{paths.length}</span>
-        <Button
-          variant="ghost"
-          danger={unview.armed}
-          icon={!unview.armed}
-          feedback={unview.armed ? 'confirm' : undefined}
-          disabled={viewedCount === 0}
-          title={
-            unview.armed
-              ? 'Click again to mark all files not viewed'
-              : `Mark all ${viewedCount} viewed file(s) not viewed`
-          }
-          onClick={unview.fire}
-        >
-          <EyeOff size="0.875rem" />
-          <ButtonLabel text={unview.armed && 'Un-view all?'} />
-        </Button>
+        {/* The count goes first when the bar is too narrow for every control: the buttons stay reachable. */}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="@max-[15rem]:hidden">{paths.length}</span>
+          <Button
+            variant="ghost"
+            icon
+            className={
+              scrolls ? 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent' : ''
+            }
+            aria-label="Scroll long names"
+            aria-pressed={scrolls}
+            title={scrolls ? 'Long names scroll. Click to shorten.' : 'Long names shortened. Click to scroll.'}
+            onClick={() => setLayout({ treeScroll: !scrolls })}
+          >
+            <ArrowLeftRight size="0.875rem" />
+          </Button>
+          <Button
+            variant="ghost"
+            danger={unview.armed}
+            icon={!unview.armed}
+            feedback={unview.armed ? 'confirm' : undefined}
+            disabled={viewedCount === 0}
+            title={
+              unview.armed
+                ? 'Click again to mark all files not viewed'
+                : `Mark all ${viewedCount} viewed file(s) not viewed`
+            }
+            onClick={unview.fire}
+          >
+            <EyeOff size="0.875rem" />
+            <ButtonLabel text={unview.armed && 'Un-view all?'} />
+          </Button>
+        </div>
       </div>
       <div className="relative min-h-0 flex-1" ref={bodyRef}>
         <FileTree
@@ -379,99 +304,5 @@ export function FileTreePane() {
         )}
       </div>
     </aside>
-  );
-}
-
-const MENU =
-  'static top-[calc(100%_+_0.375rem)] left-0 z-20 min-w-95 rounded-[0.625rem] border border-border bg-canvas p-1.5 shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)]';
-const MENU_ITEM =
-  'grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted';
-
-/** Right-click menu on a tree row: viewed and collapse toggles for changed files, a viewed toggle for directories. */
-function TreeMenu({ path, kind, close }: { path: string; kind: 'file' | 'directory'; close: () => void }) {
-  if (kind === 'directory') return <DirectoryMenu path={path} close={close} />;
-  return <FileMenu path={path} close={close} />;
-}
-
-function DirectoryMenu({ path, close }: { path: string; close: () => void }) {
-  const snapshot = useStore((s) => s.snapshot);
-  const viewed = useStore((s) => s.viewed);
-  const config = useStore((s) => s.config);
-  const files = useMemo(() => filesUnder(snapshot?.changed ?? [], path), [snapshot, path]);
-  if (!files.length) return null;
-  const all = countViewed({ viewed, config }, files) === files.length;
-  return (
-    <div className={MENU}>
-      <Button
-        className={MENU_ITEM}
-        onClick={() => {
-          toggleDirectoryViewed(path);
-          close();
-        }}
-      >
-        {all ? <EyeOff size="0.875rem" /> : <Eye size="0.875rem" />}
-        <span className="whitespace-nowrap">{all ? 'Mark directory not viewed' : 'Mark directory viewed'}</span>
-        <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted">
-          {files.length}
-        </span>
-        <span />
-      </Button>
-    </div>
-  );
-}
-
-function FileMenu({ path, close }: { path: string; close: () => void }) {
-  const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
-  const viewed = useStore((s) => (file ? isViewed(s, file) : false));
-  const collapsed = useStore((s) => isCollapsed(s, path));
-  const setViewed = useStore((s) => s.setViewed);
-  const toggleCollapsed = useStore((s) => s.toggleCollapsed);
-  const openFile = useStore((s) => s.openFile);
-  return (
-    <div className={MENU}>
-      {file ? (
-        <>
-          <Button
-            className={MENU_ITEM}
-            onClick={() => {
-              void setViewed(path, !viewed);
-              close();
-            }}
-          >
-            {viewed ? <EyeOff size="0.875rem" /> : <Eye size="0.875rem" />}
-            <span className="whitespace-nowrap">{viewed ? 'Mark not viewed' : 'Mark viewed'}</span>
-            <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted">
-              {viewed ? '' : <Check size="0.75rem" />}
-            </span>
-            <kbd>v</kbd>
-          </Button>
-          <Button
-            className={MENU_ITEM}
-            onClick={() => {
-              toggleCollapsed(path);
-              close();
-            }}
-          >
-            {collapsed ? <ChevronsUpDown size="0.875rem" /> : <ChevronsDownUp size="0.875rem" />}
-            <span className="whitespace-nowrap">{collapsed ? 'Expand' : 'Collapse'}</span>
-            <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted" />
-            <kbd>{collapsed ? 'zo' : 'zc'}</kbd>
-          </Button>
-        </>
-      ) : (
-        <Button
-          className={MENU_ITEM}
-          onClick={() => {
-            void openFile(path);
-            close();
-          }}
-        >
-          <Eye size="0.875rem" />
-          <span className="whitespace-nowrap">Open</span>
-          <span className="inline-flex items-center justify-self-end font-mono text-[0.75rem] leading-[normal] text-muted" />
-          <span />
-        </Button>
-      )}
-    </div>
   );
 }

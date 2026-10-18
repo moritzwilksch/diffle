@@ -34,7 +34,8 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-const tip = () => host.querySelector('[role="tooltip"]')!;
+// The tooltip renders in a portal on the body, outside `host`.
+const tip = () => document.querySelector('[role="tooltip"]')!;
 /** The pointer crosses from `from` to `to`; React synthesizes the tooltip's enter / leave from this pair. */
 const cross = (from: Element, to: Element) =>
   act(() => {

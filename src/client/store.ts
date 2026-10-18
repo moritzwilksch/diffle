@@ -147,9 +147,17 @@ export interface LayoutState {
   panelWidth: number | null;
   treeVisible: boolean;
   panelVisible: boolean;
+  /** Long names in the file tree scroll the pane sideways; off, the tree ellipsizes them. */
+  treeScroll: boolean;
 }
 const LAYOUT_KEY = 'diffle:layout';
-const DEFAULT_LAYOUT: LayoutState = { treeWidth: null, panelWidth: null, treeVisible: true, panelVisible: true };
+const DEFAULT_LAYOUT: LayoutState = {
+  treeWidth: null,
+  panelWidth: null,
+  treeVisible: true,
+  panelVisible: true,
+  treeScroll: false,
+};
 function readLayout(): LayoutState {
   try {
     const raw = localStorage.getItem(LAYOUT_KEY);
