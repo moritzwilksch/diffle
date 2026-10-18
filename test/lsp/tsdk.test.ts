@@ -215,4 +215,16 @@ describe('the TypeScript servers take the project’s TypeScript', () => {
     expect(definitionOf('typescript-language-server --stdio').initializationOptions?.(none)).toBeUndefined();
     expect(await definitionOf('vtsls --stdio').settings?.(none)).toEqual({});
   });
+
+  it('and the status names it, repository-relative, with its version', () => {
+    const root = tmp();
+    typescript(join(root, 'frontend', 'node_modules'), '5.9.3');
+    const ctx = { root, paths: ['frontend/src/index.ts'], lookup: () => null };
+    for (const command of ['typescript-language-server --stdio', 'vtsls --stdio', 'astro-ls --stdio'])
+      expect(definitionOf(command).projects?.(ctx)).toEqual({
+        label: 'TypeScript 5.9.3',
+        paths: ['frontend/node_modules/typescript'],
+      });
+    expect(definitionOf('vtsls --stdio').projects?.({ ...ctx, paths: [] })).toEqual({ label: 'TypeScript', paths: [] });
+  });
 });

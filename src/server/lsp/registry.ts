@@ -1,7 +1,7 @@
-import type { LanguageId, LspMissing } from '@/shared/protocol.js';
+import type { LanguageId, LspMissing, LspProjects } from '@/shared/protocol.js';
 import { loadSchemaCatalog, SCHEMA_CATALOG, type LspSettings } from './configuration.js';
-import { cargoWorkspaces } from './projects/cargo.js';
-import { tsdkLocation } from './projects/tsdk.js';
+import { cargoProjects, linkedProjects } from './projects/cargo.js';
+import { tsdk, typescriptProjects } from './projects/tsdk.js';
 import { VUE_PLUGIN, vuePlugin, vuePluginLocation } from './vue.js';
 import { argv0, findOnPath, programOf } from './which.js';
 
@@ -23,6 +23,8 @@ export interface ServerDefinition {
   settings?: (ctx: ServerContext) => LspSettings | Promise<LspSettings>;
   /** Sent with `initialize`, for servers configured there rather than through settings. */
   initializationOptions?: (ctx: ServerContext) => LspSettings | undefined;
+  /** What it is pointed at, for the status; recomputed with `settings`. */
+  projects?: (ctx: ServerContext) => LspProjects;
   /** Whether `settings` reads `paths`: recomputed and sent again when a later snapshot adds one. */
   reconfigures?: boolean;
 }
@@ -51,22 +53,6 @@ export interface ServerCandidate extends ServerDefinition {
 
 const TYPESCRIPT: LanguageId[] = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'];
 
-const TSSERVER_PROGRAMS = ['typescript-language-server', 'vtsls', 'astro-ls'];
-
-/**
- * The TypeScript `lib` a server named `program` loads: the project's, found from the
- * diff's files so a package below the root has its own, else one beside a server on
- * PATH, its own first.
- */
-function tsdk({ root, paths, lookup }: ServerContext, program: string): string | null {
-  const programs = [program, ...TSSERVER_PROGRAMS.filter((p) => p !== program)];
-  return tsdkLocation(
-    root,
-    paths,
-    programs.map((p) => lookup(p)),
-  );
-}
-
 // typescript-language-server loads tsserver plugins and its TypeScript from initializationOptions;
 // unless told, it looks for TypeScript only in the root's `node_modules` and beside itself.
 const TSSERVER: ServerDefinition = {
@@ -77,6 +63,7 @@ const TSSERVER: ServerDefinition = {
     if (!plugin && !lib) return undefined;
     return { ...(plugin && { plugins: [plugin] }), ...(lib && { tsserver: { path: lib } }) };
   },
+  projects: (ctx) => typescriptProjects(ctx, 'typescript-language-server'),
 };
 
 // vtsls takes tsserver plugins as settings; the namespace is where Vue's plugin reads its options.
@@ -92,13 +79,8 @@ const VTSLS: ServerDefinition = {
     };
     return { ...(lib && { typescript: { tsdk: lib } }), ...(Object.keys(vtsls).length && { vtsls }) };
   },
+  projects: (ctx) => typescriptProjects(ctx, 'vtsls'),
 };
-
-/** rust-analyzer's `linkedProjects`: every Cargo workspace the diff reaches, when there is one. */
-function linkedProjects({ root, paths }: ServerContext): LspSettings | undefined {
-  const projects = cargoWorkspaces(root, paths);
-  return projects.length ? { linkedProjects: projects } : undefined;
-}
 
 const VUE: Requirement = { program: 'vue-language-server', what: VUE_PLUGIN, locate: vuePluginLocation };
 
@@ -128,6 +110,7 @@ export const CANDIDATES: ServerCandidate[] = [
       const lib = tsdk(ctx, 'astro-ls');
       return lib ? { typescript: { tsdk: lib } } : undefined;
     },
+    projects: (ctx) => typescriptProjects(ctx, 'astro-ls'),
   },
   {
     languages: ['rust'],
@@ -139,6 +122,7 @@ export const CANDIDATES: ServerCandidate[] = [
       const options = linkedProjects(ctx);
       return options ? { 'rust-analyzer': options } : {};
     },
+    projects: cargoProjects,
     reconfigures: true,
   },
   { languages: ['go'], command: 'gopls' },
@@ -226,8 +210,8 @@ export function candidatesFor(language: LanguageId): string[] {
 export function definitionOf(command: string): ServerDefinition {
   const program = programOf(command);
   const known = CANDIDATES.find((c) => programOf(c.command) === program);
-  const { settings, initializationOptions, reconfigures } = known ?? {};
-  return { command, settings, initializationOptions, reconfigures };
+  const { settings, initializationOptions, projects, reconfigures } = known ?? {};
+  return { command, settings, initializationOptions, projects, reconfigures };
 }
 
 /**

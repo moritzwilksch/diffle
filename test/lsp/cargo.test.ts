@@ -61,8 +61,13 @@ describe('cargoWorkspaces', () => {
     expect(definition.initializationOptions?.(ctx)).toEqual({ linkedProjects });
     expect(await definition.settings?.(ctx)).toEqual({ 'rust-analyzer': { linkedProjects } });
     expect(definition.reconfigures).toBe(true);
+    expect(definition.projects?.(ctx)).toEqual({
+      label: 'Cargo workspaces',
+      paths: ['Cargo.toml', 'py-rattler/Cargo.toml'],
+    });
     const bare = { root: join(root, 'crates'), paths: [], lookup: () => null };
     expect(definition.initializationOptions?.(bare)).toBeUndefined();
     expect(await definition.settings?.(bare)).toEqual({});
+    expect(definition.projects?.(bare)).toEqual({ label: 'Cargo workspaces', paths: [] });
   });
 });

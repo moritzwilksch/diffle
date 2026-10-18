@@ -1,0 +1,7 @@
+- region "Language server status":
+  - strong: Language servers
+  - button "Close language server status"
+  - strong: typescript-language-server
+  - text: "Connected typescript, javascript TypeScript 5.9.3: node_modules/typescript"
+  - group: Details
+  - text: json Not on PATH python Not on PATH shellscript Not on PATH

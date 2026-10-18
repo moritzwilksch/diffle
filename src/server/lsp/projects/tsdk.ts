@@ -1,7 +1,35 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
+import type { ServerContext } from '@/server/lsp/registry.js';
 import { realExecutable } from '@/server/lsp/which.js';
+import type { LspProjects } from '@/shared/protocol.js';
+import { shownPath } from './shown.js';
+
+/** Programs whose installations may carry a TypeScript. */
+const TSSERVER_PROGRAMS = ['typescript-language-server', 'vtsls', 'astro-ls'];
+
+/**
+ * The TypeScript `lib` a server named `program` loads: the project's, found from the
+ * diff's files so a package below the root has its own, else one beside a server on
+ * PATH, its own first.
+ */
+export function tsdk({ root, paths, lookup }: ServerContext, program: string): string | null {
+  const programs = [program, ...TSSERVER_PROGRAMS.filter((p) => p !== program)];
+  return tsdkLocation(
+    root,
+    paths,
+    programs.map((p) => lookup(p)),
+  );
+}
+
+/** The TypeScript `tsdk` finds, for the status: its version and package. */
+export function typescriptProjects(ctx: ServerContext, program: string): LspProjects {
+  const lib = tsdk(ctx, program);
+  if (!lib) return { label: 'TypeScript', paths: [] };
+  const version = typescriptVersion(lib);
+  return { label: version ? `TypeScript ${version}` : 'TypeScript', paths: [shownPath(ctx.root, dirname(lib))] };
+}
 
 /**
  * The TypeScript `lib` directory a server loads as its tsdk, or null when none is found.
@@ -29,6 +57,16 @@ export function tsdkLocation(root: string, paths: readonly string[], executables
     if (lib) return lib;
   }
   return null;
+}
+
+/** The version a `lib` from `tsdkLocation` belongs to, from its package; null when unreadable. */
+function typescriptVersion(lib: string): string | null {
+  try {
+    const { version } = JSON.parse(readFileSync(join(lib, '..', 'package.json'), 'utf8')) as { version?: unknown };
+    return typeof version === 'string' ? version : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The package directories under a global `node_modules`, scoped ones included; none when it is not there. */

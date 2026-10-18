@@ -656,6 +656,15 @@ export const LspFeatureSchema = z.enum([
 ]);
 export type LspFeature = z.infer<typeof LspFeatureSchema>;
 
+/** Where diffle pointed a server, found from the diff's files: which project's code it reads. */
+export const LspProjectsSchema = z.object({
+  /** What it was pointed at, e.g. `TypeScript 5.9.3` or `Cargo workspaces`. */
+  label: z.string(),
+  /** Repository-relative, else `~`-abbreviated or absolute. Empty when nothing was found. */
+  paths: z.string().array(),
+});
+export type LspProjects = z.infer<typeof LspProjectsSchema>;
+
 /** A process plus the languages the pool routes to it. */
 export const LspServerStatusSchema = LspProcessStatusSchema.extend({
   /** Languages it owns: asked first, and alone for highlights, token kinds and outlines. */
@@ -664,6 +673,8 @@ export const LspServerStatusSchema = LspProcessStatusSchema.extend({
   joins: LanguageIdSchema.array(),
   /** What its `initialize` result advertised; empty while starting. */
   supports: LspFeatureSchema.array(),
+  /** Absent for a server diffle points at no project. */
+  projects: LspProjectsSchema.optional(),
 });
 export type LspServerStatus = z.infer<typeof LspServerStatusSchema>;
 

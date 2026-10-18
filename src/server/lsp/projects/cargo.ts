@@ -1,5 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { LspSettings } from '@/server/lsp/configuration.js';
+import type { ServerContext } from '@/server/lsp/registry.js';
+import type { LspProjects } from '@/shared/protocol.js';
+import { shownPath } from './shown.js';
 
 const MANIFEST = 'Cargo.toml';
 /** A `[workspace]` table header, or a sub-table's (`[workspace.dependencies]`), which declares it too. */
@@ -21,6 +25,17 @@ export function cargoWorkspaces(root: string, paths: readonly string[]): string[
     if (workspace) found.add(workspace);
   }
   return [...found].sort();
+}
+
+/** rust-analyzer's `linkedProjects`: every Cargo workspace the diff reaches, when there is one. */
+export function linkedProjects({ root, paths }: ServerContext): LspSettings | undefined {
+  const projects = cargoWorkspaces(root, paths);
+  return projects.length ? { linkedProjects: projects } : undefined;
+}
+
+/** The workspaces `linkedProjects` names, for the status. */
+export function cargoProjects({ root, paths }: ServerContext): LspProjects {
+  return { label: 'Cargo workspaces', paths: cargoWorkspaces(root, paths).map((m) => shownPath(root, m)) };
 }
 
 function workspaceOf(root: string, dir: string): string | null {
