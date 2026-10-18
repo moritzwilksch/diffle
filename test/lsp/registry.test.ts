@@ -70,16 +70,12 @@ describe('resolveServers', () => {
     expect(missing).toEqual([]);
   });
 
-  it('starts a joining server for any language it joins, whatever owns it', () => {
+  it('starts a joining server for any language it joins, whatever owns it, joining only the asked ones', () => {
     const tailwind = 'tailwindcss-language-server --stdio';
     const both = resolveServers(['typescriptreact', 'python'], {}, path('vtsls', 'tailwindcss-language-server'));
     expect(both.servers).toEqual([
       { command: 'vtsls --stdio', languages: ['typescriptreact'], joins: [] },
-      {
-        command: tailwind,
-        languages: [],
-        joins: ['astro', 'css', 'html', 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'vue'],
-      },
+      { command: tailwind, languages: [], joins: ['typescriptreact'] },
     ]);
     // Python is not joined, so it is missing as before; an absent joiner is nobody's missing server.
     expect(both.missing).toEqual([{ language: 'python', tried: candidatesFor('python').map((c) => c.split(' ')[0]) }]);

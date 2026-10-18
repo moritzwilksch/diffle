@@ -184,7 +184,7 @@ describe('LspPool', () => {
       await pool.track(diff('a.tsx'));
       expect(pool.status().servers).toMatchObject([
         { command: 'ts-server', languages: ['typescriptreact'], joins: [] },
-        { command: TAILWIND, languages: [], joins: expect.arrayContaining(['typescriptreact', 'css']) },
+        { command: TAILWIND, languages: [], joins: ['typescriptreact'] },
       ]);
       expect(await pool.hover({ path: 'a.tsx', line: 2, col: 0 })).toEqual({
         ...ownerHover,
@@ -196,6 +196,12 @@ describe('LspPool', () => {
       ]);
       // Highlights come from the owner alone: the joined fake would double them.
       expect((await pool.occurrences({ path: 'a.tsx', line: 2, col: 0 })).occurrences).toHaveLength(1);
+      // A language entering the diff later joins the running process, as an owner's would.
+      await pool.track(diff('a.tsx', 'b.js'));
+      expect(pool.status().servers.map((s) => [s.command, s.joins])).toEqual([
+        ['ts-server', []],
+        [TAILWIND, ['typescriptreact', 'javascript']],
+      ]);
     });
 
     it('serves a language nothing owns by itself', async () => {

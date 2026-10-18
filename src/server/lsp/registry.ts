@@ -176,8 +176,9 @@ export function definitionOf(command: string): ServerDefinition {
  * turns the language off. Languages resolving to the same command line share one
  * process. A missing language's `tried` names the programs that were not on PATH, so
  * a candidate needing two programs lists only the absent one. A candidate joining a
- * requested language starts too, when on PATH, whatever owns it; its absence is no one's
- * missing server. `lookup` is a test seam for the PATH probe.
+ * requested language starts too, when on PATH, whatever owns it, and joins only the
+ * requested ones, growing like an owner does as later snapshots ask for more; its
+ * absence is no one's missing server. `lookup` is a test seam for the PATH probe.
  */
 export function resolveServers(
   languages: Iterable<LanguageId>,
@@ -220,8 +221,8 @@ export function resolveServers(
     else servers.set(command, { command, languages: [language], joins: [] });
   }
   for (const candidate of CANDIDATES) {
-    const joins = candidate.joins ?? [];
-    if (!joins.some((l) => asked.includes(l))) continue;
+    const joins = (candidate.joins ?? []).filter((l) => asked.includes(l));
+    if (!joins.length) continue;
     if (![candidate.command, candidate.requires].every((c) => c == null || found(c))) continue;
     const server = servers.get(candidate.command) ?? { command: candidate.command, languages: [], joins: [] };
     servers.set(candidate.command, server);
