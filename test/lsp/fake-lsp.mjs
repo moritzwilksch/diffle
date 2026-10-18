@@ -93,6 +93,9 @@ function handle(msg) {
       return send({ jsonrpc: '2.0', id: nextId++, method: msg.params.method, params: msg.params.params });
     case 'test/notification':
       return send({ jsonrpc: '2.0', method: msg.params.method, params: msg.params.params });
+    // Logged in line with the document events, so a test sees when everything before it landed.
+    case 'test/mark':
+      return log(msg.params.mark);
     // Document lifecycle goes to stderr so tests can observe what the bridge opened.
     case 'textDocument/didOpen':
       docs.set(msg.params.textDocument.uri, msg.params.textDocument.text);
