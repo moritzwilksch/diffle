@@ -204,6 +204,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
 }
 
 function ServerStatus({ server: s }: { server: LspServerStatus }) {
+  const [open, setOpen] = useState(false);
   const busy = s.state === 'starting' || !!s.activity?.length;
   const problem = s.state === 'unavailable' || !!s.notice;
   const label =
@@ -234,10 +235,10 @@ function ServerStatus({ server: s }: { server: LspServerStatus }) {
       ))}
       {s.message && <p className="my-1.5 ml-5.5 wrap-anywhere text-warn">{s.message}</p>}
       {s.notice && <p className="my-1.5 ml-5.5 wrap-anywhere text-warn">{s.notice.message}</p>}
-      <details className="ml-5.5 text-[0.6875rem] text-muted">
+      <details className="ml-5.5 text-[0.6875rem] text-muted" onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary className="cursor-pointer">Details</summary>
         <pre className="my-2 font-mono wrap-anywhere whitespace-pre-wrap">{s.command}</pre>
-        <ServerLog server={s} />
+        <ServerLog server={s} shown={open} />
       </details>
     </div>
   );
@@ -250,19 +251,18 @@ function logLine(e: LspLogEntry): string {
 
 /**
  * The server's output channel: shown messages, log messages and stderr, fetched while
- * this panel is open and again whenever the status says the log moved.
+ * `shown` and again whenever the status says the log moved.
  */
-function ServerLog({ server: s }: { server: LspServerStatus }) {
-  const [open, setOpen] = useState(false);
+function ServerLog({ server: s, shown }: { server: LspServerStatus; shown: boolean }) {
   const entries = useStore((st) => st.lspLogs[s.id]?.entries);
   const watch = useStore((st) => st.watchLspLog);
   // Follows the diff's wrap setting: unwrapped, a stack trace scrolls sideways like a long line does.
   const lineWrap = useStore((st) => st.config.lineWrap);
   useEffect(() => {
-    if (!open) return;
+    if (!shown) return;
     void watch(s.id, true);
     return () => void watch(s.id, false);
-  }, [open, s.id, watch]);
+  }, [shown, s.id, watch]);
   const [result, setResult] = useState<'copied' | 'failed' | null>(null);
   useEffect(() => {
     if (!result) return;
@@ -276,46 +276,42 @@ function ServerLog({ server: s }: { server: LspServerStatus }) {
   ]
     .filter(Boolean)
     .join(', ');
+  if (!entries) return null;
+  // One framed card, as code cards sit on the canvas: the header names it, and the lines scroll under it.
   return (
-    <details className="my-2" onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary className="cursor-pointer">Log{counts ? ` (${counts})` : s.log.seq ? '' : ' (empty)'}</summary>
-      {entries && (
-        <>
-          <div className="flex items-center justify-end py-1">
-            <Button
-              variant="ghost"
-              type="button"
-              aria-label="Copy log"
-              onClick={async () => setResult((await copyText(entries.map(logLine).join('\n'))) ? 'copied' : 'failed')}
-            >
-              {result === 'copied' ? <Check size="0.75rem" /> : <Copy size="0.75rem" />}
-              <span aria-live="polite">{result === 'copied' ? 'Copied' : 'Copy'}</span>
-            </Button>
-          </div>
-          {result === 'failed' && (
-            <p role="status" className="m-2 text-warn">
-              Copy failed. Select the log and press Ctrl/⌘+C.
-            </p>
-          )}
-          <ol
-            aria-label="server log"
-            tabIndex={0}
-            className="m-0 max-h-[min(12rem,25vh)] list-none overflow-auto overscroll-contain p-2 font-mono text-foreground"
-          >
-            {entries.length === 0 && <li className="text-muted">Nothing logged yet</li>}
-            {entries.map((e) => (
-              <li key={e.id} className={lineWrap ? 'wrap-anywhere whitespace-pre-wrap' : 'whitespace-pre'}>
-                <span className={e.level === 'error' || e.level === 'warning' ? 'text-warn' : 'text-muted'}>
-                  {e.level}
-                </span>{' '}
-                <span className="text-muted">{e.source}</span> {e.message}
-                {e.count > 1 && <span className="text-muted"> ×{e.count}</span>}
-              </li>
-            ))}
-          </ol>
-        </>
+    <div className="my-2 overflow-hidden rounded-md border border-border bg-card">
+      <div className="flex items-center justify-between gap-2 border-b border-border py-0.5 pr-1 pl-2">
+        <span>Log{counts ? ` (${counts})` : ''}</span>
+        <Button
+          variant="ghost"
+          type="button"
+          aria-label="Copy log"
+          onClick={async () => setResult((await copyText(entries.map(logLine).join('\n'))) ? 'copied' : 'failed')}
+        >
+          {result === 'copied' ? <Check size="0.75rem" /> : <Copy size="0.75rem" />}
+          <span aria-live="polite">{result === 'copied' ? 'Copied' : 'Copy'}</span>
+        </Button>
+      </div>
+      {result === 'failed' && (
+        <p role="status" className="m-2 text-warn">
+          Copy failed. Select the log and press Ctrl/⌘+C.
+        </p>
       )}
-    </details>
+      <ol
+        aria-label="server log"
+        tabIndex={0}
+        className="m-0 max-h-[min(12rem,25vh)] list-none overflow-auto overscroll-contain p-2 font-mono text-foreground"
+      >
+        {entries.length === 0 && <li className="text-muted">Nothing logged yet</li>}
+        {entries.map((e) => (
+          <li key={e.id} className={lineWrap ? 'wrap-anywhere whitespace-pre-wrap' : 'whitespace-pre'}>
+            <span className={e.level === 'error' || e.level === 'warning' ? 'text-warn' : 'text-muted'}>{e.level}</span>{' '}
+            <span className="text-muted">{e.source}</span> {e.message}
+            {e.count > 1 && <span className="text-muted"> ×{e.count}</span>}
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
