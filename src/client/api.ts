@@ -218,12 +218,14 @@ export const api = {
 /**
  * Auto-reconnecting WebSocket for server pushes. `onOpen` fires on every connection, the first
  * included: pushes are not replayed, so the caller resyncs there, and fetching only once the
- * socket is subscribed is what makes the resync authoritative.
+ * socket is subscribed is what makes the resync authoritative. `onLost` fires once per dropped
+ * connection, before the retries begin; the next `onOpen` ends the outage.
  */
-export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () => void): () => void {
+export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () => void, onLost: () => void): () => void {
   let ws: WebSocket | null = null;
   let closed = false;
   let delay = 500;
+  let connected = false;
   const open = () => {
     if (closed) return;
     const url = new URL('ws', location.href);
@@ -231,6 +233,7 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
     ws = new WebSocket(url.href);
     ws.onopen = () => {
       delay = 500;
+      connected = true;
       onOpen();
     };
     ws.onmessage = (e) => {
@@ -242,6 +245,10 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
     };
     ws.onclose = () => {
       if (closed) return;
+      if (connected) {
+        connected = false;
+        onLost();
+      }
       setTimeout(open, delay);
       delay = Math.min(delay * 2, 10_000);
     };
