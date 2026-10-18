@@ -1,28 +1,30 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { realExecutable } from './which.js';
+import { realExecutable } from '@/server/lsp/which.js';
 
 /**
- * The TypeScript `lib` directory a Volar server such as astro-ls loads as its
- * `typescript.tsdk`, or null when none is found. The repository's own `typescript`
- * wins, so the server reads code with the project's version; after it, the one
- * installed beside the first of `executables` that has one. Node's resolution from an
+ * The TypeScript `lib` directory a server loads as its tsdk, or null when none is found.
+ * The project's own `typescript` wins, so the server reads code with the project's
+ * version: resolved from the directory of each of `paths` (repository-relative), so a
+ * package under `frontend/` finds its own, then from `root`. After it, the one installed
+ * beside the first of `executables` that has one. Node's resolution from an
  * executable's real location reaches the package in the layouts of npm (hoisted under
  * `lib/node_modules`), a Windows `.cmd` shim (beside `node_modules`) and nixpkgs (the
  * pnpm store the symlink's target sits in). A conda or pixi environment runs a launcher
  * in `bin`, so each package under its `lib/node_modules` is tried as well, where the
  * TypeScript is nested or hoisted. TypeScript 7 ships no `typescript.js`, so it is
- * passed over: Volar cannot load the Go port.
+ * passed over: no tsserver client can load the Go port.
  */
-export function tsdkLocation(root: string, executables: (string | null)[]): string | null {
-  const bases = [root];
+export function tsdkLocation(root: string, paths: readonly string[], executables: (string | null)[]): string | null {
+  // Resolution walks up `node_modules` from each base, so one base per directory reaches every ancestor.
+  const bases = [...paths.map((p) => join(root, dirname(p))), root];
   for (const executable of executables) {
     if (executable == null) continue;
     const bin = dirname(realExecutable(executable));
     bases.push(bin, ...globalPackages(resolve(bin, '..', 'lib', 'node_modules')));
   }
-  for (const base of bases) {
+  for (const base of new Set(bases)) {
     const lib = typescriptLib(base);
     if (lib) return lib;
   }

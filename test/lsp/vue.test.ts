@@ -125,15 +125,19 @@ describe('TypeScript servers load the plugin', () => {
     const location = pkg(join(root, 'lib', 'language-tools', 'packages', 'language-server'), '@vue/language-server');
     pkg(join(location, 'node_modules', '@vue', 'typescript-plugin'), '@vue/typescript-plugin', 'index.js');
     const found = lookup(executable(join(root, 'bin', 'vue-language-server')));
-    expect(definitionOf('typescript-language-server --stdio').initializationOptions?.({ root, lookup: found })).toEqual(
-      {
-        plugins: [{ name: '@vue/typescript-plugin', location, languages: ['vue'] }],
-      },
-    );
     expect(
-      definitionOf('typescript-language-server --stdio').initializationOptions?.({ root, lookup: lookup(null) }),
+      definitionOf('typescript-language-server --stdio').initializationOptions?.({ root, paths: [], lookup: found }),
+    ).toEqual({
+      plugins: [{ name: '@vue/typescript-plugin', location, languages: ['vue'] }],
+    });
+    expect(
+      definitionOf('typescript-language-server --stdio').initializationOptions?.({
+        root,
+        paths: [],
+        lookup: lookup(null),
+      }),
     ).toBeUndefined();
-    expect(definitionOf('vtsls --stdio').initializationOptions?.({ root, lookup: found })).toBeUndefined();
+    expect(definitionOf('vtsls --stdio').initializationOptions?.({ root, paths: [], lookup: found })).toBeUndefined();
   });
 
   it('as settings for vtsls', async () => {
@@ -141,7 +145,7 @@ describe('TypeScript servers load the plugin', () => {
     const location = pkg(join(root, 'lib', 'language-tools', 'packages', 'language-server'), '@vue/language-server');
     pkg(join(location, 'node_modules', '@vue', 'typescript-plugin'), '@vue/typescript-plugin', 'index.js');
     const found = lookup(executable(join(root, 'bin', 'vue-language-server')));
-    expect(await definitionOf('vtsls --stdio').settings?.({ root, lookup: found })).toEqual({
+    expect(await definitionOf('vtsls --stdio').settings?.({ root, paths: [], lookup: found })).toEqual({
       vtsls: {
         tsserver: {
           globalPlugins: [
@@ -150,7 +154,7 @@ describe('TypeScript servers load the plugin', () => {
         },
       },
     });
-    expect(await definitionOf('vtsls --stdio').settings?.({ root, lookup: lookup(null) })).toEqual({});
+    expect(await definitionOf('vtsls --stdio').settings?.({ root, paths: [], lookup: lookup(null) })).toEqual({});
     expect(definitionOf('typescript-language-server --stdio').settings).toBeUndefined();
   });
 });

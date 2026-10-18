@@ -18,7 +18,13 @@ import { fuzzyRank } from '@/shared/fuzzy.js';
 import { LspBridge } from './LspBridge.js';
 import { type Answer, mergeHovers, mergeLocations, union } from './merge.js';
 import { LspUnavailableError } from './LspProcess.js';
-import { definitionOf, resolveServers, type ResolvedServer } from './registry.js';
+import {
+  definitionOf,
+  resolveServers,
+  type ResolvedServer,
+  type ServerContext,
+  type ServerDefinition,
+} from './registry.js';
 import { findOnPath } from './which.js';
 
 export interface LspPoolOptions {
@@ -50,7 +56,13 @@ export type TrackedSnapshot = Pick<Snapshot, 'newSha' | 'headSha'> & {
 /** A running server and its languages, both lists growing as later snapshots resolve to the same command. */
 interface Entry extends ResolvedServer {
   bridge: LspBridge;
+  definition: ServerDefinition;
+  /** Every diff file it has answered for, so settings that follow them only grow. */
+  paths: Set<string>;
 }
+
+/** The diff's files by language. */
+type PathsByLanguage = ReadonlyMap<LanguageId, readonly string[]>;
 
 /**
  * A status change goes out at once when the pool has been quiet, and later ones within
@@ -80,7 +92,7 @@ export class LspPool {
   private publishDue = false;
 
   constructor(private readonly opts: LspPoolOptions) {
-    this.ensure(opts.preload ?? []);
+    this.ensure(new Map((opts.preload ?? []).map((l) => [l, []])));
   }
 
   status(): LspStatus {
@@ -182,10 +194,14 @@ export class LspPool {
       if (list) list.push(path);
       else byLanguage.set(language, [path]);
     }
-    this.ensure(byLanguage.keys());
+    this.ensure(byLanguage);
     const entries = [...this.entries.values()];
     return Promise.all(
-      entries.map((e) => e.bridge.track([...e.languages, ...e.joins].flatMap((l) => byLanguage.get(l) ?? []))),
+      entries.map((e) => {
+        const tracked = pathsOf(e, byLanguage);
+        this.follow(e, tracked);
+        return e.bridge.track(tracked);
+      }),
     ).then(() => {});
   }
 
@@ -236,25 +252,38 @@ export class LspPool {
   }
 
   /** Resolves and starts servers for languages not seen before. Cheap and idempotent per language. */
-  private ensure(languages: Iterable<LanguageId>): void {
+  private ensure(byLanguage: PathsByLanguage): void {
     if (this.closing) return;
-    const fresh = [...new Set(languages)].filter((l) => !this.resolved.has(l));
+    const fresh = [...byLanguage.keys()].filter((l) => !this.resolved.has(l));
     if (!fresh.length) return;
     for (const l of fresh) this.resolved.add(l);
     const { servers, missing } = resolveServers(fresh, this.opts.overrides, this.opts.lookup);
     this.missing.push(...missing);
     for (const server of servers) {
       // A process already up for one of its languages (clangd for c) takes the next one (cpp).
-      const entry = this.entries.get(server.command) ?? this.spawn(server.command);
+      const entry = this.entries.get(server.command) ?? this.spawn(server.command, pathsOf(server, byLanguage));
       for (const l of server.languages) if (!entry.languages.includes(l)) entry.languages.push(l);
       for (const l of server.joins) if (!entry.joins.includes(l)) entry.joins.push(l);
     }
     if (servers.length || missing.length) this.publish();
   }
 
-  private spawn(command: string): Entry {
+  /** Sends a server whose settings follow the diff's files new settings once `paths` adds one. */
+  private follow(entry: Entry, paths: readonly string[]): void {
+    const known = entry.paths.size;
+    for (const p of paths) entry.paths.add(p);
+    const { settings, reconfigures } = entry.definition;
+    if (entry.paths.size === known || !reconfigures || !settings) return;
+    entry.bridge.reconfigure(Promise.resolve(settings(this.context([...entry.paths]))));
+  }
+
+  private context(paths: readonly string[]): ServerContext {
+    return { root: this.opts.root, paths, lookup: this.opts.lookup ?? findOnPath };
+  }
+
+  private spawn(command: string, paths: readonly string[]): Entry {
     const definition = definitionOf(command);
-    const ctx = { root: this.opts.root, lookup: this.opts.lookup ?? findOnPath };
+    const ctx = this.context(paths);
     const bridge = new LspBridge({
       command,
       settings: definition.settings ? Promise.resolve(definition.settings(ctx)) : undefined,
@@ -266,7 +295,7 @@ export class LspPool {
       spawnProcess: this.opts.spawnProcess,
       maxOpen: this.opts.maxOpen,
     });
-    const entry: Entry = { command, bridge, languages: [], joins: [] };
+    const entry: Entry = { command, bridge, definition, paths: new Set(paths), languages: [], joins: [] };
     this.entries.set(command, entry);
     return entry;
   }
@@ -286,4 +315,9 @@ export class LspPool {
     }, PUBLISH_MS);
     this.publishTimer.unref();
   }
+}
+
+/** The files of a server's languages, owned and joined. */
+function pathsOf(server: Pick<ResolvedServer, 'languages' | 'joins'>, byLanguage: PathsByLanguage): string[] {
+  return [...server.languages, ...server.joins].flatMap((l) => byLanguage.get(l) ?? []);
 }
