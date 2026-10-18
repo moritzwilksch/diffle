@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { hoverOnly, lspBlocker, type LspServerStatus, type LspStatus } from '../../src/shared/protocol.js';
+import type { LspServerStatus, LspStatus } from '../../src/shared/protocol.js';
+import { hoverOnly, lspBlocker } from '../../src/shared/lsp.js';
 
 const ALL: LspServerStatus['supports'] = [
   'definition',
@@ -10,7 +11,6 @@ const ALL: LspServerStatus['supports'] = [
   'workspaceSymbol',
 ];
 const server = (extra: Partial<LspServerStatus> = {}): LspServerStatus => ({
-  id: 'pyrefly',
   name: 'pyrefly',
   command: 'pyrefly lsp',
   state: 'ready',
@@ -58,12 +58,18 @@ describe('lspBlocker', () => {
   });
 
   it('counts a server joining the language, after its owner', () => {
-    const tailwind = server({ id: 'tailwind', name: 'tailwind', languages: [], joins: ['css'], supports: ['hover'] });
+    const tailwind = server({
+      name: 'tailwind',
+      command: 'tailwind',
+      languages: [],
+      joins: ['css'],
+      supports: ['hover'],
+    });
     expect(lspBlocker(status(tailwind), checkout, { path: 'a.css', feature: 'hover' })).toBeNull();
     expect(lspBlocker(status(tailwind), checkout, { path: 'a.css', feature: 'definition' })).toBe(
       'tailwind offers no go to definition',
     );
-    const starting = server({ id: 'css', name: 'css', state: 'starting', languages: ['css'], supports: [] });
+    const starting = server({ name: 'css', command: 'css', state: 'starting', languages: ['css'], supports: [] });
     expect(lspBlocker(status(tailwind, starting), checkout, { path: 'a.css', feature: 'definition' })).toBe(
       'css is starting…',
     );

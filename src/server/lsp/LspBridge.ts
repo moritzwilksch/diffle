@@ -1,26 +1,23 @@
-import type { ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import {
-  LSP_FEATURE_LABELS,
-  type LspFeature,
-  type LspHoverResponse,
-  type LspLocationsResponse,
-  type LspLogEntry,
-  type LspOccurrencesResponse,
-  type LspPosition,
-  type LspProcessStatus,
-  type LspSymbol,
-  type LspSymbolsResponse,
-  type LspTokenKindResponse,
+import type {
+  LspFeature,
+  LspHoverResponse,
+  LspLocationsResponse,
+  LspLogEntry,
+  LspOccurrencesResponse,
+  LspPosition,
+  LspProcessStatus,
+  LspSymbol,
+  LspSymbolsResponse,
+  LspTokenKindResponse,
 } from '../../shared/protocol.js';
-import { fuzzyRank } from '../../shared/fuzzy.js';
-import type { LspSettings } from './configuration.js';
+import { LSP_FEATURE_LABELS } from '../../shared/lsp.js';
 import { Documents } from './Documents.js';
 import { hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcError } from './JsonRpc.js';
 import { Locator, type Range } from './Locator.js';
-import { LspProcess, LspUnavailableError } from './LspProcess.js';
+import { LspProcess, LspUnavailableError, type LspProcessOptions } from './LspProcess.js';
 import {
   type DocumentHighlight,
   type DocumentSymbol,
@@ -28,29 +25,19 @@ import {
   type LocationLink,
   type SymbolInformation,
   flattenSymbols,
+  fromLsp,
+  inconclusive,
   normalizeLocations,
   symbolInformation,
-  symbolsResponse,
   toLsp,
   tokenAt,
 } from './shapes.js';
 
-export interface LspBridgeOptions {
-  /** Shell command line that starts a stdio language server, e.g. `pyrefly lsp`. */
-  command: string;
-  /** Repository root; becomes the workspace folder and the process cwd. */
-  root: string;
-  /** Settings sent after initialization and returned for workspace/configuration requests. */
-  settings?: Promise<LspSettings>;
-  /** Sent with `initialize`, for servers configured there rather than through settings. */
-  initializationOptions?: LspSettings;
+export interface LspBridgeOptions extends LspProcessOptions {
   /** New-side text of a snapshot path, or null when the snapshot does not expose it. */
   read: (path: string) => Promise<string | null>;
   /** Whether the snapshot exposes a path on its new side. Membership only: no content is read. */
   has: (path: string) => Promise<boolean>;
-  onStatus: (status: LspProcessStatus) => void;
-  /** Test seam: replaces `spawn(command, { shell: true })`. */
-  spawnProcess?: (command: string, cwd: string) => ChildProcess;
   /** Most documents kept open beyond the tracked set. */
   maxOpen?: number;
 }
@@ -111,10 +98,8 @@ export class LspBridge {
     return this.locations('typeDefinition', 'textDocument/typeDefinition', pos);
   }
 
-  async references(pos: LspPosition, opts: { includeDeclaration?: boolean } = {}): Promise<LspLocationsResponse> {
-    return this.locations('references', 'textDocument/references', pos, {
-      context: { includeDeclaration: opts.includeDeclaration ?? true },
-    });
+  async references(pos: LspPosition): Promise<LspLocationsResponse> {
+    return this.locations('references', 'textDocument/references', pos, { context: { includeDeclaration: true } });
   }
 
   async hover(pos: LspPosition): Promise<LspHoverResponse> {
@@ -125,12 +110,9 @@ export class LspBridge {
       'hover',
     );
     const md = result ? hoverMarkdown(result.contents) : null;
-    if (md == null) return busy ? { contents: null, inconclusive: busy } : { contents: null };
+    if (md == null) return inconclusive({ contents: null }, true, busy);
     const res: LspHoverResponse = { contents: localizeFileLinks(md, await this.locator.links(md)) };
-    if (result?.range) {
-      const { start, end } = result.range;
-      res.range = { line: start.line + 1, col: start.character, endLine: end.line + 1, endCol: end.character };
-    }
+    if (result?.range) res.range = fromLsp(result.range);
     return res;
   }
 
@@ -164,11 +146,8 @@ export class LspBridge {
       pos.path,
     ).catch(unimplemented(null));
     return {
-      occurrences: (result ?? []).map(({ range: { start, end }, kind }) => ({
-        line: start.line + 1,
-        col: start.character,
-        endLine: end.line + 1,
-        endCol: end.character,
+      occurrences: (result ?? []).map(({ range, kind }) => ({
+        ...fromLsp(range),
         kind: kind === 3 ? 'write' : kind === 2 ? 'read' : 'text',
       })),
     };
@@ -186,22 +165,23 @@ export class LspBridge {
       path,
       'documentSymbol',
     );
-    return symbolsResponse(result ? flattenSymbols(result, path) : [], busy);
+    const symbols = result ? flattenSymbols(result, path) : [];
+    return inconclusive({ symbols }, !symbols.length, busy);
   }
 
   /**
-   * Symbols the server knows for `query`, limited to paths the snapshot exposes, best
-   * `fuzzyRank` match first. Membership comes from `has`, never from reading the file: a
-   * per-keystroke search must not read every hit's text.
+   * Symbols the server knows for `query`, limited to paths the snapshot exposes, in the
+   * server's order: the pool ranks the union. Membership comes from `has`, never from
+   * reading the file: a per-keystroke search must not read every hit's text.
    */
-  async workspaceSymbols(query: string, limit = 200): Promise<LspSymbolsResponse> {
+  async workspaceSymbols(query: string): Promise<LspSymbolsResponse> {
     const { result, busy } = await this.query<SymbolInformation[] | null>(
       'workspace/symbol',
       { query },
       undefined,
       'workspaceSymbol',
     );
-    if (!result) return symbolsResponse([], busy);
+    if (!result) return inconclusive({ symbols: [] }, true, busy);
     const paths = await Promise.all(result.map((s) => this.locator.pathOf(s.location.uri)));
     const inside = await this.locator.membership(paths);
     const out: LspSymbol[] = [];
@@ -216,8 +196,7 @@ export class LspBridge {
       seen.add(key);
       out.push(symbol);
     });
-    // Rank before the cap: servers list loose matches in their own order.
-    return symbolsResponse(fuzzyRank(out, query, (s) => s.name).slice(0, limit), busy);
+    return inconclusive({ symbols: out }, !out.length, busy);
   }
 
   /** Reads a file outside the snapshot only if a result named it (see `Locator.readExternal`). */
@@ -242,7 +221,7 @@ export class LspBridge {
       feature,
     );
     const locations = await this.locator.locations(normalizeLocations(result));
-    return busy && !locations.length ? { locations, inconclusive: busy } : { locations };
+    return inconclusive({ locations }, !locations.length, busy);
   }
 
   /**

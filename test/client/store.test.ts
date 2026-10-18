@@ -17,7 +17,6 @@ const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStat
   enabled: true,
   servers: [
     {
-      id: 'pyrefly',
       name: 'pyrefly',
       command: 'pyrefly lsp',
       state,
@@ -994,19 +993,36 @@ describe('language server log', () => {
     useStore.setState({ lsp: withLog(1), lspLogs: {} });
     const before = api.lspLog.mock.calls.length;
     api.lspLog.mockResolvedValueOnce({ entries: [entry] });
-    await useStore.getState().watchLspLog('pyrefly', true);
-    expect(api.lspLog).toHaveBeenLastCalledWith('pyrefly');
-    expect(useStore.getState().lspLogs['pyrefly']).toEqual({ seq: 1, entries: [entry] });
+    await useStore.getState().watchLspLog('pyrefly lsp', true);
+    expect(api.lspLog).toHaveBeenLastCalledWith('pyrefly lsp');
+    expect(useStore.getState().lspLogs['pyrefly lsp']).toEqual({ seq: 1, entries: [entry] });
     // The same seq again says nothing moved.
     useStore.getState().setLspStatus(withLog(1));
     expect(api.lspLog.mock.calls.length).toBe(before + 1);
     const more = [entry, { ...entry, id: 2, message: 'close a.py' }];
     api.lspLog.mockResolvedValueOnce({ entries: more });
     useStore.getState().setLspStatus(withLog(2));
-    await vi.waitFor(() => expect(useStore.getState().lspLogs['pyrefly']).toEqual({ seq: 2, entries: more }));
-    await useStore.getState().watchLspLog('pyrefly', false);
+    await vi.waitFor(() => expect(useStore.getState().lspLogs['pyrefly lsp']).toEqual({ seq: 2, entries: more }));
+    await useStore.getState().watchLspLog('pyrefly lsp', false);
     expect(useStore.getState().lspLogs).toEqual({});
     useStore.getState().setLspStatus(withLog(3));
+    expect(api.lspLog.mock.calls.length).toBe(before + 2);
+  });
+
+  it('fetches one log at a time, and once more when the status outran the fetch', async () => {
+    useStore.setState({ lsp: withLog(1), lspLogs: {} });
+    const before = api.lspLog.mock.calls.length;
+    const slow = deferred<{ entries: (typeof entry)[] }>();
+    api.lspLog.mockReturnValueOnce(slow.promise);
+    const shown = useStore.getState().watchLspLog('pyrefly lsp', true);
+    useStore.getState().setLspStatus(withLog(2));
+    useStore.getState().setLspStatus(withLog(3));
+    expect(api.lspLog.mock.calls.length).toBe(before + 1);
+    const more = [entry, { ...entry, id: 2, message: 'close a.py' }];
+    api.lspLog.mockResolvedValueOnce({ entries: more });
+    slow.resolve({ entries: [entry] });
+    await shown;
+    await vi.waitFor(() => expect(useStore.getState().lspLogs['pyrefly lsp']).toEqual({ seq: 3, entries: more }));
     expect(api.lspLog.mock.calls.length).toBe(before + 2);
   });
 
@@ -1014,8 +1030,8 @@ describe('language server log', () => {
     useStore.setState({ lsp: withLog(1), lspLogs: {} });
     const slow = deferred<{ entries: (typeof entry)[] }>();
     api.lspLog.mockReturnValueOnce(slow.promise);
-    const shown = useStore.getState().watchLspLog('pyrefly', true);
-    await useStore.getState().watchLspLog('pyrefly', false);
+    const shown = useStore.getState().watchLspLog('pyrefly lsp', true);
+    await useStore.getState().watchLspLog('pyrefly lsp', false);
     slow.resolve({ entries: [entry] });
     await shown;
     expect(useStore.getState().lspLogs).toEqual({});

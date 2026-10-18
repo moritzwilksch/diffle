@@ -25,15 +25,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import {
-  comparisonLabel,
-  hoverOnly,
-  languageOf,
-  serves,
-  type ChangedFile,
-  type CommentThread,
-  type Side,
-} from '../../shared/protocol.js';
+import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '../../shared/protocol.js';
+import { hoverOnly, serversFor } from '../../shared/lsp.js';
 import { copyText } from '../clipboard.js';
 import { FilePath } from '../FilePath.js';
 import { CopyIcon } from '../ui/CopyIcon.js';
@@ -228,7 +221,7 @@ function targetOf(
 function served(path: string): boolean {
   const language = languageOf(path);
   const { lsp } = useStore.getState();
-  return language != null && lsp.enabled && lsp.servers.some((s) => serves(s, language));
+  return language != null && lsp.enabled && serversFor(lsp, language).length > 0;
 }
 
 /** The identifier under the pointer inside a token span: its text and its offset within the token, or null on punctuation or space. */

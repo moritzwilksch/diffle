@@ -1,4 +1,4 @@
-import type { LspPosition, LspSymbol, LspSymbolsResponse } from '../../shared/protocol.js';
+import type { LspPosition, LspSymbol } from '../../shared/protocol.js';
 import type { Range } from './Locator.js';
 
 // LSP wire shapes, only the fields read here, and how they become diffle's answers.
@@ -30,12 +30,22 @@ export interface SymbolInformation {
   location: Location | { uri: string };
 }
 
-export function symbolsResponse(symbols: LspSymbol[], busy: string | null): LspSymbolsResponse {
-  return busy && !symbols.length ? { symbols, inconclusive: busy } : { symbols };
+/** `answer` as is, or with why it may be incomplete when it is `empty` and the server was `busy`. */
+export function inconclusive<T extends object>(
+  answer: T,
+  empty: boolean,
+  busy: string | null,
+): T & { inconclusive?: string } {
+  return busy && empty ? { ...answer, inconclusive: busy } : answer;
 }
 
 export function toLsp(pos: LspPosition): { line: number; character: number } {
   return { line: Math.max(0, pos.line - 1), character: Math.max(0, pos.col) };
+}
+
+/** An LSP range as diffle spans it: 1-based lines, 0-based columns. */
+export function fromLsp({ start, end }: Range): { line: number; col: number; endLine: number; endCol: number } {
+  return { line: start.line + 1, col: start.character, endLine: end.line + 1, endCol: end.character };
 }
 
 export function normalizeLocations(r: null | Location | Location[] | LocationLink[]): { uri: string; range: Range }[] {

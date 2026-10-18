@@ -30,7 +30,6 @@ import { Header } from '../../src/client/header/Header.js';
 
 function render(...statuses: Partial<LspServerStatus>[]) {
   state.lsp.servers = statuses.map((status, i) => ({
-    id: `server${i}`,
     name: `server${i}`,
     command: `server${i}`,
     languages: ['python'],

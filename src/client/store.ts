@@ -4,10 +4,7 @@ import type { FileTree } from '@pierre/trees';
 import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
-  hoverOnly,
-  joinedBy,
   languageOf,
-  lspBlocker,
   shownIterations,
   type GithubMetadata,
   type ChangedFile,
@@ -30,6 +27,7 @@ import {
   type ViewedEntry,
   type LspLogEntry,
 } from '../shared/protocol.js';
+import { hoverOnly, joinedBy, lspBlocker } from '../shared/lsp.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
 import {
@@ -327,10 +325,10 @@ export interface ReviewState {
   searchWord(delta: 1 | -1): Promise<void>;
   lsp: LspStatus;
   setLspStatus(status: LspStatus): void;
-  /** Retained log lines by server id, for the servers whose log is on screen, with the status seq they were fetched at. */
+  /** Retained log lines by server command, for the servers whose log is on screen, with the status seq they were fetched at. */
   lspLogs: Record<string, { seq: number; entries: LspLogEntry[] }>;
   /** Shows or hides a server's log: fetched while shown, again whenever the status says it moved. */
-  watchLspLog(id: string, shown: boolean): Promise<void>;
+  watchLspLog(command: string, shown: boolean): Promise<void>;
   symbolMenu: SymbolMenuState | null;
   /** Opens the popover unless LSP is off, syntax blocks the target, or the server identifies a keyword. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
@@ -552,6 +550,8 @@ export const useStore = create<ReviewState>((set, get) => {
   let hoverSeq = 0;
   /** Occurrence requests, newest wins, like hovers. */
   let occurrenceSeq = 0;
+  /** Servers whose log is being fetched. */
+  const logFetches = new Set<string>();
   /** The typing pause a workspace symbol query is waiting out; a newer query ends it early. */
   let symbolWait: { timer: ReturnType<typeof setTimeout>; wake: () => void } | null = null;
   const cancelSymbolWait = () => {
@@ -1713,28 +1713,36 @@ export const useStore = create<ReviewState>((set, get) => {
     setLspStatus(status) {
       set({ lsp: status });
       for (const s of status.servers) {
-        const held = get().lspLogs[s.id];
-        if (held && held.seq !== s.log.seq) void get().watchLspLog(s.id, true);
+        const held = get().lspLogs[s.command];
+        if (held && held.seq !== s.log.seq) void get().watchLspLog(s.command, true);
       }
     },
     lspLogs: {},
-    async watchLspLog(id, shown) {
+    async watchLspLog(command, shown) {
       if (!shown) {
         set((s) => {
-          const { [id]: _, ...rest } = s.lspLogs;
+          const { [command]: _, ...rest } = s.lspLogs;
           return { lspLogs: rest };
         });
         return;
       }
-      const seq = get().lsp.servers.find((s) => s.id === id)?.log.seq ?? 0;
-      // Registered before the fetch, so a status change meanwhile asks again, and a hide meanwhile wins.
-      set((s) => ({ lspLogs: { ...s.lspLogs, [id]: s.lspLogs[id] ?? { seq: -1, entries: [] } } }));
+      // One fetch at a time per server: the one in flight re-asks if the log moved meanwhile.
+      if (logFetches.has(command)) return;
+      const seqOf = () => get().lsp.servers.find((s) => s.command === command)?.log.seq ?? 0;
+      const seq = seqOf();
+      // Registered before the fetch, so a hide meanwhile wins.
+      set((s) => ({ lspLogs: { ...s.lspLogs, [command]: s.lspLogs[command] ?? { seq, entries: [] } } }));
+      logFetches.add(command);
       try {
-        const { entries } = await api.lspLog(id);
-        set((s) => (s.lspLogs[id] ? { lspLogs: { ...s.lspLogs, [id]: { seq, entries } } } : {}));
+        const { entries } = await api.lspLog(command);
+        set((s) => (s.lspLogs[command] ? { lspLogs: { ...s.lspLogs, [command]: { seq, entries } } } : {}));
       } catch (e) {
         report('Language server log', e);
+        return;
+      } finally {
+        logFetches.delete(command);
       }
+      if (get().lspLogs[command] && seqOf() !== seq) void get().watchLspLog(command, true);
     },
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {

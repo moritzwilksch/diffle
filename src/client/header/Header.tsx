@@ -20,7 +20,8 @@ import {
   Sun,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { languagesLabel, type LspLogEntry, type LspServerStatus, type LspStatus } from '../../shared/protocol.js';
+import type { LspLogEntry, LspServerStatus, LspStatus } from '../../shared/protocol.js';
+import { languagesLabel } from '../../shared/lsp.js';
 import { repoName } from '../model.js';
 import { copyText } from '../clipboard.js';
 import { useStore } from '../store.js';
@@ -184,7 +185,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
           </Button>
         </div>
         {lsp.servers.map((s) => (
-          <ServerStatus key={s.id} server={s} />
+          <ServerStatus key={s.command} server={s} />
         ))}
         {!lsp.servers.length && !lsp.missing.length && <p className="text-muted">No servers</p>}
         {lsp.missing.map((m) => (
@@ -256,15 +257,15 @@ function logLine(e: LspLogEntry): string {
  * `shown` and again whenever the status says the log moved.
  */
 function ServerLog({ server: s, shown }: { server: LspServerStatus; shown: boolean }) {
-  const entries = useStore((st) => st.lspLogs[s.id]?.entries);
+  const entries = useStore((st) => st.lspLogs[s.command]?.entries);
   const watch = useStore((st) => st.watchLspLog);
   // Follows the diff's wrap setting: unwrapped, a stack trace scrolls sideways like a long line does.
   const lineWrap = useStore((st) => st.config.lineWrap);
   useEffect(() => {
     if (!shown) return;
-    void watch(s.id, true);
-    return () => void watch(s.id, false);
-  }, [shown, s.id, watch]);
+    void watch(s.command, true);
+    return () => void watch(s.command, false);
+  }, [shown, s.command, watch]);
   const [result, setResult] = useState<'copied' | 'failed' | null>(null);
   useEffect(() => {
     if (!result) return;

@@ -86,16 +86,14 @@ describe('LspPool', () => {
     });
   });
 
-  it('routes by extension and says what is missing for a path it cannot serve', async () => {
+  it('routes by extension and refuses a path it cannot serve', async () => {
     const { pool } = start({ python: 'py-server', rust: '' });
     await pool.track(diff('a.py', 'main.rs', 'main.go'));
-    await expect(pool.definition({ path: 'c.txt', line: 1, col: 0 })).rejects.toThrow(
-      /No language server for \.txt files/,
-    );
+    // The route words why through lspBlocker before asking; the pool only refuses.
+    await expect(pool.definition({ path: 'c.txt', line: 1, col: 0 })).rejects.toThrow(LspUnavailableError);
     await expect(pool.definition({ path: 'b.go', line: 1, col: 0 })).rejects.toThrow(LspUnavailableError);
-    // Asked for go, it names the programs to install; rust is off by config, so nothing to install.
-    await expect(pool.documentSymbols('main.rs')).rejects.toThrow(/off in your diffle config/);
-    await expect(pool.documentSymbols('main.go')).rejects.toThrow(/install one of gopls/);
+    await expect(pool.documentSymbols('main.rs')).rejects.toThrow(LspUnavailableError);
+    await expect(pool.documentSymbols('main.go')).rejects.toThrow(/no language server for main\.go/);
   });
 
   it('reports every server and every unserved language as one status', async () => {
@@ -106,7 +104,6 @@ describe('LspPool', () => {
     expect(status.enabled).toBe(true);
     expect(status.servers).toMatchObject([
       {
-        id: 'py-server',
         name: 'py-server',
         command: 'py-server',
         state: 'ready',
@@ -242,17 +239,7 @@ describe('LspPool', () => {
     expect(events.get('py-server')).toEqual(['open a.py v1']);
   });
 
-  it('numbers a second process of the same program', async () => {
-    const { pool } = start({ python: 'srv --python', go: 'srv --go' });
-    await pool.track(diff('a.py', 'b.go'));
-    expect(pool.status().servers.map((s) => [s.id, s.command])).toEqual([
-      ['srv', 'srv --go'],
-      ['srv-2', 'srv --python'],
-    ]);
-    await expect.poll(() => pool.log('srv-2')?.map((e) => e.message)).toContain('open a.py v1');
-  });
-
-  it('hands out one server’s log by id', async () => {
+  it('hands out one server’s log by command', async () => {
     const { pool } = start({ python: 'py-server' });
     await pool.track(diff('a.py'));
     await expect.poll(() => pool.log('py-server')?.map((e) => e.message)).toContain('open a.py v1');

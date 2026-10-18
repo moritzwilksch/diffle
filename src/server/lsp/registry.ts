@@ -198,22 +198,27 @@ export function resolveServers(
   overrides: Partial<Record<LanguageId, string>> = {},
   lookup: (command: string) => string | null = (c) => findOnPath(c),
 ): Resolution {
-  const probe = new Map<string, string | null>();
+  const probed = new Map<string, string | null>();
   const where = (command: string): string | null => {
-    let hit = probe.get(command);
-    if (hit === undefined) probe.set(command, (hit = lookup(command)));
+    let hit = probed.get(command);
+    if (hit === undefined) probed.set(command, (hit = lookup(command)));
     return hit;
   };
-  const found = (command: string): boolean => where(command) != null;
-  /** Whether the candidate's requirement is met; a program present but lacking its payload is noted. */
-  const usable = (candidate: ServerCandidate, note?: (why: string) => void): boolean => {
+  /** What keeps a candidate from starting: programs not on PATH, or one on PATH without what it loads from beside it. */
+  const probe = (candidate: ServerCandidate): { absent: string[]; why?: string } => {
+    const absent: string[] = [];
+    if (where(candidate.command) == null) absent.push(argv0(candidate.command));
     const { requires } = candidate;
-    if (!requires) return true;
+    if (!requires) return { absent };
     const executable = where(requires.program);
-    if (executable == null) return false;
-    if (requires.locate(executable) != null) return true;
-    note?.(`${requires.program} is on PATH but ${requires.what} was not found beside it`);
-    return false;
+    if (executable == null) absent.push(requires.program);
+    else if (requires.locate(executable) == null)
+      return { absent, why: `${requires.program} is on PATH but ${requires.what} was not found beside it` };
+    return { absent };
+  };
+  const startable = (candidate: ServerCandidate): boolean => {
+    const { absent, why } = probe(candidate);
+    return !absent.length && !why;
   };
   const servers = new Map<string, ResolvedServer>();
   const missing: LspMissing[] = [];
@@ -227,14 +232,12 @@ export function resolveServers(
     if (command == null) {
       for (const candidate of CANDIDATES) {
         if (!candidate.languages.includes(language)) continue;
-        const absent: string[] = [];
-        if (!found(candidate.command)) absent.push(argv0(candidate.command));
-        if (candidate.requires && !usable(candidate, (w) => (why ??= w))) {
-          if (!found(candidate.requires.program)) absent.push(candidate.requires.program);
-        } else if (!absent.length) {
+        const { absent, why: broken } = probe(candidate);
+        if (!absent.length && !broken) {
           command = candidate.command;
           break;
         }
+        why ??= broken;
         for (const program of absent) if (!tried.includes(program)) tried.push(program);
       }
     }
@@ -248,8 +251,7 @@ export function resolveServers(
   }
   for (const candidate of CANDIDATES) {
     const joins = (candidate.joins ?? []).filter((l) => asked.includes(l));
-    if (!joins.length) continue;
-    if (!found(candidate.command) || !usable(candidate)) continue;
+    if (!joins.length || !startable(candidate)) continue;
     const server = servers.get(candidate.command) ?? { command: candidate.command, languages: [], joins: [] };
     servers.set(candidate.command, server);
     for (const l of joins) if (!server.languages.includes(l) && !server.joins.includes(l)) server.joins.push(l);

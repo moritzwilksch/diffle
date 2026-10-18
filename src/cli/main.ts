@@ -20,8 +20,8 @@ import {
   type EntryRequest,
   type UserConfig,
   type FollowRefs,
-  languagesLabel,
 } from '../shared/protocol.js';
+import { languagesLabel } from '../shared/lsp.js';
 import {
   collectLanguage,
   collectLspOverride,
@@ -501,11 +501,11 @@ function startLsp(
       for (const s of status.servers) {
         const message = s.state === 'unavailable' ? (s.message ?? 'unavailable') : s.notice?.message;
         if (!message) {
-          reported.delete(s.id);
+          reported.delete(s.command);
           continue;
         }
-        if (reported.get(s.id) === message) continue;
-        reported.set(s.id, message);
+        if (reported.get(s.command) === message) continue;
+        reported.set(s.command, message);
         console.error(`${c.red('✖')} lsp ${s.name}: ${message}`);
       }
       hub.broadcast({ type: 'lsp', payload: status });

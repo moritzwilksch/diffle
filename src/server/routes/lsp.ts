@@ -3,10 +3,10 @@ import {
   type LspFeature,
   LspPositionSchema,
   type LspStatus,
-  lspBlocker,
   LspLogQuerySchema,
   SymbolsQuerySchema,
 } from '../../shared/protocol.js';
+import { lspBlocker } from '../../shared/lsp.js';
 import type { LspPool } from '../lsp/LspPool.js';
 import type { ApiDeps } from './api.js';
 import { readJson } from './body.js';

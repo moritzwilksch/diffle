@@ -2,7 +2,6 @@ import type { ChildProcess } from 'node:child_process';
 import {
   followsCheckout,
   languageOf,
-  lspBlocker,
   type ChangedFile,
   type LanguageId,
   type LspHoverResponse,
@@ -20,7 +19,7 @@ import { fuzzyRank } from '../../shared/fuzzy.js';
 import { LspBridge } from './LspBridge.js';
 import { type Answer, mergeHovers, mergeLocations, union } from './merge.js';
 import { LspUnavailableError } from './LspProcess.js';
-import { definitionOf, resolveServers } from './registry.js';
+import { definitionOf, resolveServers, type ResolvedServer } from './registry.js';
 import { findOnPath } from './which.js';
 
 export interface LspPoolOptions {
@@ -49,13 +48,9 @@ export type TrackedSnapshot = Pick<Snapshot, 'newSha' | 'headSha'> & {
   changed: Pick<ChangedFile, 'path' | 'status' | 'binary'>[];
 };
 
-interface Entry {
-  id: string;
+/** A running server and its languages, both lists growing as later snapshots resolve to the same command. */
+interface Entry extends ResolvedServer {
   bridge: LspBridge;
-  /** Languages this server owns; grows when a second language resolves to the same command. */
-  languages: LanguageId[];
-  /** Languages it answers for beside their owner (Tailwind's class hovers in markup). */
-  joins: LanguageId[];
 }
 
 /**
@@ -94,7 +89,6 @@ export class LspPool {
       enabled: true,
       servers: [...this.entries.values()].map((e) => ({
         ...e.bridge.status(),
-        id: e.id,
         languages: [...e.languages],
         joins: [...e.joins],
         supports: e.bridge.features(),
@@ -103,9 +97,9 @@ export class LspPool {
     };
   }
 
-  /** The retained log lines of the server with status `id`, or null when none has it. */
-  log(id: string): LspLogEntry[] | null {
-    return this.entry(id)?.bridge.entries() ?? null;
+  /** The retained log lines of the server started by `command`, or null when none was. */
+  log(command: string): LspLogEntry[] | null {
+    return this.entries.get(command)?.bridge.entries() ?? null;
   }
 
   /** Reads an external file only if a running server named it. */
@@ -119,21 +113,15 @@ export class LspPool {
 
   // Every query is async, so a missing server reads as a rejection like any other LSP failure.
   definition(pos: LspPosition): Promise<LspLocationsResponse> {
-    return this.fanOut(
-      pos.path,
-      (b) => b.definition(pos),
-      mergeLocations,
-      (r) => !r.locations.length,
-    );
+    return this.locations(pos, (b) => b.definition(pos));
   }
 
   typeDefinition(pos: LspPosition): Promise<LspLocationsResponse> {
-    return this.fanOut(
-      pos.path,
-      (b) => b.typeDefinition(pos),
-      mergeLocations,
-      (r) => !r.locations.length,
-    );
+    return this.locations(pos, (b) => b.typeDefinition(pos));
+  }
+
+  references(pos: LspPosition): Promise<LspLocationsResponse> {
+    return this.locations(pos, (b) => b.references(pos));
   }
 
   hover(pos: LspPosition): Promise<LspHoverResponse> {
@@ -142,15 +130,6 @@ export class LspPool {
       (b) => b.hover(pos),
       mergeHovers,
       (r) => r.contents == null,
-    );
-  }
-
-  references(pos: LspPosition): Promise<LspLocationsResponse> {
-    return this.fanOut(
-      pos.path,
-      (b) => b.references(pos),
-      mergeLocations,
-      (r) => !r.locations.length,
     );
   }
 
@@ -166,13 +145,16 @@ export class LspPool {
     return this.ownerFor(path).documentSymbols(path);
   }
 
-  /** Symbols matching `query` from every running server, best `fuzzyRank` match first. */
+  /**
+   * Symbols matching `query` from every running server, best `fuzzyRank` match first.
+   * Ranked before the cap: servers list loose matches in their own order.
+   */
   async workspaceSymbols(query: string, limit = 200): Promise<LspSymbolsResponse> {
     if (this.closing) throw new LspUnavailableError('the language servers are shutting down');
     const bridges = [...this.entries.values()].map((e) => e.bridge);
-    if (!bridges.length) throw new LspUnavailableError(this.why());
+    if (!bridges.length) throw new LspUnavailableError('no language server is running');
     return union(
-      bridges.map((b) => b.workspaceSymbols(query, limit)),
+      bridges.map((b) => b.workspaceSymbols(query)),
       (answers) => ({
         symbols: fuzzyRank(
           answers.flatMap((a) => a.symbols),
@@ -220,14 +202,10 @@ export class LspPool {
     return (this.closed ??= Promise.all([...this.entries.values()].map((e) => e.bridge.close())).then(() => {}));
   }
 
-  private entry(id: string): Entry | undefined {
-    for (const e of this.entries.values()) if (e.id === id) return e;
-    return undefined;
-  }
-
   /**
-   * Every server for `path`, owner first, or an unavailable error naming what is missing.
-   * A language nothing owns is still served by the servers joining it.
+   * Every server for `path`, owner first. A language nothing owns is still served by the
+   * servers joining it. The route has already asked `lspBlocker` why none would answer,
+   * so an empty list here is a race with a snapshot or a shutdown, not a message to word.
    */
   private bridgesFor(path: string): LspBridge[] {
     if (this.closing) throw new LspUnavailableError('the language servers are shutting down');
@@ -239,12 +217,17 @@ export class LspPool {
           ...entries.filter((e) => e.joins.includes(language)),
         ].map((e) => e.bridge)
       : [];
-    if (!bridges.length) throw new LspUnavailableError(this.why(path));
+    if (!bridges.length) throw new LspUnavailableError(`no language server for ${path}`);
     return bridges;
   }
 
   private ownerFor(path: string): LspBridge {
     return this.bridgesFor(path)[0]!;
+  }
+
+  /** Every server's locations for `pos`, owner first, each place once. */
+  private locations(pos: LspPosition, ask: (bridge: LspBridge) => Promise<LspLocationsResponse>) {
+    return this.fanOut(pos.path, ask, mergeLocations, (r) => !r.locations.length);
   }
 
   /** Asks every server for `path` at once and merges what they answered (see `union`). */
@@ -255,11 +238,6 @@ export class LspPool {
     empty: (merged: T) => boolean,
   ): Promise<T> {
     return union(this.bridgesFor(path).map(ask), merge, empty);
-  }
-
-  private why(path?: string): string {
-    // The pool is always on and tracks only checkouts, so neither blocker applies here.
-    return lspBlocker(this.status(), { newSha: 'worktree', headSha: '' }, { path }) ?? 'no language server available';
   }
 
   /** Resolves and starts servers for languages not seen before. Cheap and idempotent per language. */
@@ -293,10 +271,7 @@ export class LspPool {
       spawnProcess: this.opts.spawnProcess,
       maxOpen: this.opts.maxOpen,
     });
-    // The program names the server; a second process of the same program is numbered.
-    const name = bridge.status().name;
-    const taken = [...this.entries.values()].filter((e) => e.id === name || e.id.startsWith(`${name}-`)).length;
-    const entry: Entry = { id: taken ? `${name}-${taken + 1}` : name, bridge, languages: [], joins: [] };
+    const entry: Entry = { command, bridge, languages: [], joins: [] };
     this.entries.set(command, entry);
     return entry;
   }
