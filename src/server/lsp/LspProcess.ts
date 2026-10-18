@@ -186,9 +186,9 @@ export class LspProcess {
     child.on('error', (e) => this.fail(`cannot start "${this.opts.command}": ${e.message}`));
     child.on('exit', (code, signal) => {
       if (this.closing) return;
+      // A trailing partial line lands in the log, which is where the reason lives.
       this.output.stderr('\n');
-      const last = this.output.lastStderr;
-      this.fail(`"${this.opts.command}" exited (${signal ?? code})${last ? `: ${last}` : ''}`);
+      this.fail(`"${this.opts.command}" exited (${signal ?? code})`);
     });
     if (!child.stdin || !child.stdout) {
       this.fail(`cannot start "${this.opts.command}": no stdio`);

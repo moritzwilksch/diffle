@@ -30,8 +30,6 @@ export class ServerOutput {
   private logSummary: LspProcessStatus['log'] = { seq: 0, errors: 0, warnings: 0 };
   /** stderr bytes since the last newline. */
   private stderrTail = '';
-  /** The last whole stderr line; an exit message quotes it. */
-  lastStderr = '';
   private notice: LspProcessStatus['notice'];
   private progress = new Map<string | number, Progress>();
 
@@ -52,7 +50,6 @@ export class ServerOutput {
     this.stderrTail = lines.pop() ?? '';
     for (const line of lines) {
       if (!line.trim()) continue;
-      this.lastStderr = line.trim();
       this.record('stderr', 'log', line);
     }
   }
