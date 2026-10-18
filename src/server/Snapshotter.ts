@@ -4,7 +4,7 @@ import { mapLimit } from './concurrency.js';
 import { looksGenerated, SNIFF_BYTES } from './generated.js';
 import type { GitRepo } from './git/GitRepo.js';
 import type { IterationStore } from './iterations.js';
-import { resolveComparison } from './mode.js';
+import { resolveComparison } from './mode/resolve.js';
 
 const PREWARM = 3;
 /** The gitattribute GitHub reads to collapse generated files; `=false` opts a file out of the heuristics. */

@@ -7,7 +7,7 @@ import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { imageType } from '../../src/server/image.js';
 import { imageKey, type Side } from '../../src/shared/protocol.js';
-import { createApi } from '../../src/server/routes.js';
+import { createApi } from '../../src/server/routes/api.js';
 import { Session } from '../../src/server/Session.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
 import { WsHub } from '../../src/server/ws.js';

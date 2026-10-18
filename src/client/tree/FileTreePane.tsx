@@ -4,87 +4,20 @@ import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
 import { ArrowLeftRight, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangedFile, ViewedState } from '../../shared/protocol.js';
 import { focusReview } from '../keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '../model.js';
 import { remPx } from '../scale.js';
 import { useStore } from '../store.js';
 import { ButtonLabel } from '../ui/ButtonLabel.js';
 import { useConfirm } from '../useConfirm.js';
+import { useCutNameTitles } from './cutNames.js';
+import { directoryDecoration, rowDecoration } from './decoration.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
 import { TREE_CSS } from './treeCss.js';
 import { toggleDirectoryViewed, TreeMenu } from './TreeMenu.js';
 
 type Scope = 'changed' | 'all';
-
-// The decoration lane holds one span of colored text parts: the file's +/− counts, then
-// the viewed mark as a glyph (the lane takes either text or one icon, not both).
-const MARK: Record<ViewedState, { glyph: string; color: string; title: string }> = {
-  viewed: {
-    glyph: '✓',
-    color: 'var(--add)',
-    title: 'Viewed · click or v to toggle',
-  },
-  unviewed: {
-    glyph: '○',
-    color: 'var(--fg-2)',
-    title: 'Not viewed · click or v to toggle',
-  },
-  restale: {
-    glyph: '◐',
-    color: 'var(--warn)',
-    title: 'Changed since you viewed it · click or v to mark viewed again',
-  },
-};
-
-/** Whether the tree's own ellipsis is showing on the row's name. */
-function ellipsized(row: HTMLElement): boolean {
-  return Array.from(row.querySelectorAll('[data-truncate-marker]')).some((m) => getComputedStyle(m).opacity !== '0');
-}
-
-/** Whether a pinned lane covers the tail of the row's name, or the pane's scroll offset hides its head. */
-function nameClipped(row: HTMLElement): boolean {
-  const name = row.querySelector('[data-item-section="content"]');
-  const pane = row.closest('[data-file-tree-virtualized-scroll]');
-  if (!name || !pane) return false;
-  const { left, right } = name.getBoundingClientRect();
-  const view = pane.getBoundingClientRect();
-  const lane = row.querySelector('[data-item-section="decoration"], [data-item-section="git"]');
-  const edge = lane ? lane.getBoundingClientRect().left : view.left + pane.clientWidth;
-  return right > edge + 0.5 || left < view.left - 0.5;
-}
-
-function rowDecoration(f: ChangedFile, state: ViewedState) {
-  const parts: { text: string; color?: string }[] = [];
-  if (f.additions > 0) parts.push({ text: `+${f.additions}`, color: 'var(--add)' });
-  if (f.deletions > 0) parts.push({ text: `−${f.deletions}`, color: 'var(--del)' });
-  const mark = MARK[state];
-  parts.push({ text: mark.glyph, color: mark.color });
-  const counts = f.binary ? 'binary' : `+${f.additions} −${f.deletions}`;
-  return {
-    text: parts.map((p) => p.text).join(' '),
-    parts,
-    title: `${counts} · ${mark.title}`,
-  };
-}
-
-// A directory's mark sums its changed files: a check once all are viewed, else the progress so far.
-function directoryDecoration(viewedCount: number, total: number) {
-  if (viewedCount === total) {
-    const title = `All ${total} changed file(s) viewed · click to mark them not viewed`;
-    return {
-      text: MARK.viewed.glyph,
-      parts: [{ text: MARK.viewed.glyph, color: MARK.viewed.color }],
-      title,
-    };
-  }
-  const parts: { text: string; color?: string }[] = [];
-  if (viewedCount > 0) parts.push({ text: `${viewedCount}/${total}`, color: 'var(--fg-2)' });
-  parts.push({ text: MARK.unviewed.glyph, color: MARK.unviewed.color });
-  const title = `${viewedCount} of ${total} changed file(s) viewed · click to mark all viewed`;
-  return { text: parts.map((p) => p.text).join(' '), parts, title };
-}
 
 export function FileTreePane() {
   const snapshot = useStore((s) => s.snapshot);
@@ -244,32 +177,13 @@ export function FileTreePane() {
     };
   }, []);
 
-  // A long name is cut by the tree's ellipsis, or, scrolling sideways, by the pinned lanes over its
-  // tail and the scroll offset over its head. On entry into a cut row, its full path becomes the
-  // row's `title`, and `TooltipHost` reads it right after: this capture listener on the shadow root
-  // runs before the host's. Rows are recycled across paths, so nothing is cached.
+  useCutNameTitles(bodyRef);
+
   useEffect(() => {
-    const shadow = bodyRef.current?.firstElementChild?.shadowRoot;
-    if (!shadow) return;
-    const searchInput = shadow.querySelector<HTMLInputElement>('[data-file-tree-search-input]');
-    if (searchInput) searchInput.placeholder = 'Search files…';
-    const onEnter = (e: Event) => {
-      const row = (e.composedPath() as HTMLElement[]).find(
-        (n) => n instanceof HTMLElement && n.dataset.itemPath != null,
-      );
-      const from = (e as PointerEvent | FocusEvent).relatedTarget;
-      // Crossing between a row's own parts changes nothing.
-      if (!row || (from instanceof Node && row.contains(from))) return;
-      const cut = shadow.host.hasAttribute('data-hscroll') ? nameClipped(row) : ellipsized(row);
-      if (cut) row.title = (row.dataset.itemPath ?? '').replace(/\/$/, '');
-      else row.removeAttribute('title');
-    };
-    shadow.addEventListener('pointerover', onEnter, true);
-    shadow.addEventListener('focusin', onEnter, true);
-    return () => {
-      shadow.removeEventListener('pointerover', onEnter, true);
-      shadow.removeEventListener('focusin', onEnter, true);
-    };
+    const input = bodyRef.current?.firstElementChild?.shadowRoot?.querySelector<HTMLInputElement>(
+      '[data-file-tree-search-input]',
+    );
+    if (input) input.placeholder = 'Search files…';
   }, []);
 
   const setTreeModel = useStore((s) => s.setTreeModel);

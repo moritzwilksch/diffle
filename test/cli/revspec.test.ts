@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRangeDiff, parseRevspec, RevspecError } from '../../src/server/revspec.js';
+import { parseRangeDiff, parseRevspec, RevspecError } from '../../src/server/mode/revspec.js';
 
 describe('parseRangeDiff', () => {
   it('takes two ranges, each old..new with empty sides defaulting to HEAD', () => {

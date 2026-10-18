@@ -20,13 +20,13 @@ import { quoteRange } from './comments/anchor.js';
 import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
-import { discoverGithub } from './GithubMetadata.js';
+import { discoverGithub } from './github/metadata.js';
 import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
 import { GithubExporter } from './github/review.js';
 import { IterationStore } from './iterations.js';
-import { namesBranch, rangeDiffReview, resolveComparison, type ResolvedReview, resolveReview } from './mode.js';
-import { compareRanges } from './rangediff.js';
-import { RevspecError } from './revspec.js';
+import { namesBranch, rangeDiffReview, resolveComparison, type ResolvedReview, resolveReview } from './mode/resolve.js';
+import { compareRanges } from './mode/rangediff.js';
+import { RevspecError } from './mode/revspec.js';
 import { Snapshotter } from './Snapshotter.js';
 import type { WatchTarget } from './Watcher.js';
 

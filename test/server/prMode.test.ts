@@ -11,7 +11,7 @@ import { openReviewRepository } from '../../src/cli/repository.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '../../src/server/github/client.js';
 import { viewPr } from '../../src/server/github/pulls.js';
-import { resolveReview } from '../../src/server/mode.js';
+import { resolveReview } from '../../src/server/mode/resolve.js';
 
 /**
  * The temp root as git reports it: macOS reaches `os.tmpdir()` through a symlink

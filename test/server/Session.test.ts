@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '../../src/server/github/client.js';
-import { RevspecError } from '../../src/server/revspec.js';
+import { RevspecError } from '../../src/server/mode/revspec.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '../../src/server/Session.js';
 import type { WatchTarget } from '../../src/server/Watcher.js';
 import { comparisonLabel, type ServerMessage, type Snapshot } from '../../src/shared/protocol.js';

@@ -9,7 +9,7 @@ import { type Context, Hono } from 'hono';
 import { compress } from 'hono/compress';
 import { getMimeType } from 'hono/utils/mime';
 import { requestGuard } from './guard.js';
-import { createApi, type ApiDeps } from './routes.js';
+import { createApi, type ApiDeps } from './routes/api.js';
 
 export interface ServerOptions {
   port: number;

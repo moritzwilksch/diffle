@@ -9,7 +9,7 @@ import { rmTmp } from '../tmp.js';
 import { GitRepo } from '../../src/server/git/GitRepo.js';
 import { Server } from '../../src/server/Server.js';
 import { LspPool } from '../../src/server/lsp/LspPool.js';
-import type { ApiDeps } from '../../src/server/routes.js';
+import type { ApiDeps } from '../../src/server/routes/api.js';
 import { Session } from '../../src/server/Session.js';
 import { UserConfigStore } from '../../src/server/UserConfig.js';
 import { WsHub } from '../../src/server/ws.js';
