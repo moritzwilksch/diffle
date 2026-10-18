@@ -105,6 +105,23 @@ describe('tsdkLocation', () => {
     expect(tsdkLocation(join(root, 'repo'), [join(root, 'bin', 'astro-ls')])).toBe(lib);
   });
 
+  it('reaches a conda environment’s packages through a pixi trampoline', () => {
+    const root = tmp();
+    const prefix = join(root, 'envs', 'astro-ls');
+    const launcher = executable(join(prefix, 'bin', 'astro-ls'));
+    const trampoline = executable(join(root, 'bin', 'astro-ls'));
+    mkdirSync(join(root, 'bin', 'trampoline_configuration'));
+    writeFileSync(join(root, 'bin', 'trampoline_configuration', 'astro-ls.json'), JSON.stringify({ exe: launcher }));
+    // Nested under the server package, as the conda package lays it out.
+    const nested = typescript(join(prefix, 'lib', 'node_modules', '@astrojs', 'language-server', 'node_modules'));
+    expect(tsdkLocation(join(root, 'repo'), [trampoline])).toBe(nested);
+    // A TypeScript 7 there is passed over for one hoisted beside the package.
+    const other = join(root, 'envs', 'other');
+    typescript(join(other, 'lib', 'node_modules', '@astrojs', 'language-server', 'node_modules'), '7.0.2');
+    const hoisted = typescript(join(other, 'lib', 'node_modules'));
+    expect(tsdkLocation(join(root, 'repo'), [executable(join(other, 'bin', 'astro-ls'))])).toBe(hoisted);
+  });
+
   it('passes over TypeScript 7 and over nothing at all', () => {
     const root = tmp();
     typescript(join(root, 'repo', 'node_modules'), '7.0.2');

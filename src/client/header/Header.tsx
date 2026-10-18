@@ -191,11 +191,13 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
           <div
             className="mt-1.5 flex items-center gap-2 border-t border-border pt-1.5 text-muted"
             key={m.language}
-            title={m.tried.join(', ')}
+            title={m.why ?? m.tried.join(', ')}
           >
             <X size="0.875rem" className="shrink-0" />
             <span className="min-w-0 flex-1 font-medium wrap-anywhere text-foreground">{m.language}</span>
-            <span className="shrink-0 text-[0.6875rem]">{m.tried.length ? 'Not on PATH' : 'Disabled'}</span>
+            <span className="shrink-0 text-[0.6875rem]">
+              {m.why ? 'Incomplete' : m.tried.length ? 'Not on PATH' : 'Disabled'}
+            </span>
           </div>
         ))}
       </section>

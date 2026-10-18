@@ -281,7 +281,10 @@ program
         answer.set(language, `${s.command}${lspCommands[language] == null ? '' : c.dim(' (config)')}`);
     // An empty override is off, and names nothing to install: the resolver leaves `tried` empty.
     for (const m of missing)
-      answer.set(m.language, c.dim(m.tried.length ? `not on PATH (tried ${m.tried.join(', ')})` : 'off in config'));
+      answer.set(
+        m.language,
+        c.dim(m.why ?? (m.tried.length ? `not on PATH (tried ${m.tried.join(', ')})` : 'off in config')),
+      );
     // A server joining a language answers beside its owner, so it is listed after it.
     for (const s of servers)
       for (const language of s.joins) answer.set(language, `${answer.get(language) ?? ''} ${c.dim('+')} ${s.command}`);

@@ -1,6 +1,6 @@
-import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
+import { realExecutable } from './which.js';
 
 /** The tsserver plugin that turns .vue files into TypeScript documents. */
 export const VUE_PLUGIN = '@vue/typescript-plugin';
@@ -11,19 +11,18 @@ export const VUE_PLUGIN = '@vue/typescript-plugin';
  * serve .vue files through this plugin inside tsserver; the standalone server only
  * relays to a tsserver the editor must bridge, so diffle never runs it. The package is
  * reached through the layouts of npm (a symlink into the package, or a `.cmd` shim
- * beside `node_modules` on Windows) and nixpkgs (a wrapper beside `lib/language-tools`).
+ * beside `node_modules` on Windows), conda and pixi (a launcher in `bin` beside
+ * `lib/node_modules`, behind a pixi global trampoline), and nixpkgs (a wrapper beside
+ * `lib/language-tools`).
  */
 export function vuePluginLocation(executable: string): string | null {
-  const bin = dirname(executable);
+  const real = realExecutable(executable);
   const candidates = [
-    join(bin, 'node_modules', '@vue', 'language-server'),
-    resolve(bin, '..', 'lib', 'language-tools', 'packages', 'language-server'),
+    resolve(dirname(real), '..'),
+    join(dirname(executable), 'node_modules', '@vue', 'language-server'),
+    resolve(dirname(real), '..', 'lib', 'node_modules', '@vue', 'language-server'),
+    resolve(dirname(real), '..', 'lib', 'language-tools', 'packages', 'language-server'),
   ];
-  try {
-    candidates.unshift(resolve(dirname(realpathSync(executable)), '..'));
-  } catch {
-    /* A dangling link leads nowhere. */
-  }
   for (const dir of candidates) {
     try {
       // The same walk up `node_modules` tsserver makes from the location it is given.

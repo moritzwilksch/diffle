@@ -1,6 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { candidatesFor, CANDIDATES, definitionOf, resolveServers } from '../../src/server/lsp/registry.js';
 import { LANGUAGE_IDS } from '../../src/shared/protocol.js';
+import { rmTmp } from '../tmp.js';
+
+const dirs: string[] = [];
+afterEach(async () => {
+  await Promise.all(dirs.splice(0).map(rmTmp));
+});
+
+/** A `vue-language-server` laid out as nixpkgs does, with the tsserver plugin beside it. */
+function vueLanguageServer(): string {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'diffle-registry-')));
+  dirs.push(root);
+  const plugin = join(root, 'lib', 'language-tools', 'packages', 'language-server', 'node_modules', '@vue');
+  mkdirSync(join(plugin, 'typescript-plugin'), { recursive: true });
+  writeFileSync(join(plugin, 'typescript-plugin', 'package.json'), '{"name":"@vue/typescript-plugin","main":"i.js"}');
+  writeFileSync(join(plugin, 'typescript-plugin', 'i.js'), '');
+  mkdirSync(join(root, 'bin'));
+  writeFileSync(join(root, 'bin', 'vue-language-server'), '#!/bin/sh\nexit 0\n');
+  chmodSync(join(root, 'bin', 'vue-language-server'), 0o755);
+  return join(root, 'bin', 'vue-language-server');
+}
 
 /** A PATH holding exactly `programs`. */
 const path =
@@ -59,10 +82,21 @@ describe('resolveServers', () => {
     expect(resolveServers(['vue'], {}, path('typescript-language-server')).missing).toEqual([
       { language: 'vue', tried: ['vue-language-server', 'vtsls'] },
     ]);
-    const { servers, missing } = resolveServers(
-      ['vue', 'typescript'],
-      {},
-      path('typescript-language-server', 'vue-language-server'),
+    // On PATH, but with nothing beside it tsserver could load: as good as absent, and said so.
+    const bare = resolveServers(['vue', 'typescript'], {}, path('typescript-language-server', 'vue-language-server'));
+    expect(bare.servers).toEqual([
+      { command: 'typescript-language-server --stdio', languages: ['typescript'], joins: [] },
+    ]);
+    expect(bare.missing).toEqual([
+      {
+        language: 'vue',
+        tried: ['vtsls'],
+        why: 'vue-language-server is on PATH but @vue/typescript-plugin was not found beside it',
+      },
+    ]);
+    const installed = vueLanguageServer();
+    const { servers, missing } = resolveServers(['vue', 'typescript'], {}, (command) =>
+      command.startsWith('vue-language-server') ? installed : path('typescript-language-server')(command),
     );
     expect(servers).toEqual([
       { command: 'typescript-language-server --stdio', languages: ['typescript', 'vue'], joins: [] },

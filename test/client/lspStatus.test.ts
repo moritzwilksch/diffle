@@ -149,12 +149,17 @@ describe('LSP status indicator', () => {
     state.lsp.missing = [
       { language: 'rust', tried: ['rust-analyzer'] },
       { language: 'python', tried: [] },
+      { language: 'vue', tried: ['vtsls'], why: 'vue-language-server is on PATH but its plugin is not' },
     ];
     try {
       const popup = render().querySelector('section')!;
       expect(popup.textContent).toContain('Not on PATH');
       expect(popup.textContent).toContain('Disabled');
+      expect(popup.textContent).toContain('Incomplete');
       expect(popup.querySelector('[title="rust-analyzer"]')!.textContent).toContain('rust');
+      expect(
+        popup.querySelector('[title="vue-language-server is on PATH but its plugin is not"]')!.textContent,
+      ).toContain('vue');
     } finally {
       state.lsp.missing = [];
     }

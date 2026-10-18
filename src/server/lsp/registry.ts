@@ -1,7 +1,7 @@
 import type { LanguageId, LspMissing } from '../../shared/protocol.js';
 import { loadSchemaCatalog, SCHEMA_CATALOG, type LspSettings } from './configuration.js';
 import { tsdkLocation } from './tsdk.js';
-import { vuePlugin } from './vue.js';
+import { VUE_PLUGIN, vuePlugin, vuePluginLocation } from './vue.js';
 import { argv0, findOnPath, programOf } from './which.js';
 
 /** What a server's settings may depend on. */
@@ -22,11 +22,20 @@ export interface ServerDefinition {
   initializationOptions?: (ctx: ServerContext) => LspSettings | undefined;
 }
 
+/** A second program a candidate needs on PATH, and what `command` loads from beside it. */
+export interface Requirement {
+  program: string;
+  /** What `program` ships for `command`, as messages name it. */
+  what: string;
+  /** Where that sits, given `program`'s executable; null when it cannot be found beside it. */
+  locate: (executable: string) => string | null;
+}
+
 /** A server diffle knows how to start, and the languages it answers for. */
 export interface ServerCandidate extends ServerDefinition {
   languages: LanguageId[];
-  /** A second program that must be on PATH too: the one shipping a plugin `command` loads. */
-  requires?: string;
+  /** A second program that must be on PATH too, with what `command` loads from beside it in reach. */
+  requires?: Requirement;
   /**
    * Languages it answers for beside their owner, as an editor extension would: started
    * whenever one of them is in the diff, never counted as serving it, and running alone
@@ -55,6 +64,8 @@ const VTSLS: ServerDefinition = {
   },
 };
 
+const VUE: Requirement = { program: 'vue-language-server', what: VUE_PLUGIN, locate: vuePluginLocation };
+
 /**
  * Built-in servers, in preference order per language: the first one whose program is
  * on PATH is used. Entries serving several languages become one process, which is how
@@ -71,8 +82,8 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: TYPESCRIPT, ...VTSLS },
   // Vue 3 language tools answer for .vue files from inside tsserver, through the plugin
   // that ships with vue-language-server; the TypeScript servers load it (vue.ts).
-  { languages: ['vue'], ...TSSERVER, requires: 'vue-language-server' },
-  { languages: ['vue'], ...VTSLS, requires: 'vue-language-server' },
+  { languages: ['vue'], ...TSSERVER, requires: VUE },
+  { languages: ['vue'], ...VTSLS, requires: VUE },
   {
     languages: ['astro'],
     command: 'astro-ls --stdio',
@@ -175,21 +186,34 @@ export function definitionOf(command: string): ServerDefinition {
  * should surface as the server failing to start, not as silence. An override of `''`
  * turns the language off. Languages resolving to the same command line share one
  * process. A missing language's `tried` names the programs that were not on PATH, so
- * a candidate needing two programs lists only the absent one. A candidate joining a
- * requested language starts too, when on PATH, whatever owns it, and joins only the
- * requested ones, growing like an owner does as later snapshots ask for more; its
- * absence is no one's missing server. `lookup` is a test seam for the PATH probe.
+ * a candidate needing two programs lists only the absent one; a program on PATH that
+ * lacks what the candidate loads from beside it is as good as absent, and the first
+ * such finding is the language's `why`. A candidate joining a requested language
+ * starts too, when on PATH, whatever owns it, and joins only the requested ones,
+ * growing like an owner does as later snapshots ask for more; its absence is no one's
+ * missing server. `lookup` is a test seam for the PATH probe.
  */
 export function resolveServers(
   languages: Iterable<LanguageId>,
   overrides: Partial<Record<LanguageId, string>> = {},
   lookup: (command: string) => string | null = (c) => findOnPath(c),
 ): Resolution {
-  const probe = new Map<string, boolean>();
-  const found = (command: string): boolean => {
+  const probe = new Map<string, string | null>();
+  const where = (command: string): string | null => {
     let hit = probe.get(command);
-    if (hit == null) probe.set(command, (hit = lookup(command) != null));
+    if (hit === undefined) probe.set(command, (hit = lookup(command)));
     return hit;
+  };
+  const found = (command: string): boolean => where(command) != null;
+  /** Whether the candidate's requirement is met; a program present but lacking its payload is noted. */
+  const usable = (candidate: ServerCandidate, note?: (why: string) => void): boolean => {
+    const { requires } = candidate;
+    if (!requires) return true;
+    const executable = where(requires.program);
+    if (executable == null) return false;
+    if (requires.locate(executable) != null) return true;
+    note?.(`${requires.program} is on PATH but ${requires.what} was not found beside it`);
+    return false;
   };
   const servers = new Map<string, ResolvedServer>();
   const missing: LspMissing[] = [];
@@ -199,13 +223,15 @@ export function resolveServers(
     let command = overrides[language]?.trim();
     // An empty override is a deliberate off switch, and names nothing to install.
     const tried: string[] = [];
+    let why: string | undefined;
     if (command == null) {
       for (const candidate of CANDIDATES) {
         if (!candidate.languages.includes(language)) continue;
-        const absent = [candidate.command, candidate.requires]
-          .filter((c): c is string => c != null && !found(c))
-          .map(argv0);
-        if (!absent.length) {
+        const absent: string[] = [];
+        if (!found(candidate.command)) absent.push(argv0(candidate.command));
+        if (candidate.requires && !usable(candidate, (w) => (why ??= w))) {
+          if (!found(candidate.requires.program)) absent.push(candidate.requires.program);
+        } else if (!absent.length) {
           command = candidate.command;
           break;
         }
@@ -213,7 +239,7 @@ export function resolveServers(
       }
     }
     if (command == null || command === '') {
-      missing.push({ language, tried });
+      missing.push(why ? { language, tried, why } : { language, tried });
       continue;
     }
     const server = servers.get(command);
@@ -223,7 +249,7 @@ export function resolveServers(
   for (const candidate of CANDIDATES) {
     const joins = (candidate.joins ?? []).filter((l) => asked.includes(l));
     if (!joins.length) continue;
-    if (![candidate.command, candidate.requires].every((c) => c == null || found(c))) continue;
+    if (!found(candidate.command) || !usable(candidate)) continue;
     const server = servers.get(candidate.command) ?? { command: candidate.command, languages: [], joins: [] };
     servers.set(candidate.command, server);
     for (const l of joins) if (!server.languages.includes(l) && !server.joins.includes(l)) server.joins.push(l);

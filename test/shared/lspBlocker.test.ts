@@ -32,6 +32,14 @@ describe('lspBlocker', () => {
     expect(lspBlocker(on, elsewhere)).toMatch(/new side/);
     expect(lspBlocker(on, checkout, { path: 'notes.txt' })).toBe('No language server for .txt files');
     expect(lspBlocker(on, checkout, { path: 'main.go' })).toBe('No language server runs for go');
+    // A program on PATH that lacks what the server loads beside it: installing more is not the answer.
+    const broken: LspStatus = {
+      ...on,
+      missing: [{ language: 'vue', tried: ['vtsls'], why: 'vue-language-server is on PATH but its plugin is not' }],
+    };
+    expect(lspBlocker(broken, checkout, { path: 'App.vue' })).toBe(
+      'No language server for vue: vue-language-server is on PATH but its plugin is not',
+    );
     expect(lspBlocker(on, checkout, { path: 'a.py', feature: 'references' })).toBeNull();
     expect(lspBlocker(on, checkout, { feature: 'workspaceSymbol' })).toBeNull();
     const hoverish = status(server({ supports: ['hover'] }));

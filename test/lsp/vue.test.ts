@@ -77,6 +77,37 @@ describe('vuePluginLocation', () => {
     expect(vuePluginLocation(executable(join(root, 'bin', 'vue-language-server')))).toBe(location);
   });
 
+  /**
+   * A conda environment: a launcher script in `bin` beside `lib/node_modules`, where the
+   * plugin is nested under the language-server package.
+   */
+  function condaLayout(prefix: string): { executable: string; location: string } {
+    const location = pkg(join(prefix, 'lib', 'node_modules', '@vue', 'language-server'), '@vue/language-server');
+    pkg(join(location, 'node_modules', '@vue', 'typescript-plugin'), '@vue/typescript-plugin', 'index.js');
+    return { executable: executable(join(prefix, 'bin', 'vue-language-server')), location };
+  }
+
+  it('finds the package beside a conda launcher', () => {
+    const { executable, location } = condaLayout(tmp());
+    expect(vuePluginLocation(executable)).toBe(location);
+  });
+
+  it('follows a pixi global trampoline into its environment', () => {
+    const root = tmp();
+    const env = condaLayout(join(root, 'envs', 'vue-language-server'));
+    // The file on PATH is a native launcher; its configuration beside it names the real program.
+    const trampoline = executable(join(root, 'bin', 'vue-language-server'));
+    mkdirSync(join(root, 'bin', 'trampoline_configuration'));
+    writeFileSync(
+      join(root, 'bin', 'trampoline_configuration', 'vue-language-server.json'),
+      JSON.stringify({ exe: env.executable, path_diff: join(root, 'envs', 'vue-language-server', 'bin') }),
+    );
+    expect(vuePluginLocation(trampoline)).toBe(env.location);
+    // A configuration naming nothing usable is ignored.
+    writeFileSync(join(root, 'bin', 'trampoline_configuration', 'vue-language-server.json'), '{"exe": 1}');
+    expect(vuePluginLocation(trampoline)).toBeNull();
+  });
+
   it('gives up on a layout without the plugin', () => {
     const root = tmp();
     pkg(join(root, 'lib', 'language-tools', 'packages', 'language-server'), '@vue/language-server');

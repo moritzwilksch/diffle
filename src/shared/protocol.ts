@@ -672,6 +672,11 @@ export const LspMissingSchema = z.object({
   language: LanguageIdSchema,
   /** Programs looked for on PATH, so the UI can name what to install. Empty when config turned the language off. */
   tried: z.string().array(),
+  /**
+   * A program that is on PATH but lacks what the server loads from beside it, such as a
+   * `vue-language-server` without its tsserver plugin: installing more is not the answer.
+   */
+  why: z.string().optional(),
 });
 export type LspMissing = z.infer<typeof LspMissingSchema>;
 
@@ -936,6 +941,9 @@ function notReady(s: LspServerStatus): string {
 /** No server serves `language` (or nothing runs at all): say what the reader can do about it. */
 function noServer(lsp: LspStatus, language?: LanguageId): string {
   const missing = language == null ? lsp.missing : lsp.missing.filter((m) => m.language === language);
+  // A broken installation is the one thing installing something else will not fix.
+  const broken = missing.find((m) => m.why);
+  if (broken) return `No language server for ${broken.language}: ${broken.why}`;
   const absent = missing.filter((m) => m.tried.length > 0);
   const off = missing.filter((m) => m.tried.length === 0).map((m) => m.language);
   if (absent.length) {
