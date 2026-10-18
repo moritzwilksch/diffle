@@ -1,5 +1,5 @@
 // Minimal stdio language server for tests: answers initialize, definition, references,
-// documentSymbol, workspace/symbol, hover, semanticTokens/range, documentHighlight, shutdown. Definitions point
+// documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. Definitions point
 // at line 2 of the queried file plus one location outside the root; references echo the open document's text length.
 import { pathToFileURL } from 'node:url';
 
@@ -40,13 +40,12 @@ const TAG = process.env.FAKE_LSP_TAG;
 /** FAKE_LSP_MODIFIED: refuse this many document requests with ContentModified before answering. */
 let modified = Number(process.env.FAKE_LSP_MODIFIED ?? 0);
 
-const ALL_FEATURES =
-  'definition,typeDefinition,hover,references,documentSymbol,workspaceSymbol,semanticTokens,documentHighlight';
+const ALL_FEATURES = 'definition,typeDefinition,hover,references,documentSymbol,workspaceSymbol,documentHighlight';
 /** FAKE_LSP_OFFERS: the providers to advertise at initialize, comma-separated; FAKE_LSP_WITHOUT: ones to leave out. */
 const offers = (process.env.FAKE_LSP_OFFERS ?? ALL_FEATURES)
   .split(',')
   .filter((f) => f && !(process.env.FAKE_LSP_WITHOUT ?? '').split(',').includes(f));
-/** FAKE_LSP_REGISTERS: features registered after `initialized` instead of advertised, with a legend for semantic tokens. */
+/** FAKE_LSP_REGISTERS: features registered after `initialized` instead of advertised. */
 const registers = (process.env.FAKE_LSP_REGISTERS ?? '').split(',').filter(Boolean);
 let nextId = 1000;
 
@@ -78,7 +77,6 @@ function handle(msg) {
       });
     case 'initialized':
       if (!registers.length) return;
-      // Registered under a legend of our own, so a test can tell it from the default numbering.
       return send({
         jsonrpc: '2.0',
         id: nextId++,
@@ -87,8 +85,7 @@ function handle(msg) {
           registrations: registers.map((f) => ({
             id: `reg-${f}`,
             method: f === 'workspaceSymbol' ? 'workspace/symbol' : `textDocument/${f}`,
-            registerOptions:
-              f === 'semanticTokens' ? { legend: { tokenTypes: Array.from({ length: 16 }, (_, i) => `t${i}`) } } : {},
+            registerOptions: {},
           })),
         },
       });
@@ -152,27 +149,6 @@ function handle(msg) {
         contents: [{ language: 'python', value: 'def f() -> None' }, 'Does the `f` thing.'],
         range: range(msg.params.position.line, 4),
       });
-    case 'textDocument/semanticTokens/range': {
-      // Every word of the requested line, relative-encoded; `if`/`else`/`import`/`pass` are keywords (15), the rest variables (8).
-      const text = docs.get(msg.params.textDocument.uri) ?? '';
-      const lineNo = msg.params.range.start.line;
-      const line = text.split('\n')[lineNo] ?? '';
-      const data = [];
-      let prevLine = 0;
-      let prevStart = 0;
-      for (const m of line.matchAll(/\w+/g)) {
-        data.push(
-          lineNo - prevLine,
-          prevLine === lineNo ? m.index - prevStart : m.index,
-          m[0].length,
-          /^(if|else|import|pass)$/.test(m[0]) ? 15 : 8,
-          0,
-        );
-        prevLine = lineNo;
-        prevStart = m.index;
-      }
-      return reply(msg.id, { data });
-    }
     case 'textDocument/documentHighlight': {
       // The word at the position, wherever it recurs inside the enclosing top-level block (a stand-in
       // for scope); one followed by a lone `=` counts as a write (3), the others as reads (2).

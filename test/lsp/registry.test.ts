@@ -132,7 +132,6 @@ describe('resolveServers', () => {
   it('configures a command by its program, however it is spelled, and an unknown one not at all', async () => {
     const ctx = { root: '/repo', lookup: () => null };
     expect(definitionOf('tombi lsp').settings).toBeUndefined();
-    expect(definitionOf('/opt/pyrefly lsp --verbose').assumes).toEqual(['semanticTokens']);
     // The VS Code CSS server's linter crashes on a null `lint` section, and nobody reads its diagnostics.
     expect(await definitionOf('vscode-css-language-server --stdio').settings?.(ctx)).toEqual({
       css: { validate: false },

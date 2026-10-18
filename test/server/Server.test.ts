@@ -96,7 +96,7 @@ describe('Server', () => {
     ['PUT', '/api/viewed/bulk'],
     ['PUT', '/api/config'],
     ['POST', '/api/github/export'],
-    ...['definition', 'type-definition', 'hover', 'token-kind', 'references', 'occurrences'].map((name) => [
+    ...['definition', 'type-definition', 'hover', 'references', 'occurrences'].map((name) => [
       'POST',
       `/api/lsp/${name}`,
     ]),

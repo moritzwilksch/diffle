@@ -2,36 +2,6 @@ import type { LspFeature, LspPosition, LspSymbol } from '../../shared/protocol.j
 import type { Range } from './Locator.js';
 
 /**
- * Token types by index when the server publishes no legend. The LSP spec's own
- * enumeration; pyrefly numbers its tokens this way.
- */
-export const DEFAULT_TOKEN_TYPES = [
-  'namespace',
-  'type',
-  'class',
-  'enum',
-  'interface',
-  'struct',
-  'typeParameter',
-  'parameter',
-  'variable',
-  'property',
-  'enumMember',
-  'event',
-  'function',
-  'method',
-  'macro',
-  'keyword',
-  'modifier',
-  'comment',
-  'string',
-  'number',
-  'regexp',
-  'operator',
-  'decorator',
-];
-
-/**
  * How a server advertises each feature: the `initialize` capability (a boolean or an
  * options object) and the method a later `client/registerCapability` names.
  */
@@ -42,7 +12,6 @@ export const FEATURES: Record<LspFeature, { provider: string; method: string }> 
   references: { provider: 'referencesProvider', method: 'textDocument/references' },
   documentSymbol: { provider: 'documentSymbolProvider', method: 'textDocument/documentSymbol' },
   workspaceSymbol: { provider: 'workspaceSymbolProvider', method: 'workspace/symbol' },
-  semanticTokens: { provider: 'semanticTokensProvider', method: 'textDocument/semanticTokens' },
   documentHighlight: { provider: 'documentHighlightProvider', method: 'textDocument/documentHighlight' },
 };
 
@@ -55,7 +24,7 @@ export function featureOf(method: string): LspFeature | null {
 
 /**
  * What diffle tells a server it can do. Every feature allows dynamic registration, so a
- * server that advertises after `initialize` (semantic tokens, often) is still asked.
+ * server that advertises after `initialize` is still asked.
  */
 export const CLIENT_CAPABILITIES = {
   window: { workDoneProgress: true },
@@ -67,20 +36,11 @@ export const CLIENT_CAPABILITIES = {
     documentHighlight: { dynamicRegistration: true },
     hover: { dynamicRegistration: true, contentFormat: ['markdown', 'plaintext'] },
     documentSymbol: { dynamicRegistration: true, hierarchicalDocumentSymbolSupport: true },
-    semanticTokens: {
-      dynamicRegistration: true,
-      requests: { range: true },
-      tokenTypes: DEFAULT_TOKEN_TYPES,
-      tokenModifiers: [],
-      formats: ['relative'],
-    },
   },
-  // A refresh is honored trivially: token kinds are asked for afresh on every use.
   workspace: {
     symbol: { dynamicRegistration: true },
     workspaceFolders: true,
     configuration: true,
-    semanticTokens: { refreshSupport: true },
   },
 };
 
@@ -135,24 +95,6 @@ export function normalizeLocations(r: null | Location | Location[] | LocationLin
   if (!r) return [];
   const list = Array.isArray(r) ? r : [r];
   return list.map((x) => ('targetUri' in x ? { uri: x.targetUri, range: x.targetSelectionRange ?? x.targetRange } : x));
-}
-
-/**
- * The token type at `col` on `line` in a relative-encoded semantic token list, or null
- * between tokens. Tokens come as 5-tuples relative to the previous token: deltaLine,
- * deltaStart, length, type, modifiers.
- */
-export function tokenAt(data: number[], line: number, col: number, tokenTypes: string[]): string | null {
-  let tokLine = 0;
-  let tokStart = 0;
-  for (let i = 0; i + 4 < data.length; i += 5) {
-    const deltaLine = data[i]!;
-    tokLine += deltaLine;
-    tokStart = deltaLine === 0 ? tokStart + data[i + 1]! : data[i + 1]!;
-    if (tokLine !== line || col < tokStart || col >= tokStart + data[i + 2]!) continue;
-    return tokenTypes[data[i + 3]!] ?? null;
-  }
-  return null;
 }
 
 /** Either symbol shape a server may answer `documentSymbol` with, flattened in document order. */

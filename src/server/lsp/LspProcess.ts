@@ -5,7 +5,7 @@ import type { LspFeature, LspLogEntry, LspProcessStatus } from '../../shared/pro
 import { configurationItems, type LspSettings } from './configuration.js';
 import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
 import { ServerOutput } from './ServerOutput.js';
-import { CLIENT_CAPABILITIES, DEFAULT_TOKEN_TYPES, FEATURES, featureOf } from './shapes.js';
+import { CLIENT_CAPABILITIES, FEATURES, featureOf } from './shapes.js';
 import { programOf } from './which.js';
 
 export interface LspProcessOptions {
@@ -17,8 +17,6 @@ export interface LspProcessOptions {
   settings?: Promise<LspSettings>;
   /** Sent with `initialize`, for servers configured there rather than through settings. */
   initializationOptions?: LspSettings;
-  /** Features counted as advertised whatever `initialize` says (see `ServerDefinition.assumes`). */
-  assumes?: LspFeature[];
   onStatus: (status: LspProcessStatus) => void;
   /** Test seam: replaces `spawn(command, { shell: true })`. */
   spawnProcess?: (command: string, cwd: string) => ChildProcess;
@@ -31,10 +29,9 @@ export class LspUnsupportedError extends LspUnavailableError {}
 
 // Params of the registration requests a server sends; the misspelling is the spec's.
 const RegistrationsSchema = z.object({
-  registrations: z.array(z.object({ id: z.string(), method: z.string(), registerOptions: z.unknown().optional() })),
+  registrations: z.array(z.object({ id: z.string(), method: z.string() })),
 });
 const UnregistrationsSchema = z.object({ unregisterations: z.array(z.object({ id: z.string() })) });
-const LegendSchema = z.object({ legend: z.object({ tokenTypes: z.string().array() }) });
 
 const INIT_TIMEOUT_MS = 60_000;
 /** Graceful shutdown budget. Both together stay under the CLI's hard exit deadline (main.ts). */
@@ -69,8 +66,6 @@ export class LspProcess {
   private advertised = new Set<LspFeature>();
   /** Dynamic registrations by their id, so an unregistration knows which feature it ends. */
   private registrations = new Map<string, LspFeature>();
-  /** Semantic token legend from the server's capabilities, else the spec's default numbering. */
-  tokenTypes: string[] = DEFAULT_TOKEN_TYPES;
 
   constructor(private readonly opts: LspProcessOptions) {
     this.current = {
@@ -208,9 +203,7 @@ export class LspProcess {
     rpc.onRequest('client/unregisterCapability', (params) => this.unregister(params));
     const rootUri = pathToFileURL(this.opts.root).href;
     try {
-      const init = await rpc.request<{
-        capabilities?: Record<string, unknown> & { semanticTokensProvider?: { legend?: { tokenTypes?: string[] } } };
-      }>(
+      const init = await rpc.request<{ capabilities?: Record<string, unknown> }>(
         'initialize',
         {
           processId: process.pid,
@@ -226,9 +219,6 @@ export class LspProcess {
       const capabilities = init?.capabilities ?? {};
       for (const [feature, { provider }] of Object.entries(FEATURES) as [LspFeature, { provider: string }][])
         if (capabilities[provider]) this.advertised.add(feature);
-      for (const feature of this.opts.assumes ?? []) this.advertised.add(feature);
-      const legend = capabilities.semanticTokensProvider?.legend?.tokenTypes;
-      if (legend?.length) this.tokenTypes = legend;
       rpc.notify('initialized', {});
       if (this.opts.settings) {
         const settings = await this.opts.settings;
@@ -241,20 +231,15 @@ export class LspProcess {
     if (this.current.state === 'starting') this.set({ ...this.current, state: 'ready' });
   }
 
-  /**
-   * A feature the server offers from now on, as an editor takes it: counted like one
-   * advertised at `initialize`, with a semantic token legend read from the options.
-   */
+  /** A feature the server offers from now on, as an editor takes it: counted like one advertised at `initialize`. */
   private register(params: unknown): null {
     const request = RegistrationsSchema.safeParse(params);
     if (!request.success) throw new JsonRpcError(-32602, 'Invalid client/registerCapability parameters');
-    for (const { id, method, registerOptions } of request.data.registrations) {
+    for (const { id, method } of request.data.registrations) {
       const feature = featureOf(method);
       if (!feature) continue;
       this.registrations.set(id, feature);
       this.advertised.add(feature);
-      const legend = feature === 'semanticTokens' ? LegendSchema.safeParse(registerOptions) : null;
-      if (legend?.success && legend.data.legend.tokenTypes.length) this.tokenTypes = legend.data.legend.tokenTypes;
     }
     this.opts.onStatus(this.current);
     return null;

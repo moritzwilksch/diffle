@@ -12,7 +12,6 @@ import {
   type LspPosition,
   type LspStatus,
   type LspSymbolsResponse,
-  type LspTokenKindResponse,
   type Snapshot,
 } from '../../shared/protocol.js';
 import { fuzzyRank } from '../../shared/fuzzy.js';
@@ -64,7 +63,7 @@ const PUBLISH_MS = 20;
  * The language servers of one run, started the first time a snapshot names a language
  * they serve and kept for the run. Routes like an editor: every server for a file's
  * language is asked at once and their hovers, definitions and references are merged,
- * owner first; highlights, token kinds and outlines come from the owner alone, as two
+ * owner first; highlights and outlines come from the owner alone, as two
  * servers' highlight sets would only clash. Repository-wide queries fan out to all
  * servers, and all of them report as one status. Owns no protocol logic: each server
  * is an `LspBridge`.
@@ -131,10 +130,6 @@ export class LspPool {
       mergeHovers,
       (r) => r.contents == null,
     );
-  }
-
-  async tokenKind(pos: LspPosition): Promise<LspTokenKindResponse> {
-    return this.ownerFor(pos.path).tokenKind(pos);
   }
 
   async occurrences(pos: LspPosition): Promise<LspOccurrencesResponse> {
@@ -264,7 +259,6 @@ export class LspPool {
       command,
       settings: definition.settings ? Promise.resolve(definition.settings(ctx)) : undefined,
       initializationOptions: definition.initializationOptions?.(ctx),
-      assumes: definition.assumes,
       root: this.opts.root,
       read: this.opts.read,
       has: this.opts.has,

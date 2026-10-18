@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LspSettings } from '../../src/server/lsp/configuration.js';
 import { LspBridge } from '../../src/server/lsp/LspBridge.js';
 import { LspUnavailableError } from '../../src/server/lsp/LspProcess.js';
-import type { LspFeature, LspProcessStatus } from '../../src/shared/protocol.js';
+import type { LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -19,13 +19,7 @@ const files: Record<string, string> = {
   'z.py': 'z\n',
 };
 
-function start(
-  env: Record<string, string> = {},
-  root = ROOT,
-  maxOpen?: number,
-  initializationOptions?: LspSettings,
-  assumes?: LspFeature[],
-) {
+function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, initializationOptions?: LspSettings) {
   let notify: (method: string, params: unknown) => void;
   let request: (method: string, params: unknown) => void;
   const statuses: LspProcessStatus[] = [];
@@ -44,7 +38,6 @@ function start(
     has: async (p) => p in files,
     maxOpen,
     initializationOptions,
-    assumes,
     onStatus: (s) => statuses.push(s),
     spawnProcess: () => {
       const child = spawn(process.execPath, [FAKE], {
@@ -130,25 +123,6 @@ describe('LspBridge', () => {
     });
     expect((await bridge.readExternal(join(root, 'ignored.py')))?.toString()).toBe('VENV = True\n');
     await bridge.close();
-  });
-
-  it('classifies the token at a position from semantic tokens, and has no opinion without them', async () => {
-    const { bridge } = start();
-    // a.py line 1: `import os`
-    expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
-    expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 5 })).toEqual({ kind: 'keyword' });
-    expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 7 })).toEqual({ kind: 'variable' });
-    expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 6 })).toEqual({ kind: null });
-    expect(await bridge.tokenKind({ path: 'a.py', line: 3, col: 4 })).toEqual({ kind: 'keyword' });
-    await bridge.close();
-    const plain = start({ FAKE_LSP_WITHOUT: 'semanticTokens' });
-    expect(await plain.bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
-    await plain.bridge.close();
-    // A server known to answer without advertising (pyrefly) is asked as if it had.
-    const assumed = start({ FAKE_LSP_WITHOUT: 'semanticTokens' }, ROOT, undefined, undefined, ['semanticTokens']);
-    expect(await assumed.bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
-    expect(assumed.bridge.features()).toContain('semanticTokens');
-    await assumed.bridge.close();
   });
 
   it('maps document highlights to new-side occurrences with their kind, and stays quiet without them', async () => {
@@ -438,26 +412,25 @@ describe('LspBridge', () => {
       );
       await expect(bridge.references({ path: 'a.py', line: 3, col: 4 })).rejects.toThrow(/offers no references/);
       await expect(bridge.workspaceSymbols('q')).rejects.toThrow(/offers no workspace symbols/);
-      // Token kinds and occurrences are advisory: not offered means no opinion, never an error.
-      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
+      // Occurrences are advisory: not offered means none, never an error.
       expect(await bridge.occurrences({ path: 'a.py', line: 1, col: 0 })).toEqual({ occurrences: [] });
     } finally {
       await bridge.close();
     }
   });
 
-  it('takes a feature the server registers after initialize, legend included, until it unregisters', async () => {
-    const { bridge, request } = start({ FAKE_LSP_REGISTERS: 'semanticTokens,references' });
+  it('takes a feature the server registers after initialize, until it unregisters', async () => {
+    const { bridge, request } = start({ FAKE_LSP_REGISTERS: 'documentHighlight,references' });
     try {
       expect((await bridge.hover({ path: 'a.py', line: 2, col: 4 })).contents).toContain('def f()');
-      await vi.waitFor(() => expect(bridge.features()).toContain('semanticTokens'));
+      await vi.waitFor(() => expect(bridge.features()).toContain('documentHighlight'));
       expect(bridge.features()).toContain('references');
-      // The fake's legend names type 15 `t15`; the default numbering would say `keyword`.
-      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 't15' });
+      // a.py line 1 is `import os`: the fake highlights the word under the position.
+      expect((await bridge.occurrences({ path: 'a.py', line: 1, col: 0 })).occurrences).toHaveLength(1);
       expect((await bridge.references({ path: 'a.py', line: 1, col: 0 })).locations.length).toBeGreaterThan(0);
-      request('client/unregisterCapability', { unregisterations: [{ id: 'reg-semanticTokens', method: 'x' }] });
-      await vi.waitFor(() => expect(bridge.features()).not.toContain('semanticTokens'));
-      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
+      request('client/unregisterCapability', { unregisterations: [{ id: 'reg-documentHighlight', method: 'x' }] });
+      await vi.waitFor(() => expect(bridge.features()).not.toContain('documentHighlight'));
+      expect(await bridge.occurrences({ path: 'a.py', line: 1, col: 0 })).toEqual({ occurrences: [] });
       expect(bridge.features()).toContain('references');
     } finally {
       await bridge.close();

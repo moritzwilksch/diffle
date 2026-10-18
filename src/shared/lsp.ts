@@ -17,7 +17,6 @@ export const LSP_FEATURE_LABELS: Record<LspFeature, string> = {
   references: 'references',
   documentSymbol: 'document symbols',
   workspaceSymbol: 'workspace symbols',
-  semanticTokens: 'semantic tokens',
   documentHighlight: 'document highlights',
 };
 

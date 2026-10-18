@@ -10,7 +10,6 @@ import type {
   LspProcessStatus,
   LspSymbol,
   LspSymbolsResponse,
-  LspTokenKindResponse,
 } from '../../shared/protocol.js';
 import { LSP_FEATURE_LABELS } from '../../shared/lsp.js';
 import { Documents } from './Documents.js';
@@ -30,7 +29,6 @@ import {
   normalizeLocations,
   symbolInformation,
   toLsp,
-  tokenAt,
 } from './shapes.js';
 
 export interface LspBridgeOptions extends LspProcessOptions {
@@ -112,25 +110,6 @@ export class LspBridge {
     const res: LspHoverResponse = { contents: localizeFileLinks(md, await this.locator.links(md)) };
     if (result?.range) res.range = fromLsp(result.range);
     return res;
-  }
-
-  /**
-   * The semantic token class at a position, via `textDocument/semanticTokens/range`
-   * on that one line. A server not offering the request, or a position between tokens,
-   * yields null, so callers treat null as "no opinion".
-   */
-  async tokenKind(pos: LspPosition): Promise<LspTokenKindResponse> {
-    const line = Math.max(0, pos.line - 1);
-    const { result } = await this.query<null | { data: number[] }>(
-      'textDocument/semanticTokens/range',
-      {
-        textDocument: { uri: this.uri(pos.path) },
-        range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } },
-      },
-      pos.path,
-      'semanticTokens',
-    ).catch(unsupported(null));
-    return { kind: tokenAt(result?.data ?? [], line, pos.col, this.process.tokenTypes) };
   }
 
   /**

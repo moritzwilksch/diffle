@@ -641,8 +641,8 @@ export type LspLogResponse = z.infer<typeof LspLogResponseSchema>;
 
 /**
  * A request the bridge sends a server only once it advertised the capability, in its
- * `initialize` result or by registering it later, as an editor does. Semantic tokens and
- * document highlights are advisory: without them the answer is empty, never an error.
+ * `initialize` result or by registering it later, as an editor does. Document highlights
+ * are advisory: without them the answer is empty, never an error.
  */
 export const LspFeatureSchema = z.enum([
   'definition',
@@ -651,7 +651,6 @@ export const LspFeatureSchema = z.enum([
   'references',
   'documentSymbol',
   'workspaceSymbol',
-  'semanticTokens',
   'documentHighlight',
 ]);
 export type LspFeature = z.infer<typeof LspFeatureSchema>;
@@ -719,13 +718,6 @@ export const LspHoverResponseSchema = z.object({
   inconclusive,
 });
 export type LspHoverResponse = z.infer<typeof LspHoverResponseSchema>;
-
-/** The semantic token class the server assigns a position: an LSP token type name such as `keyword` or `variable`. */
-export const LspTokenKindResponseSchema = z.object({
-  /** Null when the position is not inside a token or the server does not classify tokens. */
-  kind: z.string().nullable(),
-});
-export type LspTokenKindResponse = z.infer<typeof LspTokenKindResponseSchema>;
 
 /** One place a symbol occurs in its own file, from `textDocument/documentHighlight`. Same units as LspPosition. */
 export const LspOccurrenceSchema = z.object({

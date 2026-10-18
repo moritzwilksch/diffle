@@ -115,7 +115,6 @@ describe('LspPool', () => {
           'references',
           'documentSymbol',
           'workspaceSymbol',
-          'semanticTokens',
           'documentHighlight',
         ],
       },
@@ -157,7 +156,7 @@ describe('LspPool', () => {
     const { pool, events } = start({ python: 'py-server' }, { preload: ['python'] });
     expect([...events.keys()]).toEqual(['py-server']);
     expect(pool.status().servers.map((s) => s.state)).toEqual(['starting']);
-    expect(await pool.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
+    expect((await pool.hover({ path: 'a.py', line: 2, col: 4 })).contents).toContain('def f()');
   });
 
   describe('a server joining languages beside their owner', () => {

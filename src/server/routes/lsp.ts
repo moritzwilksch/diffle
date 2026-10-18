@@ -52,13 +52,6 @@ export function lspRoutes(app: Hono, deps: ApiDeps): void {
     return c.json(await r.lsp.hover(pos));
   });
 
-  app.post('/api/lsp/token-kind', async (c) => {
-    const pos = LspPositionSchema.parse(await readJson(c));
-    const r = await lspFor({ path: pos.path });
-    if ('error' in r) return c.json({ error: r.error }, 409);
-    return c.json(await r.lsp.tokenKind(pos));
-  });
-
   app.post('/api/lsp/references', async (c) => {
     const pos = LspPositionSchema.parse(await readJson(c));
     const r = await lspFor({ path: pos.path, feature: 'references' });

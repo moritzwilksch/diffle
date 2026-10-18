@@ -22,7 +22,6 @@ import {
   LspStatusSchema,
   LspLogResponseSchema,
   LspSymbolsResponseSchema,
-  LspTokenKindResponseSchema,
   MovedSchema,
   RefsResponseSchema,
   SearchResponseSchema,
@@ -203,8 +202,6 @@ export const api = {
   lspHover: (pos: LspPosition) =>
     json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
-  lspTokenKind: (pos: LspPosition) =>
-    json(LspTokenKindResponseSchema, 'api/lsp/token-kind', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   lspOccurrences: (pos: LspPosition) =>

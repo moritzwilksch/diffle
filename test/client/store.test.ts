@@ -29,7 +29,6 @@ const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStat
         'references',
         'documentSymbol',
         'workspaceSymbol',
-        'semanticTokens',
         'documentHighlight',
       ],
       log: NO_LOG,
@@ -71,7 +70,6 @@ const api = {
   lspTypeDefinition: vi.fn(),
   lspReferences: vi.fn(),
   lspHover: vi.fn(),
-  lspTokenKind: vi.fn(),
   lspSymbols: vi.fn(),
   switchMode: vi.fn(),
   file: vi.fn(),
@@ -1065,7 +1063,6 @@ describe('symbol navigation', () => {
       await state.goToTypeDefinition(target);
       await state.findReferences(target);
       expect(useStore.getState().symbolMenu).toBeNull();
-      expect(api.lspTokenKind).not.toHaveBeenCalled();
       expect(api.lspDefinition).not.toHaveBeenCalled();
       expect(api.lspTypeDefinition).not.toHaveBeenCalled();
       expect(api.lspReferences).not.toHaveBeenCalled();
@@ -1184,7 +1181,6 @@ describe('symbol navigation', () => {
     expect(useStore.getState().hover).toBeNull();
     await useStore.getState().openSymbolMenu(target, 0, 0);
     await useStore.getState().openSymbolMenu({ ...target, side: 'old' }, 0, 0);
-    expect(api.lspTokenKind).not.toHaveBeenCalled();
     expect(useStore.getState().symbolMenu).toBeNull();
   });
 
@@ -1207,7 +1203,6 @@ describe('symbol navigation', () => {
     oldClick.resolve(false);
     await menu;
     expect(useStore.getState().symbolMenu).toBeNull();
-    expect(api.lspTokenKind).not.toHaveBeenCalled();
   });
 
   it('drops syntax answers across a mode switch', async () => {
@@ -1222,7 +1217,6 @@ describe('symbol navigation', () => {
     slow.resolve(false);
     await Promise.all([hover, menu]);
     expect(api.lspHover).not.toHaveBeenCalled();
-    expect(api.lspTokenKind).not.toHaveBeenCalled();
     expect(useStore.getState().symbolMenu).toBeNull();
     expect(useStore.getState().hover).toBeNull();
   });
@@ -1264,41 +1258,31 @@ describe('symbol navigation', () => {
     lspTarget.focus(null);
   });
 
-  it('the symbol menu asks the server what the token is and stays shut on a keyword', async () => {
+  it('the symbol menu opens once the grammar clears the token, and stays shut on a keyword', async () => {
     ready();
     useStore.setState({ symbolMenu: null });
-    api.lspTokenKind.mockResolvedValue({ kind: 'keyword' });
+    blocksSymbol.mockResolvedValueOnce(true);
     await useStore.getState().openSymbolMenu({ ...target, text: 'if' }, 1, 2);
-    expect(api.lspTokenKind).toHaveBeenCalledWith({ path: 'a.py', line: 3, col: 4 });
+    expect(blocksSymbol).toHaveBeenLastCalledWith('a.py', 'new', 3, 4, expect.any(Function));
     expect(useStore.getState().symbolMenu).toBeNull();
-    api.lspTokenKind.mockResolvedValue({ kind: 'variable' });
     await useStore.getState().openSymbolMenu(target, 1, 2);
     expect(useStore.getState().symbolMenu).toEqual({ target, x: 1, y: 2 });
-    // A server without semantic tokens, or an outage, has no opinion: the menu opens as before.
+    // A close while the grammar's answer is in flight wins over the late answer.
     useStore.getState().closeSymbolMenu();
-    api.lspTokenKind.mockRejectedValue(new Error('409'));
-    await useStore.getState().openSymbolMenu(target, 1, 2);
-    expect(useStore.getState().symbolMenu).not.toBeNull();
-    // A close while the answer is in flight wins over the late answer.
-    useStore.getState().closeSymbolMenu();
-    const slow = deferred<{ kind: string | null }>();
-    api.lspTokenKind.mockReturnValue(slow.promise);
+    const slow = deferred<boolean>();
+    blocksSymbol.mockReturnValueOnce(slow.promise);
     const opening = useStore.getState().openSymbolMenu(target, 1, 2);
-    await Promise.resolve(); // Reach the semantic-token request after the syntax gate.
     useStore.getState().closeSymbolMenu();
-    slow.resolve({ kind: 'variable' });
+    slow.resolve(false);
     await opening;
     expect(useStore.getState().symbolMenu).toBeNull();
     // Started with --no-lsp: nothing the menu offers can work, so there is no menu.
-    api.lspTokenKind.mockClear();
     useStore.setState({ lsp: LSP_OFF });
     await useStore.getState().openSymbolMenu(target, 1, 2);
-    expect(api.lspTokenKind).not.toHaveBeenCalled();
     expect(useStore.getState().symbolMenu).toBeNull();
     // A server that is starting or broken still gets a menu, whose actions explain the blocker.
     useStore.setState({ lsp: lspStatus('unavailable', { message: 'boom' }) });
     await useStore.getState().openSymbolMenu(target, 1, 2);
-    expect(api.lspTokenKind).not.toHaveBeenCalled();
     expect(useStore.getState().symbolMenu).not.toBeNull();
   });
 

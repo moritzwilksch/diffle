@@ -330,7 +330,7 @@ export interface ReviewState {
   /** Shows or hides a server's log: fetched while shown, again whenever the status says it moved. */
   watchLspLog(command: string, shown: boolean): Promise<void>;
   symbolMenu: SymbolMenuState | null;
-  /** Opens the popover unless LSP is off, syntax blocks the target, or the server identifies a keyword. */
+  /** Opens the popover unless LSP is off or the grammar places the target in a keyword, a string, or a comment. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
   closeSymbolMenu(): void;
   hover: HoverState | null;
@@ -544,7 +544,7 @@ export const useStore = create<ReviewState>((set, get) => {
   let generation = 0;
   let githubRequest = 0;
   const current = (g: number) => g === generation;
-  /** Bumped by every symbol menu open and close, so a stale token-kind answer cannot open a menu the user already dismissed. */
+  /** Bumped by every symbol menu open and close, so a late syntax answer cannot open a menu the user already dismissed. */
   let menuSeq = 0;
   /** Hover requests, newest wins: moving across tokens must not show an earlier token's answer. */
   let hoverSeq = 0;
@@ -1760,22 +1760,10 @@ export const useStore = create<ReviewState>((set, get) => {
         ensureContents(target.path, target.side),
       );
       if (!current(generationAtClick) || t !== menuSeq) return;
+      // Keywords, strings and comments are the grammar's call; the menu's actions flash any server-side reason.
       if (blocked) {
         set({ symbolMenu: null });
         return;
-      }
-      // Only the server can answer on the new side; elsewhere the menu's actions flash their own reason.
-      if (!targetBlocker(target)) {
-        const g = generation;
-        let kind: string | null = null;
-        try {
-          kind = (await api.lspTokenKind({ path: target.path, line: target.line, col: target.col }))?.kind ?? null;
-        } catch {
-          /* no classification: open the menu as before */
-        }
-        // A close or a later click while the answer was in flight wins over this one.
-        if (!current(g) || t !== menuSeq) return;
-        if (kind === 'keyword') return;
       }
       set({ symbolMenu: { target, x, y } });
     },
