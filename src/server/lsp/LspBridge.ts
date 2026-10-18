@@ -1,38 +1,49 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { realpathSync } from 'node:fs';
-import { readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, join, relative } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { ChildProcess } from 'node:child_process';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
-  languageOf,
+  LSP_FEATURE_LABELS,
+  type LspFeature,
   type LspHoverResponse,
-  type LspLocation,
   type LspLocationsResponse,
+  type LspLogEntry,
   type LspOccurrencesResponse,
   type LspPosition,
   type LspProcessStatus,
   type LspSymbol,
+  type LspSymbolsResponse,
   type LspTokenKindResponse,
-  type LspLogEntry,
-  type LspLogLevel,
-  type LspLogSource,
 } from '../../shared/protocol.js';
 import { fuzzyRank } from '../../shared/fuzzy.js';
-import { mapLimit } from '../concurrency.js';
-import { fileLinkUris, hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
-import { JsonRpcConnection, JsonRpcError } from './JsonRpc.js';
-import { argv0 } from './which.js';
-import { configurationItems, type LspSettings } from './configuration.js';
+import type { LspSettings } from './configuration.js';
+import { Documents } from './Documents.js';
+import { hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
+import { JsonRpcError } from './JsonRpc.js';
+import { Locator, type Range } from './Locator.js';
+import { LspProcess, LspUnavailableError } from './LspProcess.js';
+import {
+  type DocumentHighlight,
+  type DocumentSymbol,
+  type Location,
+  type LocationLink,
+  type SymbolInformation,
+  flattenSymbols,
+  normalizeLocations,
+  symbolInformation,
+  symbolsResponse,
+  toLsp,
+  tokenAt,
+} from './shapes.js';
 
 export interface LspBridgeOptions {
-  /** Settings sent after initialization and returned for workspace/configuration requests. */
-  settings?: Promise<LspSettings>;
-  /** Sent with `initialize`, for servers configured there rather than through settings. */
-  initializationOptions?: LspSettings;
   /** Shell command line that starts a stdio language server, e.g. `pyrefly lsp`. */
   command: string;
   /** Repository root; becomes the workspace folder and the process cwd. */
   root: string;
+  /** Settings sent after initialization and returned for workspace/configuration requests. */
+  settings?: Promise<LspSettings>;
+  /** Sent with `initialize`, for servers configured there rather than through settings. */
+  initializationOptions?: LspSettings;
   /** New-side text of a snapshot path, or null when the snapshot does not expose it. */
   read: (path: string) => Promise<string | null>;
   /** Whether the snapshot exposes a path on its new side. Membership only: no content is read. */
@@ -40,192 +51,82 @@ export interface LspBridgeOptions {
   onStatus: (status: LspProcessStatus) => void;
   /** Test seam: replaces `spawn(command, { shell: true })`. */
   spawnProcess?: (command: string, cwd: string) => ChildProcess;
-  /** Most documents kept open beyond the tracked set; the least recently used is closed first. Default MAX_UNTRACKED_OPEN. */
+  /** Most documents kept open beyond the tracked set. */
   maxOpen?: number;
 }
 
-/** The server is off, still starting, or gone. Routes answer 409. */
-export class LspUnavailableError extends Error {}
-
-// LSP wire shapes, only the fields read here.
-interface Position {
-  line: number;
-  character: number;
-}
-interface Range {
-  start: Position;
-  end: Position;
-}
-interface Location {
-  uri: string;
-  range: Range;
-}
-interface LocationLink {
-  targetUri: string;
-  targetRange: Range;
-  targetSelectionRange: Range;
-}
-interface DocumentHighlight {
-  range: Range;
-  /** 1 Text, 2 Read, 3 Write; absent means Text. */
-  kind?: number;
-}
-interface DocumentSymbol {
-  name: string;
-  kind: number;
-  range: Range;
-  selectionRange: Range;
-  children?: DocumentSymbol[];
-}
-interface SymbolInformation {
-  name: string;
-  kind: number;
-  containerName?: string;
-  location: Location | { uri: string };
-}
-
-/**
- * Token types by index when the server publishes no legend. The LSP spec's own
- * enumeration; pyrefly answers semantic token requests without advertising the
- * provider and numbers its tokens this way.
- */
-const DEFAULT_TOKEN_TYPES = [
-  'namespace',
-  'type',
-  'class',
-  'enum',
-  'interface',
-  'struct',
-  'typeParameter',
-  'parameter',
-  'variable',
-  'property',
-  'enumMember',
-  'event',
-  'function',
-  'method',
-  'macro',
-  'keyword',
-  'modifier',
-  'comment',
-  'string',
-  'number',
-  'regexp',
-  'operator',
-  'decorator',
-];
-
-/** Log lines kept per server; older ones are dropped. */
-const LOG_CAPACITY = 200;
-const INIT_TIMEOUT_MS = 60_000;
-/**
- * Navigation opens whatever file a query lands in. Without a cap every path
- * visited in a long review stays open in the server, growing its memory and
- * per-save recheck cost.
- */
-const MAX_UNTRACKED_OPEN = 64;
-/** Concurrent snapshot reads while mapping a result set back to paths. */
-const READ_CONCURRENCY = 8;
-/** Files outside the snapshot remembered for `readExternal`; the least recently named is forgotten first. */
-const MAX_EXTERNAL = 1024;
-/** Graceful shutdown budget. Both together stay under the CLI's hard exit deadline (main.ts). */
-const SHUTDOWN_RPC_MS = 500;
-const SIGKILL_AFTER_MS = 500;
 /** LSP `ContentModified`: the document moved under the request, so the answer would be stale. */
 const CONTENT_MODIFIED = -32801;
+/** LSP `MethodNotFound`: the server does not implement the request. */
+const METHOD_NOT_FOUND = -32601;
 /** Waits before re-asking a request the server refused as stale, one per attempt. */
 const CONTENT_MODIFIED_BACKOFF_MS = [40, 120];
 
 /**
- * Owns one language server process: the only module that spawns one. Speaks
- * JSON-RPC to it, keeps the queried document in sync from `read` before each
- * request, and maps results back to snapshot paths. Never throws from `start`;
- * failures become a status the UI can show.
+ * One language server as diffle asks it: each LSP request against a document synced
+ * from the snapshot, with the answer mapped back to snapshot paths. The process, the
+ * open documents and the path mapping are `LspProcess`, `Documents` and `Locator`;
+ * this is where the requests and their result shapes live.
  */
 export class LspBridge {
-  private child: ChildProcess | null = null;
-  private rpc: JsonRpcConnection | null = null;
-  private current: LspProcessStatus;
-  private ready: Promise<void>;
-  /** The server's output channel, oldest first: what it showed, what it logged, what it wrote to stderr. */
-  private log: LspLogEntry[] = [];
-  private nextLogId = 1;
-  private logSummary = { seq: 0, errors: 0, warnings: 0 };
-  /** stderr bytes since the last newline. */
-  private stderrTail = '';
-  private lastStderr = '';
-  private progress = new Map<string | number, { title: string; message?: string; percentage?: number }>();
-  /** Open documents, least recently synced first. */
-  private open = new Map<string, { version: number; text: string }>();
-  /** Syncs in flight by path, so a track pass and a query racing on one file send a single didOpen. */
-  private syncing = new Map<string, Promise<void>>();
-  /** Paths `track` opened on the snapshot's behalf; closed again when they leave the snapshot. */
-  private tracked = new Set<string>();
-  private tracking: Promise<void> = Promise.resolve();
-  private closing = false;
-  private ownsGroup = false;
-  /** Symlink-free root; servers often canonicalize, so URIs may not share the root's spelling. */
-  private readonly realRoot: string;
-  /** Semantic token legend from the server's capabilities, else the spec's default numbering. */
-  private tokenTypes: string[] = DEFAULT_TOKEN_TYPES;
-  /** Absolute paths of files outside the snapshot that results named, least recently first. */
-  private external = new Set<string>();
+  private readonly process: LspProcess;
+  private readonly documents: Documents;
+  private readonly locator: Locator;
 
-  private constructor(private readonly opts: LspBridgeOptions) {
-    this.realRoot = safeRealpathSync(opts.root);
-    this.current = { name: programName(opts.command), command: opts.command, state: 'starting', log: this.logSummary };
-    this.ready = this.launch();
-    this.ready.catch(() => {});
-  }
-
-  static start(opts: LspBridgeOptions): LspBridge {
-    return new LspBridge(opts);
+  constructor(private readonly opts: LspBridgeOptions) {
+    this.process = new LspProcess(opts);
+    this.documents = new Documents({
+      connection: () => this.process.connection(),
+      read: opts.read,
+      uri: (path) => this.uri(path),
+      maxOpen: opts.maxOpen,
+    });
+    this.locator = new Locator({
+      root: opts.root,
+      read: opts.read,
+      has: opts.has,
+      textOf: (path) => this.documents.textOf(path),
+    });
   }
 
   status(): LspProcessStatus {
-    return this.current;
+    return this.process.status();
   }
 
   /** The retained log lines, oldest first. */
   entries(): LspLogEntry[] {
-    return this.log.map((e) => ({ ...e }));
+    return this.process.entries();
+  }
+
+  /** What the server's `initialize` result advertised; empty while starting. */
+  features(): LspFeature[] {
+    return this.process.features();
   }
 
   async definition(pos: LspPosition): Promise<LspLocationsResponse> {
-    const result = await this.query<null | Location | Location[] | LocationLink[]>(
-      'textDocument/definition',
-      {
-        textDocument: { uri: this.uri(pos.path) },
-        position: toLsp(pos),
-      },
-      pos.path,
-    );
-    return this.toLocations(normalizeLocations(result));
+    return this.locations('definition', 'textDocument/definition', pos);
   }
 
   async typeDefinition(pos: LspPosition): Promise<LspLocationsResponse> {
-    const result = await this.query<null | Location | Location[] | LocationLink[]>(
-      'textDocument/typeDefinition',
-      {
-        textDocument: { uri: this.uri(pos.path) },
-        position: toLsp(pos),
-      },
-      pos.path,
-    );
-    return this.toLocations(normalizeLocations(result));
+    return this.locations('typeDefinition', 'textDocument/typeDefinition', pos);
+  }
+
+  async references(pos: LspPosition, opts: { includeDeclaration?: boolean } = {}): Promise<LspLocationsResponse> {
+    return this.locations('references', 'textDocument/references', pos, {
+      context: { includeDeclaration: opts.includeDeclaration ?? true },
+    });
   }
 
   async hover(pos: LspPosition): Promise<LspHoverResponse> {
-    const result = await this.query<null | { contents: HoverContents; range?: Range }>(
+    const { result, busy } = await this.query<null | { contents: HoverContents; range?: Range }>(
       'textDocument/hover',
-      {
-        textDocument: { uri: this.uri(pos.path) },
-        position: toLsp(pos),
-      },
+      { textDocument: { uri: this.uri(pos.path) }, position: toLsp(pos) },
       pos.path,
+      'hover',
     );
     const md = result ? hoverMarkdown(result.contents) : null;
-    const res: LspHoverResponse = { contents: md == null ? null : localizeFileLinks(md, await this.resolveLinks(md)) };
+    if (md == null) return busy ? { contents: null, inconclusive: busy } : { contents: null };
+    const res: LspHoverResponse = { contents: localizeFileLinks(md, await this.locator.links(md)) };
     if (result?.range) {
       const { start, end } = result.range;
       res.range = { line: start.line + 1, col: start.character, endLine: end.line + 1, endCol: end.character };
@@ -235,61 +136,33 @@ export class LspBridge {
 
   /**
    * The semantic token class at a position, via `textDocument/semanticTokens/range`
-   * on that one line. A server without semantic tokens, or a position between
-   * tokens, yields null, so callers treat null as "no opinion".
+   * on that one line. A server without the request, or a position between tokens,
+   * yields null, so callers treat null as "no opinion".
    */
   async tokenKind(pos: LspPosition): Promise<LspTokenKindResponse> {
     const line = Math.max(0, pos.line - 1);
-    let data: number[];
-    try {
-      const result = await this.query<null | { data: number[] }>(
-        'textDocument/semanticTokens/range',
-        {
-          textDocument: { uri: this.uri(pos.path) },
-          range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } },
-        },
-        pos.path,
-      );
-      data = result?.data ?? [];
-    } catch (e) {
-      if (e instanceof LspUnavailableError) throw e;
-      // Method not supported: a plain server error, not an outage.
-      return { kind: null };
-    }
-    // Tokens come as 5-tuples relative to the previous token: deltaLine, deltaStart, length, type, modifiers.
-    let tokLine = 0;
-    let tokStart = 0;
-    for (let i = 0; i + 4 < data.length; i += 5) {
-      const deltaLine = data[i]!;
-      tokLine += deltaLine;
-      tokStart = deltaLine === 0 ? tokStart + data[i + 1]! : data[i + 1]!;
-      if (tokLine !== line || pos.col < tokStart || pos.col >= tokStart + data[i + 2]!) continue;
-      return { kind: this.tokenTypes[data[i + 3]!] ?? null };
-    }
-    return { kind: null };
+    const { result } = await this.query<null | { data: number[] }>(
+      'textDocument/semanticTokens/range',
+      {
+        textDocument: { uri: this.uri(pos.path) },
+        range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } },
+      },
+      pos.path,
+    ).catch(unimplemented(null));
+    return { kind: tokenAt(result?.data ?? [], line, pos.col, this.process.tokenTypes) };
   }
 
   /**
    * Where else the symbol at `pos` occurs in its file, via `textDocument/documentHighlight`,
-   * so scope and shadowing are the server's call. A server without the method, or a
+   * so scope and shadowing are the server's call. A server without the request, or a
    * position holding no symbol, yields no occurrences: the answer is advisory.
    */
   async occurrences(pos: LspPosition): Promise<LspOccurrencesResponse> {
-    let result: DocumentHighlight[] | null;
-    try {
-      result = await this.query<DocumentHighlight[] | null>(
-        'textDocument/documentHighlight',
-        {
-          textDocument: { uri: this.uri(pos.path) },
-          position: toLsp(pos),
-        },
-        pos.path,
-      );
-    } catch (e) {
-      if (e instanceof LspUnavailableError) throw e;
-      // Method not supported: a plain server error, not an outage.
-      return { occurrences: [] };
-    }
+    const { result } = await this.query<DocumentHighlight[] | null>(
+      'textDocument/documentHighlight',
+      { textDocument: { uri: this.uri(pos.path) }, position: toLsp(pos) },
+      pos.path,
+    ).catch(unimplemented(null));
     return {
       occurrences: (result ?? []).map(({ range: { start, end }, kind }) => ({
         line: start.line + 1,
@@ -301,388 +174,75 @@ export class LspBridge {
     };
   }
 
-  async references(pos: LspPosition, opts: { includeDeclaration?: boolean } = {}): Promise<LspLocationsResponse> {
-    const result = await this.query<Location[] | null>(
-      'textDocument/references',
-      {
-        textDocument: { uri: this.uri(pos.path) },
-        position: toLsp(pos),
-        context: { includeDeclaration: opts.includeDeclaration ?? true },
-      },
-      pos.path,
-    );
-    return this.toLocations(normalizeLocations(result));
-  }
-
-  /**
-   * Keeps the diff's own files open in the server with their snapshot text.
-   * Servers index the workspace lazily and cap how much of it they index
-   * (pyrefly: in the background from the first open, 2000 files), so a
-   * reference in a changed file that nobody queried yet is otherwise only found
-   * once its file happens to be indexed, and from the text on disk. Opening
-   * everything at start also warms the index before the first query. Calls are
-   * serialized; the last set wins. Never throws: a path the snapshot cannot read
-   * is skipped.
-   */
+  /** Keeps the diff's own files open in the server (see `Documents.track`). Never throws. */
   track(paths: string[]): Promise<void> {
-    const run = this.tracking.then(() => this.trackNow(paths)).catch(() => {});
-    this.tracking = run;
-    return run;
+    return this.documents.track(paths);
   }
 
-  private async trackNow(paths: string[]): Promise<void> {
-    const rpc = await this.ensureReady();
-    const next = new Set(paths);
-    for (const path of this.tracked) {
-      if (next.has(path)) continue;
-      this.tracked.delete(path);
-      if (this.open.delete(path)) rpc.notify('textDocument/didClose', { textDocument: { uri: this.uri(path) } });
-    }
-    for (const path of next) {
-      try {
-        await this.sync(path);
-        this.tracked.add(path);
-      } catch (e) {
-        if (e instanceof LspUnavailableError) return;
-        /* not readable on the new side (deleted, binary, gone between snapshot and read): nothing to open */
-      }
-    }
-  }
-
-  async documentSymbols(path: string): Promise<LspSymbol[]> {
-    const result = await this.query<DocumentSymbol[] | SymbolInformation[] | null>(
+  async documentSymbols(path: string): Promise<LspSymbolsResponse> {
+    const { result, busy } = await this.query<DocumentSymbol[] | SymbolInformation[] | null>(
       'textDocument/documentSymbol',
-      {
-        textDocument: { uri: this.uri(path) },
-      },
+      { textDocument: { uri: this.uri(path) } },
       path,
+      'documentSymbol',
     );
-    if (!result) return [];
-    const out: LspSymbol[] = [];
-    if (isDocumentSymbols(result)) {
-      const walk = (syms: DocumentSymbol[], container?: string) => {
-        for (const s of syms) {
-          const start = (s.selectionRange ?? s.range).start;
-          const endLine = Math.max(start.line, (s.range ?? s.selectionRange).end.line) + 1;
-          out.push({
-            name: s.name,
-            kind: s.kind,
-            container,
-            path,
-            line: start.line + 1,
-            endLine,
-            col: start.character,
-          });
-          if (s.children?.length) walk(s.children, s.name);
-        }
-      };
-      walk(result);
-      return out;
-    }
-    for (const s of result) {
-      const start = 'range' in s.location ? s.location.range.start : { line: 0, character: 0 };
-      const end = 'range' in s.location ? s.location.range.end : start;
-      out.push({
-        name: s.name,
-        kind: s.kind,
-        container: s.containerName || undefined,
-        path,
-        line: start.line + 1,
-        endLine: Math.max(start.line, end.line) + 1,
-        col: start.character,
-      });
-    }
-    return out;
+    return symbolsResponse(result ? flattenSymbols(result, path) : [], busy);
   }
 
   /**
-   * Symbols the server knows for `query`, limited to paths the snapshot
-   * exposes, best `fuzzyRank` match first. Membership comes from `has`, never from reading the file: a
+   * Symbols the server knows for `query`, limited to paths the snapshot exposes, best
+   * `fuzzyRank` match first. Membership comes from `has`, never from reading the file: a
    * per-keystroke search must not read every hit's text.
    */
-  async workspaceSymbols(query: string, limit = 200): Promise<LspSymbol[]> {
-    const result = await this.query<SymbolInformation[] | null>('workspace/symbol', { query });
-    if (!result) return [];
-    const paths = await Promise.all(result.map((s) => this.pathOf(s.location.uri)));
-    const inside = await this.membership(paths);
+  async workspaceSymbols(query: string, limit = 200): Promise<LspSymbolsResponse> {
+    const { result, busy } = await this.query<SymbolInformation[] | null>(
+      'workspace/symbol',
+      { query },
+      undefined,
+      'workspaceSymbol',
+    );
+    if (!result) return symbolsResponse([], busy);
+    const paths = await Promise.all(result.map((s) => this.locator.pathOf(s.location.uri)));
+    const inside = await this.locator.membership(paths);
     const out: LspSymbol[] = [];
     const seen = new Set<string>();
     result.forEach((s, i) => {
       const path = paths[i];
       if (path == null || !inside.get(path)) return;
+      const symbol = symbolInformation(s, path);
       // pyrefly reports one entry per import site; one per definition is enough here.
-      const start = 'range' in s.location ? s.location.range.start : { line: 0, character: 0 };
-      const key = `${path}:${start.line}:${start.character}:${s.name}`;
+      const key = `${path}:${symbol.line}:${symbol.col}:${symbol.name}`;
       if (seen.has(key)) return;
       seen.add(key);
-      const end = 'range' in s.location ? s.location.range.end : start;
-      out.push({
-        name: s.name,
-        kind: s.kind,
-        container: s.containerName || undefined,
-        path,
-        line: start.line + 1,
-        endLine: Math.max(start.line, end.line) + 1,
-        col: start.character,
-      });
+      out.push(symbol);
     });
     // Rank before the cap: servers list loose matches in their own order.
-    return fuzzyRank(out, query, (s) => s.name).slice(0, limit);
+    return symbolsResponse(fuzzyRank(out, query, (s) => s.name).slice(0, limit), busy);
   }
 
-  /**
-   * Contents of a file outside the snapshot that a recent result named as
-   * `external`, read from disk; null for every other path. This is the only
-   * read the bridge does on a client's behalf, so a path the language server
-   * never returned stays behind the snapshot allowlist.
-   */
-  async readExternal(path: string): Promise<Buffer | null> {
-    if (!this.external.has(path)) return null;
-    return readFile(path).catch(() => null);
+  /** Reads a file outside the snapshot only if a result named it (see `Locator.readExternal`). */
+  readExternal(path: string): Promise<Buffer | null> {
+    return this.locator.readExternal(path);
   }
 
-  /** `has` for each distinct path, in parallel. */
-  private async membership(paths: (string | null)[]): Promise<Map<string, boolean>> {
-    const distinct = [...new Set(paths.filter((p): p is string => p != null))];
-    const flags = await mapLimit(distinct, READ_CONCURRENCY, (p) => this.opts.has(p));
-    return new Map(distinct.map((p, i) => [p, flags[i]!]));
+  close(): Promise<void> {
+    return this.process.close();
   }
 
-  async close(): Promise<void> {
-    this.closing = true;
-    const rpc = this.rpc;
-    const child = this.child;
-    if (rpc && child && child.exitCode == null) {
-      try {
-        await rpc.request('shutdown', null, SHUTDOWN_RPC_MS);
-        rpc.notify('exit', null);
-      } catch {
-        /* the process is killed below regardless */
-      }
-    }
-    if (child && child.exitCode == null) {
-      const exited = new Promise<void>((res) => child.once('exit', () => res()));
-      const timer = setTimeout(() => this.kill(child, 'SIGKILL'), SIGKILL_AFTER_MS);
-      timer.unref();
-      this.kill(child, 'SIGTERM');
-      await exited;
-      clearTimeout(timer);
-    }
-  }
-
-  /**
-   * Signals the child's process group when we made it a group leader, else the
-   * child alone. On Windows `shell: true` means the child is cmd.exe, so the tree
-   * below it is killed explicitly.
-   */
-  private kill(child: ChildProcess, signal: NodeJS.Signals): void {
-    if (child.pid != null && process.platform === 'win32' && !this.opts.spawnProcess) {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => child.kill());
-      return;
-    }
-    if (this.ownsGroup && child.pid != null) {
-      try {
-        process.kill(-child.pid, signal);
-        return;
-      } catch {
-        /* group already gone; fall through to the child itself */
-      }
-    }
-    child.kill(signal);
-  }
-
-  private async launch(): Promise<void> {
-    let child: ChildProcess;
-    try {
-      child = this.opts.spawnProcess
-        ? this.opts.spawnProcess(this.opts.command, this.opts.root)
-        : spawn(this.opts.command, {
-            cwd: this.opts.root,
-            shell: true,
-            stdio: ['pipe', 'pipe', 'pipe'],
-            detached: DETACH,
-          });
-      this.ownsGroup = !this.opts.spawnProcess && DETACH;
-    } catch (e) {
-      this.fail(`cannot start "${this.opts.command}": ${(e as Error).message}`);
-      throw e;
-    }
-    this.child = child;
-    child.stderr?.on('data', (d: Buffer) => this.readStderr(d.toString('utf8')));
-    child.on('error', (e) => this.fail(`cannot start "${this.opts.command}": ${e.message}`));
-    child.on('exit', (code, signal) => {
-      if (this.closing) return;
-      this.readStderr('\n');
-      this.fail(`"${this.opts.command}" exited (${signal ?? code})${this.lastStderr ? `: ${this.lastStderr}` : ''}`);
-    });
-    if (!child.stdin || !child.stdout) {
-      this.fail(`cannot start "${this.opts.command}": no stdio`);
-      throw new Error('no stdio');
-    }
-    const rpc = new JsonRpcConnection(child.stdout, child.stdin);
-    this.rpc = rpc;
-    rpc.onNotification((method, params) => this.noteWorkspace(method, params));
-    rpc.onRequest('workspace/configuration', async (params) =>
-      configurationItems((await this.opts.settings) ?? {}, params),
+  private async locations(
+    feature: LspFeature,
+    method: string,
+    pos: LspPosition,
+    extra: object = {},
+  ): Promise<LspLocationsResponse> {
+    const { result, busy } = await this.query<null | Location | Location[] | LocationLink[]>(
+      method,
+      { textDocument: { uri: this.uri(pos.path) }, position: toLsp(pos), ...extra },
+      pos.path,
+      feature,
     );
-    const rootUri = pathToFileURL(this.opts.root).href;
-    try {
-      const init = await rpc.request<{
-        capabilities?: { semanticTokensProvider?: { legend?: { tokenTypes?: string[] } } };
-      }>(
-        'initialize',
-        {
-          processId: process.pid,
-          clientInfo: { name: 'diffle' },
-          rootUri,
-          rootPath: this.opts.root,
-          workspaceFolders: [{ uri: rootUri, name: 'workspace' }],
-          initializationOptions: this.opts.initializationOptions,
-          capabilities: {
-            window: { workDoneProgress: true },
-            textDocument: {
-              synchronization: { didSave: false },
-              definition: { linkSupport: true },
-              typeDefinition: { linkSupport: true },
-              references: {},
-              documentHighlight: {},
-              hover: { contentFormat: ['markdown', 'plaintext'] },
-
-              documentSymbol: { hierarchicalDocumentSymbolSupport: true },
-              semanticTokens: {
-                requests: { range: true },
-                tokenTypes: DEFAULT_TOKEN_TYPES,
-                tokenModifiers: [],
-                formats: ['relative'],
-              },
-            },
-            // A refresh is honored trivially: token kinds are asked for afresh on every use.
-            workspace: {
-              symbol: {},
-              workspaceFolders: true,
-              configuration: true,
-              semanticTokens: { refreshSupport: true },
-            },
-          },
-        },
-        INIT_TIMEOUT_MS,
-      );
-      const legend = init?.capabilities?.semanticTokensProvider?.legend?.tokenTypes;
-      if (legend?.length) this.tokenTypes = legend;
-      rpc.notify('initialized', {});
-      if (this.opts.settings) {
-        const settings = await this.opts.settings;
-        if (!this.closing) rpc.notify('workspace/didChangeConfiguration', { settings });
-      }
-    } catch (e) {
-      this.fail(`initialize failed: ${(e as Error).message}`);
-      throw e;
-    }
-    if (this.current.state === 'starting') this.set({ ...this.current, state: 'ready' });
-  }
-
-  /** Whole stderr lines go to the log; the exit message quotes the last one. */
-  private readStderr(chunk: string): void {
-    const lines = (this.stderrTail + chunk).split('\n');
-    this.stderrTail = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      this.lastStderr = line.trim();
-      this.record('stderr', 'log', line);
-    }
-  }
-
-  /**
-   * Appends to the log, folding a line the server repeats into the previous entry's
-   * count, and tells the status the log moved. Only the summary travels with the
-   * status: the lines are fetched by whoever shows them.
-   */
-  private record(source: LspLogSource, level: LspLogLevel, message: string): void {
-    const text = message.trim();
-    if (!text) return;
-    const last = this.log[this.log.length - 1];
-    if (last && last.source === source && last.level === level && last.message === text) {
-      last.count += 1;
-      last.time = Date.now();
-    } else {
-      this.log.push({ id: this.nextLogId++, time: Date.now(), source, level, message: text, count: 1 });
-      if (this.log.length > LOG_CAPACITY) this.log.shift();
-    }
-    this.logSummary = {
-      seq: this.logSummary.seq + 1,
-      errors: this.logSummary.errors + (level === 'error' ? 1 : 0),
-      warnings: this.logSummary.warnings + (level === 'warning' ? 1 : 0),
-    };
-    if (!this.closing && this.current.state !== 'unavailable') this.set({ ...this.current, log: this.logSummary });
-  }
-
-  private noteWorkspace(method: string, params: unknown): void {
-    if (!params || typeof params !== 'object' || this.closing || this.current.state === 'unavailable') return;
-    const p = params as Record<string, unknown>;
-    if (method === 'window/showMessage' || method === 'window/logMessage' || method === 'window/showMessageRequest') {
-      if (typeof p.message !== 'string' || !p.message.trim()) return;
-      const level = MESSAGE_LEVELS[p.type as number] ?? 'log';
-      // Everything lands in the log. Only what the server shows the reader, and only a problem,
-      // stands as the notice: an editor pops those up and files the rest in an output channel.
-      this.record(method === 'window/logMessage' ? 'log' : 'message', level, p.message);
-      if (method === 'window/logMessage' || (level !== 'error' && level !== 'warning')) return;
-      const notice = { severity: level, message: p.message.trim() };
-      if (notice.severity !== this.current.notice?.severity || notice.message !== this.current.notice?.message)
-        this.set({ ...this.current, notice });
-      return;
-    }
-    if (method !== '$/progress' || (typeof p.token !== 'string' && typeof p.token !== 'number')) return;
-    if (!p.value || typeof p.value !== 'object') return;
-    const { kind, title, message, percentage } = p.value as Record<string, unknown>;
-    const percent = typeof percentage === 'number' && percentage >= 0 && percentage <= 100 ? percentage : undefined;
-    if (kind === 'begin' && typeof title === 'string') {
-      this.progress.set(p.token, {
-        title,
-        message: typeof message === 'string' ? message : undefined,
-        percentage: percent,
-      });
-    } else if (kind === 'report' && this.progress.has(p.token)) {
-      if (typeof message === 'string') this.progress.get(p.token)!.message = message;
-      if (percent !== undefined) this.progress.get(p.token)!.percentage = percent;
-    } else if (kind === 'end') {
-      if (!this.progress.delete(p.token)) return;
-    } else return;
-    this.set({
-      ...this.current,
-      activity: [...this.progress.values()].map(
-        (p) => `${p.title}${p.percentage == null ? '' : ` (${p.percentage}%)`}${p.message ? `: ${p.message}` : ''}`,
-      ),
-    });
-  }
-
-  private fail(message: string): void {
-    if (this.current.state === 'unavailable') return;
-    this.set({
-      name: this.current.name,
-      command: this.opts.command,
-      state: 'unavailable',
-      message,
-      log: this.logSummary,
-    });
-    this.rpc?.dispose(new LspUnavailableError(message));
-  }
-
-  private set(status: LspProcessStatus): void {
-    if (JSON.stringify(status) === JSON.stringify(this.current)) return;
-    this.current = status;
-    this.opts.onStatus(status);
-  }
-
-  /** Waits for initialize; throws LspUnavailableError when the server is gone. */
-  private async ensureReady(): Promise<JsonRpcConnection> {
-    try {
-      await this.ready;
-    } catch {
-      throw new LspUnavailableError(this.current.message ?? 'language server unavailable');
-    }
-    if (this.current.state !== 'ready' || !this.rpc)
-      throw new LspUnavailableError(this.current.message ?? 'language server unavailable');
-    return this.rpc;
+    const locations = await this.locator.locations(normalizeLocations(result));
+    return busy && !locations.length ? { locations, inconclusive: busy } : { locations };
   }
 
   /**
@@ -690,250 +250,46 @@ export class LspBridge {
    * `ContentModified`: something moved the document under it — a watcher refresh, or a
    * `track` pass opening the diff — so it refuses to answer from text it no longer holds.
    * Re-syncing and asking again is what an editor does. Giving up reads as an outage, the
-   * one thing the reader can act on, rather than as a failed route.
+   * one thing the reader can act on, rather than as a failed route. A `feature` the
+   * server never advertised is not asked for. `busy` is why an empty `result` may be
+   * incomplete: background work the server reported before or during the request.
    */
-  private async query<T>(method: string, params: object, path?: string): Promise<T> {
+  private async query<T>(
+    method: string,
+    params: object,
+    path?: string,
+    feature?: LspFeature,
+  ): Promise<{ result: T; busy: string | null }> {
     for (let attempt = 0; ; attempt++) {
-      const rpc = path == null ? await this.ensureReady() : await this.sync(path);
+      if (path != null) await this.documents.sync(path);
+      const rpc = await this.process.connection();
+      if (feature && !this.process.supports(feature))
+        throw new LspUnavailableError(`${this.process.name} offers no ${LSP_FEATURE_LABELS[feature]}`);
       try {
-        const pending = busyReason(this.current);
+        const pending = this.process.busy();
         const result = await rpc.request<T>(method, params);
-        if (result == null || (Array.isArray(result) && !result.length)) {
-          // Background work does not prevent useful answers, but makes empty answers inconclusive.
-          // Nothing else does: an empty answer from an idle server is an answer, whatever it logged.
-          const busy = busyReason(this.current) ?? pending;
-          if (busy) throw new LspUnavailableError(busy);
-        }
-        return result;
+        return { result, busy: this.process.busy() ?? pending };
       } catch (e) {
         if (!(e instanceof JsonRpcError) || e.code !== CONTENT_MODIFIED) throw e;
         const backoff = CONTENT_MODIFIED_BACKOFF_MS[attempt];
         if (backoff == null)
           throw new LspUnavailableError(
-            `${this.current.name} could not answer while ${path ?? 'the repository'} kept changing; try again`,
+            `${this.process.name} could not answer while ${path ?? 'the repository'} kept changing; try again`,
           );
         await new Promise((r) => setTimeout(r, backoff));
       }
     }
   }
 
-  /**
-   * Opens or updates the document so the server sees the snapshot's text before
-   * each request. Concurrent syncs of one path share a single read and
-   * notification. Untracked documents beyond `maxOpen` are closed, least
-   * recently used first; tracked ones stay open for the snapshot's lifetime.
-   */
-  private async sync(path: string): Promise<JsonRpcConnection> {
-    const rpc = await this.ensureReady();
-    let pending = this.syncing.get(path);
-    if (!pending) {
-      pending = this.syncNow(rpc, path).finally(() => this.syncing.delete(path));
-      this.syncing.set(path, pending);
-    }
-    await pending;
-    return rpc;
-  }
-
-  private async syncNow(rpc: JsonRpcConnection, path: string): Promise<void> {
-    const text = await this.opts.read(path);
-    if (text == null) throw new Error(`${path} is not in the snapshot`);
-    const uri = this.uri(path);
-    const doc = this.open.get(path);
-    if (!doc) {
-      this.open.set(path, { version: 1, text });
-      rpc.notify('textDocument/didOpen', {
-        textDocument: { uri, languageId: languageOf(path) ?? 'plaintext', version: 1, text },
-      });
-    } else {
-      // Re-insert to mark it most recently used.
-      this.open.delete(path);
-      this.open.set(path, doc);
-      if (doc.text !== text) {
-        doc.version += 1;
-        doc.text = text;
-        rpc.notify('textDocument/didChange', {
-          textDocument: { uri, version: doc.version },
-          contentChanges: [{ text }],
-        });
-      }
-    }
-    this.evict(rpc);
-  }
-
-  /** Closes the least recently used untracked documents until at most `maxOpen` remain. */
-  private evict(rpc: JsonRpcConnection): void {
-    const max = this.opts.maxOpen ?? MAX_UNTRACKED_OPEN;
-    let untracked = 0;
-    for (const path of this.open.keys()) if (!this.tracked.has(path)) untracked++;
-    for (const path of this.open.keys()) {
-      if (untracked <= max) return;
-      if (this.tracked.has(path) || this.syncing.has(path)) continue;
-      this.open.delete(path);
-      untracked--;
-      rpc.notify('textDocument/didClose', { textDocument: { uri: this.uri(path) } });
-    }
-  }
-
   private uri(path: string): string {
     return pathToFileURL(join(this.opts.root, path)).href;
   }
-
-  /**
-   * Where each `file:` link in hover text points inside the repository: the repo-relative path and,
-   * from the URI's `#line` or `#line,col` fragment, the 1-based line. Links outside the root are
-   * left out, so the client never offers a jump it cannot make.
-   */
-  private async resolveLinks(md: string): Promise<Map<string, { path: string; line?: number }>> {
-    const uris = fileLinkUris(md);
-    const out = new Map<string, { path: string; line?: number }>();
-    await Promise.all(
-      uris.map(async (uri) => {
-        const hash = uri.indexOf('#');
-        const path = await this.pathOf(hash === -1 ? uri : uri.slice(0, hash));
-        if (path == null) return;
-        // Both fragment shapes servers write: `#12` / `#12,7` (pyright) and `#L12`.
-        const line = hash === -1 ? null : /^L?(\d+)/.exec(uri.slice(hash + 1))?.[1];
-        out.set(uri, line == null ? { path } : { path, line: Number(line) });
-      }),
-    );
-    return out;
-  }
-
-  /**
-   * Repo-relative path for a file URI inside the root; null otherwise. Compares
-   * lexically first, then by realpath, so a canonicalized URI still matches a
-   * root reached through a symlink (and vice versa).
-   */
-  private async pathOf(uri: string): Promise<string | null> {
-    let abs: string;
-    try {
-      abs = fileURLToPath(uri);
-    } catch {
-      return null;
-    }
-    const lexical = relativeInside(this.opts.root, abs);
-    if (lexical != null) return lexical;
-    const real = await realpath(abs).catch(() => null);
-    if (real == null) return null;
-    return relativeInside(this.realRoot, real);
-  }
-
-  /**
-   * Maps server locations to paths with the text of each line: a snapshot path,
-   * or, for a file the snapshot lacks (stdlib, site-packages, an ignored venv),
-   * the file itself read from disk and marked external. Each distinct URI is
-   * read once, in parallel with a limit, so a large reference set costs a
-   * bounded number of reads. A file readable neither way is dropped.
-   */
-  private async toLocations(locs: { uri: string; range: Range }[]): Promise<LspLocationsResponse> {
-    const uris = [...new Set(locs.map((l) => l.uri))];
-    const found = await mapLimit(uris, READ_CONCURRENCY, (uri) => this.locate(uri));
-    const byUri = new Map(uris.map((uri, i) => [uri, found[i]!]));
-    const out: LspLocation[] = [];
-    for (const l of locs) {
-      const f = byUri.get(l.uri);
-      if (!f) continue;
-      const line = l.range.start.line + 1;
-      const loc: LspLocation = { path: f.path, line, col: l.range.start.character, text: lineAt(f.text, line) };
-      if (f.external) loc.external = true;
-      out.push(loc);
-    }
-    return { locations: out };
-  }
-
-  private async locate(uri: string): Promise<{ path: string; text: string; external: boolean } | null> {
-    const path = await this.pathOf(uri);
-    if (path != null) {
-      const text = this.open.get(path)?.text ?? (await this.opts.read(path));
-      if (text != null) return { path, text, external: false };
-    }
-    let abs: string;
-    try {
-      abs = fileURLToPath(uri);
-    } catch {
-      return null;
-    }
-    const text = await readFile(abs, 'utf8').catch(() => null);
-    if (text == null) return null;
-    this.remember(abs);
-    return { path: abs, text, external: true };
-  }
-
-  private remember(abs: string): void {
-    // Re-insert to mark it most recently named.
-    this.external.delete(abs);
-    this.external.add(abs);
-    for (const old of this.external) {
-      if (this.external.size <= MAX_EXTERNAL) break;
-      this.external.delete(old);
-    }
-  }
 }
 
-/** `abs` relative to `root` when it lies inside it; null otherwise. */
-function relativeInside(root: string, abs: string): string | null {
-  const rel = relative(root, abs);
-  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return null;
-  return rel.split('\\').join('/');
-}
-
-/** How status messages name a server: `basedpyright-langserver --stdio` → `basedpyright-langserver`. */
-function programName(command: string): string {
-  const prog = argv0(command);
-  return prog.split(/[\\/]/).pop() || prog;
-}
-
-/**
- * Canonical `p`, or `p` itself when it cannot be resolved. Uses libuv's
- * realpath, the same one the async `realpath` in `pathOf` uses: the JS
- * `realpathSync` keeps a Windows 8.3 short name (`RUNNER~1`) that libuv
- * expands, and the two answers would never compare equal.
- */
-function safeRealpathSync(p: string): string {
-  try {
-    return realpathSync.native(p);
-  } catch {
-    return p;
-  }
-}
-
-function toLsp(pos: LspPosition): Position {
-  return { line: Math.max(0, pos.line - 1), character: Math.max(0, pos.col) };
-}
-
-function normalizeLocations(r: null | Location | Location[] | LocationLink[]): { uri: string; range: Range }[] {
-  if (!r) return [];
-  const list = Array.isArray(r) ? r : [r];
-  return list.map((x) => ('targetUri' in x ? { uri: x.targetUri, range: x.targetSelectionRange ?? x.targetRange } : x));
-}
-
-function isDocumentSymbols(r: DocumentSymbol[] | SymbolInformation[]): r is DocumentSymbol[] {
-  return r.length > 0 && !('location' in r[0]!);
-}
-
-/**
- * `shell: true` runs the command under `sh -c`, so a plain kill would stop the
- * shell and orphan the language server. On POSIX the child leads its own process
- * group (`detached`), and shutdown signals the whole group.
- */
-const DETACH = process.platform !== 'win32';
-
-function lineAt(text: string, line: number): string {
-  let start = 0;
-  for (let i = 1; i < line; i++) {
-    const nl = text.indexOf('\n', start);
-    if (nl === -1) return '';
-    start = nl + 1;
-  }
-  const end = text.indexOf('\n', start);
-  return (end === -1 ? text.slice(start) : text.slice(start, end)).replace(/\r$/, '');
-}
-
-/** LSP `MessageType` numbers; anything else, such as the newer Debug, reads as a plain log line. */
-const MESSAGE_LEVELS: Record<number, LspLogLevel> = { 1: 'error', 2: 'warning', 3: 'info', 4: 'log' };
-
-/** Why an empty result may be incomplete while the server reports background work. */
-function busyReason(s: LspProcessStatus): string | null {
-  const work = s.activity?.length ? s.activity.join('; ') : null;
-  return work ? `${s.name} is busy: ${work}; try again when it finishes` : null;
+/** A catch handler answering `result` for a request the server does not implement; anything else propagates. */
+function unimplemented<T>(result: T): (e: unknown) => { result: T; busy: null } {
+  return (e) => {
+    if (e instanceof JsonRpcError && e.code === METHOD_NOT_FOUND) return { result, busy: null };
+    throw e;
+  };
 }

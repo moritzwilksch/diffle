@@ -634,17 +634,36 @@ export const LspLogEntrySchema = z.object({
 });
 export type LspLogEntry = z.infer<typeof LspLogEntrySchema>;
 
-/** `GET /api/lsp/log?server=<command>`: the retained lines of one server, oldest first. */
+/** `GET /api/lsp/log?server=<id>`: the retained lines of one server, oldest first. */
 export const LspLogQuerySchema = z.object({ server: z.string().min(1) });
 export const LspLogResponseSchema = z.object({ entries: LspLogEntrySchema.array() });
 export type LspLogResponse = z.infer<typeof LspLogResponseSchema>;
 
+/**
+ * A request the bridge asks a server for only when its `initialize` result advertised it.
+ * Token kinds and occurrences are not gated: they are advisory, and some servers answer
+ * them without advertising.
+ */
+export const LspFeatureSchema = z.enum([
+  'definition',
+  'typeDefinition',
+  'hover',
+  'references',
+  'documentSymbol',
+  'workspaceSymbol',
+]);
+export type LspFeature = z.infer<typeof LspFeatureSchema>;
+
 /** A process plus the languages the pool routes to it. */
 export const LspServerStatusSchema = LspProcessStatusSchema.extend({
+  /** Names the server in the pool, the log route and the client: the program, numbered past the first. */
+  id: z.string(),
   /** Languages it owns: asked first, and alone for highlights, token kinds and outlines. */
   languages: LanguageIdSchema.array(),
   /** Languages it answers for beside their owner, such as Tailwind's class hovers in markup. */
   joins: LanguageIdSchema.array(),
+  /** What its `initialize` result advertised; empty while starting. */
+  supports: LspFeatureSchema.array(),
 });
 export type LspServerStatus = z.infer<typeof LspServerStatusSchema>;
 
@@ -665,9 +684,17 @@ export const LspStatusSchema = z.object({
 });
 export type LspStatus = z.infer<typeof LspStatusSchema>;
 
+/**
+ * Why an empty answer may be incomplete: the server reported background work (indexing, loading
+ * the workspace) while answering, or a server that would also have answered was unavailable.
+ * Never set beside a non-empty answer.
+ */
+const inconclusive = z.string().optional();
+
 /** Results the server could place: snapshot paths, or files it read from disk on the language server's word. */
 export const LspLocationsResponseSchema = z.object({
   locations: LspLocationSchema.array(),
+  inconclusive,
 });
 export type LspLocationsResponse = z.infer<typeof LspLocationsResponseSchema>;
 
@@ -684,6 +711,7 @@ export const LspHoverResponseSchema = z.object({
       endCol: z.number(),
     })
     .optional(),
+  inconclusive,
 });
 export type LspHoverResponse = z.infer<typeof LspHoverResponseSchema>;
 
@@ -724,6 +752,10 @@ export const LspSymbolSchema = z.object({
   col: z.number(),
 });
 export type LspSymbol = z.infer<typeof LspSymbolSchema>;
+
+/** `GET /api/lsp/symbols`: a file's outline with `path`, else the repository's symbols matching `q`. */
+export const LspSymbolsResponseSchema = z.object({ symbols: LspSymbolSchema.array(), inconclusive });
+export type LspSymbolsResponse = z.infer<typeof LspSymbolsResponseSchema>;
 
 /** Derived per changed file: 'restale' means viewed at an older blob. */
 export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
@@ -817,23 +849,67 @@ export function languageOf(path: string): LanguageId | null {
   return (ext && LANGUAGE_BY_EXT[ext]) || null;
 }
 
+/** How messages name a feature: "pyrefly offers no go to definition". */
+export const LSP_FEATURE_LABELS: Record<LspFeature, string> = {
+  definition: 'go to definition',
+  typeDefinition: 'go to type definition',
+  hover: 'hover',
+  references: 'references',
+  documentSymbol: 'document symbols',
+  workspaceSymbol: 'workspace symbols',
+};
+
+export interface LspQuery {
+  /** The file asked about; without one, the request is repository-wide. */
+  path?: string;
+  feature?: LspFeature;
+  /** Let a starting server through: the pool waits for it to initialize, where the client would only flash. */
+  patient?: boolean;
+}
+
 /**
- * Why the language server cannot answer for `path` — or, with no path, for a
- * repository-wide request — and null when it can. Shared so the client's flash and the
- * API's 409 say the same thing. The caller checks `followsCheckout` itself.
+ * Why no language server can answer the query right now, and null when one can. The one
+ * place that reasons about the run, the snapshot and the servers together, so the
+ * client's flash and the API's 409 say the same thing. A null `snap` is one not loaded yet.
  */
-export function lspBlocker(lsp: LspStatus, path?: string): string | null {
+export function lspBlocker(
+  lsp: LspStatus,
+  snap: Pick<Snapshot, 'newSha' | 'headSha'> | null,
+  { path, feature, patient = false }: LspQuery = {},
+): string | null {
   if (!lsp.enabled) return 'Language servers are off for this run (--no-lsp)';
-  if (path == null) {
-    if (!lsp.servers.length) return noServer(lsp);
-    return lsp.servers.some((s) => s.state === 'ready') ? null : notReady(lsp.servers[0]!);
+  if (!snap || !followsCheckout(snap))
+    return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
+  let servers = lsp.servers;
+  let language: LanguageId | undefined;
+  if (path != null) {
+    language = languageOf(path) ?? undefined;
+    if (!language) return `No language server for ${/(\.[^./\\]+)$/.exec(path)?.[1] ?? 'these'} files`;
+    servers = serversFor(lsp, language);
   }
+  if (!servers.length) return noServer(lsp, language);
+  // A starting server has not said what it offers yet, so it may still answer.
+  const able = feature ? servers.filter((s) => s.state === 'starting' || s.supports.includes(feature)) : servers;
+  if (!able.length) return `${servers.map((s) => s.name).join(', ')} offers no ${LSP_FEATURE_LABELS[feature!]}`;
+  return able.some((s) => s.state === 'ready' || (patient && s.state === 'starting')) ? null : notReady(able[0]!);
+}
+
+/** The servers answering for `language`, its owners before the ones joining it. */
+export function serversFor(lsp: LspStatus, language: LanguageId): LspServerStatus[] {
+  return [
+    ...lsp.servers.filter((s) => s.languages.includes(language)),
+    ...lsp.servers.filter((s) => s.joins.includes(language)),
+  ];
+}
+
+/**
+ * Whether the file's servers offer hover and nothing to navigate by: the schema servers for
+ * configuration files. Such a file gets tooltips on any token and no symbol menu.
+ */
+export function hoverOnly(lsp: LspStatus, path: string): boolean {
   const language = languageOf(path);
-  if (!language) return `No language server for ${/(\.[^./\\]+)$/.exec(path)?.[1] ?? 'these'} files`;
-  const server =
-    lsp.servers.find((s) => s.languages.includes(language)) ?? lsp.servers.find((s) => s.joins.includes(language));
-  if (!server) return noServer(lsp, language);
-  return server.state === 'ready' ? null : notReady(server);
+  const ready = language ? serversFor(lsp, language).filter((s) => s.state === 'ready') : [];
+  return ready.length > 0 && ready.every((s) => !s.supports.some((f) => f === 'definition' || f === 'references'));
 }
 
 /** Whether `server` answers for `language`, as its owner or beside one. */

@@ -54,8 +54,8 @@ export class JsonRpcConnection {
     this.send({ jsonrpc: '2.0', method, params });
   }
 
-  /** Observes server messages, including requests. */
-  onNotification(handler: (method: string, params: unknown) => void): void {
+  /** Observes every message the server sends: notifications and requests alike. */
+  onMessage(handler: (method: string, params: unknown) => void): void {
     this.handlers.add(handler);
   }
 
@@ -99,11 +99,11 @@ export class JsonRpcConnection {
       if (this.buffer.length < start + length) return;
       const body = this.buffer.subarray(start, start + length).toString('utf8');
       this.buffer = this.buffer.subarray(start + length);
-      this.onMessage(body);
+      this.receive(body);
     }
   }
 
-  private onMessage(body: string): void {
+  private receive(body: string): void {
     let msg: {
       id?: number | string | null;
       method?: string;

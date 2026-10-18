@@ -21,7 +21,7 @@ import { ImportError } from '../comments/import.js';
 import { GitError, isBinary } from '../git/GitRepo.js';
 import { GithubError } from '../github/client.js';
 import { imageType } from '../image.js';
-import { LspUnavailableError } from '../lsp/LspBridge.js';
+import { LspUnavailableError } from '../lsp/LspProcess.js';
 import type { LspPool } from '../lsp/LspPool.js';
 import { RevspecError } from '../mode/revspec.js';
 import type { Session } from '../Session.js';

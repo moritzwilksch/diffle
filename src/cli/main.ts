@@ -472,11 +472,8 @@ async function connectGithub(): Promise<ConnectedGithub> {
 
 /**
  * The pool reads new-side text through the session, so the snapshot allowlist applies to
- * every LSP path. Each snapshot decides which languages run: it re-opens the diff's files
- * in the server for their language, so references in them are found from the reviewed text
- * (see LspPool.track). Nothing starts when the new side is not the checkout: the client
- * refuses symbol navigation there, and a server would otherwise see text that contradicts
- * the disk it indexes.
+ * every LSP path. Each snapshot decides which languages run and which files the servers
+ * hold open (see LspPool.track).
  */
 function startLsp(
   repo: GitRepo,
@@ -485,12 +482,7 @@ function startLsp(
   overrides: Partial<Record<LanguageId, string>>,
   preload: LanguageId[],
 ): LspPool {
-  session.onSnapshot((snap) => {
-    const paths = followsCheckout(snap)
-      ? snap.changed.filter((f) => f.status !== 'D' && !f.binary).map((f) => f.path)
-      : [];
-    void lsp.track(paths);
-  });
+  session.onSnapshot((snap) => void lsp.track(snap));
   // Progress repeats the full status; print each changed warning or error once.
   const reported = new Map<string, string>();
   const lsp = new LspPool({
@@ -506,11 +498,11 @@ function startLsp(
       for (const s of status.servers) {
         const message = s.state === 'unavailable' ? (s.message ?? 'unavailable') : s.notice?.message;
         if (!message) {
-          reported.delete(s.command);
+          reported.delete(s.id);
           continue;
         }
-        if (reported.get(s.command) === message) continue;
-        reported.set(s.command, message);
+        if (reported.get(s.id) === message) continue;
+        reported.set(s.id, message);
         console.error(`${c.red('✖')} lsp ${s.name}: ${message}`);
       }
       hub.broadcast({ type: 'lsp', payload: status });

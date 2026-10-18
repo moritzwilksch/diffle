@@ -2,12 +2,7 @@ import { mkdtemp, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  configurationItems,
-  loadSchemaCatalog,
-  schemaAssociations,
-  settingsFor,
-} from '../../src/server/lsp/configuration.js';
+import { configurationItems, loadSchemaCatalog, schemaAssociations } from '../../src/server/lsp/configuration.js';
 import { rmTmp } from '../tmp.js';
 import { JsonRpcError } from '../../src/server/lsp/JsonRpc.js';
 
@@ -61,8 +56,8 @@ it('caches discovery, avoids fresh downloads, and falls back to stale data offli
   expect(await loadSchemaCatalog(file, request)).toEqual([]);
 });
 
-it('answers whole and dotted configuration sections in request order', async () => {
-  const settings = await settingsFor(['yaml', 'toml'], 'taplo lsp stdio');
+it('answers whole and dotted configuration sections in request order', () => {
+  const settings = { yaml: { hover: true }, evenBetterToml: { schema: { enabled: true } } };
   expect(
     configurationItems(settings, {
       items: [
@@ -74,18 +69,4 @@ it('answers whole and dotted configuration sections in request order', async () 
       ],
     }),
   ).toEqual([true, true, null, settings, null]);
-});
-
-it('leaves Tombi defaults intact and sends Taplo settings only to Taplo', async () => {
-  expect(await settingsFor(['toml'], 'tombi lsp')).toEqual({});
-  // The VS Code CSS server's linter crashes on a null `lint` section, and nobody reads its diagnostics.
-  expect(await settingsFor(['css'], 'vscode-css-language-server --stdio')).toEqual({
-    css: { validate: false },
-    less: { validate: false },
-    scss: { validate: false },
-  });
-  expect(await settingsFor(['toml'], '"C:\\tools\\taplo.exe" lsp stdio')).toHaveProperty(
-    'evenBetterToml.schema.enabled',
-    true,
-  );
 });

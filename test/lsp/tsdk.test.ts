@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { initializationOptionsFor } from '../../src/server/lsp/configuration.js';
+import { definitionOf } from '../../src/server/lsp/registry.js';
 import { tsdkLocation } from '../../src/server/lsp/tsdk.js';
 import { rmTmp } from '../tmp.js';
 
@@ -129,7 +129,12 @@ describe('astro-ls takes its TypeScript at initialize', () => {
       const program = command.split(' ')[0]!;
       return programs.includes(program) ? executable(join(bin, program)) : null;
     };
-    expect(initializationOptionsFor('astro-ls --stdio', join(root, 'repo'), found(['astro-ls']))).toEqual({
+    expect(
+      definitionOf('astro-ls --stdio').initializationOptions?.({
+        root: join(root, 'repo'),
+        lookup: found(['astro-ls']),
+      }),
+    ).toEqual({
       typescript: { tsdk: lib },
     });
     // astro-ls on PATH beside no TypeScript, but a TypeScript server beside one elsewhere.
@@ -140,10 +145,12 @@ describe('astro-ls takes its TypeScript at initialize', () => {
         : command.startsWith('vtsls')
           ? executable(join(root, 'elsewhere', 'vtsls'))
           : null;
-    expect(initializationOptionsFor('astro-ls --stdio', join(root, 'repo'), lookup)).toEqual({
+    expect(definitionOf('astro-ls --stdio').initializationOptions?.({ root: join(root, 'repo'), lookup })).toEqual({
       typescript: { tsdk: elsewhere },
     });
-    expect(initializationOptionsFor('astro-ls --stdio', join(root, 'repo'), () => null)).toBeUndefined();
-    expect(initializationOptionsFor('vtsls --stdio', join(root, 'repo'), found(['vtsls']))).toBeUndefined();
+    expect(
+      definitionOf('astro-ls --stdio').initializationOptions?.({ root: join(root, 'repo'), lookup: () => null }),
+    ).toBeUndefined();
+    expect(definitionOf('vtsls --stdio').initializationOptions).toBeUndefined();
   });
 });

@@ -184,7 +184,7 @@ function LspIndicator({ lsp }: { lsp: LspStatus }) {
           </Button>
         </div>
         {lsp.servers.map((s) => (
-          <ServerStatus key={s.command} server={s} />
+          <ServerStatus key={s.id} server={s} />
         ))}
         {!lsp.servers.length && !lsp.missing.length && <p className="text-muted">No servers</p>}
         {lsp.missing.map((m) => (
@@ -254,15 +254,15 @@ function logLine(e: LspLogEntry): string {
  */
 function ServerLog({ server: s }: { server: LspServerStatus }) {
   const [open, setOpen] = useState(false);
-  const entries = useStore((st) => st.lspLogs[s.command]?.entries);
+  const entries = useStore((st) => st.lspLogs[s.id]?.entries);
   const watch = useStore((st) => st.watchLspLog);
   // Follows the diff's wrap setting: unwrapped, a stack trace scrolls sideways like a long line does.
   const lineWrap = useStore((st) => st.config.lineWrap);
   useEffect(() => {
     if (!open) return;
-    void watch(s.command, true);
-    return () => void watch(s.command, false);
-  }, [open, s.command, watch]);
+    void watch(s.id, true);
+    return () => void watch(s.id, false);
+  }, [open, s.id, watch]);
   const [result, setResult] = useState<'copied' | 'failed' | null>(null);
   useEffect(() => {
     if (!result) return;

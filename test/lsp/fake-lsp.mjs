@@ -51,7 +51,15 @@ function handle(msg) {
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);
       if (!msg.params.capabilities.window?.workDoneProgress) process.exit(4);
       if (msg.params.initializationOptions) log('init ' + JSON.stringify(msg.params.initializationOptions));
-      return reply(msg.id, { capabilities: {} });
+      // FAKE_LSP_OFFERS: the providers to advertise, comma-separated; every one by default.
+      return reply(msg.id, {
+        capabilities: Object.fromEntries(
+          (process.env.FAKE_LSP_OFFERS ?? 'definition,typeDefinition,hover,references,documentSymbol,workspaceSymbol')
+            .split(',')
+            .filter(Boolean)
+            .map((f) => [`${f}Provider`, true]),
+        ),
+      });
     case 'test/notification':
       return send({ jsonrpc: '2.0', method: msg.params.method, params: msg.params.params });
     // Document lifecycle goes to stderr so tests can observe what the bridge opened.

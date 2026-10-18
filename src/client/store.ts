@@ -4,7 +4,7 @@ import type { FileTree } from '@pierre/trees';
 import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
-  followsCheckout,
+  hoverOnly,
   joinedBy,
   languageOf,
   lspBlocker,
@@ -13,6 +13,7 @@ import {
   type ChangedFile,
   type CommentThread,
   type FileResponse,
+  type LspFeature,
   type LspLocation,
   type LspOccurrence,
   type LspPosition,
@@ -42,7 +43,7 @@ import {
   type LineRange,
   type NavItem,
 } from './keyboard/nav.js';
-import { isToken, lspTarget, schemaHoverOnly, type TokenTarget } from './lsp/target.js';
+import { isToken, lspTarget, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome, ModePane } from './model.js';
 import {
@@ -326,10 +327,10 @@ export interface ReviewState {
   searchWord(delta: 1 | -1): Promise<void>;
   lsp: LspStatus;
   setLspStatus(status: LspStatus): void;
-  /** The log of each server whose log is on screen, by command, with the status seq it was fetched at. */
+  /** Retained log lines by server id, for the servers whose log is on screen, with the status seq they were fetched at. */
   lspLogs: Record<string, { seq: number; entries: LspLogEntry[] }>;
   /** Shows or hides a server's log: fetched while shown, again whenever the status says it moved. */
-  watchLspLog(command: string, shown: boolean): Promise<void>;
+  watchLspLog(id: string, shown: boolean): Promise<void>;
   symbolMenu: SymbolMenuState | null;
   /** Opens the popover unless LSP is off, syntax blocks the target, or the server identifies a keyword. */
   openSymbolMenu(target: TokenTarget, x: number, y: number): Promise<void>;
@@ -1237,20 +1238,15 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   /**
-   * Why symbol navigation cannot run right now, or null when it can. With a path, the
-   * answer is about the server for that file's language; without one, about any of them.
+   * Why `feature` cannot run right now, or null when it can. With a path, the answer is
+   * about the servers for that file's language; without one, about any of them.
    */
-  const blocker = (path?: string): string | null => {
-    const { lsp, snapshot } = get();
-    if (!lsp.enabled) return lspBlocker(lsp);
-    if (!snapshot || !followsCheckout(snapshot))
-      return 'Symbol navigation needs the new side to be the worktree or the checked-out commit';
-    return lspBlocker(lsp, path);
-  };
+  const blocker = (path?: string, feature?: LspFeature): string | null =>
+    lspBlocker(get().lsp, get().snapshot, { path, feature });
 
   /** Why the server cannot be asked about `target`, or null. Only snapshot files on the new side are open in it. */
-  const targetBlocker = (target: Pick<TokenTarget, 'path' | 'side'>): string | null =>
-    blocker(target.path) ??
+  const targetBlocker = (target: Pick<TokenTarget, 'path' | 'side'>, feature?: LspFeature): string | null =>
+    blocker(target.path, feature) ??
     (target.side === 'old'
       ? 'Symbol navigation works on the new side only'
       : get().fileView?.external
@@ -1258,8 +1254,8 @@ export const useStore = create<ReviewState>((set, get) => {
         : null);
 
   /** The LSP position for a hovered token, or null after flashing why not. */
-  const lspPosition = (target: TokenTarget | null | undefined): LspPosition | null => {
-    const reason = !target ? (blocker() ?? 'Hover a symbol first') : targetBlocker(target);
+  const lspPosition = (target: TokenTarget | null | undefined, feature: LspFeature): LspPosition | null => {
+    const reason = !target ? (blocker(undefined, feature) ?? 'Hover a symbol first') : targetBlocker(target, feature);
     if (reason) {
       get().flash(reason);
       return null;
@@ -1280,8 +1276,7 @@ export const useStore = create<ReviewState>((set, get) => {
   /** gd / gy: ask the language server where `target` (or its type) lives and jump to the first answer. */
   const jumpToLspLocation = async (target: TokenTarget | null | undefined, kind: 'definition' | 'type definition') => {
     get().closeSymbolMenu();
-    if (target && schemaHoverOnly(target.path)) return get().flash('Configuration files support schema hover (gh)');
-    const pos = lspPosition(target);
+    const pos = lspPosition(target, kind === 'definition' ? 'definition' : 'typeDefinition');
     if (!pos) return;
     // The answer names lines of the snapshot the question was asked about.
     const g = generation;
@@ -1289,7 +1284,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const res = await (kind === 'definition' ? api.lspDefinition(pos) : api.lspTypeDefinition(pos));
       if (!current(g)) return;
       const loc = res.locations[0];
-      if (!loc) return get().flash(`No ${kind} found for ${target!.text}`);
+      if (!loc) return get().flash(res.inconclusive ?? `No ${kind} found for ${target!.text}`);
       // Already on the definition: jumping would go nowhere, so list its uses instead, as editors do.
       if (kind === 'definition' && res.locations.every((l) => isToken(l, target!))) {
         return await get().findReferences(target);
@@ -1718,32 +1713,33 @@ export const useStore = create<ReviewState>((set, get) => {
     setLspStatus(status) {
       set({ lsp: status });
       for (const s of status.servers) {
-        const held = get().lspLogs[s.command];
-        if (held && held.seq !== s.log.seq) void get().watchLspLog(s.command, true);
+        const held = get().lspLogs[s.id];
+        if (held && held.seq !== s.log.seq) void get().watchLspLog(s.id, true);
       }
     },
     lspLogs: {},
-    async watchLspLog(command, shown) {
+    async watchLspLog(id, shown) {
       if (!shown) {
         set((s) => {
-          const { [command]: _, ...rest } = s.lspLogs;
+          const { [id]: _, ...rest } = s.lspLogs;
           return { lspLogs: rest };
         });
         return;
       }
-      const seq = get().lsp.servers.find((s) => s.command === command)?.log.seq ?? 0;
+      const seq = get().lsp.servers.find((s) => s.id === id)?.log.seq ?? 0;
       // Registered before the fetch, so a status change meanwhile asks again, and a hide meanwhile wins.
-      set((s) => ({ lspLogs: { ...s.lspLogs, [command]: s.lspLogs[command] ?? { seq: -1, entries: [] } } }));
+      set((s) => ({ lspLogs: { ...s.lspLogs, [id]: s.lspLogs[id] ?? { seq: -1, entries: [] } } }));
       try {
-        const { entries } = await api.lspLog(command);
-        set((s) => (s.lspLogs[command] ? { lspLogs: { ...s.lspLogs, [command]: { seq, entries } } } : {}));
+        const { entries } = await api.lspLog(id);
+        set((s) => (s.lspLogs[id] ? { lspLogs: { ...s.lspLogs, [id]: { seq, entries } } } : {}));
       } catch (e) {
         report('Language server log', e);
       }
     },
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {
-      if (schemaHoverOnly(target.path)) {
+      // A file whose servers offer hover alone (a schema server) has no symbols to act on.
+      if (hoverOnly(get().lsp, target.path)) {
         get().closeSymbolMenu();
         return;
       }
@@ -1782,7 +1778,7 @@ export const useStore = create<ReviewState>((set, get) => {
     hover: null,
     async requestHover(target, anchor) {
       const t = ++hoverSeq;
-      if (get().symbolMenu || targetBlocker(target)) return;
+      if (get().symbolMenu || targetBlocker(target, 'hover')) return;
       const g = generation;
       try {
         // A word in a string or a comment names no symbol to the owner, so the syntax gate spares the
@@ -1808,7 +1804,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     async showHover() {
       const target = get().symbolMenu?.target ?? lspTarget.get();
-      if (!lspPosition(target)) return;
+      if (!lspPosition(target, 'hover')) return;
       get().closeSymbolMenu();
       const r = lspTarget.element()?.getBoundingClientRect();
       const anchor = r ? { left: r.left, top: r.top, bottom: r.bottom } : { left: 0, top: 0, bottom: 0 };
@@ -1863,15 +1859,14 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     async findReferences(target = get().symbolMenu?.target ?? lspTarget.get()) {
       get().closeSymbolMenu();
-      if (target && schemaHoverOnly(target.path)) return get().flash('Configuration files support schema hover (gh)');
-      const pos = lspPosition(target);
+      const pos = lspPosition(target, 'references');
       if (!pos) return;
       const g = generation;
       try {
         const res = await api.lspReferences(pos);
         if (!current(g)) return;
         const items = res.locations;
-        if (items.length === 0) return get().flash(`No references to ${target!.text}`);
+        if (items.length === 0) return get().flash(res.inconclusive ?? `No references to ${target!.text}`);
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
         const index = origin === -1 ? 0 : (origin + 1) % items.length;
@@ -1923,7 +1918,9 @@ export const useStore = create<ReviewState>((set, get) => {
     async openSymbols(scope) {
       const path = scope === 'document' ? get().activePath : null;
       if (scope === 'document' && !path) return get().flash('Move to a file first');
-      const reason = path ? targetBlocker({ path, side: 'new' }) : blocker();
+      const reason = path
+        ? targetBlocker({ path, side: 'new' }, 'documentSymbol')
+        : blocker(undefined, 'workspaceSymbol');
       if (reason) return get().flash(reason);
       set({
         symbols: {
@@ -1940,12 +1937,13 @@ export const useStore = create<ReviewState>((set, get) => {
       if (scope !== 'document') return;
       const g = generation;
       try {
-        const all = await api.lspSymbols({ path: path! });
+        const { symbols: all, inconclusive } = await api.lspSymbols({ path: path! });
         const s = get().symbols;
         if (!s.open || s.scope !== 'document' || s.path !== path) return;
         // Symbol lines belong to the snapshot they were listed from.
         if (!current(g)) return set({ symbols: { ...s, loading: false } });
         set({ symbols: { ...s, all, items: filterSymbols(all, s.query), index: all.length ? 0 : -1, loading: false } });
+        if (!all.length && inconclusive) get().flash(inconclusive);
       } catch (e) {
         get().closeSymbols();
         report('Document symbols', e);
@@ -1973,12 +1971,13 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().symbols.query !== query || !get().symbols.open) return;
       const g = generation;
       try {
-        const items = await api.lspSymbols({ q: query });
+        const { symbols: items, inconclusive } = await api.lspSymbols({ q: query });
         const now = get().symbols;
         // A newer query owns the list; a newer snapshot may have moved every symbol.
         if (!now.open || now.query !== query) return;
         if (!current(g)) return set({ symbols: { ...now, loading: false } });
         set({ symbols: { ...now, items, index: items.length ? 0 : -1, loading: false } });
+        if (!items.length && inconclusive) get().flash(inconclusive);
       } catch (e) {
         set((st) => ({ symbols: { ...st.symbols, loading: false } }));
         report('Workspace symbols', e);

@@ -1,11 +1,30 @@
 import type { LanguageId, LspMissing } from '../../shared/protocol.js';
-import { argv0, findOnPath } from './which.js';
+import { loadSchemaCatalog, SCHEMA_CATALOG, type LspSettings } from './configuration.js';
+import { tsdkLocation } from './tsdk.js';
+import { vuePlugin } from './vue.js';
+import { argv0, findOnPath, programOf } from './which.js';
 
-/** A server diffle knows how to start, and the languages it answers for. */
-export interface ServerCandidate {
-  languages: LanguageId[];
+/** What a server's settings may depend on. */
+export interface ServerContext {
+  /** Repository root: the workspace folder. */
+  root: string;
+  /** The PATH probe; a test seam. */
+  lookup: (command: string) => string | null;
+}
+
+/** How one language server is started and configured: everything diffle knows about it, in one place. */
+export interface ServerDefinition {
   /** Shell command line that starts it on stdio. */
   command: string;
+  /** Settings sent after initialization and answered to `workspace/configuration`. */
+  settings?: (ctx: ServerContext) => LspSettings | Promise<LspSettings>;
+  /** Sent with `initialize`, for servers configured there rather than through settings. */
+  initializationOptions?: (ctx: ServerContext) => LspSettings | undefined;
+}
+
+/** A server diffle knows how to start, and the languages it answers for. */
+export interface ServerCandidate extends ServerDefinition {
+  languages: LanguageId[];
   /** A second program that must be on PATH too: the one shipping a plugin `command` loads. */
   requires?: string;
   /**
@@ -15,6 +34,26 @@ export interface ServerCandidate {
    */
   joins?: LanguageId[];
 }
+
+const TYPESCRIPT: LanguageId[] = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'];
+
+// typescript-language-server loads tsserver plugins from initializationOptions.
+const TSSERVER: ServerDefinition = {
+  command: 'typescript-language-server --stdio',
+  initializationOptions: ({ lookup }) => {
+    const plugin = vuePlugin(lookup);
+    return plugin ? { plugins: [plugin] } : undefined;
+  },
+};
+
+// vtsls takes tsserver plugins as settings; the namespace is where Vue's plugin reads its options.
+const VTSLS: ServerDefinition = {
+  command: 'vtsls --stdio',
+  settings: ({ lookup }) => {
+    const plugin = vuePlugin(lookup);
+    return plugin ? { vtsls: { tsserver: { globalPlugins: [{ ...plugin, configNamespace: 'typescript' }] } } } : {};
+  },
+};
 
 /**
  * Built-in servers, in preference order per language: the first one whose program is
@@ -28,17 +67,24 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: ['python'], command: 'pyright-langserver --stdio' },
   { languages: ['python'], command: 'pylsp' },
   { languages: ['python'], command: 'jedi-language-server' },
-  {
-    languages: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'],
-    command: 'typescript-language-server --stdio',
-  },
-  { languages: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'], command: 'vtsls --stdio' },
+  { languages: TYPESCRIPT, ...TSSERVER },
+  { languages: TYPESCRIPT, ...VTSLS },
   // Vue 3 language tools answer for .vue files from inside tsserver, through the plugin
-  // that ships with vue-language-server; the TypeScript servers load it (configuration.ts).
-  { languages: ['vue'], command: 'typescript-language-server --stdio', requires: 'vue-language-server' },
-  { languages: ['vue'], command: 'vtsls --stdio', requires: 'vue-language-server' },
-  // Needs a TypeScript to load, handed over at initialize (configuration.ts).
-  { languages: ['astro'], command: 'astro-ls --stdio' },
+  // that ships with vue-language-server; the TypeScript servers load it (vue.ts).
+  { languages: ['vue'], ...TSSERVER, requires: 'vue-language-server' },
+  { languages: ['vue'], ...VTSLS, requires: 'vue-language-server' },
+  {
+    languages: ['astro'],
+    command: 'astro-ls --stdio',
+    // Without a tsdk the server refuses to initialize; its own message then names the option.
+    initializationOptions: ({ root, lookup }) => {
+      const tsdk = tsdkLocation(
+        root,
+        ['astro-ls', 'typescript-language-server', 'vtsls'].map((c) => lookup(c)),
+      );
+      return tsdk ? { typescript: { tsdk } } : undefined;
+    },
+  },
   { languages: ['rust'], command: 'rust-analyzer' },
   { languages: ['go'], command: 'gopls' },
   { languages: ['c', 'cpp'], command: 'clangd' },
@@ -56,12 +102,33 @@ export const CANDIDATES: ServerCandidate[] = [
   { languages: ['haskell'], command: 'haskell-language-server-wrapper --lsp' },
   { languages: ['ocaml'], command: 'ocamllsp' },
   { languages: ['terraform'], command: 'terraform-ls serve' },
-  { languages: ['json', 'jsonc'], command: 'vscode-json-language-server --stdio' },
-  { languages: ['json', 'jsonc'], command: 'vscode-json-languageserver --stdio' },
-  { languages: ['yaml'], command: 'yaml-language-server --stdio' },
+  {
+    languages: ['json', 'jsonc'],
+    command: 'vscode-json-language-server --stdio',
+    settings: async () => ({ json: { schemas: await loadSchemaCatalog() } }),
+  },
+  {
+    languages: ['json', 'jsonc'],
+    command: 'vscode-json-languageserver --stdio',
+    settings: async () => ({ json: { schemas: await loadSchemaCatalog() } }),
+  },
+  {
+    languages: ['yaml'],
+    command: 'yaml-language-server --stdio',
+    settings: () => ({ yaml: { hover: true, schemaStore: { enable: true, url: SCHEMA_CATALOG } } }),
+  },
   { languages: ['toml'], command: 'tombi lsp' },
-  { languages: ['toml'], command: 'taplo lsp stdio' },
-  { languages: ['css'], command: 'vscode-css-language-server --stdio' },
+  {
+    languages: ['toml'],
+    command: 'taplo lsp stdio',
+    settings: () => ({ evenBetterToml: { schema: { enabled: true, catalogs: [SCHEMA_CATALOG] } } }),
+  },
+  {
+    languages: ['css'],
+    command: 'vscode-css-language-server --stdio',
+    // Diagnostics go unread, and the server's linter crashes on a missing `lint` section.
+    settings: () => ({ css: { validate: false }, less: { validate: false }, scss: { validate: false } }),
+  },
   { languages: ['html'], command: 'vscode-html-language-server --stdio' },
   // Class hovers wherever Tailwind classes appear, beside whatever owns the file.
   {
@@ -89,6 +156,17 @@ export interface Resolution {
 /** The candidate commands for a language, in the order they are tried. */
 export function candidatesFor(language: LanguageId): string[] {
   return CANDIDATES.filter((c) => c.languages.includes(language)).map((c) => c.command);
+}
+
+/**
+ * How a command line's program is configured, by the built-in definition for that program:
+ * an override naming a known server with other flags or a full path still gets its
+ * settings. A program diffle does not know takes none.
+ */
+export function definitionOf(command: string): ServerDefinition {
+  const program = programOf(command);
+  const known = CANDIDATES.find((c) => programOf(c.command) === program);
+  return { command, settings: known?.settings, initializationOptions: known?.initializationOptions };
 }
 
 /**

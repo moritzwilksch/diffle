@@ -7,7 +7,6 @@
 src/client/store.ts # TODO: split (2694 lines)
 src/client/review/ReviewPane.tsx # TODO: split (1316 lines)
 src/server/git/GitRepo.ts # TODO: split (1159 lines)
-src/server/lsp/LspBridge.ts # TODO: split (882 lines)
 src/shared/protocol.ts # TODO: split (868 lines)
 src/server/Session.ts # TODO: split (692 lines)
 scripts/record-videos.ts # TODO: split (587 lines)

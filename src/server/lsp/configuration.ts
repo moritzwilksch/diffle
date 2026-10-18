@@ -2,12 +2,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { LanguageId } from '../../shared/protocol.js';
 import { writeFileAtomic } from '../persist.js';
-import { argv0, findOnPath } from './which.js';
 import { JsonRpcError } from './JsonRpc.js';
-import { VUE_PLUGIN, vuePluginLocation } from './vue.js';
-import { tsdkLocation } from './tsdk.js';
 
 export const SCHEMA_CATALOG = 'https://www.schemastore.org/api/json/catalog.json';
 const MAX_AGE = 24 * 60 * 60 * 1000;
@@ -20,6 +16,7 @@ const SchemaCatalogSchema = z.object({ schemas: z.array(z.unknown()) });
 const ConfigurationParamsSchema = z.object({
   items: z.array(z.object({ section: z.string().optional() })),
 });
+/** A server's settings tree, as `workspace/didChangeConfiguration` carries it. */
 export type LspSettings = Record<string, unknown>;
 
 /** Valid catalog entries, in the association format understood by the JSON server. */
@@ -57,82 +54,11 @@ export async function loadSchemaCatalog(
   }
 }
 
-/** The program a command line runs, without its directory or Windows extension. */
-function programOf(command: string): string | undefined {
-  return argv0(command)
-    .split(/[\\/]/)
-    .pop()
-    ?.replace(/\.(exe|cmd|bat)$/i, '');
-}
-
 /**
- * The tsserver plugin entry for .vue files when `vue-language-server` is on PATH, else
- * null. Loaded whenever a TypeScript server starts, not only when the diff holds a .vue
- * file: a process serving .ts files first and .vue files after a refresh cannot load it
- * later, and .ts files importing components resolve them.
- */
-function vuePlugin(lookup: (command: string) => string | null): LspSettings | null {
-  const executable = lookup('vue-language-server');
-  const location = executable == null ? null : vuePluginLocation(executable);
-  return location == null ? null : { name: VUE_PLUGIN, location, languages: ['vue'] };
-}
-
-/** Default settings for the languages routed to a process. `lookup` is a test seam for the PATH probe. */
-export async function settingsFor(
-  languages: LanguageId[],
-  command: string,
-  lookup: (command: string) => string | null = findOnPath,
-): Promise<LspSettings> {
-  const settings: LspSettings = {};
-  if (languages.includes('yaml')) settings.yaml = { hover: true, schemaStore: { enable: true, url: SCHEMA_CATALOG } };
-  const program = programOf(command);
-  if (languages.includes('toml') && program === 'taplo')
-    settings.evenBetterToml = { schema: { enabled: true, catalogs: [SCHEMA_CATALOG] } };
-  if (languages.some((l) => l === 'json' || l === 'jsonc')) settings.json = { schemas: await loadSchemaCatalog() };
-  if (program === 'vscode-css-language-server') {
-    // Diagnostics go unread, and the server's linter crashes on a missing `lint` section.
-    const off = { validate: false };
-    Object.assign(settings, { css: off, less: off, scss: off });
-  }
-  if (program === 'vtsls') {
-    // vtsls takes tsserver plugins as settings; the namespace is where Vue's plugin reads its options.
-    const plugin = vuePlugin(lookup);
-    if (plugin) settings.vtsls = { tsserver: { globalPlugins: [{ ...plugin, configNamespace: 'typescript' }] } };
-  }
-  return settings;
-}
-
-/**
- * `initializationOptions` for a process, or undefined when the server takes none:
- * typescript-language-server loads tsserver plugins from here, and astro-ls the
- * TypeScript it embeds, found in `root` or beside a server on PATH. `lookup` is a test seam.
- */
-export function initializationOptionsFor(
-  command: string,
-  root: string,
-  lookup: (command: string) => string | null = findOnPath,
-): LspSettings | undefined {
-  const program = programOf(command);
-  if (program === 'typescript-language-server') {
-    const plugin = vuePlugin(lookup);
-    return plugin ? { plugins: [plugin] } : undefined;
-  }
-  if (program === 'astro-ls') {
-    // Without a tsdk the server refuses to initialize; its own message then names the option.
-    const tsdk = tsdkLocation(
-      root,
-      [command, 'typescript-language-server', 'vtsls'].map((c) => lookup(c)),
-    );
-    return tsdk ? { typescript: { tsdk } } : undefined;
-  }
-  return undefined;
-}
-
-/**
- * Used by LspBridge to answer language servers' `workspace/configuration` requests.
- * Returns settings for each requested section in order, or null for unknown sections;
- * an omitted section requests all settings. Params are untrusted JSON from the server.
- * Malformed requests throw JSON-RPC Invalid Params before any settings are returned.
+ * Answers a language server's `workspace/configuration` request from `settings`:
+ * each requested section in order, null for unknown sections, and the whole tree
+ * for an omitted section. Params are untrusted JSON from the server; malformed
+ * requests throw JSON-RPC Invalid Params before any settings are returned.
  */
 export function configurationItems(settings: LspSettings, params: unknown): unknown[] {
   const request = ConfigurationParamsSchema.safeParse(params);

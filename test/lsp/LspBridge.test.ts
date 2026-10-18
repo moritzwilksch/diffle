@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { LspSettings } from '../../src/server/lsp/configuration.js';
-import { LspBridge, LspUnavailableError } from '../../src/server/lsp/LspBridge.js';
+import { LspBridge } from '../../src/server/lsp/LspBridge.js';
+import { LspUnavailableError } from '../../src/server/lsp/LspProcess.js';
 import { type LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
@@ -25,7 +26,7 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, 
   const events: string[] = [];
   /** Paths `read` was asked for. */
   const reads: string[] = [];
-  const bridge = LspBridge.start({
+  const bridge = new LspBridge({
     command: 'fake',
     root,
     read: async (p) => {
@@ -204,14 +205,16 @@ describe('LspBridge', () => {
 
   it('flattens hierarchical document symbols and filters workspace symbols to the snapshot', async () => {
     const { bridge } = start();
-    expect(await bridge.documentSymbols('a.py')).toEqual([
-      { name: 'Foo', kind: 5, container: undefined, path: 'a.py', line: 1, endLine: 4, col: 6 },
-      { name: 'bar', kind: 6, container: 'Foo', path: 'a.py', line: 2, endLine: 3, col: 8 },
-      { name: 'baz', kind: 12, container: undefined, path: 'a.py', line: 6, endLine: 7, col: 4 },
-    ]);
-    expect(await bridge.workspaceSymbols('q')).toEqual([
-      { name: 'q_sym', kind: 12, container: 'mod', path: 'other.py', line: 5, endLine: 5, col: 2 },
-    ]);
+    expect(await bridge.documentSymbols('a.py')).toEqual({
+      symbols: [
+        { name: 'Foo', kind: 5, container: undefined, path: 'a.py', line: 1, endLine: 4, col: 6 },
+        { name: 'bar', kind: 6, container: 'Foo', path: 'a.py', line: 2, endLine: 3, col: 8 },
+        { name: 'baz', kind: 12, container: undefined, path: 'a.py', line: 6, endLine: 7, col: 4 },
+      ],
+    });
+    expect(await bridge.workspaceSymbols('q')).toEqual({
+      symbols: [{ name: 'q_sym', kind: 12, container: 'mod', path: 'other.py', line: 5, endLine: 5, col: 2 }],
+    });
     await bridge.close();
   });
 
@@ -283,7 +286,7 @@ describe('LspBridge', () => {
       notify('$/progress', { token: 2, value: { kind: 'begin', title: 'Indexing' } });
       await expect.poll(() => bridge.status().activity?.length).toBe(2);
       expect((await bridge.definition(pos)).locations).toHaveLength(1);
-      await expect(bridge.hover({ ...pos, line: 1 })).rejects.toThrow('Loading workspace');
+      expect((await bridge.hover({ ...pos, line: 1 })).inconclusive).toContain('Loading workspace');
       expect((await bridge.references(pos)).locations.length).toBeGreaterThan(0);
       await bridge.track(['a.py', 'other.py']);
       await settle();
@@ -292,7 +295,7 @@ describe('LspBridge', () => {
       notify('$/progress', { token: 'load', value: { kind: 'end' } });
       notify('$/progress', { token: 2, value: { kind: 'report', message: 'dependencies', percentage: 40 } });
       await expect.poll(() => bridge.status().activity).toEqual(['Indexing (40%): dependencies']);
-      await expect(bridge.hover({ ...pos, line: 1 })).rejects.toThrow('Indexing (40%): dependencies');
+      expect((await bridge.hover({ ...pos, line: 1 })).inconclusive).toContain('Indexing (40%): dependencies');
       notify('$/progress', { token: 2, value: { kind: 'end' } });
       await expect.poll(() => bridge.status().activity).toEqual([]);
       expect(await bridge.hover({ ...pos, line: 1 })).toEqual({ contents: null });
@@ -356,10 +359,13 @@ describe('LspBridge', () => {
     }
   });
 
-  it('rejects an empty answer when standard progress begins during the request', async () => {
+  it('marks an empty answer inconclusive when standard progress begins during the request', async () => {
     const { bridge } = start({ FAKE_LSP_LOADING_DURING_QUERY: '1' });
     try {
-      await expect(bridge.definition({ path: 'a.py', line: 3, col: 4 })).rejects.toThrow('Reloading workspace');
+      expect(await bridge.definition({ path: 'a.py', line: 3, col: 4 })).toEqual({
+        locations: [],
+        inconclusive: expect.stringContaining('Reloading workspace'),
+      });
     } finally {
       await bridge.close();
     }
@@ -403,6 +409,24 @@ describe('LspBridge', () => {
     expect(many.events.filter((e) => e.startsWith('refused'))).toHaveLength(3);
     expect(many.bridge.status().state).toBe('ready');
     await many.bridge.close();
+  });
+
+  it('asks only for what the server advertised, and says so for the rest', async () => {
+    const { bridge } = start({ FAKE_LSP_OFFERS: 'hover,documentSymbol' });
+    try {
+      expect(bridge.features()).toEqual([]);
+      expect((await bridge.hover({ path: 'a.py', line: 2, col: 4 })).contents).toContain('def f()');
+      expect(bridge.features()).toEqual(['hover', 'documentSymbol']);
+      await expect(bridge.definition({ path: 'a.py', line: 3, col: 4 })).rejects.toThrow(
+        new LspUnavailableError('fake offers no go to definition'),
+      );
+      await expect(bridge.references({ path: 'a.py', line: 3, col: 4 })).rejects.toThrow(/offers no references/);
+      await expect(bridge.workspaceSymbols('q')).rejects.toThrow(/offers no workspace symbols/);
+      // Token kinds and occurrences are asked for regardless: pyrefly answers them without advertising.
+      expect(await bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
+    } finally {
+      await bridge.close();
+    }
   });
 
   it('reports unavailable when the server dies during initialize', async () => {

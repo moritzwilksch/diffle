@@ -16,7 +16,17 @@ import type {
 const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStatus> = {}): LspStatus => ({
   enabled: true,
   servers: [
-    { name: 'pyrefly', command: 'pyrefly lsp', state, languages: ['python'], joins: [], log: NO_LOG, ...extra },
+    {
+      id: 'pyrefly',
+      name: 'pyrefly',
+      command: 'pyrefly lsp',
+      state,
+      languages: ['python'],
+      joins: [],
+      supports: ['definition', 'typeDefinition', 'hover', 'references', 'documentSymbol', 'workspaceSymbol'],
+      log: NO_LOG,
+      ...extra,
+    },
   ],
   missing: [],
 });
@@ -984,17 +994,17 @@ describe('language server log', () => {
     useStore.setState({ lsp: withLog(1), lspLogs: {} });
     const before = api.lspLog.mock.calls.length;
     api.lspLog.mockResolvedValueOnce({ entries: [entry] });
-    await useStore.getState().watchLspLog('pyrefly lsp', true);
-    expect(api.lspLog).toHaveBeenLastCalledWith('pyrefly lsp');
-    expect(useStore.getState().lspLogs['pyrefly lsp']).toEqual({ seq: 1, entries: [entry] });
+    await useStore.getState().watchLspLog('pyrefly', true);
+    expect(api.lspLog).toHaveBeenLastCalledWith('pyrefly');
+    expect(useStore.getState().lspLogs['pyrefly']).toEqual({ seq: 1, entries: [entry] });
     // The same seq again says nothing moved.
     useStore.getState().setLspStatus(withLog(1));
     expect(api.lspLog.mock.calls.length).toBe(before + 1);
     const more = [entry, { ...entry, id: 2, message: 'close a.py' }];
     api.lspLog.mockResolvedValueOnce({ entries: more });
     useStore.getState().setLspStatus(withLog(2));
-    await vi.waitFor(() => expect(useStore.getState().lspLogs['pyrefly lsp']).toEqual({ seq: 2, entries: more }));
-    await useStore.getState().watchLspLog('pyrefly lsp', false);
+    await vi.waitFor(() => expect(useStore.getState().lspLogs['pyrefly']).toEqual({ seq: 2, entries: more }));
+    await useStore.getState().watchLspLog('pyrefly', false);
     expect(useStore.getState().lspLogs).toEqual({});
     useStore.getState().setLspStatus(withLog(3));
     expect(api.lspLog.mock.calls.length).toBe(before + 2);
@@ -1004,8 +1014,8 @@ describe('language server log', () => {
     useStore.setState({ lsp: withLog(1), lspLogs: {} });
     const slow = deferred<{ entries: (typeof entry)[] }>();
     api.lspLog.mockReturnValueOnce(slow.promise);
-    const shown = useStore.getState().watchLspLog('pyrefly lsp', true);
-    await useStore.getState().watchLspLog('pyrefly lsp', false);
+    const shown = useStore.getState().watchLspLog('pyrefly', true);
+    await useStore.getState().watchLspLog('pyrefly', false);
     slow.resolve({ entries: [entry] });
     await shown;
     expect(useStore.getState().lspLogs).toEqual({});
@@ -1014,13 +1024,13 @@ describe('language server log', () => {
 
 describe('symbol navigation', () => {
   it.each(['json', 'jsonc', 'yaml', 'toml'] as const)(
-    '%s keeps hover but does not offer symbol navigation',
+    '%s keeps hover but does not offer symbol navigation when its server offers none',
     async (language) => {
       const path = `config.${language}`;
       const target = { path, side: 'new' as const, line: 1, col: 2, text: 'name' };
       useStore.setState({
         snapshot: snap(1, 'working', [path]),
-        lsp: lspStatus('ready', { languages: [language] }),
+        lsp: lspStatus('ready', { languages: [language], supports: ['hover', 'documentSymbol'] }),
         symbolMenu: null,
         hover: null,
       });
@@ -1574,7 +1584,7 @@ describe('symbol navigation', () => {
     vi.useFakeTimers();
     try {
       const sym = { name: 'foo', kind: 12, path: 'a.py', line: 1, endLine: 1, col: 0 };
-      api.lspSymbols.mockResolvedValue([sym]);
+      api.lspSymbols.mockResolvedValue({ symbols: [sym] });
       useStore.setState({
         symbols: {
           open: true,

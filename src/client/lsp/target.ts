@@ -1,10 +1,4 @@
-import { languageOf, type LspLocation, type Side } from '../../shared/protocol.js';
-
-/** Configuration tokens offer schema hover, without symbol menus or navigation. */
-export function schemaHoverOnly(path: string): boolean {
-  const language = languageOf(path);
-  return language === 'json' || language === 'jsonc' || language === 'yaml' || language === 'toml';
-}
+import type { LspLocation, Side } from '../../shared/protocol.js';
 
 /** The token `gd` / `gA` act on: keyboard-focused (w / b) first, else under the pointer. */
 export interface TokenTarget {

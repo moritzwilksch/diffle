@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { candidatesFor, CANDIDATES, resolveServers } from '../../src/server/lsp/registry.js';
+import { candidatesFor, CANDIDATES, definitionOf, resolveServers } from '../../src/server/lsp/registry.js';
 import { LANGUAGE_IDS } from '../../src/shared/protocol.js';
 
 /** A PATH holding exactly `programs`. */
@@ -97,6 +97,22 @@ describe('resolveServers', () => {
       return null;
     });
     expect(probed).toEqual([...new Set(probed)]);
+  });
+
+  it('configures a command by its program, however it is spelled, and an unknown one not at all', async () => {
+    const ctx = { root: '/repo', lookup: () => null };
+    expect(definitionOf('tombi lsp').settings).toBeUndefined();
+    // The VS Code CSS server's linter crashes on a null `lint` section, and nobody reads its diagnostics.
+    expect(await definitionOf('vscode-css-language-server --stdio').settings?.(ctx)).toEqual({
+      css: { validate: false },
+      less: { validate: false },
+      scss: { validate: false },
+    });
+    expect(await definitionOf('"C:\\tools\\taplo.exe" lsp stdio').settings?.(ctx)).toHaveProperty(
+      'evenBetterToml.schema.enabled',
+      true,
+    );
+    expect(definitionOf('my-server --stdio')).toEqual({ command: 'my-server --stdio' });
   });
 
   it('knows a server for every language it recognizes', () => {

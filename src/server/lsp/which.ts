@@ -18,6 +18,15 @@ export function argv0(command: string): string {
 }
 
 /**
+ * The program a command line runs, as status lines and the registry name it: the basename
+ * of its first word without a Windows extension. `"C:\\tools\\taplo.exe" lsp stdio` → `taplo`.
+ */
+export function programOf(command: string): string {
+  const prog = argv0(command);
+  return (prog.split(/[\\/]/).pop() || prog).replace(/\.(exe|cmd|bat)$/i, '');
+}
+
+/**
  * Where `command`'s program lives, or null when it is not an executable on PATH.
  * A name with a separator is resolved against `cwd` instead of searched, like a shell.
  */

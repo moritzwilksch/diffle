@@ -35,3 +35,22 @@ export function vuePluginLocation(executable: string): string | null {
   }
   return null;
 }
+
+/** A tsserver plugin entry (`initializationOptions.plugins` / `globalPlugins`) for .vue files. */
+export interface TsserverPlugin {
+  name: string;
+  location: string;
+  languages: string[];
+}
+
+/**
+ * The tsserver plugin entry for .vue files when `vue-language-server` is on PATH, else
+ * null. Loaded whenever a TypeScript server starts, not only when the diff holds a .vue
+ * file: a process serving .ts files first and .vue files after a refresh cannot load it
+ * later, and .ts files importing components resolve them. `lookup` is the PATH probe.
+ */
+export function vuePlugin(lookup: (command: string) => string | null): TsserverPlugin | null {
+  const executable = lookup('vue-language-server');
+  const location = executable == null ? null : vuePluginLocation(executable);
+  return location == null ? null : { name: VUE_PLUGIN, location, languages: ['vue'] };
+}
