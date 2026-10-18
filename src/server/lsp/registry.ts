@@ -1,4 +1,4 @@
-import type { LanguageId, LspMissing } from '../../shared/protocol.js';
+import type { LanguageId, LspFeature, LspMissing } from '../../shared/protocol.js';
 import { loadSchemaCatalog, SCHEMA_CATALOG, type LspSettings } from './configuration.js';
 import { tsdkLocation } from './tsdk.js';
 import { VUE_PLUGIN, vuePlugin, vuePluginLocation } from './vue.js';
@@ -20,6 +20,8 @@ export interface ServerDefinition {
   settings?: (ctx: ServerContext) => LspSettings | Promise<LspSettings>;
   /** Sent with `initialize`, for servers configured there rather than through settings. */
   initializationOptions?: (ctx: ServerContext) => LspSettings | undefined;
+  /** Features the server answers without ever advertising them; asked for as if it had. */
+  assumes?: LspFeature[];
 }
 
 /** A second program a candidate needs on PATH, and what `command` loads from beside it. */
@@ -72,7 +74,8 @@ const VUE: Requirement = { program: 'vue-language-server', what: VUE_PLUGIN, loc
  * the servers themselves want it (clangd for c and cpp, tsserver for all of js/ts).
  */
 export const CANDIDATES: ServerCandidate[] = [
-  { languages: ['python'], command: 'pyrefly lsp' },
+  // pyrefly answers semantic token requests without advertising the provider.
+  { languages: ['python'], command: 'pyrefly lsp', assumes: ['semanticTokens'] },
   { languages: ['python'], command: 'ty server' },
   { languages: ['python'], command: 'basedpyright-langserver --stdio' },
   { languages: ['python'], command: 'pyright-langserver --stdio' },
@@ -177,7 +180,12 @@ export function candidatesFor(language: LanguageId): string[] {
 export function definitionOf(command: string): ServerDefinition {
   const program = programOf(command);
   const known = CANDIDATES.find((c) => programOf(c.command) === program);
-  return { command, settings: known?.settings, initializationOptions: known?.initializationOptions };
+  return {
+    command,
+    settings: known?.settings,
+    initializationOptions: known?.initializationOptions,
+    assumes: known?.assumes,
+  };
 }
 
 /**

@@ -264,6 +264,7 @@ export class LspPool {
       command,
       settings: definition.settings ? Promise.resolve(definition.settings(ctx)) : undefined,
       initializationOptions: definition.initializationOptions?.(ctx),
+      assumes: definition.assumes,
       root: this.opts.root,
       read: this.opts.read,
       has: this.opts.has,

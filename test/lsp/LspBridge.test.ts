@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LspSettings } from '../../src/server/lsp/configuration.js';
 import { LspBridge } from '../../src/server/lsp/LspBridge.js';
 import { LspUnavailableError } from '../../src/server/lsp/LspProcess.js';
-import { type LspProcessStatus } from '../../src/shared/protocol.js';
+import type { LspFeature, LspProcessStatus } from '../../src/shared/protocol.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -19,7 +19,13 @@ const files: Record<string, string> = {
   'z.py': 'z\n',
 };
 
-function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, initializationOptions?: LspSettings) {
+function start(
+  env: Record<string, string> = {},
+  root = ROOT,
+  maxOpen?: number,
+  initializationOptions?: LspSettings,
+  assumes?: LspFeature[],
+) {
   let notify: (method: string, params: unknown) => void;
   let request: (method: string, params: unknown) => void;
   const statuses: LspProcessStatus[] = [];
@@ -38,6 +44,7 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, 
     has: async (p) => p in files,
     maxOpen,
     initializationOptions,
+    assumes,
     onStatus: (s) => statuses.push(s),
     spawnProcess: () => {
       const child = spawn(process.execPath, [FAKE], {
@@ -137,6 +144,11 @@ describe('LspBridge', () => {
     const plain = start({ FAKE_LSP_WITHOUT: 'semanticTokens' });
     expect(await plain.bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: null });
     await plain.bridge.close();
+    // A server known to answer without advertising (pyrefly) is asked as if it had.
+    const assumed = start({ FAKE_LSP_WITHOUT: 'semanticTokens' }, ROOT, undefined, undefined, ['semanticTokens']);
+    expect(await assumed.bridge.tokenKind({ path: 'a.py', line: 1, col: 0 })).toEqual({ kind: 'keyword' });
+    expect(assumed.bridge.features()).toContain('semanticTokens');
+    await assumed.bridge.close();
   });
 
   it('maps document highlights to new-side occurrences with their kind, and stays quiet without them', async () => {

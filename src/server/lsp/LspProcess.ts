@@ -17,6 +17,8 @@ export interface LspProcessOptions {
   settings?: Promise<LspSettings>;
   /** Sent with `initialize`, for servers configured there rather than through settings. */
   initializationOptions?: LspSettings;
+  /** Features counted as advertised whatever `initialize` says (see `ServerDefinition.assumes`). */
+  assumes?: LspFeature[];
   onStatus: (status: LspProcessStatus) => void;
   /** Test seam: replaces `spawn(command, { shell: true })`. */
   spawnProcess?: (command: string, cwd: string) => ChildProcess;
@@ -224,6 +226,7 @@ export class LspProcess {
       const capabilities = init?.capabilities ?? {};
       for (const [feature, { provider }] of Object.entries(FEATURES) as [LspFeature, { provider: string }][])
         if (capabilities[provider]) this.advertised.add(feature);
+      for (const feature of this.opts.assumes ?? []) this.advertised.add(feature);
       const legend = capabilities.semanticTokensProvider?.legend?.tokenTypes;
       if (legend?.length) this.tokenTypes = legend;
       rpc.notify('initialized', {});
