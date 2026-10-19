@@ -1,6 +1,7 @@
-import type { LanguageId, LspMissing } from '@/shared/protocol.js';
+import type { LanguageId, LspMissing, LspProjects } from '@/shared/protocol.js';
 import { loadSchemaCatalog, SCHEMA_CATALOG, type LspSettings } from './configuration.js';
-import { tsdkLocation } from './tsdk.js';
+import { cargoProjects, linkedProjects } from './projects/cargo.js';
+import { tsdk, typescriptProjects } from './projects/tsdk.js';
 import { VUE_PLUGIN, vuePlugin, vuePluginLocation } from './vue.js';
 import { argv0, findOnPath, programOf } from './which.js';
 
@@ -8,6 +9,8 @@ import { argv0, findOnPath, programOf } from './which.js';
 export interface ServerContext {
   /** Repository root: the workspace folder. */
   root: string;
+  /** The diff's files the server answers for, repository-relative: where its projects sit. */
+  paths: readonly string[];
   /** The PATH probe; a test seam. */
   lookup: (command: string) => string | null;
 }
@@ -20,6 +23,10 @@ export interface ServerDefinition {
   settings?: (ctx: ServerContext) => LspSettings | Promise<LspSettings>;
   /** Sent with `initialize`, for servers configured there rather than through settings. */
   initializationOptions?: (ctx: ServerContext) => LspSettings | undefined;
+  /** What it is pointed at, for the status; recomputed with `settings`. */
+  projects?: (ctx: ServerContext) => LspProjects;
+  /** Whether `settings` reads `paths`: recomputed and sent again when a later snapshot adds one. */
+  reconfigures?: boolean;
 }
 
 /** A second program a candidate needs on PATH, and what `command` loads from beside it. */
@@ -46,22 +53,33 @@ export interface ServerCandidate extends ServerDefinition {
 
 const TYPESCRIPT: LanguageId[] = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'];
 
-// typescript-language-server loads tsserver plugins from initializationOptions.
+// typescript-language-server loads tsserver plugins and its TypeScript from initializationOptions;
+// unless told, it looks for TypeScript only in the root's `node_modules` and beside itself.
 const TSSERVER: ServerDefinition = {
   command: 'typescript-language-server --stdio',
-  initializationOptions: ({ lookup }) => {
-    const plugin = vuePlugin(lookup);
-    return plugin ? { plugins: [plugin] } : undefined;
+  initializationOptions: (ctx) => {
+    const plugin = vuePlugin(ctx.lookup);
+    const lib = tsdk(ctx, 'typescript-language-server');
+    if (!plugin && !lib) return undefined;
+    return { ...(plugin && { plugins: [plugin] }), ...(lib && { tsserver: { path: lib } }) };
   },
+  projects: (ctx) => typescriptProjects(ctx, 'typescript-language-server'),
 };
 
 // vtsls takes tsserver plugins as settings; the namespace is where Vue's plugin reads its options.
+// It bundles a TypeScript, and reads the project's only when told to.
 const VTSLS: ServerDefinition = {
   command: 'vtsls --stdio',
-  settings: ({ lookup }) => {
-    const plugin = vuePlugin(lookup);
-    return plugin ? { vtsls: { tsserver: { globalPlugins: [{ ...plugin, configNamespace: 'typescript' }] } } } : {};
+  settings: (ctx) => {
+    const plugin = vuePlugin(ctx.lookup);
+    const lib = tsdk(ctx, 'vtsls');
+    const vtsls = {
+      ...(lib && { autoUseWorkspaceTsdk: true }),
+      ...(plugin && { tsserver: { globalPlugins: [{ ...plugin, configNamespace: 'typescript' }] } }),
+    };
+    return { ...(lib && { typescript: { tsdk: lib } }), ...(Object.keys(vtsls).length && { vtsls }) };
   },
+  projects: (ctx) => typescriptProjects(ctx, 'vtsls'),
 };
 
 const VUE: Requirement = { program: 'vue-language-server', what: VUE_PLUGIN, locate: vuePluginLocation };
@@ -88,15 +106,25 @@ export const CANDIDATES: ServerCandidate[] = [
     languages: ['astro'],
     command: 'astro-ls --stdio',
     // Without a tsdk the server refuses to initialize; its own message then names the option.
-    initializationOptions: ({ root, lookup }) => {
-      const tsdk = tsdkLocation(
-        root,
-        ['astro-ls', 'typescript-language-server', 'vtsls'].map((c) => lookup(c)),
-      );
-      return tsdk ? { typescript: { tsdk } } : undefined;
+    initializationOptions: (ctx) => {
+      const lib = tsdk(ctx, 'astro-ls');
+      return lib ? { typescript: { tsdk: lib } } : undefined;
     },
+    projects: (ctx) => typescriptProjects(ctx, 'astro-ls'),
   },
-  { languages: ['rust'], command: 'rust-analyzer' },
+  {
+    languages: ['rust'],
+    command: 'rust-analyzer',
+    // At initialize, so the first load has every workspace; as settings too, so a later
+    // `workspace/configuration` pull keeps them and a workspace entering the diff reloads.
+    initializationOptions: linkedProjects,
+    settings: (ctx) => {
+      const options = linkedProjects(ctx);
+      return options ? { 'rust-analyzer': options } : {};
+    },
+    projects: cargoProjects,
+    reconfigures: true,
+  },
   { languages: ['go'], command: 'gopls' },
   { languages: ['c', 'cpp'], command: 'clangd' },
   { languages: ['ruby'], command: 'ruby-lsp' },
@@ -182,7 +210,8 @@ export function candidatesFor(language: LanguageId): string[] {
 export function definitionOf(command: string): ServerDefinition {
   const program = programOf(command);
   const known = CANDIDATES.find((c) => programOf(c.command) === program);
-  return { command, settings: known?.settings, initializationOptions: known?.initializationOptions };
+  const { settings, initializationOptions, projects, reconfigures } = known ?? {};
+  return { command, settings, initializationOptions, projects, reconfigures };
 }
 
 /**

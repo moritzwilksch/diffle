@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.7](https://github.com/moritzwilksch/diffle/compare/v0.2.6...v0.2.7) - 2026-10-18
+
+### Features
+
+- _(tree)_ Scroll long names sideways, with a toggle to shorten them ([#325](https://github.com/moritzwilksch/diffle/pull/325))
+- _(lsp)_ Add vue, astro and tailwindcss support ([#317](https://github.com/moritzwilksch/diffle/pull/317))
+- _(lsp)_ Support C# via roslyn-language-server ([#327](https://github.com/moritzwilksch/diffle/pull/327))
+
+### Refactors
+
+- _(ui)_ Build dialogs and tooltips on shadcn with Base UI ([#323](https://github.com/moritzwilksch/diffle/pull/323))
+- Split near-cap files, carve `src/server` subfolders ([#329](https://github.com/moritzwilksch/diffle/pull/329))
+- _(lsp)_ Decide keywords from the client's grammar instead of semantic tokens ([#334](https://github.com/moritzwilksch/diffle/pull/334))
+- Import across directories through an `@/` alias ([#324](https://github.com/moritzwilksch/diffle/pull/324))
+
+### Other
+
+- _(dev)_ Add a pre-commit quality gate ([#322](https://github.com/moritzwilksch/diffle/pull/322))
+- _(dev)_ Use lefthook for git hooks ([#330](https://github.com/moritzwilksch/diffle/pull/330))
+
 ## [0.2.6](https://github.com/moritzwilksch/diffle/compare/v0.2.5...v0.2.6) - 2026-10-16
 
 ### Features

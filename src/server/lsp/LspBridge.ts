@@ -12,6 +12,7 @@ import type {
   LspSymbolsResponse,
 } from '@/shared/protocol.js';
 import { LSP_FEATURE_LABELS } from '@/shared/lsp.js';
+import type { LspSettings } from './configuration.js';
 import { Documents } from './Documents.js';
 import { hoverMarkdown, localizeFileLinks, type HoverContents } from './hover.js';
 import { JsonRpcError } from './JsonRpc.js';
@@ -181,6 +182,11 @@ export class LspBridge {
   /** Reads a file outside the snapshot only if a result named it (see `Locator.readExternal`). */
   readExternal(path: string): Promise<Buffer | null> {
     return this.locator.readExternal(path);
+  }
+
+  /** Replaces the server's settings (see `LspProcess.reconfigure`). */
+  reconfigure(settings: Promise<LspSettings>): void {
+    this.process.reconfigure(settings);
   }
 
   close(): Promise<void> {

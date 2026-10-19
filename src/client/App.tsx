@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { connectWs } from './api.js';
 import { CommentPanel } from './comments/CommentPanel.js';
 import { Header } from './header/Header.js';
@@ -6,6 +6,7 @@ import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
 import { documentTitle } from './model.js';
 import { ReviewPane } from './review/ReviewPane.js';
+import { ServerLost } from './ServerLost.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
 import { TooltipHost } from './ui/TitleTooltips.js';
@@ -22,6 +23,7 @@ export function App() {
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
   const title = useStore((s) => (s.snapshot ? documentTitle(s.snapshot, s.github.data) : 'diffle'));
+  const [lost, setLost] = useState(false);
   useKeymap();
 
   useEffect(() => {
@@ -69,31 +71,38 @@ export function App() {
   useEffect(() => {
     // Every (re)connection resyncs the whole state: pushes missed while the socket was down are
     // not replayed, and the first open is the boot itself.
-    const resync = () => void boot().then(() => performance.mark('diffle:snapshot'));
-    return connectWs((msg) => {
-      switch (msg.type) {
-        case 'snapshot':
-          void refreshSnapshot(msg.version);
-          break;
-        case 'moved':
-          setMoved(msg.moved);
-          break;
-        case 'threads':
-          void refreshThreads();
-          break;
-        case 'viewed':
-          void refreshViewed();
-          break;
-        case 'config':
-          void refreshConfig();
-          break;
-        case 'lsp':
-          setLspStatus(msg.payload);
-          break;
-        default:
-          break;
-      }
-    }, resync);
+    const resync = () => {
+      setLost(false);
+      void boot().then(() => performance.mark('diffle:snapshot'));
+    };
+    return connectWs(
+      (msg) => {
+        switch (msg.type) {
+          case 'snapshot':
+            void refreshSnapshot(msg.version);
+            break;
+          case 'moved':
+            setMoved(msg.moved);
+            break;
+          case 'threads':
+            void refreshThreads();
+            break;
+          case 'viewed':
+            void refreshViewed();
+            break;
+          case 'config':
+            void refreshConfig();
+            break;
+          case 'lsp':
+            setLspStatus(msg.payload);
+            break;
+          default:
+            break;
+        }
+      },
+      resync,
+      () => setLost(true),
+    );
   }, [boot, refreshSnapshot, refreshThreads, refreshViewed, refreshConfig, setLspStatus, setMoved]);
 
   return (
@@ -122,6 +131,7 @@ export function App() {
       )}
       <HelpOverlay />
       <TooltipHost />
+      {lost && <ServerLost />}
       {toast && (
         <div className="fixed bottom-6 left-[50%] z-60 max-w-[min(48rem,_90vw)] [transform:translateX(-50%)] [animation:flash-in_160ms_ease] rounded-lg bg-foreground px-5 py-3 text-[1rem] leading-[1.4] wrap-anywhere text-canvas shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.35)]">
           {toast}

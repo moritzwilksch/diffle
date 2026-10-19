@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { definitionOf } from '@/server/lsp/registry.js';
-import { tsdkLocation } from '@/server/lsp/tsdk.js';
+import { tsdkLocation } from '@/server/lsp/projects/tsdk.js';
 import { rmTmp } from '../tmp.js';
 
 const dirs: string[] = [];
@@ -41,7 +41,7 @@ describe('tsdkLocation', () => {
     const repo = typescript(join(root, 'repo', 'node_modules'));
     const bin = join(root, 'bin');
     typescript(join(bin, 'node_modules'));
-    expect(tsdkLocation(join(root, 'repo'), [executable(join(bin, 'astro-ls'))])).toBe(repo);
+    expect(tsdkLocation(join(root, 'repo'), [], [executable(join(bin, 'astro-ls'))])).toBe(repo);
   });
 
   // Windows: creating a symlink needs a privilege the CI runner lacks.
@@ -59,7 +59,7 @@ describe('tsdkLocation', () => {
         join('..', 'lib', 'node_modules', '@astrojs', 'language-server', 'bin', 'nodeServer.js'),
         join(root, 'bin', 'astro-ls'),
       );
-      expect(tsdkLocation(join(root, 'repo'), [join(root, 'bin', 'astro-ls')])).toBe(lib);
+      expect(tsdkLocation(join(root, 'repo'), [], [join(root, 'bin', 'astro-ls')])).toBe(lib);
     },
   );
 
@@ -70,7 +70,7 @@ describe('tsdkLocation', () => {
       join(bin, 'astro-ls.cmd'),
       '@node "%~dp0\\node_modules\\@astrojs\\language-server\\bin\\nodeServer.js" %*\n',
     );
-    expect(tsdkLocation(join(bin, 'repo'), [join(bin, 'astro-ls.cmd')])).toBe(lib);
+    expect(tsdkLocation(join(bin, 'repo'), [], [join(bin, 'astro-ls.cmd')])).toBe(lib);
   });
 
   it.skipIf(process.platform === 'win32')('reaches through the pnpm store nixpkgs lays out', () => {
@@ -102,7 +102,7 @@ describe('tsdkLocation', () => {
     symlinkSync(join(lib, '..'), join(pkg, 'node_modules', 'typescript'));
     mkdirSync(join(root, 'bin'));
     symlinkSync(join(pkg, 'bin', 'nodeServer.js'), join(root, 'bin', 'astro-ls'));
-    expect(tsdkLocation(join(root, 'repo'), [join(root, 'bin', 'astro-ls')])).toBe(lib);
+    expect(tsdkLocation(join(root, 'repo'), [], [join(root, 'bin', 'astro-ls')])).toBe(lib);
   });
 
   it('reaches a conda environment’s packages through a pixi trampoline', () => {
@@ -114,12 +114,28 @@ describe('tsdkLocation', () => {
     writeFileSync(join(root, 'bin', 'trampoline_configuration', 'astro-ls.json'), JSON.stringify({ exe: launcher }));
     // Nested under the server package, as the conda package lays it out.
     const nested = typescript(join(prefix, 'lib', 'node_modules', '@astrojs', 'language-server', 'node_modules'));
-    expect(tsdkLocation(join(root, 'repo'), [trampoline])).toBe(nested);
+    expect(tsdkLocation(join(root, 'repo'), [], [trampoline])).toBe(nested);
     // A TypeScript 7 there is passed over for one hoisted beside the package.
     const other = join(root, 'envs', 'other');
     typescript(join(other, 'lib', 'node_modules', '@astrojs', 'language-server', 'node_modules'), '7.0.2');
     const hoisted = typescript(join(other, 'lib', 'node_modules'));
-    expect(tsdkLocation(join(root, 'repo'), [executable(join(other, 'bin', 'astro-ls'))])).toBe(hoisted);
+    expect(tsdkLocation(join(root, 'repo'), [], [executable(join(other, 'bin', 'astro-ls'))])).toBe(hoisted);
+  });
+
+  it('finds a package’s TypeScript below the root from the diff’s files', () => {
+    const root = tmp();
+    const repo = join(root, 'repo');
+    const frontend = typescript(join(repo, 'frontend', 'node_modules'), '5.9.3');
+    const bin = join(root, 'bin');
+    const global = typescript(join(bin, 'node_modules'));
+    const server = [executable(join(bin, 'typescript-language-server'))];
+    expect(tsdkLocation(repo, ['frontend/src/app/main.ts', 'README.md'], server)).toBe(frontend);
+    // Files elsewhere in the repository reach no project of their own.
+    expect(tsdkLocation(repo, ['scripts/build.ts'], server)).toBe(global);
+    // With a TypeScript at the root too, the first file's project wins.
+    const top = typescript(join(repo, 'node_modules'));
+    expect(tsdkLocation(repo, ['scripts/build.ts', 'frontend/src/a.ts'], server)).toBe(top);
+    expect(tsdkLocation(repo, ['frontend/src/a.ts', 'scripts/build.ts'], server)).toBe(frontend);
   });
 
   it('passes over TypeScript 7 and over nothing at all', () => {
@@ -128,11 +144,15 @@ describe('tsdkLocation', () => {
     const bin = join(root, 'bin');
     typescript(join(bin, 'node_modules'), '7.0.2');
     expect(
-      tsdkLocation(join(root, 'repo'), [executable(join(bin, 'astro-ls')), null, join(bin, 'missing')]),
+      tsdkLocation(join(root, 'repo'), [], [executable(join(bin, 'astro-ls')), null, join(bin, 'missing')]),
     ).toBeNull();
     const other = typescript(join(bin, 'other', 'node_modules'));
     expect(
-      tsdkLocation(join(root, 'repo'), [executable(join(bin, 'astro-ls')), executable(join(bin, 'other', 'vtsls'))]),
+      tsdkLocation(
+        join(root, 'repo'),
+        [],
+        [executable(join(bin, 'astro-ls')), executable(join(bin, 'other', 'vtsls'))],
+      ),
     ).toBe(other);
   });
 });
@@ -149,6 +169,7 @@ describe('astro-ls takes its TypeScript at initialize', () => {
     expect(
       definitionOf('astro-ls --stdio').initializationOptions?.({
         root: join(root, 'repo'),
+        paths: [],
         lookup: found(['astro-ls']),
       }),
     ).toEqual({
@@ -162,12 +183,48 @@ describe('astro-ls takes its TypeScript at initialize', () => {
         : command.startsWith('vtsls')
           ? executable(join(root, 'elsewhere', 'vtsls'))
           : null;
-    expect(definitionOf('astro-ls --stdio').initializationOptions?.({ root: join(root, 'repo'), lookup })).toEqual({
+    expect(
+      definitionOf('astro-ls --stdio').initializationOptions?.({ root: join(root, 'repo'), paths: [], lookup }),
+    ).toEqual({
       typescript: { tsdk: elsewhere },
     });
     expect(
-      definitionOf('astro-ls --stdio').initializationOptions?.({ root: join(root, 'repo'), lookup: () => null }),
+      definitionOf('astro-ls --stdio').initializationOptions?.({
+        root: join(root, 'repo'),
+        paths: [],
+        lookup: () => null,
+      }),
     ).toBeUndefined();
     expect(definitionOf('vtsls --stdio').initializationOptions).toBeUndefined();
+  });
+});
+
+describe('the TypeScript servers take the project’s TypeScript', () => {
+  it('as tsserver.path for typescript-language-server and as the workspace tsdk for vtsls', async () => {
+    const root = tmp();
+    const lib = typescript(join(root, 'frontend', 'node_modules'));
+    const ctx = { root, paths: ['frontend/src/index.ts'], lookup: () => null };
+    expect(definitionOf('typescript-language-server --stdio').initializationOptions?.(ctx)).toEqual({
+      tsserver: { path: lib },
+    });
+    expect(await definitionOf('vtsls --stdio').settings?.(ctx)).toEqual({
+      typescript: { tsdk: lib },
+      vtsls: { autoUseWorkspaceTsdk: true },
+    });
+    const none = { ...ctx, paths: ['src/index.ts'] };
+    expect(definitionOf('typescript-language-server --stdio').initializationOptions?.(none)).toBeUndefined();
+    expect(await definitionOf('vtsls --stdio').settings?.(none)).toEqual({});
+  });
+
+  it('and the status names it, repository-relative, with its version', () => {
+    const root = tmp();
+    typescript(join(root, 'frontend', 'node_modules'), '5.9.3');
+    const ctx = { root, paths: ['frontend/src/index.ts'], lookup: () => null };
+    for (const command of ['typescript-language-server --stdio', 'vtsls --stdio', 'astro-ls --stdio'])
+      expect(definitionOf(command).projects?.(ctx)).toEqual({
+        label: 'TypeScript 5.9.3',
+        paths: ['frontend/node_modules/typescript'],
+      });
+    expect(definitionOf('vtsls --stdio').projects?.({ ...ctx, paths: [] })).toEqual({ label: 'TypeScript', paths: [] });
   });
 });

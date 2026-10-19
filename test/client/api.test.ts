@@ -32,7 +32,8 @@ describe('connectWs', () => {
   it('resyncs on every connection, so state changed while the socket was down is caught up', () => {
     const onMessage = vi.fn();
     const onOpen = vi.fn();
-    const stop = connectWs(onMessage, onOpen);
+    const onLost = vi.fn();
+    const stop = connectWs(onMessage, onOpen, onLost);
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0]!.url).toBe('ws://localhost:1/ws');
     // Nothing is fetched before the socket is subscribed: the first open is the boot.
@@ -43,16 +44,24 @@ describe('connectWs', () => {
     expect(onMessage).toHaveBeenLastCalledWith({ type: 'threads' });
 
     // The server goes away; the repository and comments change meanwhile; no push can arrive.
+    expect(onLost).not.toHaveBeenCalled();
     FakeWebSocket.instances[0]!.onclose?.();
+    expect(onLost).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(500);
     expect(FakeWebSocket.instances).toHaveLength(2);
-    FakeWebSocket.instances[1]!.onopen?.();
+    // A failed retry is the same outage, not a new one.
+    FakeWebSocket.instances[1]!.onclose?.();
+    vi.advanceTimersByTime(1000);
+    expect(FakeWebSocket.instances).toHaveLength(3);
+    expect(onLost).toHaveBeenCalledTimes(1);
+    FakeWebSocket.instances[2]!.onopen?.();
     expect(onOpen).toHaveBeenCalledTimes(2);
 
     // Stopping closes the socket without reconnecting.
     stop();
     vi.advanceTimersByTime(20_000);
-    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances).toHaveLength(3);
+    expect(onLost).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -80,7 +89,7 @@ describe('proxy paths', () => {
       `${base}api/threads/id%2Fwith%20slash`,
     ]);
     expect(fetch.mock.calls[2]![1]).toMatchObject({ method: 'DELETE' });
-    const stop = connectWs(vi.fn(), vi.fn());
+    const stop = connectWs(vi.fn(), vi.fn(), vi.fn());
     expect(FakeWebSocket.instances[0]!.url).toBe(socket);
     FakeWebSocket.instances[0]!.onclose?.();
     vi.advanceTimersByTime(500);
@@ -140,7 +149,7 @@ describe('api validation', () => {
 
   it('ignores valid JSON with invalid WebSocket message shapes', () => {
     const onMessage = vi.fn();
-    const stop = connectWs(onMessage, vi.fn());
+    const stop = connectWs(onMessage, vi.fn(), vi.fn());
     const ws = FakeWebSocket.instances[0]!;
     for (const msg of [
       null,

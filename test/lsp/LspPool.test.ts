@@ -1,9 +1,14 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import type { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LspUnavailableError } from '@/server/lsp/LspProcess.js';
 import { LspPool, type LspPoolOptions } from '@/server/lsp/LspPool.js';
 import type { LanguageId, LspStatus } from '@/shared/protocol.js';
+import { rmTmp } from '../tmp.js';
+import { flush } from './flush.js';
 
 /** A worktree snapshot changing `paths`. */
 const diff = (...paths: string[]) => ({
@@ -30,11 +35,14 @@ interface Started {
   statuses: LspStatus[];
   /** Document events per command, as the fake logs them: `open a.py v1`. */
   events: Map<string, string[]>;
+  /** Waits until every fake has logged the document events sent so far. */
+  settle: () => Promise<void>;
 }
 
 function start(overrides: Partial<Record<LanguageId, string>>, extra: Partial<LspPoolOptions> = {}): Started {
   const statuses: LspStatus[] = [];
   const events = new Map<string, string[]>();
+  const children: { stdin: Writable; log: string[] }[] = [];
   const pool = new LspPool({
     root: ROOT,
     overrides,
@@ -51,25 +59,26 @@ function start(overrides: Partial<Record<LanguageId, string>>, extra: Partial<Ls
         env: { ...process.env, FAKE_LSP_ROOT: ROOT },
       });
       child.stderr.on('data', (d: Buffer) => log.push(...d.toString().split('\n').filter(Boolean)));
+      children.push({ stdin: child.stdin, log });
       return child;
     },
     ...extra,
   });
   pools.push(pool);
-  return { pool, statuses, events };
+  const settle = () => Promise.all(children.map((c) => flush(c, c.log))).then(() => {});
+  return { pool, statuses, events, settle };
 }
 
 const pools: LspPool[] = [];
+const tmps: string[] = [];
 afterEach(async () => {
   await Promise.all(pools.splice(0).map((p) => p.close()));
+  await Promise.all(tmps.splice(0).map(rmTmp));
 });
-
-/** Notifications have no reply; let the fakes' stderr catch up. */
-const settle = () => new Promise((r) => setTimeout(r, 50));
 
 describe('LspPool', () => {
   it('starts a server per language in the diff and opens each file in its own', async () => {
-    const { pool, events } = start({ python: 'py-server', go: 'go-server' });
+    const { pool, events, settle } = start({ python: 'py-server', go: 'go-server' });
     expect(events.size).toBe(0);
     await pool.track(diff('a.py', 'b.go', 'c.txt'));
     await settle();
@@ -97,7 +106,7 @@ describe('LspPool', () => {
   });
 
   it('reports every server and every unserved language as one status', async () => {
-    const { pool, statuses } = start({ python: 'py-server', rust: '' });
+    const { pool, statuses, settle } = start({ python: 'py-server', rust: '' });
     await pool.track(diff('a.py', 'main.rs', 'b.go'));
     await settle();
     const status = pool.status();
@@ -129,7 +138,7 @@ describe('LspPool', () => {
   });
 
   it('hands a language that arrives later to the process already running its command', async () => {
-    const { pool, events } = start({ c: 'clangd-ish', cpp: 'clangd-ish' });
+    const { pool, events, settle } = start({ c: 'clangd-ish', cpp: 'clangd-ish' });
     await pool.track(diff('x.c'));
     await pool.track(diff('x.c', 'y.cpp'));
     await settle();
@@ -141,7 +150,7 @@ describe('LspPool', () => {
   });
 
   it('asks every server for workspace symbols and keeps a server whose language left the diff', async () => {
-    const { pool, events } = start({ python: 'py-server', go: 'go-server' });
+    const { pool, events, settle } = start({ python: 'py-server', go: 'go-server' });
     await pool.track(diff('a.py', 'b.go'));
     const { symbols } = await pool.workspaceSymbols('q');
     expect(symbols.map((s) => s.name)).toEqual(['q_sym', 'q_sym']);
@@ -157,6 +166,41 @@ describe('LspPool', () => {
     expect([...events.keys()]).toEqual(['py-server']);
     expect(pool.status().servers.map((s) => s.state)).toEqual(['starting']);
     expect((await pool.hover({ path: 'a.py', line: 2, col: 4 })).contents).toContain('def f()');
+  });
+
+  it('names rust-analyzer the Cargo workspaces the diff reaches, again as it reaches more', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'diffle-pool-')));
+    tmps.push(root);
+    for (const [path, text] of [
+      ['Cargo.toml', '[workspace]\nmembers = ["crates/*"]\n'],
+      ['crates/a/Cargo.toml', '[package]\nname = "a"\n'],
+      ['py-rattler/Cargo.toml', '[package]\nname = "py-rattler"\n[workspace]\n'],
+    ]) {
+      mkdirSync(dirname(join(root, path!)), { recursive: true });
+      writeFileSync(join(root, path!), text!);
+    }
+    const { pool, events, statuses } = start(
+      { rust: 'rust-analyzer' },
+      { root, read: async () => 'fn main() {}\n', has: async () => true },
+    );
+    const shown = () => statuses.at(-1)?.servers[0]?.projects;
+    const linked = (...manifests: string[]) => ({ linkedProjects: manifests.map((m) => join(root, m)) });
+    const configs = () => events.get('rust-analyzer')?.filter((l) => l.startsWith('config '));
+    await pool.track(diff('crates/a/src/lib.rs'));
+    await expect.poll(configs).toEqual([`config ${JSON.stringify({ 'rust-analyzer': linked('Cargo.toml') })}`]);
+    expect(events.get('rust-analyzer')).toContain(`init ${JSON.stringify(linked('Cargo.toml'))}`);
+    expect(pool.status().servers[0]?.projects).toEqual({ label: 'Cargo workspaces', paths: ['Cargo.toml'] });
+    // Another file of a workspace already named changes nothing; one of a new workspace reloads.
+    await pool.track(diff('crates/a/src/lib.rs', 'crates/a/src/main.rs'));
+    await pool.track(diff('py-rattler/src/lib.rs'));
+    await expect
+      .poll(configs)
+      .toEqual([
+        `config ${JSON.stringify({ 'rust-analyzer': linked('Cargo.toml') })}`,
+        `config ${JSON.stringify({ 'rust-analyzer': linked('Cargo.toml', 'py-rattler/Cargo.toml') })}`,
+      ]);
+    // The status follows, and reaches the client as one.
+    await expect.poll(shown).toEqual({ label: 'Cargo workspaces', paths: ['Cargo.toml', 'py-rattler/Cargo.toml'] });
   });
 
   describe('a server joining languages beside their owner', () => {
@@ -238,7 +282,7 @@ describe('LspPool', () => {
   });
 
   it('tracks nothing when the new side is not the checkout', async () => {
-    const { pool, events } = start({ python: 'py-server' });
+    const { pool, events, settle } = start({ python: 'py-server' });
     await pool.track({ ...diff('a.py'), newSha: 'abc123', headSha: 'def456' });
     await settle();
     expect(events.size).toBe(0);

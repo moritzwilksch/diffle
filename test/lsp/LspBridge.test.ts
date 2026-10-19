@@ -7,6 +7,7 @@ import type { LspSettings } from '@/server/lsp/configuration.js';
 import { LspBridge } from '@/server/lsp/LspBridge.js';
 import { LspUnavailableError } from '@/server/lsp/LspProcess.js';
 import type { LspProcessStatus } from '@/shared/protocol.js';
+import { flush } from './flush.js';
 
 const ROOT = '/repo';
 const FAKE = join(import.meta.dirname, 'fake-lsp.mjs');
@@ -22,6 +23,7 @@ const files: Record<string, string> = {
 function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, initializationOptions?: LspSettings) {
   let notify: (method: string, params: unknown) => void;
   let request: (method: string, params: unknown) => void;
+  let logged: () => Promise<void>;
   const statuses: LspProcessStatus[] = [];
   /** Document events the fake server logged: `open a.py v1`, `change a.py v2`, `close a.py`. */
   const events: string[] = [];
@@ -53,6 +55,7 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, 
       };
       notify = (method, params) => tell('notification', method, params);
       request = (method, params) => tell('request', method, params);
+      logged = () => flush(child, events);
       child.stderr.on('data', (d: Buffer) => events.push(...d.toString().split('\n').filter(Boolean)));
       return child;
     },
@@ -64,11 +67,10 @@ function start(env: Record<string, string> = {}, root = ROOT, maxOpen?: number, 
     reads,
     notify: (method: string, params: unknown) => notify(method, params),
     request: (method: string, params: unknown) => request(method, params),
+    /** Waits until the fake has logged every document event sent so far. */
+    settle: () => logged(),
   };
 }
-
-/** Notifications have no reply; let the fake's stderr catch up. */
-const settle = () => new Promise((r) => setTimeout(r, 50));
 
 const tmpdirs: string[] = [];
 afterEach(() => {
@@ -219,7 +221,7 @@ describe('LspBridge', () => {
   });
 
   it('tracks the snapshot: opens its files, re-syncs changed text, closes files that left, skips unreadable ones', async () => {
-    const { bridge, events } = start();
+    const { bridge, events, settle } = start();
     files['a.py'] = 'import os\ndef f():\n    pass\n';
     await bridge.track(['a.py', 'other.py', 'gone.py']);
     await settle();
@@ -239,7 +241,7 @@ describe('LspBridge', () => {
   });
 
   it('a track pass and a query racing on one file open it once', async () => {
-    const { bridge, events } = start();
+    const { bridge, events, settle } = start();
     await Promise.all([bridge.track(['a.py']), bridge.definition({ path: 'a.py', line: 1, col: 0 })]);
     await settle();
     expect(events).toEqual(['open a.py v1']);
@@ -247,7 +249,7 @@ describe('LspBridge', () => {
   });
 
   it('closes the least recently used untracked documents past the cap and never a tracked one', async () => {
-    const { bridge, events } = start({}, ROOT, 2);
+    const { bridge, events, settle } = start({}, ROOT, 2);
     await bridge.track(['a.py']);
     for (const p of ['x.py', 'y.py', 'z.py']) await bridge.documentSymbols(p);
     await settle();
@@ -268,7 +270,7 @@ describe('LspBridge', () => {
   });
 
   it('tracks concurrent standard progress and keeps documents synced until all work finishes', async () => {
-    const { bridge, notify, events } = start();
+    const { bridge, notify, events, settle } = start();
     const pos = { path: 'a.py', line: 3, col: 4 };
     try {
       await bridge.track(['a.py']);
@@ -310,7 +312,8 @@ describe('LspBridge', () => {
         expect(await bridge.hover({ path: 'a.py', line: 1, col: 0 })).toEqual({ contents: null });
         notify(method, { type: 3, message: 'An unrelated info message' });
         notify('$/progress', { token: 2, value: [1, 2, 3] });
-        await settle();
+        // A reply follows the notifications the fake sent before it, on the same stream.
+        await bridge.hover({ path: 'a.py', line: 1, col: 0 });
         expect(bridge.status().notice?.severity).toBe('error');
         expect(bridge.status().activity).toBeUndefined();
       } finally {
