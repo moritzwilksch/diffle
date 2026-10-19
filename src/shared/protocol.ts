@@ -555,8 +555,8 @@ export const UserConfigSchema = z.object({
   lspCommands: z.partialRecord(LanguageIdSchema, z.string()),
   /**
    * GitHub Enterprise hosts: the host in remote urls → the host serving the web UI and API, the
-   * same one for most. github.com needs no entry. Read-only over HTTP; set with
-   * `diffle config set-github-host`.
+   * same one for most. github.com needs no entry. Read-only over HTTP; set by editing the
+   * config file.
    */
   githubHosts: z.record(z.string(), z.string()),
 });

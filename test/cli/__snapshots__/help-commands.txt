@@ -42,16 +42,14 @@ Usage: diffle config [options] [command]
 show or edit the user config (same settings as the UI dialog)
 
 Options:
-  -h, --help                             display help for command
+  -h, --help                    display help for command
 
 Commands:
-  show                                   print the config file path and contents
-  add-auto-viewed <glob...>              add patterns for files that start viewed
-  set-context <n>                        set context lines around changes
-  set-follow-refs <mode>                 follow moved refs: on, auto (not branches), off
-  set-lsp <language> <command>           set the language-server command for one language
-  unset-lsp <language...>                forget a language-server override, back to PATH
-  set-github-host <git-host> [web-host]  treat a GitHub Enterprise host as GitHub
-  unset-github-host <git-host...>        forget GitHub Enterprise hosts
-  remove-auto-viewed <glob...>           remove patterns for files that start viewed
-  help [command]                         display help for command
+  show                          print the config file path and contents
+  add-auto-viewed <glob...>     add patterns for files that start viewed
+  set-context <n>               set context lines around changes
+  set-follow-refs <mode>        follow moved refs: on, auto (not branches), off
+  set-lsp <language> <command>  set the language-server command for one language
+  unset-lsp <language...>       forget a language-server override, back to PATH
+  remove-auto-viewed <glob...>  remove patterns for files that start viewed
+  help [command]                display help for command

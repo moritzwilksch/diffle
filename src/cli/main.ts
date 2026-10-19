@@ -260,28 +260,6 @@ config
     printLspCommands(store.get());
   });
 config
-  .command('set-github-host')
-  .description('treat a GitHub Enterprise host as GitHub')
-  .argument('<git-host>', 'host in remote urls, e.g. github.work.com')
-  .argument('[web-host]', 'host serving the web UI and API, when it differs from <git-host>')
-  .action(async (gitHost: string, webHost: string | undefined) => {
-    const store = await UserConfigStore.open();
-    await store.set({ githubHosts: { ...store.get().githubHosts, [gitHost.toLowerCase()]: webHost ?? gitHost } });
-    printGithubHosts(store.get());
-  });
-config
-  .command('unset-github-host')
-  .description('forget GitHub Enterprise hosts')
-  .argument('<git-host...>')
-  .action(async (gitHosts: string[]) => {
-    const store = await UserConfigStore.open();
-    const drop = new Set(gitHosts.map((h) => h.toLowerCase()));
-    await store.set({
-      githubHosts: Object.fromEntries(Object.entries(store.get().githubHosts).filter(([h]) => !drop.has(h))),
-    });
-    printGithubHosts(store.get());
-  });
-config
   .command('remove-auto-viewed')
   .description('remove patterns for files that start viewed')
   .argument('<glob...>')
@@ -328,10 +306,6 @@ function languageArgument(name: string, description: string): Argument {
 
 function printLspCommands(config: UserConfig): void {
   for (const [language, command] of Object.entries(config.lspCommands)) console.log(`${language}=${command}`);
-}
-
-function printGithubHosts(config: UserConfig): void {
-  for (const [git, web] of Object.entries(config.githubHosts)) console.log(git === web ? git : `${git} → ${web}`);
 }
 
 async function run(req: EntryRequest, opts: GlobalOpts): Promise<void> {

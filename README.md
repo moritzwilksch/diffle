@@ -110,12 +110,17 @@ diffle takes the token from `GITHUB_TOKEN`, then `GH_TOKEN`, then a signed-in
 [`gh`](https://cli.github.com/). Without one, everything except GitHub still works.
 `GITHUB_API_URL` points diffle at another GitHub API, as in Actions.
 
-For GitHub Enterprise Server, name its host once; a second argument gives the web host when
-remote URLs use another one, as an SSH-only host might:
+For GitHub Enterprise Server, add its host to `githubHosts` in the config file (`diffle config`
+prints its path). Each entry maps the host in remote URLs to the host serving the web UI and
+API, the same one unless remotes use another, as an SSH-only host might:
 
-```sh
-diffle config set-github-host github.work.com
-diffle config set-github-host ssh.work.com github.work.com
+```json
+{
+  "githubHosts": {
+    "github.work.com": "github.work.com",
+    "ssh.work.com": "github.work.com"
+  }
+}
 ```
 
 A run talks to one GitHub: the pull request URL's, else origin's, else the one all GitHub
