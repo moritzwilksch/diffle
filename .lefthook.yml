@@ -4,9 +4,9 @@ pre-commit:
   fail_on_changes: ci
   jobs:
     - name: format
-      run: npm run format -- {staged_files}
+      run: npm run format -- --no-error-on-unmatched-pattern {staged_files}
     - name: lint
-      run: npm run lint -- {staged_files}
+      run: npm run lint -- --no-error-on-unmatched-pattern {staged_files}
     - name: typecheck
       run: npm run typecheck
     - name: quality-gate
