@@ -4,7 +4,8 @@ import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '@/server/comments/format.js';
 import { GitError, GitRepo } from '@/server/git/GitRepo.js';
-import { createGithubClient, type GithubClient, GithubError, resolveToken } from '@/server/github/client.js';
+import { createGithubClient, GithubError, resolveToken, tokenVariables } from '@/server/github/client.js';
+import { apiBaseUrl, chooseInstance, type Github } from '@/server/github/hosts.js';
 import { LspPool } from '@/server/lsp/LspPool.js';
 import { resolveServers } from '@/server/lsp/registry.js';
 import { RevspecError } from '@/server/mode/revspec.js';
@@ -259,6 +260,28 @@ config
     printLspCommands(store.get());
   });
 config
+  .command('set-github-host')
+  .description('treat a GitHub Enterprise host as GitHub')
+  .argument('<git-host>', 'host in remote urls, e.g. github.work.com')
+  .argument('[web-host]', 'host serving the web UI and API, when it differs from <git-host>')
+  .action(async (gitHost: string, webHost: string | undefined) => {
+    const store = await UserConfigStore.open();
+    await store.set({ githubHosts: { ...store.get().githubHosts, [gitHost.toLowerCase()]: webHost ?? gitHost } });
+    printGithubHosts(store.get());
+  });
+config
+  .command('unset-github-host')
+  .description('forget GitHub Enterprise hosts')
+  .argument('<git-host...>')
+  .action(async (gitHosts: string[]) => {
+    const store = await UserConfigStore.open();
+    const drop = new Set(gitHosts.map((h) => h.toLowerCase()));
+    await store.set({
+      githubHosts: Object.fromEntries(Object.entries(store.get().githubHosts).filter(([h]) => !drop.has(h))),
+    });
+    printGithubHosts(store.get());
+  });
+config
   .command('remove-auto-viewed')
   .description('remove patterns for files that start viewed')
   .argument('<glob...>')
@@ -307,6 +330,10 @@ function printLspCommands(config: UserConfig): void {
   for (const [language, command] of Object.entries(config.lspCommands)) console.log(`${language}=${command}`);
 }
 
+function printGithubHosts(config: UserConfig): void {
+  for (const [git, web] of Object.entries(config.githubHosts)) console.log(git === web ? git : `${git} → ${web}`);
+}
+
 async function run(req: EntryRequest, opts: GlobalOpts): Promise<void> {
   const timing = new Timing(opts.timing);
   // A signal during cloning must let git settle before removing its destination.
@@ -318,16 +345,16 @@ async function run(req: EntryRequest, opts: GlobalOpts): Promise<void> {
   process.on('SIGTERM', interrupt);
   let review: Awaited<ReturnType<typeof openReviewRepository>> | undefined;
   try {
-    const github = await connectGithub();
-    timing.mark('github token');
-    review = await openReviewRepository(req, opts.C ?? process.cwd(), github.client);
-    timing.mark('open repository');
     const config = await UserConfigStore.open();
+    review = await openReviewRepository(req, opts.C ?? process.cwd(), (local) =>
+      connectGithub(config.get().githubHosts, local, req.kind === 'pr' ? req.pr : undefined),
+    );
+    timing.mark('open repository');
     if (interrupted) {
       await review.close();
       return;
     }
-    await serve(req, opts, review.repo, review.close, config, github, timing);
+    await serve(req, opts, review.repo, review.close, config, review.github, timing);
   } catch (e) {
     await review?.close();
     throw e;
@@ -351,7 +378,7 @@ async function serve(
     watch: opts.watch,
     context: opts.context ?? config.get().contextLines,
     followRefs: config.get().followRefs,
-    github: github.client ?? undefined,
+    github,
   });
   // A `--lsp` override outranks the config and starts its server whatever the diff holds.
   const named = Array.isArray(opts.lsp) ? opts.lsp : [];
@@ -425,8 +452,13 @@ async function serve(
     }
     console.error(`🚀 diffle running at ${c.cyan(url.href)}`);
     console.error(`📂 ${c.dim('repo')} ${repo.root}`);
-    if (github.client) console.error(`🐙 ${c.dim('github')} ${c.dim(`token from ${github.source}`)}`);
-    else console.error(`🐙 ${c.dim('github')} ${c.dim('off: no token in GITHUB_TOKEN, GH_TOKEN or gh auth token')}`);
+    const { host } = github.instance;
+    const label = c.dim(host === 'github.com' ? 'github' : `github ${host}`);
+    if (github.client) console.error(`🐙 ${label} ${c.dim(`token from ${github.source}`)}`);
+    else
+      console.error(
+        `🐙 ${label} ${c.dim(`off: no token in ${tokenVariables(host).join(', ')} or gh auth token --hostname ${host}`)}`,
+      );
 
     const snap = await session.start(review);
     timing.mark('snapshot');
@@ -461,16 +493,25 @@ async function serve(
   }
 }
 
-interface ConnectedGithub {
-  client: GithubClient | null;
+interface ConnectedGithub extends Github {
   source?: string;
 }
 
-/** One token lookup per run; without one, GitHub features are off rather than failing later. */
-async function connectGithub(): Promise<ConnectedGithub> {
-  const found = await resolveToken();
-  if (!found) return { client: null };
-  return { client: createGithubClient(found.token), source: found.source };
+/** One GitHub and one token lookup per run; without a token, GitHub features are off rather than failing later. */
+async function connectGithub(
+  githubHosts: Record<string, string>,
+  local: GitRepo | null,
+  prSelector: string | undefined,
+): Promise<ConnectedGithub> {
+  const instance = await chooseInstance(githubHosts, local, prSelector);
+  const found = await resolveToken(instance.host);
+  if (!found) return { instance };
+  return {
+    instance,
+    // GITHUB_API_URL, as Actions sets it, names the API of the run's GitHub outright.
+    client: createGithubClient(found.token, { baseUrl: process.env.GITHUB_API_URL || apiBaseUrl(instance) }),
+    source: found.source,
+  };
 }
 
 /**

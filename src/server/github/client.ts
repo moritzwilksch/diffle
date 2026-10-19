@@ -12,8 +12,11 @@ export class GithubError extends Error {
   }
 }
 
-/** Said wherever a GitHub feature is asked for without a token. */
-export const NO_TOKEN = 'No GitHub token: set GITHUB_TOKEN or sign in with gh auth login';
+/** Said wherever a GitHub feature is asked for without a token for `host`. */
+export function noToken(host: string): string {
+  const login = host === 'github.com' ? 'gh auth login' : `gh auth login --hostname ${host}`;
+  return `No GitHub token for ${host}: set ${tokenVariables(host)[0]} or sign in with ${login}`;
+}
 
 /**
  * Every GitHub request diffle makes. The test seam: a fake answers queries by shape, nothing
@@ -25,29 +28,41 @@ export interface GithubClient {
 }
 
 /** Where a token came from, for the startup line. */
-export type TokenSource = 'GITHUB_TOKEN' | 'GH_TOKEN' | 'gh auth token';
+export type TokenSource = (typeof TOKEN_VARIABLES)[keyof typeof TOKEN_VARIABLES][number] | 'gh auth token';
+
+/** gh's own split: GitHub Enterprise Server tokens live apart from github.com and GHE.com ones. */
+const TOKEN_VARIABLES = {
+  cloud: ['GITHUB_TOKEN', 'GH_TOKEN'],
+  server: ['GITHUB_ENTERPRISE_TOKEN', 'GH_ENTERPRISE_TOKEN'],
+} as const;
+
+/** The environment variables holding a token for `host`, in the order diffle reads them. */
+export function tokenVariables(host: string): readonly TokenSource[] {
+  return host === 'github.com' || host.endsWith('.ghe.com') ? TOKEN_VARIABLES.cloud : TOKEN_VARIABLES.server;
+}
 
 /**
- * `GITHUB_TOKEN`, then `GH_TOKEN`, then the token `gh` holds. Null when none of them has
- * one: diffle then runs without GitHub, the origin repository still shows and everything
- * else says why it is off.
+ * The token for `host`: its environment variables (see `tokenVariables`), then the one `gh`
+ * holds for it. Null when none has one: diffle then runs without GitHub, the origin
+ * repository still shows and everything else says why it is off.
  */
 export async function resolveToken(
+  host: string,
   env: NodeJS.ProcessEnv = process.env,
-  ghToken: () => Promise<string | null> = ghAuthToken,
+  ghToken: (host: string) => Promise<string | null> = ghAuthToken,
 ): Promise<{ token: string; source: TokenSource } | null> {
-  for (const source of ['GITHUB_TOKEN', 'GH_TOKEN'] as const) {
+  for (const source of tokenVariables(host)) {
     const token = env[source]?.trim();
     if (token) return { token, source };
   }
-  const token = await ghToken();
+  const token = await ghToken(host);
   return token ? { token, source: 'gh auth token' } : null;
 }
 
-/** The only `gh` left: its stored token, or null when gh is missing, signed out, or slow. */
-export function ghAuthToken(): Promise<string | null> {
+/** The only `gh` left: its stored token for `host`, or null when gh is missing, signed out, or slow. */
+export function ghAuthToken(host: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile('gh', ['auth', 'token'], { timeout: 5000, windowsHide: true }, (err, stdout) => {
+    execFile('gh', ['auth', 'token', '--hostname', host], { timeout: 5000, windowsHide: true }, (err, stdout) => {
       const token = stdout?.trim();
       resolve(!err && token ? token : null);
     });
@@ -55,7 +70,7 @@ export function ghAuthToken(): Promise<string | null> {
 }
 
 export interface ClientOptions {
-  /** REST root; the GraphQL endpoint is `/graphql` under it. `GITHUB_API_URL` (as Actions sets it), else github.com. */
+  /** REST root (see `apiBaseUrl`); Octokit derives the GraphQL endpoint from it. Default github.com. */
   baseUrl?: string;
   /** Replaces the global fetch. Test seam. */
   fetch?: typeof fetch;
@@ -65,7 +80,7 @@ export interface ClientOptions {
 export function createGithubClient(token: string, { baseUrl, fetch: customFetch }: ClientOptions = {}): GithubClient {
   const octokit = new Octokit({
     auth: token,
-    baseUrl: baseUrl || process.env.GITHUB_API_URL || undefined,
+    baseUrl,
     userAgent: `diffle/${pkg.version}`,
     request: customFetch ? { fetch: customFetch } : {},
   });

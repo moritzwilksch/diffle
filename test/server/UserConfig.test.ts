@@ -59,4 +59,12 @@ describe('UserConfigStore', () => {
     await store.set({ contextLines: 3 });
     expect(JSON.parse(await readFile(file, 'utf8'))).not.toHaveProperty('lspCommand');
   });
+
+  it('lowercases GitHub hosts and drops an entry with no web host', async () => {
+    const file = join(dir, 'config.json');
+    await writeFile(file, JSON.stringify({ githubHosts: { ' SSH.Work.com ': 'GitHub.work.com', 'a.com': ' ', b: 3 } }));
+    expect((await UserConfigStore.open(file)).get().githubHosts).toEqual({ 'ssh.work.com': 'github.work.com' });
+    await writeFile(file, JSON.stringify({ githubHosts: 'github.work.com' }));
+    expect((await UserConfigStore.open(file)).get().githubHosts).toEqual({});
+  });
 });

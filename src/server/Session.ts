@@ -21,7 +21,8 @@ import { CommentStore, type AnchorSource } from './comments/CommentStore.js';
 import { shownRanges } from './comments/hunks.js';
 import type { GitRepo } from './git/GitRepo.js';
 import { discoverGithub } from './github/metadata.js';
-import { type GithubClient, GithubError, NO_TOKEN } from './github/client.js';
+import { GithubError, noToken } from './github/client.js';
+import { type Github, TOKENLESS_GITHUB_COM } from './github/hosts.js';
 import { GithubExporter } from './github/review.js';
 import { IterationStore } from './iterations.js';
 import { namesBranch, rangeDiffReview, resolveComparison, type ResolvedReview, resolveReview } from './mode/resolve.js';
@@ -56,8 +57,8 @@ interface Active {
 
 export interface SessionOptions {
   watch: boolean;
-  /** Absent: no token, so pull request lookup and export are off. */
-  github?: GithubClient;
+  /** Where GitHub is, default github.com; without a client (no token), pull request lookup and export are off. */
+  github?: Github;
   /** Context lines for patches: `--context`, else the user config. Changed at runtime via setContext(). */
   context: number;
   /** What a review between refs does when one moves. The user config; setFollowRefs() changes it. */
@@ -106,6 +107,10 @@ export class Session {
     this.readyPromise.catch(() => {});
   }
 
+  private get gh(): Github {
+    return this.opts.github ?? TOKENLESS_GITHUB_COM;
+  }
+
   ready(): Promise<void> {
     return this.readyPromise;
   }
@@ -148,7 +153,7 @@ export class Session {
     if (snap.mode !== active.mode) return Promise.reject(new GithubError('Comparison changed; try again'));
     const cached = active.github;
     if (cached?.snapshot === snap && cached.expires > Date.now()) return cached.promise;
-    const promise = discoverGithub(this.repo, snap, { github: this.opts.github, prUrl: active.prUrl });
+    const promise = discoverGithub(this.repo, snap, { github: this.gh, prUrl: active.prUrl });
     const entry = { snapshot: snap, expires: Date.now() + 30_000, promise };
     active.github = entry;
     void promise.catch(() => {
@@ -163,9 +168,9 @@ export class Session {
       const active = this.require();
       const snap = await active.snapshotter.current();
       if (active !== this.active) throw new GithubError('Comparison changed; try again');
-      const github = this.opts.github;
-      if (!github) throw new GithubError(NO_TOKEN);
-      const metadata = await discoverGithub(this.repo, snap, { github, prUrl: active.prUrl });
+      const github = this.gh.client;
+      if (!github) throw new GithubError(noToken(this.gh.instance.host));
+      const metadata = await discoverGithub(this.repo, snap, { github: this.gh, prUrl: active.prUrl });
       if (!metadata.pullRequest || metadata.reason !== null)
         throw new GithubError(metadata.reason ?? 'No matching pull request');
       if (active !== this.active || snap !== (await active.snapshotter.current()))
@@ -214,7 +219,7 @@ export class Session {
    * invalid input before serving. Queued, so `close()` waits for a PR fetch.
    */
   resolve(req: EntryRequest): Promise<ResolvedReview> {
-    return this.run(() => resolveReview(req, this.repo, this.opts.github));
+    return this.run(() => resolveReview(req, this.repo, this.gh));
   }
 
   /** First mode, from `resolve`. Rejects `ready()` on failure so early requests error out. */
@@ -239,7 +244,7 @@ export class Session {
             ? await this.interdiff(req.from, req.to)
             : req.kind === 'pair'
               ? await this.pair(req.commit)
-              : await resolveReview(req, this.repo, this.opts.github),
+              : await resolveReview(req, this.repo, this.gh),
       ),
     );
     this.hub.broadcast({ type: 'snapshot', version: snap.version });
@@ -475,7 +480,9 @@ export class Session {
     const a = this.require();
     const inter = a.mode.interdiff;
     if (inter && !shownIterations(a.mode))
-      return rangeDiffReview(this.repo, [inter.from, inter.to], a.prUrl).then((review) => this.enter(review));
+      return rangeDiffReview(this.repo, [inter.from, inter.to], this.gh.instance, a.prUrl).then((review) =>
+        this.enter(review),
+      );
     a.snapshotter.invalidate(++this.version);
     return this.publish(a);
   }

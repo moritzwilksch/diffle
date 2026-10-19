@@ -2,35 +2,27 @@ import { z } from 'zod';
 import { type GithubPullRequest, GithubPullRequestSchema } from '@/shared/protocol.js';
 import type { GitRepo } from '@/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from './client.js';
-
-/** GitHub.com identity from a configured HTTPS, SSH, or scp-style remote URL. */
-export function githubRepository(url: string): string | null {
-  const match =
-    /^(?:https?:\/\/github\.com\/|ssh:\/\/(?:[^/@]+@)?github\.com(?::\d+)?\/|(?:[^/@]+@)?github\.com:)([^/]+)\/([^/]+?)\/?$/i.exec(
-      url,
-    );
-  return match ? `${match[1]}/${match[2]!.replace(/\.git$/i, '')}` : null;
-}
+import { type GithubInstance, githubRepository } from './hosts.js';
 
 /** Local-only origin identity; works without a token or a network connection. */
-export async function originRepository(repo: GitRepo): Promise<string | null> {
+export async function originRepository(repo: GitRepo, instance: GithubInstance): Promise<string | null> {
   const origin = (await repo.remotes()).find((r) => r.name === 'origin');
-  return origin ? githubRepository(origin.url) : null;
+  return origin ? githubRepository(origin.url, instance) : null;
 }
 
 /**
  * The GitHub repository pull requests are looked up in: `origin`, or the only GitHub remote
  * when origin is not one. Any other layout has to name the pull request by url.
  */
-async function baseRepository(repo: GitRepo | null): Promise<string> {
+async function baseRepository(repo: GitRepo | null, instance: GithubInstance): Promise<string> {
   if (!repo) throw new GithubError('not in a git repository; name the pull request by url', 400);
   const remotes = (await repo.remotes()).flatMap((r) => {
-    const repository = githubRepository(r.url);
+    const repository = githubRepository(r.url, instance);
     return repository ? [{ name: r.name, repository }] : [];
   });
   const base = remotes.find((r) => r.name === 'origin') ?? (remotes.length === 1 ? remotes[0] : undefined);
   if (!base) {
-    const detail = remotes.length ? `${remotes.length} GitHub remotes and no origin` : 'no GitHub remote';
+    const detail = remotes.length ? `${remotes.length} GitHub remotes and no origin` : `no remote on ${instance.host}`;
     throw new GithubError(`${detail}; name the pull request by url`, 400);
   }
   return base.repository;
@@ -43,15 +35,15 @@ export function repoOfPrUrl(url: string): { owner: string; repo: string } {
   return { owner: parsed.owner, repo: parsed.repo };
 }
 
-function parsePrUrl(url: string): { owner: string; repo: string; number: number } | null {
-  let pathname: string;
+function parsePrUrl(url: string): { host: string; owner: string; repo: string; number: number } | null {
+  let parsed: URL;
   try {
-    pathname = new URL(url).pathname;
+    parsed = new URL(url);
   } catch {
     return null;
   }
-  const m = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/.exec(pathname);
-  return m ? { owner: m[1]!, repo: m[2]!, number: Number(m[3]) } : null;
+  const m = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/.exec(parsed.pathname);
+  return m ? { host: parsed.host.toLowerCase(), owner: m[1]!, repo: m[2]!, number: Number(m[3]) } : null;
 }
 
 /** A pull request as GitHub reports it, plus the base repository derived from its URL. */
@@ -84,6 +76,7 @@ export async function viewPr(
   selector: string | undefined,
   repo: GitRepo | null,
   github: GithubClient,
+  instance: GithubInstance,
   timeoutMs?: number,
 ): Promise<PullRequest> {
   if (selector == null) {
@@ -94,8 +87,8 @@ export async function viewPr(
     const upstream = await repo.upstreamBranch('HEAD');
     const remotes = await repo.remotes();
     const remoteUrl = upstream && remotes.find((r) => r.name === upstream.remote)?.url;
-    const headRepo = remoteUrl ? githubRepository(remoteUrl) : null;
-    return byHead(github, await baseRepository(repo), upstream?.branch ?? ref.slice('refs/heads/'.length), {
+    const headRepo = remoteUrl ? githubRepository(remoteUrl, instance) : null;
+    return byHead(github, await baseRepository(repo, instance), upstream?.branch ?? ref.slice('refs/heads/'.length), {
       owner: headRepo?.split('/')[0],
       timeoutMs,
     });
@@ -103,13 +96,15 @@ export async function viewPr(
   const s = selector.trim();
   if (s.startsWith('-')) throw new GithubError(`not a pull request: ${selector}`, 400);
   const url = /^https?:\/\//.test(s) ? parsePrUrl(s) : null;
+  if (url && !instance.gitHosts.includes(url.host))
+    throw new GithubError(`${selector} is on ${url.host}, but diffle is talking to ${instance.host}`, 400);
   if (url) return byNumber(github, `${url.owner}/${url.repo}`, url.number, timeoutMs);
   if (/^https?:\/\//.test(s)) throw new GithubError(`not a pull request url: ${selector}`, 400);
   const num = /^#?(\d+)$/.exec(s);
-  if (num) return byNumber(github, await baseRepository(repo), Number(num[1]), timeoutMs);
+  if (num) return byNumber(github, await baseRepository(repo, instance), Number(num[1]), timeoutMs);
   const colon = s.indexOf(':');
   const owner = colon > 0 ? s.slice(0, colon) : undefined;
-  return byHead(github, await baseRepository(repo), colon > 0 ? s.slice(colon + 1) : s, { owner, timeoutMs });
+  return byHead(github, await baseRepository(repo, instance), colon > 0 ? s.slice(colon + 1) : s, { owner, timeoutMs });
 }
 
 async function byNumber(github: GithubClient, repository: string, number: number, timeoutMs?: number) {

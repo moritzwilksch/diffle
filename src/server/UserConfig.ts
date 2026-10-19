@@ -67,7 +67,7 @@ function normalize(c: Partial<UserConfig>): UserConfig {
       : DEFAULT_USER_CONFIG.contextLines;
   const followRefs = FollowRefsSchema.safeParse(c.followRefs).data ?? DEFAULT_USER_CONFIG.followRefs;
   const lineWrap = typeof c.lineWrap === 'boolean' ? c.lineWrap : DEFAULT_USER_CONFIG.lineWrap;
-  return { autoViewed, contextLines, followRefs, lineWrap, lspCommands: lspCommands(c) };
+  return { autoViewed, contextLines, followRefs, lineWrap, lspCommands: lspCommands(c), githubHosts: githubHosts(c) };
 }
 
 /**
@@ -82,6 +82,17 @@ function lspCommands(c: Partial<UserConfig>): Partial<Record<LanguageId, string>
     if (typeof command !== 'string') continue;
     if ((LANGUAGE_IDS as string[]).includes(language)) out[language as LanguageId] = command.trim();
     else console.error(`[diffle] ignoring config lspCommands.${language}: not a language diffle knows`);
+  }
+  return out;
+}
+
+/** Lowercased host names; an entry without a web host is dropped, it would point nowhere. */
+function githubHosts(c: Partial<UserConfig>): Record<string, string> {
+  const out: Record<string, string> = {};
+  const entries = c.githubHosts && typeof c.githubHosts === 'object' ? Object.entries(c.githubHosts) : [];
+  for (const [git, web] of entries) {
+    const host = git.trim().toLowerCase();
+    if (typeof web === 'string' && host && web.trim()) out[host] = web.trim().toLowerCase();
   }
   return out;
 }

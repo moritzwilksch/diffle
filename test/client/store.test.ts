@@ -62,6 +62,7 @@ const api = {
     followRefs: 'off',
     lineWrap: true,
     lspCommands: { python: 'pyrefly lsp' },
+    githubHosts: {},
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
   lspLog: vi.fn(async (): Promise<LspLogResponse> => ({ entries: [] })),
@@ -145,6 +146,7 @@ beforeEach(() => {
   api.github.mockReset().mockImplementation(async () => ({
     version: useStore.getState().snapshot?.version,
     repository: 'o/r',
+    repositoryUrl: 'https://github.com/o/r',
     pullRequest: null,
     reason: 'No matching pull request',
   }));
@@ -770,7 +772,14 @@ describe('client transitions', () => {
 
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
     useStore.setState({
-      config: { autoViewed: [], contextLines: 5, followRefs: 'off' as const, lineWrap: true, lspCommands: {} },
+      config: {
+        autoViewed: [],
+        contextLines: 5,
+        followRefs: 'off' as const,
+        lineWrap: true,
+        lspCommands: {},
+        githubHosts: {},
+      },
       lsp: LSP_OFF,
     });
     const slow = deferred<Snapshot>();
@@ -781,6 +790,7 @@ describe('client transitions', () => {
       followRefs: 'off' as const,
       lineWrap: true,
       lspCommands: {},
+      githubHosts: {},
     });
     api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
     const boot = useStore.getState().boot();
@@ -1880,6 +1890,7 @@ describe('request ownership', () => {
       followRefs: 'off',
       lineWrap: true,
       lspCommands: {},
+      githubHosts: {},
     });
     const load = deferred<UserConfig>();
     const save = deferred<UserConfig>();
@@ -2187,7 +2198,13 @@ describe('asynchronous GitHub metadata', () => {
     await useStore.getState().boot();
     expect(useStore.getState().snapshot?.version).toBe(1);
     expect(useStore.getState().github.status).toBe('loading');
-    lookup.resolve({ version: 1, repository: 'o/r', pullRequest: null, reason: 'No PR' });
+    lookup.resolve({
+      version: 1,
+      repository: 'o/r',
+      repositoryUrl: 'https://github.com/o/r',
+      pullRequest: null,
+      reason: 'No PR',
+    });
     await vi.waitFor(() => expect(useStore.getState().github.status).toBe('ready'));
   });
 
@@ -2199,7 +2216,13 @@ describe('asynchronous GitHub metadata', () => {
     api.switchMode.mockResolvedValueOnce(snap(2, 'second'));
     await useStore.getState().switchMode({ kind: 'revspec', args: ['main'] });
     await vi.waitFor(() => expect(useStore.getState().github.data?.version).toBe(2));
-    old.resolve({ version: 1, repository: 'o/r', pullRequest: null, reason: null });
+    old.resolve({
+      version: 1,
+      repository: 'o/r',
+      repositoryUrl: 'https://github.com/o/r',
+      pullRequest: null,
+      reason: null,
+    });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(useStore.getState().github.data).toMatchObject({ version: 2, reason: 'No matching pull request' });
   });
@@ -2215,14 +2238,26 @@ it('recovers GitHub lookup for the existing comparison after a failed switch', a
   await useStore.getState().switchMode({ kind: 'revspec', args: ['missing'] });
   await vi.waitFor(() => expect(useStore.getState().github.status).toBe('ready'));
   expect(useStore.getState().github.data?.version).toBe(1);
-  pending.resolve({ version: 1, repository: 'o/r', pullRequest: null, reason: null });
+  pending.resolve({
+    version: 1,
+    repository: 'o/r',
+    repositoryUrl: 'https://github.com/o/r',
+    pullRequest: null,
+    reason: null,
+  });
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   expect(useStore.getState().github.data?.reason).toBe('No matching pull request');
 });
 
 it('discards metadata for a newer server snapshot without changing the displayed comparison', async () => {
   api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
-  api.github.mockResolvedValueOnce({ version: 2, repository: 'o/r', pullRequest: null, reason: null });
+  api.github.mockResolvedValueOnce({
+    version: 2,
+    repository: 'o/r',
+    repositoryUrl: 'https://github.com/o/r',
+    pullRequest: null,
+    reason: null,
+  });
   await useStore.getState().boot();
   await vi.waitFor(() => expect(useStore.getState().github.status).toBe('idle'));
   expect(useStore.getState().snapshot?.version).toBe(1);

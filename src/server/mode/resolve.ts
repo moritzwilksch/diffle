@@ -1,7 +1,8 @@
 import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '@/shared/protocol.js';
 import { GitError, type GitRepo } from '@/server/git/GitRepo.js';
-import { type GithubClient, GithubError, NO_TOKEN } from '@/server/github/client.js';
-import { githubRepository, type PullRequest, viewPr } from '@/server/github/pulls.js';
+import { GithubError, noToken } from '@/server/github/client.js';
+import { type Github, type GithubInstance, githubRepository, TOKENLESS_GITHUB_COM } from '@/server/github/hosts.js';
+import { type PullRequest, viewPr } from '@/server/github/pulls.js';
 import { compareRanges } from './rangediff.js';
 import { type ParsedRange, type ParsedRevspec, parseRangeDiff, parseRevspec, RevspecError } from './revspec.js';
 
@@ -104,9 +105,13 @@ export interface ResolvedReview {
 }
 
 /** Resolves an input command into a comparison and optional explicit PR identity. */
-export async function resolveReview(req: EntryRequest, repo: GitRepo, github?: GithubClient): Promise<ResolvedReview> {
+export async function resolveReview(
+  req: EntryRequest,
+  repo: GitRepo,
+  github: Github = TOKENLESS_GITHUB_COM,
+): Promise<ResolvedReview> {
   if (req.kind === 'pr') return resolvePr(req, repo, github);
-  if (req.kind === 'range-diff') return rangeDiffReview(repo, parseRangeDiff(req.args));
+  if (req.kind === 'range-diff') return rangeDiffReview(repo, parseRangeDiff(req.args), github.instance);
   const parsed: ParsedRevspec =
     req.kind === 'working' ? { old: 'HEAD', new: 'worktree', base: 'direct' } : parseRevspec(req.args);
   // A commit is pinned when entered: moving the ref it was named by, e.g. amending HEAD, makes a different commit.
@@ -114,13 +119,18 @@ export async function resolveReview(req: EntryRequest, repo: GitRepo, github?: G
     const { newSha: sha } = await resolveComparison(repo, parsed);
     return { mode: { old: sha, new: sha, base: 'parent', live: 'none', commentKey: `commit:${sha}` } };
   }
-  return { mode: await resolveRange(repo, parsed, req.kind === 'working' ? 'working' : undefined) };
+  return { mode: await resolveRange(repo, parsed, github.instance, req.kind === 'working' ? 'working' : undefined) };
 }
 
 /** A range as a comparison: resolved for its liveness and keyed for its comments, unless `key` names them. */
-async function resolveRange(repo: GitRepo, parsed: ParsedRevspec, key?: string): Promise<Comparison> {
+async function resolveRange(
+  repo: GitRepo,
+  parsed: ParsedRevspec,
+  instance: GithubInstance,
+  key?: string,
+): Promise<Comparison> {
   const { oldSha, newSha, live } = await resolveComparison(repo, parsed);
-  return { ...parsed, live, commentKey: key ?? (await commentKey(repo, parsed, oldSha, newSha)) };
+  return { ...parsed, live, commentKey: key ?? (await commentKey(repo, parsed, instance, oldSha, newSha)) };
 }
 
 /**
@@ -131,6 +141,7 @@ async function resolveRange(repo: GitRepo, parsed: ParsedRevspec, key?: string):
 export async function rangeDiffReview(
   repo: GitRepo,
   [older, newer]: [ParsedRange, ParsedRange],
+  instance: GithubInstance,
   prUrl?: string,
 ): Promise<ResolvedReview> {
   const resolveSide = async (parsed: ParsedRange): Promise<RangeSide> => {
@@ -138,7 +149,7 @@ export async function rangeDiffReview(
     return { old: parsed.old, new: parsed.new, oldSha, newSha, iteration: null };
   };
   const [range, from, to] = await Promise.all([
-    resolveRange(repo, { ...newer, base: 'direct' }),
+    resolveRange(repo, { ...newer, base: 'direct' }, instance),
     resolveSide(older),
     resolveSide(newer),
   ]);
@@ -153,6 +164,7 @@ export async function rangeDiffReview(
  *   origin/main..HEAD  → range:o/r:main..o/r:feat
  * The matching explicit PR uses the first key too. If feat tracks a fork,
  * its identity becomes e.g. "contributor/r:feat", keeping forks distinct.
+ * A remote on the run's GitHub Enterprise host reads the same.
  *
  * Without a GitHub upstream, branches use full refs:
  *   main...feat → range:refs/heads/main...refs/heads/feat
@@ -163,13 +175,19 @@ export async function rangeDiffReview(
  * for the merge base. The working command bypasses this helper and uses
  * "working"; a single commit uses "commit:<hash>".
  */
-async function commentKey(repo: GitRepo, comparison: ParsedRevspec, oldSha: string, newSha: string): Promise<string> {
+async function commentKey(
+  repo: GitRepo,
+  comparison: ParsedRevspec,
+  instance: GithubInstance,
+  oldSha: string,
+  newSha: string,
+): Promise<string> {
   const remotes = await repo.remotes();
   const identity = async (rev: string): Promise<string | null> => {
     const upstream = await repo.upstreamBranch(rev);
     if (upstream) {
       const url = remotes.find((remote) => remote.name === upstream.remote)?.url;
-      const repository = url && githubRepository(url);
+      const repository = url && githubRepository(url, instance);
       if (repository) return `${repository.toLowerCase()}:${upstream.branch}`;
     }
     return repo.branchRef(rev);
@@ -193,10 +211,10 @@ function rangeKey(old: string, next: string, mergeBase: boolean): string {
 async function resolvePr(
   req: { kind: 'pr'; pr?: string },
   repo: GitRepo,
-  github?: GithubClient,
+  { client, instance }: Github,
 ): Promise<ResolvedReview> {
-  if (!github) throw new GithubError(NO_TOKEN);
-  const pr = await viewPr(req.pr, repo, github);
+  if (!client) throw new GithubError(noToken(instance.host));
+  const pr = await viewPr(req.pr, repo, client, instance);
 
   const head = `${repo.reviewRefs}/${pr.number}/head/${pr.headRefName}`;
   const base = `${repo.reviewRefs}/${pr.number}/base/${pr.baseRefName}`;

@@ -10,6 +10,7 @@ import { rmTmp } from '../tmp.js';
 import { openReviewRepository } from '@/cli/repository.js';
 import { GitRepo } from '@/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '@/server/github/client.js';
+import { GITHUB_COM } from '@/server/github/hosts.js';
 import { viewPr } from '@/server/github/pulls.js';
 import { resolveReview } from '@/server/mode/resolve.js';
 
@@ -84,6 +85,9 @@ let calls: Record<string, unknown>[] = [];
 /** Knows PR 7; made once the fixture's hashes exist. */
 let github: GithubClient;
 
+/** `openReviewRepository`'s view of github.com, with `client` or without a token. */
+const connect = (client?: GithubClient) => async () => ({ instance: GITHUB_COM, client });
+
 beforeAll(async () => {
   tmp = await mkdtemp(join(TMP_ROOT, 'diffle-pr-'));
   origin = join(tmp, 'o', 'r');
@@ -117,26 +121,28 @@ beforeEach(() => {
 describe('viewPr', () => {
   it('looks a number, a #number and a url up by number in the base repository', async () => {
     for (const selector of ['7', '#7', ' 7 ', 'https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7/files']) {
-      await viewPr(selector, repo, github);
+      await viewPr(selector, repo, github, GITHUB_COM);
       expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', number: 7 });
     }
     // A url names its own repository: no local checkout needed.
-    await viewPr('https://github.com/other/place/pull/9', null, fake(PR_NODE({ number: 9 })));
+    await viewPr('https://github.com/other/place/pull/9', null, fake(PR_NODE({ number: 9 })), GITHUB_COM);
     expect(calls.pop()).toEqual({ owner: 'other', repo: 'place', number: 9 });
   });
 
   it('looks a branch up among the open pull requests with that head, in any fork or the named one', async () => {
-    await viewPr('feat', repo, github);
+    await viewPr('feat', repo, github, GITHUB_COM);
     expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', head: 'feat', base: null });
-    expect((await viewPr('o:feat', repo, github)).number).toBe(7);
-    await expect(viewPr('someone:feat', repo, github)).rejects.toThrow(/no open pull request in o\/r for someone:feat/);
-    await expect(viewPr('feat', repo, fake(null))).rejects.toThrow(/no open pull request in o\/r for feat/);
+    expect((await viewPr('o:feat', repo, github, GITHUB_COM)).number).toBe(7);
+    await expect(viewPr('someone:feat', repo, github, GITHUB_COM)).rejects.toThrow(
+      /no open pull request in o\/r for someone:feat/,
+    );
+    await expect(viewPr('feat', repo, fake(null), GITHUB_COM)).rejects.toThrow(/no open pull request in o\/r for feat/);
     const two: GithubClient = {
       async graphql<T>() {
         return { repository: { pullRequests: { nodes: [PR_NODE(), PR_NODE({ number: 8 })] } } } as T;
       },
     };
-    await expect(viewPr('feat', repo, two)).rejects.toThrow(/2 open pull requests .*open one by number/);
+    await expect(viewPr('feat', repo, two, GITHUB_COM)).rejects.toThrow(/2 open pull requests .*open one by number/);
   });
 
   it("uses the checked-out branch's upstream when nothing is given", async () => {
@@ -147,38 +153,57 @@ describe('viewPr', () => {
     git(work, 'branch', '-q', '--set-upstream-to=origin/main');
     const branchRepo = await GitRepo.open(work);
     // The upstream names the branch on GitHub; the local name may differ.
-    expect((await viewPr(undefined, branchRepo, github)).number).toBe(7);
+    expect((await viewPr(undefined, branchRepo, github, GITHUB_COM)).number).toBe(7);
     expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', head: 'main', base: null });
     git(work, 'branch', '-q', '--unset-upstream');
     // Without an upstream, the local branch name is the best guess.
-    await viewPr(undefined, branchRepo, github);
+    await viewPr(undefined, branchRepo, github, GITHUB_COM);
     expect(calls.pop()).toEqual({ owner: 'o', repo: 'r', head: 'feat', base: null });
     git(work, 'checkout', '-q', '--detach');
-    await expect(viewPr(undefined, branchRepo, github)).rejects.toThrow(/not on a branch/);
+    await expect(viewPr(undefined, branchRepo, github, GITHUB_COM)).rejects.toThrow(/not on a branch/);
   });
 
   it('refuses an option-shaped selector and a non-pull-request url before asking GitHub', async () => {
-    await expect(viewPr('--json', repo, github)).rejects.toThrow(GithubError);
-    await expect(viewPr('https://github.com/o/r/issues/7', repo, github)).rejects.toThrow(/not a pull request url/);
+    await expect(viewPr('--json', repo, github, GITHUB_COM)).rejects.toThrow(GithubError);
+    await expect(viewPr('https://github.com/o/r/issues/7', repo, github, GITHUB_COM)).rejects.toThrow(
+      /not a pull request url/,
+    );
     expect(calls).toEqual([]);
   });
 
   it('needs a GitHub origin, or one GitHub remote, for everything but a url', async () => {
-    await expect(viewPr('7', null, github)).rejects.toThrow(/not in a git repository/);
+    await expect(viewPr('7', null, github, GITHUB_COM)).rejects.toThrow(/not in a git repository/);
     const dir = join(tmp, 'no-origin');
     git(tmp, 'init', '-q', dir);
-    await expect(viewPr('7', await GitRepo.open(dir), github)).rejects.toThrow(/no GitHub remote/);
+    await expect(viewPr('7', await GitRepo.open(dir), github, GITHUB_COM)).rejects.toThrow(/no remote on github\.com/);
     git(dir, 'remote', 'add', 'fork', 'git@github.com:me/r.git');
-    expect((await viewPr('7', await GitRepo.open(dir), github)).number).toBe(7);
+    expect((await viewPr('7', await GitRepo.open(dir), github, GITHUB_COM)).number).toBe(7);
     expect(calls.pop()).toEqual({ owner: 'me', repo: 'r', number: 7 });
     git(dir, 'remote', 'add', 'other', 'https://github.com/o/r');
-    await expect(viewPr('7', await GitRepo.open(dir), github)).rejects.toThrow(/2 GitHub remotes and no origin/);
+    await expect(viewPr('7', await GitRepo.open(dir), github, GITHUB_COM)).rejects.toThrow(
+      /2 GitHub remotes and no origin/,
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('reads remotes and urls on the run’s GitHub Enterprise host alone', async () => {
+    const enterprise = { host: 'github.work.com', gitHosts: ['github.work.com', 'git.work.com'] };
+    const dir = join(tmp, 'enterprise');
+    git(tmp, 'init', '-q', dir);
+    git(dir, 'remote', 'add', 'origin', 'git@git.work.com:team/svc.git');
+    const work = await GitRepo.open(dir);
+    await viewPr('7', work, github, enterprise);
+    expect(calls.pop()).toEqual({ owner: 'team', repo: 'svc', number: 7 });
+    await expect(viewPr('7', work, github, GITHUB_COM)).rejects.toThrow(/no remote on github\.com/);
+    await expect(viewPr('https://github.com/o/r/pull/7', work, github, enterprise)).rejects.toThrow(
+      /is on github\.com, but diffle is talking to github\.work\.com/,
+    );
     expect(calls).toEqual([]);
   });
 
   it('normalizes the head repository and accepts a deleted fork', async () => {
-    expect((await viewPr('7', repo, github)).headRepository).toBe('o/r');
-    expect((await viewPr('7', repo, fake(PR_NODE({ headRepository: null })))).headRepository).toBeNull();
+    expect((await viewPr('7', repo, github, GITHUB_COM)).headRepository).toBe('o/r');
+    expect((await viewPr('7', repo, fake(PR_NODE({ headRepository: null })), GITHUB_COM)).headRepository).toBeNull();
   });
 
   it.each([
@@ -188,15 +213,15 @@ describe('viewPr', () => {
     { state: 'UNKNOWN' },
     { headRefOid: null },
   ])('rejects malformed PR fields: %j', async (fields) => {
-    await expect(viewPr('7', repo, fake(PR_NODE(fields)))).rejects.toMatchObject({
+    await expect(viewPr('7', repo, fake(PR_NODE(fields)), GITHUB_COM)).rejects.toMatchObject({
       message: 'unexpected pull request data from GitHub',
       status: 502,
     });
   });
 
   it('names unusable GitHub data instead of guessing', async () => {
-    await expect(viewPr('7', repo, fake(null))).rejects.toThrow(/no pull request o\/r#7/);
-    await expect(viewPr('7', repo, fake(PR_NODE({ url: 'https://example.invalid/x' })))).rejects.toThrow(
+    await expect(viewPr('7', repo, fake(null), GITHUB_COM)).rejects.toThrow(/no pull request o\/r#7/);
+    await expect(viewPr('7', repo, fake(PR_NODE({ url: 'https://example.invalid/x' })), GITHUB_COM)).rejects.toThrow(
       /cannot read the repository/,
     );
   });
@@ -204,7 +229,10 @@ describe('viewPr', () => {
 
 describe("resolveReview({ kind: 'pr' })", () => {
   it('fetches the pull request into fixed refs retaining both branch names', async () => {
-    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, github);
+    const { mode, prUrl } = await resolveReview({ kind: 'pr', pr: '7' }, repo, {
+      client: github,
+      instance: GITHUB_COM,
+    });
     expect(mode).toMatchObject({
       old: `${repo.reviewRefs}/7/base/main`,
       base: 'merge-base',
@@ -225,21 +253,24 @@ describe("resolveReview({ kind: 'pr' })", () => {
     execFileSync('git', ['clone', '-q', '--origin', 'upstream', asGitUrl(origin), forked], { encoding: 'utf8', env });
     pointRemoteAtGithub(forked, 'upstream');
     const forkRepo = await GitRepo.open(forked);
-    const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, github);
+    const { mode } = await resolveReview({ kind: 'pr', pr: '7' }, forkRepo, { client: github, instance: GITHUB_COM });
     expect(await forkRepo.resolve(mode.new)).toBe(headSha);
   });
 
   it('refuses foreign PRs in an existing session without fetching', async () => {
     const refs = git(local, 'show-ref');
     await expect(
-      resolveReview({ kind: 'pr', pr: '7' }, repo, fake(PR_NODE({ url: 'https://github.com/foreign/repo/pull/7' }))),
+      resolveReview({ kind: 'pr', pr: '7' }, repo, {
+        client: fake(PR_NODE({ url: 'https://github.com/foreign/repo/pull/7' })),
+        instance: GITHUB_COM,
+      }),
     ).rejects.toThrow(/foreign repository/);
     expect(git(local, 'show-ref')).toBe(refs);
   });
 
   it('cleans only this instance’s refs', async () => {
     const other = await GitRepo.open(local);
-    await resolveReview({ kind: 'pr', pr: '7' }, other, github);
+    await resolveReview({ kind: 'pr', pr: '7' }, other, { client: github, instance: GITHUB_COM });
     await repo.cleanReviewRefs();
     expect(git(local, 'for-each-ref', repo.reviewRefs)).toBe('');
     expect(git(local, 'rev-parse', `${other.reviewRefs}/7/head/feat`)).toBe(headSha);
@@ -248,13 +279,13 @@ describe("resolveReview({ kind: 'pr' })", () => {
 
   it('is off without a token', async () => {
     await expect(resolveReview({ kind: 'pr', pr: '7' }, repo)).rejects.toThrow(/No GitHub token/);
-    await expect(openReviewRepository({ kind: 'pr', pr: '7' }, local, null)).rejects.toThrow(/No GitHub token/);
+    await expect(openReviewRepository({ kind: 'pr', pr: '7' }, local, connect())).rejects.toThrow(/No GitHub token/);
   });
 });
 
 describe('openReviewRepository', () => {
   it('keeps matching PRs in the local repository', async () => {
-    const review = await openReviewRepository({ kind: 'pr', pr: '7' }, local, github);
+    const review = await openReviewRepository({ kind: 'pr', pr: '7' }, local, connect(github));
     expect(review.repo.root).toBe(local);
     await review.close();
     await access(local);
@@ -341,7 +372,7 @@ describe('openReviewRepository', () => {
     vi.stubEnv('TMPDIR', scratch);
     try {
       const foreign = fake(PR_NODE({ url: 'https://github.com/foreign/missing/pull/7' }));
-      await expect(openReviewRepository({ kind: 'pr', pr: '7' }, local, foreign)).rejects.toThrow();
+      await expect(openReviewRepository({ kind: 'pr', pr: '7' }, local, connect(foreign))).rejects.toThrow();
       expect(await readdir(scratch)).toEqual([]);
     } finally {
       vi.unstubAllEnvs();
@@ -358,14 +389,14 @@ describe('openReviewRepository', () => {
     try {
       for (const cwd of [local, tmp]) {
         const req = { kind: 'pr' as const, pr: 'https://github.com/foreign/repo/pull/7' };
-        const review = await openReviewRepository(req, cwd, foreign);
+        const review = await openReviewRepository(req, cwd, connect(foreign));
         try {
           expect(review.repo.root).not.toBe(local);
           // The clone is made under the raw `os.tmpdir()`, so canonicalize both sides: a
           // Windows 8.3 short name or a macOS symlink would otherwise skew the prefix.
           const root = await realpath(review.repo.root);
           expect(root.startsWith(join(await realpath(tmpdir()), 'diffle-pr-'))).toBe(true);
-          const { mode, prUrl } = await resolveReview(req, review.repo, foreign);
+          const { mode, prUrl } = await resolveReview(req, review.repo, { client: foreign, instance: GITHUB_COM });
           expect(await review.repo.resolve(mode.new)).toBe(headSha);
           expect(prUrl).toBe('https://github.com/foreign/repo/pull/7');
           expect(await review.repo.resolve(mode.old)).toBe(mergeBase);

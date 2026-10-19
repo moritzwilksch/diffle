@@ -51,6 +51,7 @@ it('shows PR metadata from another repository, then the origin when no PR matche
   const metadata: GithubMetadata = {
     version: 1,
     repository: 'alice/fork',
+    repositoryUrl: 'https://github.com/alice/fork',
     reason: 'The comparison does not match the pull request diff',
     pullRequest: {
       repository: 'upstream/project',

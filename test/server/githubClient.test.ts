@@ -1,19 +1,48 @@
 import { describe, expect, it } from 'vitest';
-import { createGithubClient, GithubError, resolveToken } from '@/server/github/client.js';
+import { createGithubClient, GithubError, noToken, resolveToken } from '@/server/github/client.js';
 
 describe('resolveToken', () => {
-  it('prefers GITHUB_TOKEN, then GH_TOKEN, then what gh holds', async () => {
-    const gh = async () => 'from-gh';
-    expect(await resolveToken({ GITHUB_TOKEN: 'a', GH_TOKEN: 'b' }, gh)).toEqual({
+  it('prefers GITHUB_TOKEN, then GH_TOKEN, then what gh holds for github.com', async () => {
+    const asked: string[] = [];
+    const gh = async (host: string) => (asked.push(host), 'from-gh');
+    expect(await resolveToken('github.com', { GITHUB_TOKEN: 'a', GH_TOKEN: 'b' }, gh)).toEqual({
       token: 'a',
       source: 'GITHUB_TOKEN',
     });
-    expect(await resolveToken({ GITHUB_TOKEN: ' ', GH_TOKEN: ' b ' }, gh)).toEqual({ token: 'b', source: 'GH_TOKEN' });
-    expect(await resolveToken({}, gh)).toEqual({ token: 'from-gh', source: 'gh auth token' });
+    expect(await resolveToken('github.com', { GITHUB_TOKEN: ' ', GH_TOKEN: ' b ' }, gh)).toEqual({
+      token: 'b',
+      source: 'GH_TOKEN',
+    });
+    expect(await resolveToken('github.com', {}, gh)).toEqual({ token: 'from-gh', source: 'gh auth token' });
+    expect(asked).toEqual(['github.com']);
+  });
+
+  it('reads the enterprise variables for a GitHub Enterprise Server, as gh does', async () => {
+    const env = { GITHUB_TOKEN: 'cloud', GH_ENTERPRISE_TOKEN: 'server' };
+    expect(await resolveToken('github.work.com', env, async () => null)).toEqual({
+      token: 'server',
+      source: 'GH_ENTERPRISE_TOKEN',
+    });
+    expect(await resolveToken('acme.ghe.com', env, async () => null)).toEqual({
+      token: 'cloud',
+      source: 'GITHUB_TOKEN',
+    });
+    const asked: string[] = [];
+    await resolveToken('github.work.com', { GITHUB_TOKEN: 'cloud' }, async (host) => (asked.push(host), null));
+    expect(asked).toEqual(['github.work.com']);
   });
 
   it('is null when nothing has a token', async () => {
-    expect(await resolveToken({}, async () => null)).toBeNull();
+    expect(await resolveToken('github.com', {}, async () => null)).toBeNull();
+  });
+
+  it('says where to put a token for the host that lacks one', () => {
+    expect(noToken('github.com')).toBe(
+      'No GitHub token for github.com: set GITHUB_TOKEN or sign in with gh auth login',
+    );
+    expect(noToken('github.work.com')).toBe(
+      'No GitHub token for github.work.com: set GITHUB_ENTERPRISE_TOKEN or sign in with gh auth login --hostname github.work.com',
+    );
   });
 });
 

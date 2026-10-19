@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmTmp } from '../tmp.js';
 import { GitRepo } from '@/server/git/GitRepo.js';
 import { type GithubClient, GithubError } from '@/server/github/client.js';
+import { GITHUB_COM } from '@/server/github/hosts.js';
 import { RevspecError } from '@/server/mode/revspec.js';
 import { Session, sidePath, readablePaths, type WatcherLike } from '@/server/Session.js';
 import type { WatchTarget } from '@/server/Watcher.js';
@@ -115,7 +116,12 @@ describe('Session', () => {
         return new Promise<T>((r) => (answer = r as (v: unknown) => void));
       },
     };
-    const session = new Session(repo, hub, { watch: false, context: 3, followRefs: 'off', github });
+    const session = new Session(repo, hub, {
+      watch: false,
+      context: 3,
+      followRefs: 'off',
+      github: { client: github, instance: GITHUB_COM },
+    });
     const resolving = session.resolve({ kind: 'pr', pr: 'https://github.com/o/r/pull/7' });
     await lookup;
     let closed = false;

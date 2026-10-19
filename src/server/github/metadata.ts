@@ -1,7 +1,8 @@
 import type { GithubMetadata, Snapshot } from '@/shared/protocol.js';
 import { GitError, type GitRepo } from '@/server/git/GitRepo.js';
-import { type GithubClient, GithubError, NO_TOKEN } from './client.js';
-import { githubRepository, originRepository, type PullRequest, pullRequestsForHead, viewPr } from './pulls.js';
+import { GithubError, noToken } from './client.js';
+import { type Github, githubRepository } from './hosts.js';
+import { originRepository, type PullRequest, pullRequestsForHead, viewPr } from './pulls.js';
 
 const LOOKUP_TIMEOUT_MS = 5000;
 
@@ -12,20 +13,22 @@ const LOOKUP_TIMEOUT_MS = 5000;
 export async function discoverGithub(
   repo: GitRepo,
   snap: Snapshot,
-  { github, prUrl }: { github?: GithubClient; prUrl?: string } = {},
+  { github: { client: github, instance }, prUrl }: { github: Github; prUrl?: string },
 ): Promise<GithubMetadata> {
-  const repository = await originRepository(repo);
+  const repository = await originRepository(repo, instance);
+  const repositoryUrl = repository && `https://${instance.host}/${repository}`;
   const absent = (reason: string): GithubMetadata => ({
     version: snap.version,
     repository,
+    repositoryUrl,
     pullRequest: null,
     reason,
   });
-  if (!github) return absent(NO_TOKEN);
+  if (!github) return absent(noToken(instance.host));
   try {
     let pr: PullRequest;
     if (prUrl) {
-      pr = await viewPr(prUrl, repo, github, LOOKUP_TIMEOUT_MS);
+      pr = await viewPr(prUrl, repo, github, instance, LOOKUP_TIMEOUT_MS);
     } else {
       const [old, next, remotes] = await Promise.all([
         repo.upstreamBranch(snap.mode.old),
@@ -35,7 +38,7 @@ export async function discoverGithub(
       if (!old || !next) return absent('No branch with an upstream available for both endpoints');
       const repository = (remote: string) => {
         const url = remotes.find((r) => r.name === remote)?.url;
-        return url ? githubRepository(url) : null;
+        return url ? githubRepository(url, instance) : null;
       };
       const baseRepo = repository(old.remote);
       const headRepo = repository(next.remote);
@@ -64,6 +67,7 @@ export async function discoverGithub(
     return {
       version: snap.version,
       repository,
+      repositoryUrl,
       pullRequest: {
         repository: pr.repository,
         number: pr.number,

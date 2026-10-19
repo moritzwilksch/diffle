@@ -53,10 +53,10 @@ export function GithubMenu() {
         >
           <strong>Repository</strong>
           <p className="mt-1 mb-3 wrap-anywhere">
-            {repository ? (
+            {repository && metadata?.repositoryUrl ? (
               <a
                 className="inline-flex items-center gap-1 text-accent hover:underline"
-                href={`https://github.com/${repository}`}
+                href={metadata.repositoryUrl}
                 target="_blank"
                 rel="noreferrer"
               >

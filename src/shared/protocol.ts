@@ -262,6 +262,8 @@ export const GithubMetadataSchema = z.object({
   version: z.number(),
   /** GitHub repository identified by the local origin URL. */
   repository: z.string().nullable(),
+  /** Its page, on whichever GitHub the run talks to. */
+  repositoryUrl: z.string().nullable(),
   pullRequest: GithubPullRequestSchema.nullable(),
   /** Null when export is allowed; otherwise explains why it is blocked. */
   reason: z.string().nullable(),
@@ -551,6 +553,12 @@ export const UserConfigSchema = z.object({
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
    */
   lspCommands: z.partialRecord(LanguageIdSchema, z.string()),
+  /**
+   * GitHub Enterprise hosts: the host in remote urls → the host serving the web UI and API, the
+   * same one for most. github.com needs no entry. Read-only over HTTP; set with
+   * `diffle config set-github-host`.
+   */
+  githubHosts: z.record(z.string(), z.string()),
 });
 export type UserConfig = z.infer<typeof UserConfigSchema>;
 
@@ -560,6 +568,7 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   followRefs: 'auto',
   lineWrap: true,
   lspCommands: {},
+  githubHosts: {},
 };
 
 /** A point in a new-side file. LSP semantics: the column counts UTF-16 units, like a JS string index. */
@@ -859,7 +868,7 @@ export function languageOf(path: string): LanguageId | null {
   return (ext && LANGUAGE_BY_EXT[ext]) || null;
 }
 
-/** Writable HTTP config fields; unknown keys, including CLI-only lspCommands, are stripped. */
+/** Writable HTTP config fields; unknown keys, including CLI-only lspCommands and githubHosts, are stripped. */
 export const ConfigUpdateSchema = z.object({
   autoViewed: z.string().array().optional(),
   contextLines: z.number().int().min(0).max(10_000).optional(),

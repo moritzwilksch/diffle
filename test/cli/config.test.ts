@@ -33,3 +33,14 @@ describe('diffle config set-lsp / unset-lsp', () => {
     expect(JSON.parse(await readFile(join(dir, 'diffle', 'config.json'), 'utf8')).lspCommands).toEqual({});
   }, 30_000);
 });
+
+describe('diffle config set-github-host / unset-github-host', () => {
+  it('maps a git host to itself or to its web host, and forgets it again', async () => {
+    await config('set-github-host', 'GitHub.work.com');
+    expect(await config('set-github-host', 'ssh.work.com', 'github.work.com')).toBe(
+      'github.work.com\nssh.work.com → github.work.com\n',
+    );
+    expect(await config('unset-github-host', 'github.work.com', 'ssh.work.com')).toBe('');
+    expect(JSON.parse(await readFile(join(dir, 'diffle', 'config.json'), 'utf8')).githubHosts).toEqual({});
+  }, 30_000);
+});
