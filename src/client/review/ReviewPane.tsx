@@ -479,14 +479,21 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified, wrap) or remounts the viewer (theme). Neither is
-  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
-  // renders the change, and the request to land it at the same pixel goes out in the same update, so
-  // the jump effect below places it before anything paints. No row on screen means nothing to hold.
+  // A display toggle re-lays the rows out (split / unified, wrap, the pane widening as the tree or panel
+  // hides) or remounts the viewer (theme). Neither is navigation, so the viewport holds: the row under the
+  // pane's top edge is measured here, before React renders the change, and the request to land it at the
+  // same pixel goes out in the same update, so the jump effect below places it before anything paints.
+  // No row on screen means nothing to hold.
   useEffect(
     () =>
       useStore.subscribe((s, prev) => {
-        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle && s.config.lineWrap === prev.config.lineWrap)
+        if (
+          s.theme === prev.theme &&
+          s.diffStyle === prev.diffStyle &&
+          s.config.lineWrap === prev.config.lineWrap &&
+          s.layout.treeVisible === prev.layout.treeVisible &&
+          s.layout.panelVisible === prev.layout.panelVisible
+        )
           return;
         const scroller = containerRef.current;
         const items = viewerRef.current?.getInstance()?.getRenderedItems();
