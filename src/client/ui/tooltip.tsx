@@ -36,7 +36,8 @@ function TooltipContent({
         positionMethod={positionMethod}
         side={side}
         sideOffset={sideOffset}
-        className="z-40"
+        // Above every other layer (dialogs, toasts, the z-100 LSP popover): a tip names what is under the pointer.
+        className="z-110"
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"

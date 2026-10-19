@@ -64,6 +64,7 @@ import { focusToken, onSelectionChanged, setViewer, wordsIn } from '@/client/lsp
 import { charAtPoint, tokenRange } from '@/client/lsp/tokenText.js';
 import { installSearchHighlights } from '@/client/search/highlight.js';
 import { installCommentHighlights } from './commentHighlights.js';
+import { installWhitespaceMarks, WHITESPACE_CSS } from './whitespace.js';
 import { CommentCard } from './CommentCard.js';
 import { CommentComposer } from './CommentComposer.js';
 import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
@@ -392,6 +393,11 @@ export function ReviewPane() {
     if (!scroller) return;
     return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
+  // And the visible spaces and tabs.
+  useEffect(() => {
+    if (!scroller) return;
+    return installWhitespaceMarks(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
+  }, [scroller]);
   // And the occurrences of the focused or hovered symbol.
   useEffect(() => {
     if (!scroller) return;
@@ -473,14 +479,21 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified, wrap) or remounts the viewer (theme). Neither is
-  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
-  // renders the change, and the request to land it at the same pixel goes out in the same update, so
-  // the jump effect below places it before anything paints. No row on screen means nothing to hold.
+  // A display toggle re-lays the rows out (split / unified, wrap, the pane widening as the tree or panel
+  // hides) or remounts the viewer (theme). Neither is navigation, so the viewport holds: the row under the
+  // pane's top edge is measured here, before React renders the change, and the request to land it at the
+  // same pixel goes out in the same update, so the jump effect below places it before anything paints.
+  // No row on screen means nothing to hold.
   useEffect(
     () =>
       useStore.subscribe((s, prev) => {
-        if (s.theme === prev.theme && s.diffStyle === prev.diffStyle && s.config.lineWrap === prev.config.lineWrap)
+        if (
+          s.theme === prev.theme &&
+          s.diffStyle === prev.diffStyle &&
+          s.config.lineWrap === prev.config.lineWrap &&
+          s.layout.treeVisible === prev.layout.treeVisible &&
+          s.layout.panelVisible === prev.layout.panelVisible
+        )
           return;
         const scroller = containerRef.current;
         const items = viewerRef.current?.getInstance()?.getRenderedItems();
@@ -514,9 +527,15 @@ export function ReviewPane() {
         ?.getRenderedItems()
         .find((r) => r.id === reveal.id);
       if (rendered?.type === 'diff') {
-        rendered.instance.revealLine(reveal.line);
-        // Tell the cursor model which lines are now on screen, so j / k walk them instead of skipping to the next hunk.
         const inst = rendered.instance;
+        inst.revealLine(reveal.line);
+        // A reveal is spent once taken, so a later regeneration of the file does not replay it,
+        // and one the viewer could not expand has no row to center.
+        if (!inst.isLineRenderable(reveal.line)) {
+          useStore.setState({ reveal: null });
+          return;
+        }
+        // Tell the cursor model which lines are now on screen, so j / k walk them instead of skipping to the next hunk.
         let lo = reveal.line;
         let hi = reveal.line;
         while (lo > 1 && reveal.line - lo < 10_000 && inst.isLineRenderable(lo - 1)) lo--;
@@ -534,6 +553,7 @@ export function ReviewPane() {
               align: 'eye',
               nonce: (s.scrollTarget?.nonce ?? 0) + 1,
             },
+            reveal: null,
           }));
         }, 30);
         return;
@@ -802,7 +822,7 @@ export function ReviewPane() {
   const options = useMemo(
     () => ({
       ...codeViewOptions,
-      unsafeCSS: HEADER_CSS + geometry.css,
+      unsafeCSS: HEADER_CSS + WHITESPACE_CSS + geometry.css,
       layout: geometry.layout,
       itemMetrics: geometry.itemMetrics,
       hunkSeparators: 'line-info' as const,

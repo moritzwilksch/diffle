@@ -1,5 +1,6 @@
 import { Check, ChevronDown, ChevronUp, Circle, CircleDashed, GitCommitHorizontal, Layers } from 'lucide-react';
 import { type ComponentProps, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { twMerge } from 'tailwind-merge';
 import {
   comparisonLabel,
@@ -510,16 +511,18 @@ function CommitCard({ id, commit, row }: { id: string; commit: RangeCommit; row:
     const height = card.current?.offsetHeight ?? 0;
     setTop(Math.max(8, Math.min(row.top, window.innerHeight - height - 8)));
   }, [row]);
-  return (
+  // Portaled at the tooltips' z-110 so no panel or popover stacks above it.
+  return createPortal(
     <div
       ref={card}
       id={id}
       role="tooltip"
-      className="pointer-events-none fixed z-40 max-h-[calc(100vh-1rem)] w-[26rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-border bg-canvas px-3 py-2.5 text-[0.8125rem] shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
+      className="pointer-events-none fixed z-110 max-h-[calc(100vh-1rem)] w-[26rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-border bg-canvas px-3 py-2.5 text-[0.8125rem] shadow-[0_0.5rem_1.5rem_rgba(0,_0,_0,_0.18)]"
       style={{ top, right: window.innerWidth - row.left + 8 }}
     >
       <p className="m-0 mb-1.5 leading-[1.4] font-semibold wrap-anywhere">{subjectOf(commit)}</p>
       <CommitDetails commit={commit} full />
-    </div>
+    </div>,
+    document.body,
   );
 }

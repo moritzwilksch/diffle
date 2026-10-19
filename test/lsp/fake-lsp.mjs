@@ -1,6 +1,6 @@
 // Minimal stdio language server for tests: answers initialize, definition, references,
 // documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. Definitions point
-// at line 2 of the queried file plus one location outside the root; references echo the open document's text length.
+// at line 2 (FAKE_LSP_DEFINITION_LINE) of the queried file plus one location outside the root; references echo the open document's text length.
 import { pathToFileURL } from 'node:url';
 
 let buf = Buffer.alloc(0);
@@ -33,6 +33,8 @@ const span = (startLine, endLine, ch = 0) => ({
   start: { line: startLine, character: ch },
   end: { line: endLine, character: 0 },
 });
+
+const DEFINITION_LINE = Number(process.env.FAKE_LSP_DEFINITION_LINE ?? 2);
 
 // FAKE_LSP_TAG: a server joining another on the same file; its answers say who spoke.
 const TAG = process.env.FAKE_LSP_TAG;
@@ -126,7 +128,7 @@ function handle(msg) {
           )
         : msg.params.textDocument.uri;
       return reply(msg.id, [
-        { uri, range: range(1, 4) },
+        { uri, range: range(DEFINITION_LINE - 1, 4) },
         { uri: pathToFileURL(EXTERNAL).href, range: range(0) },
       ]);
     }

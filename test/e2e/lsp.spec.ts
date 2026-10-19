@@ -168,6 +168,47 @@ test.describe('with a language server', () => {
     // Not a file header's Copy path button, which the next Space would press.
     await expect(page.locator('main[tabindex]')).toBeFocused();
   });
+
+  test.describe('whose definitions point into collapsed context', () => {
+    // At 2 context lines, openapi.py folds lines 4–10 between its two hunks; line 20, `refunds=...`, calls in.
+    test.use({ env: { PATH: '/usr/bin:/bin', FAKE_LSP_DEFINITION_LINE: '7' } });
+
+    test('regression: go to definition into a diff that cannot hydrate opens the whole file', async ({
+      page,
+      diffle,
+    }) => {
+      // Collapsed context expands only in a hydrated diff. Fail openapi.py's old side so its hydration does;
+      // the whole file needs only the new side.
+      const path = 'tally/generated/openapi.py';
+      await page.route(/\/api\/file\?/, async (route) => {
+        const params = new URL(route.request().url()).searchParams;
+        if (params.get('path') === path && params.get('rev') === 'old') await route.fulfill({ status: 500 });
+        else await route.continue();
+      });
+      // A context change reloads every patch, so the page already open hydrates afresh through the route.
+      await page.getByRole('button', { name: 'Settings' }).click();
+      const settings = page.getByRole('dialog', { name: 'Settings' });
+      await settings.getByRole('spinbutton').fill('2');
+      await settings.getByRole('button', { name: 'Save' }).click();
+      await expect(settings).toHaveCount(0);
+      await gotoFile(page, path);
+      await waitForLsp(diffle.url);
+      await clickLine(page, path, 20);
+      await page.mouse.move(0, 0);
+      const line7 = page
+        .locator('diffs-container')
+        .filter({ has: page.locator(`[slot="header-custom"] [data-path="${path}"]`) })
+        .locator('[data-column-number="7"]')
+        .last();
+      await expect(line7).toHaveCount(0);
+      // The first request can land while the bridge is still opening the document; ask again then.
+      await expect(async () => {
+        await page.keyboard.press('0');
+        await page.keyboard.type('gd');
+        await expect(line7).toBeInViewport({ timeout: 2000 });
+      }).toPass({ timeout: 10000 });
+    });
+  });
 });
 
 // A TypeScript installed in the checkout, and the fake server on PATH as `typescript-language-server`:
