@@ -8,14 +8,7 @@ const api = {
   snapshot: vi.fn(),
   threads: vi.fn(async () => []),
   viewed: vi.fn(async () => []),
-  config: vi.fn(async () => ({
-    autoViewed: [],
-    contextLines: 5,
-    followRefs: 'off',
-    lineWrap: true,
-    showWhitespace: false,
-    lspCommands: {},
-  })),
+  config: vi.fn(async () => ({ autoViewed: [], contextLines: 5, followRefs: 'off', lineWrap: true, lspCommands: {} })),
   saveConfig: vi.fn(async (update: object) => ({ ...useStore.getState().config, ...update })),
   lspStatus: vi.fn(async () => ({ enabled: false, servers: [], missing: [] })),
   exportComments: vi.fn(),
@@ -358,15 +351,6 @@ describe('useKeymap', () => {
     press('w');
     await flush();
     expect(useStore.getState().config.lineWrap).toBe(true);
-  });
-
-  it('zs saves the flipped whitespace visibility', async () => {
-    expect(useStore.getState().config.showWhitespace).toBe(false);
-    press('z');
-    press('s');
-    await flush();
-    expect(api.saveConfig).toHaveBeenCalledWith({ showWhitespace: true });
-    expect(useStore.getState().config.showWhitespace).toBe(true);
   });
 
   it('repeats a chord while its prefix is held and stops on release', () => {

@@ -1,5 +1,4 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import { useStore } from '@/client/store.js';
 import { watchRenderedRows } from './rows.js';
 
 /**
@@ -47,43 +46,23 @@ export function markWhitespace(row: Element): void {
   }
 }
 
-/** Undo `markWhitespace` under `root`, merging the text back into the nodes it came from. */
-export function unmarkWhitespace(root: ParentNode): void {
-  const parents = new Set<Node>();
-  for (const span of root.querySelectorAll(`[${WHITESPACE_ATTR}]`)) {
-    if (span.parentNode) parents.add(span.parentNode);
-    span.replaceWith(span.textContent ?? '');
-  }
-  for (const parent of parents) parent.normalize();
-}
-
 export function installWhitespaceMarks(
   viewer: () => CodeViewHandle<unknown, undefined> | null,
   scroller: HTMLElement,
 ): () => void {
   // Rows already marked; a mutation inside one (the viewer re-rendering it, or our own wrapping) drops it.
-  let marked = new WeakSet<Element>();
+  const marked = new WeakSet<Element>();
   return watchRenderedRows(
     viewer,
     scroller,
-    (schedule) =>
-      useStore.subscribe((s, prev) => {
-        if (s.config.showWhitespace !== prev.config.showWhitespace) schedule();
-      }),
+    () => () => {},
     (items) => {
-      const show = useStore.getState().config.showWhitespace;
-      if (!show) marked = new WeakSet();
-      for (const { root } of items) {
-        if (!show) {
-          unmarkWhitespace(root);
-          continue;
-        }
+      for (const { root } of items)
         for (const row of root.querySelectorAll('[data-line]')) {
           if (marked.has(row)) continue;
           markWhitespace(row);
           marked.add(row);
         }
-      }
     },
     (records) => {
       for (const r of records) {

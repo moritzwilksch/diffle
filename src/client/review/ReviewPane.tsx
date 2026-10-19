@@ -393,7 +393,7 @@ export function ReviewPane() {
     if (!scroller) return;
     return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
-  // And the visible spaces and tabs, while the setting is on.
+  // And the visible spaces and tabs.
   useEffect(() => {
     if (!scroller) return;
     return installWhitespaceMarks(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);

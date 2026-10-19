@@ -63,7 +63,6 @@ const KEYMAP: Record<string, Action> = {
   zb: (s) => s.scrollCursorTo('bottom'),
   zz: (s) => s.scrollCursorTo('eye'),
   zw: (s) => s.saveConfig({ lineWrap: !s.config.lineWrap }),
-  zs: (s) => s.saveConfig({ showWhitespace: !s.config.showWhitespace }),
   zh: () => scrollCursorInline(-1),
   zl: () => scrollCursorInline(1),
   s: (s) => s.setDiffStyle(s.diffStyle === 'split' ? 'unified' : 'split'),

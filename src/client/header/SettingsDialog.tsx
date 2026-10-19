@@ -17,7 +17,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [context, setContext] = useState(String(config.contextLines));
   const [followRefs, setFollowRefs] = useState(config.followRefs);
   const [lineWrap, setLineWrap] = useState(config.lineWrap);
-  const [showWhitespace, setShowWhitespace] = useState(config.showWhitespace);
   const [saving, setSaving] = useState(false);
   const overrides = Object.entries(config.lspCommands).sort(([a], [b]) => a.localeCompare(b));
 
@@ -31,7 +30,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       contextLines: Math.max(0, Number.parseInt(context, 10) || 0),
       followRefs,
       lineWrap,
-      showWhitespace,
     });
     setSaving(false);
     onClose();
@@ -89,19 +87,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           onChange={(e) => setContext(e.target.value)}
           className="w-[100px]"
         />
-        <h3 className="m-0 mt-[14px] mb-2">Lines</h3>
+        <h3 className="m-0 mt-[14px] mb-2">Long lines</h3>
         <label className="flex cursor-pointer items-center gap-1.5">
           <input type="checkbox" checked={lineWrap} onChange={(e) => setLineWrap(e.target.checked)} />
           Wrap long lines
           <span className="text-muted">
             (toggle with <code>zw</code>)
-          </span>
-        </label>
-        <label className="mt-1 flex cursor-pointer items-center gap-1.5">
-          <input type="checkbox" checked={showWhitespace} onChange={(e) => setShowWhitespace(e.target.checked)} />
-          Show spaces and tabs
-          <span className="text-muted">
-            (toggle with <code>zs</code>)
           </span>
         </label>
         <h3 className="m-0 mt-[14px] mb-2">Reload behavior</h3>

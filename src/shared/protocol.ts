@@ -546,8 +546,6 @@ export const UserConfigSchema = z.object({
   followRefs: FollowRefsSchema,
   /** Wrap long lines in the viewer instead of scrolling them sideways. Default true. */
   lineWrap: z.boolean(),
-  /** Draw spaces and tabs in the viewer as faint dots and arrows. Default false. */
-  showWhitespace: z.boolean(),
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
@@ -561,7 +559,6 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   contextLines: 5,
   followRefs: 'auto',
   lineWrap: true,
-  showWhitespace: false,
   lspCommands: {},
 };
 
@@ -857,7 +854,6 @@ export const ConfigUpdateSchema = z.object({
   contextLines: z.number().int().min(0).max(10_000).optional(),
   followRefs: FollowRefsSchema.optional(),
   lineWrap: z.boolean().optional(),
-  showWhitespace: z.boolean().optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });

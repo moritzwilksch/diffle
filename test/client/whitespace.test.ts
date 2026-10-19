@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { markWhitespace, unmarkWhitespace } from '@/client/review/whitespace.js';
+import { markWhitespace } from '@/client/review/whitespace.js';
 
 /** A rendered row as the highlighter emits it: one span per token, a word-diff mark nested in one. */
 function row(): HTMLElement {
@@ -32,14 +32,5 @@ describe('markWhitespace', () => {
     const html = el.innerHTML;
     markWhitespace(el);
     expect(el.innerHTML).toBe(html);
-  });
-
-  it('is undone by unmarkWhitespace, down to the text nodes', () => {
-    const el = row();
-    const html = el.innerHTML;
-    markWhitespace(el);
-    unmarkWhitespace(el);
-    expect(el.innerHTML).toBe(html);
-    expect(el.firstElementChild!.childNodes).toHaveLength(1);
   });
 });

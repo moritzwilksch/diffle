@@ -529,7 +529,7 @@ export interface ReviewState {
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
   selectFile(path: string): void;
   saveConfig(
-    config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs' | 'lineWrap' | 'showWhitespace'>>,
+    config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs' | 'lineWrap'>>,
   ): Promise<void>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
