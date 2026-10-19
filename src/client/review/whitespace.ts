@@ -26,8 +26,12 @@ export const WHITESPACE_CSS = `
 
 const RUN = /( +|\t)/;
 
+/** Longer lines stay unmarked, as the viewer leaves them unhighlighted (its `tokenizeMaxLineLength` default). */
+export const MAX_MARKED_LINE = 1000;
+
 /** Wrap the whitespace in `row`'s text that is not wrapped yet. */
 export function markWhitespace(row: Element): void {
+  if ((row.textContent?.length ?? 0) > MAX_MARKED_LINE) return;
   const walker = row.ownerDocument.createTreeWalker(row, NodeFilter.SHOW_TEXT);
   const pending: Text[] = [];
   for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null)
@@ -46,30 +50,41 @@ export function markWhitespace(row: Element): void {
   }
 }
 
+/** The rows a mutation touched or added, including those in an item's shadow root as it mounts. */
+function touchedRows(record: MutationRecord): Element[] {
+  const el = record.target instanceof Element ? record.target : record.target.parentElement;
+  const row = el?.closest('[data-line]');
+  if (row) return [row];
+  const rows: Element[] = [];
+  for (const node of record.addedNodes) {
+    if (!(node instanceof Element)) continue;
+    if (node.matches('[data-line]')) rows.push(node);
+    rows.push(...node.querySelectorAll('[data-line]'), ...(node.shadowRoot?.querySelectorAll('[data-line]') ?? []));
+  }
+  return rows;
+}
+
 export function installWhitespaceMarks(
   viewer: () => CodeViewHandle<unknown, undefined> | null,
   scroller: HTMLElement,
 ): () => void {
-  // Rows already marked; a mutation inside one (the viewer re-rendering it, or our own wrapping) drops it.
+  // Rows already marked, so a scroll frame walks no text. Marking also runs straight from the mutation
+  // callback, before paint: the frame pass alone could leave a row the viewer rendered inside a frame bare for one frame.
   const marked = new WeakSet<Element>();
+  const mark = (row: Element) => {
+    markWhitespace(row);
+    marked.add(row);
+  };
   return watchRenderedRows(
     viewer,
     scroller,
     () => () => {},
     (items) => {
       for (const { root } of items)
-        for (const row of root.querySelectorAll('[data-line]')) {
-          if (marked.has(row)) continue;
-          markWhitespace(row);
-          marked.add(row);
-        }
+        for (const row of root.querySelectorAll('[data-line]')) if (!marked.has(row)) mark(row);
     },
     (records) => {
-      for (const r of records) {
-        const el = r.target instanceof Element ? r.target : r.target.parentElement;
-        const row = el?.closest('[data-line]');
-        if (row) marked.delete(row);
-      }
+      for (const r of records) for (const row of touchedRows(r)) mark(row);
     },
   );
 }

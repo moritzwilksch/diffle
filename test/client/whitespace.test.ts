@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { markWhitespace } from '@/client/review/whitespace.js';
+import { MAX_MARKED_LINE, markWhitespace } from '@/client/review/whitespace.js';
 
 /** A rendered row as the highlighter emits it: one span per token, a word-diff mark nested in one. */
 function row(): HTMLElement {
@@ -32,5 +32,12 @@ describe('markWhitespace', () => {
     const html = el.innerHTML;
     markWhitespace(el);
     expect(el.innerHTML).toBe(html);
+  });
+
+  it('leaves a line longer than the viewer highlights unmarked', () => {
+    const el = document.createElement('div');
+    el.textContent = 'a '.repeat(MAX_MARKED_LINE);
+    markWhitespace(el);
+    expect(el.querySelector('[data-ws]')).toBeNull();
   });
 });
