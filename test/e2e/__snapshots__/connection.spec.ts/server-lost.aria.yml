@@ -1,0 +1,4 @@
+- alert:
+  - text: Lost the connection to the diffle server. Restart
+  - code: diffle
+  - text: to keep reviewing; this page reconnects on its own.

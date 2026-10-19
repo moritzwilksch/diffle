@@ -130,7 +130,7 @@ describe('resolveServers', () => {
   });
 
   it('configures a command by its program, however it is spelled, and an unknown one not at all', async () => {
-    const ctx = { root: '/repo', lookup: () => null };
+    const ctx = { root: '/repo', paths: [], lookup: () => null };
     expect(definitionOf('tombi lsp').settings).toBeUndefined();
     // The VS Code CSS server's linter crashes on a null `lint` section, and nobody reads its diagnostics.
     expect(await definitionOf('vscode-css-language-server --stdio').settings?.(ctx)).toEqual({

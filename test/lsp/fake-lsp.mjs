@@ -89,6 +89,8 @@ function handle(msg) {
           })),
         },
       });
+    case 'workspace/didChangeConfiguration':
+      return log('config ' + JSON.stringify(msg.params.settings));
     case 'test/request':
       return send({ jsonrpc: '2.0', id: nextId++, method: msg.params.method, params: msg.params.params });
     case 'test/notification':

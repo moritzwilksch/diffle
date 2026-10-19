@@ -15,11 +15,11 @@ import {
   type Snapshot,
 } from '@/shared/protocol.js';
 import { fuzzyRank } from '@/shared/fuzzy.js';
-import { LspBridge } from './LspBridge.js';
+import type { LspBridge } from './LspBridge.js';
 import { type Answer, mergeHovers, mergeLocations, union } from './merge.js';
 import { LspUnavailableError } from './LspProcess.js';
-import { definitionOf, resolveServers, type ResolvedServer } from './registry.js';
-import { findOnPath } from './which.js';
+import { type PathsByLanguage, pathsOf, PoolServer } from './PoolServer.js';
+import { resolveServers } from './registry.js';
 
 export interface LspPoolOptions {
   /** Repository root; becomes every server's workspace folder and cwd. */
@@ -47,11 +47,6 @@ export type TrackedSnapshot = Pick<Snapshot, 'newSha' | 'headSha'> & {
   changed: Pick<ChangedFile, 'path' | 'status' | 'binary'>[];
 };
 
-/** A running server and its languages, both lists growing as later snapshots resolve to the same command. */
-interface Entry extends ResolvedServer {
-  bridge: LspBridge;
-}
-
 /**
  * A status change goes out at once when the pool has been quiet, and later ones within
  * this window ride on one trailing publish: a server logging a hundred stderr lines
@@ -70,7 +65,7 @@ const PUBLISH_MS = 20;
  */
 export class LspPool {
   /** Servers by command line: languages that resolve to the same command share one process. */
-  private entries = new Map<string, Entry>();
+  private entries = new Map<string, PoolServer>();
   private missing: LspMissing[] = [];
   /** Languages already resolved, served or not, so the PATH probe runs once each. */
   private resolved = new Set<LanguageId>();
@@ -80,18 +75,13 @@ export class LspPool {
   private publishDue = false;
 
   constructor(private readonly opts: LspPoolOptions) {
-    this.ensure(opts.preload ?? []);
+    this.ensure(new Map((opts.preload ?? []).map((l) => [l, []])));
   }
 
   status(): LspStatus {
     return {
       enabled: true,
-      servers: [...this.entries.values()].map((e) => ({
-        ...e.bridge.status(),
-        languages: [...e.languages],
-        joins: [...e.joins],
-        supports: e.bridge.features(),
-      })),
+      servers: [...this.entries.values()].map((e) => e.status()),
       missing: this.missing,
     };
   }
@@ -182,10 +172,14 @@ export class LspPool {
       if (list) list.push(path);
       else byLanguage.set(language, [path]);
     }
-    this.ensure(byLanguage.keys());
+    this.ensure(byLanguage);
     const entries = [...this.entries.values()];
     return Promise.all(
-      entries.map((e) => e.bridge.track([...e.languages, ...e.joins].flatMap((l) => byLanguage.get(l) ?? []))),
+      entries.map((e) => {
+        const tracked = pathsOf(e, byLanguage);
+        e.follow(tracked);
+        return e.bridge.track(tracked);
+      }),
     ).then(() => {});
   }
 
@@ -236,39 +230,26 @@ export class LspPool {
   }
 
   /** Resolves and starts servers for languages not seen before. Cheap and idempotent per language. */
-  private ensure(languages: Iterable<LanguageId>): void {
+  private ensure(byLanguage: PathsByLanguage): void {
     if (this.closing) return;
-    const fresh = [...new Set(languages)].filter((l) => !this.resolved.has(l));
+    const fresh = [...byLanguage.keys()].filter((l) => !this.resolved.has(l));
     if (!fresh.length) return;
     for (const l of fresh) this.resolved.add(l);
     const { servers, missing } = resolveServers(fresh, this.opts.overrides, this.opts.lookup);
     this.missing.push(...missing);
     for (const server of servers) {
       // A process already up for one of its languages (clangd for c) takes the next one (cpp).
-      const entry = this.entries.get(server.command) ?? this.spawn(server.command);
+      const entry = this.entries.get(server.command) ?? this.spawn(server.command, pathsOf(server, byLanguage));
       for (const l of server.languages) if (!entry.languages.includes(l)) entry.languages.push(l);
       for (const l of server.joins) if (!entry.joins.includes(l)) entry.joins.push(l);
     }
     if (servers.length || missing.length) this.publish();
   }
 
-  private spawn(command: string): Entry {
-    const definition = definitionOf(command);
-    const ctx = { root: this.opts.root, lookup: this.opts.lookup ?? findOnPath };
-    const bridge = new LspBridge({
-      command,
-      settings: definition.settings ? Promise.resolve(definition.settings(ctx)) : undefined,
-      initializationOptions: definition.initializationOptions?.(ctx),
-      root: this.opts.root,
-      read: this.opts.read,
-      has: this.opts.has,
-      onStatus: () => this.publish(),
-      spawnProcess: this.opts.spawnProcess,
-      maxOpen: this.opts.maxOpen,
-    });
-    const entry: Entry = { command, bridge, languages: [], joins: [] };
-    this.entries.set(command, entry);
-    return entry;
+  private spawn(command: string, paths: readonly string[]): PoolServer {
+    const server = new PoolServer(command, paths, { ...this.opts, onStatus: () => this.publish() });
+    this.entries.set(command, server);
+    return server;
   }
 
   private publish(): void {

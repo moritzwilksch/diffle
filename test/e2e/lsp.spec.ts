@@ -1,3 +1,4 @@
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
@@ -166,6 +167,39 @@ test.describe('with a language server', () => {
     await expect(references).toHaveCount(0);
     // Not a file header's Copy path button, which the next Space would press.
     await expect(page.locator('main[tabindex]')).toBeFocused();
+  });
+});
+
+// A TypeScript installed in the checkout, and the fake server on PATH as `typescript-language-server`:
+// diffle configures it as the real one, so the status names the TypeScript it was pointed at.
+const typescriptTest = test.extend({
+  repo: async ({ repo }, use) => {
+    const typescript = join(repo, 'node_modules', 'typescript');
+    await mkdir(join(typescript, 'lib'), { recursive: true });
+    await writeFile(join(typescript, 'package.json'), JSON.stringify({ name: 'typescript', version: '5.9.3' }));
+    await writeFile(join(typescript, 'lib', 'typescript.js'), '');
+    const shim = join(repo, '..', 'bin', 'typescript-language-server');
+    await mkdir(join(shim, '..'));
+    await writeFile(
+      shim,
+      `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(REPO_ROOT, 'test/lsp/fake-lsp.mjs'))}\n`,
+    );
+    await chmod(shim, 0o755);
+    await use(repo);
+  },
+  env: async ({ repo }, use) => use({ PATH: `${join(repo, '..', 'bin')}:/usr/bin:/bin` }),
+});
+
+typescriptTest.describe('with a TypeScript server', () => {
+  typescriptTest.use({ args: ['--lsp', 'typescript=typescript-language-server --stdio'] });
+
+  typescriptTest('the status names the TypeScript the server reads', async ({ page, diffle }) => {
+    await waitForLsp(diffle.url);
+    await page.getByLabel(/Language servers/).click();
+    const status = page.getByRole('region', { name: 'Language server status' });
+    await expect(status).toContainText('TypeScript 5.9.3: node_modules/typescript');
+    await expect(status).toMatchAriaSnapshot({ name: 'typescript-status.aria.yml' });
+    await expect(status).toHaveScreenshot('typescript-status.png');
   });
 });
 

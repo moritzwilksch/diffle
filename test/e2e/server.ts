@@ -99,6 +99,8 @@ export async function startDiffle({
     url,
     proc,
     async stop() {
+      // A scenario may stop the server itself; the fixture's teardown then has nothing to wait for.
+      if (proc.exitCode !== null || proc.signalCode !== null) return rmTmp(configDir);
       proc.kill('SIGTERM');
       await new Promise<void>((done) => {
         const force = setTimeout(() => {

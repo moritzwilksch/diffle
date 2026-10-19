@@ -66,8 +66,11 @@ export class LspProcess {
   private advertised = new Set<LspFeature>();
   /** Dynamic registrations by their id, so an unregistration knows which feature it ends. */
   private registrations = new Map<string, LspFeature>();
+  /** What the server is answered from: the latest `reconfigure`'s, else the options'. */
+  private settings: Promise<LspSettings> | undefined;
 
   constructor(private readonly opts: LspProcessOptions) {
+    this.settings = opts.settings;
     this.current = {
       name: programOf(opts.command),
       command: opts.command,
@@ -107,6 +110,17 @@ export class LspProcess {
     return work ? `${this.name} is busy: ${work}; try again when it finishes` : null;
   }
 
+  /**
+   * Answers the server from `settings` from now on, and sends them once it is initialized
+   * unless they are what it already has. A later call supersedes one still pending.
+   */
+  reconfigure(settings: Promise<LspSettings>): void {
+    const before = this.settings;
+    this.settings = settings;
+    // A server that never started, or settings that failed to load, have nothing to send.
+    this.resend(before, settings).catch(() => {});
+  }
+
   /** The connection once initialized; throws LspUnavailableError when the server is gone. */
   async connection(): Promise<JsonRpcConnection> {
     try {
@@ -139,6 +153,13 @@ export class LspProcess {
       await exited;
       clearTimeout(timer);
     }
+  }
+
+  private async resend(before: Promise<LspSettings> | undefined, settings: Promise<LspSettings>): Promise<void> {
+    await this.ready;
+    const [previous, next] = await Promise.all([before, settings]);
+    if (this.closing || this.settings !== settings || JSON.stringify(previous) === JSON.stringify(next)) return;
+    this.rpc?.notify('workspace/didChangeConfiguration', { settings: next });
   }
 
   /**
@@ -196,9 +217,7 @@ export class LspProcess {
     rpc.onMessage((method, params) => {
       if (!this.closing && this.current.state !== 'unavailable') this.output.message(method, params);
     });
-    rpc.onRequest('workspace/configuration', async (params) =>
-      configurationItems((await this.opts.settings) ?? {}, params),
-    );
+    rpc.onRequest('workspace/configuration', async (params) => configurationItems((await this.settings) ?? {}, params));
     rpc.onRequest('client/registerCapability', (params) => this.register(params));
     rpc.onRequest('client/unregisterCapability', (params) => this.unregister(params));
     const rootUri = pathToFileURL(this.opts.root).href;
@@ -220,8 +239,8 @@ export class LspProcess {
       for (const [feature, { provider }] of Object.entries(FEATURES) as [LspFeature, { provider: string }][])
         if (capabilities[provider]) this.advertised.add(feature);
       rpc.notify('initialized', {});
-      if (this.opts.settings) {
-        const settings = await this.opts.settings;
+      if (this.settings) {
+        const settings = await this.settings;
         if (!this.closing) rpc.notify('workspace/didChangeConfiguration', { settings });
       }
     } catch (e) {

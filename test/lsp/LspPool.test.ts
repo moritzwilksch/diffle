@@ -1,10 +1,13 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LspUnavailableError } from '@/server/lsp/LspProcess.js';
 import { LspPool, type LspPoolOptions } from '@/server/lsp/LspPool.js';
 import type { LanguageId, LspStatus } from '@/shared/protocol.js';
+import { rmTmp } from '../tmp.js';
 import { flush } from './flush.js';
 
 /** A worktree snapshot changing `paths`. */
@@ -67,8 +70,10 @@ function start(overrides: Partial<Record<LanguageId, string>>, extra: Partial<Ls
 }
 
 const pools: LspPool[] = [];
+const tmps: string[] = [];
 afterEach(async () => {
   await Promise.all(pools.splice(0).map((p) => p.close()));
+  await Promise.all(tmps.splice(0).map(rmTmp));
 });
 
 describe('LspPool', () => {
@@ -161,6 +166,41 @@ describe('LspPool', () => {
     expect([...events.keys()]).toEqual(['py-server']);
     expect(pool.status().servers.map((s) => s.state)).toEqual(['starting']);
     expect((await pool.hover({ path: 'a.py', line: 2, col: 4 })).contents).toContain('def f()');
+  });
+
+  it('names rust-analyzer the Cargo workspaces the diff reaches, again as it reaches more', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'diffle-pool-')));
+    tmps.push(root);
+    for (const [path, text] of [
+      ['Cargo.toml', '[workspace]\nmembers = ["crates/*"]\n'],
+      ['crates/a/Cargo.toml', '[package]\nname = "a"\n'],
+      ['py-rattler/Cargo.toml', '[package]\nname = "py-rattler"\n[workspace]\n'],
+    ]) {
+      mkdirSync(dirname(join(root, path!)), { recursive: true });
+      writeFileSync(join(root, path!), text!);
+    }
+    const { pool, events, statuses } = start(
+      { rust: 'rust-analyzer' },
+      { root, read: async () => 'fn main() {}\n', has: async () => true },
+    );
+    const shown = () => statuses.at(-1)?.servers[0]?.projects;
+    const linked = (...manifests: string[]) => ({ linkedProjects: manifests.map((m) => join(root, m)) });
+    const configs = () => events.get('rust-analyzer')?.filter((l) => l.startsWith('config '));
+    await pool.track(diff('crates/a/src/lib.rs'));
+    await expect.poll(configs).toEqual([`config ${JSON.stringify({ 'rust-analyzer': linked('Cargo.toml') })}`]);
+    expect(events.get('rust-analyzer')).toContain(`init ${JSON.stringify(linked('Cargo.toml'))}`);
+    expect(pool.status().servers[0]?.projects).toEqual({ label: 'Cargo workspaces', paths: ['Cargo.toml'] });
+    // Another file of a workspace already named changes nothing; one of a new workspace reloads.
+    await pool.track(diff('crates/a/src/lib.rs', 'crates/a/src/main.rs'));
+    await pool.track(diff('py-rattler/src/lib.rs'));
+    await expect
+      .poll(configs)
+      .toEqual([
+        `config ${JSON.stringify({ 'rust-analyzer': linked('Cargo.toml') })}`,
+        `config ${JSON.stringify({ 'rust-analyzer': linked('Cargo.toml', 'py-rattler/Cargo.toml') })}`,
+      ]);
+    // The status follows, and reaches the client as one.
+    await expect.poll(shown).toEqual({ label: 'Cargo workspaces', paths: ['Cargo.toml', 'py-rattler/Cargo.toml'] });
   });
 
   describe('a server joining languages beside their owner', () => {
