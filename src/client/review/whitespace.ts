@@ -13,7 +13,7 @@ export const WHITESPACE_ATTR = 'data-ws';
 
 /** Injected into the viewer's shadow DOM. Paints without taking room, so no row changes height or width. */
 export const WHITESPACE_CSS = `
-[data-ws] { --ws-color: color-mix(in srgb, var(--fg-2) 55%, transparent); }
+[data-ws] { --ws-color: color-mix(in srgb, var(--fg-2) 30%, transparent); }
 /* One centered dot per character cell; in a monospace font a space is 1ch wide. */
 [data-ws='space'] {
   background: radial-gradient(circle, var(--ws-color) 0.07em, transparent 0.09em) 0 50% / 1ch 1lh repeat-x;
