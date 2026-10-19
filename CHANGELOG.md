@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.9](https://github.com/moritzwilksch/diffle/compare/v0.2.8...v0.2.9) - 2026-10-19
+
+### Features
+
+- _(github)_ Support GitHub Enterprise hosts ([#346](https://github.com/moritzwilksch/diffle/pull/346))
+
 ## [0.2.8](https://github.com/moritzwilksch/diffle/compare/v0.2.7...v0.2.8) - 2026-10-19
 
 ### Features
