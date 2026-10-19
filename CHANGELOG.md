@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.8](https://github.com/moritzwilksch/diffle/compare/v0.2.7...v0.2.8) - 2026-10-19
+
+### Features
+
+- _(client)_ Warn when the diffle server is gone ([#337](https://github.com/moritzwilksch/diffle/pull/337))
+- _(review)_ Always show spaces and tabs as dots and arrows ([#339](https://github.com/moritzwilksch/diffle/pull/339))
+
+### Bug fixes
+
+- _(lsp)_ Find TypeScript and Cargo workspaces below the repository root ([#338](https://github.com/moritzwilksch/diffle/pull/338))
+- _(review)_ Expand collapsed context on a jump into a diff not yet hydrated ([#340](https://github.com/moritzwilksch/diffle/pull/340))
+- _(ui)_ Lift tooltips above every other layer ([#345](https://github.com/moritzwilksch/diffle/pull/345))
+
+### Testing
+
+- _(lsp)_ Wait for the fake server's log instead of a fixed 50ms ([#335](https://github.com/moritzwilksch/diffle/pull/335))
+
 ## [0.2.7](https://github.com/moritzwilksch/diffle/compare/v0.2.6...v0.2.7) - 2026-10-18
 
 ### Features
