@@ -12,6 +12,9 @@ export const TREE_CSS = `
 [data-item-section="decoration"] { flex: 1 0 auto; overflow: visible; }
 [data-item-section="decoration"] > span { gap: 0.375rem; overflow: visible; font-variant-numeric: tabular-nums; }
 [data-item-section="decoration"] > span > span:last-child { min-width: 1ch; text-align: center; }
+/* An unchanged row has nothing to show in its lanes; dropped, they leave the name the whole row, and
+ * while scrolling sideways no opaque lane is pinned over its tail. */
+[data-type="item"]:has(> [data-item-section="decoration"]:empty) > :is([data-item-section="decoration"], [data-item-section="git"]) { display: none; }
 /* The tree shows a name's ellipsis once a hidden wrapping copy makes its cell taller than 1lh. At a
  * fractional browser zoom (110%) fixed-point rounding leaves every cell a hair taller, and the marker
  * then paints over names that fit (pierrecomputer/pierre#816). A wrapped copy is at least 2lh tall. */

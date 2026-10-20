@@ -50,6 +50,25 @@ test('a narrow sidebar scrolls sideways and keeps the lanes in view', async ({ p
   await expect(page.locator('file-tree-container')).toHaveScreenshot('narrow-tree.png');
 });
 
+test('an unchanged row pins no lanes over its name', async ({ page }) => {
+  await scrollLongNames(page);
+  await page.getByRole('button', { name: 'All files' }).click();
+  await page.locator('file-tree-container [data-item-path="docs/"]').click({ position: { x: 20, y: 10 } });
+  const row = page.locator('file-tree-container [data-item-path="docs/release notes.md"]');
+  const pane = page.locator('file-tree-container [data-file-tree-virtualized-scroll]');
+  await pane.evaluate((el) => (el.scrollLeft = 10_000));
+  // Nothing is left to cover the name, so it ends inside the pane.
+  await expect(row.locator('[data-item-section="decoration"], [data-item-section="git"]')).toHaveCount(2);
+  await expect(row.locator('[data-item-section="decoration"]')).toBeHidden();
+  await expect(row.locator('[data-item-section="git"]')).toBeHidden();
+  const ends = await row.evaluate((el) => {
+    const name = el.querySelector('[data-item-section="content"]')!.getBoundingClientRect();
+    const view = el.closest('[data-file-tree-virtualized-scroll]')!;
+    return name.right <= view.getBoundingClientRect().left + view.clientWidth;
+  });
+  expect(ends).toBe(true);
+});
+
 test('a clipped row names its full path', async ({ page }) => {
   await scrollLongNames(page);
   const row = page.locator('file-tree-container [data-item-path="tally/generated/openapi.py"]');
