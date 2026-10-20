@@ -14,7 +14,7 @@ import { useCutNameTitles } from './cutNames.js';
 import { directoryDecoration, rowDecoration } from './decoration.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
-import { TREE_CSS } from './treeCss.js';
+import { pinLanes, TREE_CSS } from './treeCss.js';
 import { toggleDirectoryViewed, TreeMenu } from './TreeMenu.js';
 
 type Scope = 'changed' | 'all';
@@ -88,7 +88,10 @@ export function FileTreePane() {
   // Long names follow the diff's long lines: wrapped, the tree ellipsizes them; unwrapped, the pane scrolls sideways.
   const scrolls = useStore((s) => !s.config.lineWrap);
   useEffect(() => {
-    bodyRef.current?.firstElementChild?.toggleAttribute('data-hscroll', scrolls);
+    const host = bodyRef.current?.firstElementChild;
+    if (!(host instanceof HTMLElement)) return;
+    host.toggleAttribute('data-hscroll', scrolls);
+    return scrolls ? pinLanes(host) : undefined;
   }, [scrolls]);
 
   useEffect(() => {

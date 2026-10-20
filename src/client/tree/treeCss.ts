@@ -30,9 +30,8 @@ export const TREE_CSS = `
   [data-file-tree-virtualized-scroll] { overscroll-behavior-x: contain; }
   [data-file-tree-virtualized-list] { width: max-content; min-width: 100%; }
   [data-type="item"] {
-    --lane-gutter: var(--trees-scrollbar-gutter-measured, var(--trees-scrollbar-gutter));
-    /* A sticky offset counts from the scroll box's outer edge, scrollbar gutter included. */
-    --lane-pin: calc(var(--lane-edge) + var(--lane-gutter));
+    /* \`pinLanes\` sets \`--lane-gutter\`: whether a sticky offset counts the scrollbar gutter depends on the browser. */
+    --lane-pin: calc(var(--lane-edge) + var(--lane-gutter, 0px));
     overflow: clip;
   }
   /* Keep the focus ring above the lanes. */
@@ -58,3 +57,40 @@ export const TREE_CSS = `
   [data-item-section="decoration"]::before { content: ""; position: absolute; top: 0; bottom: 0; right: 100%; width: var(--trees-item-row-gap); background-color: inherit; }
 }
 `;
+
+/** How far past the inner edge a sticky `right: 0` lands in a box styled like the tree's scroller. */
+function stickyPastInnerEdge(shadow: ShadowRoot, scrollsVertically: boolean): number {
+  const box = document.createElement('div');
+  box.setAttribute('data-file-tree-scrollbar-measure', 'true');
+  const content = box.appendChild(document.createElement('div'));
+  content.style.cssText = `display: flex; width: 200%; height: ${scrollsVertically ? 300 : 50}%`;
+  const pin = content.appendChild(document.createElement('span'));
+  pin.style.cssText = 'position: sticky; right: 0; margin-left: auto; width: 1px';
+  shadow.append(box);
+  const inner = box.getBoundingClientRect().left + box.clientLeft + box.clientWidth;
+  const past = pin.getBoundingClientRect().right - inner;
+  box.remove();
+  return Math.max(past, 0);
+}
+
+/**
+ * Keeps the host's `--lane-gutter` at the offset that pins the lanes where they stand without the
+ * scroll. Chromium on Linux counts the scrollbar gutter in a sticky offset; on macOS it does only
+ * while the box has no vertical scrollbar. Returns the cleanup.
+ */
+export function pinLanes(host: HTMLElement): () => void {
+  const shadow = host.shadowRoot;
+  const pane = shadow?.querySelector('[data-file-tree-virtualized-scroll]');
+  if (!shadow || !pane) return () => {};
+  const gutter = { scrolling: stickyPastInnerEdge(shadow, true), still: stickyPastInnerEdge(shadow, false) };
+  const update = () => {
+    const px = pane.scrollHeight > pane.clientHeight ? gutter.scrolling : gutter.still;
+    host.style.setProperty('--lane-gutter', `${px}px`);
+  };
+  // The list's height follows its rows, so expanding or filtering re-checks the vertical scrollbar.
+  const observer = new ResizeObserver(update);
+  observer.observe(pane);
+  for (const list of pane.children) observer.observe(list);
+  update();
+  return () => observer.disconnect();
+}
