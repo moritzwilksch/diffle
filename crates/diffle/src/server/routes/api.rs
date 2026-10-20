@@ -55,10 +55,10 @@ async fn mode(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     Ok(Json(d.session.switch_mode(req).await?).into_response())
 }
 
-/// Pull request discovery arrives with the GitHub client.
+/// The pull request the current snapshot belongs to, as far as GitHub and the remotes tell.
 async fn github(State(d): State<Arc<ApiDeps>>) -> ApiResult {
-    d.session.snapshotter()?.current().await?;
-    Err(crate::error::Error::Github("GitHub is not available in this build yet".into()).into())
+    let snap = d.session.snapshotter()?.current().await?;
+    Ok(Json(d.session.github_metadata(&snap).await?).into_response())
 }
 
 async fn refs(State(d): State<Arc<ApiDeps>>) -> ApiResult {

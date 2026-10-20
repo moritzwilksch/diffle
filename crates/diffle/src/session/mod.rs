@@ -1,5 +1,6 @@
 //! The active mode and everything derived from it, behind one serialized transition queue.
 mod files;
+mod github;
 mod refresh;
 mod transitions;
 mod watch;
@@ -15,7 +16,7 @@ use tokio::sync::{mpsc, oneshot, watch as signal};
 use crate::comments::CommentStore;
 use crate::error::{Error, Result};
 use crate::git::GitRepo;
-use crate::github::hosts::GithubInstance;
+use crate::github::hosts::Github;
 use crate::iterations::IterationStore;
 use crate::mode::resolve::{names_branch, resolve_review};
 use crate::protocol::{
@@ -42,17 +43,13 @@ pub trait Broadcaster: Send + Sync {
     fn broadcast(&self, msg: ServerMessage);
 }
 
-/// A review ready to activate: the comparison, and the pull request it was entered as, if any.
-#[derive(Clone, Debug)]
-pub struct ResolvedReview {
-    pub mode: ModeSpec,
-    pub pr_url: Option<String>,
-}
+pub use crate::mode::resolve::ResolvedReview;
 
 pub struct SessionOptions {
     pub watch: bool,
-    /// Where GitHub is; decides comment keys of ranges on its remotes.
-    pub instance: GithubInstance,
+    /// Where GitHub is, deciding comment keys of ranges on its remotes; without a client (no
+    /// token), pull request lookup and export are off.
+    pub github: Github,
     /// Context lines for patches: `--context`, else the user config. Changed at runtime via `set_context`.
     pub context: u32,
     /// What a review between refs does when one moves. The user config; `set_follow_refs` changes it.
@@ -72,6 +69,8 @@ struct Active {
 }
 
 type Job = BoxFuture<'static, ()>;
+type Discovery =
+    (Arc<Snapshot>, std::time::Instant, Shared<BoxFuture<'static, Result<crate::protocol::GithubMetadata>>>);
 type Listener = Box<dyn Fn(&Arc<Snapshot>) + Send + Sync>;
 type Pending = Shared<BoxFuture<'static, ()>>;
 
@@ -88,7 +87,11 @@ pub struct Session {
     pub repo: Arc<GitRepo>,
     hub: Arc<dyn Broadcaster>,
     watch: bool,
-    instance: GithubInstance,
+    github: Github,
+    /// The latest pull request discovery: its snapshot, when it goes stale, and the shared lookup.
+    discovered: Mutex<Option<Discovery>>,
+    /// Exports one at a time, so two overlapping ones cannot add the same thread twice.
+    exporter: crate::github::review::GithubExporter,
     context: Mutex<u32>,
     follow_refs: Mutex<FollowRefs>,
     version: AtomicI64,
@@ -114,7 +117,9 @@ impl Session {
             repo,
             hub,
             watch: opts.watch,
-            instance: opts.instance,
+            github: opts.github,
+            discovered: Mutex::new(None),
+            exporter: crate::github::review::GithubExporter::default(),
             context: Mutex::new(opts.context),
             follow_refs: Mutex::new(opts.follow_refs),
             version: AtomicI64::new(0),
@@ -191,8 +196,8 @@ impl Session {
         *self.context.lock().unwrap()
     }
 
-    pub fn instance(&self) -> &GithubInstance {
-        &self.instance
+    pub fn github(&self) -> &Github {
+        &self.github
     }
 
     /// Whether moved refs recompute the review, as worktree edits always do, or only announce themselves.
@@ -227,10 +232,7 @@ impl Session {
     /// before serving. Queued, so `close` waits for it.
     pub fn resolve(self: &Arc<Self>, req: ModeRequest) -> impl Future<Output = Result<ResolvedReview>> + Send + use<> {
         let this = self.clone();
-        self.run(async move {
-            let mode = resolve_review(&req, &this.repo, &this.instance).await?;
-            Ok(ResolvedReview { mode, pr_url: None })
-        })
+        self.run(async move { resolve_review(&req, &this.repo, &this.github).await })
     }
 
     /// First mode, from `resolve`. Fails `ready` too, so early requests error out.
@@ -250,9 +252,7 @@ impl Session {
                     ModeRequest::Focus { commit } => this.focus(commit).await?,
                     ModeRequest::Interdiff { from, to } => this.interdiff(from.get() as i64, to.get() as i64).await?,
                     ModeRequest::Pair { commit } => this.pair(commit).await?,
-                    req => {
-                        ResolvedReview { mode: resolve_review(&req, &this.repo, &this.instance).await?, pr_url: None }
-                    }
+                    req => resolve_review(&req, &this.repo, &this.github).await?,
                 };
                 this.activate(review).await
             })

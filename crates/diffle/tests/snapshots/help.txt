@@ -4,6 +4,7 @@ Usage: diffle [OPTIONS] [revs]... [COMMAND]
 
 Commands:
   config      show or edit the user config (same settings as the UI dialog)
+  lsp         show the language server each language would get, and what is missing from PATH
   completion  print a shell completion script for bash, zsh, or fish
 
 Arguments:

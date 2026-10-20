@@ -131,18 +131,17 @@ async fn clear(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiRes
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
+/// `threadIds` absent means every open thread, which the generated type cannot tell from none.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GithubExportRequest {
-    #[allow(dead_code)]
     thread_ids: Option<Vec<String>>,
 }
 
-/// A pending review on the matching pull request arrives with the GitHub client.
+/// Adds threads to a pending review on the matching pull request; the human submits it on GitHub.
 async fn github_export(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
-    let _: GithubExportRequest = body(&raw)?;
-    d.session.snapshotter()?;
-    Err(Error::Github("GitHub is not available in this build yet".into()).into())
+    let req: GithubExportRequest = body(&raw)?;
+    Ok(Json(d.session.export_github(req.thread_ids).await?).into_response())
 }
 
 async fn viewed(State(d): State<Arc<ApiDeps>>) -> ApiResult {

@@ -3,9 +3,11 @@ mod args;
 mod completion;
 mod config;
 mod lifetime;
+mod lsp;
 mod open;
 mod paint;
 mod parse;
+pub mod repository;
 mod serve;
 mod timing;
 
@@ -46,7 +48,7 @@ pub fn main() -> ExitCode {
     match runtime.block_on(dispatch(cli)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{} {e:#}", paint::red("✖"));
+            crate::status!("{} {e:#}", paint::red("✖"));
             ExitCode::from(if is_user_error(&e) { 2 } else { 1 })
         }
     }
@@ -55,6 +57,7 @@ pub fn main() -> ExitCode {
 async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     let (req, later) = match cli.command {
         Some(Command::Config { command }) => return config::run(command).await,
+        Some(Command::Lsp) => return lsp::list().await,
         Some(Command::Completion { shell }) => {
             print!("{}", completion::script(args::shell(&shell)));
             return Ok(());

@@ -209,7 +209,7 @@ async fn reports_an_unknown_commit_as_a_revspec_error() {
     let t = merge_repo();
     let repo = t.open().await;
     let req = revspec(&["nope^!"]);
-    let err = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::GithubInstance::github_com())
+    let err = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::Github::tokenless())
         .await
         .unwrap_err();
     assert!(matches!(err, diffle::error::Error::Revspec(_)));
@@ -232,7 +232,7 @@ async fn working_mode_on_an_unborn_branch_diffs_against_the_empty_tree() {
     assert!(snapshotter.patch("staged.txt").await.unwrap().unwrap().contains("+s2\n"));
     assert!(snapshotter.patch_all().await.unwrap().contains("+l\n"));
     let req = revspec(&["HEAD"]);
-    let err = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::GithubInstance::github_com())
+    let err = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::Github::tokenless())
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "unknown revision: HEAD");

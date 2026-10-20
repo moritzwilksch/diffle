@@ -117,13 +117,18 @@ async fn does_not_clear_threads_for_an_invalid_stale_filter() {
     s.close().await;
 }
 
-/// Phase 4 brings pull request discovery; until then the route fails as JSON.
 #[tokio::test]
 async fn serves_repository_identity_as_github_metadata() {
     let s = TestServer::start().await;
+    let version = s.get("/api/snapshot").await.json()["version"].clone();
     let r = s.get("/api/github").await;
-    assert_eq!(r.status, 502);
-    assert_eq!(r.json(), json!({ "error": "GitHub is not available in this build yet" }));
+    assert_eq!(r.status, 200, "{}", r.body);
+    let metadata = r.json();
+    assert_eq!(
+        (&metadata["version"], &metadata["repository"], &metadata["pullRequest"]),
+        (&version, &json!(null), &json!(null))
+    );
+    assert!(metadata["reason"].is_string(), "{metadata}");
     s.close().await;
 }
 
@@ -392,14 +397,13 @@ async fn rejects_oversized_bodies_with_413() {
     s.close().await;
 }
 
-// Phase 5: GET /api/file serving a file outside the snapshot after the language server named it
-// needs the LSP pool; until then /api/lsp/* answer that language servers are off.
+// GET /api/file serving a file outside the snapshot after a language server named it: tests/server_lsp.rs.
 #[tokio::test]
 async fn lsp_routes_say_language_servers_are_off() {
     let s = TestServer::start().await;
     assert_eq!(s.get("/api/lsp/status").await.json(), json!({ "enabled": false, "servers": [], "missing": [] }));
     let r = s.json("POST", "/api/lsp/definition", json!({ "path": "a.txt", "line": 1, "col": 0 })).await;
-    assert_eq!((r.status, r.json()), (409, json!({ "error": "language servers are off" })));
+    assert_eq!((r.status, r.json()), (409, json!({ "error": "Language servers are off for this run (--no-lsp)" })));
     assert_eq!(s.get("/api/lsp/log?server=fake").await.status, 404);
     s.close().await;
 }

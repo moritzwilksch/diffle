@@ -53,13 +53,13 @@ impl UserConfigStore {
             Ok(text) => match serde_json::from_str::<Value>(&text) {
                 Ok(value) => normalize(&value),
                 Err(e) => {
-                    eprintln!("[diffle] ignoring unreadable config {}: {e}", file.display());
+                    crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
                     default_user_config()
                 }
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => default_user_config(),
             Err(e) => {
-                eprintln!("[diffle] ignoring unreadable config {}: {e}", file.display());
+                crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
                 default_user_config()
             }
         };
@@ -143,7 +143,7 @@ fn lsp_commands(value: Option<&Value>) -> HashMap<LanguageId, String> {
             Ok(id) if known.contains(&id) => {
                 out.insert(id, command.trim().to_owned());
             }
-            _ => eprintln!("[diffle] ignoring config lspCommands.{language}: not a language diffle knows"),
+            _ => crate::status!("[diffle] ignoring config lspCommands.{language}: not a language diffle knows"),
         }
     }
     out

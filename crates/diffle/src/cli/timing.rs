@@ -25,7 +25,7 @@ impl Timing {
         let width = self.marks.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
         let mut prev = 0.0;
         for (name, ms) in &self.marks {
-            eprintln!("[timing] {name:<width$}  +{:>7.1} ms  @{ms:>7.1} ms", ms - prev);
+            crate::status!("[timing] {name:<width$}  +{:>7.1} ms  @{ms:>7.1} ms", ms - prev);
             prev = *ms;
         }
     }

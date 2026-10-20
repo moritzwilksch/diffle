@@ -40,9 +40,10 @@ impl From<Error> for ApiError {
             Error::NotFound(_) => Self::not_found("not found"),
             Error::Revspec(m) | Error::Invalid(m) | Error::Unquotable(m) => Self::bad_request(m),
             Error::Git(e) => Self::bad_request(e.message),
-            Error::Github(m) => Self(StatusCode::BAD_GATEWAY, m),
+            Error::LspUnavailable(m) | Error::LspUnsupported(m) => Self(StatusCode::CONFLICT, m),
+            Error::Github(e) => Self(StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY), e.message),
             Error::Other(e) => {
-                eprintln!("[diffle] {e:#}");
+                crate::status!("[diffle] {e:#}");
                 Self(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
             }
         }

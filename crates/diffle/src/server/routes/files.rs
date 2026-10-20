@@ -66,7 +66,15 @@ async fn file(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResu
     let q: FileQuery = query(raw.as_deref())?;
     let path = q.path.to_string();
     let snap = d.session.snapshotter()?.current().await?;
-    let Some(buf) = d.session.read_side(&snap, &path, q.rev).await? else {
+    // Outside the snapshot only a file the language server named is readable (see `Locator::read_external`).
+    let mut found = d.session.read_side(&snap, &path, q.rev).await?;
+    if found.is_none()
+        && q.rev == Side::New
+        && let Some(pool) = &d.lsp
+    {
+        found = pool.read_external(&path).await;
+    }
+    let Some(buf) = found else {
         return Err(ApiError::not_found("absent on that side"));
     };
     let binary = is_binary(&buf);

@@ -29,6 +29,27 @@ impl GitError {
     }
 }
 
+/// A GitHub precondition the user can fix (no token, no pull request, wrong mode) or a GitHub
+/// failure, with the status the API answers it with: 400 for bad input, 409 for something to fix
+/// first, 502 when GitHub refused or did not answer.
+#[derive(Debug, Error, Clone)]
+#[error("{message}")]
+pub struct GithubError {
+    pub message: String,
+    pub status: u16,
+}
+
+impl GithubError {
+    pub fn new(message: impl Into<String>, status: u16) -> Self {
+        Self { message: message.into(), status }
+    }
+
+    /// Something to fix before GitHub can help: the default.
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(message, 409)
+    }
+}
+
 /// Cloneable, so one failed computation can answer every caller sharing it.
 #[derive(Debug, Error, Clone)]
 pub enum Error {
@@ -37,14 +58,20 @@ pub enum Error {
     /// A revision argument that cannot be parsed or resolved.
     #[error("{0}")]
     Revspec(String),
-    #[error("{0}")]
-    Github(String),
+    #[error(transparent)]
+    Github(#[from] GithubError),
     /// A thread or message id that names nothing.
     #[error("not found: {0}")]
     NotFound(String),
     /// An anchor the snapshot cannot place: path absent on that side, or lines past the end.
     #[error("{0}")]
     Unquotable(String),
+    /// A language server is off, still starting, gone, or busy past retrying: the API answers 409.
+    #[error("{0}")]
+    LspUnavailable(String),
+    /// The server never advertised the feature; advisory requests answer nothing instead.
+    #[error("{0}")]
+    LspUnsupported(String),
     /// A request body that is not valid JSON or not the shape the route takes.
     #[error("{0}")]
     Invalid(String),

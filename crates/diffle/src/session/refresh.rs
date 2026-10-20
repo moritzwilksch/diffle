@@ -51,7 +51,7 @@ impl Session {
         let ran = self.run(job);
         let pending = async move {
             if let Err(e) = ran.await {
-                eprintln!("[diffle] {what} failed: {e}");
+                crate::status!("[diffle] {what} failed: {e}");
             }
         }
         .boxed()
@@ -132,7 +132,8 @@ impl Session {
         if let Some(inter) = a.mode.interdiff.as_ref().filter(|_| shown_iterations(&a.mode).is_none()) {
             let range =
                 |side: &crate::protocol::RangeSide| ParsedRange { old: side.old.clone(), new: side.new.clone() };
-            let mode = range_diff_review(&self.repo, (range(&inter.from), range(&inter.to)), &self.instance).await?;
+            let mode =
+                range_diff_review(&self.repo, (range(&inter.from), range(&inter.to)), &self.github.instance).await?;
             return self.enter(ResolvedReview { mode, pr_url: a.pr_url.clone() }).await;
         }
         a.snapshotter.invalidate(self.next_version());

@@ -47,6 +47,8 @@ pub struct ApiDeps {
     /// Session-only additions from `--auto-viewed`.
     pub extra_auto_viewed: Vec<String>,
     pub hub: Arc<Hub>,
+    /// The language servers, unless the run disabled them with `--no-lsp`.
+    pub lsp: Option<Arc<crate::lsp::pool::LspPool>>,
 }
 
 struct App {
@@ -75,7 +77,7 @@ impl Server {
                 let _ = stopped.wait_for(|stop| *stop).await;
             };
             if let Err(e) = axum::serve(listener, router).with_graceful_shutdown(shutdown).await {
-                eprintln!("[diffle] server failed: {e}");
+                crate::status!("[diffle] server failed: {e}");
             }
         });
         Ok((Server { hub, stop, serving }, url(&opts.host, addr)))

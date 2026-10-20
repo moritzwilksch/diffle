@@ -1,5 +1,9 @@
 //! Temporary real repositories for the integration tests.
 #![allow(dead_code)]
+pub mod github;
+#[cfg(unix)]
+pub mod lsp;
+pub mod pr;
 pub mod server;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -68,7 +72,7 @@ pub fn git_in(dir: &Path, args: &[&str]) -> String {
 
 use std::sync::Arc;
 
-use diffle::github::hosts::GithubInstance;
+use diffle::github::hosts::Github;
 use diffle::mode::resolve::resolve_review;
 use diffle::protocol::{ModeRequest, ModeSpec, Snapshot};
 use diffle::snapshotter::Snapshotter;
@@ -78,7 +82,7 @@ pub fn revspec(args: &[&str]) -> ModeRequest {
 }
 
 pub async fn mode(repo: &GitRepo, req: ModeRequest) -> ModeSpec {
-    resolve_review(&req, repo, &GithubInstance::github_com()).await.unwrap()
+    resolve_review(&req, repo, &Github::tokenless()).await.unwrap().mode
 }
 
 /// A snapshotter for `req` at version 1 with three lines of context, and its first snapshot.
@@ -122,7 +126,7 @@ pub fn session(
     follow_refs: FollowRefs,
 ) -> (Arc<Session>, Arc<Recorder>) {
     let hub = Arc::new(Recorder::default());
-    let opts = SessionOptions { watch, instance: GithubInstance::github_com(), context, follow_refs };
+    let opts = SessionOptions { watch, github: Github::tokenless(), context, follow_refs };
     (Session::new(repo.clone(), hub.clone(), opts), hub)
 }
 

@@ -13,29 +13,35 @@ anyhow = "1"
 axum = { version = "0.8", features = ["ws"] }
 clap = { version = "4.6", features = ["derive", "string", "wrap_help"] }
 clap_complete = "4.6"
+dunce = "1"
 form_urlencoded = "1"
 futures = "0.3"
 gethostname = "1"
 hex = "0.4"
+indexmap = "2"
 http-body-util = "0.1"
 notify = "8"
 mime_guess = "2"
 regex = "1"
 regress = "0.10"
+reqwest = { version = "0.13.5", features = ["json"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 sha1 = "0.10"
+tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "compression-deflate"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 futures = "0.3"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream"] }
-tempfile = "3"
 tokio = { version = "1", features = ["full", "test-util"] }
 tokio-tungstenite = "0.30.0"
 

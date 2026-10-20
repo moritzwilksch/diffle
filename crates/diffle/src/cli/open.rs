@@ -15,6 +15,6 @@ pub fn open_browser(url: &str) {
     match spawned {
         // Reaped on a thread of its own, so an opener that lingers never leaves a zombie or blocks startup.
         Ok(mut child) => drop(std::thread::spawn(move || child.wait())),
-        Err(_) => eprintln!("🌐 could not open a browser; visit {url}"),
+        Err(_) => crate::status!("🌐 could not open a browser; visit {url}"),
     }
 }

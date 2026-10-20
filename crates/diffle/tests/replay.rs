@@ -95,9 +95,10 @@ async fn a_range_diff_review_replays_the_older_range_and_pairs_its_commits() {
     t.git(&["commit", "-q", "-am", "feat, rebased"]);
     let repo = t.open().await;
     let req = diffle::protocol::ModeRequest::RangeDiff { args: vec![format!("{base}..feat"), "main~1..feat2".into()] };
-    let mode = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::GithubInstance::github_com())
+    let mode = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::Github::tokenless())
         .await
-        .unwrap();
+        .unwrap()
+        .mode;
     let inter = mode.interdiff.clone().unwrap();
     let (feat, feat2, onto) =
         (t.git(&["rev-parse", "feat"]), t.git(&["rev-parse", "feat2"]), t.git(&["rev-parse", "main~1"]));

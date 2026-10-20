@@ -169,6 +169,8 @@ pub enum Command {
         #[command(subcommand)]
         command: Option<ConfigCommand>,
     },
+    /// show the language server each language would get, and what is missing from PATH
+    Lsp,
     /// print a shell completion script for bash, zsh, or fish
     #[command(after_help = COMPLETION_HELP)]
     Completion {

@@ -597,6 +597,9 @@ export const LspLocationSchema = LspPositionSchema.extend({
 export type LspLocation = z.infer<typeof LspLocationSchema>;
 
 /** One language server process, as its bridge sees it. */
+export const LspStateSchema = z.enum(['starting', 'ready', 'unavailable']);
+export type LspState = z.infer<typeof LspStateSchema>;
+
 export const LspNoticeSchema = z.object({
   severity: z.enum(['warning', 'error']),
   message: z.string(),
@@ -618,7 +621,7 @@ export const LspProcessStatusSchema = z.object({
   /** The command line it was started from. */
   command: z.string(),
   /** `ready` means initialized; LSP has no universal workspace-ready signal. */
-  state: z.enum(['starting', 'ready', 'unavailable']),
+  state: LspStateSchema,
   message: z.string().optional(),
   /** Active work reported through LSP work-done progress; absent when none is reported. */
   activity: z.string().array().optional(),

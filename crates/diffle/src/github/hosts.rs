@@ -4,7 +4,22 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use super::client::GithubClient;
 use crate::git::GitRepo;
+
+/// A run's GitHub: where it is, and a client when there is a token for it.
+#[derive(Clone)]
+pub struct Github {
+    pub instance: GithubInstance,
+    pub client: Option<std::sync::Arc<dyn GithubClient>>,
+}
+
+impl Github {
+    /// github.com without a token: what a run that never configured GitHub sees.
+    pub fn tokenless() -> Self {
+        Self { instance: GithubInstance::github_com(), client: None }
+    }
+}
 
 /// The one GitHub a run talks to: github.com, a GitHub Enterprise Server, or a GHE.com tenant.
 /// Remotes on other hosts are not GitHub for that run.

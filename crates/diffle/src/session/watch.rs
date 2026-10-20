@@ -58,7 +58,7 @@ fn on_dirty(session: &Weak<Session>, active: &Weak<Active>, ignored: Option<&Ign
         session.run(async move { if this.is_active(&a) { refresh_ignored(&this, &ignored).await } else { Ok(()) } });
     tokio::spawn(async move {
         if let Err(e) = follow_up.await {
-            eprintln!("[diffle] ignored paths refresh failed: {e}");
+            crate::status!("[diffle] ignored paths refresh failed: {e}");
         }
     });
 }

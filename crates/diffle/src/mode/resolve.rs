@@ -1,7 +1,7 @@
 //! Resolving a comparison to Git endpoints, and a reviewer's request to a comparison.
 use crate::error::{Error, Result};
 use crate::git::{GitRepo, WORKTREE};
-use crate::github::hosts::{GithubInstance, github_repository};
+use crate::github::hosts::{Github, GithubInstance, github_repository};
 use crate::protocol::{Comparison, ComparisonBase, Live, ModeRequest, ModeSpec, RangeSide};
 
 use super::rangediff::compare_ranges;
@@ -108,21 +108,33 @@ pub async fn names_branch(repo: &GitRepo, old: &str, new: &str) -> Result<bool> 
     Ok(old.is_some() || new.is_some())
 }
 
+/// A review ready to activate: the comparison, and the pull request it was entered as, if any.
+/// The pull request is server-side identity; the client sees only the comparison.
+#[derive(Clone, Debug)]
+pub struct ResolvedReview {
+    pub mode: ModeSpec,
+    pub pr_url: Option<String>,
+}
+
 /// Resolves a request that enters a comparison from scratch, as the CLI does.
-pub async fn resolve_review(req: &ModeRequest, repo: &GitRepo, instance: &GithubInstance) -> Result<ModeSpec> {
+pub async fn resolve_review(req: &ModeRequest, repo: &GitRepo, github: &Github) -> Result<ResolvedReview> {
+    let instance = &github.instance;
     let parsed = match req {
-        ModeRequest::RangeDiff { args } => return range_diff_review(repo, parse_range_diff(args)?, instance).await,
+        ModeRequest::Pr { pr } => return super::pr::resolve_pr(pr.as_deref(), repo, github).await,
+        ModeRequest::RangeDiff { args } => {
+            let mode = range_diff_review(repo, parse_range_diff(args)?, instance).await?;
+            return Ok(ResolvedReview { mode, pr_url: None });
+        }
         ModeRequest::Working => {
             ParsedRevspec { old: "HEAD".into(), new: WORKTREE.into(), base: ComparisonBase::Direct }
         }
         ModeRequest::Revspec { args } => parse_revspec(args)?,
-        ModeRequest::Pr { .. } => return Err(Error::Github("pull requests are resolved by the GitHub module".into())),
         _ => return Err(Error::revspec("this request depends on the active comparison")),
     };
     // A commit is pinned when entered: moving the ref it was named by, e.g. amending HEAD, makes a different commit.
-    if parsed.base == ComparisonBase::Parent {
+    let mode = if parsed.base == ComparisonBase::Parent {
         let sha = resolve_comparison(repo, &parsed.old, &parsed.new, parsed.base, false).await?.new_sha;
-        return Ok(ModeSpec {
+        ModeSpec {
             old: sha.clone(),
             new: sha.clone(),
             base: ComparisonBase::Parent,
@@ -131,10 +143,12 @@ pub async fn resolve_review(req: &ModeRequest, repo: &GitRepo, instance: &Github
             within: None,
             interdiff: None,
             pair: None,
-        });
-    }
-    let key = matches!(req, ModeRequest::Working).then(|| "working".to_owned());
-    Ok(plain(resolve_range(repo, &parsed, instance, key).await?))
+        }
+    } else {
+        let key = matches!(req, ModeRequest::Working).then(|| "working".to_owned());
+        plain(resolve_range(repo, &parsed, instance, key).await?)
+    };
+    Ok(ResolvedReview { mode, pr_url: None })
 }
 
 /// A comparison as the mode that shows it on its own.
