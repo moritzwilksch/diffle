@@ -4,7 +4,7 @@ import { completionHint } from 'commander-static-completion';
 import pkg from '../../package.json' with { type: 'json' };
 import { formatPrompt } from '@/server/comments/format.js';
 import { GitError, GitRepo } from '@/server/git/GitRepo.js';
-import { createGithubClient, GithubError, resolveToken, tokenVariables } from '@/server/github/client.js';
+import { createGithubClient, GithubError, resolveToken, tokenVariables, useEnvProxy } from '@/server/github/client.js';
 import { apiBaseUrl, chooseInstance, type Github } from '@/server/github/hosts.js';
 import { LspPool } from '@/server/lsp/LspPool.js';
 import { resolveServers } from '@/server/lsp/registry.js';
@@ -480,6 +480,7 @@ async function connectGithub(
   const instance = await chooseInstance(githubHosts, local, prSelector);
   const found = await resolveToken(instance.host);
   if (!found) return { instance };
+  useEnvProxy();
   return {
     instance,
     // GITHUB_API_URL, as Actions sets it, names the API of the run's GitHub outright.

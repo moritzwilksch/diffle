@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { setGlobalProxyFromEnv } from 'node:http';
 import { Octokit } from '@octokit/core';
 import pkg from '../../../package.json' with { type: 'json' };
 
@@ -67,6 +68,20 @@ export function ghAuthToken(host: string): Promise<string | null> {
       resolve(!err && token ? token : null);
     });
   });
+}
+
+/**
+ * Routes Node's global `fetch`, and with it Octokit, through the proxy that `HTTPS_PROXY`,
+ * `HTTP_PROXY` and `NO_PROXY` (either case) name, as git already does. A malformed proxy
+ * URL is a `GithubError`. Returns what undoes it.
+ */
+export function useEnvProxy(env: NodeJS.ProcessEnv = process.env): () => void {
+  try {
+    return setGlobalProxyFromEnv(env);
+  } catch (e) {
+    if ((e as { code?: string }).code !== 'ERR_PROXY_INVALID_CONFIG') throw e;
+    throw new GithubError(`invalid proxy environment: ${(e as Error).message}`, 400);
+  }
 }
 
 export interface ClientOptions {

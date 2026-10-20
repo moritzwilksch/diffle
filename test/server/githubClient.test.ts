@@ -1,5 +1,7 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { createGithubClient, GithubError, noToken, resolveToken } from '@/server/github/client.js';
+import { createGithubClient, GithubError, noToken, resolveToken, useEnvProxy } from '@/server/github/client.js';
 
 describe('resolveToken', () => {
   it('prefers GITHUB_TOKEN, then GH_TOKEN, then what gh holds for github.com', async () => {
@@ -124,5 +126,33 @@ describe('createGithubClient', () => {
     const err = await slow.graphql('query{x}', {}, { timeoutMs: 20 }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(GithubError);
     expect(err).toMatchObject({ status: 502, message: 'GitHub did not answer within 20ms' });
+  });
+});
+
+describe('useEnvProxy', () => {
+  it('sends GitHub requests through the proxy the environment names', async () => {
+    const seen: string[] = [];
+    const proxy = createServer((req, res) => (seen.push(`${req.method} ${req.url}`), res.writeHead(502).end()));
+    // Node versions differ on plain HTTP: some forward absolute-form requests, others tunnel.
+    proxy.on(
+      'connect',
+      (req, socket) => (seen.push(`CONNECT ${req.url}`), socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')),
+    );
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+    const restore = useEnvProxy({ HTTP_PROXY: `http://127.0.0.1:${(proxy.address() as AddressInfo).port}` });
+    try {
+      const client = createGithubClient('t', { baseUrl: 'http://github.invalid/api/v3' });
+      await expect(client.graphql('{ viewer { login } }', {})).rejects.toBeInstanceOf(GithubError);
+      expect(seen).toEqual([
+        expect.stringMatching(/^(POST http:\/\/github\.invalid\/api\/graphql|CONNECT github\.invalid:80)$/),
+      ]);
+    } finally {
+      restore();
+      proxy.close();
+    }
+  });
+
+  it('turns a malformed proxy URL into a GithubError', () => {
+    expect(() => useEnvProxy({ HTTPS_PROXY: 'not a url' })).toThrow(GithubError);
   });
 });
