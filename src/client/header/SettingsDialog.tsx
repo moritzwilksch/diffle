@@ -88,7 +88,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           className="w-[100px]"
         />
         <h3 className="m-0 mt-[14px] mb-2">Long lines</h3>
-        <p className="m-0 mb-2 text-muted">Unwrapped, long file names in the tree scroll sideways too.</p>
         <label className="flex cursor-pointer items-center gap-1.5">
           <input type="checkbox" checked={lineWrap} onChange={(e) => setLineWrap(e.target.checked)} />
           Wrap long lines
