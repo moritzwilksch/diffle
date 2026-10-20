@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
 
-// The tree ellipsizes long names until the toolbar toggle turns on the sideways scroll. Then,
+// The tree ellipsizes long names while lines wrap; `zw` unwraps them and turns on the sideways scroll. Then,
 // narrower than its widest row, the pane scrolls, and the counts, viewed mark and git status stay
 // pinned to its right edge, within reach of the pointer.
 test.beforeEach(async ({ page }) => {
@@ -13,10 +13,15 @@ test.beforeEach(async ({ page }) => {
   await page.mouse.up();
 });
 
+const scrollsSideways = (page: Page) =>
+  page
+    .locator('file-tree-container [data-file-tree-virtualized-scroll]')
+    .evaluate((el) => el.scrollWidth > el.clientWidth);
+
 async function scrollLongNames(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Scroll long names' });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('z');
+  await page.keyboard.press('w');
+  await expect.poll(() => scrollsSideways(page)).toBe(true);
 }
 
 test('a narrow sidebar scrolls sideways and keeps the lanes in view', async ({ page }) => {
@@ -52,13 +57,10 @@ test('a clipped row names its full path', async ({ page }) => {
   await expect(page.getByRole('tooltip')).toHaveText('tally/generated/openapi.py');
 });
 
-test('the tree ellipsizes by default, the toggle trades that for the scroll, and the choice sticks', async ({
+test('the tree ellipsizes while lines wrap, unwrapping trades that for the scroll, and the choice sticks', async ({
   page,
 }) => {
-  const pane = page.locator('file-tree-container [data-file-tree-virtualized-scroll]');
-  const toggle = page.getByRole('button', { name: 'Scroll long names' });
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(() => pane.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect.poll(() => scrollsSideways(page)).toBe(false);
   await page.mouse.move(600, 400);
   await expect(page.locator('file-tree-container')).toHaveScreenshot('narrow-tree-ellipsis.png');
 
@@ -68,12 +70,9 @@ test('the tree ellipsizes by default, the toggle trades that for the scroll, and
     .hover({ position: { x: 70, y: 13 } });
   await expect(page.getByRole('tooltip')).toHaveText('tally/generated/openapi.py');
 
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(() => pane.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
-
+  await scrollLongNames(page);
   await page.reload();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => scrollsSideways(page)).toBe(true);
 });
 
 test('a tooltip follows the pointer down the rows without waiting again', async ({ page }) => {
@@ -87,19 +86,6 @@ test('a tooltip follows the pointer down the rows without waiting again', async 
   // The pointer-rest delay is 250ms; the next row's tip must beat it.
   await row('tests/').hover({ position: { x: 60, y: 13 } });
   await expect(tooltip).toHaveText('tests', { timeout: 200 });
-});
-
-test('a layout saved before the toggle existed keeps the ellipsis', async ({ page }) => {
-  await page.evaluate(() =>
-    localStorage.setItem(
-      'diffle:layout',
-      JSON.stringify({ treeWidth: 200, panelWidth: null, treeVisible: true, panelVisible: true }),
-    ),
-  );
-  await page.reload();
-  await expect(page.getByRole('button', { name: 'Scroll long names' })).toHaveAttribute('aria-pressed', 'false');
-  const pane = page.locator('file-tree-container [data-file-tree-virtualized-scroll]');
-  await expect.poll(() => pane.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 test('a narrow toolbar drops the count and keeps its buttons in reach', async ({ page }) => {

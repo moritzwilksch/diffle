@@ -2,7 +2,7 @@ import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { Button } from '@/client/ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
-import { ArrowLeftRight, EyeOff } from 'lucide-react';
+import { EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '@/client/model.js';
@@ -85,8 +85,8 @@ export function FileTreePane() {
   useEffect(() => {
     bodyRef.current?.firstElementChild?.toggleAttribute('data-search-empty', searchEmpty);
   }, [searchEmpty]);
-  const scrolls = useStore((s) => s.layout.treeScroll);
-  const setLayout = useStore((s) => s.setLayout);
+  // Long names follow the diff's long lines: wrapped, the tree ellipsizes them; unwrapped, the pane scrolls sideways.
+  const scrolls = useStore((s) => !s.config.lineWrap);
   useEffect(() => {
     bodyRef.current?.firstElementChild?.toggleAttribute('data-hscroll', scrolls);
   }, [scrolls]);
@@ -260,19 +260,6 @@ export function FileTreePane() {
         {/* The count goes first when the bar is too narrow for every control: the buttons stay reachable. */}
         <div className="ml-auto flex items-center gap-2">
           <span className="@max-[15rem]:hidden">{paths.length}</span>
-          <Button
-            variant="ghost"
-            icon
-            className={
-              scrolls ? 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent' : ''
-            }
-            aria-label="Scroll long names"
-            aria-pressed={scrolls}
-            title={scrolls ? 'Long names scroll. Click to shorten.' : 'Long names shortened. Click to scroll.'}
-            onClick={() => setLayout({ treeScroll: !scrolls })}
-          >
-            <ArrowLeftRight size="0.875rem" />
-          </Button>
           <Button
             variant="ghost"
             danger={unview.armed}
