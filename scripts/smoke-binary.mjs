@@ -1,5 +1,5 @@
-// Runs a built single executable over a throwaway repo and fetches the page, a script, and a
-// grammar, proving the client assets were embedded. Usage: node scripts/smoke-sea.mjs <binary>
+// Runs a built binary over a throwaway repo and fetches the page, a script, and a
+// grammar, proving the client assets were embedded. usage: node scripts/smoke-binary.mjs <binary>
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

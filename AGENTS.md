@@ -1,19 +1,20 @@
 # Working in diffle
 
-Diffle is a local Git review app: a Node/Hono server owns repository state; a React client renders diffs with `@pierre/diffs`; comments can become an agent prompt or a pending GitHub review. Keep `README.md` focused on installation, core workflows, and user-visible constraints. Let `--help`, code, and tests carry exhaustive detail.
+Diffle is a local Git review app: a Rust server (`crates/diffle`, axum on tokio) owns repository state; a React client renders diffs with `@pierre/diffs`; comments can become an agent prompt or a pending GitHub review. Keep `README.md` focused on installation, core workflows, and user-visible constraints. Let `--help`, code, and tests carry exhaustive detail.
 
 ## Find the owner
 
 - `src/shared/protocol.ts`: the only client/server contract. Define cross-boundary fields here first.
-- `crates/diffle/`: the Rust server replacing `src/server` and `src/cli`, under way on `rust-rewrite`. Its wire types are generated: `test/scripts/protocol-schema.test.ts` exports `protocol.ts` to `protocol.generated.json` (`npx vitest run test/scripts/protocol-schema.test.ts -u` after a protocol change), and `build.rs` turns that into Rust with typify. Numbers on the wire are `.int()` unless they truly are fractional. The version comes from `package.json`.
-- `src/server/git/GitRepo.ts`: all Git execution. Use explicit argv and preserve stable, NUL-delimited parser inputs where applicable.
-- `src/server/Session.ts`: active mode, snapshots, comments, watcher, and serialized transitions.
-- `src/server/Snapshotter.ts`: derives trees, changed files, and patches for one mode.
-- `src/server/mode/`: parses revspecs and resolves a comparison, pull request, or range-diff to Git endpoints.
-- `src/server/routes/`: HTTP behavior, `api.ts` mounting the comment and LSP route groups; `src/server/ws.ts`: server-to-client invalidation messages.
-- `src/server/comments/`: persistence, relocation, import, and prompt formatting.
-- `src/server/github/`: `client.ts` resolves the token and wraps `@octokit/core` (the only GitHub transport; `gh` is spawned for `gh auth token` alone); `pulls.ts` names pull requests; `review.ts` builds and exports pending reviews through `pendingReview.ts`, its GraphQL calls; `metadata.ts` discovers a comparison's pull request.
-- `src/server/lsp/`: `registry.ts` defines every server (command, languages, settings) and resolves which to start; `LspProcess.ts` spawns one and owns its status, with `ServerOutput.ts` keeping its log, notice, and progress; `Documents.ts` keeps its open documents in step with the snapshot; `Locator.ts` maps its URIs back to snapshot paths; `LspBridge.ts` asks it the LSP requests, through the wire shapes in `shapes.ts`; `LspPool.ts` routes by language and merges with `merge.ts`. `src/shared/lsp.ts` (`lspBlocker`) is the one place deciding why a query cannot run.
+- `crates/diffle/protocol.generated.json` and `build.rs`: the Rust side of the contract, generated. `test/scripts/protocol-schema.test.ts` exports `protocol.ts` to the JSON file (`npx vitest run test/scripts/protocol-schema.test.ts -u` after a protocol change) and `build.rs` turns it into Rust with typify (`crate::protocol`). Numbers on the wire are `.int()` unless they truly are fractional. An optional array becomes a defaulted `Vec`, so a route that must tell absent from empty reads its own request struct. The crate's version comes from `package.json`.
+- `crates/diffle/src/git/`: all Git execution (`exec.rs` is the one module that spawns git; `catfile.rs` the shared `cat-file --batch`). Use explicit argv and preserve stable, NUL-delimited parser inputs where applicable.
+- `crates/diffle/src/session/`: active mode, snapshots, comments, watcher, and serialized transitions: `mod.rs` the queue, `transitions.rs` focus/interdiff/pair, `refresh.rs` reloads and iterations, `files.rs` the allowlisted reads, `github.rs` discovery and export.
+- `crates/diffle/src/snapshotter.rs`: derives trees, changed files, and patches for one mode; `generated.rs` flags generated files.
+- `crates/diffle/src/mode/`: parses revspecs and resolves a comparison, pull request (`pr.rs`), or range-diff to Git endpoints.
+- `crates/diffle/src/server/`: HTTP and the `/ws` hub; `routes/` holds the route groups, `guard.rs` the Host/Origin check, `assets.rs` the embedded client.
+- `crates/diffle/src/comments/`: persistence, relocation, import, and prompt formatting.
+- `crates/diffle/src/github/`: `client.rs` resolves the token and owns the one HTTP client (reqwest; `gh` is spawned for `gh auth token` alone); `pulls.rs` names pull requests; `review.rs` builds and exports pending reviews through `pending_review.rs`, its GraphQL calls; `metadata.rs` discovers a comparison's pull request.
+- `crates/diffle/src/lsp/`: `registry.rs` and `projects/catalog.rs` define every server (command, languages, settings) and resolve which to start; `process/` spawns one and owns its status, with `output.rs` keeping its log, notice, and progress; `documents.rs` keeps its open documents in step with the snapshot; `locator.rs` maps its URIs back to snapshot paths; `bridge.rs` asks it the LSP requests, through the wire shapes in `shapes.rs`; `pool.rs` routes by language and merges with `merge.rs`. `lsp_blocker` (`crate::protocol`, ported from `src/shared/lsp.ts`, which the client uses) is the one place deciding why a query cannot run.
+- `crates/diffle/src/cli/`: clap arguments, the run (`serve.rs`), and the subcommands.
 - `src/client/api.ts`: the only client module that knows URLs.
 - `src/client/store.ts`: Zustand state and effects; guard async commits with the current generation.
 - `src/client/model.ts`: pure state functions and item identity, kept separate to avoid store cycles.
@@ -24,16 +25,17 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 ## Preserve these invariants
 
 - `Session` alone advances `Snapshot.version`; mode switches, refreshes, and context changes stay serialized.
-- `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session.readSide`; it also maps a rename's old path. The one exception is `LspBridge.readExternal`: `/api/file` serves a file outside the snapshot on the new side only after a language-server result named it.
+- `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session::read_side`; it also maps a rename's old path. The one exception is `Locator::read_external`: `/api/file` serves a file outside the snapshot on the new side only after a language-server result named it.
 - Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`; keep the worktree untouched.
-- PR fetches use session-owned `refs/diffle/` refs. `GitRepo.fetch` must reject destinations outside them.
+- PR fetches use session-owned `refs/diffle/` refs. `GitRepo::fetch` must reject destinations outside them.
 - Treat rendered `FileDiffMetadata` as immutable. Hydrate with `hydratePartialDiff('clone', ...)`, replace the store entry, and change its generation-backed item id.
 - Every async boot, refresh, or mode-switch result commits only while its generation is current.
 - Navigation jumps land at the fixed gaze point with `placeCursor(..., 'eye')` or `align: 'eye'`.
 - `ReviewPane` resolves estimated jump layouts synchronously: scroll, `render(true)`, then reissue the measured offset before paint. Avoid cross-frame correction.
 - Handled keys stop propagation in `useKeymap`; `CodeView` cancels pending scroll on propagated keydown.
 - The keymap runs the store's `escape()` on Escape and lets the key through, so a Base UI dialog also closes. A dialog whose Escape does more than close (References leaves a peek first) ignores the `escape-key` reason in `onOpenChange`.
-- User input errors become `RevspecError`, `GitError`, `GithubError`, or Commander usage errors and exit 2; unexpected failures propagate.
+- User input errors are `Error` variants (`Revspec`, `Git`, `Github`, ...; `Error::is_user_error`) or clap usage errors and exit 2; `Error::Other` is the unexpected kind and exits 1.
+- Status goes to stderr through `crate::status!`, which never panics on a closed stream; stdout carries only the prompt at shutdown.
 
 ## Renovate cleanly
 
@@ -41,26 +43,26 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 
 ## Verify changes
 
-- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing; after a Rust change also `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all`.
-- `DIFFLE_BIN=target/debug/diffle npm run test:e2e` runs the e2e scenarios against a built server instead of the TS source.
+- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`, and `npm run build` before finishing.
+- The e2e setup builds the client, then the release binary it embeds; `DIFFLE_BIN=<path>` runs another build instead. A debug build is too slow for the suite's parallel load.
 - Never run the e2e tests (`npm run test:e2e*`) unprompted, not even after a client change. Run them only when the user asks or when you edited `test/e2e/`.
-- Prefer tests that produce something a reviewer can judge: a screenshot, an accessibility tree, a prompt, a payload. Server tests use temporary real Git repositories; e2e tests (`test/e2e/*.spec.ts`) drive a real diffle over the fixture repository (`test/fixture/repo.ts`) in Chromium and compare against snapshots under `__snapshots__/`; text outputs use `toMatchFileSnapshot`. Do not stub the viewer or the API in client tests: write an e2e scenario instead. The one exception is `test/client/store.test.ts`, whose deferred-promise races a browser cannot provoke reliably.
+- Prefer tests that produce something a reviewer can judge: a screenshot, an accessibility tree, a prompt, a payload. Server tests (`crates/diffle/tests/`) use temporary real Git repositories (`tests/common`), and language-server tests drive `test/lsp/fake-lsp.mjs` with `node`; e2e tests (`test/e2e/*.spec.ts`) drive a real diffle over the fixture repository (`test/fixture/repo.ts`) in Chromium and compare against snapshots under `__snapshots__/`; text outputs use `toMatchFileSnapshot`, or on the Rust side a byte comparison against a file (`UPDATE_SNAPSHOTS=1` rewrites `crates/diffle/tests/snapshots/`). Do not stub the viewer or the API in client tests: write an e2e scenario instead. The one exception is `test/client/store.test.ts`, whose deferred-promise races a browser cannot provoke reliably.
 - The fixture repository hashes the same everywhere; `test/fixture/repo.test.ts` pins the hashes. Changing its history means updating the pins and re-accepting the screenshots that show it. `npm run fixture -- <dir>` builds it for hands-on testing.
 - Screenshots are compared on Linux only, in Playwright's container in CI. Run `npm run test:e2e:docker` on any host and inspect the persisted report with `npm run test:e2e:report`. Accept intended changes with `npm run test:e2e:docker:update` or the `Update snapshots` workflow; the PR gets a snapshot report comparing before and after. `npm run test:e2e:docker -- -g <pattern>` runs a few scenarios while iterating.
 - When CI's e2e job fails, it regenerates the failed scenarios' snapshots and uploads them as the `e2e-snapshots` artifact. Commit them onto the PR's branch with `gh workflow run update-snapshots.yml -f pr=<number>` (it waits for the head commit's e2e job), follow it with `gh run watch "$(gh run list --workflow update-snapshots.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"`, then `git pull`. Inspect the `e2e-results` artifact or the snapshot report before accepting. The bot's push reruns CI.
 - The README GIF and diffle.app's videos are takes of real diffle: `npm run videos [-- <scene>]` (`scripts/record-videos.ts`) re-records them into `.github/assets/videos/`. Re-record the scenes a change alters (a shortcut, a moved control, a reworded hint) in the same PR and look at the frames; diffle.app copies them from the next release.
-- Use `npm run dev -- working --no-open` for a local source run; restart after client changes because the server serves `dist/client`.
-- CI runs the tests and the build on Linux, macOS, and Windows, x64 and arm64. `skipIf` what Windows cannot express, with a note: a `"` or a newline in a filename, POSIX mode bits, a POSIX-shell probe.
+- Use `npm run dev -- working --no-open` (`cargo run`) for a local source run. A debug build reads `dist/client` from disk, so `npm run build:client` and a reload show a client change; a release build embeds it.
+- CI runs the tests and the build on Linux, macOS, and Windows, x64 and arm64. Skip what Windows cannot express (`#[cfg(unix)]`, `skipIf`), with a note: a `"` or a newline in a filename, POSIX mode bits, a POSIX-shell probe.
 - Remove temp directories with `rmTmp` from `test/tmp.ts`: an idle `cat-file --batch` holds the repo root as its cwd, and Windows refuses to remove it until the child is reaped.
 - Comments explain why in one or two lines. Exported doc comments state contracts, not implementations.
 
 ## Commit gate
 
-- `.lefthook.yml` defines the pre-commit hook: `npm run format` and `npm run lint` over the staged files, then `npm run typecheck` and `npm run quality-gate` over the whole working tree. It is not installed automatically (`no_auto_install`); run `npm run install-hooks` once per clone. The CI `lint` job runs `npm run check`, the same hook over every file, where `fail_on_changes: ci` turns a formatter rewrite into a failure, so a `--no-verify` commit still fails there.
+- `.lefthook.yml` defines the pre-commit hook: `npm run format`, `npm run lint` and `rustfmt` over the staged files, then `npm run typecheck`, `cargo clippy` (when Rust or the generated contract changed) and `npm run quality-gate` over the whole working tree. It is not installed automatically (`no_auto_install`); run `npm run install-hooks` once per clone. The CI `lint` job runs `npm run check`, the same hook over every file, where `fail_on_changes: ci` turns a formatter rewrite into a failure, so a `--no-verify` commit still fails there.
 - A source file (`.rs` included, minus everything from its first `#[cfg(test)]` line) stays within 330 lines, and a folder holds at most 15 source files. Tests (`*.test.*`, `*.spec.*`, and files under `test`, `tests`, `__tests__`, `e2e`, `fixtures`, `testdata`, `__snapshots__`), generated files, package roots and the repository root are never counted. Nothing requires a test for new code.
 - Split along a real responsibility, never a line-count saw-cut. The only way past the gate is `.locignore` (files) or `.folderignore` (folders), one glob per line with `#` comments: a pattern without `/` matches the basename, one with `/` the whole path. List only a cohesive unit (generated code, a data catalog), with the reason on the same line. A `TODO` entry is debt: delete it when its file shrinks under the cap.
 
 ## Conventional commits
 
 - Use conventional commits for commit messages and PR titles (e.g. `feat(cli): add pr command`, `fix(store): guard async commits`).
-- Squash-merged PR titles become `CHANGELOG.md` entries and pick the next version (`cliff.toml`): a `!` bumps the minor version before 1.0, anything else the patch. The Release workflow keeps a `chore: release vX.Y.Z` PR open; merging it tags the release, and the tag publishes it. Never edit `CHANGELOG.md` or the version by hand.
+- Squash-merged PR titles become `CHANGELOG.md` entries and pick the next version (`cliff.toml`): a `!` bumps the minor version before 1.0, anything else the patch. The Release workflow keeps a `chore: release vX.Y.Z` PR open; merging it tags the release, and the tag publishes it: the binaries and installers on the GitHub release. npm publishing is paused until the binaries ship as per-platform npm packages. Never edit `CHANGELOG.md` or the version by hand.

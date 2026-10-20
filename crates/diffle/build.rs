@@ -8,6 +8,9 @@ fn main() {
         serde_json::from_str(&fs::read_to_string(manifest).expect("read package.json")).expect("parse package.json");
     println!("cargo:rustc-env=DIFFLE_VERSION={}", package["version"].as_str().expect("package.json version"));
 
+    // A release build embeds the client; a rebuild of it renames its hashed assets.
+    println!("cargo:rerun-if-changed=../../dist/client");
+
     let schema_path = "protocol.generated.json";
     println!("cargo:rerun-if-changed={schema_path}");
     let text = fs::read_to_string(schema_path).expect("read protocol schema");

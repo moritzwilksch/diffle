@@ -64,6 +64,10 @@ jobs:
       - name: Disable autocrlf
         if: runner.os == 'Windows'
         run: git config --system core.autocrlf false
+      # The language-server tests drive test/lsp/fake-lsp.mjs.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       # rustup reads rust-toolchain.toml on the first cargo call.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Test
@@ -125,42 +129,11 @@ jobs:
       - name: Pre-commit hook
         run: npm run check
 
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-latest
-          - windows-latest
-          - windows-11-arm
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      - name: Build package
-        run: |
-          npm ci
-          npm pack
-      # The tarball is platform-independent, so only one job uploads it; the rest
-      # of the matrix is here to prove the build runs everywhere.
-      - name: Upload artifact
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          path: "*.tgz"
-          archive: false
-
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
-  sea:
+  binaries:
     permissions:
       contents: read
-    uses: ./.github/workflows/sea.yml
+    uses: ./.github/workflows/binaries.yml
 
   lockfile:
     runs-on: ubuntu-latest

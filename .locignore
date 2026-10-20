@@ -6,13 +6,9 @@
 # unit (generated code, a data catalog), with the reason on the same line.
 src/client/store.ts # TODO: split (2694 lines)
 src/client/review/ReviewPane.tsx # TODO: split (1316 lines)
-src/server/git/GitRepo.ts # TODO: split (1159 lines)
 src/shared/protocol.ts # TODO: split (868 lines)
-src/server/Session.ts # TODO: split (692 lines)
 scripts/record-videos.ts # TODO: split (587 lines)
 src/client/comments/CommitNavigator.tsx # TODO: split (525 lines)
-src/cli/main.ts # TODO: split (522 lines)
 src/client/model.ts # TODO: split (503 lines)
-src/server/comments/CommentStore.ts # TODO: split (465 lines)
 src/client/keyboard/useKeymap.ts # TODO: split (458 lines)
 src/client/header/ModePicker.tsx # TODO: split (427 lines)

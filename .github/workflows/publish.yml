@@ -5,17 +5,14 @@ on:
       - v*
 
 jobs:
-  publish:
+  # npm publishing is paused until the binaries ship as per-platform npm packages; releases
+  # carry the binaries and the installers alone.
+  verify:
     runs-on: ubuntu-latest
-    environment: npmjs
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
       - name: Verify release tag matches package version
         run: |
           expected="v$(jq -r '.version' package.json)"
@@ -23,19 +20,16 @@ jobs:
             echo "::error::Release tag $GITHUB_REF_NAME does not match package version $expected"
             exit 1
           fi
-      - name: Publish package
-        run: |
-          npm ci
-          npm publish
 
-  sea:
+  binaries:
+    needs: verify
     permissions:
       contents: read
-    uses: ./.github/workflows/sea.yml
+    uses: ./.github/workflows/binaries.yml
 
   # Attaches the binaries, their checksums, and the installers to the tag's release.
   release:
-    needs: [publish, sea]
+    needs: [binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write

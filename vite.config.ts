@@ -15,7 +15,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': srcRoot } },
   appType: 'spa',
-  // The client ships inside the same package as the server, so the build-time version is the running one.
+  // The binary embeds the client it was built with, so the build-time version is the running one.
   define: { __DIFFLE_VERSION__: JSON.stringify(pkg.version) },
   build: {
     outDir,
@@ -24,5 +24,4 @@ export default defineConfig({
     sourcemap: false,
   },
   worker: { format: 'es' },
-  server: { middlewareMode: true },
 });

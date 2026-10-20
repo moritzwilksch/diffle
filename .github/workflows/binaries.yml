@@ -1,4 +1,4 @@
-name: Single executable
+name: Binaries
 on:
   workflow_call:
 
@@ -18,25 +18,29 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # `node --build-sea` needs Node 25.5 or later; the binary embeds this runtime.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 26
-      - name: Build single executable
+          node-version: 24
+      # rustup reads rust-toolchain.toml on the first cargo call.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The release binary embeds dist/client, so the client is built first.
+      - name: Build binary
+        shell: bash
         run: |
           npm ci
-          npm run build:sea
+          npm run build:client
+          cargo build --release --locked
       - name: Smoke test
         shell: bash
-        run: node scripts/smoke-sea.mjs dist/sea/diffle${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: node scripts/smoke-binary.mjs target/release/diffle${{ runner.os == 'Windows' && '.exe' || '' }}
       - name: Archive
         shell: bash
         run: |
           mkdir out
           if [[ "$RUNNER_OS" == Windows ]]; then
-            7z a -tzip "out/diffle-${{ matrix.target }}.zip" ./dist/sea/diffle.exe ./LICENSE ./THIRD_PARTY_NOTICES.md
+            7z a -tzip "out/diffle-${{ matrix.target }}.zip" ./target/release/diffle.exe ./LICENSE ./THIRD_PARTY_NOTICES.md
           else
-            tar -czf "out/diffle-${{ matrix.target }}.tar.gz" -C dist/sea diffle -C ../.. LICENSE THIRD_PARTY_NOTICES.md
+            tar -czf "out/diffle-${{ matrix.target }}.tar.gz" -C target/release diffle -C ../.. LICENSE THIRD_PARTY_NOTICES.md
           fi
       # Serves this job's archive as a one-asset release and installs from it.
       - name: Test installer

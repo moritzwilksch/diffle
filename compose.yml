@@ -8,10 +8,17 @@ services:
         FROM node:24-bookworm-slim AS node
         FROM mcr.microsoft.com/playwright:v1.63.0-noble
         COPY --from=node /usr/local/ /usr/local/
+        # The server under test is built in here: a Linux binary, whatever the host is.
+        ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
+        COPY rust-toolchain.toml /tmp/rust-toolchain.toml
+        RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl ca-certificates \
+          && rm -rf /var/lib/apt/lists/* \
+          && curl -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --component clippy,rustfmt \
+            --default-toolchain "$(sed -n 's/^channel = "\(.*\)"/\1/p' /tmp/rust-toolchain.toml)"
         # Any host user can run the suite: Git trusts the mount and the volumes below start writable.
         RUN git config --system --add safe.directory /workspace \
-          && mkdir -p /workspace/node_modules /workspace/dist \
-          && chmod 777 /workspace/node_modules /workspace/dist
+          && mkdir -p /workspace/node_modules /workspace/dist /workspace/target /usr/local/cargo/registry \
+          && chmod 777 /workspace/node_modules /workspace/dist /workspace/target /usr/local/cargo/registry
     init: true
     ipc: host
     working_dir: /workspace
@@ -25,4 +32,11 @@ services:
       # Keep Linux dependencies and build output separate from the host installation.
       - /workspace/node_modules
       - /workspace/dist
+      # Linux build output and downloaded crates, kept apart from the host's and across runs.
+      - e2e-target:/workspace/target
+      - e2e-cargo:/usr/local/cargo/registry
     entrypoint: ["/bin/sh", "-c", 'npm ci && npm run test:e2e -- "$$@"', "e2e"]
+
+volumes:
+  e2e-target:
+  e2e-cargo:

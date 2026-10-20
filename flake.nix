@@ -15,26 +15,42 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          src = pkgs.lib.cleanSourceWith {
+            src = self;
+            filter =
+              path: type:
+              let
+                name = baseNameOf path;
+              in
+              name != ".git" && name != "dist" && name != "node_modules" && name != "target";
+          };
+          # The browser client, which the binary embeds.
+          client = pkgs.buildNpmPackage {
+            pname = "diffle-client";
+            inherit (package) version;
+            inherit src;
+            nodejs = pkgs.nodejs_24;
+            # Fetches each dependency by the lockfile's integrity hash, so no aggregate hash goes stale on a version bump.
+            npmDeps = pkgs.importNpmLock { npmRoot = ./.; };
+            npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+            npmBuildScript = "build:client";
+            installPhase = ''
+              cp -r dist/client "$out"
+            '';
+          };
           mkDiffle =
             extraRuntimePackages:
-            pkgs.buildNpmPackage {
+            pkgs.rustPlatform.buildRustPackage {
               pname = "diffle";
               inherit (package) version;
-
-              src = pkgs.lib.cleanSourceWith {
-                src = self;
-                filter =
-                  path: type:
-                  let
-                    name = baseNameOf path;
-                  in
-                  name != ".git" && name != "dist" && name != "node_modules";
-              };
-
-              nodejs = pkgs.nodejs_24;
-              # Fetches each dependency by the lockfile's integrity hash, so no aggregate hash goes stale on a version bump.
-              npmDeps = pkgs.importNpmLock { npmRoot = ./.; };
-              npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+              inherit src;
+              cargoLock.lockFile = ./Cargo.lock;
+              preBuild = ''
+                mkdir -p dist
+                cp -r ${client} dist/client
+              '';
+              # The suites drive git, node and language servers; CI runs them.
+              doCheck = false;
 
               nativeBuildInputs = [ pkgs.makeWrapper ];
               postInstall = ''

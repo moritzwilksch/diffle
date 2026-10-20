@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync } 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { REPO_ROOT, buildClient, quiet } from './server.js';
+import { REPO_ROOT, buildClient, buildServer, quiet } from './server.js';
 import { settle, type PageOptions } from './browser.js';
 
 /**
@@ -28,6 +28,7 @@ export function baseCheckout(rev: string): string {
     process.platform === 'win32' ? 'junction' : 'dir',
   );
   buildClient(staging);
+  buildServer(staging);
   try {
     renameSync(staging, dir);
   } catch {

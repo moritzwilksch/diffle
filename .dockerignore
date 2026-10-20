@@ -1,0 +1,3 @@
+# The e2e image takes only the toolchain pin; the repository is mounted at run time (compose.yml).
+*
+!rust-toolchain.toml

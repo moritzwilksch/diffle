@@ -3,7 +3,6 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/moritzwilksch/diffle/ci.yml?style=flat-square&branch=main)](https://github.com/moritzwilksch/diffle/actions/workflows/ci.yml)
 [![conda-forge](https://img.shields.io/conda/vn/conda-forge/diffle?logoColor=white&logo=conda-forge&style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![conda-forge-platforms](https://img.shields.io/conda/pn/conda-forge/diffle?style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
-[![npm](https://img.shields.io/npm/v/%40moritzwilksch%2Fdiffle?logo=npm&logoColor=white&style=flat-square)](https://npmx.dev/package/@moritzwilksch/diffle)
 [![website](https://img.shields.io/badge/website-diffle.app-0349b4?style=flat-square)](https://diffle.app)
 
 Review a Git diff in the browser and comment on lines, blocks, or whole files. Then hand the
@@ -19,11 +18,9 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 
 ```bash
 pixi global install diffle               # conda-forge
-npm install -g @moritzwilksch/diffle     # npm
 ```
 
-Or grab the standalone binary, which needs no Node.js. On Linux (x64, arm64, glibc) and Apple
-silicon macOS:
+Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon macOS:
 
 ```bash
 curl -fsSL https://diffle.app/install.sh | sh
@@ -40,7 +37,6 @@ To try it without installing:
 
 ```bash
 pixi exec diffle working
-npx @moritzwilksch/diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
 
@@ -187,14 +183,19 @@ name, trust that address instead. A rejected request gets a 403 naming the heade
 
 ## Development
 
+The server is Rust (`crates/diffle`), the client TypeScript; you need a Rust toolchain
+(`rust-toolchain.toml` pins it) and Node.js.
+
 ```bash
 npm install
+npm run build:client
 npm run dev -- working
-npm test && npm run typecheck && npm run build
+npm test && npm run typecheck && cargo test && npm run build
 ```
 
 `npm run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `npm run check` runs the same hook over every file, as CI does.
-Restart `npm run dev` after client changes; the server serves `dist/client`.
+A debug build reads `dist/client` from disk: after a client change, run `npm run build:client`
+and reload the page. A release build (`npm run build`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. Screenshot tests run in Docker so they match CI:
 
