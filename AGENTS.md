@@ -5,6 +5,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 ## Find the owner
 
 - `src/shared/protocol.ts`: the only client/server contract. Define cross-boundary fields here first.
+- `crates/diffle/`: the Rust server replacing `src/server` and `src/cli`, under way on `rust-rewrite`. Its wire types are generated: `test/scripts/protocol-schema.test.ts` exports `protocol.ts` to `protocol.generated.json` (`npx vitest run test/scripts/protocol-schema.test.ts -u` after a protocol change), and `build.rs` turns that into Rust with typify. Numbers on the wire are `.int()` unless they truly are fractional. The version comes from `package.json`.
 - `src/server/git/GitRepo.ts`: all Git execution. Use explicit argv and preserve stable, NUL-delimited parser inputs where applicable.
 - `src/server/Session.ts`: active mode, snapshots, comments, watcher, and serialized transitions.
 - `src/server/Snapshotter.ts`: derives trees, changed files, and patches for one mode.
@@ -40,7 +41,8 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 
 ## Verify changes
 
-- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing.
+- Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run format`, and `npm run build` before finishing; after a Rust change also `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all`.
+- `DIFFLE_BIN=target/debug/diffle npm run test:e2e` runs the e2e scenarios against a built server instead of the TS source.
 - Never run the e2e tests (`npm run test:e2e*`) unprompted, not even after a client change. Run them only when the user asks or when you edited `test/e2e/`.
 - Prefer tests that produce something a reviewer can judge: a screenshot, an accessibility tree, a prompt, a payload. Server tests use temporary real Git repositories; e2e tests (`test/e2e/*.spec.ts`) drive a real diffle over the fixture repository (`test/fixture/repo.ts`) in Chromium and compare against snapshots under `__snapshots__/`; text outputs use `toMatchFileSnapshot`. Do not stub the viewer or the API in client tests: write an e2e scenario instead. The one exception is `test/client/store.test.ts`, whose deferred-promise races a browser cannot provoke reliably.
 - The fixture repository hashes the same everywhere; `test/fixture/repo.test.ts` pins the hashes. Changing its history means updating the pins and re-accepting the screenshots that show it. `npm run fixture -- <dir>` builds it for hands-on testing.
@@ -55,7 +57,7 @@ Diffle is a local Git review app: a Node/Hono server owns repository state; a Re
 ## Commit gate
 
 - `.lefthook.yml` defines the pre-commit hook: `npm run format` and `npm run lint` over the staged files, then `npm run typecheck` and `npm run quality-gate` over the whole working tree. It is not installed automatically (`no_auto_install`); run `npm run install-hooks` once per clone. The CI `lint` job runs `npm run check`, the same hook over every file, where `fail_on_changes: ci` turns a formatter rewrite into a failure, so a `--no-verify` commit still fails there.
-- A source file stays within 330 lines, and a folder holds at most 15 source files. Tests (`*.test.*`, `*.spec.*`, and files under `test`, `tests`, `__tests__`, `e2e`, `fixtures`, `testdata`, `__snapshots__`), generated files, package roots and the repository root are never counted. Nothing requires a test for new code.
+- A source file (`.rs` included, minus everything from its first `#[cfg(test)]` line) stays within 330 lines, and a folder holds at most 15 source files. Tests (`*.test.*`, `*.spec.*`, and files under `test`, `tests`, `__tests__`, `e2e`, `fixtures`, `testdata`, `__snapshots__`), generated files, package roots and the repository root are never counted. Nothing requires a test for new code.
 - Split along a real responsibility, never a line-count saw-cut. The only way past the gate is `.locignore` (files) or `.folderignore` (folders), one glob per line with `#` comments: a pattern without `/` matches the basename, one with `/` the whole path. List only a cohesive unit (generated code, a data catalog), with the reason on the same line. A `TODO` entry is debt: delete it when its file shrinks under the cap.
 
 ## Conventional commits

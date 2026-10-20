@@ -7,7 +7,13 @@ pre-commit:
       run: npm run format -- --no-error-on-unmatched-pattern {staged_files}
     - name: lint
       run: npm run lint -- --no-error-on-unmatched-pattern {staged_files}
+    - name: rustfmt
+      glob: "*.rs"
+      run: rustfmt --edition 2024 {staged_files}
     - name: typecheck
       run: npm run typecheck
+    - name: clippy
+      glob: "{*.rs,Cargo.toml,Cargo.lock,protocol.generated.json}"
+      run: cargo clippy --locked --all-targets -- -D warnings
     - name: quality-gate
       run: npm run quality-gate

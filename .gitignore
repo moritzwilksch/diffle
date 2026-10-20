@@ -150,3 +150,6 @@ spec/
 test-results/
 playwright-report/
 snapshot-report.html
+
+# Cargo
+/target

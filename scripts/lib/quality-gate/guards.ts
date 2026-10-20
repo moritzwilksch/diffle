@@ -3,8 +3,10 @@ import { posix } from 'node:path';
 export const LOC_CAP = 330;
 export const FOLDER_CAP = 15;
 
-const SOURCE_EXTENSIONS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'css']);
-const MANIFESTS = new Set(['package.json']);
+const SOURCE_EXTENSIONS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'css', 'rs']);
+const MANIFESTS = new Set(['package.json', 'Cargo.toml']);
+/** Rust keeps unit tests inline: everything from the first `#[cfg(test)]` line on is the test module. */
+const RUST_TESTS = /^#\[cfg\(test\)\]/m;
 const GENERATED = [
   /\.(gen\.tsx?|min\.js|min\.css|d\.ts)$/,
   /_generated\.|\.generated\./,
@@ -26,6 +28,12 @@ export interface GateInput {
 }
 
 export type Finding = { guard: 'size'; path: string; lines: number } | { guard: 'folder'; dir: string; count: number };
+
+/** Lines the size cap judges: all of them, but none of a Rust file's trailing test module. */
+export function countLines(path: string, content: string): number {
+  const counted = posix.extname(path) === '.rs' ? content.split(RUST_TESTS)[0]! : content;
+  return counted.split('\n').length - 1;
+}
 
 export function isSource(path: string): boolean {
   return SOURCE_EXTENSIONS.has(posix.extname(path).slice(1));

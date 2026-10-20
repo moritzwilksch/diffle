@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.99"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

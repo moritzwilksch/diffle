@@ -87,11 +87,11 @@ export type EntryRequest = Exclude<ModeRequest, { kind: 'focus' | 'interdiff' | 
  */
 export const IterationSchema = z.object({
   /** 1-based, in recording order. */
-  n: z.number(),
+  n: z.number().int(),
   oldSha: z.string(),
   newSha: z.string(),
   /** Epoch milliseconds. */
-  recordedAt: z.number(),
+  recordedAt: z.number().int(),
 });
 export type Iteration = z.infer<typeof IterationSchema>;
 
@@ -134,7 +134,7 @@ export const RangeCommitSchema = CommitInfoSchema.extend({
   author: z.string(),
   email: z.string(),
   /** Author date, epoch milliseconds. */
-  date: z.number(),
+  date: z.number().int(),
 });
 export type RangeCommit = z.infer<typeof RangeCommitSchema>;
 
@@ -163,7 +163,7 @@ export const RangeSideSchema = z.object({
   new: z.string(),
   oldSha: z.string(),
   newSha: z.string(),
-  iteration: z.number().nullable(),
+  iteration: z.number().int().nullable(),
 });
 export type RangeSide = z.infer<typeof RangeSideSchema>;
 
@@ -248,7 +248,7 @@ export function refName(rev: string): string {
 
 export const GithubPullRequestSchema = z.object({
   repository: z.string(),
-  number: z.number(),
+  number: z.number().int(),
   url: z.string(),
   title: z.string(),
   state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
@@ -259,7 +259,7 @@ export type GithubPullRequest = z.infer<typeof GithubPullRequestSchema>;
 /** Optional enrichment for a snapshot, independent of its comparison. */
 export const GithubMetadataSchema = z.object({
   /** Snapshot.version used for this lookup; the client discards results for a different snapshot version. */
-  version: z.number(),
+  version: z.number().int(),
   /** GitHub repository identified by the local origin URL. */
   repository: z.string().nullable(),
   /** Its page, on whichever GitHub the run talks to. */
@@ -279,8 +279,8 @@ export const ChangedFileSchema = z.object({
   /** Set for R/C. */
   oldPath: z.string().optional(),
   status: ChangeStatusSchema,
-  additions: z.number(),
-  deletions: z.number(),
+  additions: z.number().int(),
+  deletions: z.number().int(),
   binary: z.boolean(),
   /** New-side blob sha. '' for deletions. Keys the viewed state. */
   blob: z.string(),
@@ -300,7 +300,7 @@ export type ChangedFile = z.infer<typeof ChangedFileSchema>;
 export const RangeCommitsSchema = z.object({
   /** Oldest first; the newest MAX_RANGE_COMMITS when there are more. */
   list: RangeCommitSchema.array(),
-  total: z.number(),
+  total: z.number().int(),
   /** The spanned comparison's resolved endpoints: the snapshot's own, or the range's when a commit is focused. */
   oldSha: z.string(),
   newSha: z.string(),
@@ -313,14 +313,14 @@ export const SnapshotSchema = z.object({
   root: z.string(),
   mode: ModeSpecSchema,
   /** Monotonic; bumps on every refresh and mode switch. */
-  version: z.number(),
+  version: z.number().int(),
   /** Resolved endpoints; either can be the worktree sentinel. */
   oldSha: z.string(),
   newSha: z.string(),
   /** The checked-out commit; '' on an unborn branch. Symbol navigation needs newSha to be this or the worktree. */
   headSha: z.string(),
   /** Context lines the patches were generated with. */
-  context: z.number(),
+  context: z.number().int(),
   changed: ChangedFileSchema.array(),
   /** All paths on the new side: the new commit's tree, or index ∪ untracked for the worktree. Sorted. */
   tree: z.string().array(),
@@ -338,7 +338,7 @@ export type Snapshot = z.infer<typeof SnapshotSchema>;
  */
 export const MovedSchema = z.object({
   /** The snapshot a reload would supersede. */
-  version: z.number(),
+  version: z.number().int(),
   /** Where the comparison `Snapshot.commits` spans resolves now. */
   oldSha: z.string(),
   newSha: z.string(),
@@ -364,8 +364,8 @@ export const LineAnchorSchema = z.object({
   path: z.string(),
   /** Column the user selected in a diff; 'new' for file items. */
   side: SideSchema,
-  startLine: z.number(),
-  endLine: z.number(),
+  startLine: z.number().int(),
+  endLine: z.number().int(),
   /** Exact text of [startLine, endLine] at creation. */
   quoted: z.string(),
 });
@@ -385,8 +385,8 @@ export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 export const CommentMessageSchema = z.object({
   id: z.string(),
   body: z.string(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
 });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
@@ -397,11 +397,11 @@ export const CommentThreadSchema = z.object({
   /** At least one; [0] opened the thread. */
   messages: CommentMessageSchema.array().min(1),
   resolved: z.boolean(),
-  resolvedAt: z.number().optional(),
+  resolvedAt: z.number().int().optional(),
   /** Relocation failed after a snapshot refresh: the lines left the diff, or the file left the review. */
   stale: z.boolean(),
   /** Original startLine of a line thread, shown in export when stale. */
-  staleFromLine: z.number().optional(),
+  staleFromLine: z.number().int().optional(),
 });
 export type CommentThread = z.infer<typeof CommentThreadSchema>;
 
@@ -449,9 +449,9 @@ export const GithubExportResponseSchema = z.object({
   /** The pull request whose pending review the comments joined; the human submits the review there. */
   url: z.string(),
   /** Review comments added to the pending review. */
-  posted: z.number(),
+  posted: z.number().int(),
   /** Comments already in the pending review at the same anchor whose body this call rewrote in place. */
-  updated: z.number(),
+  updated: z.number().int(),
   /** Whether this call opened the pending review or added to one that was already waiting. */
   review: z.enum(['created', 'existing']),
   /** Threads left out, with why (stale, resolved, unknown id, an identical comment already in the review). */
@@ -510,7 +510,7 @@ export type RefsResponse = z.infer<typeof RefsResponseSchema>;
 export const SearchMatchSchema = z.object({
   path: z.string(),
   /** 1-based line on the new side. */
-  line: z.number(),
+  line: z.number().int(),
   text: z.string(),
 });
 export type SearchMatch = z.infer<typeof SearchMatchSchema>;
@@ -543,7 +543,7 @@ export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),
   /** Unchanged lines shown around each change (git -U). Default 5. */
-  contextLines: z.number(),
+  contextLines: z.number().int(),
   /** When a review between refs recomputes as its refs move; see `FollowRefsSchema`. Default auto. */
   followRefs: FollowRefsSchema,
   /** Wrap long lines in the viewer instead of scrolling them sideways. Default true. */
@@ -635,7 +635,7 @@ export const LspLogEntrySchema = z.object({
   /** Stable identity of the line within the run. */
   id: z.number().int().positive(),
   /** Milliseconds since the epoch, of its latest repeat. */
-  time: z.number(),
+  time: z.number().int(),
   source: LspLogSourceSchema,
   level: LspLogLevelSchema,
   message: z.string(),
@@ -730,10 +730,10 @@ export const LspHoverResponseSchema = z.object({
   /** The span the contents describe, when the server says. Same units as LspPosition. */
   range: z
     .object({
-      line: z.number(),
-      col: z.number(),
-      endLine: z.number(),
-      endCol: z.number(),
+      line: z.number().int(),
+      col: z.number().int(),
+      endLine: z.number().int(),
+      endCol: z.number().int(),
     })
     .optional(),
   inconclusive,
@@ -760,14 +760,14 @@ export type LspOccurrencesResponse = z.infer<typeof LspOccurrencesResponseSchema
 export const LspSymbolSchema = z.object({
   name: z.string(),
   /** LSP SymbolKind number; the client maps it to a label. */
-  kind: z.number(),
+  kind: z.number().int(),
   /** Enclosing class or function, when any. */
   container: z.string().optional(),
   path: z.string(),
-  line: z.number(),
+  line: z.number().int(),
   /** Last line of the declaration's full range. */
-  endLine: z.number(),
-  col: z.number(),
+  endLine: z.number().int(),
+  col: z.number().int(),
 });
 export type LspSymbol = z.infer<typeof LspSymbolSchema>;
 
@@ -782,7 +782,7 @@ export type ViewedState = z.infer<typeof ViewedStateSchema>;
 export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('snapshot'),
-    version: z.number(),
+    version: z.number().int(),
   }),
   /** Null once the refs are back where the snapshot has them. */
   z.object({

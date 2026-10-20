@@ -1,14 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isChecked, type GateInput, type TreeFile } from './guards.js';
+import { countLines, isChecked, type GateInput, type TreeFile } from './guards.js';
 
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 const IGNORE_FILES = { files: '.locignore', folders: '.folderignore' };
-
-function countLines(content: Buffer): number {
-  return content.toString('utf8').split('\n').length - 1;
-}
 
 /** Tracked, modified and new files that git does not ignore, in the working tree; NUL-delimited. */
 function listFiles(cwd: string): string[] {
@@ -30,7 +26,7 @@ function listFiles(cwd: string): string[] {
 /** A path the index still lists but the working tree lost (deleted, or a submodule) is not in the commit. */
 function readTreeFile(cwd: string, path: string): TreeFile | null {
   try {
-    return { path, lines: isChecked(path) ? countLines(readFileSync(join(cwd, path))) : 0 };
+    return { path, lines: isChecked(path) ? countLines(path, readFileSync(join(cwd, path), 'utf8')) : 0 };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT' || code === 'EISDIR') return null;

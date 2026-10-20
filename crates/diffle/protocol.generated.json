@@ -1,0 +1,2200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ApiError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error"
+      ]
+    },
+    "ChangedFile": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "oldPath": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ChangeStatus"
+        },
+        "additions": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "deletions": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "binary": {
+          "type": "boolean"
+        },
+        "blob": {
+          "type": "string"
+        },
+        "oldBlob": {
+          "type": "string"
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "submodule": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "additions",
+        "deletions",
+        "binary",
+        "blob",
+        "oldBlob",
+        "generated"
+      ]
+    },
+    "ChangeStatus": {
+      "type": "string",
+      "enum": [
+        "A",
+        "M",
+        "D",
+        "R",
+        "C",
+        "T",
+        "U"
+      ]
+    },
+    "ClearThreadsQuery": {
+      "type": "object",
+      "properties": {
+        "stale": {
+          "type": "string",
+          "const": "1"
+        }
+      }
+    },
+    "CommentAnchor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "line"
+            },
+            "path": {
+              "type": "string"
+            },
+            "side": {
+              "$ref": "#/$defs/Side"
+            },
+            "startLine": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "endLine": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "quoted": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "side",
+            "startLine",
+            "endLine",
+            "quoted"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "file"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ]
+        }
+      ]
+    },
+    "CommentMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "body",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CommentThread": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "anchor": {
+          "$ref": "#/$defs/CommentAnchor"
+        },
+        "messages": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CommentMessage"
+          }
+        },
+        "resolved": {
+          "type": "boolean"
+        },
+        "resolvedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "staleFromLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "anchor",
+        "messages",
+        "resolved",
+        "stale"
+      ]
+    },
+    "CommitInfo": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "short": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha",
+        "short",
+        "message"
+      ]
+    },
+    "Comparison": {
+      "type": "object",
+      "properties": {
+        "old": {
+          "type": "string"
+        },
+        "new": {
+          "type": "string"
+        },
+        "base": {
+          "$ref": "#/$defs/ComparisonBase"
+        },
+        "live": {
+          "type": "string",
+          "enum": [
+            "worktree",
+            "refs",
+            "none"
+          ]
+        },
+        "commentKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "old",
+        "new",
+        "base",
+        "live",
+        "commentKey"
+      ]
+    },
+    "ComparisonBase": {
+      "type": "string",
+      "enum": [
+        "direct",
+        "merge-base",
+        "parent"
+      ]
+    },
+    "ConfigUpdate": {
+      "type": "object",
+      "properties": {
+        "autoViewed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contextLines": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "followRefs": {
+          "$ref": "#/$defs/FollowRefs"
+        },
+        "lineWrap": {
+          "type": "boolean"
+        }
+      }
+    },
+    "FileAnchor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "file"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ]
+    },
+    "FileQuery": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "$ref": "#/$defs/Side"
+        }
+      },
+      "required": [
+        "path",
+        "rev"
+      ]
+    },
+    "FileResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "contents": {
+          "type": "string"
+        },
+        "binary": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "contents",
+        "binary"
+      ]
+    },
+    "FollowRefs": {
+      "type": "string",
+      "enum": [
+        "on",
+        "auto",
+        "off"
+      ]
+    },
+    "GithubExportRequest": {
+      "type": "object",
+      "properties": {
+        "threadIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "GithubExportResponse": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "posted": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "updated": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "review": {
+          "type": "string",
+          "enum": [
+            "created",
+            "existing"
+          ]
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "url",
+        "posted",
+        "updated",
+        "review",
+        "skipped"
+      ]
+    },
+    "GithubMetadata": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "repository": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repositoryUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pullRequest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GithubPullRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "repository",
+        "repositoryUrl",
+        "pullRequest",
+        "reason"
+      ]
+    },
+    "GithubPullRequest": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "url": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "CLOSED",
+            "MERGED"
+          ]
+        },
+        "isDraft": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repository",
+        "number",
+        "url",
+        "title",
+        "state",
+        "isDraft"
+      ]
+    },
+    "ImageQuery": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "$ref": "#/$defs/Side"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path",
+        "rev",
+        "key"
+      ]
+    },
+    "Interdiff": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/RangeSide"
+        },
+        "to": {
+          "$ref": "#/$defs/RangeSide"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RangePair"
+          }
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "conflicts",
+        "pairs"
+      ]
+    },
+    "Iteration": {
+      "type": "object",
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        },
+        "recordedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "n",
+        "oldSha",
+        "newSha",
+        "recordedAt"
+      ]
+    },
+    "LanguageId": {
+      "type": "string",
+      "enum": [
+        "astro",
+        "c",
+        "cpp",
+        "csharp",
+        "css",
+        "go",
+        "haskell",
+        "html",
+        "java",
+        "javascript",
+        "javascriptreact",
+        "json",
+        "jsonc",
+        "lua",
+        "nix",
+        "ocaml",
+        "php",
+        "python",
+        "ruby",
+        "rust",
+        "shellscript",
+        "swift",
+        "terraform",
+        "toml",
+        "typescript",
+        "typescriptreact",
+        "vue",
+        "yaml",
+        "zig"
+      ]
+    },
+    "LastCommitsPreview": {
+      "type": "object",
+      "properties": {
+        "old": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommitInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommitInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "old",
+        "new"
+      ]
+    },
+    "LastCommitsQuery": {
+      "type": "object",
+      "properties": {
+        "oldOffset": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "newOffset": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      },
+      "required": [
+        "oldOffset",
+        "newOffset"
+      ]
+    },
+    "LineAnchor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "line"
+        },
+        "path": {
+          "type": "string"
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "quoted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "side",
+        "startLine",
+        "endLine",
+        "quoted"
+      ]
+    },
+    "LspFeature": {
+      "type": "string",
+      "enum": [
+        "definition",
+        "typeDefinition",
+        "hover",
+        "references",
+        "documentSymbol",
+        "workspaceSymbol",
+        "documentHighlight"
+      ]
+    },
+    "LspHoverResponse": {
+      "type": "object",
+      "properties": {
+        "contents": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "range": {
+          "type": "object",
+          "properties": {
+            "line": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "col": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "endLine": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "endCol": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "line",
+            "col",
+            "endLine",
+            "endCol"
+          ]
+        },
+        "inconclusive": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contents"
+      ]
+    },
+    "LspLocation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        },
+        "external": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "col",
+        "text"
+      ]
+    },
+    "LspLocationsResponse": {
+      "type": "object",
+      "properties": {
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspLocation"
+          }
+        },
+        "inconclusive": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "locations"
+      ]
+    },
+    "LspLogEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "time": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "source": {
+          "$ref": "#/$defs/LspLogSource"
+        },
+        "level": {
+          "$ref": "#/$defs/LspLogLevel"
+        },
+        "message": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "time",
+        "source",
+        "level",
+        "message",
+        "count"
+      ]
+    },
+    "LspLogLevel": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "info",
+        "log"
+      ]
+    },
+    "LspLogQuery": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "server"
+      ]
+    },
+    "LspLogResponse": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspLogEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ]
+    },
+    "LspLogSource": {
+      "type": "string",
+      "enum": [
+        "message",
+        "log",
+        "stderr"
+      ]
+    },
+    "LspMissing": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "$ref": "#/$defs/LanguageId"
+        },
+        "tried": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "language",
+        "tried"
+      ]
+    },
+    "LspOccurrence": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endCol": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "text",
+            "read",
+            "write"
+          ]
+        }
+      },
+      "required": [
+        "line",
+        "col",
+        "endLine",
+        "endCol",
+        "kind"
+      ]
+    },
+    "LspOccurrencesResponse": {
+      "type": "object",
+      "properties": {
+        "occurrences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspOccurrence"
+          }
+        }
+      },
+      "required": [
+        "occurrences"
+      ]
+    },
+    "LspPosition": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "col"
+      ]
+    },
+    "LspProcessStatus": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "ready",
+            "unavailable"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "activity": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notice": {
+          "type": "object",
+          "properties": {
+            "severity": {
+              "type": "string",
+              "enum": [
+                "warning",
+                "error"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "severity",
+            "message"
+          ]
+        },
+        "log": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "errors": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "warnings": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "seq",
+            "errors",
+            "warnings"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "command",
+        "state",
+        "log"
+      ]
+    },
+    "LspProjects": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "label",
+        "paths"
+      ]
+    },
+    "LspServerStatus": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "ready",
+            "unavailable"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "activity": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notice": {
+          "type": "object",
+          "properties": {
+            "severity": {
+              "type": "string",
+              "enum": [
+                "warning",
+                "error"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "severity",
+            "message"
+          ]
+        },
+        "log": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "errors": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "warnings": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "seq",
+            "errors",
+            "warnings"
+          ]
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageId"
+          }
+        },
+        "joins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LanguageId"
+          }
+        },
+        "supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspFeature"
+          }
+        },
+        "projects": {
+          "$ref": "#/$defs/LspProjects"
+        }
+      },
+      "required": [
+        "name",
+        "command",
+        "state",
+        "log",
+        "languages",
+        "joins",
+        "supports"
+      ]
+    },
+    "LspStatus": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspServerStatus"
+          }
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspMissing"
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "servers",
+        "missing"
+      ]
+    },
+    "LspSymbol": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "container": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "col": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "path",
+        "line",
+        "endLine",
+        "col"
+      ]
+    },
+    "LspSymbolsResponse": {
+      "type": "object",
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LspSymbol"
+          }
+        },
+        "inconclusive": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbols"
+      ]
+    },
+    "MessagePatch": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ]
+    },
+    "ModeRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "working"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pr"
+            },
+            "pr": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "revspec"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "focus"
+            },
+            "commit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "commit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "interdiff"
+            },
+            "from": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "to": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "range-diff"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pair"
+            },
+            "commit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "commit"
+          ]
+        }
+      ]
+    },
+    "ModeSpec": {
+      "type": "object",
+      "properties": {
+        "old": {
+          "type": "string"
+        },
+        "new": {
+          "type": "string"
+        },
+        "base": {
+          "$ref": "#/$defs/ComparisonBase"
+        },
+        "live": {
+          "type": "string",
+          "enum": [
+            "worktree",
+            "refs",
+            "none"
+          ]
+        },
+        "commentKey": {
+          "type": "string"
+        },
+        "within": {
+          "$ref": "#/$defs/Comparison"
+        },
+        "interdiff": {
+          "$ref": "#/$defs/Interdiff"
+        },
+        "pair": {
+          "$ref": "#/$defs/PairSpec"
+        }
+      },
+      "required": [
+        "old",
+        "new",
+        "base",
+        "live",
+        "commentKey"
+      ]
+    },
+    "Moved": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "oldSha",
+        "newSha"
+      ]
+    },
+    "PairSpec": {
+      "type": "object",
+      "properties": {
+        "old": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "new": {
+          "type": "string"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "old",
+        "new",
+        "conflicts"
+      ]
+    },
+    "PairStatus": {
+      "type": "string",
+      "enum": [
+        "identical",
+        "changed",
+        "message",
+        "added",
+        "dropped"
+      ]
+    },
+    "PatchQuery": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "PatchRequest": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "paths"
+      ]
+    },
+    "RangeCommit": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "short": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "date": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "sha",
+        "short",
+        "message",
+        "author",
+        "email",
+        "date"
+      ]
+    },
+    "RangeCommits": {
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RangeCommit"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "list",
+        "total",
+        "oldSha",
+        "newSha"
+      ]
+    },
+    "RangePair": {
+      "type": "object",
+      "properties": {
+        "old": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RangeCommit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RangeCommit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/PairStatus"
+        }
+      },
+      "required": [
+        "old",
+        "new",
+        "status"
+      ]
+    },
+    "RangeSide": {
+      "type": "object",
+      "properties": {
+        "old": {
+          "type": "string"
+        },
+        "new": {
+          "type": "string"
+        },
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        },
+        "iteration": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "old",
+        "new",
+        "oldSha",
+        "newSha",
+        "iteration"
+      ]
+    },
+    "RefsResponse": {
+      "type": "object",
+      "properties": {
+        "defaultBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remoteBranches": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recent": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sha": {
+                "type": "string"
+              },
+              "short": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sha",
+              "short",
+              "subject"
+            ]
+          }
+        }
+      },
+      "required": [
+        "defaultBranch",
+        "current",
+        "branches",
+        "remoteBranches",
+        "tags",
+        "recent"
+      ]
+    },
+    "ReplyCreate": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ]
+    },
+    "ResolvedRequest": {
+      "type": "object",
+      "properties": {
+        "resolved": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "resolved"
+      ]
+    },
+    "ReviewedCommit": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "short": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "child": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sha",
+        "short",
+        "message",
+        "parent",
+        "child"
+      ]
+    },
+    "SearchContent": {
+      "type": "string",
+      "enum": [
+        "diff",
+        "full"
+      ]
+    },
+    "SearchMatch": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "text"
+      ]
+    },
+    "SearchQuery": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "default": "",
+          "type": "string"
+        },
+        "scope": {
+          "default": "diff",
+          "$ref": "#/$defs/SearchScope"
+        },
+        "content": {
+          "default": "diff",
+          "$ref": "#/$defs/SearchContent"
+        },
+        "path": {
+          "type": "string"
+        },
+        "word": {
+          "type": "string",
+          "enum": [
+            "0",
+            "1"
+          ]
+        },
+        "i": {
+          "type": "string",
+          "enum": [
+            "0",
+            "1"
+          ]
+        },
+        "re": {
+          "type": "string",
+          "enum": [
+            "0",
+            "1"
+          ]
+        }
+      }
+    },
+    "SearchResponse": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SearchMatch"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "query",
+        "matches",
+        "truncated"
+      ]
+    },
+    "SearchScope": {
+      "type": "string",
+      "enum": [
+        "file",
+        "diff",
+        "repo"
+      ]
+    },
+    "ServerMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "snapshot"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "type",
+            "version"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "moved"
+            },
+            "moved": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Moved"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "moved"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "threads"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "viewed"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "config"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "lsp"
+            },
+            "payload": {
+              "$ref": "#/$defs/LspStatus"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "Side": {
+      "type": "string",
+      "enum": [
+        "old",
+        "new"
+      ]
+    },
+    "Snapshot": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/ModeSpec"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "context": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangedFile"
+          }
+        },
+        "tree": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewedCommit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "commits": {
+          "$ref": "#/$defs/RangeCommits"
+        },
+        "iterations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Iteration"
+          }
+        }
+      },
+      "required": [
+        "root",
+        "mode",
+        "version",
+        "oldSha",
+        "newSha",
+        "headSha",
+        "context",
+        "changed",
+        "tree",
+        "commit",
+        "commits",
+        "iterations"
+      ]
+    },
+    "SymbolsQuery": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "q": {
+          "type": "string"
+        }
+      }
+    },
+    "ThreadCreate": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "startLine": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "body": {
+          "type": "string"
+        },
+        "quoted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "body"
+      ]
+    },
+    "ThreadQuery": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/ThreadState"
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "ThreadState": {
+      "type": "string",
+      "enum": [
+        "open",
+        "resolved",
+        "all"
+      ]
+    },
+    "UserConfig": {
+      "type": "object",
+      "properties": {
+        "autoViewed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contextLines": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "followRefs": {
+          "$ref": "#/$defs/FollowRefs"
+        },
+        "lineWrap": {
+          "type": "boolean"
+        },
+        "lspCommands": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/LanguageId"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "githubHosts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "autoViewed",
+        "contextLines",
+        "followRefs",
+        "lineWrap",
+        "lspCommands",
+        "githubHosts"
+      ]
+    },
+    "ViewedBulkRequest": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ViewedEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ]
+    },
+    "ViewedEntry": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "blob": {
+          "type": "string"
+        },
+        "viewed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "blob",
+        "viewed"
+      ]
+    },
+    "ViewedState": {
+      "type": "string",
+      "enum": [
+        "unviewed",
+        "viewed",
+        "restale"
+      ]
+    }
+  }
+}

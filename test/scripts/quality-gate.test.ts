@@ -81,6 +81,16 @@ describe('size guard', () => {
     });
   });
 
+  it('sizes a Rust file without its inline test module, and its tests/ folder not at all', async () => {
+    const tests = `#[cfg(test)]\nmod tests {\n${lines(500)}}\n`;
+    await withRepo({}, async ({ write, gate }) => {
+      await write({ 'src/lib.rs': lines(330) + tests, 'tests/flow.rs': lines(500) });
+      expect(gate()).toEqual(clean);
+      await write({ 'src/lib.rs': lines(331) + tests });
+      expect(gate().output).toContain('src/lib.rs is 331 lines');
+    });
+  });
+
   it('skips a file deleted from the working tree but still in the index', async () => {
     await withRepo({ 'src/gone.ts': lines(400) }, async ({ dir, gate }) => {
       await rm(join(dir, 'src/gone.ts'));

@@ -43,11 +43,13 @@ export async function startDiffle({
   timeoutMs = 30000,
 }: DiffleOptions): Promise<RunningDiffle> {
   const configDir = await mkdtemp(join(tmpdir(), 'diffle-e2e-config-'));
+  // DIFFLE_BIN runs a built server, the Rust one, over this checkout's scenarios; a base checkout runs from source.
+  const bin = root === REPO_ROOT ? process.env.DIFFLE_BIN : undefined;
+  const launcher = bin ? [] : [join(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs'), join(root, 'src/cli/main.ts')];
   const proc = spawn(
-    process.execPath,
+    bin ? resolve(bin) : process.execPath,
     [
-      join(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs'),
-      join(root, 'src/cli/main.ts'),
+      ...launcher,
       '-C',
       repo,
       '--port',
