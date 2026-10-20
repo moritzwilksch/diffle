@@ -239,12 +239,7 @@
           "$ref": "#/$defs/ComparisonBase"
         },
         "live": {
-          "type": "string",
-          "enum": [
-            "worktree",
-            "refs",
-            "none"
-          ]
+          "$ref": "#/$defs/Live"
         },
         "commentKey": {
           "type": "string"
@@ -684,6 +679,14 @@
         "quoted"
       ]
     },
+    "Live": {
+      "type": "string",
+      "enum": [
+        "worktree",
+        "refs",
+        "none"
+      ]
+    },
     "LspFeature": {
       "type": "string",
       "enum": [
@@ -793,6 +796,31 @@
         "locations"
       ]
     },
+    "LspLogCounts": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "seq",
+        "errors",
+        "warnings"
+      ]
+    },
     "LspLogEntry": {
       "type": "object",
       "properties": {
@@ -892,6 +920,25 @@
       "required": [
         "language",
         "tried"
+      ]
+    },
+    "LspNotice": {
+      "type": "object",
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": [
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "message"
       ]
     },
     "LspOccurrence": {
@@ -999,48 +1046,10 @@
           }
         },
         "notice": {
-          "type": "object",
-          "properties": {
-            "severity": {
-              "type": "string",
-              "enum": [
-                "warning",
-                "error"
-              ]
-            },
-            "message": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "severity",
-            "message"
-          ]
+          "$ref": "#/$defs/LspNotice"
         },
         "log": {
-          "type": "object",
-          "properties": {
-            "seq": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "errors": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "warnings": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            }
-          },
-          "required": [
-            "seq",
-            "errors",
-            "warnings"
-          ]
+          "$ref": "#/$defs/LspLogCounts"
         }
       },
       "required": [
@@ -1095,48 +1104,10 @@
           }
         },
         "notice": {
-          "type": "object",
-          "properties": {
-            "severity": {
-              "type": "string",
-              "enum": [
-                "warning",
-                "error"
-              ]
-            },
-            "message": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "severity",
-            "message"
-          ]
+          "$ref": "#/$defs/LspNotice"
         },
         "log": {
-          "type": "object",
-          "properties": {
-            "seq": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "errors": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "warnings": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            }
-          },
-          "required": [
-            "seq",
-            "errors",
-            "warnings"
-          ]
+          "$ref": "#/$defs/LspLogCounts"
         },
         "languages": {
           "type": "array",
@@ -1409,12 +1380,7 @@
           "$ref": "#/$defs/ComparisonBase"
         },
         "live": {
-          "type": "string",
-          "enum": [
-            "worktree",
-            "refs",
-            "none"
-          ]
+          "$ref": "#/$defs/Live"
         },
         "commentKey": {
           "type": "string"

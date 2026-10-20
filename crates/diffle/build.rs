@@ -6,10 +6,7 @@ fn main() {
     println!("cargo:rerun-if-changed={manifest}");
     let package: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(manifest).expect("read package.json")).expect("parse package.json");
-    println!(
-        "cargo:rustc-env=DIFFLE_VERSION={}",
-        package["version"].as_str().expect("package.json version")
-    );
+    println!("cargo:rustc-env=DIFFLE_VERSION={}", package["version"].as_str().expect("package.json version"));
 
     let schema_path = "protocol.generated.json";
     println!("cargo:rerun-if-changed={schema_path}");

@@ -102,12 +102,16 @@ export type Iteration = z.infer<typeof IterationSchema>;
 export const ComparisonBaseSchema = z.enum(['direct', 'merge-base', 'parent']);
 export type ComparisonBase = z.infer<typeof ComparisonBaseSchema>;
 
+/** What a comparison follows: the worktree, the refs it was named by, or nothing (pinned hashes). */
+export const LiveSchema = z.enum(['worktree', 'refs', 'none']);
+export type Live = z.infer<typeof LiveSchema>;
+
 /** A comparison; both endpoints accept a Git revision or "worktree". Under `parent`, both name the one commit. */
 export const ComparisonSchema = z.object({
   old: z.string(),
   new: z.string(),
   base: ComparisonBaseSchema,
-  live: z.enum(['worktree', 'refs', 'none']),
+  live: LiveSchema,
   /** Fixed when the comparison is entered; discovery never changes comment storage. */
   commentKey: z.string(),
 });
@@ -593,6 +597,21 @@ export const LspLocationSchema = LspPositionSchema.extend({
 export type LspLocation = z.infer<typeof LspLocationSchema>;
 
 /** One language server process, as its bridge sees it. */
+export const LspNoticeSchema = z.object({
+  severity: z.enum(['warning', 'error']),
+  message: z.string(),
+});
+export type LspNotice = z.infer<typeof LspNoticeSchema>;
+
+export const LspLogCountsSchema = z.object({
+  /** Changes whenever a line is added or repeated, so a reader showing the log knows to fetch again. */
+  seq: z.number().int().nonnegative(),
+  /** Error and warning lines since the server started, kept or not. */
+  errors: z.number().int().nonnegative(),
+  warnings: z.number().int().nonnegative(),
+});
+export type LspLogCounts = z.infer<typeof LspLogCountsSchema>;
+
 export const LspProcessStatusSchema = z.object({
   /** Program name, for messages: the basename of the command's first word, e.g. `pyrefly`. */
   name: z.string(),
@@ -607,20 +626,9 @@ export const LspProcessStatusSchema = z.object({
    * What the server last said to the reader through `window/showMessage`, when it was a
    * warning or an error. Its log never stands here: that is `log`.
    */
-  notice: z
-    .object({
-      severity: z.enum(['warning', 'error']),
-      message: z.string(),
-    })
-    .optional(),
+  notice: LspNoticeSchema.optional(),
   /** The server's output channel in brief; `GET /api/lsp/log` lists the lines. */
-  log: z.object({
-    /** Changes whenever a line is added or repeated, so a reader showing the log knows to fetch again. */
-    seq: z.number().int().nonnegative(),
-    /** Error and warning lines since the server started, kept or not. */
-    errors: z.number().int().nonnegative(),
-    warnings: z.number().int().nonnegative(),
-  }),
+  log: LspLogCountsSchema,
 });
 export type LspProcessStatus = z.infer<typeof LspProcessStatusSchema>;
 

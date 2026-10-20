@@ -1,4 +1,4 @@
-import type { Comparison, EntryRequest, ModeSpec, RangeSide } from '@/shared/protocol.js';
+import type { Comparison, EntryRequest, Live, ModeSpec, RangeSide } from '@/shared/protocol.js';
 import { GitError, type GitRepo } from '@/server/git/GitRepo.js';
 import { GithubError, noToken } from '@/server/github/client.js';
 import { type Github, type GithubInstance, githubRepository, TOKENLESS_GITHUB_COM } from '@/server/github/hosts.js';
@@ -35,7 +35,7 @@ import { type ParsedRange, type ParsedRevspec, parseRangeDiff, parseRevspec, Rev
 export async function resolveComparison(
   repo: GitRepo,
   comparison: Pick<ModeSpec, 'old' | 'new' | 'base' | 'interdiff'>,
-): Promise<{ oldSha: string; newSha: string; live: ModeSpec['live'] }> {
+): Promise<{ oldSha: string; newSha: string; live: Live }> {
   // An interdiff's old side is a tree the session wrote, which no revision names; both sides are pinned.
   // An added commit shown within one is an ordinary commit against its parent.
   if (comparison.interdiff && comparison.base !== 'parent')
