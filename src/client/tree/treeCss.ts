@@ -25,6 +25,8 @@ export const TREE_CSS = `
  * fractional browser zoom (110%) fixed-point rounding leaves every cell a hair taller, and the marker
  * then paints over names that fit (pierrecomputer/pierre#816). A wrapped copy is at least 2lh tall. */
 @container measure (height < 1.5lh) { [data-truncate-marker] { opacity: 0; } }
+/* A row scrolling into view is rendered afresh, and the ellipsis would fade in over a name already cut. */
+[data-truncate-container] { --truncate-marker-fade-in-duration: 0s; }
 /* The library butts the search box against the toolbar above; give it the toolbar's own vertical rhythm. */
 [data-file-tree-search-container] { padding-top: 0.5rem; }
 /* An input's intrinsic width (its default 20 characters) would hold it wider than a narrow pane. */
