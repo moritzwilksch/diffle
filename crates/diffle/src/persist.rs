@@ -65,7 +65,11 @@ fn lock_path(file: &Path) -> PathBuf {
 }
 
 async fn acquire(lock: &Path) -> anyhow::Result<File> {
-    let handle = OpenOptions::new().create(true).truncate(false).write(true).open(lock)?;
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(false).write(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let handle = options.open(lock)?;
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
         match handle.try_lock() {

@@ -1,0 +1,99 @@
+$ diffle working --help
+
+Same as `diffle HEAD..worktree`: uncommitted changes, staged and untracked files included.
+
+Usage: diffle working [OPTIONS]
+
+Options:
+  -C <path>                      run as if started in <path> (any directory inside a git worktree)
+  -h, --help                     display help for command
+  -p, --port <port>              port to listen on (default: 4966, or the next free one; 0 = random)
+  -H, --host <host>              address to bind; use 0.0.0.0 to expose on the network (default:
+                                 127.0.0.1)
+      --allowed-origin <origin>  trusted public HTTP(S) origin behind a reverse proxy (without a
+                                 path)
+      --no-open                  do not open a browser
+      --keep-alive               keep the server running after all browser tabs close
+      --no-watch                 do not watch for changes
+      --auto-viewed <glob>       mark matching files viewed for this session (repeatable)
+  -U, --context <n>              context lines around changes for this session (default: config, 5)
+      --lsp <language=command>   language server command for one language, started for this run
+                                 (repeatable); by default the diff's languages are served by
+                                 whatever is on PATH
+      --no-lsp                   do not start any language server
+      --timing                   print startup phase timings to stderr
+
+$ diffle pr --help
+
+A GitHub pull request, as GitHub shows it: merge-base(base, head) vs head.
+
+Usage: diffle pr [OPTIONS] [pr]
+
+Arguments:
+  [pr]  pull request number or url; default: the pull request for this branch
+
+Options:
+  -C <path>                      run as if started in <path> (any directory inside a git worktree)
+  -h, --help                     display help for command
+  -p, --port <port>              port to listen on (default: 4966, or the next free one; 0 = random)
+  -H, --host <host>              address to bind; use 0.0.0.0 to expose on the network (default:
+                                 127.0.0.1)
+      --allowed-origin <origin>  trusted public HTTP(S) origin behind a reverse proxy (without a
+                                 path)
+      --no-open                  do not open a browser
+      --keep-alive               keep the server running after all browser tabs close
+      --no-watch                 do not watch for changes
+      --auto-viewed <glob>       mark matching files viewed for this session (repeatable)
+  -U, --context <n>              context lines around changes for this session (default: config, 5)
+      --lsp <language=command>   language server command for one language, started for this run
+                                 (repeatable); by default the diff's languages are served by
+                                 whatever is on PATH
+      --no-lsp                   do not start any language server
+      --timing                   print startup phase timings to stderr
+
+$ diffle range-diff --help
+
+How one series of commits became another, as git range-diff shows it: the older range replayed onto
+the newer one’s base against the newer range, with the commits paired.
+
+Usage: diffle range-diff [OPTIONS] <ranges>...
+
+Arguments:
+  <ranges>...  two ranges: <a>..<b> <c>..<d>, <base> <b> <d>, or <b>...<d>
+
+Options:
+  -C <path>                      run as if started in <path> (any directory inside a git worktree)
+  -h, --help                     display help for command
+  -p, --port <port>              port to listen on (default: 4966, or the next free one; 0 = random)
+  -H, --host <host>              address to bind; use 0.0.0.0 to expose on the network (default:
+                                 127.0.0.1)
+      --allowed-origin <origin>  trusted public HTTP(S) origin behind a reverse proxy (without a
+                                 path)
+      --no-open                  do not open a browser
+      --keep-alive               keep the server running after all browser tabs close
+      --no-watch                 do not watch for changes
+      --auto-viewed <glob>       mark matching files viewed for this session (repeatable)
+  -U, --context <n>              context lines around changes for this session (default: config, 5)
+      --lsp <language=command>   language server command for one language, started for this run
+                                 (repeatable); by default the diff's languages are served by
+                                 whatever is on PATH
+      --no-lsp                   do not start any language server
+      --timing                   print startup phase timings to stderr
+
+$ diffle config --help
+
+show or edit the user config (same settings as the UI dialog)
+
+Usage: diffle config [COMMAND]
+
+Commands:
+  show                print the config file path and contents
+  add-auto-viewed     add patterns for files that start viewed
+  set-context         set context lines around changes
+  set-follow-refs     follow moved refs: on, auto (not branches), off
+  set-lsp             set the language-server command for one language
+  unset-lsp           forget a language-server override, back to PATH
+  remove-auto-viewed  remove patterns for files that start viewed
+
+Options:
+  -h, --help  display help for command

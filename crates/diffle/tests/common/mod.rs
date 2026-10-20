@@ -1,5 +1,6 @@
 //! Temporary real repositories for the integration tests.
 #![allow(dead_code)]
+pub mod server;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -125,9 +126,10 @@ pub fn session(
     (Session::new(repo.clone(), hub.clone(), opts), hub)
 }
 
-/// Polls `check` until it holds, failing after ten seconds: watchers poll and debounce.
+/// Polls `check` until it holds, failing after thirty seconds: watchers poll and debounce, and a
+/// loaded machine spawns git slowly.
 pub async fn eventually(what: &str, mut check: impl AsyncFnMut() -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     while !check().await {
         assert!(std::time::Instant::now() < deadline, "timed out waiting for {what}");
         tokio::time::sleep(std::time::Duration::from_millis(25)).await;

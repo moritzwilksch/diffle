@@ -143,8 +143,12 @@ impl GitRepo {
             }
             self.text(&args).await
         };
-        let (tracked, extras) =
-            tokio::join!(tracked, map_limit(single, READ_CONCURRENCY, |f| self.patch(old, new, f, context, None)));
+        let (tracked, extras) = tokio::join!(
+            tracked,
+            map_limit(single.into_iter().cloned().collect::<Vec<_>>(), READ_CONCURRENCY, |f: ChangedFile| async move {
+                self.patch(old, new, &f, context, None).await
+            })
+        );
         let mut out = tracked?;
         for extra in extras {
             out += &extra?;

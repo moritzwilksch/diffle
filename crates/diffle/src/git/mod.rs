@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use catfile::CatFileBatch;
 pub use catfile::CatFileObject;
+pub use changes::is_binary;
 pub use grep::{GrepMatch, GrepOptions, GrepResult};
 pub use refs::{Remote, Upstream};
 

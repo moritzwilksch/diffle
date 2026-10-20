@@ -1,3 +1,3 @@
-fn main() {
-    println!("{}", env!("DIFFLE_VERSION"));
+fn main() -> std::process::ExitCode {
+    diffle::cli::main()
 }

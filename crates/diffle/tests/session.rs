@@ -448,9 +448,10 @@ async fn follows_moved_refs_live_when_configured_recording_each_state_as_an_iter
     assert!(s.moved().unwrap().is_none());
 
     // Turned off at runtime: the next move is announced instead.
-    settle(&published).await;
     s.set_follow_refs(FollowRefs::Off);
     assert!(!s.follows().unwrap());
+    // A no-op behind every queued job: a refresh signalled while following was on has finished.
+    s.set_context(3).await.unwrap();
     t.write("a.txt", "a\nb\nc\nd\n");
     t.git(&["commit", "-q", "-am", "three"]);
     let three = t.git(&["rev-parse", "feat"]);
@@ -469,15 +470,4 @@ async fn follows_moved_refs_live_when_configured_recording_each_state_as_an_iter
     let four = t.git(&["rev-parse", "HEAD"]);
     eventually("the detached commit", async || latest().new_sha == four).await;
     s.close().await;
-}
-
-/// Waits until no snapshot has been published for half a second: the watcher's signals are spent.
-async fn settle(published: &Mutex<Vec<Arc<Snapshot>>>) {
-    loop {
-        let count = published.lock().unwrap().len();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        if published.lock().unwrap().len() == count {
-            return;
-        }
-    }
 }
