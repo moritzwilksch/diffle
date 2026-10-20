@@ -37,7 +37,7 @@ pub fn comparison_label(mode: &ModeSpec) -> String {
     };
     let outer = plain_label(&within.old, &within.new, within.base);
     if let Some(inter) = &mode.interdiff {
-        let label = match shown_iterations(&inter.from, &inter.to) {
+        let label = match super::shown_iterations(mode) {
             Some((from, to)) => format!("{outer} #{from}→#{to}"),
             None => format!("{} → {}", range_label(&inter.from.old, &inter.from.new), side_label(&inter.to)),
         };
@@ -52,10 +52,6 @@ pub fn comparison_label(mode: &ModeSpec) -> String {
 
 fn side_label(side: &RangeSide) -> String {
     range_label(&side.old, &side.new)
-}
-
-fn shown_iterations(from: &RangeSide, to: &RangeSide) -> Option<(i64, i64)> {
-    Some((from.iteration?, to.iteration?))
 }
 
 fn short(rev: &str) -> String {

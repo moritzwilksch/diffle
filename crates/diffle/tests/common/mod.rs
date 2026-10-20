@@ -18,6 +18,9 @@ impl TestRepo {
         let path = dir.path().canonicalize().unwrap();
         let repo = Self { _dir: dir, path };
         repo.git(&["init", "-q", "-b", "main"]);
+        // Git's detached background maintenance writes refs after a commit, a watcher signal no test expects.
+        repo.git(&["config", "maintenance.auto", "false"]);
+        repo.git(&["config", "gc.auto", "0"]);
         repo
     }
 
@@ -90,4 +93,43 @@ pub fn paths(snap: &Snapshot) -> Vec<&str> {
 
 pub fn statuses(snap: &Snapshot) -> Vec<(&str, diffle::protocol::ChangeStatus)> {
     snap.changed.iter().map(|f| (f.path.as_str(), f.status)).collect()
+}
+
+use diffle::protocol::{FollowRefs, ServerMessage};
+use diffle::session::{Broadcaster, Session, SessionOptions};
+
+/// Every message a session broadcast, as JSON for easy comparison.
+#[derive(Default)]
+pub struct Recorder(std::sync::Mutex<Vec<serde_json::Value>>);
+
+impl Broadcaster for Recorder {
+    fn broadcast(&self, msg: ServerMessage) {
+        self.0.lock().unwrap().push(serde_json::to_value(msg).unwrap());
+    }
+}
+
+impl Recorder {
+    pub fn messages(&self) -> Vec<serde_json::Value> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+pub fn session(
+    repo: &Arc<GitRepo>,
+    watch: bool,
+    context: u32,
+    follow_refs: FollowRefs,
+) -> (Arc<Session>, Arc<Recorder>) {
+    let hub = Arc::new(Recorder::default());
+    let opts = SessionOptions { watch, instance: GithubInstance::github_com(), context, follow_refs };
+    (Session::new(repo.clone(), hub.clone(), opts), hub)
+}
+
+/// Polls `check` until it holds, failing after ten seconds: watchers poll and debounce.
+pub async fn eventually(what: &str, mut check: impl AsyncFnMut() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !check().await {
+        assert!(std::time::Instant::now() < deadline, "timed out waiting for {what}");
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
 }

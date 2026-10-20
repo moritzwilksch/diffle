@@ -39,6 +39,15 @@ pub enum Error {
     Revspec(String),
     #[error("{0}")]
     Github(String),
+    /// A thread or message id that names nothing.
+    #[error("not found: {0}")]
+    NotFound(String),
+    /// An anchor the snapshot cannot place: path absent on that side, or lines past the end.
+    #[error("{0}")]
+    Unquotable(String),
+    /// A request body that is not valid JSON or not the shape the route takes.
+    #[error("{0}")]
+    Invalid(String),
     #[error(transparent)]
     Other(Arc<anyhow::Error>),
 }
