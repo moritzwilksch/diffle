@@ -21,6 +21,8 @@ export const TREE_CSS = `
 @container measure (height < 1.5lh) { [data-truncate-marker] { opacity: 0; } }
 /* The library butts the search box against the toolbar above; give it the toolbar's own vertical rhythm. */
 [data-file-tree-search-container] { padding-top: 0.5rem; }
+/* An input's intrinsic width (its default 20 characters) would hold it wider than a narrow pane. */
+[data-file-tree-search-input] { min-width: 0; }
 :host([data-search-empty]) [data-file-tree-virtualized-scroll] { display: none; }
 
 :host([data-hscroll]) {
