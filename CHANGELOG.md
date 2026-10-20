@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.10](https://github.com/moritzwilksch/diffle/compare/v0.2.9...v0.2.10) - 2026-10-20
+
+### Features
+
+- _(github)_ Route GitHub requests through the environment's proxy ([#350](https://github.com/moritzwilksch/diffle/pull/350))
+
+### Bug fixes
+
+- _(tree)_ Drive long-name scrolling from `zw` ([#352](https://github.com/moritzwilksch/diffle/pull/352))
+- _(tree)_ Various horizontal scrolling fixes ([#353](https://github.com/moritzwilksch/diffle/pull/353))
+
+### Other
+
+- Re-record the demo videos ([#348](https://github.com/moritzwilksch/diffle/pull/348))
+
 ## [0.2.9](https://github.com/moritzwilksch/diffle/compare/v0.2.8...v0.2.9) - 2026-10-19
 
 ### Features
