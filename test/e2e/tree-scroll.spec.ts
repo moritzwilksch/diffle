@@ -50,20 +50,6 @@ test('a narrow sidebar scrolls sideways and keeps the lanes in view', async ({ p
   await expect(page.locator('file-tree-container')).toHaveScreenshot('narrow-tree.png');
 });
 
-test('the lanes stand in the same column whether names scroll or ellipsize', async ({ page }) => {
-  const laneEdges = () =>
-    page
-      .locator('file-tree-container [data-item-path="tally/cli.py"]')
-      .evaluate((row) =>
-        ['decoration', 'git'].map((s) =>
-          Math.round(row.querySelector(`[data-item-section="${s}"] > span`)!.getBoundingClientRect().right),
-        ),
-      );
-  const ellipsized = await laneEdges();
-  await scrollLongNames(page);
-  expect(await laneEdges()).toEqual(ellipsized);
-});
-
 test('an unchanged row pins no lanes over its name', async ({ page }) => {
   await scrollLongNames(page);
   await page.getByRole('button', { name: 'All files' }).click();

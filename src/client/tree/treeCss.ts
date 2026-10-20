@@ -30,8 +30,9 @@ export const TREE_CSS = `
   [data-file-tree-virtualized-scroll] { overscroll-behavior-x: contain; }
   [data-file-tree-virtualized-list] { width: max-content; min-width: 100%; }
   [data-type="item"] {
-    /* \`--lane-gutter\` (see \`measureLaneGutter\`) puts the lanes where they stand without the scroll. */
-    --lane-pin: calc(var(--lane-edge) + var(--lane-gutter, 0px));
+    --lane-gutter: var(--trees-scrollbar-gutter-measured, var(--trees-scrollbar-gutter));
+    /* A sticky offset counts from the scroll box's outer edge, scrollbar gutter included. */
+    --lane-pin: calc(var(--lane-edge) + var(--lane-gutter));
     overflow: clip;
   }
   /* Keep the focus ring above the lanes. */
@@ -57,24 +58,3 @@ export const TREE_CSS = `
   [data-item-section="decoration"]::before { content: ""; position: absolute; top: 0; bottom: 0; right: 100%; width: var(--trees-item-row-gap); background-color: inherit; }
 }
 `;
-
-/**
- * Sets the host's `--lane-gutter`: how far past the scroll box's inner edge a sticky `right: 0`
- * lands. Browsers disagree on whether that edge includes the scrollbar, so it is measured on a
- * hidden box the tree styles like its own scroller.
- */
-export function measureLaneGutter(host: HTMLElement): void {
-  const shadow = host.shadowRoot;
-  if (!shadow) return;
-  const box = document.createElement('div');
-  box.setAttribute('data-file-tree-scrollbar-measure', 'true');
-  const content = box.appendChild(document.createElement('div'));
-  content.style.cssText = 'display: flex; width: 200%; height: 200%';
-  const pin = content.appendChild(document.createElement('span'));
-  pin.style.cssText = 'position: sticky; right: 0; margin-left: auto; width: 1px';
-  shadow.append(box);
-  const inner = box.getBoundingClientRect().left + box.clientLeft + box.clientWidth;
-  const gutter = Math.max(pin.getBoundingClientRect().right - inner, 0);
-  box.remove();
-  host.style.setProperty('--lane-gutter', `${gutter}px`);
-}
