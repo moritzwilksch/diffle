@@ -80,9 +80,9 @@ try {
     DIFFLE_NO_MODIFY_PATH: '1',
   };
   // The installers run while the server answers them, so they must not block the event loop.
-  const run = (program: string, args: string[], extra: NodeJS.ProcessEnv = {}) =>
+  const run = (program: string, args: string[]) =>
     new Promise<void>((done, fail) => {
-      const child = spawn(program, args, { cwd: ROOT, env: { ...env, ...extra }, stdio: 'inherit' });
+      const child = spawn(program, args, { cwd: ROOT, env, stdio: 'inherit' });
       child.on('error', fail);
       child.on('exit', (code) =>
         code === 0 ? done() : fail(new Error(`${program} ${args.join(' ')} exited ${code}`)),
@@ -91,12 +91,8 @@ try {
   try {
     if (windows) {
       await run('pwsh', ['-NoProfile', '-File', 'scripts/install.ps1']);
-      // Again under Windows PowerShell 5.1, over the existing install. Started from pwsh (CI's
-      // shell, or a terminal), it would inherit pwsh's module path and load pwsh's modules, where
-      // Get-FileHash is missing; without the variable it falls back to its own.
-      await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/install.ps1'], {
-        PSModulePath: undefined,
-      });
+      // Again under Windows PowerShell 5.1, over the existing install.
+      await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/install.ps1']);
     } else {
       await run('sh', ['scripts/install.sh']);
     }

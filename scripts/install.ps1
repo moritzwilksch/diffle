@@ -41,10 +41,15 @@ try {
   $line = Get-Content (Join-Path $tmp 'SHA256SUMS') | Where-Object { (($_ -split '\s+')[1] -replace '^\*') -eq $asset }
   if (-not $line) { Fail "SHA256SUMS lists no $asset" }
   $expected = ($line -split '\s+')[0]
-  $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $asset)).Hash
+  # Through .NET rather than Get-FileHash and Expand-Archive: those come from modules, which a
+  # Windows PowerShell started with another PowerShell's module path cannot find.
+  $stream = [System.IO.File]::OpenRead((Join-Path $tmp $asset))
+  try { $actual = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($stream)) -replace '-' }
+  finally { $stream.Dispose() }
   if ($expected -ne $actual) { Fail "checksum mismatch for $asset" } # -ne ignores case
 
-  Expand-Archive -Path (Join-Path $tmp $asset) -DestinationPath $tmp
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  [System.IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $tmp $asset), $tmp)
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   Move-Item -Force (Join-Path $tmp 'diffle.exe') (Join-Path $dir 'diffle.exe')
 } finally {
