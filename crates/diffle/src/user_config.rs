@@ -43,7 +43,7 @@ impl UserConfigStore {
         let base = std::env::var_os("XDG_CONFIG_HOME")
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
-            .unwrap_or_else(|| home_dir().join(".config"));
+            .unwrap_or_else(|| std::env::home_dir().unwrap_or_default().join(".config"));
         base.join("diffle").join("config.json")
     }
 
@@ -96,10 +96,6 @@ impl UserConfigStore {
         *self.config.lock().unwrap() = config.clone();
         Ok(config)
     }
-}
-
-fn home_dir() -> PathBuf {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
 }
 
 /// Whatever the file holds, as a valid config: each field that is missing or malformed takes its default.

@@ -72,7 +72,11 @@ impl Watcher {
         let target = Arc::new(target);
         let native = match &*target {
             WatchTarget::Worktree { root, .. } => {
-                Some(Arc::new(Mutex::new(watch_worktree(&target, root, tx.clone())?)))
+                // Registering the watches walks the worktree on Linux: off the runtime, so the
+                // session's queue keeps serving while a large checkout is scanned.
+                let (target, root, tx) = (target.clone(), root.clone(), tx.clone());
+                let watcher = tokio::task::spawn_blocking(move || watch_worktree(&target, &root, tx)).await??;
+                Some(Arc::new(Mutex::new(watcher)))
             }
             WatchTarget::Refs { .. } => None,
         };
@@ -110,10 +114,13 @@ impl Drop for Watcher {
     }
 }
 
-fn handle(signal: Signal, native: &Option<Arc<Mutex<RecommendedWatcher>>>, target: &WatchTarget) {
+/// A new directory's subtree gets its watches off the runtime, like the initial walk: a checkout
+/// can create thousands at once.
+fn handle(signal: Signal, native: &Option<Arc<Mutex<RecommendedWatcher>>>, target: &Arc<WatchTarget>) {
     let Signal::NewDir(dir) = signal else { return };
-    if let (Some(native), WatchTarget::Worktree { root, .. }) = (native, target) {
-        watch_dirs(&mut native.lock().unwrap(), target, root, &dir);
+    if let (Some(native), WatchTarget::Worktree { root, .. }) = (native, &**target) {
+        let (native, target, root) = (native.clone(), target.clone(), root.clone());
+        tokio::task::spawn_blocking(move || watch_dirs(&mut native.lock().unwrap(), &target, &root, &dir));
     }
 }
 

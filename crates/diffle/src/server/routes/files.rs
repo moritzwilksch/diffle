@@ -103,7 +103,8 @@ async fn image(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiRes
 async fn search(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
     let q: SearchQuery = query(raw.as_deref())?;
     let flag = |v: Option<String>| v.as_deref() == Some("1");
-    let snap = d.session.snapshotter()?.current().await?;
+    let snapshotter = d.session.snapshotter()?;
+    let snap = snapshotter.current().await?;
     // File scope is pinned to the new-side allowlist; global text search covers changed files.
     let mut paths: Option<Vec<String>> = match q.scope {
         SearchScope::Repo => None,
@@ -121,15 +122,16 @@ async fn search(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiRe
             .filter(|f| paths.as_ref().is_none_or(|p| p.contains(&f.path)))
             .cloned()
             .collect();
-        let (repo, snap) = (&d.session.repo, &snap);
+        // The snapshotter's cache: the review already loaded most of these patches, and the rest
+        // stay cached for it. A file that left the changed set meanwhile has no shown lines.
+        let snapshotter = &snapshotter;
         let entries = map_limit(candidates, 8, |file| async move {
-            let patch = repo.patch(&snap.old_sha, &snap.new_sha, &file, snap.context as u32, None).await?;
-            Ok::<_, crate::error::GitError>((file.path, shown_ranges(&patch, Side::New)))
+            let patch = snapshotter.patch(&file.path).await?.unwrap_or_default();
+            Ok::<_, crate::error::Error>((file.path, shown_ranges(&patch, Side::New)))
         })
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(crate::error::Error::from)?;
+        .collect::<Result<Vec<_>, _>>()?;
         paths = Some(entries.iter().filter(|(_, spans)| !spans.is_empty()).map(|(p, _)| p.clone()).collect());
         ranges = Some(entries.into_iter().collect());
     }

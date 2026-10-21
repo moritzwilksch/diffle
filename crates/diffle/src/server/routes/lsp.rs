@@ -12,7 +12,7 @@ use axum::routing::{get, post};
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::lsp::pool::LspPool;
 use crate::protocol::{
-    LspFeature, LspLogQuery, LspPosition, LspQuery, LspStatus, SymbolsQuery, lsp_blocker, readable_by_servers,
+    LspFeature, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery, lsp_blocker, readable_by_servers,
 };
 
 /// The largest integer a JavaScript client can send exactly; zod's `.int()` refuses anything past it.
@@ -60,7 +60,7 @@ async fn pool_for(d: &ApiDeps, path: Option<&str>, feature: Option<LspFeature>) 
         return Err(refuse(blocked));
     }
     let Some(pool) = d.lsp.clone() else { return Err(refuse("language servers are off".into())) };
-    if let Some(path) = path.filter(|p| !snap.tree.iter().any(|t| t == p)) {
+    if let Some(path) = path.filter(|p| !d.session.has_side(&snap, p, Side::New)) {
         return Err(refuse(format!("{path} is not in the snapshot")));
     }
     Ok(pool)
