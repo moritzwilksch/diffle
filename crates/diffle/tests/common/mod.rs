@@ -63,7 +63,7 @@ pub fn git_in(dir: &Path, args: &[&str]) -> String {
         .env("GIT_AUTHOR_EMAIL", "t@t")
         .env("GIT_COMMITTER_NAME", "t")
         .env("GIT_COMMITTER_EMAIL", "t@t")
-        .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
+        .env("GIT_CONFIG_GLOBAL", std::env::temp_dir().join("diffle-tests-no-global-gitconfig"))
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .output()
         .unwrap();

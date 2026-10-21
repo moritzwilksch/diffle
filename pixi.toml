@@ -16,29 +16,27 @@ lefthook = "*"
 c-compiler = "*"
 
 [tasks]
-install = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
-# npm builds the client alone; cargo builds the binary that embeds it, so the client comes first.
-build = { cmd = "npm run build", depends-on = ["install"] }
-release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
-# `pixi run diffle <args>`: a source run; a debug build reads dist/client from disk.
-diffle = { cmd = "cargo run --", depends-on = ["build"] }
-# The suites: the client's, the server's, and the browser's over the release binary.
-test = { cmd = "npm test", depends-on = ["install"] }
-test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["install"] }
-e2e = { cmd = "npm run test:e2e --", depends-on = ["release"] }
-e2e-report = { cmd = "npm run test:e2e:report", depends-on = ["install"] }
-typecheck = { cmd = "npm run typecheck", depends-on = ["install"] }
-lint = { cmd = "npm run lint && cargo clippy --all-targets -- -D warnings", depends-on = ["install"] }
-format = { cmd = "npm run format && cargo fmt --all", depends-on = ["install"] }
+install-node = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
+# build
+build-client = { cmd = "npm run build", depends-on = ["install-node"] }
+build-release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
+# test
+test-node = { cmd = "npm test", depends-on = ["install-node"] }
+test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["build-client"] }
+e2e = { cmd = "npm run test:e2e --", depends-on = ["build-release"] }
+e2e-report = { cmd = "npm run test:e2e:report", depends-on = ["install-node"] }
+install-nodelint = { cmd = "npm run lint && cargo clippy --all-targets -- -D warnings", depends-on = ["install-node"] }
+format = { cmd = "npm run format && cargo fmt --all", depends-on = ["install-node"] }
 # The pre-commit hook over every file, as CI's lint job runs it.
-check = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install"] }
+check = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install-node"] }
 install-hooks = "lefthook install"
 # `pixi run fixture <dir>` builds the repository the tests review, for hands-on testing.
-fixture = { cmd = "npm run fixture --", depends-on = ["install"] }
+fixture = { cmd = "npm run fixture --", depends-on = ["install-node"] }
 # What a release ships: the binary proven over a repository, and the npm packages from the archives.
 smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle", depends-on = ["release"] }
 package = { cmd = "node scripts/package-binary.ts", depends-on = ["smoke"] }
 npm-packages = "node scripts/npm-packages.ts archives npm-packages --smoke"
+diffle = { cmd = "cargo run --", depends-on = ["build-client"] }
 
 [target.win.tasks]
 smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle.exe", depends-on = ["release"] }

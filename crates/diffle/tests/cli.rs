@@ -11,12 +11,14 @@ use common::TestRepo;
 /// The binary with its own config directory and no colours, so no real config is touched.
 fn diffle(config: &Path, args: &[&str]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_diffle"));
-    cmd.args(args).env("NO_COLOR", "1").env("XDG_CONFIG_HOME", config).env("GIT_CONFIG_GLOBAL", null_device());
+    cmd.args(args).env("NO_COLOR", "1").env("XDG_CONFIG_HOME", config).env("GIT_CONFIG_GLOBAL", no_global_config());
     cmd
 }
 
-fn null_device() -> &'static str {
-    if cfg!(windows) { "NUL" } else { "/dev/null" }
+/// A global git config that does not exist: git reads none, and every git accepts the path, where
+/// conda-forge's on Windows refuses `NUL`.
+fn no_global_config() -> std::path::PathBuf {
+    std::env::temp_dir().join("diffle-tests-no-global-gitconfig")
 }
 
 fn run(config: &Path, args: &[&str]) -> Output {
