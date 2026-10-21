@@ -48,7 +48,7 @@ impl GithubInstance {
     }
 
     /// The instance whose web host is `host`: github.com, plus every `githubHosts` entry (git host →
-    /// web host, as in `diffle config set-github-host`) that maps to it.
+    /// web host, the config file's `githubHosts`) that maps to it.
     fn at(host: &str, github_hosts: &HashMap<String, String>) -> Self {
         let mut git_hosts = vec![host.to_owned()];
         let mut mapped: Vec<&String> =

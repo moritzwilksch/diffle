@@ -43,7 +43,11 @@ nix run github:moritzwilksch/diffle -- working
 ```
 
 The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, `#python`, and `#csharp` bundle
-language servers.
+language servers. Every package takes more with `withLsps`, and `#unwrapped` is the bare binary:
+
+```nix
+diffle.packages.${system}.default.withLsps [ pkgs.gopls pkgs.clang-tools ]
+```
 
 ## Pick what to review
 
@@ -147,14 +151,17 @@ python    pyrefly lsp
 rust      not on PATH (tried rust-analyzer)
 ```
 
-Override a server or turn one off:
+Override a server or turn one off for a run:
 
 ```bash
-diffle config set-lsp rust "rust-analyzer"       # persistent
-diffle config set-lsp java ""                    # never start one for java
-diffle config unset-lsp rust                     # back to PATH
 diffle working --lsp python="pyrefly lsp"        # this run only
 diffle working --no-lsp                          # none at all
+```
+
+Or persistently, in the config file (`diffle config` prints its path and contents):
+
+```json
+{ "lspCommands": { "rust": "rust-analyzer", "java": "" } }
 ```
 
 Language servers run through a shell inside the repository and can read anything your user can.

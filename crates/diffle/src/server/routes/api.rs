@@ -108,7 +108,6 @@ async fn set_config(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
         context_lines: update.context_lines,
         follow_refs: update.follow_refs,
         line_wrap: update.line_wrap,
-        ..Default::default()
     };
     let saved = d.config.set(patch).await?;
     d.hub.broadcast(ServerMessage::Config);

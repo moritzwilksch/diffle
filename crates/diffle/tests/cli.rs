@@ -31,18 +31,6 @@ fn stdout(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
-/// Compares `text` with the committed snapshot, or writes it when missing or under UPDATE_SNAPSHOTS=1.
-fn snapshot(name: &str, text: &str) {
-    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots").join(name);
-    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() || !file.exists() {
-        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-        std::fs::write(&file, text).unwrap();
-        return;
-    }
-    let committed = std::fs::read_to_string(&file).unwrap().replace("\r\n", "\n");
-    assert_eq!(text, committed, "{name} differs; rerun with UPDATE_SNAPSHOTS=1 to accept");
-}
-
 #[test]
 fn prints_the_bare_version() {
     let config = tempfile::tempdir().unwrap();
@@ -73,19 +61,20 @@ fn help_is_the_committed_text_and_keeps_the_shorthands_in_a_section_of_their_own
         assert!(main[main.find("Shorthands").unwrap()..].contains(shorthand));
     }
     assert!(!main.contains("[default: ]") && !main.contains("--dev"));
-    snapshot("help.txt", &main);
+    insta::assert_snapshot!("help", main);
     let sections: Vec<String> = ["working", "pr", "range-diff", "config"]
         .iter()
         .map(|cmd| format!("$ diffle {cmd} --help\n\n{}", help(&[cmd])))
         .collect();
-    snapshot("help-commands.txt", &sections.join("\n"));
+    insta::assert_snapshot!("help-commands", sections.join("\n"));
 }
 
 #[test]
 fn usage_errors_name_what_was_wrong_and_exit_2() {
     let config = tempfile::tempdir().unwrap();
-    let cases: [(&[&str], &str); 4] = [
-        (&["config", "unset-lsp", "python", "nope"], "unknown language \"nope\""),
+    let cases: [(&[&str], &str); 5] = [
+        (&["completion"], "--shell <shell>"),
+        (&["completion", "--shell", "nope"], "invalid value 'nope' for '--shell <shell>'"),
         (&["working", "--no-open", "--no-watch", "--lsp", "python=x", "--lsp"], "--lsp <language=command>"),
         (&["working", "--no-open", "--no-watch", "--lsp", "nope=x"], "unknown language \"nope\""),
         (&["--port", "65536"], "expected an integer between 0 and 65535"),
@@ -98,34 +87,22 @@ fn usage_errors_name_what_was_wrong_and_exit_2() {
 }
 
 #[test]
-fn config_sets_one_language_at_a_time_and_unsets_every_language_it_is_given() {
+fn config_prints_the_file_path_and_the_settings() {
     let config = tempfile::tempdir().unwrap();
-    run(config.path(), &["config", "set-lsp", "python", "my-py-server"]);
-    let both = run(config.path(), &["config", "set-lsp", "go", "my-go-server"]);
-    assert_eq!(stdout(&both), "go=my-go-server\npython=my-py-server\n");
-    assert_eq!(stdout(&run(config.path(), &["config", "unset-lsp", "python", "go"])), "");
-    let file = std::fs::read_to_string(config.path().join("diffle/config.json")).unwrap();
-    let json: serde_json::Value = serde_json::from_str(&file).unwrap();
-    assert_eq!(json["lspCommands"], serde_json::json!({}));
-    assert_eq!(stdout(&run(config.path(), &["config", "set-context", "7"])), "7\n");
-    assert_eq!(
-        stdout(&run(config.path(), &["config", "add-auto-viewed", "*.lock", "*.snap", "*.lock"])),
-        "*.lock\n*.snap\n"
-    );
-    assert_eq!(stdout(&run(config.path(), &["config", "remove-auto-viewed", "*.lock"])), "*.snap\n");
-    let shown = stdout(&run(config.path(), &["config"]));
-    assert!(shown.starts_with("# ") && shown.contains("\"contextLines\": 7"), "{shown}");
+    let out = run(config.path(), &["config"]);
+    let path = config.path().join("diffle").join("config.json");
+    assert_eq!(stderr(&out).trim_end(), path.display().to_string());
+    let shown = stdout(&out);
+    assert!(shown.starts_with("{\n") && shown.contains("\"contextLines\": 5"), "{shown}");
+    assert!(serde_json::from_str::<serde_json::Value>(&shown).is_ok());
 }
 
 #[test]
-fn writes_completion_scripts_carrying_the_argument_choices() {
+fn writes_a_completion_script_for_the_shell_named() {
     let config = tempfile::tempdir().unwrap();
-    for shell in ["bash", "zsh", "fish"] {
+    for shell in ["bash", "zsh", "fish", "elvish", "powershell"] {
         let script = stdout(&run(config.path(), &["completion", "--shell", shell]));
-        // The shorthands are hidden commands; the revision argument's choices offer them anyway.
-        assert!(script.contains("working"), "{shell}");
-        // Languages are a static choice list, so they complete without a config lookup.
-        assert!(script.contains("typescriptreact"), "{shell}");
+        assert!(script.contains("no-open"), "{shell}:\n{script}");
     }
 }
 

@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::protocol::{FollowRefs, LanguageId, language_ids};
+use crate::protocol::{LanguageId, language_ids};
 
 fn int_arg(raw: &str, min: u32, max: u32) -> Result<u32, String> {
     let message = || format!("expected an integer between {min} and {max}");
@@ -66,15 +66,6 @@ pub fn lsp_override(raw: &str) -> Result<LspOverride, String> {
     Ok(LspOverride { language: language(language_part)?, command: command.trim().to_owned() })
 }
 
-pub fn follow_refs(raw: &str) -> Result<FollowRefs, String> {
-    match raw {
-        "on" => Ok(FollowRefs::On),
-        "auto" => Ok(FollowRefs::Auto),
-        "off" => Ok(FollowRefs::Off),
-        _ => Err("expected on, auto or off".to_owned()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,14 +77,6 @@ mod tests {
             assert_eq!(port(bad), Err("expected an integer between 0 and 65535".into()), "{bad}");
         }
         assert_eq!(context("10001"), Err("expected an integer between 0 and 10000".into()));
-    }
-
-    #[test]
-    fn reads_follow_refs_modes() {
-        assert_eq!(follow_refs("auto"), Ok(FollowRefs::Auto));
-        for bad in ["yes", "true", "", "ON"] {
-            assert_eq!(follow_refs(bad), Err("expected on, auto or off".into()));
-        }
     }
 
     #[test]

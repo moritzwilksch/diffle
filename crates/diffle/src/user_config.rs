@@ -15,8 +15,6 @@ pub struct UserConfigPatch {
     pub context_lines: Option<i64>,
     pub follow_refs: Option<FollowRefs>,
     pub line_wrap: Option<bool>,
-    pub lsp_commands: Option<HashMap<LanguageId, String>>,
-    pub github_hosts: Option<HashMap<String, String>>,
 }
 
 /// `DEFAULT_USER_CONFIG`.
@@ -88,8 +86,6 @@ impl UserConfigStore {
         put("contextLines", next.context_lines.map(Value::from));
         put("followRefs", next.follow_refs.map(|f| Value::from(f.to_string())));
         put("lineWrap", next.line_wrap.map(Value::from));
-        put("lspCommands", next.lsp_commands.map(|m| serde_json::to_value(m).expect("string map")));
-        put("githubHosts", next.github_hosts.map(|m| serde_json::to_value(m).expect("string map")));
         let config = normalize(&merged);
         // May hold a shell command: the write is owner-only.
         write_file_atomic(&self.file, &(serde_json::to_string_pretty(&config)? + "\n")).await?;

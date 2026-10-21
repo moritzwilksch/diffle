@@ -22,7 +22,7 @@ fn on_disk(store: &UserConfigStore) -> Value {
 #[tokio::test]
 async fn serializes_overlapping_writes_and_leaves_no_temp_files() {
     let dir = temp();
-    let store = Arc::new(UserConfigStore::open(dir.path().join("cfg").join("config.json")).await);
+    let store = Arc::new(open_with(&dir, json!({ "lspCommands": { "python": "x" } })).await);
     let set = |patch: UserConfigPatch| {
         let store = store.clone();
         async move { store.set(patch).await.unwrap().context_lines }
@@ -30,14 +30,14 @@ async fn serializes_overlapping_writes_and_leaves_no_temp_files() {
     let python = HashMap::from([(LanguageId::Python, "x".to_owned())]);
     let results = futures::join!(
         set(UserConfigPatch { context_lines: Some(1), ..Default::default() }),
-        set(UserConfigPatch { lsp_commands: Some(python.clone()), ..Default::default() }),
+        set(UserConfigPatch { line_wrap: Some(false), ..Default::default() }),
         set(UserConfigPatch { context_lines: Some(9), ..Default::default() }),
     );
     assert_eq!(results, (1, 1, 9));
     assert_eq!((store.get().context_lines, store.get().lsp_commands), (9, python.clone()));
     let disk = on_disk(&store);
     assert_eq!((disk["contextLines"].clone(), disk["lspCommands"].clone()), (json!(9), json!({ "python": "x" })));
-    let left: Vec<_> = std::fs::read_dir(dir.path().join("cfg")).unwrap().map(|e| e.unwrap().file_name()).collect();
+    let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
     assert_eq!(left, ["config.json"]);
     let reopened = UserConfigStore::open(store.file().to_owned()).await.get();
     assert_eq!((reopened.context_lines, reopened.lsp_commands), (9, python));

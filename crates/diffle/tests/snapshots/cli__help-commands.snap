@@ -1,3 +1,7 @@
+---
+source: crates/diffle/tests/cli.rs
+expression: "sections.join(\"\\n\")"
+---
 $ diffle working --help
 
 Same as `diffle HEAD..worktree`: uncommitted changes, staged and untracked files included.
@@ -82,18 +86,9 @@ Options:
 
 $ diffle config --help
 
-show or edit the user config (same settings as the UI dialog)
+print the config file path and contents
 
-Usage: diffle config [COMMAND]
-
-Commands:
-  show                print the config file path and contents
-  add-auto-viewed     add patterns for files that start viewed
-  set-context         set context lines around changes
-  set-follow-refs     follow moved refs: on, auto (not branches), off
-  set-lsp             set the language-server command for one language
-  unset-lsp           forget a language-server override, back to PATH
-  remove-auto-viewed  remove patterns for files that start viewed
+Usage: diffle config
 
 Options:
   -h, --help  display help for command

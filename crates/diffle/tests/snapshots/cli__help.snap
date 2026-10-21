@@ -1,11 +1,15 @@
+---
+source: crates/diffle/tests/cli.rs
+expression: main
+---
 Review a git diff in the browser and export line comments as an agent prompt.
 
 Usage: diffle [OPTIONS] [revs]... [COMMAND]
 
 Commands:
-  config      show or edit the user config (same settings as the UI dialog)
+  config      print the config file path and contents
   lsp         show the language server each language would get, and what is missing from PATH
-  completion  print a shell completion script for bash, zsh, or fish
+  completion  print a shell completion script
 
 Arguments:
   [revs]...  git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>

@@ -5,7 +5,6 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
 
 use super::parse::{self, LspOverride};
-use crate::protocol::{FollowRefs, LanguageId};
 
 const AFTER_HELP: &str = "\
 Shorthands (in place of <revs>):
@@ -164,63 +163,16 @@ pub enum Command {
         #[command(flatten)]
         opts: GlobalOpts,
     },
-    /// show or edit the user config (same settings as the UI dialog)
-    Config {
-        #[command(subcommand)]
-        command: Option<ConfigCommand>,
-    },
+    /// print the config file path and contents
+    Config,
     /// show the language server each language would get, and what is missing from PATH
     Lsp,
-    /// print a shell completion script for bash, zsh, or fish
+    /// print a shell completion script
     #[command(after_help = COMPLETION_HELP)]
     Completion {
         /// shell to generate the script for
-        #[arg(short, long, value_name = "shell", value_parser = ["bash", "zsh", "fish"])]
-        shell: String,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-pub enum ConfigCommand {
-    /// print the config file path and contents
-    Show,
-    /// add patterns for files that start viewed
-    AddAutoViewed {
-        /// patterns for files that start viewed and collapsed, e.g. "*.lock"
-        #[arg(required = true, value_name = "glob")]
-        globs: Vec<String>,
-    },
-    /// set context lines around changes
-    SetContext {
-        /// context lines around changes
-        #[arg(value_name = "n", value_parser = parse::context)]
-        n: u32,
-    },
-    /// follow moved refs: on, auto (not branches), off
-    SetFollowRefs {
-        /// on: reload at once; auto: so unless a branch is compared; off: offer a Reload button
-        #[arg(value_name = "mode", value_parser = parse::follow_refs)]
-        mode: FollowRefs,
-    },
-    /// set the language-server command for one language
-    SetLsp {
-        /// the language, as diffle names it
-        #[arg(index = 1, value_name = "language", value_parser = parse::language)]
-        language: LanguageId,
-        /// shell command that starts a stdio language server, e.g. "pyrefly lsp"; "" to turn it off
-        #[arg(index = 2, value_name = "command")]
-        command: String,
-    },
-    /// forget a language-server override, back to PATH
-    UnsetLsp {
-        /// one or more languages, as diffle names them
-        #[arg(required = true, value_name = "language", value_parser = parse::language)]
-        languages: Vec<LanguageId>,
-    },
-    /// remove patterns for files that start viewed
-    RemoveAutoViewed {
-        #[arg(required = true, value_name = "glob")]
-        globs: Vec<String>,
+        #[arg(short, long, value_name = "shell", value_enum)]
+        shell: Shell,
     },
 }
 
@@ -245,14 +197,5 @@ impl GlobalOpts {
 
     pub fn host(&self) -> &str {
         self.host.as_deref().unwrap_or("127.0.0.1")
-    }
-}
-
-/// The shells `completion` writes for, by the name the option takes.
-pub fn shell(name: &str) -> Shell {
-    match name {
-        "zsh" => Shell::Zsh,
-        "fish" => Shell::Fish,
-        _ => Shell::Bash,
     }
 }

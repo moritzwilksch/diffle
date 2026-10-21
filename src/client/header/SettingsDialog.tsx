@@ -113,7 +113,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
         <h3 className="m-0 mt-[14px] mb-2">Language servers</h3>
         <p className="m-0 mb-2 text-muted">
-          <code>diffle lsp</code> lists them; <code>diffle config set-lsp</code> overrides one.
+          <code>diffle lsp</code> lists them; <code>lspCommands</code> in the config file (<code>diffle config</code>{' '}
+          prints its path) overrides one.
         </p>
         {overrides.length > 0 && (
           <p className="m-0 mb-2 text-muted">
