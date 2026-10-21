@@ -1,0 +1,78 @@
+# The development toolchain from conda-forge: Node, Rust, git and gh, pinned by pixi.lock, so
+# every checkout builds and tests the same way. The `lsp` environments add real language servers
+# for hands-on testing of symbol navigation. Installing diffle itself stays with the Nix flake,
+# npm and the release binaries.
+[workspace]
+name = "diffle"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
+
+[dependencies]
+# The same release rust-toolchain.toml names; rustup is not involved under pixi.
+rust = "1.99.*"
+nodejs = "24.*"
+git = ">=2.40"
+# `gh auth token` is the GitHub login the review export reads.
+gh = "*"
+# aws-lc-sys (reqwest's rustls backend) builds C with cmake.
+cmake = "*"
+
+[target.linux.dependencies]
+# Rust links through the system C compiler; conda-forge's gcc also builds aws-lc-sys.
+c-compiler = "*"
+
+[tasks]
+install = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
+# A local source run: a debug build reads dist/client from disk, so build the client first.
+build-client = { cmd = "npm run build:client", depends-on = ["install"] }
+dev = { cmd = "npm run dev -- working --no-open", depends-on = ["build-client"] }
+build = { cmd = "npm run build", depends-on = ["install"] }
+# Everything a change must pass before it is finished.
+test = { cmd = "npm test", depends-on = ["install"] }
+test-rust = { cmd = "cargo test", depends-on = ["install"] }
+typecheck = { cmd = "npm run typecheck", depends-on = ["install"] }
+lint = { cmd = "npm run lint && cargo clippy --all-targets -- -D warnings", depends-on = ["install"] }
+format = { cmd = "npm run format && cargo fmt --all", depends-on = ["install"] }
+# The pre-commit hook over every file, as CI's lint job runs it.
+check = { cmd = "npm run check", depends-on = ["install"] }
+install-hooks = { cmd = "npm run install-hooks", depends-on = ["install"] }
+# `pixi run fixture <dir>` builds the repository the tests review, for hands-on testing.
+fixture = { cmd = "npm run fixture --", depends-on = ["install"] }
+# `diffle lsp` lists which servers an environment resolves.
+lsp = { cmd = "cargo run -- lsp", depends-on = ["install"] }
+
+# Language servers on PATH, grouped as the Nix flake's packages are. `pixi run -e lsp dev` reviews
+# with all of them; a narrower environment keeps the others out of the probe. The JSON, CSS and
+# HTML servers (vscode-langservers-extracted) are absent: conda-forge's build pins Node 22.
+[feature.lsp-web.dependencies]
+typescript-language-server = "*"
+typescript = "*"
+vue-language-server = "*"
+tailwindcss-language-server = "*"
+yaml-language-server = "*"
+tombi = "*"
+bash-language-server = "*"
+
+[feature.lsp-rust.dependencies]
+rust-analyzer = "*"
+
+[feature.lsp-python.dependencies]
+pyrefly = "*"
+python = "3.13.*"
+
+# lua-language-server has no Windows build on conda-forge.
+[feature.lsp-more]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64"]
+
+[feature.lsp-more.dependencies]
+gopls = "*"
+go = "*"
+clang-tools = "*"
+lua-language-server = "*"
+terraform-ls = "*"
+
+[environments]
+lsp = { features = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"], solve-group = "default" }
+lsp-web = { features = ["lsp-web"], solve-group = "default" }
+lsp-rust = { features = ["lsp-rust"], solve-group = "default" }
+lsp-python = { features = ["lsp-python"], solve-group = "default" }

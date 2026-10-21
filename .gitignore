@@ -153,3 +153,6 @@ snapshot-report.html
 
 # Cargo
 /target
+
+# pixi
+.pixi/

@@ -193,6 +193,15 @@ npm run dev -- working
 npm test && npm run typecheck && cargo test && npm run build
 ```
 
+[pixi](https://pixi.sh) installs that toolchain, git and gh from `pixi.lock`; its tasks wrap the npm scripts:
+
+```bash
+pixi run dev                              # build the client, then serve the working tree
+pixi run test && pixi run test-rust       # the suites, under the locked toolchain
+pixi run -e lsp dev                       # with real language servers on PATH
+pixi run -e lsp-python lsp                # which servers an environment resolves
+```
+
 `npm run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `npm run check` runs the same hook over every file, as CI does.
 A debug build reads `dist/client` from disk: after a client change, run `npm run build:client`
 and reload the page. A release build (`npm run build`) embeds the client.
