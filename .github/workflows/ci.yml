@@ -5,6 +5,13 @@ on:
       - main
   pull_request:
 
+# The log is not a terminal, so cargo, clippy, vitest, oxlint and diffle itself would print plain
+# text; these tell each to colour anyway.
+env:
+  CARGO_TERM_COLOR: always
+  CLICOLOR_FORCE: 1
+  FORCE_COLOR: 1
+
 jobs:
   nix:
     runs-on: ubuntu-latest

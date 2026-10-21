@@ -4,6 +4,11 @@ on:
     tags:
       - v*
 
+env:
+  CARGO_TERM_COLOR: always
+  CLICOLOR_FORCE: 1
+  FORCE_COLOR: 1
+
 jobs:
   verify:
     runs-on: ubuntu-latest
