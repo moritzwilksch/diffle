@@ -6,8 +6,8 @@
 // copied in the review scene.
 //
 // Frames are screenshots at 2x device pixels, so text stays sharp; ffmpeg turns them into H.264 (at
-// CRF 24 it beat VP9 webm on size). Needs ffmpeg on PATH (with libx264 and libwebp), Playwright's
-// Chromium (`npm run test:e2e:install`), and for the lsp scene the pinned pyrefly that `PYTHON_LSP`
+// CRF 24 it beat VP9 webm on size). Needs ffmpeg on PATH (with libx264 and libwebp), Docker for
+// the browser container (`compose.yml`), and for the lsp scene the pinned pyrefly that `PYTHON_LSP`
 // starts (pixi by default). `KEEP_FRAMES=1` keeps the raw frames and a `last.png` and prints where.
 import type { Browser, Page } from '@playwright/test';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';

@@ -206,13 +206,15 @@ pixi run -e lsp-python lsp                # which servers an environment resolve
 A debug build reads `dist/client` from disk: after a client change, run `npm run build:client`
 and reload the page. A release build (`npm run build`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
-CRLF, and more. Screenshot tests run in Docker so they match CI:
+CRLF, and more. The browser suite drives Playwright's Linux Chromium in a Docker container
+(`compose.yml`, started and stopped by the suite) while the tests and diffle run natively, so
+screenshots match CI on every host:
 
 ```bash
-npm run test:e2e:docker                  # the browser suite
-npm run test:e2e:docker -- -g search     # matching scenarios
+npm run test:e2e                         # the browser suite
+npm run test:e2e -- -g search            # matching scenarios
 npm run test:e2e:report                  # open the last report
-npm run test:e2e:docker:update           # accept new screenshots
+npm run test:e2e:update                  # accept new screenshots
 ```
 
 See [AGENTS.md](AGENTS.md) for more.

@@ -1,25 +1,15 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { connectOptions, ensureBrowserServer, stopBrowserServer } from './browser-server.js';
 
 /**
- * Chromium's shared libraries. A headless shell needs libnspr4/libnss3 and friends, which a
- * minimal Linux image lacks. `PLAYWRIGHT_LIBS` overrides; otherwise a local pixi env that
- * provides them is used when present.
+ * The same Linux Chromium the e2e suite drives (`browser-server.ts`), for the capture scripts.
+ * Closing the browser stops the container when this call started it.
  */
-function libPath(): string | null {
-  const explicit = process.env.PLAYWRIGHT_LIBS;
-  if (explicit && existsSync(explicit)) return explicit;
-  const fallback = join(homedir(), '.pixi/envs/chromelibs/lib');
-  return existsSync(join(fallback, 'libnspr4.so')) ? fallback : null;
-}
-
-/** Launch Chromium, adding its shared libraries to the loader path when found. */
 export async function openBrowser(): Promise<Browser> {
-  const libs = libPath();
-  if (libs) process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH ? `${libs}:${process.env.LD_LIBRARY_PATH}` : libs;
-  return chromium.launch();
+  const started = await ensureBrowserServer();
+  const browser = await chromium.connect(connectOptions().wsEndpoint, connectOptions());
+  if (started) browser.once('disconnected', stopBrowserServer);
+  return browser;
 }
 
 /**
