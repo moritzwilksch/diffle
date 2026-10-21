@@ -11,6 +11,7 @@ git = ">=2.40"
 gh = "*"
 cmake = "*"
 lefthook = "*"
+zizmor = "*"
 
 [target.linux.dependencies]
 c-compiler = "*"
@@ -19,30 +20,22 @@ c-compiler = "*"
 install-node = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
 # build
 build-client = { cmd = "npm run build", depends-on = ["install-node"] }
-build-release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
+build-release = { cmd = "cargo build --release --locked", depends-on = ["build-client"] }
 # test
 test-node = { cmd = "npm test", depends-on = ["install-node"] }
 test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["build-client"] }
 e2e = { cmd = "npm run test:e2e --", depends-on = ["build-release"] }
 e2e-report = { cmd = "npm run test:e2e:report", depends-on = ["install-node"] }
-install-nodelint = { cmd = "npm run lint && cargo clippy --all-targets -- -D warnings", depends-on = ["install-node"] }
-format = { cmd = "npm run format && cargo fmt --all", depends-on = ["install-node"] }
-# The pre-commit hook over every file, as CI's lint job runs it.
-check = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install-node"] }
-install-hooks = "lefthook install"
-# `pixi run fixture <dir>` builds the repository the tests review, for hands-on testing.
+# lefthook
+lefthook-run = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install-node"] }
+lefthook-install = "lefthook install"
+# useful stuff
 fixture = { cmd = "npm run fixture --", depends-on = ["install-node"] }
-# What a release ships: the binary proven over a repository, and the npm packages from the archives.
-smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle", depends-on = ["release"] }
+diffle = { cmd = "cargo run --", depends-on = ["build-client"] }
+# release
+smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle", depends-on = ["build-release"] }
 package = { cmd = "node scripts/package-binary.ts", depends-on = ["smoke"] }
 npm-packages = "node scripts/npm-packages.ts archives npm-packages --smoke"
-diffle = { cmd = "cargo run --", depends-on = ["build-client"] }
-
-[target.win.tasks]
-smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle.exe", depends-on = ["release"] }
-
-[feature.lsp-web]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
 
 [feature.lsp-web.dependencies]
 typescript-language-server = "*"
@@ -50,35 +43,22 @@ typescript = "*"
 vue-language-server = "*"
 tailwindcss-language-server = "*"
 yaml-language-server = "*"
-tombi = "*"
-bash-language-server = "*"
-
-[feature.lsp-rust]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
 
 [feature.lsp-rust.dependencies]
 rust-analyzer = "*"
 
-[feature.lsp-python]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
-
 [feature.lsp-python.dependencies]
 pyrefly = "*"
-python = "3.13.*"
-
-# lua-language-server has no Windows build on conda-forge.
-[feature.lsp-more]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64"]
+python = "3.15.*"
 
 [feature.lsp-more.dependencies]
-gopls = "*"
+# gopls = "*"
 go = "*"
 clang-tools = "*"
-lua-language-server = "*"
-terraform-ls = "*"
+# lua-language-server = "*"
+# terraform-ls = "*"
+tombi = "*"
+bash-language-server = "*"
 
 [environments]
-lsp = { features = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"], solve-group = "default" }
-lsp-web = { features = ["lsp-web"], solve-group = "default" }
-lsp-rust = { features = ["lsp-rust"], solve-group = "default" }
-lsp-python = { features = ["lsp-python"], solve-group = "default" }
+default = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"]

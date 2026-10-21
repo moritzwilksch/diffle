@@ -1,15 +1,18 @@
 no_auto_install: true
-
+templates:
+  run: run --as-is --quiet --no-progress
 pre-commit:
-  fail_on_changes: ci
+  fail_on_changes: always
   jobs:
+    - name: pixi-install
+      run: pixi install --quiet --no-progress
     - name: format
       run: npm run format -- --no-error-on-unmatched-pattern {staged_files}
-    - name: lint
-      run: npm run lint -- --no-error-on-unmatched-pattern {staged_files}
     - name: rustfmt
       glob: "*.rs"
       run: cargo fmt -- {staged_files}
+    - name: lint
+      run: npm run lint -- --no-error-on-unmatched-pattern {staged_files}
     - name: typecheck
       run: npm run typecheck
     - name: clippy
@@ -17,3 +20,6 @@ pre-commit:
       run: cargo clippy --locked --all-targets -- -D warnings
     - name: quality-gate
       run: npm run quality-gate
+    - name: zizmor
+      glob: "*.{yml,yaml}"
+      run: pixi {run} zizmor --no-progress --min-severity high --fix --offline .

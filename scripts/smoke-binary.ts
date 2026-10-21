@@ -8,7 +8,8 @@ import { join, resolve } from 'node:path';
 const fail = (msg: string): never => {
   throw new Error(msg);
 };
-const binary = resolve(process.argv[2] ?? '');
+// The same `target/release/diffle` names the binary on every platform; cargo adds the suffix.
+const binary = resolve(process.argv[2] ?? '') + (process.platform === 'win32' ? '.exe' : '');
 const repo = mkdtempSync(join(tmpdir(), 'diffle-smoke-'));
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
 git('init', '-q');

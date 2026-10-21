@@ -202,14 +202,14 @@ the server, whose release build embeds the client.
 
 ```bash
 pixi run diffle working                   # build the client, then serve the working tree
-pixi run test && pixi run test-rust       # the client's and the server's suites
-pixi run check                            # the pre-commit hook over every file, as CI runs it
-pixi run release                          # the release binary
-pixi run -e lsp diffle working            # with real language servers on PATH
-pixi run -e lsp-python diffle lsp         # which servers an environment resolves
+pixi run test-node && pixi run test-rust  # the client's and the server's suites
+pixi run lefthook-run                     # the pre-commit hook over every file, as CI runs it
+pixi run build-release                    # the release binary
+pixi run diffle lsp                       # the language servers the environment resolves
 ```
 
-`pixi run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `pixi run check` runs the same hook over every file, as CI does.
+The environment puts real language servers on PATH, so `pixi run diffle working` reviews with them.
+`pixi run lefthook-install` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `pixi run lefthook-run` runs the same hook over every file, as CI does.
 A debug build reads `dist/client` from disk: after a client change, run `npm run build`
 and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
