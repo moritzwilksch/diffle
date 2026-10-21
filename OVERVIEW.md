@@ -130,6 +130,91 @@ the commit navigator and the iteration list, `header/` the mode picker and statu
 hover, occurrence, references and symbol views plus syntax classification in a worker, `keyboard/`
 the keymap.
 
+## Core types
+
+The wire types live in `src/shared/protocol.ts` and are generated into Rust; the rest are
+server-side owners or client state.
+
+### What is reviewed
+
+- **`EnterRequest`**: the words a review is entered with, from the CLI or the picker: `working`,
+  `pr` (an optional number, URL or branch), `revspec` (the arguments as `git diff` takes them), or
+  `range-diff`. The server parses and resolves it; the client never names a hash here.
+- **`Review`**: the specification of what is under review, with nothing resolved in it. Either a
+  `range` (`old`, `new`, `base` of `direct` or `merge-base`, an optional `pr`, and the `view` on
+  screen) or a `commit` (one `sha` against its first parent). It is the identity a refresh keeps,
+  and `reviewKey` serializes it for the client's generation checks.
+- **`RangeView`**: the slice of a range on screen: `whole`, `commit` (one listed commit), `uncommitted`
+  (the changes past the last commit of a range ending at the worktree), or `interdiff` (`from` and an
+  optional `to` as `RangeRef`s, an optional `pair` by its new-side hash). Only a range has slices, so
+  an invalid combination cannot be written down.
+- **`RangeRef`**: one side of an interdiff: a recorded `iteration` by number, or a `named` range
+  `old..new`. An absent `to` means the range as it is now.
+- **`PullRef`**: the pull request a range was entered as: `url`, `number`, `repository` and
+  `headRepository`. It keys the range's comments like the branches would and names the export target.
+
+### What a review resolved to
+
+- **`Snapshot`**: the review at one version, which only the session advances. It carries the
+  `review` itself, the resolved `oldSha` and `newSha` (either may be the worktree sentinel, an
+  interdiff's old side is a replayed tree), `headSha`, what it `follows` (`worktree`, `refs` or
+  `none`), the `commentKey` or null while comments are off, the `context` lines, the `changed`
+  files, the full new-side `tree` (the read allowlist), the shown `commit` with its neighbours, the
+  range's `commits`, its recorded `iterations`, and the resolved `interdiff` for that view.
+- **`ChangedFile`**: one entry of the diff: `path` and `oldPath`, a Git `status` letter,
+  additions and deletions, `binary`, the new and old `blob` hashes (the new one keys viewed marks),
+  the `generated` flag, and `submodule` for a gitlink.
+- **`RangeCommits`** and **`RangeCommit`**: the range's commits oldest first, capped at 250 with a
+  `total`, and the resolved ends they span. **`ReviewedCommit`** is the shown commit with its first
+  `parent` and the `child` toward HEAD, for stepping.
+- **`Interdiff`**, **`RangePair`**: the two ranges' resolved ends, their commits paired as
+  `git range-diff` pairs them with a `status` of `identical`, `changed`, `message`, `added` or
+  `dropped`, and the paths the replay could not merge.
+- **`Iteration`**: one recorded state of a followed range: its number, both hashes and when it was
+  recorded. The commits are pinned under `refs/diffle/iterations/`.
+- **`Moved`**: where a refs-live range's refs point now when that differs from the shown snapshot.
+
+### Comments and settings
+
+- **`CommentThread`**, **`CommentMessage`**, **`CommentAnchor`**: a thread is an `anchor` plus at
+  least one message, `resolved` or not, and `stale` once relocation could not place it after a
+  refresh. A `line` anchor names a path, a side, a line range and the `quoted` text; a `file` anchor
+  names the file as a whole. The quote is what the prompt and the GitHub export carry.
+- **`ViewedEntry`**: a path marked viewed at one `blob`, so an edited file reopens for review.
+- **`UserConfig`**: `autoViewed` globs, `contextLines`, `followRefs` (`on`, `auto`, `off`),
+  `lineWrap`, and the CLI-only `lspCommands` and `githubHosts`.
+- **`ServerMessage`**: the WebSocket hints, `snapshot` with a version, `moved`, `threads`, `viewed`,
+  `config`, and `lsp` with the full status.
+- **`LspStatus`**, **`LspServerStatus`**: whether servers are on, one entry per started server with
+  the languages it owns and joins, what it supports and which projects it was pointed at, and the
+  languages nothing on PATH can serve.
+
+### Server-side owners
+
+- **`GitRepo`** (`git/mod.rs`): the repository's `root`, `git_dir` and `common_dir`, the run's own
+  `review_refs` namespace, and the long-lived `cat-file --batch`. Every git call goes through it.
+- **`Session`** and its private **`Active`** (`session/mod.rs`): the queue, and the active review
+  with its `range_key`, what it `follows`, its `Snapshotter`, its optional `CommentStore`, its
+  watcher, the pending `moved` notice, and whether its endpoints name branches.
+- **`Snapshotter`** (`snapshotter.rs`): one review's cached snapshot and per-path patch tasks,
+  invalidated by version. `Shown` (`mode/view.rs`) is its input: the resolved slice.
+- **`CommentStore`** and **`IterationStore`**: the two files under `<git-dir>/diffle/`, each
+  written under a file lock so two servers on one repository keep each other's records.
+- **`LspPool`** (`lsp/pool.rs`): the language servers of one run, started as snapshots name their
+  languages, with their open documents, status and logs.
+- **`Hub`** (`server/hub.rs`): the WebSocket broadcast channel and the client count the run's
+  lifetime watches.
+
+### Client state
+
+- **`ReviewState`** (`store.ts`): the one Zustand store: the snapshot, threads, viewed marks and
+  config as fetched; what is `loaded` per path; the cursor, selection and file view; the open
+  draft, reply or edit and their unsent text; search, LSP and layout state; and every action.
+- **`Loaded`**: what a path holds in the pane: a hydrated `diff`, a whole `file`, `binary`,
+  `oversized`, `error`, or `loading`.
+- **`FileDiffMetadata`** (from `@pierre/diffs`): the rendered diff of one file. It is treated as
+  immutable; a reload hydrates a clone and changes the item's generation-backed id.
+
 ## Data flow
 
 ### Boot
