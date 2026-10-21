@@ -17,5 +17,5 @@ pub fn resolve_package(base: &Path, package: &str) -> Option<PathBuf> {
         .filter(|dir| dir.file_name().is_none_or(|name| name != "node_modules"))
         .map(|dir| dir.join("node_modules").join(package))
         .find(|dir| dir.join("package.json").is_file())
-        .map(|dir| std::fs::canonicalize(&dir).unwrap_or(dir))
+        .map(|dir| dunce::canonicalize(&dir).unwrap_or(dir))
 }

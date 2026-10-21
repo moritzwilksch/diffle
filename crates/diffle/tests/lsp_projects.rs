@@ -11,7 +11,7 @@ use serde_json::json;
 fn tmp() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
     // Canonical, so a location reached through a symlink compares equal to the one laid out.
-    let path = dir.path().canonicalize().unwrap();
+    let path = dunce::canonicalize(dir.path()).unwrap();
     (dir, path)
 }
 

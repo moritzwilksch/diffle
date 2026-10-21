@@ -103,7 +103,7 @@ fn routes_vue_to_a_typescript_server_only_beside_the_plugin_vue_language_server_
         json!([{ "language": "vue", "tried": ["vtsls"], "why": "vue-language-server is on PATH but @vue/typescript-plugin was not found beside it" }])
     );
     let dir = tempfile::tempdir().unwrap();
-    let installed = vue_language_server(&dir.path().canonicalize().unwrap());
+    let installed = vue_language_server(&dunce::canonicalize(dir.path()).unwrap());
     let ts = path(&["typescript-language-server"]);
     let lookup: Lookup =
         Arc::new(move |c: &str| if c.starts_with("vue-language-server") { Some(installed.clone()) } else { ts(c) });

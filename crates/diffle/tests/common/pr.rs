@@ -25,7 +25,7 @@ pub fn as_git_url(p: &Path) -> String {
 impl Fixture {
     pub fn new() -> Self {
         let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path().canonicalize().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap();
         let origin = root.join("o").join("r");
         std::fs::create_dir_all(&origin).unwrap();
         git_in(&origin, &["init", "-q", "-b", "main"]);
@@ -49,7 +49,7 @@ impl Fixture {
     }
 
     pub fn root(&self) -> PathBuf {
-        self.tmp.path().canonicalize().unwrap()
+        dunce::canonicalize(self.tmp.path()).unwrap()
     }
 
     /// Makes `remote` look like github.com/o/r while fetching from the bare repository.

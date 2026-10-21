@@ -94,7 +94,7 @@ pub fn real_executable(executable: &Path) -> PathBuf {
             target = PathBuf::from(exe);
         }
     }
-    std::fs::canonicalize(&target).unwrap_or(target)
+    dunce::canonicalize(&target).unwrap_or(target)
 }
 
 #[cfg(test)]

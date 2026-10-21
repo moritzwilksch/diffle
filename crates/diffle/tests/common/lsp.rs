@@ -24,7 +24,8 @@ pub fn fake_servers() -> Option<&'static Path> {
             eprintln!("node is not on PATH; skipping the fake language server tests");
             None
         })?;
-        let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/lsp/fake-lsp.mjs").canonicalize().unwrap();
+        let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/lsp/fake-lsp.mjs");
+        let script = dunce::canonicalize(script).unwrap();
         let dir = tempfile::tempdir().unwrap().keep();
         for name in COMMANDS {
             let wrapper = format!(
@@ -92,6 +93,6 @@ pub async fn eventually(what: &str, check: impl Fn() -> bool) {
 /// A canonical temporary directory to serve as a server's root.
 pub fn root() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().canonicalize().unwrap();
+    let path = dunce::canonicalize(dir.path()).unwrap();
     (dir, path)
 }

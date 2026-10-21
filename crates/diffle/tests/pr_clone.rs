@@ -66,8 +66,8 @@ async fn clones_foreign_prs_into_temp_storage_and_removes_them_including_after_a
         let opened = open_review_repository_with(&mut req, &cwd, async |_| Ok((gh, None))).await.unwrap();
         let clone_root = opened.repo.root.clone();
         assert_ne!(clone_root, f.local);
-        let temp = std::env::temp_dir().canonicalize().unwrap();
-        assert!(clone_root.canonicalize().unwrap().starts_with(temp.join("")), "{}", clone_root.display());
+        let temp = dunce::canonicalize(std::env::temp_dir()).unwrap();
+        assert!(dunce::canonicalize(&clone_root).unwrap().starts_with(temp.join("")), "{}", clone_root.display());
         assert!(clone_root.file_name().unwrap().to_string_lossy().starts_with("diffle-pr-"));
         let review = resolve_review(&req, &opened.repo, &github).await.unwrap();
         let diffle::protocol::Review::Range { old, new, pr, .. } = &review else { panic!("a range") };
