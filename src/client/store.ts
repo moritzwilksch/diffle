@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import {
   DEFAULT_USER_CONFIG,
   languageOf,
+  reviewKey,
   shownIterations,
   type GithubMetadata,
   type ChangedFile,
@@ -16,7 +17,8 @@ import {
   type LspPosition,
   type LspStatus,
   type LspSymbol,
-  type ModeRequest,
+  type EnterRequest,
+  type RangeView,
   type Moved,
   type SearchMatch,
   type SearchScope,
@@ -465,7 +467,10 @@ export interface ReviewState {
   refreshThreads(): Promise<void>;
   refreshViewed(): Promise<void>;
   refreshConfig(): Promise<void>;
-  switchMode(req: ModeRequest): Promise<'applied' | 'superseded' | { error: string }>;
+  /** Enter another review, as the CLI does. */
+  enter(req: EnterRequest): Promise<'applied' | 'superseded' | { error: string }>;
+  /** Show a slice of the current range. */
+  show(view: RangeView): Promise<'applied' | 'superseded' | { error: string }>;
   /** Show one listed commit of the current range, or with null the range itself. */
   focusCommit(commit: string | null): void;
   /** Show what the current range's iteration `to` changed since its iteration `from`. */
@@ -632,10 +637,36 @@ export const useStore = create<ReviewState>((set, get) => {
     await applySnapshot(snap, g);
   };
   /** A server-side change of the snapshot within the mode (reload, forgetting iterations): fetch and commit it. */
+  /** Enters what `request` answers with: a new review, or a slice of the current one. */
+  const switchTo = async (request: () => Promise<Snapshot>) => {
+    const g = beginMode();
+    set({ error: null });
+    let snap: Snapshot | undefined;
+    // Only a fetch this call started is its to release: the version may already be a push's in flight.
+    let owned = false;
+    try {
+      snap = await request();
+      // The pushed refresh normally owns this version already; only a client without a socket gets here.
+      if (!current(g)) return 'superseded' as const;
+      if (accounted(snap.version)) return 'applied' as const;
+      fetching = snap.version;
+      owned = true;
+      await commitSnapshot(snap, g, await fetchLists());
+      return current(g) ? ('applied' as const) : ('superseded' as const);
+    } catch (e) {
+      if (!current(g)) return 'superseded' as const;
+      const error = errorMessage(e);
+      set({ error });
+      void get().refreshGithub();
+      return { error };
+    } finally {
+      if (owned && snap && fetching === snap.version) fetching = 0;
+    }
+  };
   const transition = async (request: () => Promise<Snapshot>, what: string) => {
     const g = begin();
     let snap: Snapshot | undefined;
-    // As in switchMode: the pushed refresh normally owns the version before the response lands.
+    // As in switchTo: the pushed refresh normally owns the version before the response lands.
     let owned = false;
     try {
       snap = await request();
@@ -923,7 +954,7 @@ export const useStore = create<ReviewState>((set, get) => {
 
   const applySnapshot = async (next: Snapshot, g: number) => {
     const prev = get().snapshot;
-    const modeChanged = prev == null || prev.mode.commentKey !== next.mode.commentKey;
+    const modeChanged = prev == null || reviewKey(prev.review) !== reviewKey(next.review);
     const contextChanged = prev != null && prev.context !== next.context;
     // `ChangedFile` names only the new blob. The old side moving (amend, rebase, a fetched base)
     // keeps blob, status and counts and still changes every patch, so it invalidates like context does.
@@ -1515,7 +1546,7 @@ export const useStore = create<ReviewState>((set, get) => {
     pickModeEntry(n) {
       if (n === 1) {
         set({ modeMenuOpen: false, modePane: null, modeEntry: 1 });
-        void get().switchMode({ kind: 'working' });
+        void get().enter({ kind: 'working' });
       } else if (n >= 2 && n <= MODE_PANES.length) {
         set({ modeMenuOpen: true, modePane: MODE_PANES[n - 1]!, modeEntry: n });
       }
@@ -2335,31 +2366,9 @@ export const useStore = create<ReviewState>((set, get) => {
       }
     },
 
-    async switchMode(req) {
-      const g = beginMode();
-      set({ error: null });
-      let snap: Snapshot | undefined;
-      // Only a fetch this call started is its to release: the version may already be a push's in flight.
-      let owned = false;
-      try {
-        snap = await api.switchMode(req);
-        // The pushed refresh normally owns this version already; only a client without a socket gets here.
-        if (!current(g)) return 'superseded';
-        if (accounted(snap.version)) return 'applied';
-        fetching = snap.version;
-        owned = true;
-        await commitSnapshot(snap, g, await fetchLists());
-        return current(g) ? 'applied' : 'superseded';
-      } catch (e) {
-        if (!current(g)) return 'superseded';
-        const error = errorMessage(e);
-        set({ error });
-        void get().refreshGithub();
-        return { error };
-      } finally {
-        if (owned && snap && fetching === snap.version) fetching = 0;
-      }
-    },
+    enter: (req) => switchTo(() => api.enter(req)),
+
+    show: (view) => switchTo(() => api.show(view)),
 
     moved: null,
     setMoved(moved) {
@@ -2373,21 +2382,29 @@ export const useStore = create<ReviewState>((set, get) => {
     deleteIteration: (n) => transition(() => api.deleteIteration(n), `Forgetting iteration #${n}`),
 
     focusCommit(commit) {
-      void get().switchMode({ kind: 'focus', commit });
+      void get().show(
+        commit === null
+          ? { kind: 'whole' }
+          : commit === 'worktree'
+            ? { kind: 'uncommitted' }
+            : { kind: 'commit', sha: commit },
+      );
     },
 
     compareIterations(from, to) {
-      void get().switchMode({ kind: 'interdiff', from, to });
+      void get().show({ kind: 'interdiff', from: { kind: 'iteration', n: from }, to: { kind: 'iteration', n: to } });
     },
 
     showPair(commit) {
-      void get().switchMode({ kind: 'pair', commit });
+      const review = get().snapshot?.review;
+      if (review?.kind !== 'range' || review.view.kind !== 'interdiff') return;
+      void get().show({ ...review.view, pair: commit ?? undefined });
     },
 
     toggleInterdiff() {
       const snap = get().snapshot;
       if (!snap) return;
-      if (snap.mode.interdiff) return get().focusCommit(null);
+      if (snap.review.kind === 'range' && snap.review.view.kind === 'interdiff') return get().focusCommit(null);
       const [previous, latest] = snap.iterations.slice(-2);
       if (!previous || !latest) return get().flash('Only one iteration so far: reload once the branch moved');
       get().compareIterations(previous.n, latest.n);
@@ -2396,7 +2413,7 @@ export const useStore = create<ReviewState>((set, get) => {
     stepIteration(end, direction) {
       const snap = get().snapshot;
       if (!snap) return;
-      const next = iterationStep(snap.iterations, shownIterations(snap.mode), end, direction);
+      const next = iterationStep(snap.iterations, shownIterations(snap.review), end, direction);
       if (next) get().compareIterations(next.from, next.to);
     },
 
@@ -2405,7 +2422,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const latest = snap?.iterations.at(-1);
       if (!snap || !latest) return;
       if (!snap.iterations.some((it) => it.n === n)) return get().flash(`No iteration #${n}`);
-      const next = iterationPick(shownIterations(snap.mode), latest.n, n, false);
+      const next = iterationPick(shownIterations(snap.review), latest.n, n, false);
       if (next) get().compareIterations(next.from, next.to);
     },
 
@@ -2417,15 +2434,15 @@ export const useStore = create<ReviewState>((set, get) => {
     stepCommit(direction) {
       const snap = get().snapshot;
       if (!snap) return;
-      if (snap.mode.within || snap.mode.base !== 'parent') {
+      if (snap.review.kind === 'range') {
         const target = rangeStep(snap, direction);
         if (target === undefined) return;
-        if (snap.mode.interdiff) get().showPair(target);
+        if (snap.review.view.kind === 'interdiff') get().showPair(target);
         else get().focusCommit(target);
         return;
       }
       const target = direction < 0 ? snap.commit?.parent : snap.commit?.child;
-      if (target) void get().switchMode({ kind: 'revspec', args: [`${target}^!`] });
+      if (target) void get().enter({ kind: 'revspec', args: [`${target}^!`] });
     },
 
     loadFile,
@@ -2511,7 +2528,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     async openDraft(sel) {
-      const off = get().snapshot && commentsOff(get().snapshot!.mode);
+      const off = get().snapshot && commentsOff(get().snapshot!.review);
       if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       const path = pathFromItemId(sel.id);
@@ -2519,7 +2536,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     openFileDraft(path) {
-      const off = get().snapshot && commentsOff(get().snapshot!.mode);
+      const off = get().snapshot && commentsOff(get().snapshot!.review);
       if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       // The cursor stays where the reader is when that is inside this file, so `]` and `e` carry on from

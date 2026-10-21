@@ -16,7 +16,7 @@ use std::process::ExitCode;
 use clap::{Command as ClapCommand, CommandFactory, FromArgMatches};
 
 use crate::error::{Error, GitError};
-use crate::protocol::{ModeRequest, language_ids};
+use crate::protocol::{EnterRequest, language_ids};
 use args::{Cli, Command};
 
 /// The command tree, with help that only exists at runtime: the languages diffle knows.
@@ -62,13 +62,13 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             print!("{}", completion::script(args::shell(&shell)));
             return Ok(());
         }
-        Some(Command::Working { opts }) => (ModeRequest::Working, opts),
-        Some(Command::Show { rev, opts }) => (ModeRequest::Revspec { args: vec![format!("{rev}^!")] }, opts),
-        Some(Command::Pr { pr, opts }) => (ModeRequest::Pr { pr }, opts),
-        Some(Command::RangeDiff { ranges, opts }) => (ModeRequest::RangeDiff { args: ranges }, opts),
+        Some(Command::Working { opts }) => (EnterRequest::Working, opts),
+        Some(Command::Show { rev, opts }) => (EnterRequest::Revspec { args: vec![format!("{rev}^!")] }, opts),
+        Some(Command::Pr { pr, opts }) => (EnterRequest::Pr { pr }, opts),
+        Some(Command::RangeDiff { ranges, opts }) => (EnterRequest::RangeDiff { args: ranges }, opts),
         // No revisions: review the working tree, like a bare `git diff`.
-        None if cli.revs.is_empty() => (ModeRequest::Working, Default::default()),
-        None => (ModeRequest::Revspec { args: cli.revs }, Default::default()),
+        None if cli.revs.is_empty() => (EnterRequest::Working, Default::default()),
+        None => (EnterRequest::Revspec { args: cli.revs }, Default::default()),
     };
     serve::run(req, cli.global.merge(later)).await
 }

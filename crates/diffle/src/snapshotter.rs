@@ -1,4 +1,4 @@
-//! Turns one mode into snapshots: trees, changed files, commits, and their patches.
+//! Turns one review into snapshots: trees, changed files, commits, and their patches.
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
@@ -9,10 +9,9 @@ use crate::error::{Error, Result};
 use crate::generated::GeneratedFlags;
 use crate::git::{GitRepo, WORKTREE};
 use crate::iterations::IterationStore;
-use crate::mode::resolve::{resolve_comparison, resolve_mode};
+use crate::mode::view::{Shown, resolve_shown};
 use crate::protocol::{
-    ChangeStatus, ChangedFile, ComparisonBase, Iteration, MAX_RANGE_COMMITS, ModeSpec, RangeCommits, ReviewedCommit,
-    Snapshot,
+    ChangeStatus, ChangedFile, Iteration, MAX_RANGE_COMMITS, RangeCommits, RangeEnds, Review, ReviewedCommit, Snapshot,
 };
 
 /// Patches computed ahead for the first changed files, which the viewer asks for first.
@@ -28,12 +27,14 @@ struct State {
     all: Option<Task<String>>,
 }
 
-/// One mode's snapshots, cached until `invalidate`. A failed computation is dropped from the cache,
+/// One review's snapshots, cached until `invalidate`. A failed computation is dropped from the cache,
 /// so the next caller retries it.
 pub struct Snapshotter {
     repo: Arc<GitRepo>,
-    pub mode: ModeSpec,
-    /// Records the spanned range's endpoints as taken; absent for comparisons that are not followed.
+    pub review: Review,
+    /// Where the range's comments live, whatever slice is shown; a lone commit has none.
+    range_key: Option<String>,
+    /// Records the range's endpoints as taken; absent for reviews that are not followed.
     iterations: Option<IterationStore>,
     state: Mutex<State>,
     generated: GeneratedFlags,
@@ -42,14 +43,16 @@ pub struct Snapshotter {
 impl Snapshotter {
     pub fn new(
         repo: Arc<GitRepo>,
-        mode: ModeSpec,
+        review: Review,
+        range_key: Option<String>,
         version: i64,
         context: u32,
         iterations: Option<IterationStore>,
     ) -> Arc<Self> {
         Arc::new(Self {
             repo,
-            mode,
+            review,
+            range_key,
             iterations,
             state: Mutex::new(State { version, context, snapshot: None, patches: HashMap::new(), all: None }),
             generated: GeneratedFlags::default(),
@@ -191,9 +194,10 @@ impl Snapshotter {
 
     async fn compute(self: Arc<Self>, version: i64) -> Result<Arc<Snapshot>> {
         let repo = &self.repo;
-        let (ends, head_sha) = tokio::join!(resolve_mode(repo, &self.mode), repo.resolve("HEAD"));
-        let (ends, head_sha) = (ends?, head_sha.unwrap_or_default());
-        let (old_sha, new_sha) = (ends.old_sha, ends.new_sha);
+        let shown = resolve_shown(repo, &self.review, self.iterations.as_ref(), self.range_key.as_deref());
+        let (shown, head_sha) = tokio::join!(shown, repo.resolve("HEAD"));
+        let (shown, head_sha) = (shown?, head_sha.unwrap_or_default());
+        let Shown { old_sha, new_sha, follows, range, interdiff, commit, comment_key } = shown;
         // The tree belongs to the selected new side: a commit's own listing, or the index plus
         // untracked files (added below via `changed`) for the worktree.
         let tracked = async {
@@ -205,14 +209,13 @@ impl Snapshotter {
             }
         };
         let commit = async {
-            if self.mode.base == ComparisonBase::Parent { self.reviewed_commit(&new_sha).await } else { Ok(None) }
+            match &commit {
+                Some(sha) => self.reviewed_commit(sha).await,
+                None => Ok(None),
+            }
         };
-        let (tracked, mut changed, commit, commits) = tokio::try_join!(
-            tracked,
-            repo.numstat(&old_sha, &new_sha),
-            commit,
-            self.range_commits(&old_sha, &new_sha, &head_sha)
-        )?;
+        let (tracked, mut changed, commit, commits) =
+            tokio::try_join!(tracked, repo.numstat(&old_sha, &new_sha), commit, self.range_commits(&range, &head_sha))?;
         let (iterations, ()) =
             tokio::join!(self.record_iteration(&commits), self.generated.fill(repo, &mut changed, &new_sha));
         let mut tree: BTreeSet<String> = tracked.into_iter().collect();
@@ -229,11 +232,14 @@ impl Snapshotter {
         let context = self.state.lock().unwrap().context;
         let snap = Arc::new(Snapshot {
             root: repo.root.to_string_lossy().into_owned(),
-            mode: self.mode.clone(),
+            review: self.review.clone(),
             version,
             old_sha,
             new_sha,
             head_sha,
+            follows,
+            comment_key,
+            interdiff,
             context: i64::from(context),
             changed,
             tree: tree.into_iter().collect(),
@@ -268,21 +274,18 @@ impl Snapshotter {
         }))
     }
 
-    async fn range_commits(&self, old_sha: &str, new_sha: &str, head_sha: &str) -> Result<RangeCommits> {
-        if let Some(within) = &self.mode.within {
-            let range = resolve_comparison(&self.repo, &within.old, &within.new, within.base, false).await?;
-            return self.spanned(&range.old_sha, &range.new_sha, head_sha).await;
-        }
-        if self.mode.base == ComparisonBase::Parent {
-            let list = self.repo.range_commits(&format!("{new_sha}^!"), MAX_RANGE_COMMITS).await?;
+    /// The commits the review's range spans; a lone commit lists itself.
+    async fn range_commits(&self, range: &RangeEnds, head_sha: &str) -> Result<RangeCommits> {
+        if let Review::Commit { sha } = &self.review {
+            let list = self.repo.range_commits(&format!("{sha}^!"), MAX_RANGE_COMMITS).await?;
             return Ok(RangeCommits {
                 list: list.list,
                 total: list.total,
-                old_sha: old_sha.into(),
-                new_sha: new_sha.into(),
+                old_sha: range.old_sha.clone(),
+                new_sha: range.new_sha.clone(),
             });
         }
-        self.spanned(old_sha, new_sha, head_sha).await
+        self.spanned(&range.old_sha, &range.new_sha, head_sha).await
     }
 
     async fn spanned(&self, old_sha: &str, new_sha: &str, head_sha: &str) -> Result<RangeCommits> {

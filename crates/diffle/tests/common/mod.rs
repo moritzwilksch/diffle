@@ -73,21 +73,34 @@ pub fn git_in(dir: &Path, args: &[&str]) -> String {
 use std::sync::Arc;
 
 use diffle::github::hosts::Github;
+use diffle::mode::keys::range_comment_key;
+use diffle::mode::resolve::resolve_range;
 use diffle::mode::resolve::resolve_review;
-use diffle::protocol::{ModeRequest, ModeSpec, Snapshot};
+use diffle::protocol::{EnterRequest, Review, Snapshot};
 use diffle::snapshotter::Snapshotter;
 
-pub fn revspec(args: &[&str]) -> ModeRequest {
-    ModeRequest::Revspec { args: args.iter().map(|a| (*a).to_owned()).collect() }
+pub fn revspec(args: &[&str]) -> EnterRequest {
+    EnterRequest::Revspec { args: args.iter().map(|a| (*a).to_owned()).collect() }
 }
 
-pub async fn mode(repo: &GitRepo, req: ModeRequest) -> ModeSpec {
-    resolve_review(&req, repo, &Github::tokenless()).await.unwrap().mode
+pub async fn mode(repo: &GitRepo, req: EnterRequest) -> Review {
+    resolve_review(&req, repo, &Github::tokenless()).await.unwrap()
+}
+
+/// Where the review's range keeps its comments, as the session derives it; none for a lone commit.
+pub async fn range_key(repo: &GitRepo, review: &Review) -> Option<String> {
+    let Review::Range { old, new, base, pr, .. } = review else { return None };
+    let ends = resolve_range(repo, old, new, *base).await.unwrap();
+    let instance = &Github::tokenless().instance;
+    let key = range_comment_key(repo, instance, (old, new, *base), pr.as_ref(), (&ends.old_sha, &ends.new_sha));
+    Some(key.await.unwrap())
 }
 
 /// A snapshotter for `req` at version 1 with three lines of context, and its first snapshot.
-pub async fn snapshot(repo: &Arc<GitRepo>, req: ModeRequest) -> (Arc<Snapshotter>, Arc<Snapshot>) {
-    let snapshotter = Snapshotter::new(repo.clone(), mode(repo, req).await, 1, 3, None);
+pub async fn snapshot(repo: &Arc<GitRepo>, req: EnterRequest) -> (Arc<Snapshotter>, Arc<Snapshot>) {
+    let review = mode(repo, req).await;
+    let key = range_key(repo, &review).await;
+    let snapshotter = Snapshotter::new(repo.clone(), review, key, 1, 3, None);
     let snap = snapshotter.current().await.unwrap();
     (snapshotter, snap)
 }

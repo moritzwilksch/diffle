@@ -19,23 +19,23 @@ vi.mock('@/client/api.js', () => ({
 const { useStore } = await import('@/client/store.js');
 const { ModePicker } = await import('@/client/header/ModePicker.js');
 const { useKeymap } = await import('@/client/keyboard/useKeymap.js');
-type Result = Awaited<ReturnType<typeof originalSwitchMode>>;
+type Result = Awaited<ReturnType<typeof originalEnter>>;
 let root: Root;
 let host: HTMLDivElement;
 let finish: (result: Result) => void;
-const switchMode = vi.fn();
-const originalSwitchMode = useStore.getState().switchMode;
+const enterReview = vi.fn();
+const originalEnter = useStore.getState().enter;
 
 beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  switchMode.mockReset();
-  switchMode.mockImplementation(
+  enterReview.mockReset();
+  enterReview.mockImplementation(
     () =>
       new Promise<Result>((resolve) => {
         finish = resolve;
       }),
   );
-  useStore.setState({ modeMenuOpen: true, modePane: 'pr', switchMode });
+  useStore.setState({ modeMenuOpen: true, modePane: 'pr', enter: enterReview });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -44,7 +44,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(() => root.unmount());
   host.remove();
-  useStore.setState({ modeMenuOpen: false, modePane: null, switchMode: originalSwitchMode });
+  useStore.setState({ modeMenuOpen: false, modePane: null, enter: originalEnter });
 });
 async function submit() {
   await act(() => {
@@ -66,7 +66,7 @@ it('focuses the PR field and prevents duplicate submissions while opening the cu
   expect(button.disabled).toBe(false);
   await submit();
   await submit();
-  expect(switchMode).toHaveBeenCalledExactlyOnceWith({ kind: 'pr' });
+  expect(enterReview).toHaveBeenCalledExactlyOnceWith({ kind: 'pr' });
   expect(button.getAttribute('aria-busy')).toBe('true');
   expect(button.disabled).toBe(true);
   expect(useStore.getState().modeMenuOpen).toBe(true);
@@ -91,7 +91,7 @@ it('returns focus to the review pane after a successful switch instead of the me
 it('keeps failed input for correction and clears the inline error on editing', async () => {
   await type('123');
   await submit();
-  expect(switchMode).toHaveBeenCalledWith({ kind: 'pr', pr: '123' });
+  expect(enterReview).toHaveBeenCalledWith({ kind: 'pr', pr: '123' });
   await act(() => finish({ error: 'Pull request not found' }));
   expect(host.querySelector('[role="alert"]')?.textContent).toBe('Pull request not found');
   expect(host.querySelector('input')?.value).toBe('123');
@@ -100,7 +100,7 @@ it('keeps failed input for correction and clears the inline error on editing', a
   await type('https://github.com/org/repo/pull/124');
   expect(host.querySelector('[role="alert"]')).toBeNull();
   await submit();
-  expect(switchMode).toHaveBeenLastCalledWith({ kind: 'pr', pr: 'https://github.com/org/repo/pull/124' });
+  expect(enterReview).toHaveBeenLastCalledWith({ kind: 'pr', pr: 'https://github.com/org/repo/pull/124' });
   await act(() => finish('applied'));
 });
 
@@ -136,9 +136,9 @@ it('defaults to HEAD~1..HEAD~0, steps both offsets by arrows and buttons, and ap
   await act(() => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
   await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Increase target offset"]')!.click());
   expect(target.value).toBe('2');
-  expect(switchMode).not.toHaveBeenCalled();
+  expect(enterReview).not.toHaveBeenCalled();
   await submit();
-  expect(switchMode).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~9..HEAD~2'] });
+  expect(enterReview).toHaveBeenCalledWith({ kind: 'revspec', args: ['HEAD~9..HEAD~2'] });
 });
 
 it('keeps ref suggestions closed on pointer and keyboard picks until input interaction', async () => {
@@ -187,7 +187,7 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   });
   expect(typed.defaultPrevented).toBe(false);
   expect(base.value).toBe('main');
-  expect(switchMode).not.toHaveBeenCalled();
+  expect(enterReview).not.toHaveBeenCalled();
 });
 
 it('shows one highlight shared by the pointer and the keyboard', async () => {
@@ -230,7 +230,7 @@ it('leaves Enter to a focused button and keeps a focused entry highlighted', asy
   await act(() => trigger.focus());
   expect(enter(trigger).defaultPrevented).toBe(false);
   expect(useStore.getState().modeMenuOpen).toBe(true);
-  expect(switchMode).not.toHaveBeenCalled();
+  expect(enterReview).not.toHaveBeenCalled();
 });
 
 it('moves focus from another header button onto the entry j highlights', async () => {
@@ -284,7 +284,7 @@ it('enters the highlighted pane with l and leaves it with h', async () => {
   press('ArrowLeft');
   expect(useStore.getState().modePane).toBeNull();
   expect(useStore.getState().modeMenuOpen).toBe(true);
-  expect(switchMode).not.toHaveBeenCalled();
+  expect(enterReview).not.toHaveBeenCalled();
 });
 
 it('closes an open pane on Escape before the menu, keeping the list navigable', async () => {

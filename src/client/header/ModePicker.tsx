@@ -13,7 +13,7 @@ import {
   PencilRuler,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { comparisonLabel, type ModeRequest, type RefsResponse } from '@/shared/protocol.js';
+import { comparisonLabel, type EnterRequest, type RefsResponse } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
 import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { lastCommitsRequest } from '@/client/model.js';
@@ -25,7 +25,7 @@ import { CommitPreview } from './CommitPreview.js';
 /** Comparison modes with configuration in an adjacent pane. */
 export function ModePicker() {
   const snapshot = useStore((s) => s.snapshot);
-  const switchMode = useStore((s) => s.switchMode);
+  const enter = useStore((s) => s.enter);
   const open = useStore((s) => s.modeMenuOpen);
   const setOpen = useStore((s) => s.setModeMenuOpen);
   const pane = useStore((s) => s.modePane);
@@ -94,12 +94,12 @@ export function ModePicker() {
     };
   }, [open, setOpen]);
 
-  const choose = (req: ModeRequest) => {
+  const choose = (req: EnterRequest) => {
     setOpen(false);
     // Hand focus back to the diff instead of the trigger: a programmatic focus there shows the
     // native ring even though the user never navigated to the button.
     focusReview();
-    void switchMode(req);
+    void enter(req);
   };
   const chooseCommit = (revision: string) => choose({ kind: 'revspec', args: [`${revision}^!`] });
   const openPr = async () => {
@@ -109,7 +109,7 @@ export function ModePicker() {
     setPrError(null);
     const view = prView.current;
     try {
-      const result = await switchMode(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
+      const result = await enter(pr.trim() ? { kind: 'pr', pr: pr.trim() } : { kind: 'pr' });
       if (view !== prView.current) return;
       if (result === 'applied') {
         setOpen(false);
@@ -151,7 +151,7 @@ export function ModePicker() {
         aria-controls="mode-picker"
         className="max-w-full font-mono"
       >
-        <span className="truncate">{snapshot ? comparisonLabel(snapshot.mode) : '…'}</span>{' '}
+        <span className="truncate">{snapshot ? comparisonLabel(snapshot.review) : '…'}</span>{' '}
         <ChevronDown size="0.875rem" />
       </Button>
       {open && (

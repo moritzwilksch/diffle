@@ -6,9 +6,9 @@ use super::{Active, Session};
 use crate::comments::anchor::quote_range;
 use crate::comments::hunks::shown_ranges;
 use crate::comments::{AnchorSource, ReviewView, SideView};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::git::WORKTREE;
-use crate::protocol::{Side, Snapshot, image_key, shown_iterations};
+use crate::protocol::{Side, Snapshot, image_key};
 use crate::snapshotter::Snapshotter;
 
 /// The paths a snapshot exposes, for answering reads without touching Git.
@@ -107,12 +107,8 @@ impl Session {
     /// would live under a key the range never shows.
     pub fn anchor_source(self: &Arc<Self>) -> Result<impl AnchorSource + use<>> {
         let a = self.active()?;
-        if a.mode.interdiff.is_some() {
-            return Err(Error::revspec(if shown_iterations(&a.mode).is_some() {
-                "comments are off while comparing iterations"
-            } else {
-                "comments are off in a range-diff"
-            }));
+        if a.comments.is_none() {
+            return Err(super::comments_off(&a.review));
         }
         Ok(Placer { session: self.clone(), snapshotter: a.snapshotter.clone() })
     }
@@ -121,8 +117,9 @@ impl Session {
     /// tree file shows its new side whole (the file view) and nothing of its old side. A file thread
     /// only needs its file in the review.
     pub(super) async fn relocate_comments(self: &Arc<Self>, a: &Active, snap: &Arc<Snapshot>) -> Result<()> {
+        let Some(comments) = &a.comments else { return Ok(()) };
         let view = Review { session: self, snapshotter: &a.snapshotter, snap };
-        a.comments.relocate_all(&view).await.map(drop)
+        comments.relocate_all(&view).await.map(drop)
     }
 }
 

@@ -13,7 +13,8 @@ use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
 use diffle::github::pulls::view_pr;
 use diffle::mode::resolve::resolve_review;
-use diffle::protocol::{ComparisonBase, Live, ModeRequest};
+use diffle::protocol::{ComparisonBase, EnterRequest, Live, RangeView, Review};
+use diffle::snapshotter::Snapshotter;
 use serde_json::json;
 
 fn com() -> GithubInstance {
@@ -188,24 +189,30 @@ async fn names_unusable_github_data_instead_of_guessing() {
     assert!(err.contains("cannot read the repository"), "{err}");
 }
 
-fn pr(selector: &str) -> ModeRequest {
-    ModeRequest::Pr { pr: Some(selector.into()) }
+fn pr(selector: &str) -> EnterRequest {
+    EnterRequest::Pr { pr: Some(selector.into()) }
 }
 
 #[tokio::test]
 async fn fetches_the_pull_request_into_fixed_refs_retaining_both_branch_names() {
     let f = Fixture::new();
     let repo = f.repo().await;
+    let repo = Arc::new(repo);
     let review = resolve_review(&pr("7"), &repo, &with(&f.github())).await.unwrap();
-    let mode = &review.mode;
-    assert_eq!(mode.old, format!("{}/7/base/main", repo.review_refs));
-    assert_eq!(mode.new, format!("{}/7/head/feat", repo.review_refs));
-    assert_eq!((mode.base, mode.live), (ComparisonBase::MergeBase, Live::None));
-    // Branch identities share review state with ordinary branch comparisons.
-    assert_eq!(mode.comment_key, "range:o/r:main...o/r:feat");
-    assert_eq!(review.pr_url.as_deref(), Some("https://github.com/o/r/pull/7"));
-    assert_eq!(git_in(&f.local, &["rev-parse", &mode.new]), f.head);
-    assert_eq!(git_in(&f.local, &["rev-parse", &mode.old]), f.merge_base);
+    let Review::Range { old, new, base, pr: pull, view } = &review else { panic!("a range") };
+    assert_eq!(*old, format!("{}/7/base/main", repo.review_refs));
+    assert_eq!(*new, format!("{}/7/head/feat", repo.review_refs));
+    assert_eq!(*base, ComparisonBase::MergeBase);
+    assert!(matches!(view, RangeView::Whole));
+    let pull = pull.as_ref().unwrap();
+    assert_eq!((pull.url.as_str(), pull.number, pull.repository.as_str()), ("https://github.com/o/r/pull/7", 7, "o/r"));
+    // Branch identities share review state with ordinary branch comparisons; the fetched refs stay put.
+    let key = common::range_key(&repo, &review).await;
+    assert_eq!(key.as_deref(), Some("range:o/r:main...o/r:feat"));
+    let snap = Snapshotter::new(repo.clone(), review.clone(), key.clone(), 1, 3, None).current().await.unwrap();
+    assert_eq!((snap.follows, snap.comment_key.clone()), (Live::None, key));
+    assert_eq!(git_in(&f.local, &["rev-parse", new]), f.head);
+    assert_eq!(git_in(&f.local, &["rev-parse", old]), f.merge_base);
     repo.clean_review_refs().await.unwrap();
 }
 
@@ -217,7 +224,8 @@ async fn fetches_from_the_remote_that_points_at_the_base_repository_whatever_it_
     f.point_remote_at_github(&forked, "upstream");
     let repo = GitRepo::open(&forked).await.unwrap();
     let review = resolve_review(&pr("7"), &repo, &with(&f.github())).await.unwrap();
-    assert_eq!(repo.resolve(&review.mode.new).await.unwrap(), f.head);
+    let Review::Range { new, .. } = &review else { panic!("a range") };
+    assert_eq!(repo.resolve(new).await.unwrap(), f.head);
 }
 
 #[tokio::test]

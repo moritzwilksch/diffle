@@ -1,4 +1,4 @@
-//! The review itself: its snapshot, mode, iterations, refs and settings.
+//! The review itself: its snapshot, what it reviews, iterations, refs and settings.
 use std::sync::Arc;
 
 use axum::Json;
@@ -6,11 +6,11 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, RawQuery, State};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use serde::Deserialize;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
-use crate::protocol::{FollowRefs, LastCommitsQuery, ModeRequest, ServerMessage, UserConfig};
+use crate::protocol::{EnterRequest, FollowRefs, LastCommitsQuery, RangeView, ServerMessage, UserConfig};
 use crate::session::Broadcaster;
 use crate::user_config::UserConfigPatch;
 
@@ -21,7 +21,8 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/reload", post(reload))
         .route("/api/iterations", delete(clear_iterations))
         .route("/api/iterations/{n}", delete(delete_iteration))
-        .route("/api/mode", post(mode))
+        .route("/api/review", post(enter))
+        .route("/api/view", put(show))
         .route("/api/github", get(github))
         .route("/api/refs", get(refs))
         .route("/api/last-commits-preview", get(last_commits_preview))
@@ -50,9 +51,16 @@ async fn delete_iteration(State(d): State<Arc<ApiDeps>>, Path(n): Path<String>) 
     Ok(Json(d.session.delete_iteration(n).await?).into_response())
 }
 
-async fn mode(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
-    let req: ModeRequest = body(&raw)?;
-    Ok(Json(d.session.switch_mode(req).await?).into_response())
+/// Enters another review, as the CLI does.
+async fn enter(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    let req: EnterRequest = body(&raw)?;
+    Ok(Json(d.session.enter(req).await?).into_response())
+}
+
+/// Shows a slice of the active range.
+async fn show(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    let view: RangeView = body(&raw)?;
+    Ok(Json(d.session.show(view).await?).into_response())
 }
 
 /// The pull request the current snapshot belongs to, as far as GitHub and the remotes tell.

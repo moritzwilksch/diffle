@@ -93,19 +93,18 @@ async fn a_range_diff_review_replays_the_older_range_and_pairs_its_commits() {
     t.git(&["checkout", "-q", "-b", "feat2", "main~1"]);
     t.write("f.txt", "a\nB\nc\nd\n");
     t.git(&["commit", "-q", "-am", "feat, rebased"]);
-    let repo = t.open().await;
-    let req = diffle::protocol::ModeRequest::RangeDiff { args: vec![format!("{base}..feat"), "main~1..feat2".into()] };
-    let mode = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::Github::tokenless())
-        .await
-        .unwrap()
-        .mode;
-    let inter = mode.interdiff.clone().unwrap();
-    let (feat, feat2, onto) =
-        (t.git(&["rev-parse", "feat"]), t.git(&["rev-parse", "feat2"]), t.git(&["rev-parse", "main~1"]));
-    assert_eq!(mode.comment_key, format!("range-diff:{base}..{feat}:{onto}..{feat2}"));
-    assert_eq!((mode.new.as_str(), mode.live), (feat2.as_str(), diffle::protocol::Live::Refs));
+    let repo = std::sync::Arc::new(t.open().await);
+    let req = diffle::protocol::EnterRequest::RangeDiff { args: vec![format!("{base}..feat"), "main~1..feat2".into()] };
+    let (_, snap) = common::snapshot(&repo, req).await;
+    let inter = snap.interdiff.clone().unwrap();
+    let (feat, feat2) = (t.git(&["rev-parse", "feat"]), t.git(&["rev-parse", "feat2"]));
+    // Comments are off: the old side is a replayed tree.
+    assert_eq!(
+        (snap.new_sha.as_str(), snap.follows, snap.comment_key.clone()),
+        (feat2.as_str(), diffle::protocol::Live::Refs, None)
+    );
     // feat replayed onto main~1 is what feat2 holds: the rebase alone shows nothing.
-    assert_eq!(repo.show(&mode.old, "f.txt").await.unwrap().unwrap(), b"a\nB\nc\nd\n");
+    assert_eq!(repo.show(&snap.old_sha, "f.txt").await.unwrap().unwrap(), b"a\nB\nc\nd\n");
     assert!(inter.conflicts.is_empty());
     let pairs: Vec<_> = inter
         .pairs
@@ -113,5 +112,6 @@ async fn a_range_diff_review_replays_the_older_range_and_pairs_its_commits() {
         .map(|p| (p.old.as_ref().map(|c| c.sha.clone()), p.new.as_ref().map(|c| c.sha.clone()), p.status))
         .collect();
     assert_eq!(pairs, [(Some(feat), Some(feat2), diffle::protocol::PairStatus::Changed)]);
-    assert_eq!(mode.within.unwrap().old, "main~1");
+    let diffle::protocol::Review::Range { old, .. } = &snap.review else { panic!("a range") };
+    assert_eq!(old, "main~1");
 }

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use common::{TestRepo, git_in, revspec, snapshot};
-use diffle::protocol::{ChangeStatus::*, ModeRequest};
+use diffle::protocol::{ChangeStatus::*, EnterRequest};
 
 /// `super` records `sub` at an older commit than its checkout; beside it an edit, a staged broken
 /// symlink and an untracked nested repository.
@@ -60,7 +60,7 @@ async fn numstat_loads_every_ordinary_file_and_marks_the_gitlink() {
 async fn renders_a_gitlink_as_a_commit_id_change_and_leaves_it_out_of_hydration() {
     let (_lib, sup) = super_repo();
     let repo = Arc::new(sup.open().await);
-    let (snapshotter, snap) = snapshot(&repo, ModeRequest::Working).await;
+    let (snapshotter, snap) = snapshot(&repo, EnterRequest::Working).await;
     assert!(snap.changed.iter().any(|f| f.path == "sub"));
     assert!(snap.tree.contains(&"sub".to_owned()));
     assert!(!snap.tree.iter().any(|p| p.starts_with("nested")));
@@ -174,6 +174,6 @@ async fn a_committed_comparison_reads_attributes_from_the_new_revision_the_workt
     assert!(flag(&committed, "completions/x.bash"));
     assert!(!flag(&committed, "package-lock.json"));
     t.write("completions/x.bash", "edited\n");
-    let (_, live) = snapshot(&repo, ModeRequest::Working).await;
+    let (_, live) = snapshot(&repo, EnterRequest::Working).await;
     assert!(!flag(&live, "completions/x.bash"));
 }

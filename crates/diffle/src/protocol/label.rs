@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::{ComparisonBase, ModeSpec, RangeSide};
+use super::{ComparisonBase, RangeRef, RangeView, Review, shown_iterations};
 
 static SESSION_REF: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^refs/diffle/[^/]+/\d+/(?:base|head)/").unwrap());
 static BRANCH_REF: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^refs/(?:heads|remotes)/").unwrap());
@@ -15,6 +15,7 @@ pub fn ref_name(rev: &str) -> String {
     BRANCH_REF.replace(&rev, "").into_owned()
 }
 
+/// One side of a range-diff as named, `<old>..<new>`, with full hashes abbreviated.
 pub fn range_label(old: &str, new: &str) -> String {
     let short = |rev: &str| {
         if FULL_SHA.is_match(rev) { rev[..7].to_owned() } else { ref_name(rev) }
@@ -22,36 +23,41 @@ pub fn range_label(old: &str, new: &str) -> String {
     format!("{}..{}", short(old), short(new))
 }
 
-/// The endpoints of a plain comparison, as `comparisonLabel` labels one without a range around it.
+/// The endpoints of a range, as `comparisonLabel` labels one shown whole.
 pub fn plain_label(old: &str, new: &str, base: ComparisonBase) -> String {
     match base {
-        ComparisonBase::Parent => format!("{}^!", short(new)),
         ComparisonBase::MergeBase => format!("{}...{}", ref_name(old), ref_name(new)),
         ComparisonBase::Direct => format!("{}..{}", ref_name(old), ref_name(new)),
     }
 }
 
-pub fn comparison_label(mode: &ModeSpec) -> String {
-    let Some(within) = &mode.within else {
-        return plain_label(&mode.old, &mode.new, mode.base);
+/// How the header names a review; see `comparisonLabel` in `protocol.ts`.
+pub fn comparison_label(review: &Review) -> String {
+    let Review::Range { old, new, base, view, .. } = review else {
+        let Review::Commit { sha } = review else { unreachable!() };
+        return format!("{}^!", short(sha));
     };
-    let outer = plain_label(&within.old, &within.new, within.base);
-    if let Some(inter) = &mode.interdiff {
-        let label = match super::shown_iterations(mode) {
-            Some((from, to)) => format!("{outer} #{from}→#{to}"),
-            None => format!("{} → {}", range_label(&inter.from.old, &inter.from.new), side_label(&inter.to)),
-        };
-        return match &mode.pair {
-            Some(pair) => format!("{label} @ {}", short(&pair.new)),
-            None => label,
-        };
+    let range = plain_label(old, new, *base);
+    match view {
+        RangeView::Whole => range,
+        RangeView::Commit { sha } => format!("{range} @ {}", short(sha)),
+        RangeView::Uncommitted => format!("{range} @ worktree"),
+        RangeView::Interdiff { from, to, pair } => {
+            let side = |r: Option<&RangeRef>| match r {
+                None => range.clone(),
+                Some(RangeRef::Iteration { n }) => format!("#{n}"),
+                Some(RangeRef::Named { old, new }) => range_label(old, new),
+            };
+            let label = match shown_iterations(review) {
+                Some((from, to)) => format!("{range} #{from}→#{to}"),
+                None => format!("{} → {}", side(Some(from)), side(to.as_ref())),
+            };
+            match pair {
+                Some(sha) => format!("{label} @ {}", short(sha)),
+                None => label,
+            }
+        }
     }
-    let at = if mode.new == "worktree" { "worktree".to_owned() } else { short(&mode.new) };
-    format!("{outer} @ {at}")
-}
-
-fn side_label(side: &RangeSide) -> String {
-    range_label(&side.old, &side.new)
 }
 
 fn short(rev: &str) -> String {

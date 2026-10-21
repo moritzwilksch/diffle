@@ -3,11 +3,11 @@ use crate::error::{Error, Result};
 use crate::git::WORKTREE;
 use crate::protocol::ComparisonBase;
 
+/// What revision arguments name: a range, or one commit against its first parent.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParsedRevspec {
-    pub old: String,
-    pub new: String,
-    pub base: ComparisonBase,
+pub enum ParsedRevspec {
+    Range { old: String, new: String, base: ComparisonBase },
+    Commit(String),
 }
 
 /// A range of a range-diff as named: `old..new`.
@@ -18,7 +18,7 @@ pub struct ParsedRange {
 }
 
 fn spec(old: &str, new: &str, base: ComparisonBase) -> ParsedRevspec {
-    ParsedRevspec { old: old.to_owned(), new: new.to_owned(), base }
+    ParsedRevspec::Range { old: old.to_owned(), new: new.to_owned(), base }
 }
 
 fn or_head(rev: &str) -> &str {
@@ -53,7 +53,7 @@ pub fn parse_revspec(args: &[String]) -> Result<ParsedRevspec> {
                 if commit == WORKTREE {
                     return Err(Error::revspec("the worktree is not a commit"));
                 }
-                return Ok(spec(commit, commit, ComparisonBase::Parent));
+                return Ok(ParsedRevspec::Commit(commit.to_owned()));
             }
             if let Some((a, b)) = arg.split_once("...") {
                 return Ok(spec(or_head(a), or_head(b), ComparisonBase::MergeBase));
@@ -135,9 +135,8 @@ mod tests {
         list.iter().map(|s| (*s).to_owned()).collect()
     }
 
-    fn parsed(list: &[&str]) -> (String, String, ComparisonBase) {
-        let p = parse_revspec(&args(list)).unwrap();
-        (p.old, p.new, p.base)
+    fn parsed(list: &[&str]) -> ParsedRevspec {
+        parse_revspec(&args(list)).unwrap()
     }
 
     fn err(list: &[&str]) -> String {
@@ -146,14 +145,14 @@ mod tests {
 
     #[test]
     fn reads_revspecs_as_git_diff_does() {
-        let t = |old: &str, new: &str, base| (old.to_owned(), new.to_owned(), base);
+        let t = |old: &str, new: &str, base| ParsedRevspec::Range { old: old.to_owned(), new: new.to_owned(), base };
         assert_eq!(parsed(&["main"]), t("main", "HEAD", MergeBase));
         assert_eq!(parsed(&["main..feat"]), t("main", "feat", Direct));
         assert_eq!(parsed(&["main..."]), t("main", "HEAD", MergeBase));
         assert_eq!(parsed(&["..feat"]), t("HEAD", "feat", Direct));
         assert_eq!(parsed(&["a", "b"]), t("a", "b", Direct));
-        assert_eq!(parsed(&["abc^!"]), t("abc", "abc", Parent));
-        assert_eq!(parsed(&["^!"]), t("HEAD", "HEAD", Parent));
+        assert_eq!(parsed(&["abc^!"]), ParsedRevspec::Commit("abc".into()));
+        assert_eq!(parsed(&["^!"]), ParsedRevspec::Commit("HEAD".into()));
         assert_eq!(parsed(&["worktree"]), t("HEAD", "worktree", Direct));
         assert_eq!(parsed(&["main...worktree"]), t("main", "worktree", MergeBase));
     }

@@ -3,12 +3,11 @@ use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
 
-use super::{Active, Pending, ResolvedReview, Session, range_of};
+use super::{Active, Pending, Session};
 use crate::error::{Error, Result};
 use crate::iterations::IterationStore;
-use crate::mode::resolve::{range_diff_review, resolve_comparison};
-use crate::mode::revspec::ParsedRange;
-use crate::protocol::{Moved, ServerMessage, Snapshot, shown_iterations};
+use crate::mode::resolve::resolve_range;
+use crate::protocol::{Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations, with_view};
 
 impl Session {
     /// Change context lines for the running session; clients refetch patches.
@@ -68,7 +67,7 @@ impl Session {
         self.run(async move {
             let a = this.active()?;
             // Two iterations are pinned; the moved refs belong to their range, where the reviewer continues.
-            if a.mode.within.is_some() && shown_iterations(&a.mode).is_some() {
+            if shown_iterations(&a.review).is_some() {
                 return this.leave_interdiff(&a).await;
             }
             this.recompute().await
@@ -81,9 +80,9 @@ impl Session {
         let this = self.clone();
         self.run(async move {
             let a = this.active()?;
-            IterationStore::new(this.repo.clone(), range_of(&a.mode).comment_key).clear().await?;
+            this.iterations(&a)?.clear().await?;
             // An interdiff or pair of two iterations names iterations that no longer exist.
-            if shown_iterations(&a.mode).is_some() { this.leave_interdiff(&a).await } else { this.recompute().await }
+            if shown_iterations(&a.review).is_some() { this.leave_interdiff(&a).await } else { this.recompute().await }
         })
         .await
     }
@@ -94,7 +93,7 @@ impl Session {
         let this = self.clone();
         self.run(async move {
             let a = this.active()?;
-            let store = IterationStore::new(this.repo.clone(), range_of(&a.mode).comment_key);
+            let store = this.iterations(&a)?;
             let list = store.list().await?;
             if !list.iter().any(|it| it.n == n) {
                 return Err(Error::revspec(format!("no iteration #{n}")));
@@ -104,7 +103,7 @@ impl Session {
             }
             store.remove(n).await?;
             // An interdiff or pair that names the forgotten iteration has nothing to compare any more.
-            match shown_iterations(&a.mode) {
+            match shown_iterations(&a.review) {
                 Some((from, to)) if from == n || to == n => this.leave_interdiff(&a).await,
                 _ => this.recompute().await,
             }
@@ -112,29 +111,34 @@ impl Session {
         .await
     }
 
-    async fn leave_interdiff(self: &Arc<Self>, a: &Active) -> Result<Arc<Snapshot>> {
-        let range = a.mode.within.clone().expect("an interdiff lies within a range");
-        self.enter(ResolvedReview { mode: crate::mode::resolve::plain(range), pr_url: a.pr_url.clone() }).await
+    /// The active range's recorded iterations; a lone commit has none.
+    fn iterations(&self, a: &Active) -> Result<IterationStore> {
+        match &a.range_key {
+            Some(key) => Ok(IterationStore::new(self.repo.clone(), key.clone())),
+            None => Err(Error::revspec("a single commit has no iterations")),
+        }
     }
 
-    /// Activates a review in place of the current one, as a switch does, and tells clients.
-    async fn enter(self: &Arc<Self>, review: ResolvedReview) -> Result<Arc<Snapshot>> {
-        let snap = self.activate(review).await?;
+    /// Back to the whole range, in place of the interdiff, and tells clients.
+    async fn leave_interdiff(self: &Arc<Self>, a: &Active) -> Result<Arc<Snapshot>> {
+        let range = with_view(&a.review, RangeView::Whole).expect("an interdiff lies within a range");
+        let snap = self.activate(range).await?;
         self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
         Ok(snap)
     }
 
-    /// Recomputes the active snapshot. A range-diff of two named ranges resolves them again
-    /// instead, since its sides are pinned trees: that is how it follows the refs it was named by.
-    /// From one of its pairs too, back to the whole range-diff: the pair may no longer exist.
+    /// Recomputes the active snapshot; every revision resolves again, so a range-diff of two
+    /// named ranges follows the refs it was named by. From one of its pairs, back to the whole
+    /// range-diff: the pair may no longer exist.
     async fn recompute(self: &Arc<Self>) -> Result<Arc<Snapshot>> {
         let a = self.active()?;
-        if let Some(inter) = a.mode.interdiff.as_ref().filter(|_| shown_iterations(&a.mode).is_none()) {
-            let range =
-                |side: &crate::protocol::RangeSide| ParsedRange { old: side.old.clone(), new: side.new.clone() };
-            let mode =
-                range_diff_review(&self.repo, (range(&inter.from), range(&inter.to)), &self.github.instance).await?;
-            return self.enter(ResolvedReview { mode, pr_url: a.pr_url.clone() }).await;
+        if let Review::Range { view: RangeView::Interdiff { from, to, pair: Some(_) }, .. } = &a.review
+            && shown_iterations(&a.review).is_none()
+        {
+            let view = RangeView::Interdiff { from: from.clone(), to: to.clone(), pair: None };
+            let snap = self.activate(with_view(&a.review, view).expect("a range")).await?;
+            self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
+            return Ok(snap);
         }
         a.snapshotter.invalidate(self.next_version());
         self.publish(&a).await
@@ -162,8 +166,8 @@ impl Session {
                 return Ok(());
             }
             let snap = a.snapshotter.current().await?;
-            let range = range_of(&a.mode);
-            let ends = resolve_comparison(&this.repo, &range.old, &range.new, range.base, false).await?;
+            let Review::Range { old, new, base, .. } = &a.review else { return Ok(()) };
+            let ends = resolve_range(&this.repo, old, new, *base).await?;
             let moved = (ends.old_sha != snap.commits.old_sha || ends.new_sha != snap.commits.new_sha).then(|| Moved {
                 version: snap.version,
                 old_sha: ends.old_sha,

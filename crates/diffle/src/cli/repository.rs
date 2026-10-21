@@ -8,7 +8,7 @@ use crate::github::client::{HttpClient, no_token, resolve_token};
 use crate::github::hosts::{Github, choose_instance};
 use crate::github::pulls::view_pr;
 use crate::mode::resolve::remote_slug;
-use crate::protocol::ModeRequest;
+use crate::protocol::EnterRequest;
 
 pub struct Opened {
     pub repo: Arc<GitRepo>,
@@ -28,12 +28,12 @@ fn is_url(selector: &str) -> bool {
 /// the caller's object database; `req` then names the pull request by url, so a numberless or
 /// branch selector stays tied to it.
 pub async fn open_review_repository(
-    req: &mut ModeRequest,
+    req: &mut EnterRequest,
     cwd: &Path,
     github_hosts: &std::collections::HashMap<String, String>,
 ) -> Result<Opened> {
     let selector = match &*req {
-        ModeRequest::Pr { pr } => pr.clone(),
+        EnterRequest::Pr { pr } => pr.clone(),
         _ => None,
     };
     open_review_repository_with(req, cwd, async |local| connect_github(github_hosts, local, selector.as_deref()).await)
@@ -43,12 +43,12 @@ pub async fn open_review_repository(
 /// `open_review_repository`, finding the run's GitHub through `connect` from the local repository,
 /// when there is one. Test seam.
 pub async fn open_review_repository_with(
-    req: &mut ModeRequest,
+    req: &mut EnterRequest,
     cwd: &Path,
     connect: impl AsyncFnOnce(Option<&GitRepo>) -> Result<(Github, Option<String>)>,
 ) -> Result<Opened> {
     let selector = match &*req {
-        ModeRequest::Pr { pr } => pr.clone(),
+        EnterRequest::Pr { pr } => pr.clone(),
         _ => None,
     };
     let local = match GitRepo::open(cwd).await {
@@ -64,7 +64,7 @@ pub async fn open_review_repository_with(
         token_source: token_source.clone(),
         clone,
     };
-    let ModeRequest::Pr { pr } = req else {
+    let EnterRequest::Pr { pr } = req else {
         return Ok(opened(local.expect("a repository outside pr mode"), github, None));
     };
     let Some(client) = github.client.clone() else {

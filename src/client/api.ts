@@ -4,7 +4,8 @@ import {
   GithubExportRequestSchema,
   LspPositionSchema,
   MessagePatchSchema,
-  ModeRequestSchema,
+  EnterRequestSchema,
+  RangeViewSchema,
   PatchRequestSchema,
   ReplyCreateSchema,
   ResolvedRequestSchema,
@@ -33,7 +34,8 @@ import {
 import type {
   GithubExportRequest,
   LspPosition,
-  ModeRequest,
+  EnterRequest,
+  RangeView,
   ReplyCreate,
   SearchScope,
   SearchContent,
@@ -98,8 +100,11 @@ export const api = {
   clearIterations: () => json(SnapshotSchema, 'api/iterations', { method: 'DELETE' }),
   /** Forget one recorded iteration; the latest cannot go. */
   deleteIteration: (n: number) => json(SnapshotSchema, `api/iterations/${n}`, { method: 'DELETE' }),
-  switchMode: (req: ModeRequest) =>
-    json(SnapshotSchema, 'api/mode', { method: 'POST', body: encode(ModeRequestSchema, req) }),
+  /** Enter another review, as the CLI does. */
+  enter: (req: EnterRequest) =>
+    json(SnapshotSchema, 'api/review', { method: 'POST', body: encode(EnterRequestSchema, req) }),
+  /** Show a slice of the active range. */
+  show: (view: RangeView) => json(SnapshotSchema, 'api/view', { method: 'PUT', body: encode(RangeViewSchema, view) }),
   refs: () => json(RefsResponseSchema, 'api/refs'),
   lastCommitsPreview: (oldOffset: number, newOffset: number, signal?: AbortSignal) =>
     json(

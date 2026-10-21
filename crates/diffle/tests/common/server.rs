@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use diffle::github::hosts::Github;
 use diffle::lsp::pool::{LspPool, PoolOptions};
-use diffle::protocol::{FollowRefs, LanguageId, ModeRequest, Side};
+use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
 use diffle::server::hub::Hub;
 use diffle::server::{ApiDeps, Server, ServerOptions};
 use diffle::session::{Session, SessionOptions};
@@ -83,11 +83,11 @@ impl TestServer {
         let repo = TestRepo::new();
         repo.write("a.txt", "a\n");
         repo.commit("base");
-        Self::over(repo, ModeRequest::Working).await
+        Self::over(repo, EnterRequest::Working).await
     }
 
     /// A server over `repo`, reviewing `req`.
-    pub async fn over(repo: TestRepo, req: ModeRequest) -> Self {
+    pub async fn over(repo: TestRepo, req: EnterRequest) -> Self {
         Self::with_lsp(repo, req, None).await
     }
 
@@ -95,7 +95,7 @@ impl TestServer {
     /// and kept in step with the session's snapshots as a run does it.
     pub async fn with_lsp(
         repo: TestRepo,
-        req: ModeRequest,
+        req: EnterRequest,
         overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
     ) -> Self {
         let git = Arc::new(repo.open().await);

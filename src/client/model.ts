@@ -2,13 +2,15 @@ import type { CodeViewLineSelection } from '@pierre/diffs';
 import picomatch from 'picomatch/posix';
 import {
   refName,
+  rangeOf,
   shownIterations,
   type ChangedFile,
   type CommentAnchor,
   type Iteration,
   type CommentThread,
   type LspSymbol,
-  type ModeRequest,
+  type EnterRequest,
+  type Review,
   type Moved,
   type Side,
   type Snapshot,
@@ -269,7 +271,7 @@ export function composerKey(
   target: ComposerTarget,
 ): string | null {
   if (!state.snapshot) return null;
-  const review = state.snapshot.mode.commentKey;
+  const review = state.snapshot.commentKey ?? '';
   if (target.kind === 'reply') return `${review}\0reply\0${target.threadId}`;
   if (target.kind === 'edit') return `${review}\0edit\0${target.messageId}`;
   if (!state.draft) return null;
@@ -347,7 +349,7 @@ export function filterSymbols(all: LspSymbol[], query: string): LspSymbol[] {
 export const MODE_PANES = [null, 'refs', 'commits', 'pr', 'commit', 'range-diff'] as const;
 export type ModePane = NonNullable<(typeof MODE_PANES)[number]>;
 
-export function lastCommitsRequest(n: number, m: number): ModeRequest {
+export function lastCommitsRequest(n: number, m: number): EnterRequest {
   return { kind: 'revspec', args: [`HEAD~${n}..HEAD~${m}`] };
 }
 
@@ -361,7 +363,8 @@ export function exportLabel(outcome: ExportOutcome): string {
 
 /** Which end of the live comparison moved since `snapshot`, and where to: `feat 8f2c1ab → 4d9e0f2`. */
 export function movedLabel(snapshot: Snapshot, moved: Moved): string {
-  const live = snapshot.mode.within ?? snapshot.mode;
+  const live = rangeOf(snapshot.review);
+  if (!live) return '';
   const { oldSha, newSha } = snapshot.commits;
   const step = (name: string, from: string, to: string) => `${name} ${from.slice(0, 7)} → ${to.slice(0, 7)}`;
   const ends: string[] = [];
@@ -389,9 +392,9 @@ export function relativeTime(at: number, now = Date.now()): string {
  * Why comments are off in this comparison, or null. An interdiff's old side is a replayed tree
  * and its threads would live under a key the range never shows again.
  */
-export function commentsOff(mode: Pick<Snapshot['mode'], 'interdiff'>): string | null {
-  if (!mode.interdiff) return null;
-  return shownIterations(mode)
+export function commentsOff(review: Review): string | null {
+  if (review.kind !== 'range' || review.view.kind !== 'interdiff') return null;
+  return shownIterations(review)
     ? 'Comments are off while comparing iterations: leave them on the range itself'
     : 'Comments are off in a range-diff: leave them on either range itself';
 }
@@ -479,9 +482,9 @@ export function commitBody(message: string): string[] {
 }
 
 /** Whether the range lists its uncommitted changes as a stop of their own: it ends at the worktree, past a commit. */
-export function listsWorktree(snapshot: Pick<Snapshot, 'mode' | 'commits'>): boolean {
-  const { mode, commits } = snapshot;
-  return !mode.interdiff && (mode.within ?? mode).new === 'worktree' && commits.total > 0;
+export function listsWorktree(snapshot: Pick<Snapshot, 'review' | 'commits'>): boolean {
+  const { review, commits } = snapshot;
+  return review.kind === 'range' && review.view.kind !== 'interdiff' && review.new === 'worktree' && commits.total > 0;
 }
 
 /**
@@ -489,14 +492,26 @@ export function listsWorktree(snapshot: Pick<Snapshot, 'mode' | 'commits'>): boo
  * newest commit, then the range itself: a commit's hash, `worktree`, null for the range, or undefined past
  * either end and outside a range. A focused commit no longer listed steps newer to the range.
  */
-export function rangeStep(snapshot: Pick<Snapshot, 'mode' | 'commits'>, direction: -1 | 1): string | null | undefined {
-  const { mode, commits } = snapshot;
-  if (!mode.within && mode.base === 'parent') return undefined;
+export function rangeStep(
+  snapshot: Pick<Snapshot, 'review' | 'commits' | 'interdiff'>,
+  direction: -1 | 1,
+): string | null | undefined {
+  const { review, commits, interdiff } = snapshot;
+  if (review.kind !== 'range') return undefined;
+  const { view } = review;
   // Within an interdiff the stops are its pairs with something to show, then the interdiff itself.
-  const order = mode.interdiff
-    ? [...mode.interdiff.pairs.filter((p) => p.new && p.status !== 'identical').map((p) => p.new!.sha), null]
-    : [...commits.list.map((c) => c.sha), ...(listsWorktree(snapshot) ? ['worktree'] : []), null];
-  const shown = mode.interdiff ? (mode.pair?.new ?? null) : mode.within ? mode.new : null;
+  const order =
+    view.kind === 'interdiff'
+      ? [...(interdiff?.pairs ?? []).filter((p) => p.new && p.status !== 'identical').map((p) => p.new!.sha), null]
+      : [...commits.list.map((c) => c.sha), ...(listsWorktree(snapshot) ? ['worktree'] : []), null];
+  const shown =
+    view.kind === 'interdiff'
+      ? (view.pair ?? null)
+      : view.kind === 'commit'
+        ? view.sha
+        : view.kind === 'uncommitted'
+          ? 'worktree'
+          : null;
   const at = order.indexOf(shown);
   if (at < 0) return direction > 0 ? null : undefined;
   return order[at + direction];

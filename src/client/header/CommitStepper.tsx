@@ -8,7 +8,7 @@ import { Button } from '@/client/ui/Button.js';
  */
 export function CommitStepper() {
   const commit = useStore((s) => s.snapshot?.commit);
-  const focused = useStore((s) => s.snapshot?.mode.within != null);
+  const focused = useStore((s) => s.snapshot?.review.kind === 'range');
   const step = useStore((s) => s.stepCommit);
   // A commit focused within a range steps through the range, in the commits panel.
   if (!commit || focused) return null;

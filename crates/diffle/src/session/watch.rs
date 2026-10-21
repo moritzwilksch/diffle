@@ -17,7 +17,7 @@ impl Session {
     pub(super) async fn start_watcher(self: &Arc<Self>, a: &Arc<Active>) -> Result<Watcher> {
         let repo = &self.repo;
         let (session, active) = (Arc::downgrade(self), Arc::downgrade(a));
-        if a.mode.live != Live::Worktree {
+        if a.follows != Live::Worktree {
             let target = WatchTarget::Refs { git_dir: repo.git_dir.clone(), common_dir: repo.common_dir.clone() };
             return Ok(Watcher::start(target, DEBOUNCE, move || on_dirty(&session, &active, None)).await?);
         }

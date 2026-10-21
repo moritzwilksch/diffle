@@ -1,17 +1,17 @@
-//! A GitHub pull request as a comparison, fetched into refs this run owns.
-use super::resolve::{ResolvedReview, range_key, remote_slug, resolve_comparison};
+//! A GitHub pull request as a range, fetched into refs this run owns.
+use super::resolve::{remote_slug, resolve_range};
 use crate::error::{Error, GithubError, Result};
 use crate::git::GitRepo;
 use crate::github::client::no_token;
 use crate::github::hosts::Github;
 use crate::github::pulls::{PullRequest, view_pr};
-use crate::protocol::{ComparisonBase, Live, ModeSpec};
+use crate::protocol::{ComparisonBase, PullRef, RangeView, Review};
 
 /// A pull request, as GitHub shows it: merge-base(base tip, head) vs head. GitHub names it, then
 /// one fetch brings the base tip and the head into session-owned refs named after the branches, so
 /// a pull request nobody has checked out is reviewable. The refs stay fixed until another fetch;
-/// comments use the same branch identities as ordinary comparisons, so they survive pushes.
-pub async fn resolve_pr(selector: Option<&str>, repo: &GitRepo, github: &Github) -> Result<ResolvedReview> {
+/// the range carries the pull request's identity, which keys its comments like the branches would.
+pub async fn resolve_pr(selector: Option<&str>, repo: &GitRepo, github: &Github) -> Result<Review> {
     let Some(client) = &github.client else {
         return Err(GithubError::conflict(no_token(&github.instance.host)).into());
     };
@@ -21,24 +21,19 @@ pub async fn resolve_pr(selector: Option<&str>, repo: &GitRepo, github: &Github)
     let refspecs =
         [format!("+refs/pull/{}/head:{head}", pr.number), format!("+refs/heads/{}:{base}", pr.base_ref_name)];
     repo.fetch(&fetch_source(repo, &pr).await?, &refspecs).await?;
-    resolve_comparison(repo, &base, &head, ComparisonBase::MergeBase, false).await?;
-    let head_identity = pr.head_repository.as_ref().map_or_else(|| format!("deleted:{}", pr.url), |h| h.to_lowercase());
-    let comment_key = range_key(
-        &format!("{}:{}", pr.repository.to_lowercase(), pr.base_ref_name),
-        &format!("{head_identity}:{}", pr.head_ref_name),
-        true,
-    );
-    let mode = ModeSpec {
+    resolve_range(repo, &base, &head, ComparisonBase::MergeBase).await?;
+    Ok(Review::Range {
         old: base,
         new: head,
         base: ComparisonBase::MergeBase,
-        live: Live::None,
-        comment_key,
-        within: None,
-        interdiff: None,
-        pair: None,
-    };
-    Ok(ResolvedReview { mode, pr_url: Some(pr.url) })
+        pr: Some(PullRef {
+            url: pr.url,
+            number: pr.number,
+            repository: pr.repository,
+            head_repository: pr.head_repository,
+        }),
+        view: RangeView::Whole,
+    })
 }
 
 /// `refs/pull/*` lives on the base repository, so the fetch goes to the remote that points at it.

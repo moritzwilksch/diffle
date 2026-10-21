@@ -7,9 +7,9 @@ Diffle is a local Git review app: a Rust server (`crates/diffle`, axum on tokio)
 - `src/shared/protocol.ts`: the only client/server contract. Define cross-boundary fields here first.
 - `crates/diffle/protocol.generated.json` and `build.rs`: the Rust side of the contract, generated. `test/scripts/protocol-schema.test.ts` exports `protocol.ts` to the JSON file (`npx vitest run test/scripts/protocol-schema.test.ts -u` after a protocol change) and `build.rs` turns it into Rust with typify (`crate::protocol`). Numbers on the wire are `.int()` unless they truly are fractional. An optional array becomes a defaulted `Vec`, so a route that must tell absent from empty reads its own request struct. The crate's version comes from `package.json`.
 - `crates/diffle/src/git/`: all Git execution (`exec.rs` is the one module that spawns git; `catfile.rs` the shared `cat-file --batch`). Use explicit argv and preserve stable, NUL-delimited parser inputs where applicable.
-- `crates/diffle/src/session/`: active mode, snapshots, comments, watcher, and serialized transitions: `mod.rs` the queue, `transitions.rs` focus/interdiff/pair, `refresh.rs` reloads and iterations, `files.rs` the allowlisted reads, `github.rs` discovery and export.
+- `crates/diffle/src/session/`: the active review, snapshots, comments, watcher, and serialized transitions: `mod.rs` the queue, `transitions.rs` entering a review and showing a slice of its range, `refresh.rs` reloads and iterations, `files.rs` the allowlisted reads, `github.rs` discovery and export.
 - `crates/diffle/src/snapshotter.rs`: derives trees, changed files, and patches for one mode; `generated.rs` flags generated files.
-- `crates/diffle/src/mode/`: parses revspecs and resolves a comparison, pull request (`pr.rs`), or range-diff to Git endpoints.
+- `crates/diffle/src/mode/`: `revspec.rs` parses revision arguments, `resolve.rs` turns a request into a `Review` and a range into endpoints, `pr.rs` fetches a pull request into session refs, `view.rs` resolves the slice a review shows (a commit, the uncommitted changes, an interdiff or one of its pairs; `rangediff.rs` replays and pairs), `keys.rs` derives where its comments live.
 - `crates/diffle/src/server/`: HTTP and the `/ws` hub; `routes/` holds the route groups, `guard.rs` the Host/Origin check, `assets.rs` the embedded client.
 - `crates/diffle/src/comments/`: persistence, relocation, import, and prompt formatting.
 - `crates/diffle/src/github/`: `client.rs` resolves the token and owns the one HTTP client (reqwest; `gh` is spawned for `gh auth token` alone); `pulls.rs` names pull requests; `review.rs` builds and exports pending reviews through `pending_review.rs`, its GraphQL calls; `metadata.rs` discovers a comparison's pull request.
@@ -26,7 +26,7 @@ Diffle is a local Git review app: a Rust server (`crates/diffle`, axum on tokio)
 
 - `Session` alone advances `Snapshot.version`; mode switches, refreshes, and context changes stay serialized.
 - `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session::read_side`; it also maps a rename's old path. The one exception is `Locator::read_external`: `/api/file` serves a file outside the snapshot on the new side only after a language-server result named it.
-- Persist review state under `<git-dir>/diffle/`, keyed by `ModeSpec.commentKey`; keep the worktree untouched.
+- A `Review` names what is reviewed, nothing resolved; the `Snapshot` carries the hashes, `follows` and `commentKey`. Persist review state under `<git-dir>/diffle/`, keyed by `Snapshot.commentKey`; keep the worktree untouched.
 - PR fetches use session-owned `refs/diffle/` refs. `GitRepo::fetch` must reject destinations outside them.
 - Treat rendered `FileDiffMetadata` as immutable. Hydrate with `hydratePartialDiff('clone', ...)`, replace the store entry, and change its generation-backed item id.
 - Every async boot, refresh, or mode-switch result commits only while its generation is current.

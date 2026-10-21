@@ -21,10 +21,10 @@ export function IterationList({ snapshot }: { snapshot: Snapshot }) {
   const clearIterations = useStore((s) => s.clearIterations);
   const forget = useConfirm(() => void clearIterations());
   const [open, setOpen] = useState(true);
-  const { iterations, mode } = snapshot;
+  const { iterations, review } = snapshot;
   const latest = iterations.at(-1);
   if (!latest || iterations.length < 2) return null;
-  const shown = shownIterations(mode);
+  const shown = shownIterations(review);
   const pick = (n: number, shift: boolean) => {
     const next = iterationPick(shown, latest.n, n, shift);
     if (next) compareIterations(next.from, next.to);

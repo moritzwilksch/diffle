@@ -16,7 +16,7 @@ use crate::git::GitRepo;
 use crate::github::client::token_variables;
 use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
-use crate::protocol::{Live, ModeRequest, Snapshot, ThreadQuery, ThreadState, comparison_label};
+use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Server, ServerOptions};
 use crate::session::{Session, SessionOptions};
@@ -27,7 +27,7 @@ const CLOSE_BOUND: Duration = Duration::from_millis(1500);
 
 /// Serves `req` until a signal or the last auto-opened tab ends the run. Fails, before anything
 /// is served, when the request does not resolve.
-pub async fn run(req: ModeRequest, opts: GlobalOpts) -> anyhow::Result<()> {
+pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
     let mut timing = Timing::new(opts.timing);
     let config = Arc::new(UserConfigStore::open(UserConfigStore::default_path()).await);
     let dir = match &opts.dir {
@@ -107,7 +107,7 @@ pub async fn run(req: ModeRequest, opts: GlobalOpts) -> anyhow::Result<()> {
 
 #[allow(clippy::too_many_arguments)]
 async fn start(
-    req: ModeRequest,
+    req: EnterRequest,
     opts: &GlobalOpts,
     session: &Arc<Session>,
     config: &Arc<UserConfigStore>,
@@ -170,15 +170,15 @@ fn report(snap: &Snapshot, follows: bool, watch: bool) {
     let n = snap.changed.len();
     let adds: i64 = snap.changed.iter().map(|f| f.additions).sum();
     let dels: i64 = snap.changed.iter().map(|f| f.deletions).sum();
-    crate::status!("🔍 {} {}", dim("comparing"), bold(&comparison_label(&snap.mode)));
+    crate::status!("🔍 {} {}", dim("comparing"), bold(&comparison_label(&snap.review)));
     if n == 0 {
         crate::status!("{} No differences. Open any file from the tree to comment on it.", yellow("!"));
     } else {
         let files = if n == 1 { "file" } else { "files" };
         crate::status!("📝 {n} changed {files}  {} {}", green(&format!("+{adds}")), red(&format!("−{dels}")));
     }
-    if snap.mode.live != Live::None {
-        let what = match (snap.mode.live, follows) {
+    if snap.follows != Live::None {
+        let what = match (snap.follows, follows) {
             (Live::Worktree, _) => "watching the worktree",
             (_, true) => "watching refs",
             _ => "watching refs; moved refs show a Reload button",

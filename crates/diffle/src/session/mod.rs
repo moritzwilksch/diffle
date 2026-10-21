@@ -1,4 +1,4 @@
-//! The active mode and everything derived from it, behind one serialized transition queue.
+//! The active review and everything derived from it, behind one serialized transition queue.
 mod files;
 mod github;
 mod refresh;
@@ -17,33 +17,16 @@ use crate::comments::CommentStore;
 use crate::error::{Error, Result};
 use crate::git::GitRepo;
 use crate::github::hosts::Github;
-use crate::iterations::IterationStore;
-use crate::mode::resolve::{names_branch, resolve_review};
-use crate::protocol::{
-    Comparison, ComparisonBase, FollowRefs, Live, ModeRequest, ModeSpec, Moved, ServerMessage, Snapshot,
-};
+use crate::protocol::{FollowRefs, Live, Moved, Review, ServerMessage, Snapshot, shown_iterations};
 use crate::snapshotter::Snapshotter;
 use crate::watcher::Watcher;
 
 pub use files::{ReadablePaths, side_path};
 
-/// The range a mode belongs to: its `within`, or the mode itself.
-fn range_of(mode: &ModeSpec) -> Comparison {
-    mode.within.clone().unwrap_or_else(|| Comparison {
-        old: mode.old.clone(),
-        new: mode.new.clone(),
-        base: mode.base,
-        live: mode.live,
-        comment_key: mode.comment_key.clone(),
-    })
-}
-
 /// Where clients hear about state changes: the WebSocket hub, or a recorder in tests.
 pub trait Broadcaster: Send + Sync {
     fn broadcast(&self, msg: ServerMessage);
 }
-
-pub use crate::mode::resolve::ResolvedReview;
 
 pub struct SessionOptions {
     pub watch: bool,
@@ -57,12 +40,16 @@ pub struct SessionOptions {
 }
 
 struct Active {
-    mode: ModeSpec,
-    pr_url: Option<String>,
+    review: Review,
+    /// Where the range's comments and iterations live, whatever slice is shown; a lone commit has none.
+    range_key: Option<String>,
+    /// What the first snapshot followed; a slice keeps following its range.
+    follows: Live,
     snapshotter: Arc<Snapshotter>,
-    comments: Arc<CommentStore>,
+    /// Absent while comments are off: an interdiff has no key of its own.
+    comments: Option<Arc<CommentStore>>,
     watcher: tokio::sync::Mutex<Option<Watcher>>,
-    /// Where a refs-live comparison's refs point now, when that differs from the snapshot; cleared by a reload.
+    /// Where a refs-live range's refs point now, when that differs from the snapshot; cleared by a reload.
     moved: Mutex<Option<Moved>>,
     /// Whether an endpoint of the followed range names a branch; decides what `auto` does with a move.
     branches: bool,
@@ -74,13 +61,31 @@ type Discovery =
 type Listener = Box<dyn Fn(&Arc<Snapshot>) + Send + Sync>;
 type Pending = Shared<BoxFuture<'static, ()>>;
 
-/// Owns the current mode and everything derived from it. Every mutation of the active state (mode
-/// transition, refresh, context change) runs through one queue, one at a time, in request order,
-/// on its own task, so a caller that goes away never leaves a transition half done. Snapshot
-/// versions are allocated only inside the queue, so published versions are monotonic. Requests
-/// that arrive before the first mode resolves wait on `ready`.
+/// Why comments are off in `review`: an interdiff's old side is a replayed tree, and its threads
+/// would live under a key the range never shows again.
+fn comments_off(review: &Review) -> Error {
+    Error::revspec(if shown_iterations(review).is_some() {
+        "comments are off while comparing iterations"
+    } else {
+        "comments are off in a range-diff"
+    })
+}
+
+/// The pull request a review was entered as, if any.
+pub fn pr_url(review: &Review) -> Option<String> {
+    match review {
+        Review::Range { pr: Some(pr), .. } => Some(pr.url.clone()),
+        _ => None,
+    }
+}
+
+/// Owns the current review and everything derived from it. Every mutation of the active state
+/// (entering a review, showing a slice, a refresh, a context change) runs through one queue, one
+/// at a time, in request order, on its own task, so a caller that goes away never leaves a
+/// transition half done. Snapshot versions are allocated only inside the queue, so published
+/// versions are monotonic. Requests that arrive before the first review resolves wait on `ready`.
 ///
-/// A worktree-live comparison recomputes on every change. A refs-live one only announces that its
+/// A worktree-live review recomputes on every change. A refs-live one only announces that its
 /// refs moved (`moved`) and recomputes on `reload`, so a push or rebase does not swap the review
 /// out from under the reviewer, unless `follows` says otherwise.
 pub struct Session {
@@ -155,7 +160,7 @@ impl Session {
         }
     }
 
-    /// Resolves once the first mode is active; fails with its error if it could not start.
+    /// Resolves once the first review is active; fails with its error if it could not start.
     pub async fn ready(&self) -> Result<()> {
         let mut rx = self.ready.subscribe();
         let state = rx.wait_for(Option::is_some).await.map_err(|_| Error::from(anyhow::anyhow!("session closed")))?;
@@ -170,24 +175,26 @@ impl Session {
         self.active.lock().unwrap().as_ref().is_some_and(|current| Arc::ptr_eq(current, a))
     }
 
-    pub fn mode(&self) -> Result<ModeSpec> {
-        Ok(self.active()?.mode.clone())
+    pub fn review(&self) -> Result<Review> {
+        Ok(self.active()?.review.clone())
     }
 
     pub fn snapshotter(&self) -> Result<Arc<Snapshotter>> {
         Ok(self.active()?.snapshotter.clone())
     }
 
+    /// The active review's comments, or why there are none.
     pub fn comments(&self) -> Result<Arc<CommentStore>> {
-        Ok(self.active()?.comments.clone())
+        let a = self.active()?;
+        a.comments.clone().ok_or_else(|| comments_off(&a.review))
     }
 
     /// The pull request the active review was entered as, if any.
     pub fn pr_url(&self) -> Result<Option<String>> {
-        Ok(self.active()?.pr_url.clone())
+        Ok(pr_url(&self.active()?.review))
     }
 
-    /// The pending reload of a refs-live comparison, for a client that connects after the push.
+    /// The pending reload of a refs-live range, for a client that connects after the push.
     pub fn moved(&self) -> Result<Option<Moved>> {
         Ok(self.active()?.moved.lock().unwrap().clone())
     }
@@ -203,7 +210,7 @@ impl Session {
     /// Whether moved refs recompute the review, as worktree edits always do, or only announce themselves.
     pub fn follows(&self) -> Result<bool> {
         let a = self.active()?;
-        Ok(a.mode.live == Live::Worktree
+        Ok(a.follows == Live::Worktree
             || match *self.follow_refs.lock().unwrap() {
                 FollowRefs::On => true,
                 FollowRefs::Off => false,
@@ -216,7 +223,7 @@ impl Session {
         *self.follow_refs.lock().unwrap() = follow_refs;
     }
 
-    /// Runs after every snapshot the session produces: the first mode, a switch, a refresh, a context
+    /// Runs after every snapshot the session produces: the first review, a switch, a refresh, a context
     /// change. In-process consumers (the LSP bridge) use this; clients get the `snapshot` broadcast.
     pub fn on_snapshot(&self, listener: impl Fn(&Arc<Snapshot>) + Send + Sync + 'static) {
         self.listeners.lock().unwrap().push(Box::new(listener));
@@ -226,78 +233,6 @@ impl Session {
         for listener in self.listeners.lock().unwrap().iter() {
             listener(snap);
         }
-    }
-
-    /// Resolves a request into a review without activating it, so a caller can reject invalid input
-    /// before serving. Queued, so `close` waits for it.
-    pub fn resolve(self: &Arc<Self>, req: ModeRequest) -> impl Future<Output = Result<ResolvedReview>> + Send + use<> {
-        let this = self.clone();
-        self.run(async move { resolve_review(&req, &this.repo, &this.github).await })
-    }
-
-    /// First mode, from `resolve`. Fails `ready` too, so early requests error out.
-    pub async fn start(self: &Arc<Self>, review: ResolvedReview) -> Result<Arc<Snapshot>> {
-        let this = self.clone();
-        let result = self.run(async move { this.activate(review).await }).await;
-        self.ready.send_replace(Some(result.as_ref().map(|_| ()).map_err(Clone::clone)));
-        result
-    }
-
-    /// Switch modes at runtime. Broadcasts a snapshot bump on success.
-    pub async fn switch_mode(self: &Arc<Self>, req: ModeRequest) -> Result<Arc<Snapshot>> {
-        let this = self.clone();
-        let snap = self
-            .run(async move {
-                let review = match req {
-                    ModeRequest::Focus { commit } => this.focus(commit).await?,
-                    ModeRequest::Interdiff { from, to } => this.interdiff(from.get() as i64, to.get() as i64).await?,
-                    ModeRequest::Pair { commit } => this.pair(commit).await?,
-                    req => resolve_review(&req, &this.repo, &this.github).await?,
-                };
-                this.activate(review).await
-            })
-            .await?;
-        self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
-        Ok(snap)
-    }
-
-    async fn activate(self: &Arc<Self>, ResolvedReview { mode, pr_url }: ResolvedReview) -> Result<Arc<Snapshot>> {
-        // A range that can move again gets its iterations recorded: one between refs, or a PR's, fetched anew each run.
-        let range = range_of(&mode);
-        let followed = range.base != ComparisonBase::Parent && (range.live == Live::Refs || pr_url.is_some());
-        let version = self.next_version();
-        let iterations = followed.then(|| IterationStore::new(self.repo.clone(), range.comment_key.clone()));
-        let snapshotter = Snapshotter::new(self.repo.clone(), mode.clone(), version, self.context(), iterations);
-        let branches = async {
-            if range.live == Live::Refs { names_branch(&self.repo, &range.old, &range.new).await } else { Ok(false) }
-        };
-        let (comments, snap, branches) = tokio::try_join!(
-            CommentStore::open(&self.repo.git_dir, &mode.comment_key),
-            snapshotter.current(),
-            branches
-        )?;
-        let next = Arc::new(Active {
-            mode,
-            pr_url,
-            snapshotter,
-            comments: Arc::new(comments),
-            watcher: tokio::sync::Mutex::new(None),
-            moved: Mutex::new(None),
-            branches,
-        });
-        // The repository may have moved on while no server was watching it.
-        self.relocate_comments(&next, &snap).await?;
-        if self.watch && next.mode.live != Live::None {
-            *next.watcher.lock().await = Some(self.start_watcher(&next).await?);
-        }
-        let prev = self.active.lock().unwrap().replace(next);
-        if let Some(prev) = prev
-            && let Some(watcher) = prev.watcher.lock().await.take()
-        {
-            watcher.close().await;
-        }
-        self.announce(&snap);
-        Ok(snap)
     }
 
     /// Allocates the next snapshot version; only queued jobs call it.

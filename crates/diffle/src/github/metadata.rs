@@ -6,7 +6,7 @@ use super::hosts::{Github, github_repository};
 use super::pulls::{PullRequest, origin_repository, pull_requests_for_head, view_pr};
 use crate::error::{Error, Result};
 use crate::git::{GitRepo, WORKTREE};
-use crate::protocol::{GithubMetadata, GithubPullRequest, GithubPullRequestState, Snapshot};
+use crate::protocol::{GithubMetadata, GithubPullRequest, GithubPullRequestState, Review, Snapshot};
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -60,10 +60,11 @@ pub async fn discover_github(
 /// there is none.
 async fn matching_pr(repo: &GitRepo, snap: &Snapshot, github: &Github) -> Result<Result<PullRequest, String>> {
     let client = github.client.as_ref().expect("a client");
+    let Review::Range { old, new, .. } = &snap.review else {
+        return Ok(Err("A single commit belongs to no pull request".into()));
+    };
     let (old, new, remotes) =
-        tokio::try_join!(repo.upstream_branch(&snap.mode.old), repo.upstream_branch(&snap.mode.new), async {
-            Ok(repo.remotes().await?)
-        })?;
+        tokio::try_join!(repo.upstream_branch(old), repo.upstream_branch(new), async { Ok(repo.remotes().await?) })?;
     let (Some(old), Some(new)) = (old, new) else {
         return Ok(Err("No branch with an upstream available for both endpoints".into()));
     };

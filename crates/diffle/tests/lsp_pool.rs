@@ -41,7 +41,8 @@ fn diff_at(paths: &[&str], new_sha: &str, head_sha: &str) -> Snapshot {
         .collect();
     serde_json::from_value(json!({
         "root": "/r", "version": 1, "oldSha": "a", "newSha": new_sha, "headSha": head_sha, "context": 3,
-        "mode": { "old": "HEAD", "new": "worktree", "base": "direct", "live": "worktree", "commentKey": "working" },
+        "review": { "kind": "range", "old": "HEAD", "new": "worktree", "base": "direct", "view": { "kind": "whole" } },
+        "follows": "worktree", "commentKey": "working",
         "changed": changed, "tree": paths, "commit": null,
         "commits": { "list": [], "total": 0, "oldSha": "a", "newSha": new_sha }, "iterations": [],
     }))

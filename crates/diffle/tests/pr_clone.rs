@@ -12,7 +12,7 @@ use diffle::cli::repository::open_review_repository_with;
 use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
 use diffle::mode::resolve::resolve_review;
-use diffle::protocol::ModeRequest;
+use diffle::protocol::EnterRequest;
 use serde_json::json;
 
 fn set(name: &str, value: &Path) {
@@ -42,7 +42,7 @@ async fn clones_foreign_prs_into_temp_storage_and_removes_them_including_after_a
     let foreign = knows(Some(f.node(json!({ "url": "https://github.com/foreign/missing/pull/7" }))));
     let github =
         Github { instance: GithubInstance::github_com(), client: Some(Arc::new(foreign) as Arc<dyn GithubClient>) };
-    let mut req = ModeRequest::Pr { pr: Some("7".into()) };
+    let mut req = EnterRequest::Pr { pr: Some("7".into()) };
     let gh = github.clone();
     assert!(open_review_repository_with(&mut req, &f.local, async |_| Ok((gh, None))).await.is_err());
     assert_eq!(std::fs::read_dir(&scratch).unwrap().count(), 0);
@@ -61,7 +61,7 @@ async fn clones_foreign_prs_into_temp_storage_and_removes_them_including_after_a
     let outside = tempfile::tempdir().unwrap();
     for cwd in [f.local.clone(), outside.path().to_path_buf()] {
         let url = "https://github.com/foreign/repo/pull/7";
-        let mut req = ModeRequest::Pr { pr: Some(url.into()) };
+        let mut req = EnterRequest::Pr { pr: Some(url.into()) };
         let gh = github.clone();
         let opened = open_review_repository_with(&mut req, &cwd, async |_| Ok((gh, None))).await.unwrap();
         let clone_root = opened.repo.root.clone();
@@ -70,9 +70,10 @@ async fn clones_foreign_prs_into_temp_storage_and_removes_them_including_after_a
         assert!(clone_root.canonicalize().unwrap().starts_with(temp.join("")), "{}", clone_root.display());
         assert!(clone_root.file_name().unwrap().to_string_lossy().starts_with("diffle-pr-"));
         let review = resolve_review(&req, &opened.repo, &github).await.unwrap();
-        assert_eq!(opened.repo.resolve(&review.mode.new).await.unwrap(), f.head);
-        assert_eq!(opened.repo.resolve(&review.mode.old).await.unwrap(), f.merge_base);
-        assert_eq!(review.pr_url.as_deref(), Some(url));
+        let diffle::protocol::Review::Range { old, new, pr, .. } = &review else { panic!("a range") };
+        assert_eq!(opened.repo.resolve(new).await.unwrap(), f.head);
+        assert_eq!(opened.repo.resolve(old).await.unwrap(), f.merge_base);
+        assert_eq!(pr.as_ref().map(|p| p.url.as_str()), Some(url));
         assert_eq!(git_in(&f.local, &["show-ref"]), refs);
         assert_eq!(git_in(&f.local, &["count-objects", "-v"]), objects);
         drop(review);

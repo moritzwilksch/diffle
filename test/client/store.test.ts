@@ -72,7 +72,7 @@ const api = {
   lspReferences: vi.fn(),
   lspHover: vi.fn(),
   lspSymbols: vi.fn(),
-  switchMode: vi.fn(),
+  enter: vi.fn(),
   file: vi.fn(),
   patch: vi.fn(),
   patches: vi.fn(),
@@ -121,13 +121,9 @@ const file = (over: Partial<ChangedFile>): ChangedFile => ({
 function snap(version: number, key: string, tree: string[] = ['a.txt', 'b.txt']): Snapshot {
   return {
     root: '/r',
-    mode: {
-      old: 'HEAD',
-      new: 'worktree',
-      base: 'direct',
-      live: 'none',
-      commentKey: key,
-    },
+    review: { kind: 'range', old: 'HEAD', new: 'worktree', base: 'direct', view: { kind: 'commit', sha: key } },
+    follows: 'none',
+    commentKey: key,
     version,
     oldSha: 'x',
     newSha: 'worktree',
@@ -297,8 +293,8 @@ describe('client transitions', () => {
     expect(s.selection?.range.end).toBe(1);
     expect(s.jumps).toHaveLength(1);
 
-    api.switchMode.mockResolvedValueOnce(snap(3, 'pr:abc', ['c.txt']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(3, 'pr:abc', ['c.txt']));
+    await useStore.getState().enter({ kind: 'pr' });
     s = useStore.getState();
     expect(s.draft).toBeNull();
     expect(s.selection).toBeNull();
@@ -461,8 +457,8 @@ describe('client transitions', () => {
     const signal = api.file.mock.calls[0]![2] as AbortSignal;
     expect(signal.aborted).toBe(false);
 
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
+    await useStore.getState().enter({ kind: 'pr' });
     expect(signal.aborted).toBe(true);
     for (const d of pending) d.resolve({ contents: 'y\nrest\n', binary: false });
     await new Promise((r) => setTimeout(r, 0));
@@ -654,8 +650,8 @@ describe('client transitions', () => {
 
     // A mode switch drops the view along with the rest of the mode's state.
     await useStore.getState().openFullFile('a.txt');
-    api.switchMode.mockResolvedValueOnce(snap(4, 'pr:abc', ['c.txt']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(4, 'pr:abc', ['c.txt']));
+    await useStore.getState().enter({ kind: 'pr' });
     expect(useStore.getState().fileView).toBeNull();
   });
 
@@ -807,13 +803,13 @@ describe('client transitions', () => {
   it('a mode switch whose push lands before the POST response fetches once and resets the composer via the push', async () => {
     useStore.setState({ snapshot: snap(1, 'working'), replyTo: 't1', editingId: 't1' });
     const post = deferred<Snapshot>();
-    api.switchMode.mockReturnValueOnce(post.promise);
-    const switching = useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockReturnValueOnce(post.promise);
+    const switching = useStore.getState().enter({ kind: 'pr' });
     // The server broadcasts the new version before its response returns.
     api.snapshot.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
     await useStore.getState().refreshSnapshot(2);
     let s = useStore.getState();
-    expect(s.snapshot?.mode.commentKey).toBe('pr:abc');
+    expect(s.snapshot?.commentKey).toBe('pr:abc');
     expect(s.replyTo).toBeNull();
     expect(s.editingId).toBeNull();
 
@@ -862,8 +858,8 @@ describe('client transitions', () => {
   it("a mode switch resolved by its push leaves the push's in-flight fetch owning the version", async () => {
     useStore.setState({ snapshot: snap(1, 'working') });
     const post = deferred<Snapshot>();
-    api.switchMode.mockReturnValueOnce(post.promise);
-    const switching = useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockReturnValueOnce(post.promise);
+    const switching = useStore.getState().enter({ kind: 'pr' });
     const slow = deferred<Snapshot>();
     api.snapshot.mockReturnValueOnce(slow.promise);
     const pushed = useStore.getState().refreshSnapshot(2);
@@ -911,9 +907,9 @@ describe('client transitions', () => {
       from: { position: null, activePath: null },
     });
 
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
-    await useStore.getState().switchMode({ kind: 'pr' });
-    expect(useStore.getState().snapshot?.mode.commentKey).toBe('pr:abc');
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
+    await useStore.getState().enter({ kind: 'pr' });
+    expect(useStore.getState().snapshot?.commentKey).toBe('pr:abc');
     expect(useStore.getState().fileView).toBeNull();
 
     file.resolve({ path: 'a.txt', contents: 'stale', binary: false });
@@ -927,8 +923,8 @@ describe('client transitions', () => {
     const stale = deferred<CommentThread[]>();
     api.threads.mockReturnValueOnce(stale.promise);
     const refresh = useStore.getState().refreshThreads();
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
+    await useStore.getState().enter({ kind: 'pr' });
     stale.resolve([thread({ id: 'old-mode' })]);
     await refresh;
     expect(useStore.getState().threads).toEqual([]);
@@ -995,9 +991,9 @@ describe('client transitions', () => {
 
 describe('mode picker', () => {
   it('shortcut 1 compares HEAD to the worktree immediately', () => {
-    api.switchMode.mockResolvedValue(snap(2, 'working'));
+    api.enter.mockResolvedValue(snap(2, 'working'));
     useStore.getState().pickModeEntry(1);
-    expect(api.switchMode).toHaveBeenLastCalledWith({ kind: 'working' });
+    expect(api.enter).toHaveBeenLastCalledWith({ kind: 'working' });
     expect(useStore.getState().modeMenuOpen).toBe(false);
   });
 });
@@ -1222,8 +1218,8 @@ describe('symbol navigation', () => {
     blocksSymbol.mockReturnValue(slow.promise);
     const hover = useStore.getState().requestHover(target, { left: 0, top: 0, bottom: 0 });
     const menu = useStore.getState().openSymbolMenu(target, 1, 2);
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
+    await useStore.getState().enter({ kind: 'pr' });
     slow.resolve(false);
     await Promise.all([hover, menu]);
     expect(api.lspHover).not.toHaveBeenCalled();
@@ -1725,8 +1721,8 @@ describe('request ownership', () => {
     api.search.mockReturnValueOnce(slow.promise);
     const run = useStore.getState().searchWord(1);
     lspTarget.focus(null);
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
+    await useStore.getState().enter({ kind: 'pr' });
     slow.resolve(hit('b.py', 2));
     await run;
     await new Promise((r) => setTimeout(r, 0));
@@ -1744,8 +1740,8 @@ describe('request ownership', () => {
     }>();
     api.lspDefinition.mockReturnValueOnce(slow.promise);
     const go = useStore.getState().goToDefinition({ path: 'a.py', side: 'new', line: 3, col: 4, text: 'foo' });
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
+    await useStore.getState().enter({ kind: 'pr' });
     slow.resolve({ locations: [{ path: 'b.py', line: 2, col: 0, text: 'y = 2' }] });
     await go;
     await new Promise((r) => setTimeout(r, 0));
@@ -1760,8 +1756,8 @@ describe('request ownership', () => {
     const slow = deferred<{ locations: { path: string; line: number; col: number; text: string }[] }>();
     api.lspReferences.mockReturnValueOnce(slow.promise);
     const find = useStore.getState().findReferences({ path: 'a.py', side: 'new', line: 3, col: 4, text: 'foo' });
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['b.py']));
+    await useStore.getState().enter({ kind: 'pr' });
     slow.resolve({ locations: [{ path: 'b.py', line: 2, col: 0, text: 'foo' }] });
     await find;
     expect(useStore.getState().references.open).toBe(false);
@@ -1775,8 +1771,8 @@ describe('request ownership', () => {
     const mark = useStore.getState().setViewed('a.py', true);
     expect(useStore.getState().viewed).toEqual([{ path: 'a.py', blob: 'b1', viewed: true }]);
     api.viewed.mockResolvedValueOnce([{ path: 'c.py', blob: 'c1', viewed: true }]);
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.py']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.py']));
+    await useStore.getState().enter({ kind: 'pr' });
     slow.resolve([{ path: 'a.py', blob: 'b1', viewed: true }]);
     await mark;
     expect(useStore.getState().viewed).toEqual([{ path: 'c.py', blob: 'c1', viewed: true }]);
@@ -1808,8 +1804,8 @@ describe('request ownership', () => {
     const slow = deferred<ViewedEntry[]>();
     api.setViewed.mockReturnValueOnce(slow.promise);
     const mark = useStore.getState().setViewed('a.py', true);
-    api.switchMode.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.py']));
-    await useStore.getState().switchMode({ kind: 'pr' });
+    api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.py']));
+    await useStore.getState().enter({ kind: 'pr' });
     const viewedCalls = api.viewed.mock.calls.length;
     slow.reject(new Error('boom'));
     await mark;
@@ -2213,8 +2209,8 @@ describe('asynchronous GitHub metadata', () => {
     api.github.mockReturnValueOnce(old.promise);
     api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
     await useStore.getState().boot();
-    api.switchMode.mockResolvedValueOnce(snap(2, 'second'));
-    await useStore.getState().switchMode({ kind: 'revspec', args: ['main'] });
+    api.enter.mockResolvedValueOnce(snap(2, 'second'));
+    await useStore.getState().enter({ kind: 'revspec', args: ['main'] });
     await vi.waitFor(() => expect(useStore.getState().github.data?.version).toBe(2));
     old.resolve({
       version: 1,
@@ -2234,8 +2230,8 @@ it('recovers GitHub lookup for the existing comparison after a failed switch', a
   api.snapshot.mockResolvedValueOnce(snap(1, 'first'));
   await useStore.getState().boot();
   expect(useStore.getState().github.status).toBe('loading');
-  api.switchMode.mockRejectedValueOnce(new Error('unknown revision'));
-  await useStore.getState().switchMode({ kind: 'revspec', args: ['missing'] });
+  api.enter.mockRejectedValueOnce(new Error('unknown revision'));
+  await useStore.getState().enter({ kind: 'revspec', args: ['missing'] });
   await vi.waitFor(() => expect(useStore.getState().github.status).toBe('ready'));
   expect(useStore.getState().github.data?.version).toBe(1);
   pending.resolve({

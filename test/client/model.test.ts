@@ -6,6 +6,8 @@ import {
   type ChangedFile,
   type CommentThread,
   type GithubMetadata,
+  type RangeView,
+  type Review,
   type Snapshot,
 } from '@/shared/protocol.js';
 import {
@@ -267,31 +269,55 @@ describe('nextFileAfter', () => {
 });
 
 describe('documentTitle', () => {
-  const snapshot = (mode: Partial<Snapshot['mode']>, root = '/home/me/rattler/'): Snapshot =>
-    ({ root, mode }) as Snapshot;
+  const snapshot = (root = '/home/me/rattler/'): Snapshot => ({ root }) as Snapshot;
 
   it('names the root directory', () => {
-    expect(documentTitle(snapshot({}))).toBe('diffle: rattler');
+    expect(documentTitle(snapshot())).toBe('diffle: rattler');
   });
 
   it('names the pull request by its base repository and number, not the checkout directory', () => {
     const github = { pullRequest: { repository: 'conda/rattler', number: 12345 } } as GithubMetadata;
-    expect(documentTitle(snapshot({}, '/tmp/diffle-pr-lTXVEf'), github)).toBe('diffle: conda/rattler #12345');
+    expect(documentTitle(snapshot('/tmp/diffle-pr-lTXVEf'), github)).toBe('diffle: conda/rattler #12345');
   });
 });
 
 describe('comparisonLabel', () => {
+  const whole = { kind: 'whole' } as const;
+  const range = (old: string, next: string, base: 'direct' | 'merge-base', view: RangeView = whole): Review => ({
+    kind: 'range',
+    old,
+    new: next,
+    base,
+    view,
+  });
+  const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+
   it('shows branch paths from fetched PR refs without the session namespace', () => {
     expect(
-      comparisonLabel({
-        old: 'refs/diffle/session/42/base/main',
-        new: 'refs/diffle/session/42/head/feature/nested',
-        base: 'merge-base',
-      }),
+      comparisonLabel(
+        range('refs/diffle/session/42/base/main', 'refs/diffle/session/42/head/feature/nested', 'merge-base'),
+      ),
     ).toBe('main...feature/nested');
-    expect(comparisonLabel({ old: 'HEAD', new: 'worktree', base: 'direct' })).toBe('HEAD..worktree');
-    const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
-    expect(comparisonLabel({ old: sha, new: sha, base: 'parent' })).toBe('a1b2c3d^!');
+    expect(comparisonLabel(range('HEAD', 'worktree', 'direct'))).toBe('HEAD..worktree');
+    expect(comparisonLabel({ kind: 'commit', sha })).toBe('a1b2c3d^!');
+  });
+
+  it("names a range's slices after the range", () => {
+    expect(comparisonLabel(range('main', 'feat', 'merge-base', { kind: 'commit', sha }))).toBe('main...feat @ a1b2c3d');
+    expect(comparisonLabel(range('main', 'worktree', 'merge-base', { kind: 'uncommitted' }))).toBe(
+      'main...worktree @ worktree',
+    );
+    const iterations = {
+      kind: 'interdiff',
+      from: { kind: 'iteration', n: 1 },
+      to: { kind: 'iteration', n: 3 },
+    } as const;
+    expect(comparisonLabel(range('main', 'feat', 'merge-base', iterations))).toBe('main...feat #1→#3');
+    expect(comparisonLabel(range('main', 'feat', 'merge-base', { ...iterations, pair: sha }))).toBe(
+      'main...feat #1→#3 @ a1b2c3d',
+    );
+    const named = { kind: 'interdiff', from: { kind: 'named', old: sha, new: 'v1' } } as const;
+    expect(comparisonLabel(range('main', 'feat', 'direct', named))).toBe('a1b2c3d..v1 → main..feat');
   });
 });
 
@@ -348,9 +374,9 @@ describe('movedLabel', () => {
   const b = 'b'.repeat(40);
   const c = 'c'.repeat(40);
   const d = 'd'.repeat(40);
-  const snap = (mode: Snapshot['mode']) =>
-    ({ mode, commits: { list: [], total: 0, oldSha: a, newSha: b } }) as unknown as Snapshot;
-  const refs = { old: 'main', new: 'refs/heads/feat', base: 'direct', live: 'refs', commentKey: 'k' } as const;
+  const snap = (review: Review) =>
+    ({ review, commits: { list: [], total: 0, oldSha: a, newSha: b } }) as unknown as Snapshot;
+  const refs: Review = { kind: 'range', old: 'main', new: 'refs/heads/feat', base: 'direct', view: { kind: 'whole' } };
 
   it('names the end that moved by its ref, and the merge base as such', () => {
     expect(movedLabel(snap(refs), { version: 1, oldSha: a, newSha: c })).toBe('feat bbbbbbb → ccccccc');
@@ -361,7 +387,7 @@ describe('movedLabel', () => {
   });
 
   it('describes the range a focused commit sits in, not the commit', () => {
-    const focused = { old: b, new: b, base: 'parent', live: 'refs', commentKey: `commit:${b}`, within: refs } as const;
+    const focused: Review = { ...refs, view: { kind: 'commit', sha: b } };
     expect(movedLabel(snap(focused), { version: 1, oldSha: a, newSha: c })).toBe('feat bbbbbbb → ccccccc');
   });
 });
@@ -421,13 +447,7 @@ describe('commitBody', () => {
 });
 
 describe('rangeStep', () => {
-  const range = {
-    old: 'main',
-    new: 'feat',
-    base: 'merge-base',
-    live: 'refs',
-    commentKey: 'range:main...feat',
-  } as const;
+  const range: Review = { kind: 'range', old: 'main', new: 'feat', base: 'merge-base', view: { kind: 'whole' } };
   const commit = (sha: string) => ({ sha, short: sha.slice(0, 7), message: sha, author: 'a', email: 'a@a', date: 0 });
   const commits = {
     list: [commit('a'.repeat(40)), commit('b'.repeat(40))],
@@ -435,72 +455,40 @@ describe('rangeStep', () => {
     oldSha: '0'.repeat(40),
     newSha: 'b'.repeat(40),
   };
-  const focused = (sha: string) => ({
-    mode: { old: sha, new: sha, base: 'parent', live: 'refs', commentKey: `commit:${sha}`, within: range } as const,
-    commits,
-  });
+  const focused = (sha: string) => ({ review: { ...range, view: { kind: 'commit', sha } } as Review, commits });
 
   it('walks from the range to the newest commit, older to the oldest, and stops at either end', () => {
-    expect(rangeStep({ mode: range, commits }, 1)).toBeUndefined();
-    expect(rangeStep({ mode: range, commits }, -1)).toBe('b'.repeat(40));
+    expect(rangeStep({ review: range, commits }, 1)).toBeUndefined();
+    expect(rangeStep({ review: range, commits }, -1)).toBe('b'.repeat(40));
     expect(rangeStep(focused('b'.repeat(40)), 1)).toBeNull();
     expect(rangeStep(focused('b'.repeat(40)), -1)).toBe('a'.repeat(40));
     expect(rangeStep(focused('a'.repeat(40)), -1)).toBeUndefined();
   });
 
   it('stops at the uncommitted changes between the newest commit and a range that ends at the worktree', () => {
-    const toWorktree = { ...range, new: 'worktree', live: 'worktree' } as const;
-    const within = (sha: string) => ({ ...focused(sha), mode: { ...focused(sha).mode, within: toWorktree } });
-    const uncommitted = {
-      mode: {
-        old: 'HEAD',
-        new: 'worktree',
-        base: 'direct',
-        live: 'worktree',
-        commentKey: 'working',
-        within: toWorktree,
-      },
-      commits,
-    } as const;
-    expect(rangeStep({ mode: toWorktree, commits }, -1)).toBe('worktree');
+    const toWorktree: Review = { ...range, new: 'worktree' };
+    const within = (sha: string) => ({ review: { ...toWorktree, view: { kind: 'commit', sha } } as Review, commits });
+    const uncommitted = { review: { ...toWorktree, view: { kind: 'uncommitted' } } as Review, commits };
+    expect(rangeStep({ review: toWorktree, commits }, -1)).toBe('worktree');
     expect(rangeStep(uncommitted, -1)).toBe('b'.repeat(40));
     expect(rangeStep(uncommitted, 1)).toBeNull();
     expect(rangeStep(within('b'.repeat(40)), 1)).toBe('worktree');
     // Without a commit, the uncommitted changes are the whole range.
-    expect(rangeStep({ mode: toWorktree, commits: { ...commits, list: [], total: 0 } }, -1)).toBeUndefined();
+    expect(rangeStep({ review: toWorktree, commits: { ...commits, list: [], total: 0 } }, -1)).toBeUndefined();
   });
 
   it("steps through an interdiff's pairs with something to show, skipping identical and dropped ones", () => {
-    const it = (n: number) => ({
-      old: '0'.repeat(40),
-      new: 'b'.repeat(40),
-      oldSha: '0'.repeat(40),
-      newSha: 'b'.repeat(40),
-      iteration: n,
-    });
+    const ends = { oldSha: '0'.repeat(40), newSha: 'b'.repeat(40) };
     const pairs = [
       { old: commit('1'.repeat(40)), new: commit('a'.repeat(40)), status: 'identical' as const },
       { old: commit('2'.repeat(40)), new: null, status: 'dropped' as const },
       { old: commit('3'.repeat(40)), new: commit('b'.repeat(40)), status: 'changed' as const },
       { old: null, new: commit('c'.repeat(40)), status: 'added' as const },
     ];
-    const interdiff = { from: it(1), to: it(2), conflicts: [], pairs };
-    const whole = {
-      mode: {
-        old: 't',
-        new: 'b'.repeat(40),
-        base: 'direct',
-        live: 'refs',
-        commentKey: 'i',
-        within: range,
-        interdiff,
-      } as const,
-      commits,
-    };
-    const pair = (sha: string) => ({
-      ...whole,
-      mode: { ...whole.mode, new: sha, pair: { old: null, new: sha, conflicts: [] } },
-    });
+    const interdiff = { from: ends, to: ends, conflicts: [], pairs };
+    const view = { kind: 'interdiff', from: { kind: 'iteration', n: 1 }, to: { kind: 'iteration', n: 2 } } as const;
+    const whole = { review: { ...range, view } as Review, commits, interdiff };
+    const pair = (sha: string) => ({ ...whole, review: { ...range, view: { ...view, pair: sha } } as Review });
     expect(rangeStep(whole, 1)).toBeUndefined();
     expect(rangeStep(whole, -1)).toBe('c'.repeat(40));
     expect(rangeStep(pair('c'.repeat(40)), -1)).toBe('b'.repeat(40));
@@ -511,7 +499,6 @@ describe('rangeStep', () => {
   it('steps a commit the range no longer lists newer to the range, and a lone commit nowhere', () => {
     expect(rangeStep(focused('c'.repeat(40)), 1)).toBeNull();
     expect(rangeStep(focused('c'.repeat(40)), -1)).toBeUndefined();
-    const { within: _, ...lone } = focused('a'.repeat(40)).mode;
-    expect(rangeStep({ mode: lone, commits }, 1)).toBeUndefined();
+    expect(rangeStep({ review: { kind: 'commit', sha: 'a'.repeat(40) }, commits }, 1)).toBeUndefined();
   });
 });

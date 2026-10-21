@@ -3,7 +3,7 @@ import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { Button } from '@/client/ui/Button.js';
 import { AlertTriangle, Check, ClipboardCopy, GitPullRequestArrow, MessageSquare, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CommentThread } from '@/shared/protocol.js';
+import { rangeKey, type CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
 import { copyText } from '@/client/clipboard.js';
 import { commentsOff, exportLabel, type ExportOutcome, visibleThreads } from '@/client/model.js';
@@ -29,7 +29,7 @@ export function CommentPanel() {
   const canExport = useStore((s) => s.github.data?.reason === null);
   const copiedAll = useStore((s) => s.copiedAll);
   const snapshot = useStore((s) => s.snapshot);
-  const off = snapshot ? commentsOff(snapshot.mode) : null;
+  const off = snapshot ? commentsOff(snapshot.review) : null;
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
@@ -79,7 +79,7 @@ export function CommentPanel() {
     <aside className="flex min-h-0 flex-col bg-surface">
       {snapshot && (
         // Keyed by the range, so focusing one of its commits keeps the list as it was.
-        <CommitNavigator key={(snapshot.mode.within ?? snapshot.mode).commentKey} snapshot={snapshot} />
+        <CommitNavigator key={rangeKey(snapshot.review)} snapshot={snapshot} />
       )}
       {snapshot && <IterationList snapshot={snapshot} />}
       <div className="flex min-h-10 items-center gap-1.5 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:px-2 [&_button]:whitespace-nowrap">

@@ -4,12 +4,12 @@ use std::time::{Duration, Instant};
 
 use futures::FutureExt;
 
-use super::Session;
+use super::{Session, pr_url};
 use crate::error::{GithubError, Result};
 use crate::github::client::no_token;
 use crate::github::metadata::discover_github;
 use crate::github::review::ExportInput;
-use crate::protocol::{GithubExportResponse, GithubMetadata, Snapshot, ThreadQuery, ThreadState};
+use crate::protocol::{GithubExportResponse, GithubMetadata, Snapshot, ThreadQuery, ThreadState, same_review};
 
 /// How long one discovery answers for its snapshot before GitHub is asked again.
 const DISCOVERY_TTL: Duration = Duration::from_secs(30);
@@ -24,7 +24,7 @@ impl Session {
     pub async fn github_metadata(self: &Arc<Self>, snap: &Arc<Snapshot>) -> Result<GithubMetadata> {
         let a = self.active()?;
         // The snapshot must be one of the active review's: a discovery answers for one comparison.
-        if serde_json::to_value(&a.mode).ok() != serde_json::to_value(&snap.mode).ok() {
+        if !same_review(&a.review, &snap.review) {
             return Err(changed().into());
         }
         let task = {
@@ -32,7 +32,7 @@ impl Session {
             match cached.as_ref() {
                 Some((at, expires, task)) if Arc::ptr_eq(at, snap) && *expires > Instant::now() => task.clone(),
                 _ => {
-                    let (this, target, pr_url) = (self.clone(), snap.clone(), a.pr_url.clone());
+                    let (this, target, pr_url) = (self.clone(), snap.clone(), pr_url(&a.review));
                     let lookup =
                         async move { discover_github(&this.repo, &target, &this.github, pr_url.as_deref()).await };
                     let task = lookup.boxed().shared();
@@ -64,7 +64,7 @@ impl Session {
                 let Some(client) = self.github.client.clone() else {
                     return Err(GithubError::conflict(no_token(&self.github.instance.host)).into());
                 };
-                let metadata = discover_github(&self.repo, &snap, &self.github, a.pr_url.as_deref()).await?;
+                let metadata = discover_github(&self.repo, &snap, &self.github, pr_url(&a.review).as_deref()).await?;
                 let pull_request = match (metadata.pull_request, metadata.reason) {
                     (Some(pr), None) => pr,
                     (_, reason) => {
@@ -75,7 +75,8 @@ impl Session {
                 if !self.is_active(&a) || !Arc::ptr_eq(&snap, &a.snapshotter.current().await?) {
                     return Err(changed().into());
                 }
-                let threads = a.comments.threads(&ThreadQuery { state: Some(ThreadState::All), path: None }).await?;
+                let comments = self.comments()?;
+                let threads = comments.threads(&ThreadQuery { state: Some(ThreadState::All), path: None }).await?;
                 Ok(ExportInput { new_sha: snap.new_sha.clone(), pull_request, threads, thread_ids, github: client })
             })
             .await

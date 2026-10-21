@@ -6,7 +6,8 @@ use common::{TestRepo, eventually, revspec, session};
 use diffle::comments::CommentStore;
 use diffle::error::Error;
 use diffle::protocol::{
-    CommentAnchor, FollowRefs, Live, ModeRequest, ModeSpec, Side, Snapshot, ThreadQuery, comparison_label,
+    CommentAnchor, EnterRequest, FollowRefs, Live, RangeView, Side, Snapshot, ThreadQuery, comparison_label, range_of,
+    with_view,
 };
 use diffle::session::{ReadablePaths, side_path};
 
@@ -50,7 +51,8 @@ fn text(buf: Option<Vec<u8>>) -> Option<String> {
 fn side_path_maps_renames_and_refuses_paths_outside_the_snapshot() {
     let snap: Snapshot = serde_json::from_value(serde_json::json!({
         "root": "/r", "version": 1, "oldSha": "a", "newSha": "b", "headSha": "b", "context": 3,
-        "mode": { "old": "a", "new": "b", "base": "direct", "live": "none", "commentKey": "k" },
+        "review": { "kind": "range", "old": "a", "new": "b", "base": "direct", "view": { "kind": "whole" } },
+        "follows": "none", "commentKey": "k",
         "changed": [
             { "path": "new.txt", "oldPath": "old.txt", "status": "R", "additions": 0, "deletions": 0, "binary": false, "blob": "", "oldBlob": "", "generated": false },
             { "path": "gone.txt", "status": "D", "additions": 0, "deletions": 0, "binary": false, "blob": "", "oldBlob": "", "generated": false },
@@ -138,7 +140,7 @@ async fn notifies_snapshot_listeners_on_every_snapshot_in_version_order() {
     let first = s.start(s.resolve(revspec(&["main..feat"])).await.unwrap()).await.unwrap();
     s.refresh().await;
     s.set_context(3).await.unwrap();
-    s.switch_mode(ModeRequest::Working).await.unwrap();
+    s.enter(EnterRequest::Working).await.unwrap();
     let seen = seen.lock().unwrap().clone();
     assert_eq!(seen.len(), 4);
     assert_eq!(seen[0], first.version);
@@ -155,12 +157,12 @@ async fn keeps_versions_monotonic_and_the_context_agreed_when_transitions_race()
     let record = seen.clone();
     s.on_snapshot(move |snap| record.lock().unwrap().push(snap.version));
     s.start(s.resolve(revspec(&["main..feat"])).await.unwrap()).await.unwrap();
-    let (switched, context, ()) = tokio::join!(s.switch_mode(ModeRequest::Working), s.set_context(5), s.refresh());
+    let (switched, context, ()) = tokio::join!(s.enter(EnterRequest::Working), s.set_context(5), s.refresh());
     switched.unwrap();
     context.unwrap();
     let seen = seen.lock().unwrap().clone();
     assert!(seen.windows(2).all(|w| w[0] < w[1]), "{seen:?}");
-    assert_eq!(s.mode().unwrap().new, "worktree");
+    assert_eq!(json(&s.review().unwrap())["new"], "worktree");
     let current = s.snapshotter().unwrap().current().await.unwrap();
     assert_eq!((s.context(), current.context, Some(&current.version)), (5, 5, seen.last()));
     s.close().await;
@@ -190,21 +192,21 @@ async fn focuses_one_listed_commit_of_a_range_keeps_listing_the_range_and_return
     let (s, _) = session(&repo, false, 3, FollowRefs::Off);
     let range = s.start(s.resolve(revspec(&["main..feat"])).await.unwrap()).await.unwrap();
     let commit = range.commits.list[0].clone();
-    let focused = s.switch_mode(ModeRequest::Focus { commit: Some(commit.short.clone()) }).await.unwrap();
-    let m = &focused.mode;
-    assert_eq!((m.old.as_str(), m.new.as_str(), m.live), (commit.sha.as_str(), commit.sha.as_str(), Live::Refs));
-    assert_eq!(m.comment_key, format!("commit:{}", commit.sha));
-    assert_eq!(m.within.as_ref().unwrap().comment_key, range.mode.comment_key);
+    let focused = s.show(RangeView::Commit { sha: commit.short.clone() }).await.unwrap();
+    let view = RangeView::Commit { sha: commit.sha.clone() };
+    assert_eq!(json(&focused.review), json(&with_view(&range.review, view.clone()).unwrap()));
+    assert_eq!((focused.new_sha.as_str(), focused.follows), (commit.sha.as_str(), Live::Refs));
+    assert_eq!(focused.comment_key, Some(format!("commit:{}", commit.sha)));
     assert_eq!(json(&focused.commits), json(&range.commits));
     assert_eq!(focused.commit.as_ref().unwrap().sha, commit.sha);
     // Stepping from one focused commit to another keeps the range, not the commit, as the outer comparison.
-    let again = s.switch_mode(ModeRequest::Focus { commit: Some(commit.sha.clone()) }).await.unwrap();
-    assert_eq!(again.mode.within.as_ref().unwrap().comment_key, range.mode.comment_key);
-    let unknown = s.switch_mode(ModeRequest::Focus { commit: Some("f".repeat(40)) }).await.unwrap_err();
+    let again = s.show(RangeView::Commit { sha: commit.sha.clone() }).await.unwrap();
+    assert_eq!(json(&range_of(&again.review)), json(&range_of(&range.review)));
+    let unknown = s.show(RangeView::Commit { sha: "f".repeat(40) }).await.unwrap_err();
     assert!(matches!(unknown, Error::Revspec(_)));
-    assert_eq!(json(&s.switch_mode(ModeRequest::Focus { commit: None }).await.unwrap().mode), json(&range.mode));
-    s.switch_mode(revspec(&["feat^!"])).await.unwrap();
-    assert!(matches!(s.switch_mode(ModeRequest::Focus { commit: None }).await, Err(Error::Revspec(_))));
+    assert_eq!(json(&s.show(RangeView::Whole).await.unwrap().review), json(&range.review));
+    s.enter(revspec(&["feat^!"])).await.unwrap();
+    assert!(matches!(s.show(RangeView::Whole).await, Err(Error::Revspec(_))));
     s.close().await;
 }
 
@@ -213,16 +215,17 @@ async fn focuses_the_uncommitted_changes_of_a_range_that_ends_at_the_worktree() 
     let (t, _outside) = rename_repo();
     let repo = Arc::new(t.open().await);
     let (s, _) = session(&repo, false, 3, FollowRefs::Off);
-    let working = s.start(s.resolve(ModeRequest::Working).await.unwrap()).await.unwrap();
-    let range = s.switch_mode(revspec(&["main..worktree"])).await.unwrap();
-    let focused = s.switch_mode(ModeRequest::Focus { commit: Some("worktree".into()) }).await.unwrap();
-    let expected = ModeSpec { within: Some(comparison(&range.mode)), ..working.mode.clone() };
-    assert_eq!(json(&focused.mode), json(&expected));
+    let working = s.start(s.resolve(EnterRequest::Working).await.unwrap()).await.unwrap();
+    let range = s.enter(revspec(&["main..worktree"])).await.unwrap();
+    let focused = s.show(RangeView::Uncommitted).await.unwrap();
+    assert_eq!(json(&focused.review), json(&with_view(&range.review, RangeView::Uncommitted).unwrap()));
+    let sides = |snap: &Snapshot| (snap.old_sha.clone(), snap.new_sha.clone(), snap.follows, snap.comment_key.clone());
+    assert_eq!(sides(&focused), sides(&working));
     assert_eq!(json(&focused.changed), json(&working.changed));
     assert_eq!(json(&focused.commits.list), json(&range.commits.list));
-    assert_eq!(comparison_label(&focused.mode), "main..worktree @ worktree");
-    s.switch_mode(revspec(&["main..feat"])).await.unwrap();
-    let refused = s.switch_mode(ModeRequest::Focus { commit: Some("worktree".into()) }).await;
+    assert_eq!(comparison_label(&focused.review), "main..worktree @ worktree");
+    s.enter(revspec(&["main..feat"])).await.unwrap();
+    let refused = s.show(RangeView::Uncommitted).await;
     assert!(matches!(refused, Err(Error::Revspec(_))));
     s.close().await;
 }
@@ -271,7 +274,7 @@ async fn refuses_an_absolute_path_and_returns_a_symlink_as_its_target_string() {
     let (t, outside) = rename_repo();
     let repo = Arc::new(t.open().await);
     let (s, _) = session(&repo, false, 3, FollowRefs::Off);
-    let snap = s.start(s.resolve(ModeRequest::Working).await.unwrap()).await.unwrap();
+    let snap = s.start(s.resolve(EnterRequest::Working).await.unwrap()).await.unwrap();
     let secret = outside.path().join("secret.txt").to_string_lossy().into_owned();
     assert!(s.read_side(&snap, &secret, Side::New).await.unwrap().is_none());
     if cfg!(unix) {
@@ -302,26 +305,17 @@ async fn serializes_concurrent_mode_switches_so_the_last_request_wins() {
     let repo = Arc::new(t.open().await);
     let (s, _) = session(&repo, true, 3, FollowRefs::Off);
     s.start(s.resolve(revspec(&["main..feat"])).await.unwrap()).await.unwrap();
-    let (a, b) = tokio::join!(s.switch_mode(ModeRequest::Working), s.switch_mode(revspec(&["main"])));
+    let (a, b) = tokio::join!(s.enter(EnterRequest::Working), s.enter(revspec(&["main"])));
     assert!(b.unwrap().version > a.unwrap().version);
-    let mode = s.mode().unwrap();
-    assert_eq!((mode.old.as_str(), mode.new.as_str()), ("main", "HEAD"));
-    assert_eq!(s.comments().unwrap().key(), mode.comment_key);
+    let review = json(&s.review().unwrap());
+    assert_eq!((review["old"].as_str(), review["new"].as_str()), (Some("main"), Some("HEAD")));
+    let current = s.snapshotter().unwrap().current().await.unwrap();
+    assert_eq!(Some(s.comments().unwrap().key().to_owned()), current.comment_key);
     s.close().await;
 }
 
 fn json<T: serde::Serialize>(value: &T) -> serde_json::Value {
     serde_json::to_value(value).unwrap()
-}
-
-fn comparison(mode: &ModeSpec) -> diffle::protocol::Comparison {
-    diffle::protocol::Comparison {
-        old: mode.old.clone(),
-        new: mode.new.clone(),
-        base: mode.base,
-        live: mode.live,
-        comment_key: mode.comment_key.clone(),
-    }
 }
 
 /// a.txt on main; feat adds a commit. The review runs from main, so the compared branch is not checked out.
@@ -399,7 +393,7 @@ async fn refreshes_the_worktree_snapshot_when_only_the_index_or_head_changed() {
     t.git(&["commit", "-q", "-m", "base"]);
     let repo = Arc::new(t.open().await);
     let (s, _) = session(&repo, true, 3, FollowRefs::Off);
-    let first = s.start(s.resolve(ModeRequest::Working).await.unwrap()).await.unwrap();
+    let first = s.start(s.resolve(EnterRequest::Working).await.unwrap()).await.unwrap();
     assert!(first.changed.is_empty());
     assert_eq!(first.tree, [".gitignore"]);
     let current = async || s.snapshotter().unwrap().current().await.unwrap();
@@ -463,7 +457,7 @@ async fn follows_moved_refs_live_when_configured_recording_each_state_as_an_iter
     s.set_follow_refs(FollowRefs::Auto);
     assert!(!s.follows().unwrap());
     t.git(&["checkout", "-q", "--detach"]);
-    s.switch_mode(revspec(&["HEAD~1..HEAD"])).await.unwrap();
+    s.enter(revspec(&["HEAD~1..HEAD"])).await.unwrap();
     assert!(s.follows().unwrap());
     t.write("a.txt", "a\nb\nc\nd\ne\n");
     t.git(&["commit", "-q", "-am", "four"]);

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use common::server::TestServer;
 use common::{TestRepo, revspec};
-use diffle::protocol::{ModeRequest, Side, image_key};
+use diffle::protocol::{EnterRequest, Side, image_key};
 use diffle::session::Session;
 
 const PNG: [u8; 8] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -63,8 +63,8 @@ async fn settle(session: &Arc<Session>) {
     snapshotter.patch_many(&snap.changed.iter().map(|f| f.path.clone()).collect::<Vec<_>>()).await.unwrap();
 }
 
-async fn switch(s: &TestServer, req: ModeRequest) {
-    s.session.switch_mode(req).await.unwrap();
+async fn switch(s: &TestServer, req: EnterRequest) {
+    s.session.enter(req).await.unwrap();
     settle(&s.session).await;
 }
 
@@ -114,7 +114,7 @@ async fn answers_404_for_a_key_that_is_not_the_sides_bytes_that_are_no_image_and
 async fn serves_a_worktree_side_only_while_its_bytes_are_the_snapshots() {
     let t = image_repo();
     t.write("logo.png", png(6));
-    let s = TestServer::over(t, ModeRequest::Working).await;
+    let s = TestServer::over(t, EnterRequest::Working).await;
     settle(&s.session).await;
     let snap = s.session.snapshotter().unwrap().current().await.unwrap();
     let key = image_key(&snap, "logo.png", Side::New).unwrap();
@@ -127,7 +127,7 @@ async fn serves_a_worktree_side_only_while_its_bytes_are_the_snapshots() {
 
 #[tokio::test]
 async fn reads_an_unchanged_path_from_the_commit_its_key_names_not_from_a_worktree_that_moved_on() {
-    let s = TestServer::over(image_repo(), ModeRequest::Working).await;
+    let s = TestServer::over(image_repo(), EnterRequest::Working).await;
     settle(&s.session).await;
     s.repo.write("still.png", png(8));
     let head = s.repo.git(&["rev-parse", "HEAD"]);
@@ -139,7 +139,7 @@ async fn reads_an_unchanged_path_from_the_commit_its_key_names_not_from_a_worktr
 async fn keys_a_worktree_old_side_by_its_hashed_blob() {
     let t = image_repo();
     t.write("logo.png", png(9));
-    let s = TestServer::over(t, ModeRequest::Working).await;
+    let s = TestServer::over(t, EnterRequest::Working).await;
     switch(&s, revspec(&["worktree..HEAD"])).await;
     let snap = s.session.snapshotter().unwrap().current().await.unwrap();
     assert_eq!(image_key(&snap, "logo.png", Side::Old).unwrap(), s.repo.git(&["hash-object", "logo.png"]));

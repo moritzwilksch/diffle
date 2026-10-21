@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use common::lsp::{eventually, fake_env, fake_servers, root};
 use common::server::TestServer;
 use common::{TestRepo, revspec};
-use diffle::protocol::{LanguageId, ModeRequest};
+use diffle::protocol::{EnterRequest, LanguageId};
 
 /// `source.py` and `other.py` committed, a second commit on top, and `source.py` edited in the
 /// worktree: the diff names python, so its server starts.
@@ -29,7 +29,7 @@ fn python_repo() -> TestRepo {
 
 async fn serve(
     t: TestRepo,
-    req: ModeRequest,
+    req: EnterRequest,
     env: &[(&str, &str)],
     overrides: &[(LanguageId, &str)],
 ) -> Option<TestServer> {
@@ -67,7 +67,7 @@ async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language
     let t = python_repo();
     t.write("source.py", "import sys\n");
     let overrides = [(LanguageId::Python, "fake")];
-    let Some(s) = serve(t, ModeRequest::Working, &[("FAKE_LSP_EXTERNAL", &site_s)], &overrides).await else { return };
+    let Some(s) = serve(t, EnterRequest::Working, &[("FAKE_LSP_EXTERNAL", &site_s)], &overrides).await else { return };
     ready(&s).await;
     assert_eq!(s.get(&file_query(&site_s, "new")).await.status, 404);
     let def = s.json("POST", "/api/lsp/definition", json!({ "path": "source.py", "line": 1, "col": 0 })).await;
@@ -100,7 +100,7 @@ async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language
 #[tokio::test]
 async fn answers_definition_hover_references_occurrences_and_symbols() {
     let overrides = [(LanguageId::Python, "fake")];
-    let Some(s) = serve(python_repo(), ModeRequest::Working, &[], &overrides).await else { return };
+    let Some(s) = serve(python_repo(), EnterRequest::Working, &[], &overrides).await else { return };
     ready(&s).await;
     let status = s.get("/api/lsp/status").await.json();
     assert_eq!((status["enabled"].clone(), status["servers"][0]["name"].clone()), (json!(true), json!("fake")));
@@ -143,7 +143,7 @@ async fn refuses_with_the_reason_lsp_blocker_gives() {
     // Go enters the diff, so its configured off switch is what refuses it.
     let t = python_repo();
     t.write("main.go", "package main\n");
-    let Some(s) = serve(t, ModeRequest::Working, &[("FAKE_LSP_OFFERS", "hover")], &overrides).await else {
+    let Some(s) = serve(t, EnterRequest::Working, &[("FAKE_LSP_OFFERS", "hover")], &overrides).await else {
         return;
     };
     ready(&s).await;

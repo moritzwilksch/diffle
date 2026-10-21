@@ -3,7 +3,8 @@ mod common;
 use std::sync::Arc;
 
 use common::{TestRepo, mode, paths, revspec, snapshot, statuses};
-use diffle::protocol::{ChangeStatus::*, ComparisonBase, Live, ModeRequest};
+use diffle::mode::resolve::range;
+use diffle::protocol::{ChangeStatus::*, ComparisonBase, EnterRequest, Live, Review};
 
 /// The same history as `git.rs`: main and feat diverge, feat has uncommitted work.
 fn feature_repo() -> TestRepo {
@@ -31,12 +32,12 @@ async fn a_lone_revision_diffs_its_merge_base_with_head_against_head() {
     let t = feature_repo();
     let repo = Arc::new(t.open().await);
     let m = mode(&repo, revspec(&["main"])).await;
-    assert_eq!(
-        (m.old.as_str(), m.new.as_str(), m.base, m.live),
-        ("main", "HEAD", ComparisonBase::MergeBase, Live::Refs)
-    );
-    assert_eq!(m.comment_key, "range:refs/heads/main...refs/heads/feat");
+    assert_eq!(json(&m), json(&range("main", "HEAD", ComparisonBase::MergeBase)));
     let (_, snap) = snapshot(&repo, revspec(&["main"])).await;
+    assert_eq!(
+        (snap.follows, snap.comment_key.as_deref()),
+        (Live::Refs, Some("range:refs/heads/main...refs/heads/feat"))
+    );
     assert_eq!(snap.old_sha, repo.merge_base("main", "feat").await.unwrap());
     assert_eq!(paths(&snap), ["a.txt", "new.txt"]);
     assert_eq!(snap.tree, ["a.txt", "keep.txt", "new.txt"]);
@@ -55,9 +56,8 @@ async fn the_tree_belongs_to_the_selected_new_revision_not_the_index() {
 async fn working_mode_is_live_on_the_worktree() {
     let t = feature_repo();
     let repo = Arc::new(t.open().await);
-    assert_eq!(mode(&repo, ModeRequest::Working).await.live, Live::Worktree);
-    let (_, snap) = snapshot(&repo, ModeRequest::Working).await;
-    assert_eq!(snap.new_sha, "worktree");
+    let (_, snap) = snapshot(&repo, EnterRequest::Working).await;
+    assert_eq!((snap.new_sha.as_str(), snap.follows), ("worktree", Live::Worktree));
     assert!(snap.tree.contains(&"untracked.txt".to_owned()));
     assert!(!snap.tree.contains(&"ignored.txt".to_owned()));
 }
@@ -65,12 +65,13 @@ async fn working_mode_is_live_on_the_worktree() {
 #[tokio::test]
 async fn pinned_shas_are_static_and_symbolic_refs_live() {
     let t = feature_repo();
-    let repo = t.open().await;
+    let repo = Arc::new(t.open().await);
     let sha = repo.resolve("main").await.unwrap();
-    assert_eq!(mode(&repo, revspec(&[&format!("{sha}..{sha}")])).await.live, Live::None);
-    assert_eq!(mode(&repo, revspec(&["main..feat"])).await.live, Live::Refs);
-    assert_eq!(mode(&repo, revspec(&["main"])).await.live, Live::Refs);
-    assert_eq!(mode(&repo, revspec(&["main..worktree"])).await.live, Live::Worktree);
+    let follows = async |args: &[&str]| snapshot(&repo, revspec(args)).await.1.follows;
+    assert_eq!(follows(&[&format!("{sha}..{sha}")]).await, Live::None);
+    assert_eq!(follows(&["main..feat"]).await, Live::Refs);
+    assert_eq!(follows(&["main"]).await, Live::Refs);
+    assert_eq!(follows(&["main..worktree"]).await, Live::Worktree);
 }
 
 #[tokio::test]
@@ -78,7 +79,7 @@ async fn reverses_the_worktree_on_the_old_side_in_every_patch_api() {
     let t = feature_repo();
     let repo = Arc::new(t.open().await);
     let (snapshotter, snap) = snapshot(&repo, revspec(&["worktree..HEAD"])).await;
-    assert_eq!((snap.old_sha.as_str(), snap.mode.live), ("worktree", Live::Worktree));
+    assert_eq!((snap.old_sha.as_str(), snap.follows), ("worktree", Live::Worktree));
     assert!(!snap.tree.contains(&"untracked.txt".to_owned()));
     let file = |path: &str| snap.changed.iter().find(|f| f.path == path).unwrap();
     assert_eq!((file("a.txt").status, file("a.txt").additions, file("a.txt").deletions), (M, 0, 1));
@@ -123,12 +124,12 @@ async fn pins_a_single_commit_and_shows_it_against_its_parent_with_its_message()
     let repo = Arc::new(t.open().await);
     let sha = t.git(&["rev-parse", "HEAD~1"]);
     let m = mode(&repo, revspec(&["HEAD~1^!"])).await;
-    assert_eq!(
-        (m.old.as_str(), m.new.as_str(), m.base, m.live),
-        (sha.as_str(), sha.as_str(), ComparisonBase::Parent, Live::None)
-    );
-    assert_eq!(m.comment_key, format!("commit:{sha}"));
+    assert_eq!(json(&m), json(&Review::Commit { sha: sha.clone() }));
     let (_, snap) = snapshot(&repo, revspec(&["HEAD~1^!"])).await;
+    assert_eq!(
+        (snap.new_sha.as_str(), snap.follows, snap.comment_key.clone()),
+        (sha.as_str(), Live::None, Some(format!("commit:{sha}")))
+    );
     assert_eq!(snap.old_sha, t.git(&["rev-parse", "HEAD~2"]));
     assert_eq!(statuses(&snap), [("a.txt", M)]);
     let commit = snap.commit.clone().unwrap();
@@ -223,7 +224,7 @@ async fn working_mode_on_an_unborn_branch_diffs_against_the_empty_tree() {
     t.git(&["add", "staged.txt"]);
     t.write("loose.txt", "l\n");
     let repo = Arc::new(t.open().await);
-    let (snapshotter, snap) = snapshot(&repo, ModeRequest::Working).await;
+    let (snapshotter, snap) = snapshot(&repo, EnterRequest::Working).await;
     assert_eq!(snap.old_sha, repo.empty_tree().await.unwrap());
     assert_eq!(snap.head_sha, "");
     let counts: Vec<_> = snap.changed.iter().map(|f| (f.path.as_str(), f.status, f.additions)).collect();
@@ -236,4 +237,8 @@ async fn working_mode_on_an_unborn_branch_diffs_against_the_empty_tree() {
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "unknown revision: HEAD");
+}
+
+fn json<T: serde::Serialize>(value: &T) -> serde_json::Value {
+    serde_json::to_value(value).unwrap()
 }

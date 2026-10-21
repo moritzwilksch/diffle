@@ -9,7 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 const BODY_ROUTES: &[(&str, &str)] = &[
-    ("POST", "/api/mode"),
+    ("POST", "/api/review"),
     ("POST", "/api/patch"),
     ("POST", "/api/threads"),
     ("POST", "/api/threads/missing/replies"),
@@ -46,7 +46,7 @@ async fn clients(s: &TestServer, n: usize) {
 #[tokio::test]
 async fn rejects_malformed_json_and_null_before_side_effects() {
     let s = TestServer::start().await;
-    let mode = serde_json::to_value(s.session.mode().unwrap()).unwrap();
+    let mode = serde_json::to_value(s.session.review().unwrap()).unwrap();
     let before = serde_json::to_value(s.config.get()).unwrap();
     let mut ws = connect(&s, &[]).await.unwrap();
     for (method, path) in BODY_ROUTES {
@@ -56,7 +56,7 @@ async fn rejects_malformed_json_and_null_before_side_effects() {
             assert!(r.json()["error"].is_string());
         }
     }
-    assert_eq!(serde_json::to_value(s.session.mode().unwrap()).unwrap(), mode);
+    assert_eq!(serde_json::to_value(s.session.review().unwrap()).unwrap(), mode);
     assert_eq!(serde_json::to_value(s.config.get()).unwrap(), before);
     // Nothing was broadcast.
     assert!(tokio::time::timeout(Duration::from_millis(200), ws.next()).await.is_err());
@@ -67,7 +67,7 @@ async fn rejects_malformed_json_and_null_before_side_effects() {
 async fn validates_fields() {
     let s = TestServer::start().await;
     let cases: Vec<(&str, &str, Value)> = vec![
-        ("POST", "/api/mode", json!({ "kind": "revspec", "args": [1] })),
+        ("POST", "/api/review", json!({ "kind": "revspec", "args": [1] })),
         ("POST", "/api/patch", json!({ "paths": vec!["a.txt"; 201] })),
         ("PUT", "/api/config", json!({ "autoViewed": ["a", 1] })),
         ("PUT", "/api/config", json!({ "contextLines": -1 })),
@@ -156,7 +156,7 @@ async fn reports_no_moved_refs_for_a_worktree_comparison_and_recomputes_the_snap
     assert_eq!(r.status, 200);
     let snap = r.json();
     assert!(snap["version"].as_i64() > before["version"].as_i64());
-    assert_eq!(snap["mode"], before["mode"]);
+    assert_eq!(snap["review"], before["review"]);
     s.close().await;
 }
 

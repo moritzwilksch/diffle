@@ -5,6 +5,7 @@ import { twMerge } from 'tailwind-merge';
 import {
   comparisonLabel,
   rangeLabel,
+  rangeOf,
   type PairStatus,
   type RangeCommit,
   type RangePair,
@@ -31,21 +32,31 @@ const COPIED_MS = 1400;
  * range-diff instead: the two iterations' commits paired, under an entry for the interdiff itself.
  */
 export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
-  const { mode, commits } = snapshot;
+  const { review, commits } = snapshot;
   const focusCommit = useStore((s) => s.focusCommit);
   const showPair = useStore((s) => s.showPair);
   const stepCommit = useStore((s) => s.stepCommit);
-  const interdiff = mode.interdiff ?? null;
+  const view = review.kind === 'range' ? review.view : null;
+  const interdiff = view?.kind === 'interdiff' ? (snapshot.interdiff ?? null) : null;
   const [open, setOpen] = useState(true);
   const [hover, setHover] = useState<{ commit: RangeCommit; row: DOMRect } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const list = useRef<HTMLDivElement>(null);
   const cardId = useId();
   // A single commit alone has nothing to step through; it is shown as the one active entry.
-  const range = mode.within ?? (mode.base === 'parent' ? null : mode);
-  const active = mode.pair ? mode.pair.new : mode.base === 'parent' || (mode.within && !interdiff) ? mode.new : null;
+  const range = rangeOf(review);
+  const active =
+    view?.kind === 'commit'
+      ? view.sha
+      : view?.kind === 'uncommitted'
+        ? 'worktree'
+        : view?.kind === 'interdiff'
+          ? (view.pair ?? null)
+          : review.kind === 'commit'
+            ? review.sha
+            : null;
   // An interdiff shows neither the range nor one of its commits; "All changes" leads back to the range.
-  const whole = active === null && !interdiff;
+  const whole = view?.kind === 'whole';
   const uncommitted = listsWorktree(snapshot);
   // Without a commit, the uncommitted changes are the whole range: one entry, already shown.
   const onlyUncommitted = range?.new === 'worktree' && commits.total === 0;
@@ -139,9 +150,11 @@ export function CommitNavigator({ snapshot }: { snapshot: Snapshot }) {
             entry(
               active === null,
               () => showPair(null),
-              interdiff.from.iteration != null
-                ? `Since #${interdiff.from.iteration}`
-                : `Since ${rangeLabel(interdiff.from)}`,
+              view?.kind === 'interdiff' && view.from.kind === 'iteration'
+                ? `Since #${view.from.n}`
+                : view?.kind === 'interdiff' && view.from.kind === 'named'
+                  ? `Since ${rangeLabel(view.from)}`
+                  : 'Since',
               `${interdiff.pairs.filter((p) => p.status !== 'identical').length} of ${interdiff.pairs.length} commits differ`,
             )}
           <ol className="m-0 list-none p-0">

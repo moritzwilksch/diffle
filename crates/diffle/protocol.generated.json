@@ -226,39 +226,11 @@
         "message"
       ]
     },
-    "Comparison": {
-      "type": "object",
-      "properties": {
-        "old": {
-          "type": "string"
-        },
-        "new": {
-          "type": "string"
-        },
-        "base": {
-          "$ref": "#/$defs/ComparisonBase"
-        },
-        "live": {
-          "$ref": "#/$defs/Live"
-        },
-        "commentKey": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "old",
-        "new",
-        "base",
-        "live",
-        "commentKey"
-      ]
-    },
     "ComparisonBase": {
       "type": "string",
       "enum": [
         "direct",
-        "merge-base",
-        "parent"
+        "merge-base"
       ]
     },
     "ConfigUpdate": {
@@ -282,6 +254,75 @@
           "type": "boolean"
         }
       }
+    },
+    "EnterRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "working"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pr"
+            },
+            "pr": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "revspec"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "range-diff"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "args"
+          ]
+        }
+      ]
     },
     "FileAnchor": {
       "type": "object",
@@ -511,29 +552,29 @@
       "type": "object",
       "properties": {
         "from": {
-          "$ref": "#/$defs/RangeSide"
+          "$ref": "#/$defs/RangeEnds"
         },
         "to": {
-          "$ref": "#/$defs/RangeSide"
-        },
-        "conflicts": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/RangeEnds"
         },
         "pairs": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/RangePair"
           }
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
         "from",
         "to",
-        "conflicts",
-        "pairs"
+        "pairs",
+        "conflicts"
       ]
     },
     "Iteration": {
@@ -1234,173 +1275,6 @@
         "body"
       ]
     },
-    "ModeRequest": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "working"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "pr"
-            },
-            "pr": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "revspec"
-            },
-            "args": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "required": [
-            "kind",
-            "args"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "focus"
-            },
-            "commit": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "kind",
-            "commit"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "interdiff"
-            },
-            "from": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            },
-            "to": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            }
-          },
-          "required": [
-            "kind",
-            "from",
-            "to"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "range-diff"
-            },
-            "args": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "required": [
-            "kind",
-            "args"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "pair"
-            },
-            "commit": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "kind",
-            "commit"
-          ]
-        }
-      ]
-    },
-    "ModeSpec": {
-      "type": "object",
-      "properties": {
-        "old": {
-          "type": "string"
-        },
-        "new": {
-          "type": "string"
-        },
-        "base": {
-          "$ref": "#/$defs/ComparisonBase"
-        },
-        "live": {
-          "$ref": "#/$defs/Live"
-        },
-        "commentKey": {
-          "type": "string"
-        },
-        "within": {
-          "$ref": "#/$defs/Comparison"
-        },
-        "interdiff": {
-          "$ref": "#/$defs/Interdiff"
-        },
-        "pair": {
-          "$ref": "#/$defs/PairSpec"
-        }
-      },
-      "required": [
-        "old",
-        "new",
-        "base",
-        "live",
-        "commentKey"
-      ]
-    },
     "Moved": {
       "type": "object",
       "properties": {
@@ -1420,31 +1294,6 @@
         "version",
         "oldSha",
         "newSha"
-      ]
-    },
-    "PairSpec": {
-      "type": "object",
-      "properties": {
-        "old": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "new": {
-          "type": "string"
-        },
-        "conflicts": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "old",
-        "new",
-        "conflicts"
       ]
     },
     "PairStatus": {
@@ -1478,6 +1327,34 @@
       },
       "required": [
         "paths"
+      ]
+    },
+    "PullRef": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "repository": {
+          "type": "string"
+        },
+        "headRepository": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "number",
+        "repository",
+        "headRepository"
       ]
     },
     "RangeCommit": {
@@ -1541,6 +1418,21 @@
         "newSha"
       ]
     },
+    "RangeEnds": {
+      "type": "object",
+      "properties": {
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "oldSha",
+        "newSha"
+      ]
+    },
     "RangePair": {
       "type": "object",
       "properties": {
@@ -1574,40 +1466,112 @@
         "status"
       ]
     },
-    "RangeSide": {
-      "type": "object",
-      "properties": {
-        "old": {
-          "type": "string"
-        },
-        "new": {
-          "type": "string"
-        },
-        "oldSha": {
-          "type": "string"
-        },
-        "newSha": {
-          "type": "string"
-        },
-        "iteration": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
+    "RangeRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "iteration"
             },
-            {
-              "type": "null"
+            "n": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
+          },
+          "required": [
+            "kind",
+            "n"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "named"
+            },
+            "old": {
+              "type": "string"
+            },
+            "new": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "old",
+            "new"
           ]
         }
-      },
-      "required": [
-        "old",
-        "new",
-        "oldSha",
-        "newSha",
-        "iteration"
+      ]
+    },
+    "RangeView": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "whole"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "commit"
+            },
+            "sha": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sha"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "uncommitted"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "interdiff"
+            },
+            "from": {
+              "$ref": "#/$defs/RangeRef"
+            },
+            "to": {
+              "$ref": "#/$defs/RangeRef"
+            },
+            "pair": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "from"
+          ]
+        }
       ]
     },
     "RefsResponse": {
@@ -1695,6 +1659,57 @@
       },
       "required": [
         "resolved"
+      ]
+    },
+    "Review": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "range"
+            },
+            "old": {
+              "type": "string"
+            },
+            "new": {
+              "type": "string"
+            },
+            "base": {
+              "$ref": "#/$defs/ComparisonBase"
+            },
+            "pr": {
+              "$ref": "#/$defs/PullRef"
+            },
+            "view": {
+              "$ref": "#/$defs/RangeView"
+            }
+          },
+          "required": [
+            "kind",
+            "old",
+            "new",
+            "base",
+            "view"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "commit"
+            },
+            "sha": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sha"
+          ]
+        }
       ]
     },
     "ReviewedCommit": {
@@ -1939,8 +1954,8 @@
         "root": {
           "type": "string"
         },
-        "mode": {
-          "$ref": "#/$defs/ModeSpec"
+        "review": {
+          "$ref": "#/$defs/Review"
         },
         "version": {
           "type": "integer",
@@ -1955,6 +1970,18 @@
         },
         "headSha": {
           "type": "string"
+        },
+        "follows": {
+          "$ref": "#/$defs/Live"
+        },
+        "commentKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interdiff": {
+          "$ref": "#/$defs/Interdiff"
         },
         "context": {
           "type": "integer",
@@ -1995,11 +2022,13 @@
       },
       "required": [
         "root",
-        "mode",
+        "review",
         "version",
         "oldSha",
         "newSha",
         "headSha",
+        "follows",
+        "commentKey",
         "context",
         "changed",
         "tree",

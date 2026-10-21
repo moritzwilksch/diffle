@@ -954,7 +954,7 @@ export function ReviewPane() {
     return (
       <main className="relative flex min-h-0 min-w-0 flex-col outline-none">
         <div className="p-10 text-center text-muted">
-          No changes for <code>{comparisonLabel(snapshot.mode)}</code>. Open any file from the tree to comment on it.
+          No changes for <code>{comparisonLabel(snapshot.review)}</code>. Open any file from the tree to comment on it.
         </div>
       </main>
     );
@@ -1264,7 +1264,7 @@ function FileHeaderMeta({ path }: { path: string }) {
   const loadPatch = useStore((s) => s.loadPatch);
   const openFileDraft = useStore((s) => s.openFileDraft);
   const external = useStore((s) => s.fileView?.external === true && s.fileView.path === path);
-  const commentable = useStore((s) => s.snapshot == null || commentsOff(s.snapshot.mode) == null);
+  const commentable = useStore((s) => s.snapshot == null || commentsOff(s.snapshot.review) == null);
   return (
     <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
       {count > 0 && (
