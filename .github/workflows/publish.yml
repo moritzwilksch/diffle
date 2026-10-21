@@ -31,9 +31,9 @@ jobs:
       contents: read
     uses: ./.github/workflows/npm-packages.yml
 
-  # Publishes the platform packages, then the launcher that depends on them. Trusted publishing
-  # (OIDC) signs in; `NPM_TOKEN`, when set, takes over for a package not yet enrolled. A package
-  # already at this version is skipped, so a rerun finishes what an earlier one left.
+  # Publishes the platform packages, then the launcher that depends on them, through trusted
+  # publishing (OIDC). A package already at this version is skipped, so a rerun finishes what an
+  # earlier one left.
   npm:
     needs: npm-packages
     runs-on: ubuntu-latest
@@ -51,8 +51,6 @@ jobs:
           name: npm-packages
           path: npm-packages
       - name: Publish packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for dir in npm-packages/diffle-* npm-packages/diffle; do
             name=$(jq -r .name "$dir/package.json")
