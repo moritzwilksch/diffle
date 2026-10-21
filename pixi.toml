@@ -1,7 +1,7 @@
 [workspace]
 name = "diffle"
 channels = ["conda-forge"]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64", "win-arm64"]
 
 [dependencies]
 # The same release rust-toolchain.toml names; rustup is not involved under pixi.
@@ -19,12 +19,14 @@ c-compiler = "*"
 install = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
 # npm builds the client alone; cargo builds the binary that embeds it, so the client comes first.
 build = { cmd = "npm run build", depends-on = ["install"] }
+release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
 # `pixi run diffle <args>`: a source run; a debug build reads dist/client from disk.
 diffle = { cmd = "cargo run --", depends-on = ["build"] }
-release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
-# Everything a change must pass before it is finished.
+# The suites: the client's, the server's, and the browser's over the release binary.
 test = { cmd = "npm test", depends-on = ["install"] }
-test-rust = { cmd = "cargo test", depends-on = ["install"] }
+test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["install"] }
+e2e = { cmd = "npm run test:e2e --", depends-on = ["release"] }
+e2e-report = { cmd = "npm run test:e2e:report", depends-on = ["install"] }
 typecheck = { cmd = "npm run typecheck", depends-on = ["install"] }
 lint = { cmd = "npm run lint && cargo clippy --all-targets -- -D warnings", depends-on = ["install"] }
 format = { cmd = "npm run format && cargo fmt --all", depends-on = ["install"] }
@@ -33,6 +35,17 @@ check = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install"] 
 install-hooks = "lefthook install"
 # `pixi run fixture <dir>` builds the repository the tests review, for hands-on testing.
 fixture = { cmd = "npm run fixture --", depends-on = ["install"] }
+# What a release ships: the binary proven over a repository, and the npm packages from the archives.
+smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle", depends-on = ["release"] }
+package = { cmd = "node scripts/package-binary.ts", depends-on = ["smoke"] }
+npm-packages = "node scripts/npm-packages.ts archives npm-packages --smoke"
+
+[target.win.tasks]
+smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle.exe", depends-on = ["release"] }
+
+[feature.lsp-web]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
+
 [feature.lsp-web.dependencies]
 typescript-language-server = "*"
 typescript = "*"
@@ -42,8 +55,14 @@ yaml-language-server = "*"
 tombi = "*"
 bash-language-server = "*"
 
+[feature.lsp-rust]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
+
 [feature.lsp-rust.dependencies]
 rust-analyzer = "*"
+
+[feature.lsp-python]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
 
 [feature.lsp-python.dependencies]
 pyrefly = "*"

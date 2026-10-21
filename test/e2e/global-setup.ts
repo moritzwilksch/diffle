@@ -1,15 +1,14 @@
+import { existsSync } from 'node:fs';
 import { ensureBrowserServer } from './browser-server.js';
-import { buildClient, buildServer } from './server.js';
+import { diffleCommand } from './server.js';
 
 /**
- * The release binary embeds `dist/client`, so the screenshots show whatever was built last. Build
- * the client, then the binary, from the current sources before every run; cargo rebuilds only
- * what changed. Then make sure the browser container answers; the teardown stops what this started.
+ * The suite drives the release binary, which embeds `dist/client`; `pixi run e2e` builds both
+ * first, and `DIFFLE_BIN=<path>` names another build. Then make sure the browser container
+ * answers; the teardown stops what this started.
  */
 export default async function globalSetup(): Promise<void> {
-  if (!process.env.DIFFLE_E2E_SKIP_BUILD) {
-    buildClient();
-    if (!process.env.DIFFLE_BIN) buildServer();
-  }
+  const [binary] = diffleCommand();
+  if (!existsSync(binary!)) throw new Error(`${binary} is not built; run \`pixi run e2e\`, which builds it first`);
   if (await ensureBrowserServer()) process.env.DIFFLE_BROWSER_STARTED = '1';
 }

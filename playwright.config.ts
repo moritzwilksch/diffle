@@ -7,7 +7,7 @@ import { connectOptions } from './test/e2e/browser-server.js';
  *
  * Screenshots are pixel-exact only on one platform and font stack, so the browser is always
  * Playwright's Linux Chromium, served from a container (`compose.yml`, started by the global
- * setup), while the runner and diffle run natively; `npm run test:e2e:update` regenerates them.
+ * setup), while the runner and diffle run natively; `pixi run e2e --update-snapshots` regenerates them.
  */
 export default defineConfig({
   testDir: 'test/e2e',

@@ -196,21 +196,15 @@ name, trust that address instead. A rejected request gets a 403 naming the heade
 The server is Rust (`crates/diffle`), the client TypeScript; you need a Rust toolchain
 (`rust-toolchain.toml` pins it) and Node.js.
 
-npm builds and tests the client; cargo builds and tests the server, whose release build embeds
-the client:
-
-```bash
-npm install
-npm run build
-cargo run -- working
-npm test && npm run typecheck && cargo test && cargo build --release
-```
-
-[pixi](https://pixi.sh) installs that toolchain, git and gh from `pixi.lock`; its tasks wrap the npm scripts:
+[pixi](https://pixi.sh) installs the toolchain, git, gh and lefthook from `pixi.lock`, and its tasks
+are the entry points, locally and in CI. npm builds and tests the client; cargo builds and tests
+the server, whose release build embeds the client.
 
 ```bash
 pixi run diffle working                   # build the client, then serve the working tree
-pixi run test && pixi run test-rust       # the suites, under the locked toolchain
+pixi run test && pixi run test-rust       # the client's and the server's suites
+pixi run check                            # the pre-commit hook over every file, as CI runs it
+pixi run release                          # the release binary
 pixi run -e lsp diffle working            # with real language servers on PATH
 pixi run -e lsp-python diffle lsp         # which servers an environment resolves
 ```
@@ -220,14 +214,14 @@ A debug build reads `dist/client` from disk: after a client change, run `npm run
 and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. The browser suite drives Playwright's Linux Chromium in a Docker container
-(`compose.yml`, started and stopped by the suite) while the tests and diffle run natively, so
-screenshots match CI on every host:
+(`compose.yml`, started and stopped by the suite) while the tests and the release binary run
+natively, so screenshots match CI on every host:
 
 ```bash
-npm run test:e2e                         # the browser suite
-npm run test:e2e -- -g search            # matching scenarios
-npm run test:e2e:report                  # open the last report
-npm run test:e2e:update                  # accept new screenshots
+pixi run e2e                              # the browser suite, after the release build
+pixi run e2e -g search                    # matching scenarios
+pixi run e2e-report                       # open the last report
+pixi run e2e --update-snapshots           # accept new screenshots
 ```
 
 See [AGENTS.md](AGENTS.md) for more.
