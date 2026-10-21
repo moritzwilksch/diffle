@@ -114,8 +114,6 @@ fn reads_as_an_agent_would_receive_it() {
         ),
         stale,
     ];
-    let pinned =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test/comments/__snapshots__/prompt.md"))
-            .unwrap();
+    let pinned = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snapshots/prompt.md")).unwrap();
     assert_eq!(format_prompt(&threads), pinned);
 }

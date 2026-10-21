@@ -323,8 +323,8 @@ async fn sends_the_committed_graphql_review_payloads() {
         .map(|c| json!({ "operation": op(&c.query), "input": c.variables["input"] }))
         .collect();
     let payload = json!({ "mutations": mutations, "result": res });
-    // The same payload the TS export pinned: both implementations answer to one snapshot.
-    let pinned = concat!(env!("CARGO_MANIFEST_DIR"), "/../../test/server/__snapshots__/review.json");
+    // The payload the TS export pinned before the port: the Rust export answers to the same snapshot.
+    let pinned = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snapshots/review.json");
     let expected: Value = serde_json::from_str(&std::fs::read_to_string(pinned).unwrap()).unwrap();
     assert_eq!(payload, expected);
 }
