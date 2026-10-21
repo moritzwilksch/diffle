@@ -20,6 +20,7 @@ jobs:
           fi
 
   build:
+    name: build (${{ matrix.os }})
     needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
