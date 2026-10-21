@@ -140,6 +140,13 @@ jobs:
       contents: read
     uses: ./.github/workflows/binaries.yml
 
+  # Assembles the npm packages from them and runs the launcher, so Publish never meets a surprise.
+  npm-packages:
+    needs: binaries
+    permissions:
+      contents: read
+    uses: ./.github/workflows/npm-packages.yml
+
   lockfile:
     runs-on: ubuntu-latest
     permissions:

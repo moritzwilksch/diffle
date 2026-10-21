@@ -1,0 +1,34 @@
+{
+  "name": "@moritzwilksch/diffle",
+  "version": "0.0.0",
+  "description": "Local git diff reviewer in the browser with line comments exported as agent prompts",
+  "keywords": [
+    "agent",
+    "cli",
+    "code-review",
+    "diff",
+    "git"
+  ],
+  "homepage": "https://diffle.app",
+  "bugs": {
+    "url": "https://github.com/moritzwilksch/diffle/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "Moritz Wilksch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moritzwilksch/diffle.git"
+  },
+  "bin": {
+    "diffle": "bin/diffle.js"
+  },
+  "files": [
+    "bin",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "type": "module",
+  "optionalDependencies": {},
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -5,8 +5,6 @@ on:
       - v*
 
 jobs:
-  # npm publishing is paused until the binaries ship as per-platform npm packages; releases
-  # carry the binaries and the installers alone.
   verify:
     runs-on: ubuntu-latest
     permissions:
@@ -27,9 +25,48 @@ jobs:
       contents: read
     uses: ./.github/workflows/binaries.yml
 
+  npm-packages:
+    needs: binaries
+    permissions:
+      contents: read
+    uses: ./.github/workflows/npm-packages.yml
+
+  # Publishes the platform packages, then the launcher that depends on them. Trusted publishing
+  # (OIDC) signs in; `NPM_TOKEN`, when set, takes over for a package not yet enrolled. A package
+  # already at this version is skipped, so a rerun finishes what an earlier one left.
+  npm:
+    needs: npm-packages
+    runs-on: ubuntu-latest
+    environment: npmjs
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-packages
+          path: npm-packages
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for dir in npm-packages/diffle-* npm-packages/diffle; do
+            name=$(jq -r .name "$dir/package.json")
+            version=$(jq -r .version "$dir/package.json")
+            if npm view "$name@$version" version > /dev/null 2>&1; then
+              echo "$name@$version is already published."
+              continue
+            fi
+            npm publish "$dir" --access public --provenance
+          done
+
   # Attaches the binaries, their checksums, and the installers to the tag's release.
   release:
-    needs: [binaries]
+    needs: [binaries, npm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
