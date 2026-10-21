@@ -1,4 +1,4 @@
-//! Mirrors `LANGUAGE_BY_EXT` in `protocol.ts`: which language server a file's extension selects.
+//! Which language server a file's extension selects; the client keeps the same table.
 use std::collections::BTreeSet;
 
 use super::LanguageId::{self, *};

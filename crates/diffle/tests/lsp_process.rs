@@ -1,4 +1,4 @@
-//! One language server process against the fake server the TS suite uses, run with `node`.
+//! One language server process against the fake server in `test/lsp`, run with `node`.
 #![cfg(unix)]
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

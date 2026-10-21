@@ -55,7 +55,7 @@ on their own.";
     disable_help_flag = true,
     disable_version_flag = true,
     disable_help_subcommand = true,
-    // A repeated option takes its last value, as commander did: a wrapper may add its own `--port`.
+    // A repeated option takes its last value: a wrapper may add its own `--port` after the user's.
     args_override_self = true,
     max_term_width = 100
 )]
@@ -75,7 +75,7 @@ pub struct Cli {
     pub command: Option<Command>,
 }
 
-/// What a review run takes; given before the shorthand, after it, or both, as commander merges them.
+/// What a review run takes; given before the shorthand, after it, or both, merged with the later winning.
 #[derive(Args, Debug, Clone, Default)]
 pub struct GlobalOpts {
     /// run as if started in <path> (any directory inside a git worktree)

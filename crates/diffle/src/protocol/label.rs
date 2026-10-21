@@ -1,4 +1,4 @@
-//! Ports of the label helpers in `protocol.ts`; the client renders the same strings.
+//! The labels the header shows; the client renders the same strings.
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -31,7 +31,7 @@ pub fn plain_label(old: &str, new: &str, base: ComparisonBase) -> String {
     }
 }
 
-/// How the header names a review; see `comparisonLabel` in `protocol.ts`.
+/// How the header names a review, as the client labels it too.
 pub fn comparison_label(review: &Review) -> String {
     let Review::Range { old, new, base, view, .. } = review else {
         let Review::Commit { sha } = review else { unreachable!() };

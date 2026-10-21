@@ -1,10 +1,31 @@
-//! Durable writes under `<git-dir>/diffle/`: atomic replacement and a cross-process lock.
+//! Durable writes under `<git-dir>/diffle/`: atomic replacement and a cross-process lock; and where
+//! diffle's per-user files live.
 use std::fs::{File, OpenOptions, TryLockError};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
+
+/// `$XDG_CONFIG_HOME/diffle`, or `~/.config/diffle`: the same place on every platform, so a run
+/// can be pointed at its own settings by the one variable.
+pub fn user_config_dir() -> PathBuf {
+    user_dir("XDG_CONFIG_HOME", ".config")
+}
+
+/// `$XDG_CACHE_HOME/diffle`, or `~/.cache/diffle`.
+pub fn user_cache_dir() -> PathBuf {
+    user_dir("XDG_CACHE_HOME", ".cache")
+}
+
+fn user_dir(var: &str, under_home: &str) -> PathBuf {
+    let base = std::env::var_os(var)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::home_dir().map(|h| h.join(under_home)))
+        .unwrap_or_else(std::env::temp_dir);
+    base.join("diffle")
+}
 
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCK_POLL: Duration = Duration::from_millis(15);

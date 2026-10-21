@@ -1,5 +1,5 @@
-//! Port of `lsp.ts`: how a language-server query's fate is decided from one status, so the
-//! client's flash and the API's 409 say the same thing.
+//! How a language-server query's fate is decided from one status; the client decides the same way,
+//! so its flash and the API's 409 say the same thing.
 use super::{LanguageId, LspFeature, LspServerStatus, LspState, LspStatus, Snapshot, follows_checkout, language_of};
 
 /// How messages name a feature: "pyrefly offers no go to definition".

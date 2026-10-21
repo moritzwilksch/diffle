@@ -1,4 +1,4 @@
-//! Port of `fuzzy.ts`: ranks workspace symbols the way the client filters them.
+//! Ranks workspace symbols; the client filters with the same scoring, so both sides agree on the order.
 
 const MATCH: f64 = 1.0;
 const WORD_START: f64 = 8.0;

@@ -1,4 +1,4 @@
-//! The TS suite's fake language server (`test/lsp/fake-lsp.mjs`), run with `node` under real commands.
+//! The fake language server (`test/lsp/fake-lsp.mjs`), run with `node` under real commands.
 //!
 //! A shared bin directory, prepended to PATH once per test binary, holds one wrapper per command the
 //! tests name (`fake`, `py-server`, ...). Each runs the fake with its working directory, the server's

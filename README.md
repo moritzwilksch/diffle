@@ -3,6 +3,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/moritzwilksch/diffle/ci.yml?style=flat-square&branch=main)](https://github.com/moritzwilksch/diffle/actions/workflows/ci.yml)
 [![conda-forge](https://img.shields.io/conda/vn/conda-forge/diffle?logoColor=white&logo=conda-forge&style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
 [![conda-forge-platforms](https://img.shields.io/conda/pn/conda-forge/diffle?style=flat-square)](https://prefix.dev/channels/conda-forge/packages/diffle)
+[![npm](https://img.shields.io/npm/v/%40moritzwilksch%2Fdiffle?logo=npm&logoColor=white&style=flat-square)](https://npmx.dev/package/@moritzwilksch/diffle)
 [![website](https://img.shields.io/badge/website-diffle.app-0349b4?style=flat-square)](https://diffle.app)
 
 Review a Git diff in the browser and comment on lines, blocks, or whole files. Then hand the
@@ -18,7 +19,7 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 
 ```bash
 pixi global install diffle               # conda-forge
-npm install -g @moritzwilksch/diffle     # npm: a launcher plus this platform's binary
+npm install -g @moritzwilksch/diffle     # npm
 ```
 
 Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon macOS:
@@ -208,13 +209,13 @@ npm test && npm run typecheck && cargo test && cargo build --release
 [pixi](https://pixi.sh) installs that toolchain, git and gh from `pixi.lock`; its tasks wrap the npm scripts:
 
 ```bash
-pixi run dev                              # build the client, then serve the working tree
+pixi run diffle working                   # build the client, then serve the working tree
 pixi run test && pixi run test-rust       # the suites, under the locked toolchain
-pixi run -e lsp dev                       # with real language servers on PATH
-pixi run -e lsp-python lsp                # which servers an environment resolves
+pixi run -e lsp diffle working            # with real language servers on PATH
+pixi run -e lsp-python diffle lsp         # which servers an environment resolves
 ```
 
-`npm run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `npm run check` runs the same hook over every file, as CI does.
+`pixi run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `pixi run check` runs the same hook over every file, as CI does.
 A debug build reads `dist/client` from disk: after a client change, run `npm run build`
 and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,

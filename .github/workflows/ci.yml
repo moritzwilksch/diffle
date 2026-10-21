@@ -124,15 +124,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
+      # The hook needs node, cargo and lefthook, all from the pixi environment.
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       # The hook runs clippy.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Install
-        run: npm ci
       - name: Pre-commit hook
-        run: npm run check
+        run: pixi run check
 
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
   binaries:

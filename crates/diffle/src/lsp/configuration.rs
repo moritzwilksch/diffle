@@ -32,12 +32,7 @@ pub fn schema_associations(v: &Value) -> Vec<Value> {
 }
 
 fn default_cache() -> PathBuf {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::home_dir().map(|h| h.join(".cache")))
-        .unwrap_or_else(std::env::temp_dir);
-    base.join("diffle").join("schemastore.json")
+    crate::persist::user_cache_dir().join("schemastore.json")
 }
 
 /// The schema catalog, cached for a day; the last good copy answers when offline.

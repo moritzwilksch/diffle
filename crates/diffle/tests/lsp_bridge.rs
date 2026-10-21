@@ -1,4 +1,4 @@
-//! One language server as diffle asks it, against the fake the TS suite uses.
+//! One language server as diffle asks it, against the fake server in `test/lsp`.
 #![cfg(unix)]
 mod common;
 
@@ -421,7 +421,7 @@ async fn files_shown_messages_log_messages_and_stderr_in_one_log_and_lets_only_s
         .await;
     // Log messages never become the notice, and a warning in the log is no reason to doubt an empty answer.
     assert_eq!(json_of(&s.bridge.hover(&pos("a.py", 1, 0)).await.unwrap()), json!({ "contents": null }));
-    // The settle mark is a stderr line of its own here; the rest matches the TS log entry for entry.
+    // The settle mark is a stderr line of its own; the rest is the log, entry for entry.
     let entries: Vec<_> = s.bridge.entries().into_iter().filter(|e| !e.message.starts_with("mark ")).collect();
     let rows: Vec<(String, String, String, u64)> =
         entries.iter().map(|e| (e.source.to_string(), e.level.to_string(), e.message.clone(), e.count.get())).collect();
@@ -437,7 +437,7 @@ async fn files_shown_messages_log_messages_and_stderr_in_one_log_and_lets_only_s
         ]
     );
     assert_eq!(before.len(), 2, "the open line and the mark come first");
-    // Two warnings from the repeated line count once each; the mark is one more log line than in TS.
+    // Two warnings from the repeated line count once each; the mark is one more log line.
     assert_eq!(json_of(&s.bridge.status().log), json!({ "seq": 7, "errors": 1, "warnings": 3 }));
     s.bridge.close().await;
 }

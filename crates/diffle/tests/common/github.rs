@@ -1,4 +1,4 @@
-//! A GitHub that answers GraphQL by query shape, as the TS fakes do.
+//! A GitHub that answers GraphQL by query shape.
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -41,7 +41,7 @@ impl FakeGithub {
         self.calls.lock().unwrap().clear();
     }
 
-    /// Removes the last recorded call and answers its variables, as the TS tests' `calls.pop()`.
+    /// Removes the last recorded call and answers its variables.
     pub fn pop(&self) -> Value {
         self.calls.lock().unwrap().pop().expect("a recorded call").variables
     }

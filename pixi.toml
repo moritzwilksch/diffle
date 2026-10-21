@@ -10,6 +10,7 @@ nodejs = "24.*"
 git = ">=2.40"
 gh = "*"
 cmake = "*"
+lefthook = "*"
 
 [target.linux.dependencies]
 c-compiler = "*"
@@ -18,8 +19,8 @@ c-compiler = "*"
 install = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
 # npm builds the client alone; cargo builds the binary that embeds it, so the client comes first.
 build = { cmd = "npm run build", depends-on = ["install"] }
-# A local source run: a debug build reads dist/client from disk.
-dev = { cmd = "cargo run -- working --no-open", depends-on = ["build"] }
+# `pixi run diffle <args>`: a source run; a debug build reads dist/client from disk.
+diffle = { cmd = "cargo run --", depends-on = ["build"] }
 release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
 # Everything a change must pass before it is finished.
 test = { cmd = "npm test", depends-on = ["install"] }
@@ -28,16 +29,10 @@ typecheck = { cmd = "npm run typecheck", depends-on = ["install"] }
 lint = { cmd = "npm run lint && cargo clippy --all-targets -- -D warnings", depends-on = ["install"] }
 format = { cmd = "npm run format && cargo fmt --all", depends-on = ["install"] }
 # The pre-commit hook over every file, as CI's lint job runs it.
-check = { cmd = "npm run check", depends-on = ["install"] }
-install-hooks = { cmd = "npm run install-hooks", depends-on = ["install"] }
+check = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install"] }
+install-hooks = "lefthook install"
 # `pixi run fixture <dir>` builds the repository the tests review, for hands-on testing.
 fixture = { cmd = "npm run fixture --", depends-on = ["install"] }
-# `diffle lsp` lists which servers an environment resolves.
-lsp = { cmd = "cargo run -- lsp", depends-on = ["install"] }
-
-# Language servers on PATH, grouped as the Nix flake's packages are. `pixi run -e lsp dev` reviews
-# with all of them; a narrower environment keeps the others out of the probe. The JSON, CSS and
-# HTML servers (vscode-langservers-extracted) are absent: conda-forge's build pins Node 22.
 [feature.lsp-web.dependencies]
 typescript-language-server = "*"
 typescript = "*"

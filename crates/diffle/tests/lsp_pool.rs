@@ -1,4 +1,4 @@
-//! The run's language servers as a pool, against the fake the TS suite uses under several commands.
+//! The run's language servers as a pool, against the fake server in `test/lsp` under several commands.
 #![cfg(unix)]
 mod common;
 

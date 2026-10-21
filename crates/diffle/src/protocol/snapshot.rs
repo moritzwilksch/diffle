@@ -1,4 +1,4 @@
-//! Ports of the snapshot and review helpers in `protocol.ts`.
+//! Helpers over a snapshot and a review that the client shares.
 use super::{RangeRef, RangeView, Review, Side, Snapshot};
 
 /// Names the bytes of one side of `path`, or none when the side has no name: a changed file's

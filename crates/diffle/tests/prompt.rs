@@ -1,5 +1,5 @@
-//! One realistic export, pinned to the same file as the TypeScript test, so a change to the format
-//! is judged by reading the prompt an agent would receive.
+//! One realistic export, pinned as a snapshot, so a change to the format is judged by reading the
+//! prompt an agent would receive.
 use diffle::comments::format::format_prompt;
 use diffle::protocol::{CommentAnchor, CommentMessage, CommentThread, Side};
 

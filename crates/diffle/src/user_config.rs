@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use serde_json::{Map, Value};
 
-use crate::persist::write_file_atomic;
+use crate::persist::{user_config_dir, write_file_atomic};
 use crate::protocol::{FollowRefs, LanguageId, UserConfig, language_ids};
 
 /// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/githubHosts).
@@ -17,15 +17,16 @@ pub struct UserConfigPatch {
     pub line_wrap: Option<bool>,
 }
 
-/// `DEFAULT_USER_CONFIG`.
-pub fn default_user_config() -> UserConfig {
-    UserConfig {
-        auto_viewed: Vec::new(),
-        context_lines: 5,
-        follow_refs: FollowRefs::Auto,
-        line_wrap: true,
-        lsp_commands: HashMap::new(),
-        github_hosts: HashMap::new(),
+impl Default for UserConfig {
+    fn default() -> Self {
+        Self {
+            auto_viewed: Vec::new(),
+            context_lines: 5,
+            follow_refs: FollowRefs::Auto,
+            line_wrap: true,
+            lsp_commands: HashMap::new(),
+            github_hosts: HashMap::new(),
+        }
     }
 }
 
@@ -38,11 +39,7 @@ pub struct UserConfigStore {
 
 impl UserConfigStore {
     pub fn default_path() -> PathBuf {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| std::env::home_dir().unwrap_or_default().join(".config"));
-        base.join("diffle").join("config.json")
+        user_config_dir().join("config.json")
     }
 
     /// Reads `file`; an absent file is the defaults, and so is an unreadable one, with a warning.
@@ -52,13 +49,13 @@ impl UserConfigStore {
                 Ok(value) => normalize(&value),
                 Err(e) => {
                     crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
-                    default_user_config()
+                    UserConfig::default()
                 }
             },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => default_user_config(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => UserConfig::default(),
             Err(e) => {
                 crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
-                default_user_config()
+                UserConfig::default()
             }
         };
         Self { file, config: Mutex::new(config), writing: tokio::sync::Mutex::new(()) }
@@ -96,7 +93,7 @@ impl UserConfigStore {
 
 /// Whatever the file holds, as a valid config: each field that is missing or malformed takes its default.
 fn normalize(value: &Value) -> UserConfig {
-    let defaults = default_user_config();
+    let defaults = UserConfig::default();
     let empty = Map::new();
     let c = value.as_object().unwrap_or(&empty);
     let auto_viewed = match c.get("autoViewed") {
