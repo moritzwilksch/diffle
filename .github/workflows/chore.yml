@@ -1,7 +1,8 @@
 name: Chore
 on:
-  # Runs with write permissions: process PR metadata only; never execute PR code.
-  pull_request_target:
+  # Runs with write permissions so it can comment on fork pull requests: it reads PR metadata
+  # only and never checks out or executes PR code, which is what the audit warns about.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     branches: [main]
     types: [opened, reopened, edited, synchronize]
 
