@@ -1,0 +1,9 @@
+# Generated files: collapsed in review (GitHub and diffle read linguist-generated), and never
+# merged line by line (merge=binary leaves the conflict to the tool that writes the file).
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true -diff
+Cargo.lock merge=binary linguist-generated=true
+package-lock.json merge=binary linguist-generated=true
+crates/diffle/protocol.generated.json merge=binary linguist-generated=true
+THIRD_PARTY_NOTICES.md merge=binary linguist-generated=true
+# git-cliff writes it from the squash-merged titles.
+CHANGELOG.md linguist-generated=true
