@@ -19,8 +19,9 @@ impl TestRepo {
     /// An empty repository on `main`, with a fixed identity and no global config.
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        // The canonical path: git prints it, and macOS's /var is a link to /private/var.
-        let path = dir.path().canonicalize().unwrap();
+        // The canonical path as git prints it: macOS's /var is a link to /private/var, and
+        // Windows gets the drive form rather than the verbatim `\\?\` one.
+        let path = dunce::canonicalize(dir.path()).unwrap();
         let repo = Self { _dir: dir, path };
         repo.git(&["init", "-q", "-b", "main"]);
         // Git's detached background maintenance writes refs after a commit, a watcher signal no test expects.
