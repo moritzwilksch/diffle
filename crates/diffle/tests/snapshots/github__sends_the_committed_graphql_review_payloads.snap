@@ -1,0 +1,60 @@
+---
+source: crates/diffle/tests/github.rs
+expression: payload
+---
+{
+  "mutations": [
+    {
+      "input": {
+        "commitOID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "pullRequestId": "PR_7",
+        "threads": [
+          {
+            "body": "`KWD` has no symbol.\n\n```suggestion\n_SYMBOLS = {\"KWD\": \"KD\"}\n```\n\n<!-- diffle-thread:symbol -->",
+            "line": 7,
+            "path": "tally/currency.py",
+            "side": "RIGHT"
+          },
+          {
+            "body": "Say what counts as a refund here.\n\n<!-- diffle-thread:kind -->",
+            "line": 4,
+            "path": "tally/ledger.py",
+            "side": "RIGHT",
+            "startLine": 3,
+            "startSide": "RIGHT"
+          },
+          {
+            "body": "Still called by cron.\n\n<!-- diffle-thread:removed -->",
+            "line": 15,
+            "path": "tally/legacy.py",
+            "side": "LEFT",
+            "startLine": 9,
+            "startSide": "LEFT"
+          }
+        ]
+      },
+      "operation": "createReview"
+    },
+    {
+      "input": {
+        "body": "Fold this into ledger.py.\n\n<!-- diffle-thread:module -->",
+        "path": "tally/refunds.py",
+        "pullRequestReviewId": "PRR_NEW",
+        "subjectType": "FILE"
+      },
+      "operation": "addThread"
+    }
+  ],
+  "result": {
+    "posted": 4,
+    "review": "created",
+    "skipped": [
+      {
+        "id": "gone",
+        "reason": "stale"
+      }
+    ],
+    "updated": 0,
+    "url": "https://github.com/o/r/pull/7"
+  }
+}
