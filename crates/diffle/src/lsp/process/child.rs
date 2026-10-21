@@ -87,3 +87,19 @@ pub(super) fn exit_reason(status: &std::process::ExitStatus) -> String {
     }
     status.code().map_or_else(|| "unknown".into(), |c| c.to_string())
 }
+
+/// `spawn`, tried again briefly when the executable is busy: on Linux a program written moments ago
+/// can still be held open for writing by another process mid-fork, as a package manager that just
+/// installed a server, and the window closes on its own.
+pub(super) async fn spawn_settled(cmd: &mut tokio::process::Command) -> std::io::Result<tokio::process::Child> {
+    let mut attempt = 0;
+    loop {
+        match cmd.spawn() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && attempt < 10 => {
+                attempt += 1;
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+            result => return result,
+        }
+    }
+}

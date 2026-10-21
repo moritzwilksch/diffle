@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use capabilities::truthy;
-use child::{command, signal};
+use child::{command, signal, spawn_settled};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
@@ -205,10 +205,13 @@ impl LspProcess {
     }
 
     async fn launch(self: &Arc<Self>, opts: ProcessOptions) -> std::result::Result<(), ()> {
-        let spawned = command(&opts.command).and_then(|mut cmd| {
-            cmd.current_dir(&opts.root).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-            cmd.spawn().map_err(|e| e.to_string())
-        });
+        let spawned = match command(&opts.command) {
+            Ok(mut cmd) => {
+                cmd.current_dir(&opts.root).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+                spawn_settled(&mut cmd).await.map_err(|e| e.to_string())
+            }
+            Err(e) => Err(e),
+        };
         let mut child = match spawned {
             Ok(child) => child,
             Err(e) => {
