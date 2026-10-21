@@ -32,7 +32,7 @@ jobs:
           cargo build --release --locked
       - name: Smoke test
         shell: bash
-        run: node scripts/smoke-binary.mjs target/release/diffle${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: node scripts/smoke-binary.ts target/release/diffle${{ runner.os == 'Windows' && '.exe' || '' }}
       - name: Archive
         shell: bash
         run: |

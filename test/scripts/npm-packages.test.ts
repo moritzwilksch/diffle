@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TARGETS, assemble, smoke } from '../../scripts/npm-packages.mjs';
+import { TARGETS, assemble, smoke } from '../../scripts/npm-packages.js';
 import { rmTmp } from '../tmp.js';
 
 const version = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
