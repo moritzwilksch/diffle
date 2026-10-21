@@ -19,11 +19,12 @@ pub fn vue_plugin_location(executable: &Path) -> Option<PathBuf> {
     let real = real_executable(executable);
     let bin = real.parent().unwrap_or(Path::new(""));
     let up = bin.parent().unwrap_or(Path::new(""));
+    // Joined a component at a time: a slash inside one would stay a slash on Windows.
     let candidates = [
         up.to_path_buf(),
-        executable.parent().unwrap_or(Path::new("")).join("node_modules/@vue/language-server"),
-        up.join("lib/node_modules/@vue/language-server"),
-        up.join("lib/language-tools/packages/language-server"),
+        executable.parent().unwrap_or(Path::new("")).join("node_modules").join("@vue").join("language-server"),
+        up.join("lib").join("node_modules").join("@vue").join("language-server"),
+        up.join("lib").join("language-tools").join("packages").join("language-server"),
     ];
     // The same walk up `node_modules` tsserver makes from the location it is given.
     candidates.into_iter().find(|dir| resolve_package(dir, VUE_PLUGIN).is_some())

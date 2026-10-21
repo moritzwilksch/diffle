@@ -71,7 +71,7 @@ jobs:
       # rustup reads rust-toolchain.toml on the first cargo call.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Test
-        run: cargo test --locked
+        run: cargo test --locked --no-fail-fast
 
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
   # here as on every developer machine: the screenshots are the container's.
