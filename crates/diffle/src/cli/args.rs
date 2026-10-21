@@ -48,6 +48,8 @@ on their own.";
 #[derive(Parser, Debug)]
 #[command(
     name = "diffle",
+    // Usage lines and completion scripts name the command the same on every platform, not `diffle.exe`.
+    bin_name = "diffle",
     about = "Review a git diff in the browser and export line comments as an agent prompt.",
     after_help = AFTER_HELP,
     disable_help_flag = true,
