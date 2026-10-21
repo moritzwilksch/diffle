@@ -20,7 +20,11 @@ git('add', '.');
 git('commit', '-qm', 'init');
 writeFileSync(join(repo, 'a.txt'), 'two\n');
 
-const child = spawn(binary, ['working', '--no-open', '--no-lsp', '--port', '0'], { cwd: repo });
+// The URL is read off the status line, so no colour, whatever CI forces on the terminal.
+const child = spawn(binary, ['working', '--no-open', '--no-lsp', '--port', '0'], {
+  cwd: repo,
+  env: { ...process.env, NO_COLOR: '1' },
+});
 try {
   const base = await new Promise<string>((res, rej) => {
     let err = '';

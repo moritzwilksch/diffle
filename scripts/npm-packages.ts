@@ -97,7 +97,11 @@ export function smoke(out: string, version: string): string {
     cpSync(join(out, 'diffle'), join(scope, 'diffle'), { recursive: true });
     cpSync(join(out, name), join(scope, name), { recursive: true });
     const launcher = join(scope, 'diffle', 'bin', 'diffle.js');
-    const printed = execFileSync(process.execPath, [launcher, '--version'], { encoding: 'utf8' }).trim();
+    const printed = execFileSync(process.execPath, [launcher, '--version'], {
+      encoding: 'utf8',
+      // Compared byte for byte, so no colour, whatever CI forces on the terminal.
+      env: { ...process.env, NO_COLOR: '1' },
+    }).trim();
     if (printed !== version) throw new Error(`the launcher ran a binary reporting ${printed}, not ${version}`);
     return printed;
   } finally {
