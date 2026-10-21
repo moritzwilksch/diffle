@@ -6,7 +6,8 @@
 macro_rules! status {
     ($($arg:tt)*) => {{
         use ::std::io::Write as _;
-        let _ = writeln!(::std::io::stderr(), $($arg)*);
+        // anstream drops the styles when stderr is not a terminal or NO_COLOR is set.
+        let _ = writeln!(::anstream::stderr(), $($arg)*);
     }};
 }
 pub mod cli;

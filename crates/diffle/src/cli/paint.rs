@@ -1,34 +1,31 @@
-//! Minimal ANSI colours for status lines; off when stderr is not a terminal or NO_COLOR is set.
-use std::io::IsTerminal;
-use std::sync::LazyLock;
+//! The styles of status lines. `status!` writes through anstream, which keeps them on a terminal
+//! and strips them otherwise, so callers style unconditionally.
+use anstyle::{AnsiColor, Style};
 
-static COLOR: LazyLock<bool> =
-    LazyLock::new(|| std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none());
-
-fn paint(code: &str, s: &str) -> String {
-    if *COLOR { format!("\u{1b}[{code}m{s}\u{1b}[0m") } else { s.to_owned() }
+fn styled(style: Style, s: &str) -> String {
+    format!("{style}{s}{style:#}")
 }
 
 pub fn red(s: &str) -> String {
-    paint("31", s)
+    styled(AnsiColor::Red.on_default(), s)
 }
 
 pub fn green(s: &str) -> String {
-    paint("32", s)
+    styled(AnsiColor::Green.on_default(), s)
 }
 
 pub fn yellow(s: &str) -> String {
-    paint("33", s)
+    styled(AnsiColor::Yellow.on_default(), s)
 }
 
 pub fn cyan(s: &str) -> String {
-    paint("36", s)
+    styled(AnsiColor::Cyan.on_default(), s)
 }
 
 pub fn bold(s: &str) -> String {
-    paint("1", s)
+    styled(Style::new().bold(), s)
 }
 
 pub fn dim(s: &str) -> String {
-    paint("2", s)
+    styled(Style::new().dimmed(), s)
 }
