@@ -132,17 +132,34 @@ jobs:
         run: pixi run check
 
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
-  binaries:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-latest, target: darwin-arm64 }
+          - { os: windows-latest, target: windows-x64 }
+          - { os: windows-11-arm, target: windows-arm64 }
     permissions:
       contents: read
-    uses: ./.github/workflows/binaries.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/build-binary
+        with:
+          target: ${{ matrix.target }}
 
   # Assembles the npm packages from them and runs the launcher, so Publish never meets a surprise.
   npm-packages:
-    needs: binaries
+    needs: build
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-    uses: ./.github/workflows/npm-packages.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/npm-packages
 
   lockfile:
     runs-on: ubuntu-latest
