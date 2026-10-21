@@ -21,6 +21,9 @@ pre-commit:
       run: cargo clippy --locked --all-targets -- -D warnings
     - name: quality-gate
       run: npm run quality-gate
+    - name: licenses
+      glob: "{Cargo.lock,about.toml,about.hbs}"
+      run: pixi run licenses
     - name: zizmor
       glob: "*.{yml,yaml}"
       run: pixi {run} zizmor --no-progress --min-severity high --fix --offline .

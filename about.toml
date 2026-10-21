@@ -1,0 +1,24 @@
+# cargo-about: the licences the release binary may carry. `pixi run licenses` regenerates
+# THIRD_PARTY_NOTICES.md from the lockfile through about.hbs, and a crate under anything not
+# listed here fails that run, so a new licence is accepted here on purpose or not at all.
+# Listed in order of preference where a crate offers a choice.
+accepted = [
+  "MIT",
+  "Apache-2.0",
+  "MIT-0",
+  "0BSD",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "Unlicense",
+  "CC0-1.0",
+  "BSL-1.0",
+  "MPL-2.0",
+  "CDLA-Permissive-2.0",
+]
+
+# Only what ends up in the binary.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true

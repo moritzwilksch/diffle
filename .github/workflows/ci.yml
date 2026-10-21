@@ -182,3 +182,12 @@ jobs:
             echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
             exit 1
           }
+      # The notices file is generated from Cargo.lock; the pre-commit hook regenerates it, and this
+      # catches a commit that skipped the hook or a crate whose licence about.toml does not accept.
+      - name: Check THIRD_PARTY_NOTICES.md is up to date
+        run: |
+          pixi run licenses
+          git diff --exit-code -- THIRD_PARTY_NOTICES.md || {
+            echo "::error file=THIRD_PARTY_NOTICES.md::THIRD_PARTY_NOTICES.md is out of date; run \`pixi run licenses\` and commit the result."
+            exit 1
+          }
