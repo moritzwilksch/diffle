@@ -158,7 +158,7 @@ server-side owners or client state.
 - **`Snapshot`**: the review at one version, which only the session advances. It carries the
   `review` itself, the resolved `oldSha` and `newSha` (either may be the worktree sentinel, an
   interdiff's old side is a replayed tree), `headSha`, what it `follows` (`worktree`, `refs` or
-  `none`), the `commentKey` or null while comments are off, the `context` lines, the `changed`
+  `none`), the `commentKey`, the `context` lines, the `changed`
   files, the full new-side `tree` (the read allowlist), the shown `commit` with its neighbours, the
   range's `commits`, its recorded `iterations`, and the resolved `interdiff` for that view.
 - **`ChangedFile`**: one entry of the diff: `path` and `oldPath`, a Git `status` letter,
@@ -258,7 +258,7 @@ resolved and activated, and the response carries the first snapshot. The client 
 generation. A slice keeps the range's commits listed and its iterations recorded, so the reviewer
 moves between a commit, the uncommitted changes, an interdiff and the whole range without leaving
 the range; the snapshot's `follows` and `commentKey` say what each slice follows and where its
-comments live, and comments are off in an interdiff.
+comments live; an interdiff keeps viewed marks but takes no new threads.
 
 ### Comments out
 

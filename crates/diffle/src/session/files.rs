@@ -107,8 +107,8 @@ impl Session {
     /// would live under a key the range never shows.
     pub fn anchor_source(self: &Arc<Self>) -> Result<impl AnchorSource + use<>> {
         let a = self.active()?;
-        if a.comments.is_none() {
-            return Err(super::comments_off(&a.review));
+        if let Some(off) = super::comments_off(&a.review) {
+            return Err(off);
         }
         Ok(Placer { session: self.clone(), snapshotter: a.snapshotter.clone() })
     }
@@ -117,9 +117,8 @@ impl Session {
     /// tree file shows its new side whole (the file view) and nothing of its old side. A file thread
     /// only needs its file in the review.
     pub(super) async fn relocate_comments(self: &Arc<Self>, a: &Active, snap: &Arc<Snapshot>) -> Result<()> {
-        let Some(comments) = &a.comments else { return Ok(()) };
         let view = Review { session: self, snapshotter: &a.snapshotter, snap };
-        comments.relocate_all(&view).await.map(drop)
+        a.comments.relocate_all(&view).await.map(drop)
     }
 }
 

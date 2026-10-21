@@ -3,7 +3,7 @@
 use crate::error::Result;
 use crate::git::{GitRepo, WORKTREE};
 use crate::github::hosts::{GithubInstance, github_repository};
-use crate::protocol::{ComparisonBase, PullRef, ref_name};
+use crate::protocol::{ComparisonBase, PullRef, RangeEnds, ref_name};
 
 /// The uncommitted changes, whether entered as `working` or reached from a range ending at the worktree.
 pub const WORKING: &str = "working";
@@ -16,6 +16,16 @@ pub fn commit_key(sha: &str) -> String {
 /// One pair of an interdiff: `old` amended into `new`, under the range both belong to.
 pub fn pair_key(range_key: &str, old: &str, new: &str) -> String {
     format!("{range_key}:pair:{old}-{new}")
+}
+
+/// Two recorded iterations of a range compared, under the range.
+pub fn interdiff_key(range_key: &str, from: i64, to: i64) -> String {
+    format!("{range_key}:interdiff:{from}-{to}")
+}
+
+/// Two named ranges compared, by what they resolved to.
+pub fn range_diff_key(from: &RangeEnds, to: &RangeEnds) -> String {
+    format!("range-diff:{}..{}:{}..{}", from.old_sha, from.new_sha, to.old_sha, to.new_sha)
 }
 
 /// Keys read like the range, with ... for a merge base and .. otherwise.

@@ -75,8 +75,7 @@ impl Session {
                 if !self.is_active(&a) || !Arc::ptr_eq(&snap, &a.snapshotter.current().await?) {
                     return Err(changed().into());
                 }
-                let comments = self.comments()?;
-                let threads = comments.threads(&ThreadQuery { state: Some(ThreadState::All), path: None }).await?;
+                let threads = a.comments.threads(&ThreadQuery { state: Some(ThreadState::All), path: None }).await?;
                 Ok(ExportInput { new_sha: snap.new_sha.clone(), pull_request, threads, thread_ids, github: client })
             })
             .await

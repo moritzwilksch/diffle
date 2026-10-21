@@ -101,8 +101,8 @@ async fn records_an_iteration_per_loaded_range_state_and_compares_two_across_a_r
     let inter = s.show(interdiff(nth(1), Some(nth(2)), None)).await.unwrap();
     assert_eq!(json(&inter.review), json(&with_view(&first.review, interdiff(nth(1), Some(nth(2)), None)).unwrap()));
     assert_eq!(
-        (inter.new_sha.as_str(), inter.follows, inter.comment_key.as_deref()),
-        (second.new_sha.as_str(), Live::Refs, None)
+        (inter.new_sha.as_str(), inter.follows, inter.comment_key.as_str()),
+        (second.new_sha.as_str(), Live::Refs, format!("{}:interdiff:1-2", first.comment_key).as_str())
     );
     assert_eq!(json(&range_of(&inter.review)), json(&first.review));
     assert_eq!(shown_iterations(&inter.review), Some((1, 2)));
@@ -121,7 +121,7 @@ async fn records_an_iteration_per_loaded_range_state_and_compares_two_across_a_r
     assert_eq!(inter.iterations.len(), 2);
     assert_eq!(comparison_label(&inter.review), "main...feat #1→#2");
     assert!(matches!(s.anchor_source().err(), Some(Error::Revspec(_))));
-    assert!(matches!(s.comments().err(), Some(Error::Revspec(_))));
+    assert_eq!(s.comments().unwrap().key(), inter.comment_key);
 
     // The range-diff pairs the rebased commit with its amended self; its pair shows the amend alone, too.
     let pairs = &resolved.pairs;
@@ -133,8 +133,8 @@ async fn records_an_iteration_per_loaded_range_state_and_compares_two_across_a_r
         json(&pair.review),
         json(&with_view(&first.review, pair_of(&inter.review, Some(&second.new_sha))).unwrap())
     );
-    let range_key = first.comment_key.as_deref().unwrap();
-    assert_eq!(pair.comment_key, Some(format!("{range_key}:pair:{}-{}", first.new_sha, second.new_sha)));
+    let range_key = &first.comment_key;
+    assert_eq!(pair.comment_key, format!("{range_key}:pair:{}-{}", first.new_sha, second.new_sha));
     assert_eq!(edits(&s.snapshotter().unwrap(), "a.txt").await, ["+amended"]);
     assert_eq!(comparison_label(&pair.review), format!("main...feat #1→#2 @ {}", &second.new_sha[..7]));
     assert_eq!(json(&s.show(pair_of(&inter.review, None)).await.unwrap().review), json(&inter.review));
@@ -197,7 +197,8 @@ async fn compares_two_named_ranges_like_git_range_diff_and_resolves_them_again_o
     let whole = range("main", "feat", ComparisonBase::Direct);
     let older = RangeRef::Named { old: base.clone(), new: v1.clone() };
     assert_eq!(json(&snap.review), json(&with_view(&whole, interdiff(older.clone(), None, None)).unwrap()));
-    assert_eq!((snap.new_sha.as_str(), snap.follows, snap.comment_key.as_deref()), (v2.as_str(), Live::Refs, None));
+    assert_eq!((snap.new_sha.as_str(), snap.follows), (v2.as_str(), Live::Refs));
+    assert_eq!(snap.comment_key, format!("range-diff:{base}..{v1}:{main}..{v2}"));
     let inter = snap.interdiff.clone().unwrap();
     assert_eq!(json(&inter.from), serde_json::json!({ "oldSha": base, "newSha": v1 }));
     assert_eq!(json(&inter.to), serde_json::json!({ "oldSha": main, "newSha": v2 }));

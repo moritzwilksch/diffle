@@ -34,10 +34,7 @@ async fn a_lone_revision_diffs_its_merge_base_with_head_against_head() {
     let m = mode(&repo, revspec(&["main"])).await;
     assert_eq!(json(&m), json(&range("main", "HEAD", ComparisonBase::MergeBase)));
     let (_, snap) = snapshot(&repo, revspec(&["main"])).await;
-    assert_eq!(
-        (snap.follows, snap.comment_key.as_deref()),
-        (Live::Refs, Some("range:refs/heads/main...refs/heads/feat"))
-    );
+    assert_eq!((snap.follows, snap.comment_key.as_str()), (Live::Refs, "range:refs/heads/main...refs/heads/feat"));
     assert_eq!(snap.old_sha, repo.merge_base("main", "feat").await.unwrap());
     assert_eq!(paths(&snap), ["a.txt", "new.txt"]);
     assert_eq!(snap.tree, ["a.txt", "keep.txt", "new.txt"]);
@@ -128,7 +125,7 @@ async fn pins_a_single_commit_and_shows_it_against_its_parent_with_its_message()
     let (_, snap) = snapshot(&repo, revspec(&["HEAD~1^!"])).await;
     assert_eq!(
         (snap.new_sha.as_str(), snap.follows, snap.comment_key.clone()),
-        (sha.as_str(), Live::None, Some(format!("commit:{sha}")))
+        (sha.as_str(), Live::None, format!("commit:{sha}"))
     );
     assert_eq!(snap.old_sha, t.git(&["rev-parse", "HEAD~2"]));
     assert_eq!(statuses(&snap), [("a.txt", M)]);

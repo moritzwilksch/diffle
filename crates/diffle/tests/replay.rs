@@ -98,11 +98,9 @@ async fn a_range_diff_review_replays_the_older_range_and_pairs_its_commits() {
     let (_, snap) = common::snapshot(&repo, req).await;
     let inter = snap.interdiff.clone().unwrap();
     let (feat, feat2) = (t.git(&["rev-parse", "feat"]), t.git(&["rev-parse", "feat2"]));
-    // Comments are off: the old side is a replayed tree.
-    assert_eq!(
-        (snap.new_sha.as_str(), snap.follows, snap.comment_key.clone()),
-        (feat2.as_str(), diffle::protocol::Live::Refs, None)
-    );
+    let onto = t.git(&["rev-parse", "main~1"]);
+    assert_eq!((snap.new_sha.as_str(), snap.follows), (feat2.as_str(), diffle::protocol::Live::Refs));
+    assert_eq!(snap.comment_key, format!("range-diff:{base}..{feat}:{onto}..{feat2}"));
     // feat replayed onto main~1 is what feat2 holds: the rebase alone shows nothing.
     assert_eq!(repo.show(&snap.old_sha, "f.txt").await.unwrap().unwrap(), b"a\nB\nc\nd\n");
     assert!(inter.conflicts.is_empty());

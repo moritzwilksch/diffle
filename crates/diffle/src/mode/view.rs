@@ -19,7 +19,9 @@ pub struct Shown {
     pub interdiff: Option<Interdiff>,
     /// The commit on screen, if one is: shown alone, focused, or an added commit of a pair.
     pub commit: Option<String>,
-    pub comment_key: Option<String>,
+    /// Where its threads and viewed marks live. An interdiff has a key of its own for viewed
+    /// marks, though no thread can be created there (`Session::anchor_source`).
+    pub comment_key: String,
 }
 
 /// What `review` shows now. Revisions resolve afresh each time, so a followed range moves with its
@@ -41,7 +43,7 @@ pub async fn resolve_shown(
                 follows: Live::None,
                 interdiff: None,
                 commit: Some(sha.clone()),
-                comment_key: Some(keys::commit_key(sha)),
+                comment_key: keys::commit_key(sha),
             });
         }
         Review::Range { old, new, base, pr, view } => (old, new, *base, pr, view),
@@ -55,7 +57,7 @@ pub async fn resolve_shown(
     let range = RangeEnds { old_sha: ends.old_sha.clone(), new_sha: ends.new_sha.clone() };
     let label = || comparison_label(&range_of(review).expect("a range"));
     let range_key = range_key.unwrap_or_default();
-    let shown = |old_sha: String, new_sha: String, commit: Option<String>, comment_key: Option<String>| Shown {
+    let shown = |old_sha: String, new_sha: String, commit: Option<String>, comment_key: String| Shown {
         old_sha,
         new_sha,
         follows,
@@ -65,11 +67,11 @@ pub async fn resolve_shown(
         comment_key,
     };
     match view {
-        RangeView::Whole => Ok(shown(ends.old_sha, ends.new_sha, None, Some(range_key.to_owned()))),
+        RangeView::Whole => Ok(shown(ends.old_sha, ends.new_sha, None, range_key.to_owned())),
         // The commit is pinned; refs still move the range, whose commits stay listed.
         RangeView::Commit { sha } => {
             let ends = resolve_commit(repo, sha).await?;
-            let out = shown(ends.old_sha, ends.new_sha, Some(sha.clone()), Some(keys::commit_key(sha)));
+            let out = shown(ends.old_sha, ends.new_sha, Some(sha.clone()), keys::commit_key(sha));
             Ok(Shown { follows: pinned, ..out })
         }
         RangeView::Uncommitted => {
@@ -77,7 +79,7 @@ pub async fn resolve_shown(
                 return Err(Error::revspec(format!("{} has no uncommitted changes", label())));
             }
             let ends = resolve_range(repo, "HEAD", WORKTREE, ComparisonBase::Direct).await?;
-            Ok(Shown { follows: Live::Worktree, ..shown(ends.old_sha, ends.new_sha, None, Some(keys::WORKING.into())) })
+            Ok(Shown { follows: Live::Worktree, ..shown(ends.old_sha, ends.new_sha, None, keys::WORKING.into()) })
         }
         RangeView::Interdiff { from, to, pair } => {
             let (from, to) = tokio::try_join!(
@@ -88,20 +90,25 @@ pub async fn resolve_shown(
                 return Err(Error::revspec("the worktree is not a commit"));
             }
             let pairs = pair_ranges(repo, &from, &to).await?;
+            // Two iterations are keyed under their range; named ranges by what they resolved to.
+            let key = match crate::protocol::shown_iterations(review) {
+                Some((a, b)) => keys::interdiff_key(range_key, a, b),
+                None => keys::range_diff_key(&from, &to),
+            };
             let (mut out, conflicts) = match pair {
                 None => {
                     let (tree, conflicts) = replay_range(repo, &from, &to).await?;
-                    (shown(tree, to.new_sha.clone(), None, None), conflicts)
+                    (shown(tree, to.new_sha.clone(), None, key), conflicts)
                 }
                 Some(sha) => match find_pair(&pairs, sha, &label)? {
                     // An added commit is an ordinary commit against its parent.
                     (None, new) => {
                         let ends = resolve_commit(repo, &new).await?;
-                        (shown(ends.old_sha, ends.new_sha, Some(new.clone()), Some(keys::commit_key(&new))), Vec::new())
+                        (shown(ends.old_sha, ends.new_sha, Some(new.clone()), keys::commit_key(&new)), Vec::new())
                     }
                     (Some(old), new) => {
                         let (tree, conflicts) = repo.replay(&format!("{old}^"), &format!("{new}^"), &old).await?;
-                        (shown(tree, new.clone(), None, Some(keys::pair_key(range_key, &old, &new))), conflicts)
+                        (shown(tree, new.clone(), None, keys::pair_key(range_key, &old, &new)), conflicts)
                     }
                 },
             };

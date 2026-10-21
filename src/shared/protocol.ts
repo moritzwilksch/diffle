@@ -350,10 +350,10 @@ export const SnapshotSchema = z.object({
   follows: LiveSchema,
   /**
    * Where the review's threads and viewed marks live: fixed by what was entered, never by
-   * discovery, so they survive pushes. Null while comments are off: an interdiff's old side is a
-   * replayed tree, and its threads would live under a key the range never shows again.
+   * discovery, so they survive pushes. An interdiff keeps viewed marks under a key of its own,
+   * but takes no new threads: its old side is a replayed tree the range never shows again.
    */
-  commentKey: z.string().nullable(),
+  commentKey: z.string(),
   /** Set for an interdiff view: how it was resolved. */
   interdiff: InterdiffSchema.optional(),
   /** Context lines the patches were generated with. */
@@ -587,7 +587,7 @@ export const UserConfigSchema = z.object({
   lineWrap: z.boolean(),
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
-   * string disables the language. Read-only over HTTP; set with `diffle config set-lsp`.
+   * string disables the language. Read-only over HTTP; set in the config file, whose path `diffle config` prints.
    */
   lspCommands: z.partialRecord(LanguageIdSchema, z.string()),
   /**

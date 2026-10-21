@@ -81,10 +81,7 @@ impl Session {
         let snapshotter =
             Snapshotter::new(self.repo.clone(), review.clone(), range_key.clone(), version, self.context(), iterations);
         let snap = snapshotter.current().await?;
-        let comments = match &snap.comment_key {
-            Some(key) => Some(Arc::new(CommentStore::open(&self.repo.git_dir, key).await?)),
-            None => None,
-        };
+        let comments = Arc::new(CommentStore::open(&self.repo.git_dir, &snap.comment_key).await?);
         let next = Arc::new(Active {
             review,
             range_key,

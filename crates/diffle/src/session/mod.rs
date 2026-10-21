@@ -17,7 +17,7 @@ use crate::comments::CommentStore;
 use crate::error::{Error, Result};
 use crate::git::GitRepo;
 use crate::github::hosts::Github;
-use crate::protocol::{FollowRefs, Live, Moved, Review, ServerMessage, Snapshot, shown_iterations};
+use crate::protocol::{FollowRefs, Live, Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations};
 use crate::snapshotter::Snapshotter;
 use crate::watcher::Watcher;
 
@@ -46,8 +46,7 @@ struct Active {
     /// What the first snapshot followed; a slice keeps following its range.
     follows: Live,
     snapshotter: Arc<Snapshotter>,
-    /// Absent while comments are off: an interdiff has no key of its own.
-    comments: Option<Arc<CommentStore>>,
+    comments: Arc<CommentStore>,
     watcher: tokio::sync::Mutex<Option<Watcher>>,
     /// Where a refs-live range's refs point now, when that differs from the snapshot; cleared by a reload.
     moved: Mutex<Option<Moved>>,
@@ -61,14 +60,15 @@ type Discovery =
 type Listener = Box<dyn Fn(&Arc<Snapshot>) + Send + Sync>;
 type Pending = Shared<BoxFuture<'static, ()>>;
 
-/// Why comments are off in `review`: an interdiff's old side is a replayed tree, and its threads
-/// would live under a key the range never shows again.
-fn comments_off(review: &Review) -> Error {
-    Error::revspec(if shown_iterations(review).is_some() {
+/// Why no thread can be created in `review`, or none: an interdiff's old side is a replayed
+/// tree, and its threads would live under a key the range never shows again.
+fn comments_off(review: &Review) -> Option<Error> {
+    let Review::Range { view: RangeView::Interdiff { .. }, .. } = review else { return None };
+    Some(Error::revspec(if shown_iterations(review).is_some() {
         "comments are off while comparing iterations"
     } else {
         "comments are off in a range-diff"
-    })
+    }))
 }
 
 /// The pull request a review was entered as, if any.
@@ -183,10 +183,8 @@ impl Session {
         Ok(self.active()?.snapshotter.clone())
     }
 
-    /// The active review's comments, or why there are none.
     pub fn comments(&self) -> Result<Arc<CommentStore>> {
-        let a = self.active()?;
-        a.comments.clone().ok_or_else(|| comments_off(&a.review))
+        Ok(self.active()?.comments.clone())
     }
 
     /// The pull request the active review was entered as, if any.

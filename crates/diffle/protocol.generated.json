@@ -1975,10 +1975,7 @@
           "$ref": "#/$defs/Live"
         },
         "commentKey": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "interdiff": {
           "$ref": "#/$defs/Interdiff"

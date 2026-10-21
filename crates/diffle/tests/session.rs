@@ -196,7 +196,7 @@ async fn focuses_one_listed_commit_of_a_range_keeps_listing_the_range_and_return
     let view = RangeView::Commit { sha: commit.sha.clone() };
     assert_eq!(json(&focused.review), json(&with_view(&range.review, view.clone()).unwrap()));
     assert_eq!((focused.new_sha.as_str(), focused.follows), (commit.sha.as_str(), Live::Refs));
-    assert_eq!(focused.comment_key, Some(format!("commit:{}", commit.sha)));
+    assert_eq!(focused.comment_key, format!("commit:{}", commit.sha));
     assert_eq!(json(&focused.commits), json(&range.commits));
     assert_eq!(focused.commit.as_ref().unwrap().sha, commit.sha);
     // Stepping from one focused commit to another keeps the range, not the commit, as the outer comparison.
@@ -310,7 +310,7 @@ async fn serializes_concurrent_mode_switches_so_the_last_request_wins() {
     let review = json(&s.review().unwrap());
     assert_eq!((review["old"].as_str(), review["new"].as_str()), (Some("main"), Some("HEAD")));
     let current = s.snapshotter().unwrap().current().await.unwrap();
-    assert_eq!(Some(s.comments().unwrap().key().to_owned()), current.comment_key);
+    assert_eq!(s.comments().unwrap().key(), current.comment_key);
     s.close().await;
 }
 

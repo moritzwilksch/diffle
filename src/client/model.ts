@@ -271,7 +271,7 @@ export function composerKey(
   target: ComposerTarget,
 ): string | null {
   if (!state.snapshot) return null;
-  const review = state.snapshot.commentKey ?? '';
+  const review = state.snapshot.commentKey;
   if (target.kind === 'reply') return `${review}\0reply\0${target.threadId}`;
   if (target.kind === 'edit') return `${review}\0edit\0${target.messageId}`;
   if (!state.draft) return null;
