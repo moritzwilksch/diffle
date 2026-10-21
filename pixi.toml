@@ -1,7 +1,3 @@
-# The development toolchain from conda-forge: Node, Rust, git and gh, pinned by pixi.lock, so
-# every checkout builds and tests the same way. The `lsp` environments add real language servers
-# for hands-on testing of symbol navigation. Installing diffle itself stays with the Nix flake,
-# npm and the release binaries.
 [workspace]
 name = "diffle"
 channels = ["conda-forge"]
@@ -12,13 +8,10 @@ platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
 rust = "1.99.*"
 nodejs = "24.*"
 git = ">=2.40"
-# `gh auth token` is the GitHub login the review export reads.
 gh = "*"
-# aws-lc-sys (reqwest's rustls backend) builds C with cmake.
 cmake = "*"
 
 [target.linux.dependencies]
-# Rust links through the system C compiler; conda-forge's gcc also builds aws-lc-sys.
 c-compiler = "*"
 
 [tasks]
