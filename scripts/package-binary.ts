@@ -19,10 +19,13 @@ const out = join(ROOT, 'out');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
 // bsdtar, which every runner has, picks the format from the extension with -a: a zip for Windows.
-// The archive path stays relative: tar reads an absolute `D:\...` as a remote host.
+// Named by path there, because the GNU tar that conda-forge's git puts on PATH would write a
+// plain tarball under the .zip name. The archive path stays relative: tar reads an absolute
+// `D:\...` as a remote host.
 const binary = windows ? 'diffle.exe' : 'diffle';
+const tar = windows ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
 execFileSync(
-  'tar',
+  tar,
   [
     '-a',
     '-c',
@@ -41,6 +44,14 @@ execFileSync(
     stdio: 'inherit',
   },
 );
+
+// A zip starts with PK\3\4 and a gzip with 1f 8b; anything else is a tar that misread the suffix.
+const magic = readFileSync(join(out, archive)).subarray(0, 4);
+const isArchive = windows
+  ? magic.equals(Buffer.from('PK\u0003\u0004', 'latin1'))
+  : magic[0] === 0x1f && magic[1] === 0x8b;
+if (!isArchive)
+  throw new Error(`${archive} is not a ${windows ? 'zip' : 'gzip'} archive (starts with ${magic.toString('hex')})`);
 
 // A one-asset release: the archive and its checksum, as the installers read them.
 const release = mkdtempSync(join(tmpdir(), 'diffle-release-'));

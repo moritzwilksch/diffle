@@ -11,8 +11,8 @@
   // The workflows are hand-maintained, with pinned action SHAs and comments; the
   // formatter only wants to reflow their quotes, so it stays out of them.
   // Snapshots and generated files are test output, byte for byte; reformatting one would fail its test.
-  // Lockfiles belong to their package managers, which rewrite them in their own layout, and
-  // cargo-about writes the notices file.
+  // Lockfiles belong to their package managers, which rewrite them in their own layout; the
+  // notices file is generated, and its cargo-about template is Markdown the formatter would reflow.
   "ignorePatterns": [
     "**/*.yml",
     "**/*.yaml",
@@ -21,6 +21,7 @@
     "**/*.generated.json",
     "**/*.lock",
     "**/package-lock.json",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "about.hbs"
   ]
 }

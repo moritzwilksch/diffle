@@ -22,7 +22,7 @@ pre-commit:
     - name: quality-gate
       run: npm run quality-gate
     - name: licenses
-      glob: "{Cargo.lock,about.toml,about.hbs}"
+      glob: "{Cargo.lock,package-lock.json,about.toml,about.hbs,vite.config.ts,scripts/licenses*}"
       run: pixi run licenses
     - name: zizmor
       glob: "*.{yml,yaml}"
