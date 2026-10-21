@@ -19,6 +19,7 @@ const out = join(ROOT, 'out');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
 // bsdtar, which every runner has, picks the format from the extension with -a: a zip for Windows.
+// The archive path stays relative: tar reads an absolute `D:\...` as a remote host.
 const binary = windows ? 'diffle.exe' : 'diffle';
 execFileSync(
   'tar',
@@ -26,7 +27,7 @@ execFileSync(
     '-a',
     '-c',
     '-f',
-    join(out, archive),
+    `out/${archive}`,
     '-C',
     'target/release',
     binary,
