@@ -1,3 +1,4 @@
+output: [summary]
 no_auto_install: true
 templates:
   run: run --as-is --quiet --no-progress
