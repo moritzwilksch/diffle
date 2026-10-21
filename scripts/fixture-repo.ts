@@ -24,6 +24,6 @@ console.log(`Fixture repository built at ${dir}\n`);
 for (const [ref, sha] of Object.entries(refs)) console.log(`  ${ref.padEnd(width)}  ${sha.slice(0, 12)}`);
 console.log('\nOpen it with one of:\n');
 for (const { revs, shows } of REVIEWS) {
-  console.log(`  npm run dev -- -C ${dir} ${revs.padEnd(width)}  # ${shows}`);
+  console.log(`  cargo run -- -C ${dir} ${revs.padEnd(width)}  # ${shows}`);
 }
 console.log('\nA published build reviews it the same way: diffle -C <dir> <revs>.');

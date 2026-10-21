@@ -18,6 +18,7 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 
 ```bash
 pixi global install diffle               # conda-forge
+npm install -g @moritzwilksch/diffle     # npm: a launcher plus this platform's binary
 ```
 
 Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon macOS:
@@ -36,6 +37,7 @@ irm https://diffle.app/install.ps1 | iex
 To try it without installing:
 
 ```bash
+npx @moritzwilksch/diffle working
 pixi exec diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
@@ -186,11 +188,14 @@ name, trust that address instead. A rejected request gets a 403 naming the heade
 The server is Rust (`crates/diffle`), the client TypeScript; you need a Rust toolchain
 (`rust-toolchain.toml` pins it) and Node.js.
 
+npm builds and tests the client; cargo builds and tests the server, whose release build embeds
+the client:
+
 ```bash
 npm install
-npm run build:client
-npm run dev -- working
-npm test && npm run typecheck && cargo test && npm run build
+npm run build
+cargo run -- working
+npm test && npm run typecheck && cargo test && cargo build --release
 ```
 
 [pixi](https://pixi.sh) installs that toolchain, git and gh from `pixi.lock`; its tasks wrap the npm scripts:
@@ -203,8 +208,8 @@ pixi run -e lsp-python lsp                # which servers an environment resolve
 ```
 
 `npm run install-hooks` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `npm run check` runs the same hook over every file, as CI does.
-A debug build reads `dist/client` from disk: after a client change, run `npm run build:client`
-and reload the page. A release build (`npm run build`) embeds the client.
+A debug build reads `dist/client` from disk: after a client change, run `npm run build`
+and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. The browser suite drives Playwright's Linux Chromium in a Docker container
 (`compose.yml`, started and stopped by the suite) while the tests and diffle run natively, so

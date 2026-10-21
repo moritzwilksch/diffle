@@ -23,10 +23,11 @@ c-compiler = "*"
 
 [tasks]
 install = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
-# A local source run: a debug build reads dist/client from disk, so build the client first.
-build-client = { cmd = "npm run build:client", depends-on = ["install"] }
-dev = { cmd = "npm run dev -- working --no-open", depends-on = ["build-client"] }
+# npm builds the client alone; cargo builds the binary that embeds it, so the client comes first.
 build = { cmd = "npm run build", depends-on = ["install"] }
+# A local source run: a debug build reads dist/client from disk.
+dev = { cmd = "cargo run -- working --no-open", depends-on = ["build"] }
+release = { cmd = "cargo build --release --locked", depends-on = ["build"] }
 # Everything a change must pass before it is finished.
 test = { cmd = "npm test", depends-on = ["install"] }
 test-rust = { cmd = "cargo test", depends-on = ["install"] }

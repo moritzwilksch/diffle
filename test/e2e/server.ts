@@ -243,7 +243,9 @@ export function buildClient(cwd = REPO_ROOT): boolean {
   const stamp = join(cwd, 'dist/client/.build-stamp');
   const key = clientInputsKey(cwd);
   if (existsSync(stamp) && readFileSync(stamp, 'utf8') === key) return false;
-  quiet(npm, ['run', 'build:client'], cwd);
+  // A base checkout from before the server moved to Rust names the client build `build:client`.
+  const scripts = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8')).scripts as Record<string, string>;
+  quiet(npm, ['run', 'build:client' in scripts ? 'build:client' : 'build'], cwd);
   writeFileSync(stamp, key);
   return true;
 }

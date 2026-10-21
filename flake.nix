@@ -33,7 +33,7 @@
             # Fetches each dependency by the lockfile's integrity hash, so no aggregate hash goes stale on a version bump.
             npmDeps = pkgs.importNpmLock { npmRoot = ./.; };
             npmConfigHook = pkgs.importNpmLock.npmConfigHook;
-            npmBuildScript = "build:client";
+            npmBuildScript = "build";
             installPhase = ''
               cp -r dist/client "$out"
             '';

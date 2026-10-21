@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           npm ci
-          npm run build:client
+          npm run build
           cargo build --release --locked
       - name: Smoke test
         shell: bash

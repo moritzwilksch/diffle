@@ -52,12 +52,12 @@ EOF
 chmod +x "$TOOLS"/*
 
 if [ "$ONLY" = prepare ]; then
-  echo "npm run dev -- -C $DIR main...feature/refunds --no-open"
+  echo "cargo run -- -C $DIR main...feature/refunds --no-open"
   exit 0
 fi
 if [ -z "$ONLY" ]; then
   bold "Fixture at $DIR"
-  echo "   npm run dev -- -C $DIR main...feature/refunds --no-open"
+  echo "   cargo run -- -C $DIR main...feature/refunds --no-open"
   log
   pause 'open it; iteration #1 is recorded as soon as the review loads.'
 fi
