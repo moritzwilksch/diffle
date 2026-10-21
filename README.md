@@ -35,6 +35,9 @@ to pin a release. On Windows (x64, arm64), from PowerShell:
 irm https://diffle.app/install.ps1 | iex
 ```
 
+It installs to `%LOCALAPPDATA%\Programs\diffle` and adds that to your user PATH; set
+`DIFFLE_NO_MODIFY_PATH` to keep the PATH as it is.
+
 To try it without installing:
 
 ```bash

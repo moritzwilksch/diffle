@@ -1,7 +1,8 @@
 # Installs the diffle binary from a GitHub release.
 #   irm https://diffle.app/install.ps1 | iex
 # DIFFLE_VERSION picks a release tag (default: latest); DIFFLE_INSTALL_DIR the target
-# (default: %LOCALAPPDATA%\Programs\diffle); DIFFLE_DOWNLOAD_URL a mirror of the release assets.
+# (default: %LOCALAPPDATA%\Programs\diffle); DIFFLE_DOWNLOAD_URL a mirror of the release assets;
+# DIFFLE_NO_MODIFY_PATH leaves the user PATH alone.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue' # Windows PowerShell's progress bar slows downloads tenfold.
 
@@ -54,7 +55,7 @@ $exe = Join-Path $dir 'diffle.exe'
 Write-Host "installed $(& $exe --version) to $exe"
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (($userPath -split ';') -notcontains $dir) {
+if (-not $env:DIFFLE_NO_MODIFY_PATH -and (($userPath -split ';') -notcontains $dir)) {
   [Environment]::SetEnvironmentVariable('Path', (@($userPath, $dir) | Where-Object { $_ }) -join ';', 'User')
   $env:Path = "$env:Path;$dir"
   Write-Host "added $dir to your user PATH; restart other terminals to pick it up"
