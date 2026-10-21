@@ -33,17 +33,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         if: runner.os == 'Windows'
         run: git config --system core.autocrlf false
-      - name: Test
-        run: |
-          npm ci
-          npm test
+      - run: pixi run test
 
   rust:
     runs-on: ${{ matrix.os }}
@@ -60,18 +55,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         if: runner.os == 'Windows'
         run: git config --system core.autocrlf false
-      # The language-server tests drive test/lsp/fake-lsp.mjs.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      # rustup reads rust-toolchain.toml on the first cargo call.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Test
-        run: cargo test --locked --no-fail-fast
+      - run: pixi run test-rust
 
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
   # here as on every developer machine: the screenshots are the container's.
@@ -81,15 +71,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      # The global setup builds the release binary the suite drives.
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Install
-        run: npm ci
-      - name: End-to-end tests
-        run: npm run test:e2e
+      - run: pixi run e2e
       # Expected, actual and diff images plus traces for every failed scenario, and the HTML report.
       - name: Upload failure artifacts
         if: failure()
@@ -103,7 +87,7 @@ jobs:
       # Rewrites the snapshots of the failed scenarios; the Update snapshots workflow commits them.
       - name: Regenerate failed snapshots
         if: failure()
-        run: npm run test:e2e -- --last-failed --update-snapshots
+        run: pixi run e2e --last-failed --update-snapshots
       - name: Collect changed snapshots
         if: failure()
         run: |
@@ -124,12 +108,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The hook needs node, cargo and lefthook, all from the pixi environment.
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-      # The hook runs clippy.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Pre-commit hook
-        run: pixi run check
+      - run: pixi run check
 
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
   build:
@@ -168,15 +149,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
-          node-version: 24
+          locked: true
       # The `npm ci` in the other jobs only checks the dependency tree, so drift in
       # the lockfile's own metadata (name, version, bin, engines) passes it silently.
       # `--package-lock-only` needs no install, so this job does not run `npm ci`.
       - name: Check package-lock.json is up to date
         run: |
-          npm install --package-lock-only --no-audit --no-fund
+          pixi run -- npm install --package-lock-only --no-audit --no-fund
           git diff --exit-code -- package-lock.json || {
             echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
             exit 1
