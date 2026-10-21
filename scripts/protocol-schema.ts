@@ -23,7 +23,8 @@ export function protocolJsonSchema(): object {
       .map(([id, schema]) => [id, withoutKeys(schema as JsonSchema, ['$schema', '$id'])]),
   );
   for (const schema of Object.values(defs)) inlineVariants(schema, defs);
-  const docs = jsDocs(readFileSync(SOURCE, 'utf8'));
+  // A Windows checkout may hold CRLF; the descriptions must not depend on it.
+  const docs = jsDocs(readFileSync(SOURCE, 'utf8').replaceAll('\r\n', '\n'));
   for (const [id, schema] of Object.entries(defs)) describe(schema, docs.get(`${id}Schema`), docs);
   return { $schema: 'https://json-schema.org/draft/2020-12/schema', $defs: defs };
 }
