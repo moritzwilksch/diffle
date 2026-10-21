@@ -1,4 +1,4 @@
-//! The operating-system side of a server: the shell that starts it, the signals that end it, and
+//! The operating-system side of a server: the command that starts it, the signals that end it, and
 //! how its exit reads.
 #[cfg(windows)]
 use std::process::Stdio;
@@ -34,25 +34,26 @@ pub(super) async fn watch(me: Weak<LspProcess>, mut stderr: ChildStderr, mut chi
     me.exited.send_replace(true);
 }
 
-/// The platform shell running `command`. On unix the shell leads its own process group, so a
-/// kill reaches the language server below it, not only `sh`.
-pub(super) fn shell(command: &str) -> tokio::process::Command {
-    #[cfg(unix)]
-    {
-        let mut cmd = tokio::process::Command::new("sh");
-        cmd.arg("-c").arg(command).process_group(0);
-        cmd
-    }
+/// `line` as a process: split as a POSIX shell reads it, no shell in between. On unix the server
+/// leads its own process group, so a kill reaches whatever it spawned too. On Windows the program
+/// is looked up on PATH first, so a `.cmd` shim, as npm installs servers, is found; std runs those
+/// through cmd.exe itself.
+pub(super) fn command(line: &str) -> Result<tokio::process::Command, String> {
+    let words = shlex::split(line).ok_or_else(|| format!("unbalanced quotes in \"{line}\""))?;
+    let Some((program, args)) = words.split_first().filter(|(p, _)| !p.is_empty()) else {
+        return Err("no program named".to_owned());
+    };
     #[cfg(windows)]
-    {
-        let mut cmd = tokio::process::Command::new("cmd");
-        cmd.arg("/C").raw_arg(command);
-        cmd
-    }
+    let program = crate::lsp::which::find_on_path(program).map_or_else(|| program.into(), |p| p.into_os_string());
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args);
+    #[cfg(unix)]
+    cmd.process_group(0);
+    Ok(cmd)
 }
 
 /// Ends the server's process tree: SIGTERM (or SIGKILL when `hard`) to its group on unix,
-/// `taskkill /T /F` on Windows, where the child is cmd.exe and the server sits below it.
+/// `taskkill /T /F` on Windows, where a `.cmd` server sits below cmd.exe.
 pub(super) fn signal(pid: u32, hard: bool) {
     #[cfg(unix)]
     unsafe {

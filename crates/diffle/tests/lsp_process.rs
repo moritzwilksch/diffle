@@ -16,7 +16,7 @@ fn fake() -> Option<String> {
         eprintln!("node is not on PATH; skipping the fake language server tests");
     }
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/lsp/fake-lsp.mjs");
-    node.map(|_| format!("node '{}'", script.canonicalize().unwrap().display()))
+    node.map(|_| format!("node '{}'", dunce::canonicalize(&script).unwrap().display()))
 }
 
 struct Started {
@@ -29,9 +29,15 @@ fn settings(v: Value) -> SettingsFuture {
     async move { v }.boxed().shared()
 }
 
-fn start(env: &str, settings: Option<SettingsFuture>, init: Option<Value>) -> Option<Started> {
-    let command = format!("{env} {}", fake()?);
+/// Starts the fake under `prefix`, shell text in front of it: an environment assignment, or a
+/// command to run first. diffle spawns no shell, so the prefix lives in a wrapper script of the test's.
+fn start(prefix: &str, settings: Option<SettingsFuture>, init: Option<Value>) -> Option<Started> {
+    let fake = fake()?;
     let root = tempfile::tempdir().unwrap();
+    let wrapper = root.path().join("server");
+    std::fs::write(&wrapper, format!("#!/bin/sh\n{prefix} {fake}\n")).unwrap();
+    std::fs::set_permissions(&wrapper, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let command = wrapper.display().to_string();
     let statuses = Arc::new(Mutex::new(Vec::new()));
     let record = statuses.clone();
     let process = LspProcess::start(ProcessOptions {
@@ -61,7 +67,7 @@ async fn initializes_and_reads_the_advertised_features() {
     let Some(s) = start("FAKE_LSP_OFFERS=definition,hover", None, Some(json!({ "x": 1 }))) else { return };
     let rpc = s.process.connection().await.unwrap();
     assert_eq!(s.process.status().state, LspState::Ready);
-    assert_eq!(s.process.name(), "FAKE_LSP_OFFERS=definition,hover");
+    assert_eq!(s.process.name(), "server");
     assert!(s.process.supports(LspFeature::Definition) && s.process.supports(LspFeature::Hover));
     assert!(!s.process.supports(LspFeature::References));
     eventually("the init log", || logged(&s.process).contains(&r#"init {"x":1}"#.to_owned())).await;
@@ -132,7 +138,7 @@ async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the
     tell("$/progress", json!({ "token": "load", "value": { "kind": "begin", "title": "Loading workspace" } }));
     eventually("the notice", || s.process.status().notice.is_some_and(|n| n.message == "Could not find Astro")).await;
     eventually("the activity", || !s.process.status().activity.is_empty()).await;
-    assert_eq!(s.process.busy().as_deref(), Some("node is busy: Loading workspace; try again when it finishes"));
+    assert_eq!(s.process.busy().as_deref(), Some("server is busy: Loading workspace; try again when it finishes"));
     rpc.notify("test/mark", json!({ "mark": "a line on stderr" }));
     eventually("the stderr line", || logged(&s.process).contains(&"a line on stderr".to_owned())).await;
     let entries = s.process.entries();

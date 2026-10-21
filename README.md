@@ -164,7 +164,7 @@ Or persistently, in the config file (`diffle config` prints its path and content
 { "lspCommands": { "rust": "rust-analyzer", "java": "" } }
 ```
 
-Language servers run through a shell inside the repository and can read anything your user can.
+Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
 ## Shell completions

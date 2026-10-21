@@ -34,7 +34,7 @@ pub type SettingsFn = fn(&ServerContext) -> BoxFuture<'static, Value>;
 /// How one language server is started and configured: everything diffle knows about it.
 #[derive(Clone)]
 pub struct ServerDefinition {
-    /// Shell command line that starts it on stdio.
+    /// The command line that starts it on stdio: a program on PATH and its arguments, split as a shell would.
     pub command: String,
     pub settings: Option<SettingsFn>,
     /// Sent with `initialize`, for servers configured there rather than through settings.
