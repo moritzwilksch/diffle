@@ -3878,7 +3878,6 @@ that use it.
 - Creative Commons Zero v1.0 Universal: 1
 - Community Data License Agreement Permissive 2.0: 1
 - Mozilla Public License 2.0: 1
-- zlib License: 1
 
 ### Apache License 2.0
 
@@ -5338,7 +5337,6 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- hashbrown 0.16.1 (https://github.com/rust-lang/hashbrown)
 - hashbrown 0.17.1 (https://github.com/rust-lang/hashbrown)
 
 ```
@@ -5701,6 +5699,7 @@ THE SOFTWARE.
 ### MIT License
 
 Used by:
+- sha1 0.11.0 (https://github.com/RustCrypto/hashes)
 - sha2 0.11.1 (https://github.com/RustCrypto/hashes)
 
 ```
@@ -6669,6 +6668,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 - tower-http 0.6.11 (https://github.com/tower-rs/tower-http)
+- tower-http 0.7.1 (https://github.com/tower-rs/tower-http)
 
 ```
 Copyright (c) 2019-2021 Tower Contributors
@@ -7383,7 +7383,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- regress 0.10.5 (https://github.com/ridiculousfish/regress)
+- regress 0.12.0 (https://github.com/ridiculousfish/regress)
 
 ```
 MIT License
@@ -7763,38 +7763,6 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- allocator-api2 0.2.21 (https://github.com/zakarumych/allocator-api2)
-
-```
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-### MIT License
-
-Used by:
 - tracing-core 0.1.36 (https://github.com/tokio-rs/tracing)
 
 ```
@@ -7980,7 +7948,7 @@ THE SOFTWARE.
 ### MIT License
 
 Used by:
-- shlex 1.3.0 (https://github.com/comex/rust-shlex)
+- shlex 2.0.1 (https://github.com/comex/rust-shlex)
 
 ```
 The MIT License (MIT)
@@ -8877,33 +8845,6 @@ SPDX-License-Identifier: Unicode-3.0
 Portions of ICU4X may have been adapted from ICU4C and/or ICU4J.
 ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation and others.
 
-```
-
-### zlib License
-
-Used by:
-- foldhash 0.2.0 (https://github.com/orlp/foldhash)
-
-```
-Copyright (c) 2024 Orson Peters
-
-This software is provided 'as-is', without any express or implied warranty. In
-no event will the authors be held liable for any damages arising from the use of
-this software.
-
-Permission is granted to anyone to use this software for any purpose, including
-commercial applications, and to alter it and redistribute it freely, subject to
-the following restrictions:
-
-1. The origin of this software must not be misrepresented; you must not claim
-    that you wrote the original software. If you use this software in a product,
-    an acknowledgment in the product documentation would be appreciated but is
-    not required.
-
-2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-3. This notice may not be removed or altered from any source distribution.
 ```
 
 
