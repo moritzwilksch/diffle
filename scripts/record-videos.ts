@@ -15,7 +15,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openBrowser, settle } from '../test/e2e/browser.js';
-import { REPO_ROOT, buildClient, quiet, waitForLsp, withDiffle } from '../test/e2e/server.js';
+import { REPO_ROOT, buildClient, buildServer, quiet, waitForLsp, withDiffle } from '../test/e2e/server.js';
 import { rmTmp } from '../test/tmp.js';
 import { BASE, FEATURE, buildDemoRepo } from './lib/demo-repo.js';
 
@@ -585,3 +585,4 @@ try {
 } finally {
   await browser.close();
 }
+buildServer();
