@@ -11,10 +11,6 @@ name = "diffle"
 name = "pixi-build-rattler-build"
 version = "*"
 
-# The recipe reads its version from package.json with load_from_file, an experimental rattler-build feature.
-[package.build.config]
-experimental = true
-
 [dependencies]
 # The same release rust-toolchain.toml names; rustup is not involved under pixi.
 rust = "1.99.*"

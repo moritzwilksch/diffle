@@ -87,6 +87,7 @@ jobs:
           npm ci --ignore-scripts
           npm version --no-git-tag-version "${NEXT#v}"
           sed -i "s/^version = \".*\"/version = \"${NEXT#v}\"/" crates/diffle/Cargo.toml
+          sed -i "s/^  version: \".*\"/  version: \"${NEXT#v}\"/" recipe/recipe.yaml
           cargo update --workspace
           pixi run licenses
           git cliff --tag "$NEXT" -o CHANGELOG.md
@@ -114,6 +115,7 @@ jobs:
           add-paths: |
             package.json
             crates/diffle/Cargo.toml
+            recipe/recipe.yaml
             Cargo.lock
             THIRD_PARTY_NOTICES.md
             package-lock.json
