@@ -99,7 +99,6 @@ jobs:
               echo "$name@$version is already published."
               continue
             fi
-            # Without `./`, npm reads `npm-packages/diffle-*` as a GitHub owner/repo.
             npm publish "./$dir" --access public --provenance
           done
 
