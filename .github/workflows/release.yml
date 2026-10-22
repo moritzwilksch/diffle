@@ -68,8 +68,7 @@ jobs:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
-          environments: release
-          activate-environment: release
+          activate-environment: true
       - name: Determine the next version
         id: version
         run: |

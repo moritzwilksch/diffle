@@ -17,6 +17,13 @@ cargo-about = ">=0.9.2,<0.10"
 [target.linux.dependencies]
 c-compiler = "*"
 
+# conda-forge builds no git-cliff for win-arm64; the release workflow runs on Linux.
+[target.unix.dependencies]
+git-cliff = "2.14.*"
+
+[target.win-64.dependencies]
+git-cliff = "2.14.*"
+
 [tasks]
 install-node = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
 # build
@@ -63,14 +70,5 @@ clang-tools = "*"
 tombi = "*"
 bash-language-server = "*"
 
-[feature.release]
-# conda-forge builds no git-cliff for win-arm64.
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
-
-[feature.release.dependencies]
-git-cliff = "2.14.*"
-
 [environments]
 default = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"]
-# The release workflow's changelog and version bump; no language servers.
-release = ["release"]
