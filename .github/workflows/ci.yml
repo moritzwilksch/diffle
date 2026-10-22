@@ -25,7 +25,6 @@ jobs:
       - name: Smoke test Nix package
         run: nix run . -- --help
 
-  # Builds the pixi-build package (recipe/recipe.yaml) into a local directory.
   pixi-build:
     runs-on: ubuntu-latest
     permissions:
