@@ -60,17 +60,6 @@ Node.js come from conda-forge):
 pixi global install --git https://github.com/moritzwilksch/diffle diffle
 ```
 
-Or depend on it from a pixi workspace. The extras add language servers: `python`, `rust`,
-`typescript`, `go`, `ruby`, `java`, `lua`, `terraform`, `json`, `yaml`, and `toml`:
-
-```toml
-[workspace]
-preview = ["pixi-build"]
-
-[dependencies]
-diffle = { git = "https://github.com/moritzwilksch/diffle", extras = ["python", "rust"] }
-```
-
 ## Pick what to review
 
 ```bash
