@@ -19,10 +19,10 @@ c-compiler = "*"
 
 # conda-forge builds no git-cliff for win-arm64; the release workflow runs on Linux.
 [target.unix.dependencies]
-git-cliff = "2.14.*"
+git-cliff = ">=2,<3"
 
 [target.win-64.dependencies]
-git-cliff = "2.14.*"
+git-cliff = ">=2,<3"
 
 [tasks]
 install-node = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["node_modules/.package-lock.json"] }
