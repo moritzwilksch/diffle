@@ -79,8 +79,8 @@ export function CommentComposer({ label }: { label: string }) {
           value={text}
           placeholder="Leave a comment…"
           onChange={(e) => setText(e.target.value)}
+          // Escape is the keymap's: handled here too, it would also drop the cursor.
           onKeyDown={(e) => {
-            if (e.key === 'Escape') closeDraft();
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
           }}
         />

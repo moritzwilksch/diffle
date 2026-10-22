@@ -2560,8 +2560,9 @@ export const useStore = create<ReviewState>((set, get) => {
       ensureExpanded(path);
     },
 
+    // The cursor stays on the lines the draft was for, as after posting it.
     closeDraft() {
-      set({ draft: null, selection: null });
+      set({ draft: null });
     },
 
     async draftQuote() {
