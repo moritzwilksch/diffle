@@ -99,7 +99,8 @@ jobs:
               echo "$name@$version is already published."
               continue
             fi
-            npm publish "$dir" --access public --provenance
+            # Without `./`, npm reads `npm-packages/diffle-*` as a GitHub owner/repo.
+            npm publish "./$dir" --access public --provenance
           done
 
   # Attaches the binaries, their checksums, and the installers to the tag's release.
