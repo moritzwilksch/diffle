@@ -153,7 +153,7 @@ fn fails_with_1_when_the_requested_port_is_taken() {
     assert!(!stderr(&out).contains("running at"));
 }
 
-/// Starts a review and returns it with its URL once stderr announces it.
+/// Starts a review and returns it with its URL once stderr announces it and its version.
 // The child goes to the caller, who stops and reaps it.
 #[allow(clippy::zombie_processes)]
 fn serve(config: &Path, repo: &Path) -> (Child, String, BufReader<std::process::ChildStderr>) {
@@ -166,13 +166,14 @@ fn serve(config: &Path, repo: &Path) -> (Child, String, BufReader<std::process::
             .unwrap();
     let mut lines = BufReader::new(child.stderr.take().unwrap());
     let mut line = String::new();
+    let announcement = format!("🚀 diffle v{} running at ", version());
     loop {
         line.clear();
         if lines.read_line(&mut line).unwrap() == 0 {
             let _ = child.wait();
             panic!("diffle exited before serving");
         }
-        if let Some(url) = line.trim().strip_prefix("🚀 diffle running at ") {
+        if let Some(url) = line.trim().strip_prefix(&announcement) {
             return (child, url.to_owned(), lines);
         }
     }

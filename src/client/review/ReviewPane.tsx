@@ -12,7 +12,7 @@ import type {
   OnLineClickProps,
   TokenEventBase,
 } from '@pierre/diffs';
-import { CodeView, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
+import { CodeView, type CodeViewAnnotationArgs, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import {
   ChevronDown,
   ChevronRight,
@@ -54,7 +54,7 @@ import {
   commentsOff,
 } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
-import { SHIKI_THEMES } from '@/client/theme.js';
+import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
@@ -240,7 +240,8 @@ function markHover(el: HTMLElement, on: boolean): void {
 }
 
 const codeViewOptions = {
-  theme: SHIKI_THEMES,
+  theme: CODE_THEMES,
+  preferredHighlighter: HIGHLIGHTER,
   loadDiffFiles,
   stickyHeaders: true,
   enableLineSelection: true,
@@ -901,7 +902,7 @@ export function ReviewPane() {
     [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, lineWrap, geometry],
   );
 
-  const renderAnnotation = useCallback((annotation: LineAnnotation<Annot> | DiffLineAnnotation<Annot>) => {
+  const renderAnnotation = useCallback((...[annotation]: CodeViewAnnotationArgs<Annot>) => {
     const meta = annotation.metadata;
     if (meta.kind === 'placeholder') return <PlaceholderBanner kind={meta.placeholder} message={meta.message} />;
     if (meta.kind === 'image') return <ImageDiff path={meta.path} sides={meta.sides} />;

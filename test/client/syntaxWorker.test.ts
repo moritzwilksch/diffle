@@ -42,8 +42,6 @@ it('loads contents only for supported languages and routes out-of-order answers'
     line: 1,
     col: 2,
   });
-  expect(worker.postMessage.mock.calls[0]![0].grammars?.map((g) => g.name)).toEqual(['python']);
-  expect(worker.postMessage.mock.calls[1]![0].grammars).toBeUndefined();
   worker.answer(1, false);
   worker.answer(0, true);
   expect(await first).toBe(true);

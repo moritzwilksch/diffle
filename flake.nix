@@ -46,15 +46,13 @@
               cp -r dist/client "$out"
             '';
           };
-          # The Cargo sources plus what build.rs reads: the version from package.json and the
-          # wire contract it turns into Rust.
+          # The Cargo sources plus what build.rs reads: the wire contract it turns into Rust.
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
               (craneLib.fileset.commonCargoSources ./crates)
               ./Cargo.toml
               ./Cargo.lock
-              ./package.json
               ./crates/diffle/protocol.generated.json
             ];
           };

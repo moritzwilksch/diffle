@@ -78,7 +78,7 @@ export async function startDiffle({
   const url = await new Promise<string>((resolveUrl, reject) => {
     const timer = setTimeout(() => reject(new Error(`diffle did not start in ${timeoutMs}ms\n${stderr}`)), timeoutMs);
     const scan = () => {
-      const match = stderr.match(/diffle running at (\S+)/);
+      const match = stderr.match(/running at (\S+)/);
       if (!match) return;
       clearTimeout(timer);
       resolveUrl(match[1] ?? '');

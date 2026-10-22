@@ -1,13 +1,7 @@
-// Generates the wire types from the JSON Schema that `protocol.ts` exports, and takes the version from package.json.
+// Generates the wire types from the JSON Schema that `protocol.ts` exports.
 use std::{env, fs, path::Path};
 
 fn main() {
-    let manifest = "../../package.json";
-    println!("cargo:rerun-if-changed={manifest}");
-    let package: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(manifest).expect("read package.json")).expect("parse package.json");
-    println!("cargo:rustc-env=DIFFLE_VERSION={}", package["version"].as_str().expect("package.json version"));
-
     // A release build embeds the client; a rebuild of it renames its hashed assets.
     println!("cargo:rerun-if-changed=../../dist/client");
 

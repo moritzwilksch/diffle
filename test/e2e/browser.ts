@@ -68,7 +68,11 @@ export async function filePaths(page: Page): Promise<string[]> {
  * the mapping for the ones after it. The viewer renders only files near the viewport, so a file
  * further down is brought into view with `reveal` first, which moves the cursor there.
  */
-async function fileItem(page: Page, path: string, reveal: (page: Page, path: string) => Promise<void> = walkToFile) {
+export async function fileItem(
+  page: Page,
+  path: string,
+  reveal: (page: Page, path: string) => Promise<void> = walkToFile,
+) {
   if (!(await filePaths(page)).includes(path)) throw new Error(`not a changed file: ${path}`);
   // Headers before `data-path` name the file in the path span's title; `--before` captures run those.
   const named = JSON.stringify(path);

@@ -13,8 +13,8 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 /** The image and the server inside it follow the installed `@playwright/test`: a client only talks to its own version. */
 export const PLAYWRIGHT_VERSION: string = createRequire(import.meta.url)('@playwright/test/package.json').version;
 const PORT = process.env.DIFFLE_BROWSER_PORT ?? '3000';
-/** How long the first start may take: the image is pulled and the server's package fetched inside it. */
-const START_TIMEOUT_MS = 180_000;
+/** How long the server may take to answer once its container runs; it needs no network, so seconds. */
+const START_TIMEOUT_MS = 60_000;
 
 /** Where the browser server listens. `DIFFLE_BROWSER_WS` names one started elsewhere. */
 export function wsEndpoint(): string {
@@ -64,11 +64,13 @@ export async function ensureBrowserServer(): Promise<boolean> {
   }
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (!(await answers(5000))) {
-    if (Date.now() > deadline) {
+    // A server that died will not come back; its log is the only record of why, and stopping loses it.
+    const exited = compose('ps', '--all', '--format', '{{.State}}', 'browser').stdout?.toString().trim() === 'exited';
+    if (exited || Date.now() > deadline) {
+      const log = compose('logs', '--no-color', '--tail', '20', 'browser').stdout?.toString().trim();
       stopBrowserServer();
-      throw new Error(
-        `the browser server did not answer within ${START_TIMEOUT_MS / 1000}s; its log: docker compose logs browser`,
-      );
+      const why = exited ? 'exited' : `did not answer within ${START_TIMEOUT_MS / 1000}s`;
+      throw new Error(`the browser server ${why}; its log:\n${log || '(empty)'}`);
     }
     await new Promise((r) => setTimeout(r, 1000));
   }

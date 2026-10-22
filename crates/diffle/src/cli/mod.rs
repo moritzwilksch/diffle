@@ -30,7 +30,7 @@ pub fn main() -> ExitCode {
     };
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     if cli.version {
-        println!("{}", env!("DIFFLE_VERSION"));
+        println!("{}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
     }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");

@@ -141,7 +141,7 @@ async fn start(
         let browser = if opts.host() == "0.0.0.0" || opts.host() == "::" { localhost(&url) } else { url.clone() };
         open_browser(&browser);
     }
-    crate::status!("🚀 diffle running at {}", cyan(&url));
+    crate::status!("🚀 diffle {} running at {}", dim(concat!("v", env!("CARGO_PKG_VERSION"))), cyan(&url));
     crate::status!("📂 {} {}", dim("repo"), repo.root.display());
     let host = &github.instance.host;
     let label = dim(&if host == "github.com" { "github".to_owned() } else { format!("github {host}") });

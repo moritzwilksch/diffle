@@ -1,5 +1,4 @@
-import { getFiletypeFromFileName, resolveLanguage, type SupportedLanguages } from '@pierre/diffs';
-import type { LanguageRegistration } from 'shiki/core';
+import { getFiletypeFromFileName, type SupportedLanguages } from '@pierre/diffs';
 
 type Language = Exclude<SupportedLanguages, 'text' | 'ansi'>;
 
@@ -12,8 +11,6 @@ export interface SyntaxRequest {
   id: number;
   key: string;
   lang: string;
-  /** The language's grammars, sent once per worker: grammars resolve on the main thread only. */
-  grammars?: LanguageRegistration[];
   contents: string;
   line: number;
   col: number;
@@ -28,7 +25,6 @@ let worker: Worker | null = null;
 let unavailable = false;
 let sequence = 0;
 const pending = new Map<number, (blocked: boolean) => void>();
-const grammars = new Map<Language, Promise<LanguageRegistration[]>>();
 
 function stop(): void {
   unavailable = true;
@@ -55,13 +51,6 @@ export async function blocksSymbol(
     const text = await contents();
     // Large files remain usable without copying and tokenizing them for an advisory popup.
     if (text.length > 1_000_000 || unavailable) return false;
-    // The request that starts resolving a language carries its grammars, and posts first: it
-    // awaits the shared promise before any later request does.
-    let loading = grammars.get(lang);
-    const first = !loading;
-    if (!loading) grammars.set(lang, (loading = resolveLanguage(lang).then((resolved) => resolved.data)));
-    const data = await loading;
-    if (unavailable) return false;
     if (!worker) {
       worker = new Worker(new URL('./syntax.worker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }: MessageEvent<SyntaxResponse>) => {
@@ -84,7 +73,6 @@ export async function blocksSymbol(
           id,
           key: `${side}:${path}`,
           lang,
-          grammars: first ? data : undefined,
           contents: text,
           line,
           col,
