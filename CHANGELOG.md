@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0](https://github.com/moritzwilksch/diffle/compare/v0.2.10...v0.3.0) - 2026-10-22
+
+### Features
+
+- [**breaking**] Rewrite the Node server in Rust ([#355](https://github.com/moritzwilksch/diffle/pull/355))
+
 ## [0.2.10](https://github.com/moritzwilksch/diffle/compare/v0.2.9...v0.2.10) - 2026-10-20
 
 ### Features
