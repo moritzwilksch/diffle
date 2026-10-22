@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "@pierre/diffs": "1.5.2",
+    "@pierre/diffs": "1.6.1",
     "@pierre/trees": "1.0.0-beta.6",
     "commander": "^15.0.0",
     "lucide-react": "^1.57.0",
@@ -47,7 +47,6 @@
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "shiki": "^4.5.0",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7",
     "zustand": "^5.0.15"

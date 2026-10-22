@@ -1,6 +1,6 @@
 import { getFiletypeFromFileName, getSharedHighlighter, type SupportedLanguages } from '@pierre/diffs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SHIKI_THEMES, type ThemeChoice } from '@/client/theme.js';
+import { CODE_THEMES, HIGHLIGHTER, type ThemeChoice } from '@/client/theme.js';
 
 export interface HlToken {
   text: string;
@@ -29,11 +29,15 @@ export async function highlightCode(
   lang: SupportedLanguages,
   theme: ThemeChoice,
 ): Promise<HlToken[][]> {
-  const themeName = isDark(theme) ? SHIKI_THEMES.dark : SHIKI_THEMES.light;
-  const highlighter = await getSharedHighlighter({ themes: [SHIKI_THEMES.dark, SHIKI_THEMES.light], langs: [lang] });
+  const themeName = isDark(theme) ? CODE_THEMES.dark : CODE_THEMES.light;
+  const highlighter = await getSharedHighlighter({
+    themes: [CODE_THEMES.dark, CODE_THEMES.light],
+    langs: [lang],
+    preferredHighlighter: HIGHLIGHTER,
+  });
   return lines.map((line) => {
     try {
-      const [tokens = []] = highlighter.codeToTokensBase(line, { lang, theme: themeName });
+      const [tokens = []] = highlighter.codeToTokens(line, { lang, theme: themeName }).tokens;
       return tokens.map((t) => ({ text: t.content, color: t.color }));
     } catch {
       return [{ text: line }];
