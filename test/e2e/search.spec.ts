@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js';
-import { clickLine, gotoFile } from './browser.js';
+import { clickLine, fileItem, gotoFile } from './browser.js';
 
 test('searches the current file and highlights the matches', async ({ page }) => {
   await gotoFile(page, 'tally/ledger.py');
@@ -13,7 +13,9 @@ test('searches the current file and highlights the matches', async ({ page }) =>
 
 test('/ prefills the search with the selected text', async ({ page }) => {
   await gotoFile(page, 'tally/ledger.py');
-  await page
+  // Scoped to the file: other files above it hold `amount` tokens too.
+  const ledger = await fileItem(page, 'tally/ledger.py');
+  await ledger
     .locator('span[data-char]', { hasText: /^amount$/ })
     .first()
     .dblclick();
