@@ -12,7 +12,7 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/review-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/review-light.gif">
-  <img alt="A review in diffle: two comments on a rate-limiting change, then yy copies them as one prompt" src=".github/assets/videos/review-light.gif">
+  <img alt="A review in diffle: a language-server hover, its references, a jump to one and a comment there, then yy copies the comments as one prompt" src=".github/assets/videos/review-light.gif">
 </picture>
 
 ## Install

@@ -1,16 +1,8 @@
-shortlink/app.py:19-20
+tests/test_ratelimit.py:23-24
 
->     forwarded = request.headers.get("x-forwarded-for")
->     client = forwarded or request.client.host
+>     now[0] += 0.5
+>     assert limiter.allow("a")
 
-`x-forwarded-for` is client-controlled, so a new value per request dodges the limit. Only trust it behind our proxy.
-
----
-
-shortlink/ratelimit.py:24
-
->         now = time.time()
-
-Use `time.monotonic()`: a wall-clock jump would refill or drain every bucket.
+Also step the clock back: a negative `elapsed` drains the bucket. `time.monotonic()` cannot go back.
 
 ---
