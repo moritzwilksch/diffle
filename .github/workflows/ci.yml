@@ -161,10 +161,11 @@ jobs:
           # archives are lost.
           skip-decompress: true
       - run: pixi run npm-packages
+      # The tarballs alone: an artifact drops file modes, which only a tarball keeps.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: npm-packages
-          path: npm-packages
+          path: npm-packages/*.tgz
 
   lockfile:
     runs-on: ubuntu-latest

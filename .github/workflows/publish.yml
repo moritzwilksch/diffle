@@ -67,10 +67,11 @@ jobs:
           # archives are lost.
           skip-decompress: true
       - run: pixi run npm-packages
+      # The tarballs alone: an artifact drops file modes, which only a tarball keeps.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: npm-packages
-          path: npm-packages
+          path: npm-packages/*.tgz
 
   # Publishes the platform packages, then the launcher that depends on them, through trusted
   # publishing (OIDC). A package already at this version is skipped, so a rerun finishes what an
@@ -95,14 +96,15 @@ jobs:
           path: npm-packages
       - name: Publish packages
         run: |
-          for dir in npm-packages/diffle-* npm-packages/diffle; do
-            name=$(jq -r .name "$dir/package.json")
-            version=$(jq -r .version "$dir/package.json")
+          for tarball in npm-packages/diffle-*.tgz npm-packages/diffle.tgz; do
+            manifest=$(tar -xOzf "$tarball" package/package.json)
+            name=$(jq -r .name <<< "$manifest")
+            version=$(jq -r .version <<< "$manifest")
             if npm view "$name@$version" version > /dev/null 2>&1; then
               echo "$name@$version is already published."
               continue
             fi
-            npm publish "./$dir" --access public --provenance
+            npm publish "./$tarball" --access public --provenance
           done
 
   # Attaches the binaries, their checksums, and the installers to the tag's release.

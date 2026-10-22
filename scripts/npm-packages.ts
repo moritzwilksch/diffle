@@ -4,8 +4,10 @@
 // Plain node runs it: no dependencies, and Node 24 strips the types itself.
 //
 // The platform packages are named after Node's `process.platform` and `process.arch`, which the
-// launcher uses to find its binary. `--smoke` installs the assembled packages for this host into a
-// temporary prefix and runs `diffle --version` through the launcher.
+// launcher uses to find its binary. Each package is also packed into `<out>/<name>.tgz`, which is
+// what gets published: an artifact upload drops file modes, a tarball keeps the binary executable.
+// `--smoke` installs this host's tarballs into a temporary prefix and runs `diffle --version`
+// through the launcher.
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -58,6 +60,7 @@ export function assemble(archives: string, out: string): { version: string; buil
       cpu: [platform.cpu],
     };
     writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    pack(dir, join(out, `${name}.tgz`));
     built.push(name);
   }
   const launcher = join(out, 'diffle');
@@ -74,7 +77,24 @@ export function assemble(archives: string, out: string): { version: string; buil
     Object.values(TARGETS).map((platform) => [`${SCOPE}/${platformName(platform)}`, version]),
   );
   writeFileSync(join(launcher, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  pack(launcher, join(out, 'diffle.tgz'));
   return { version, built };
+}
+
+/** `npm pack`s the package in `dir` into the tarball `to`. */
+function pack(dir: string, to: string): void {
+  const stage = mkdtempSync(join(tmpdir(), 'diffle-pack-'));
+  try {
+    const [packed] = JSON.parse(
+      execFileSync('npm', ['pack', dir, '--json', '--ignore-scripts', '--pack-destination', stage], {
+        encoding: 'utf8',
+      }),
+    ) as { filename: string }[];
+    rmSync(to, { force: true });
+    cpSync(join(stage, packed!.filename), to);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
 }
 
 /** The archive's files into `dir`: the binary, LICENSE and the notices. */
@@ -84,18 +104,19 @@ function extract(archive: string, dir: string): void {
 }
 
 /**
- * Installs the launcher and this host's platform package from `out` into a temporary prefix
- * without the registry, then runs `diffle --version` through the launcher.
+ * Unpacks the launcher's and this host's platform package's tarballs from `out` into a temporary
+ * prefix without the registry, then runs `diffle --version` through the launcher.
  */
 export function smoke(out: string, version: string): string {
   const name = platformName({ os: process.platform, cpu: process.arch });
-  if (!existsSync(join(out, name))) throw new Error(`no package for this host (${name}) under ${out}`);
+  if (!existsSync(join(out, `${name}.tgz`))) throw new Error(`no package for this host (${name}) under ${out}`);
   const prefix = mkdtempSync(join(tmpdir(), 'diffle-npm-'));
   try {
     const scope = join(prefix, 'node_modules', SCOPE);
-    mkdirSync(scope, { recursive: true });
-    cpSync(join(out, 'diffle'), join(scope, 'diffle'), { recursive: true });
-    cpSync(join(out, name), join(scope, name), { recursive: true });
+    for (const pkg of ['diffle', name]) {
+      mkdirSync(join(scope, pkg), { recursive: true });
+      execFileSync('tar', ['-xzf', join(out, `${pkg}.tgz`), '-C', join(scope, pkg), '--strip-components=1']);
+    }
     const launcher = join(scope, 'diffle', 'bin', 'diffle.js');
     const printed = execFileSync(process.execPath, [launcher, '--version'], {
       encoding: 'utf8',
