@@ -34,7 +34,8 @@
     "videos": "tsx scripts/record-videos.ts",
     "test:e2e:report": "playwright show-report playwright-report",
     "snapshot-report": "tsx scripts/snapshot-report.ts",
-    "quality-gate": "tsx scripts/quality-gate.ts"
+    "quality-gate": "tsx scripts/quality-gate.ts",
+    "check-version": "tsx scripts/check-version.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
