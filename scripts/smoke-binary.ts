@@ -1,5 +1,5 @@
-// Runs a built binary over a throwaway repo and fetches the page, a script, and a
-// grammar, proving the client assets were embedded. usage: node scripts/smoke-binary.ts <binary>
+// Runs a built binary over a throwaway repo and fetches the page, its scripts, and the
+// highlighter's lexers, proving the client assets were embedded. usage: node scripts/smoke-binary.ts <binary>
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -49,12 +49,14 @@ try {
   const find = (re: RegExp, text: string, what: string) => re.exec(text)?.[0] ?? fail(`found no ${what}`);
   const script = find(/assets\/index-[\w-]+\.js/, html, 'entry script');
   const entry = await fetchOk(script, 'text/javascript');
-  const worker = find(/syntax\.worker-[\w-]+\.js/, entry, 'worker');
-  const grammar = find(/typescript-[\w-]+\.js/, entry, 'grammar');
+  const worker = find(/syntax\.worker-[\w-]+\.js/, entry, 'syntax worker');
   await fetchOk(`assets/${worker}`, 'text/javascript');
-  await fetchOk(`assets/${grammar}`, 'text/javascript');
+  // The viewer's highlighting worker loads the lexers lazily, one chunk further down.
+  const pool = find(/(?<![.\w])worker-[\w-]+\.js/, entry, 'highlighting worker');
+  const lexers = find(/highlights-[\w-]+\.js/, await fetchOk(`assets/${pool}`, 'text/javascript'), 'lexers');
+  await fetchOk(`assets/${lexers}`, 'text/javascript');
   await fetchOk('api/snapshot', 'application/json');
-  console.error(`smoke ok: ${base} served ${script}, ${worker}, ${grammar}, and api/snapshot`);
+  console.error(`smoke ok: ${base} served ${script}, ${worker}, ${pool}, ${lexers}, and api/snapshot`);
 } finally {
   child.kill();
   await new Promise<void>((res) => (child.exitCode == null ? child.once('exit', () => res()) : res()));
