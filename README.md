@@ -53,6 +53,24 @@ language servers. Every package takes more with `withLsps`, and `#unwrapped` is 
 diffle.packages.${system}.default.withLsps [ pkgs.gopls pkgs.clang-tools ]
 ```
 
+To build from source, pixi builds the checkout with `recipe/recipe.yaml` (a Rust toolchain and
+Node.js come from conda-forge):
+
+```bash
+pixi global install --git https://github.com/moritzwilksch/diffle diffle
+```
+
+Or depend on it from a pixi workspace. The extras add language servers: `python`, `rust`,
+`typescript`, `go`, `ruby`, `java`, `lua`, `terraform`, `json`, `yaml`, and `toml`:
+
+```toml
+[workspace]
+preview = ["pixi-build"]
+
+[dependencies]
+diffle = { git = "https://github.com/moritzwilksch/diffle", extras = ["python", "rust"] }
+```
+
 ## Pick what to review
 
 ```bash

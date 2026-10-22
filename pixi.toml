@@ -2,6 +2,20 @@
 name = "diffle"
 channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64", "win-arm64"]
+preview = ["pixi-build"]
+
+# diffle itself, built from source by recipe/recipe.yaml. Other workspaces depend on it with
+# `diffle = { git = "https://github.com/moritzwilksch/diffle" }`; this one does not.
+[package]
+name = "diffle"
+
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "*"
+
+# The recipe reads its version from package.json with load_from_file, an experimental rattler-build feature.
+[package.build.config]
+experimental = true
 
 [dependencies]
 # The same release rust-toolchain.toml names; rustup is not involved under pixi.
