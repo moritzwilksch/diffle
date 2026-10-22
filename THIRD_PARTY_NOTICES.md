@@ -264,7 +264,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### @shikijs/core 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/core 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -291,7 +291,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/engine-javascript 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/engine-javascript 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -318,7 +318,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/engine-oniguruma 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/engine-oniguruma 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -345,7 +345,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/langs 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/langs 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -372,7 +372,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/primitive 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/primitive 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -399,7 +399,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/themes 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/themes 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -453,7 +453,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/types 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/types 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -2113,7 +2113,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### react 19.2.8 (https://github.com/react/react.git)
+#### react 19.3.1 (https://github.com/react/react.git)
 
 ```
 MIT License
@@ -2139,7 +2139,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### react-dom 19.2.8 (https://github.com/react/react.git)
+#### react-dom 19.3.1 (https://github.com/react/react.git)
 
 ```
 MIT License
@@ -2349,7 +2349,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### scheduler 0.27.0 (https://github.com/facebook/react.git)
+#### scheduler 0.28.0 (https://github.com/react/react.git)
 
 ```
 MIT License
@@ -2375,7 +2375,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### shiki 4.4.3 (git+https://github.com/shikijs/shiki.git)
+#### shiki 4.5.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -2510,7 +2510,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### tailwind-merge 3.6.0 (https://github.com/dcastil/tailwind-merge.git)
+#### tailwind-merge 3.7.0 (https://github.com/dcastil/tailwind-merge.git)
 
 ```
 MIT License
@@ -2829,7 +2829,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### zod 4.6.2 (git+https://github.com/colinhacks/zod.git)
+#### zod 4.6.7 (git+https://github.com/colinhacks/zod.git)
 
 ```
 MIT License
@@ -3781,7 +3781,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### lucide-react 1.39.0 (https://github.com/lucide-icons/lucide.git)
+#### lucide-react 1.57.0 (https://github.com/lucide-icons/lucide.git)
 
 ```
 ISC License
