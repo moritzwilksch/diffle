@@ -1,7 +1,7 @@
 [package]
 name = "diffle"
 # Kept equal to package.json's version; `scripts/check-version.ts` enforces it and the release bumps both.
-version = "0.3.1"
+version = "0.3.2"
 description = "Local git diff reviewer in the browser with line comments exported as agent prompts"
 edition.workspace = true
 license.workspace = true

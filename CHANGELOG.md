@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.2](https://github.com/moritzwilksch/diffle/compare/v0.3.1...v0.3.2) - 2026-10-22
+
+### Features
+
+- _(videos)_ Show hover, references, a jump in the `review` scene ([#376](https://github.com/moritzwilksch/diffle/pull/376))
+- _(client)_ Highlight code with @pierre/highlights ([#382](https://github.com/moritzwilksch/diffle/pull/382))
+- _(cli)_ Print the version when starting ([#384](https://github.com/moritzwilksch/diffle/pull/384))
+
+### Bug fixes
+
+- _(cli)_ Print the real version at startup ([#388](https://github.com/moritzwilksch/diffle/pull/388))
+- _(client)_ Keep the cursor when Escape cancels a comment ([#387](https://github.com/moritzwilksch/diffle/pull/387))
+
+### Refactors
+
+- _(github)_ Talk to GitHub through octocrab ([#364](https://github.com/moritzwilksch/diffle/pull/364))
+
+### Build and CI
+
+- Update pixi lock file monthly, add dependabot ([#366](https://github.com/moritzwilksch/diffle/pull/366))
+- _(release)_ Install git-cliff through pixi ([#378](https://github.com/moritzwilksch/diffle/pull/378))
+- _(ts)_ Make tsserver resolve the @/ alias ([#383](https://github.com/moritzwilksch/diffle/pull/383))
+- Add a pixi-build package definition ([#386](https://github.com/moritzwilksch/diffle/pull/386))
+
+### Other
+
+- _(deps)_ Bump the gh-actions group with 4 updates ([#367](https://github.com/moritzwilksch/diffle/pull/367))
+- _(deps)_ Bump the cargo group with 6 updates ([#370](https://github.com/moritzwilksch/diffle/pull/370))
+- _(deps)_ Bump the npm group with 20 updates ([#369](https://github.com/moritzwilksch/diffle/pull/369))
+
 ## [0.3.1](https://github.com/moritzwilksch/diffle/compare/v0.3.0...v0.3.1) - 2026-10-22
 
 ### Bug fixes
