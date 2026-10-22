@@ -12,7 +12,6 @@ let release = () => {};
 let held = Promise.resolve();
 const themeColors = new Map<string, string>();
 vi.mock('@pierre/diffs', () => ({
-  canUseWASM: () => true,
   getFiletypeFromFileName: () => 'typescript',
   getSharedHighlighter: async () => {
     if (++calls > holdFrom) await held;

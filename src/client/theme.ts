@@ -1,4 +1,4 @@
-import { canUseWASM, type HighlighterTypes, type ThemesType } from '@pierre/diffs';
+import type { ThemesType } from '@pierre/diffs';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
@@ -10,9 +10,9 @@ export const CODE_THEMES: ThemesType = { light: 'github-light-high-contrast', da
 
 /**
  * The highlighter every renderer names: one thread holds one type at a time, and a renderer that
- * names none loads Shiki. Shiki's JavaScript engine covers engines without WebAssembly SIMD.
+ * names none loads Shiki. It needs WebAssembly SIMD, which every engine that parses the bundle has.
  */
-export const HIGHLIGHTER: HighlighterTypes = canUseWASM() ? 'highlights' : 'shiki-js';
+export const HIGHLIGHTER = 'highlights' as const;
 const KEY = 'diffle:theme';
 
 export function readTheme(): ThemeChoice {
