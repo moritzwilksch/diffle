@@ -88,6 +88,7 @@ jobs:
           npm version --no-git-tag-version "${NEXT#v}"
           sed -i "s/^version = \".*\"/version = \"${NEXT#v}\"/" crates/diffle/Cargo.toml
           cargo update --workspace
+          pixi run licenses
           git cliff --tag "$NEXT" -o CHANGELOG.md
           npx oxfmt CHANGELOG.md
           awk -v v="${NEXT#v}" '/^## \[/ { p = index($0, "## [" v "]") == 1; next } p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
@@ -114,6 +115,7 @@ jobs:
             package.json
             crates/diffle/Cargo.toml
             Cargo.lock
+            THIRD_PARTY_NOTICES.md
             package-lock.json
             CHANGELOG.md
           sign-commits: true
