@@ -14,9 +14,30 @@ source:
 
 build:
   number: 0
+  script:
+    interpreter: brush
+    content:
+      # The Rust binary embeds the web client from dist/client
+      - npm ci --ignore-scripts
+      - npm run build
+      # aws-lc-sys needs clang-cl to assemble its ARM64 sources; conda-forge sets CC to cl.exe
+      - if: win and arm64
+        then: export AWS_LC_SYS_CC=clang-cl
+      - export CARGO_PROFILE_RELEASE_STRIP=symbols
+      - cargo install --locked --no-track --bins --root "${LIBRARY_PREFIX:-$PREFIX}" --path crates/diffle
+      # Pixi: prevent CONDA_PREFIX from leaking into sandboxed processes
+      - mkdir -p "$PREFIX/etc/pixi/diffle"
+      - touch "$PREFIX/etc/pixi/diffle/global-ignore-conda-prefix"
+      - if: unix
+        then:
+          - mkdir -p "$PREFIX/share/zsh/site-functions" "$PREFIX/share/bash-completion/completions" "$PREFIX/share/fish/vendor_completions.d"
+          - '"$PREFIX/bin/diffle" completion --shell zsh > "$PREFIX/share/zsh/site-functions/_diffle"'
+          - '"$PREFIX/bin/diffle" completion --shell bash > "$PREFIX/share/bash-completion/completions/diffle"'
+          - '"$PREFIX/bin/diffle" completion --shell fish > "$PREFIX/share/fish/vendor_completions.d/diffle.fish"'
 
 requirements:
   build:
+    - brush
     - ${{ stdlib('c') }}
     - ${{ compiler('c') }}
     - ${{ compiler('rust') }}
