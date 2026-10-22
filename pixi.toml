@@ -22,6 +22,7 @@ install-node = { cmd = "npm ci", inputs = ["package-lock.json"], outputs = ["nod
 # build
 build-client = { cmd = "npm run build", depends-on = ["install-node"] }
 build-release = { cmd = "cargo build --release --locked", depends-on = ["build-client"] }
+build-debug = { cmd = "cargo build --locked", depends-on = ["build-client"] }
 # test
 test-node = { cmd = "npm test", depends-on = ["install-node"] }
 test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["build-client"] }
