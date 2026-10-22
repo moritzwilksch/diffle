@@ -1,0 +1,51 @@
+name: Update lock files
+# Keeps a pull request open that updates pixi.lock within pixi.toml's constraints, monthly or on demand.
+on:
+  schedule:
+    - cron: 0 5 1 * *
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  pixi-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          run-install: false
+      - name: Update lock files
+        run: |
+          set -o pipefail
+          pixi update --json | pixi exec pixi-diff-to-markdown >> "$RUNNER_TEMP/diff.md"
+      # An octo-sts token rather than GITHUB_TOKEN, so that the pull request runs CI.
+      - name: Obtain GitHub app token
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: update-lockfiles
+      - name: Open or update the pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.octo-sts.outputs.token }}
+          branch: update-pixi
+          base: main
+          title: "chore(deps): update pixi lock file"
+          commit-message: "chore(deps): update pixi lock file"
+          body-path: ${{ runner.temp }}/diff.md
+          labels: pixi
+          delete-branch: true
+          add-paths: pixi.lock
+          sign-commits: true
