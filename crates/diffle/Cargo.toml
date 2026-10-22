@@ -23,6 +23,8 @@ hex = "0.4"
 indexmap = "2"
 http-body-util = "0.1"
 notify = "8"
+# Over reqwest, which honours the proxy environment as git does.
+octocrab = { version = "0.54", default-features = false, features = ["reqwest"] }
 mime_guess = "2"
 regex = "1"
 regress = "0.10"

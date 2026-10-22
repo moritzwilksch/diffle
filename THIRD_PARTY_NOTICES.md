@@ -3870,7 +3870,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The binary links the crates below, grouped by licence. Each licence's text follows the crates
 that use it.
 
-- MIT License: 224
+- MIT License: 245
 - Unicode License v3: 19
 - Apache License 2.0: 6
 - ISC License: 6
@@ -4658,6 +4658,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 - sha1 0.10.7 (https://github.com/RustCrypto/hashes)
+- sha2 0.10.9 (https://github.com/RustCrypto/hashes)
 
 ```
 Copyright (c) 2006-2009 Graydon Hoare
@@ -4964,6 +4965,7 @@ THE SOFTWARE.
 Used by:
 - bitflags 2.13.2 (https://github.com/bitflags/bitflags)
 - log 0.4.34 (https://github.com/rust-lang/log)
+- num-traits 0.2.19 (https://github.com/rust-num/num-traits)
 - regex-automata 0.4.18 (https://github.com/rust-lang/regex)
 - regex-syntax 0.8.11 (https://github.com/rust-lang/regex)
 - regex 1.13.1 (https://github.com/rust-lang/regex)
@@ -5768,6 +5770,7 @@ THE SOFTWARE.
 
 Used by:
 - digest 0.10.7 (https://github.com/RustCrypto/traits)
+- hmac 0.12.1 (https://github.com/RustCrypto/MACs)
 
 ```
 Copyright (c) 2017 Artyom Pavlov
@@ -5923,6 +5926,40 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+### MIT License
+
+Used by:
+- arc-swap 1.9.3 (https://github.com/vorner/arc-swap)
+
+```
+Copyright (c) 2017 arc-swap developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
 ```
 
 ### MIT License
@@ -6323,6 +6360,41 @@ THE SOFTWARE.
 ### MIT License
 
 Used by:
+- getrandom 0.2.17 (https://github.com/rust-random/getrandom)
+
+```
+Copyright (c) 2018-2024 The rust-random Project Developers
+Copyright (c) 2014 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
 - block-buffer 0.12.1 (https://github.com/RustCrypto/utils)
 
 ```
@@ -6668,6 +6740,41 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
+- snafu-derive 0.8.9 (https://github.com/shepmaster/snafu)
+- snafu 0.8.9 (https://github.com/shepmaster/snafu)
+
+```
+Copyright (c) 2019- Jake Goulding
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
 - tower-http 0.6.11 (https://github.com/tower-rs/tower-http)
 
 ```
@@ -6707,6 +6814,41 @@ Used by:
 
 ```
 Copyright (c) 2019-2026 Sean McArthur & Hyper Contributors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
+- iana-time-zone-haiku 0.1.2 (https://github.com/strawlab/iana-time-zone)
+- iana-time-zone 0.1.65 (https://github.com/strawlab/iana-time-zone)
+
+```
+Copyright (c) 2020 Andrew D. Straw
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -7348,6 +7490,36 @@ SOFTWARE.
 ### MIT License
 
 Used by:
+- secrecy 0.10.3 (https://github.com/iqlusioninc/crates/tree/main/secrecy)
+
+```
+MIT License
+
+Copyright (c) 2019-2024 iqlusion
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
 - axum-core 0.5.6 (https://github.com/tokio-rs/axum)
 
 ```
@@ -7503,12 +7675,47 @@ SOFTWARE.
 ### MIT License
 
 Used by:
+- web-time 1.1.0 (https://github.com/daxpedda/web-time)
+
+```
+MIT License
+
+Copyright (c) 2023 dAxpeDDa
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
+- chrono 0.4.45 (https://github.com/chronotope/chrono)
+- http-serde 2.1.1 (https://gitlab.com/kornelski/http-serde)
 - jni-macros 0.22.4 (https://github.com/jni-rs/jni-rs)
 - jni-sys-macros 0.4.1 (https://github.com/jni-rs/jni-sys)
 - jni 0.22.4 (https://github.com/jni-rs/jni-rs)
 - r-efi 5.3.0 (https://github.com/r-efi/r-efi)
 - r-efi 6.0.0 (https://github.com/r-efi/r-efi)
 - rustls-platform-verifier-android 0.2.0 (https://github.com/rustls/rustls-platform-verifier)
+- windows-core 0.62.2 (https://github.com/microsoft/windows-rs)
+- windows-implement 0.60.2 (https://github.com/microsoft/windows-rs)
+- windows-interface 0.59.3 (https://github.com/microsoft/windows-rs)
 - windows-link 0.2.1 (https://github.com/microsoft/windows-rs)
 - windows-registry 0.6.1 (https://github.com/microsoft/windows-rs)
 - windows-result 0.4.1 (https://github.com/microsoft/windows-rs)
@@ -7705,6 +7912,36 @@ SOFTWARE.
 ### MIT License
 
 Used by:
+- octocrab 0.54.5 (https://github.com/XAMPPRocky/octocrab.git)
+
+```
+MIT License (MIT)
+
+Copyright (c) 2016 Erin Power
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
 - adler2 2.0.1 (https://github.com/oyvindln/adler2)
 - anyhow 1.0.104 (https://github.com/dtolnay/anyhow)
 - atomic-waker 1.1.2 (https://github.com/smol-rs/atomic-waker)
@@ -7713,10 +7950,13 @@ Used by:
 - itoa 1.0.18 (https://github.com/dtolnay/itoa)
 - linux-raw-sys 0.12.1 (https://github.com/sunfishcode/linux-raw-sys)
 - once_cell 1.21.4 (https://github.com/matklad/once_cell)
+- pin-project-internal 1.1.13 (https://github.com/taiki-e/pin-project)
 - pin-project-lite 0.2.17 (https://github.com/taiki-e/pin-project-lite)
+- pin-project 1.1.13 (https://github.com/taiki-e/pin-project)
 - proc-macro2 1.0.107 (https://github.com/dtolnay/proc-macro2)
 - quote 1.0.47 (https://github.com/dtolnay/quote)
 - rustix 1.1.5 (https://github.com/bytecodealliance/rustix)
+- rustversion 1.0.23 (https://github.com/dtolnay/rustversion)
 - serde 1.0.229 (https://github.com/serde-rs/serde)
 - serde_core 1.0.229 (https://github.com/serde-rs/serde)
 - serde_derive 1.0.229 (https://github.com/serde-rs/serde)
@@ -7789,6 +8029,35 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
+Used by:
+- android_system_properties 0.1.6 (https://github.com/nical/android_system_properties)
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2013 Nicolas Silva
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ```
 
