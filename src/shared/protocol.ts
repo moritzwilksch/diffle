@@ -291,6 +291,12 @@ export const GithubMetadataSchema = z.object({
   repository: z.string().nullable(),
   /** Its page, on whichever GitHub the run talks to. */
   repositoryUrl: z.string().nullable(),
+  /**
+   * Whether each side's commit is on that repository, judged from local refs alone: reachable from
+   * origin's remote-tracking branches or from this run's fetch of the reviewed pull request. The
+   * worktree, an interdiff's replayed old side and an unpushed commit are not. Permalinks need it.
+   */
+  published: z.object({ old: z.boolean(), new: z.boolean() }),
   pullRequest: GithubPullRequestSchema.nullable(),
   /** Null when export is allowed; otherwise explains why it is blocked. */
   reason: z.string().nullable(),

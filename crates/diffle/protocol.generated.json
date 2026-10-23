@@ -494,6 +494,22 @@
           ],
           "description": "Its page, on whichever GitHub the run talks to."
         },
+        "published": {
+          "type": "object",
+          "properties": {
+            "old": {
+              "type": "boolean"
+            },
+            "new": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "old",
+            "new"
+          ],
+          "description": "Whether each side's commit is on that repository, judged from local refs alone: reachable from\norigin's remote-tracking branches or from this run's fetch of the reviewed pull request. The\nworktree, an interdiff's replayed old side and an unpushed commit are not. Permalinks need it."
+        },
         "pullRequest": {
           "anyOf": [
             {
@@ -516,6 +532,7 @@
         "version",
         "repository",
         "repositoryUrl",
+        "published",
         "pullRequest",
         "reason"
       ],
