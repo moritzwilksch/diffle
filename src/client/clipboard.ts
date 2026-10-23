@@ -1,3 +1,32 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/** How long a copy button shows its check mark. */
+const COPIED_MS = 1400;
+
+/**
+ * A copy button's acknowledgement: `copy` writes the text and, on success, sets `done` for a
+ * moment; `acknowledge` sets it for a copy made elsewhere. A failed copy is the caller's to report.
+ */
+export function useCopied(): { done: boolean; copy(text: string): Promise<boolean>; acknowledge(): void } {
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const acknowledge = useCallback(() => {
+    setDone(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDone(false), COPIED_MS);
+  }, []);
+  const copy = useCallback(
+    async (text: string) => {
+      const ok = await copyText(text);
+      if (ok) acknowledge();
+      return ok;
+    },
+    [acknowledge],
+  );
+  return { done, copy, acknowledge };
+}
+
 /**
  * Copies text to the clipboard. `navigator.clipboard` only exists in secure
  * contexts (https or localhost); over plain http on a LAN address the legacy

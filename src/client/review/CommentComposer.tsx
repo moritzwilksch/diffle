@@ -2,7 +2,7 @@ import { Button } from '@/client/ui/Button.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { FileDiff, Link, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { copyText } from '@/client/clipboard.js';
+import { useCopied } from '@/client/clipboard.js';
 import { composerKey, selectionRange } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { permalink } from './permalink.js';
@@ -121,9 +121,7 @@ function CopyLinkButton() {
     const link = permalink(s.snapshot, s.github.data, d.path, selectionRange(s, d.path, d.selection));
     return 'url' in link ? link.url : null;
   });
-  const [done, setDone] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const { done, copy } = useCopied();
   if (!url) return null;
   return (
     <Button
@@ -131,10 +129,7 @@ function CopyLinkButton() {
       title="Copy a GitHub permalink to these lines (yl)"
       aria-label="Copy link"
       onClick={async () => {
-        if (!(await copyText(url))) return flash('The browser blocked clipboard access');
-        setDone(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), 1400);
+        if (!(await copy(url))) flash('The browser blocked clipboard access');
       }}
     >
       <CopyIcon done={done} size="0.8125rem">

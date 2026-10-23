@@ -5,7 +5,7 @@ import { AlertTriangle, Check, ClipboardCopy, GitPullRequestArrow, MessageSquare
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { rangeKey, type CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
-import { copyText } from '@/client/clipboard.js';
+import { copyText, useCopied } from '@/client/clipboard.js';
 import { commentsOff, exportLabel, type ExportOutcome, visibleThreads } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { FilePath } from '@/client/FilePath.js';
@@ -236,20 +236,13 @@ function CopyButton({
   disabled?: boolean;
   title?: string;
 }) {
-  const [done, setDone] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
-  const acknowledge = () => {
-    setDone(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setDone(false), 1400);
-  };
+  const { done, acknowledge } = useCopied();
   const seen = useRef(pulse);
   useEffect(() => {
     if (pulse === seen.current) return;
     seen.current = pulse;
     acknowledge();
-  }, [pulse]);
+  }, [pulse, acknowledge]);
   return (
     <Button
       variant={primary ? 'primary' : 'default'}
