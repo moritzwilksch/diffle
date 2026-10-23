@@ -3,9 +3,9 @@ import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { FileDiff, Link, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useCopied } from '@/client/clipboard.js';
-import { composerKey, selectionRange } from '@/client/model.js';
+import { composerKey } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
-import { permalink } from './permalink.js';
+import { draftPermalink } from './permalink.js';
 
 /**
  * Inline comment editor rendered as an annotation at the selection's last line. Its header names the
@@ -112,15 +112,22 @@ export function CommentComposer({ label }: { label: string }) {
   );
 }
 
-/** Copies a GitHub permalink to the draft's lines; absent when GitHub could not show them. */
+/**
+ * Copies a GitHub permalink to the draft's lines; absent when GitHub could not show them. A draft
+ * on unpushed lines asks again once, in case they were pushed since the last lookup.
+ */
 function CopyLinkButton() {
   const flash = useStore((s) => s.flash);
+  const draft = useStore((s) => s.draft);
   const url = useStore((s) => {
-    const d = s.draft;
-    if (!s.snapshot || !d?.selection || s.fileView?.external) return null;
-    const link = permalink(s.snapshot, s.github.data, d.path, selectionRange(s, d.path, d.selection));
-    return 'url' in link ? link.url : null;
+    const link = draftPermalink(s);
+    return link && 'url' in link ? link.url : null;
   });
+  useEffect(() => {
+    const s = useStore.getState();
+    const link = draftPermalink(s);
+    if (link && 'unpushed' in link) void s.refreshGithub();
+  }, [draft]);
   const { done, copy } = useCopied();
   if (!url) return null;
   return (

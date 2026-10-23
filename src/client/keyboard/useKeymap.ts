@@ -5,7 +5,7 @@ import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInli
 import { currentPath, MODE_PANES } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
 import { escapeRegex } from '@/client/search/highlight.js';
-import { copyPermalink, cursorPermalink } from '@/client/review/permalink.js';
+import { copyCursorPermalink } from '@/client/review/permalink.js';
 import { useStore, type ReviewState } from '@/client/store.js';
 import { nextTheme } from '@/client/theme.js';
 
@@ -71,7 +71,7 @@ const KEYMAP: Record<string, Action> = {
   yy: () => void copyComments(),
   Y: () => void copyComments(),
   yp: (s) => void copyPath(s),
-  yl: (s) => void copyPermalink(cursorPermalink(s), s.flash),
+  yl: () => void copyCursorPermalink(),
   '/': (s) => s.openSearch('file', selectedQuery(s)),
   'g/': (s) => s.openSearch('diff', selectedQuery(s)),
   gf: () => focusFileSearch(),
