@@ -4400,7 +4400,7 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- diffle 0.3.2 (https://github.com/moritzwilksch/diffle)
+- diffle 0.3.3 (https://github.com/moritzwilksch/diffle)
 - aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
 - dunce 1.0.5 (https://gitlab.com/kornelski/dunce)
 - ryu 1.0.23 (https://github.com/dtolnay/ryu)
