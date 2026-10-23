@@ -7,9 +7,12 @@ use futures::FutureExt;
 use super::{Session, pr_url};
 use crate::error::{GithubError, Result};
 use crate::github::client::no_token;
-use crate::github::metadata::{discover_github, published};
+use crate::github::metadata::discover_github;
+use crate::github::published::published;
 use crate::github::review::ExportInput;
-use crate::protocol::{GithubExportResponse, GithubMetadata, Snapshot, ThreadQuery, ThreadState, same_review};
+use crate::protocol::{
+    GithubExportResponse, GithubMetadata, Published, Snapshot, ThreadQuery, ThreadState, same_review,
+};
 
 /// How long one discovery answers for its snapshot before GitHub is asked again.
 const DISCOVERY_TTL: Duration = Duration::from_secs(30);
@@ -20,32 +23,28 @@ fn changed() -> GithubError {
 
 impl Session {
     /// The pull request `snap` belongs to, cached apart from snapshot construction, so callers never
-    /// hold the transition queue. A failed lookup is forgotten at once. `published` is read from the
-    /// local refs on every call, so a push shows without waiting out the cache.
+    /// hold the transition queue. A failed lookup is forgotten at once.
     pub async fn github_metadata(self: &Arc<Self>, snap: &Arc<Snapshot>) -> Result<GithubMetadata> {
         let a = self.active()?;
         // The snapshot must be one of the active review's: a discovery answers for one comparison.
         if !same_review(&a.review, &snap.review) {
             return Err(changed().into());
         }
-        let (task, cached_hit) = {
+        let task = {
             let mut cached = self.discovered.lock().unwrap();
             match cached.as_ref() {
-                Some((at, expires, task)) if Arc::ptr_eq(at, snap) && *expires > Instant::now() => (task.clone(), true),
+                Some((at, expires, task)) if Arc::ptr_eq(at, snap) && *expires > Instant::now() => task.clone(),
                 _ => {
                     let (this, target, pr_url) = (self.clone(), snap.clone(), pr_url(&a.review));
                     let lookup =
                         async move { discover_github(&this.repo, &target, &this.github, pr_url.as_deref()).await };
                     let task = lookup.boxed().shared();
                     *cached = Some((snap.clone(), Instant::now() + DISCOVERY_TTL, task.clone()));
-                    (task, false)
+                    task
                 }
             }
         };
-        let mut result = task.clone().await;
-        if let (true, Ok(metadata)) = (cached_hit, &mut result) {
-            metadata.published = published(&self.repo, snap, metadata.repository.as_deref()).await;
-        }
+        let result = task.clone().await;
         if result.is_err() {
             let mut cached = self.discovered.lock().unwrap();
             if cached.as_ref().is_some_and(|(_, _, t)| t.ptr_eq(&task)) {
@@ -53,6 +52,11 @@ impl Session {
             }
         }
         result
+    }
+
+    /// Where permalinks to `snap`'s sides point, read afresh from local refs on every call.
+    pub async fn published(&self, snap: &Snapshot) -> Result<Published> {
+        published(&self.repo, snap, &self.github.instance).await
     }
 
     /// Adds threads to a pending review on the matching pull request, with fresh pull request data

@@ -52,7 +52,6 @@ it('shows PR metadata from another repository, then the origin when no PR matche
     version: 1,
     repository: 'alice/fork',
     repositoryUrl: 'https://github.com/alice/fork',
-    published: { old: false, new: false },
     reason: 'The comparison does not match the pull request diff',
     pullRequest: {
       repository: 'upstream/project',

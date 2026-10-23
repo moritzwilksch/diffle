@@ -494,22 +494,6 @@
           ],
           "description": "Its page, on whichever GitHub the run talks to."
         },
-        "published": {
-          "type": "object",
-          "properties": {
-            "old": {
-              "type": "boolean"
-            },
-            "new": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "old",
-            "new"
-          ],
-          "description": "Whether each side's commit is on that repository, judged from local refs alone: reachable from\norigin's remote-tracking branches or from this run's fetch of the reviewed pull request. The\nworktree, an interdiff's replayed old side and an unpushed commit are not. Permalinks need it."
-        },
         "pullRequest": {
           "anyOf": [
             {
@@ -532,7 +516,6 @@
         "version",
         "repository",
         "repositoryUrl",
-        "published",
         "pullRequest",
         "reason"
       ],
@@ -1448,6 +1431,38 @@
         "paths"
       ],
       "description": "Body of `POST /api/patch`: the changed files whose patches to return, concatenated. Unknown paths are skipped."
+    },
+    "Published": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Snapshot.version it answers for."
+        },
+        "repositoryUrl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Origin's GitHub page; null when origin is no GitHub remote."
+        },
+        "old": {
+          "type": "boolean",
+          "description": "Whether each side's commit is in that repository: reachable from origin's remote-tracking\nbranches or from this run's fetch of the reviewed pull request. The worktree, an interdiff's\nreplayed old side and an unpushed commit are not."
+        },
+        "new": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "version",
+        "repositoryUrl",
+        "old",
+        "new"
+      ],
+      "description": "Where a permalink to each side of a snapshot points, from local refs alone: no token, no\nnetwork, no cache, so a push shows on the next request."
     },
     "PullRef": {
       "type": "object",

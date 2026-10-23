@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { permalink } from '@/client/review/permalink.js';
-import type { GithubState } from '@/client/store.js';
-import type { GithubMetadata, Snapshot } from '@/shared/protocol.js';
+import type { Published, Snapshot } from '@/shared/protocol.js';
 
 const OLD = 'a'.repeat(40);
 const NEW = 'b'.repeat(40);
@@ -11,19 +10,14 @@ const snapshot = {
   newSha: NEW,
   changed: [{ path: 'src/new name.ts', oldPath: 'src/old#name.ts', status: 'R' }],
 } as unknown as Snapshot;
-const ready = (published: GithubMetadata['published'], over: Partial<GithubMetadata> = {}): GithubState => ({
-  status: 'ready',
-  data: {
-    version: 3,
-    repository: 'o/r',
-    repositoryUrl: 'https://github.com/o/r',
-    published,
-    pullRequest: null,
-    reason: null,
-    ...over,
-  },
+const published = (old: boolean, side: boolean, over: Partial<Published> = {}): Published => ({
+  version: 3,
+  repositoryUrl: 'https://github.com/o/r',
+  old,
+  new: side,
+  ...over,
 });
-const both = ready({ old: true, new: true });
+const both = published(true, true);
 
 describe('permalink', () => {
   it('links a side’s lines at its commit, an old side at the rename’s old path, paths escaped', () => {
@@ -35,24 +29,18 @@ describe('permalink', () => {
     });
   });
 
-  it('says why when GitHub could not show the lines, and when a push could change that', () => {
+  it('says why when GitHub could not show the lines', () => {
     const range = { side: 'new', startLine: 1, endLine: 1 } as const;
-    const why = (github: GithubState, snap = snapshot) => permalink(snap, github, 'a.ts', range);
+    const why = (p: Published, snap = snapshot) => permalink(snap, p, 'a.ts', range);
     expect([
-      why({ status: 'idle' }),
-      why({ status: 'loading' }),
-      why({ status: 'error', error: 'HTTP 502' }),
-      why(ready({ old: true, new: true }, { version: 2 })),
-      why(ready({ old: false, new: false }, { repository: null, repositoryUrl: null })),
-      why(ready({ old: true, new: false })),
-      why(ready({ old: true, new: false }), { ...snapshot, newSha: 'worktree' }),
+      why(published(true, true, { version: 2 })),
+      why(published(false, false, { repositoryUrl: null })),
+      why(published(true, false)),
+      why(published(true, false), { ...snapshot, newSha: 'worktree' }),
     ]).toEqual([
-      { reason: 'No GitHub lookup yet' },
-      { reason: 'GitHub lookup still running' },
-      { reason: 'GitHub lookup failed: HTTP 502' },
-      { reason: 'GitHub lookup still running' },
+      { reason: 'The review changed; try again' },
       { reason: 'No GitHub origin to link to' },
-      { reason: 'Not on GitHub: these lines are not in a pushed commit', unpushed: true },
+      { reason: 'Not on GitHub: these lines are not in a pushed commit' },
       { reason: 'Uncommitted lines have no GitHub link' },
     ]);
   });

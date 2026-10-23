@@ -113,21 +113,22 @@ export function CommentComposer({ label }: { label: string }) {
 }
 
 /**
- * Copies a GitHub permalink to the draft's lines; absent when GitHub could not show them. A draft
- * on unpushed lines asks again once, in case they were pushed since the last lookup.
+ * Copies a GitHub permalink to the draft's lines; absent when GitHub could not show them. Each
+ * draft and snapshot asks afresh, so lines pushed since show the button.
  */
 function CopyLinkButton() {
   const flash = useStore((s) => s.flash);
   const draft = useStore((s) => s.draft);
-  const url = useStore((s) => {
-    const link = draftPermalink(s);
-    return link && 'url' in link ? link.url : null;
-  });
+  const snapshot = useStore((s) => s.snapshot);
+  const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    const s = useStore.getState();
-    const link = draftPermalink(s);
-    if (link && 'unpushed' in link) void s.refreshGithub();
-  }, [draft]);
+    let live = true;
+    setUrl(null);
+    void draftPermalink(useStore.getState()).then((u) => live && setUrl(u));
+    return () => {
+      live = false;
+    };
+  }, [draft, snapshot]);
   const { done, copy } = useCopied();
   if (!url) return null;
   return (

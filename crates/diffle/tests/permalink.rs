@@ -5,19 +5,20 @@ use std::sync::Arc;
 
 use common::github::FakeGithub;
 use common::pr::{Fixture, as_git_url};
-use common::{TestRepo, git_in, revspec, session};
+use common::server::TestServer;
+use common::{TestRepo, git_in, revspec};
 use diffle::git::GitRepo;
 use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
-use diffle::github::metadata::discover_github;
+use diffle::github::published::published as read_published;
 use diffle::mode::resolve::resolve_review;
-use diffle::protocol::{EnterRequest, FollowRefs, Snapshot};
+use diffle::protocol::{EnterRequest, Snapshot};
 use diffle::snapshotter::Snapshotter;
 
-/// (old, new) published, as the GitHub metadata reports them.
+/// (old, new) published, read without a token.
 async fn published(repo: &Arc<GitRepo>, snap: &Snapshot) -> (bool, bool) {
-    let metadata = discover_github(repo, snap, &Github::tokenless(), None).await.unwrap();
-    (metadata.published.old, metadata.published.new)
+    let p = read_published(repo, snap, &Github::tokenless().instance).await.unwrap();
+    (p.old, p.new)
 }
 
 async fn sides(repo: &Arc<GitRepo>, req: EnterRequest) -> (bool, bool) {
@@ -70,18 +71,14 @@ async fn publishes_commits_a_remote_tracking_branch_of_origin_reaches_and_never_
 }
 
 #[tokio::test]
-async fn shows_a_push_on_the_next_lookup_while_the_pull_request_lookup_stays_cached() {
-    let t = pushed_then_local();
-    let repo = Arc::new(t.open().await);
-    let (s, _) = session(&repo, false, 3, FollowRefs::Off);
-    let snap = s.enter(revspec(&["HEAD~1", "HEAD"])).await.unwrap();
-    let sides = async || {
-        let m = s.github_metadata(&snap).await.unwrap();
-        (m.published.old, m.published.new)
-    };
-    assert_eq!(sides().await, (true, false));
-    t.git(&["update-ref", "refs/remotes/origin/feat/x", "HEAD"]);
-    assert_eq!(sides().await, (true, true));
+async fn serves_a_push_on_the_next_request_without_a_reload() {
+    let s = TestServer::over(pushed_then_local(), revspec(&["HEAD~1", "HEAD"])).await;
+    let version = s.get("/api/snapshot").await.json()["version"].clone();
+    let published = async || s.get("/api/github/published").await.json();
+    let expected = |new: bool| serde_json::json!({ "version": version, "repositoryUrl": "https://github.com/o/r", "old": true, "new": new });
+    assert_eq!(published().await, expected(false));
+    s.repo.git(&["update-ref", "refs/remotes/origin/feat/x", "HEAD"]);
+    assert_eq!(published().await, expected(true));
     s.close().await;
 }
 

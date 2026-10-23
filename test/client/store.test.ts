@@ -143,7 +143,6 @@ beforeEach(() => {
     version: useStore.getState().snapshot?.version,
     repository: 'o/r',
     repositoryUrl: 'https://github.com/o/r',
-    published: { old: false, new: false },
     pullRequest: null,
     reason: 'No matching pull request',
   }));
@@ -2201,7 +2200,6 @@ describe('asynchronous GitHub metadata', () => {
       version: 1,
       repository: 'o/r',
       repositoryUrl: 'https://github.com/o/r',
-      published: { old: false, new: false },
       pullRequest: null,
       reason: 'No PR',
     });
@@ -2220,7 +2218,6 @@ describe('asynchronous GitHub metadata', () => {
       version: 1,
       repository: 'o/r',
       repositoryUrl: 'https://github.com/o/r',
-      published: { old: false, new: false },
       pullRequest: null,
       reason: null,
     });
@@ -2243,7 +2240,6 @@ it('recovers GitHub lookup for the existing comparison after a failed switch', a
     version: 1,
     repository: 'o/r',
     repositoryUrl: 'https://github.com/o/r',
-    published: { old: false, new: false },
     pullRequest: null,
     reason: null,
   });
@@ -2257,7 +2253,6 @@ it('discards metadata for a newer server snapshot without changing the displayed
     version: 2,
     repository: 'o/r',
     repositoryUrl: 'https://github.com/o/r',
-    published: { old: false, new: false },
     pullRequest: null,
     reason: null,
   });

@@ -6,9 +6,7 @@ use super::hosts::{Github, github_repository};
 use super::pulls::{PullRequest, origin_repository, pull_requests_for_head, view_pr};
 use crate::error::{Error, Result};
 use crate::git::{GitRepo, WORKTREE};
-use crate::protocol::{
-    GithubMetadata, GithubMetadataPublished, GithubPullRequest, GithubPullRequestState, Review, Snapshot,
-};
+use crate::protocol::{GithubMetadata, GithubPullRequest, GithubPullRequestState, Review, Snapshot};
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -24,12 +22,10 @@ pub async fn discover_github(
     let instance = &github.instance;
     let repository = origin_repository(repo, instance).await?;
     let repository_url = repository.as_ref().map(|r| format!("https://{}/{r}", instance.host));
-    let published = published(repo, snap, repository.as_deref()).await;
     let metadata = |pull_request: Option<GithubPullRequest>, reason: Option<String>| GithubMetadata {
         version: snap.version,
         repository: repository.clone(),
         repository_url: repository_url.clone(),
-        published: published.clone(),
         pull_request,
         reason,
     };
@@ -58,24 +54,6 @@ pub async fn discover_github(
         }
     };
     Ok(metadata(Some(summary(&pr)), reason))
-}
-
-/// Whether each side's commit is on origin's GitHub repository, from local refs alone: reachable
-/// from origin's remote-tracking branches, or from the reviewed pull request this run fetched when
-/// it lives in that repository. A failed query counts as unpublished, which only hides permalinks.
-pub async fn published(repo: &GitRepo, snap: &Snapshot, repository: Option<&str>) -> GithubMetadataPublished {
-    let Some(repository) = repository else { return GithubMetadataPublished { old: false, new: false } };
-    let mut prefixes = vec!["refs/remotes/origin".to_owned()];
-    if let Review::Range { pr: Some(pr), .. } = &snap.review
-        && pr.repository.eq_ignore_ascii_case(repository)
-    {
-        prefixes.push(format!("{}/{}", repo.review_refs, pr.number));
-    }
-    let reachable = async |sha: &str| repo.reachable_from(sha, &prefixes).await.unwrap_or(false);
-    // An interdiff's old side is a replay GitHub never saw.
-    let old = async { snap.interdiff.is_none() && reachable(&snap.old_sha).await };
-    let (old, new) = tokio::join!(old, reachable(&snap.new_sha));
-    GithubMetadataPublished { old, new }
 }
 
 /// The one open pull request from the new endpoint's upstream branch into the old one's, or why

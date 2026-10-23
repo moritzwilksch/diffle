@@ -24,6 +24,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/review", post(enter))
         .route("/api/view", put(show))
         .route("/api/github", get(github))
+        .route("/api/github/published", get(github_published))
         .route("/api/refs", get(refs))
         .route("/api/last-commits-preview", get(last_commits_preview))
         .route("/api/config", get(config).put(set_config))
@@ -67,6 +68,12 @@ async fn show(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
 async fn github(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     let snap = d.session.snapshotter()?.current().await?;
     Ok(Json(d.session.github_metadata(&snap).await?).into_response())
+}
+
+/// Where permalinks to the current snapshot's sides point; local refs only, never the network.
+async fn github_published(State(d): State<Arc<ApiDeps>>) -> ApiResult {
+    let snap = d.session.snapshotter()?.current().await?;
+    Ok(Json(d.session.published(&snap).await?).into_response())
 }
 
 async fn refs(State(d): State<Arc<ApiDeps>>) -> ApiResult {

@@ -291,17 +291,30 @@ export const GithubMetadataSchema = z.object({
   repository: z.string().nullable(),
   /** Its page, on whichever GitHub the run talks to. */
   repositoryUrl: z.string().nullable(),
-  /**
-   * Whether each side's commit is on that repository, judged from local refs alone: reachable from
-   * origin's remote-tracking branches or from this run's fetch of the reviewed pull request. The
-   * worktree, an interdiff's replayed old side and an unpushed commit are not. Permalinks need it.
-   */
-  published: z.object({ old: z.boolean(), new: z.boolean() }),
   pullRequest: GithubPullRequestSchema.nullable(),
   /** Null when export is allowed; otherwise explains why it is blocked. */
   reason: z.string().nullable(),
 });
 export type GithubMetadata = z.infer<typeof GithubMetadataSchema>;
+
+/**
+ * Where a permalink to each side of a snapshot points, from local refs alone: no token, no
+ * network, no cache, so a push shows on the next request.
+ */
+export const PublishedSchema = z.object({
+  /** Snapshot.version it answers for. */
+  version: z.number().int(),
+  /** Origin's GitHub page; null when origin is no GitHub remote. */
+  repositoryUrl: z.string().nullable(),
+  /**
+   * Whether each side's commit is in that repository: reachable from origin's remote-tracking
+   * branches or from this run's fetch of the reviewed pull request. The worktree, an interdiff's
+   * replayed old side and an unpushed commit are not.
+   */
+  old: z.boolean(),
+  new: z.boolean(),
+});
+export type Published = z.infer<typeof PublishedSchema>;
 
 export const ChangeStatusSchema = z.enum(['A', 'M', 'D', 'R', 'C', 'T', 'U']);
 export type ChangeStatus = z.infer<typeof ChangeStatusSchema>;

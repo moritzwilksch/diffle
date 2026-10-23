@@ -24,6 +24,7 @@ import {
   LspLogResponseSchema,
   LspSymbolsResponseSchema,
   MovedSchema,
+  PublishedSchema,
   RefsResponseSchema,
   SearchResponseSchema,
   ServerMessageSchema,
@@ -92,6 +93,8 @@ const q = (params: Record<string, string | undefined>) =>
 
 export const api = {
   github: () => json(GithubMetadataSchema, 'api/github'),
+  /** Where permalinks to the snapshot's sides point; local refs only, so it answers at once. */
+  published: () => json(PublishedSchema, 'api/github/published'),
   snapshot: () => json(SnapshotSchema, 'api/snapshot'),
   moved: () => json(MovedSchema.nullable(), 'api/moved'),
   /** Recompute the snapshot where the refs point now. */
