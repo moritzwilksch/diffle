@@ -136,9 +136,14 @@ async fn navigates_on_from_files_outside_the_snapshot_that_the_language_server_n
     }
     let encoded: String = form_urlencoded::byte_serialize(next_s.as_bytes()).collect();
     assert_eq!(s.get(&format!("/api/lsp/symbols?path={encoded}")).await.status, 200);
-    // Nothing named the secret, and a repository path stays bound to the snapshot.
-    assert_eq!(s.json("POST", "/api/lsp/hover", at(&secret_s)).await.status, 409);
-    assert_eq!(s.get(&file_query(&secret_s, "new")).await.status, 404);
+    // Nothing named the secret or the detour to site.py through `sub/..`, and a repository path
+    // stays bound to the snapshot.
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    let detour = dir.join("sub/../site.py").to_string_lossy().into_owned();
+    for unnamed in [&secret_s, &detour] {
+        assert_eq!(s.json("POST", "/api/lsp/hover", at(unnamed)).await.status, 409, "{unnamed}");
+        assert_eq!(s.get(&file_query(unnamed, "new")).await.status, 404, "{unnamed}");
+    }
     assert_eq!(s.json("POST", "/api/lsp/hover", at("missing.py")).await.status, 409);
     s.close().await;
     drop(outside);

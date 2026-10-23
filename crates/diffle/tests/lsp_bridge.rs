@@ -216,6 +216,33 @@ async fn opens_a_file_once_when_it_is_asked_about_from_outside_and_then_tracked_
 }
 
 #[tokio::test]
+async fn opens_a_file_once_when_the_server_names_it_through_the_real_path_of_a_symlinked_root() {
+    let (dir, base) = root();
+    let (real, link) = (base.join("real"), base.join("link"));
+    std::fs::create_dir(&real).unwrap();
+    std::fs::write(real.join("ignored.py"), "VENV = True\n").unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let named = real.join("ignored.py").to_string_lossy().into_owned();
+    let Some(s) = start_with(&[("FAKE_LSP_EXTERNAL", &named)], Some(link.clone()), None, None) else { return };
+    let res = s.bridge.definition(&pos("a.py", 3, 4)).await.unwrap();
+    // The server spelled it through the real path; diffle remembers it through the root it was given.
+    let ignored = link.join("ignored.py").to_string_lossy().into_owned();
+    assert_eq!(
+        json_of(res.locations.last().unwrap()),
+        json!({ "path": ignored, "line": 1, "col": 0, "text": "VENV = True", "external": true })
+    );
+    assert!(s.bridge.origin(&named).is_none());
+    s.bridge.hover(&pos(&ignored, 1, 0)).await.unwrap();
+    s.set("ignored.py", "VENV = False\n");
+    s.bridge.track(&["ignored.py".to_owned()]).await;
+    s.settle().await;
+    let about: Vec<String> = s.events().into_iter().filter(|e| e.contains("ignored.py")).collect();
+    assert_eq!(about, ["open ignored.py v1", "change ignored.py v2"]);
+    s.bridge.close().await;
+    drop(dir);
+}
+
+#[tokio::test]
 async fn maps_document_highlights_to_new_side_occurrences_with_their_kind_and_stays_quiet_without_them() {
     let Some(s) = start(&[]) else { return };
     // The fake marks `z = ` a write and every other `z` in the enclosing block a read; the `z` outside it is out of scope.

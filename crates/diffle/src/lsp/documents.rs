@@ -141,9 +141,7 @@ impl Documents {
 fn uri_of(snapshot_uri: &(dyn Fn(&str) -> String + Send + Sync), origin: &Origin) -> String {
     match origin {
         Origin::Snapshot(path) => snapshot_uri(path),
-        Origin::External(abs) => {
-            url::Url::from_file_path(abs).map_or_else(|()| format!("file://{}", abs.display()), |u| u.to_string())
-        }
+        Origin::External(abs) => url::Url::from_file_path(abs).expect("an external path is absolute").to_string(),
     }
 }
 

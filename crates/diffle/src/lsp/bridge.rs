@@ -204,8 +204,12 @@ impl LspBridge {
         self.process.close().await;
     }
 
+    /// The document a query asks about, promoted in the locator's memory: the one place a query counts.
     fn document(&self, path: &str) -> Result<Origin> {
-        self.locator.origin(path).ok_or_else(|| Error::Invalid(format!("{path} is not in the snapshot")))
+        let origin =
+            self.locator.origin(path).ok_or_else(|| Error::Invalid(format!("{path} is not in the snapshot")))?;
+        self.locator.promote(&origin);
+        Ok(origin)
     }
 
     fn at(&self, origin: &Origin, pos: &LspPosition, extra: Value) -> Value {

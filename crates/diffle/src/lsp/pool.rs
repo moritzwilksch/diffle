@@ -201,6 +201,7 @@ impl LspPool {
     /// Every server for `path`, owner first; a language nothing owns is still served by the servers
     /// joining it. A file outside the snapshot goes only to the servers that named it: another
     /// server for its language may resolve it in a different environment, or not index it at all.
+    /// This decides routing, not access: each bridge refuses what its own results never named.
     /// The route has asked `lsp_blocker` already, so none here is a race.
     fn servers_for(&self, path: &str) -> Result<Vec<Arc<PoolServer>>> {
         if self.closing.load(Ordering::SeqCst) {
