@@ -98,6 +98,7 @@ to keep it running.
 - `F`: open the full file
 - `Ctrl+o`: go back
 - `yy`: copy all comments
+- `yl`: copy a GitHub permalink to the current line or selection, once its commit is pushed
 
 Press `?` for the full list.
 

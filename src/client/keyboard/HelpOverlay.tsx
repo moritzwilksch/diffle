@@ -48,6 +48,7 @@ export const COLUMNS: HelpSection[][] = [
         ['R', 'resolve / reopen the thread under the cursor'],
         ['yy or Y', 'copy all comments'],
         ['yp', 'copy the current file’s path'],
+        ['yl', 'copy a GitHub link to the line or selection'],
       ],
     },
   ],

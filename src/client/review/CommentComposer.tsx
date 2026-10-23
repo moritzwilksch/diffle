@@ -1,8 +1,11 @@
 import { Button } from '@/client/ui/Button.js';
-import { FileDiff, MessageSquare } from 'lucide-react';
+import { CopyIcon } from '@/client/ui/CopyIcon.js';
+import { FileDiff, Link, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { composerKey } from '@/client/model.js';
+import { copyText } from '@/client/clipboard.js';
+import { composerKey, selectionRange } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
+import { permalink } from './permalink.js';
 
 /**
  * Inline comment editor rendered as an annotation at the selection's last line. Its header names the
@@ -98,6 +101,7 @@ export function CommentComposer({ label }: { label: string }) {
               <FileDiff size="0.8125rem" /> <span className="@max-[18rem]:hidden">Suggest change</span>
             </Button>
           )}
+          <CopyLinkButton />
           <Button onClick={closeDraft}>Cancel</Button>
           <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
             Comment
@@ -105,5 +109,38 @@ export function CommentComposer({ label }: { label: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Copies a GitHub permalink to the draft's lines; absent when GitHub could not show them. */
+function CopyLinkButton() {
+  const flash = useStore((s) => s.flash);
+  const url = useStore((s) => {
+    const d = s.draft;
+    if (!s.snapshot || !d?.selection || s.fileView?.external) return null;
+    const link = permalink(s.snapshot, s.github.data, d.path, selectionRange(s, d.path, d.selection));
+    return 'url' in link ? link.url : null;
+  });
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  if (!url) return null;
+  return (
+    <Button
+      variant="ghost"
+      title="Copy a GitHub permalink to these lines (yl)"
+      aria-label="Copy link"
+      onClick={async () => {
+        if (!(await copyText(url))) return flash('The browser blocked clipboard access');
+        setDone(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), 1400);
+      }}
+    >
+      <CopyIcon done={done} size="0.8125rem">
+        <Link size="0.8125rem" />
+      </CopyIcon>{' '}
+      <span className="@max-[18rem]:hidden">Copy link</span>
+    </Button>
   );
 }
