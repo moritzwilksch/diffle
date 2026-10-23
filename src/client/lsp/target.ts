@@ -14,7 +14,6 @@ export interface TokenTarget {
 /** Whether `loc` points into `target`'s token: a definition query asked at the definition itself. */
 export function isToken(loc: LspLocation, target: TokenTarget): boolean {
   return (
-    !loc.external &&
     loc.path === target.path &&
     loc.line === target.line &&
     loc.col >= target.col &&

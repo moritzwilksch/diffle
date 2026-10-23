@@ -623,7 +623,8 @@ export const LspLocationSchema = LspPositionSchema.extend({
   text: z.string(),
   /**
    * The file is not in the snapshot (stdlib, site-packages, an ignored venv) and `path` is absolute.
-   * `/api/file` serves it on the new side, read-only, for as long as the language server keeps naming it.
+   * `/api/file` serves it on the new side, read-only, and the servers that named it answer queries from it,
+   * for as long as they keep naming it.
    */
   external: z.literal(true).optional(),
 });

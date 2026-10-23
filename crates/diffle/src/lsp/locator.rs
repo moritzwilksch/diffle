@@ -7,7 +7,7 @@ use futures::future::BoxFuture;
 use indexmap::IndexSet;
 use regex::Regex;
 
-use super::documents::ReadFn;
+use super::documents::{Origin, ReadFn};
 use super::hover::file_link_uris;
 use super::shapes::Range;
 use crate::concurrency::map_limit;
@@ -121,6 +121,20 @@ impl Locator {
             return None;
         }
         tokio::fs::read(&path).await.ok()
+    }
+
+    /// The document a query names: an outside file a recent result named, which counts as naming
+    /// it again, or else a repository path for the snapshot to vouch for. Any other absolute path
+    /// is none.
+    pub fn origin(&self, path: &str) -> Option<Origin> {
+        let abs = PathBuf::from(path);
+        let mut external = self.external.lock().unwrap();
+        if external.contains(&abs) {
+            external.shift_remove(&abs);
+            external.insert(abs.clone());
+            return Some(Origin::External(abs));
+        }
+        (!abs.has_root()).then(|| Origin::Snapshot(path.to_owned()))
     }
 
     async fn locate(&self, uri: &str, text_of: &(dyn Fn(&str) -> Option<String> + Sync)) -> Option<Found> {

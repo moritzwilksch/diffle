@@ -25,7 +25,7 @@ Diffle is a local Git review app: a Rust server (`crates/diffle`, axum on tokio)
 ## Preserve these invariants
 
 - `Session` alone advances `Snapshot.version`; mode switches, refreshes, and context changes stay serialized.
-- `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session::read_side`; it also maps a rename's old path. The one exception is `Locator::read_external`: `/api/file` serves a file outside the snapshot on the new side only after a language-server result named it.
+- `Snapshot.tree` is the new-side allowlist. File and LSP reads go through `Session::read_side`; it also maps a rename's old path. The one exception is a file outside the snapshot that a language-server result named (`Locator::read_external`, `Locator::origin`): `/api/file` serves it on the new side, and the servers that named it are asked about it.
 - A `Review` names what is reviewed, nothing resolved; the `Snapshot` carries the hashes, `follows` and `commentKey`. Persist review state under `<git-dir>/diffle/`, keyed by `Snapshot.commentKey`; keep the worktree untouched.
 - PR fetches use session-owned `refs/diffle/` refs. `GitRepo::fetch` must reject destinations outside them.
 - Treat rendered `FileDiffMetadata` as immutable. Hydrate with `hydratePartialDiff('clone', ...)`, replace the store entry, and change its generation-backed item id.
