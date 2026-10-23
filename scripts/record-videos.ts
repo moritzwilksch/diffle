@@ -7,15 +7,15 @@
 //
 // Frames are screenshots at 2x device pixels, so text stays sharp; ffmpeg turns them into H.264 (at
 // CRF 24 it beat VP9 webm on size). Needs ffmpeg on PATH (with libx264 and libwebp), Docker for
-// the browser container (`compose.yml`), and for the lsp scene the pinned pyrefly that `PYTHON_LSP`
-// starts (pixi by default). `KEEP_FRAMES=1` keeps the raw frames and a `last.png` and prints where.
+// the browser container (`compose.yml`), and for the review and lsp scenes the pinned pyrefly that
+// `PYTHON_LSP` starts (pixi by default). `KEEP_FRAMES=1` keeps the raw frames and a `last.png` and prints where.
 import type { Browser, Page } from '@playwright/test';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openBrowser, settle } from '../test/e2e/browser.js';
-import { REPO_ROOT, buildClient, quiet, waitForLsp, withDiffle } from '../test/e2e/server.js';
+import { REPO_ROOT, buildClient, buildServer, quiet, waitForLsp, withDiffle } from '../test/e2e/server.js';
 import { rmTmp } from '../test/tmp.js';
 import { BASE, FEATURE, buildDemoRepo } from './lib/demo-repo.js';
 
@@ -251,6 +251,38 @@ async function hoverWord(page: Page, path: string, word: string) {
   return box;
 }
 
+/** Hover `word` until its tooltip shows `text`. */
+async function hoverUntil(page: Page, path: string, word: string, text: string) {
+  const tooltip = page.getByRole('tooltip').filter({ hasText: text });
+  // The first hover can land while the server is still opening the document; hover again then.
+  for (let attempt = 0; ; attempt++) {
+    await hoverWord(page, path, word);
+    try {
+      await tooltip.waitFor({ timeout: 3000 * SLOW });
+      return;
+    } catch (error) {
+      if (attempt === 4) throw error;
+      await glide(page, pointer.x, pointer.y + 40, 4);
+    }
+  }
+}
+
+/** Step the references list with j until line `line` of `path` is highlighted. */
+async function stepToReference(page: Page, path: string, line: number) {
+  const active = () =>
+    page.locator('[data-active="true"]').evaluate((row) => ({
+      path: row.closest('section')?.querySelector('header')?.textContent ?? '',
+      line: Number(row.firstElementChild?.textContent),
+    }));
+  for (let i = 0; i < 12; i++) {
+    const at = await active();
+    if (at.path.includes(path) && at.line === line) return;
+    await page.keyboard.press('j');
+    await pause(page, 700);
+  }
+  throw new Error(`no reference at ${path}:${line}`);
+}
+
 /** Click a button in the symbol menu, e.g. "Go to definition". */
 async function pickFromSymbolMenu(page: Page, title: string) {
   const button = page.locator(`[data-symbol-menu] [title^="${title}"]`);
@@ -277,28 +309,37 @@ interface Scene {
 }
 
 const SCENES: Record<string, Scene> = {
-  /** The core loop: read, comment on lines, copy every comment as one prompt. */
+  /**
+   * The core loop with a language server: hover a call, find its references, jump to one, comment on
+   * it, and copy every comment as one prompt.
+   */
   review: {
+    args: ['--lsp', `python=${PYTHON_LSP}`],
     unified: true,
     gif: true,
     async play(page, { url, repo }) {
-      await pause(page, 1200);
-      for (let i = 0; i < 3; i++) {
-        await page.keyboard.press('j');
-        await pause(page, 220);
-      }
+      await pause(page, 1000);
       await walkTo(page, 'shortlink/app.py');
-      const forwarded = lineOf(repo, 'shortlink/app.py', 'x-forwarded-for');
-      await selectLines(page, 'shortlink/app.py', forwarded, forwarded + 1);
+      await hoverUntil(page, 'shortlink/app.py', 'allow', 'Spend one token');
+      await pause(page, 2400);
+
+      const call = await wordBox(page, 'shortlink/app.py', 'allow');
+      await page.mouse.click(call.x + 6, call.y + call.height / 2);
+      await pickFromSymbolMenu(page, 'Find references');
+      await page.getByRole('dialog').waitFor();
+      await pause(page, 1200);
+      const test = 'tests/test_ratelimit.py';
+      const refill = lineOf(repo, test, 'now[0] += 0.5');
+      await stepToReference(page, test, refill + 1);
+      await pause(page, 600);
+      await page.keyboard.press('Enter');
+      await pause(page, 1500);
+
+      await selectLines(page, test, refill, refill + 1);
       await comment(
         page,
-        '`x-forwarded-for` is client-controlled, so a new value per request dodges the limit. Only trust it behind our proxy.',
+        'Also step the clock back: a negative `elapsed` drains the bucket. `time.monotonic()` cannot go back.',
       );
-
-      await walkTo(page, 'shortlink/ratelimit.py');
-      const now = lineOf(repo, 'shortlink/ratelimit.py', 'time.time()');
-      await selectLines(page, 'shortlink/ratelimit.py', now, now);
-      await comment(page, 'Use `time.monotonic()`: a wall-clock jump would refill or drain every bucket.');
 
       await glide(page, VIEWPORT.width * 0.55, VIEWPORT.height * 0.3);
       await pause(page, 500);
@@ -355,18 +396,7 @@ const SCENES: Record<string, Scene> = {
     args: ['--lsp', `python=${PYTHON_LSP}`],
     async play(page) {
       await pause(page, 900);
-      const tooltip = page.getByRole('tooltip');
-      // The first hover can land while the server is still opening the document; hover again then.
-      for (let attempt = 0; ; attempt++) {
-        await hoverWord(page, 'shortlink/app.py', 'allow');
-        try {
-          await tooltip.filter({ hasText: 'Spend one token' }).waitFor({ timeout: 3000 * SLOW });
-          break;
-        } catch (error) {
-          if (attempt === 4) throw error;
-          await glide(page, pointer.x, pointer.y + 40, 4);
-        }
-      }
+      await hoverUntil(page, 'shortlink/app.py', 'allow', 'Spend one token');
       await pause(page, 2600);
 
       const call = await wordBox(page, 'shortlink/app.py', 'allow');
@@ -576,6 +606,7 @@ for (const name of wanted) {
   }
 }
 buildClient();
+buildServer();
 mkdirSync(OUT, { recursive: true });
 const browser = await openBrowser();
 try {

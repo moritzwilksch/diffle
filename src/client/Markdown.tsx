@@ -6,7 +6,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { HighlightedCode } from './lsp/highlight.js';
 import { useStore } from './store.js';
-import { SHIKI_THEMES } from './theme.js';
+import { CODE_THEMES, HIGHLIGHTER } from './theme.js';
 
 /**
  * Comment body as GitHub-flavored markdown. Raw HTML stays literal and images
@@ -114,7 +114,8 @@ function Highlighted({ path, source }: { path: string; source: string }) {
   );
   const options = useMemo(
     () => ({
-      theme: SHIKI_THEMES,
+      theme: CODE_THEMES,
+      preferredHighlighter: HIGHLIGHTER,
       themeType: theme,
       disableFileHeader: true,
       disableLineNumbers: true,
@@ -140,7 +141,8 @@ function SuggestedChange({ path, quoted, source }: { path: string; quoted: strin
   );
   const options = useMemo(
     () => ({
-      theme: SHIKI_THEMES,
+      theme: CODE_THEMES,
+      preferredHighlighter: HIGHLIGHTER,
       themeType: theme,
       diffStyle: 'unified' as const,
       diffIndicators: 'classic' as const,

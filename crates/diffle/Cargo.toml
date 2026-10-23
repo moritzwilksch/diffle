@@ -1,12 +1,28 @@
 [package]
 name = "diffle"
-# The release reads package.json; build.rs passes its version on as DIFFLE_VERSION.
-version = "0.0.0"
+# Kept equal to package.json's version; `scripts/check-version.ts` enforces it and the release bumps both.
+version = "0.3.2"
 description = "Local git diff reviewer in the browser with line comments exported as agent prompts"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-publish = false
+repository = "https://github.com/moritzwilksch/diffle"
+homepage = "https://diffle.app"
+readme = "../../README.md"
+keywords = ["git", "diff", "code-review", "review"]
+categories = ["command-line-utilities", "development-tools"]
+# The client build and the licence files are git-ignored: scripts/package-crate.ts builds and copies them in.
+include = ["/src/**/*.rs", "/build.rs", "/protocol.generated.json", "/client/**", "/LICENSE", "/THIRD_PARTY_NOTICES.md"]
+
+# `cargo binstall diffle` downloads the release archive rather than compiling; a target without one compiles.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/diffle-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
+bin-dir = "{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides]
+x86_64-pc-windows-msvc = { pkg-fmt = "zip" }
+aarch64-pc-windows-msvc = { pkg-fmt = "zip" }
 
 [dependencies]
 anstream = "1"
@@ -23,19 +39,20 @@ hex = "0.4"
 indexmap = "2"
 http-body-util = "0.1"
 notify = "8"
+octocrab = { version = "0.54", default-features = false, features = ["reqwest"] }
 mime_guess = "2"
 regex = "1"
-regress = "0.10"
+regress = "0.12"
 reqwest = { version = "0.13.5", features = ["json"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
-sha1 = "0.10"
-shlex = "1"
+sha1 = "0.11"
+shlex = "2"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.6", features = ["compression-gzip", "compression-deflate"] }
+tower-http = { version = "0.7", features = ["compression-gzip", "compression-deflate"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 
@@ -50,9 +67,9 @@ tokio = { version = "1", features = ["full", "test-util"] }
 tokio-tungstenite = "0.30.0"
 
 [build-dependencies]
-prettyplease = "0.2"
+prettyplease = "0.3"
 schemars = "0.8"
 serde_json = "1"
-regress = "0.10"
-syn = "2"
+regress = "0.12"
+syn = "3"
 typify = "0.8"

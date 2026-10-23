@@ -3,8 +3,8 @@
 // the matching one. usage: node scripts/npm-packages.ts <archives dir> <out dir> [--smoke]
 // Plain node runs it: no dependencies, and Node 24 strips the types itself.
 //
-// The platform packages are named after Node's `process.platform` and `process.arch`, which the
-// launcher uses to find its binary. Each package is also packed into `<out>/<name>.tgz`, which is
+// The archives are named after Rust target triples; the platform packages after Node's
+// `process.platform` and `process.arch`, which the launcher uses to find its binary. Each package is also packed into `<out>/<name>.tgz`, which is
 // what gets published: an artifact upload drops file modes, a tarball keeps the binary executable.
 // `--smoke` installs this host's tarballs into a temporary prefix and runs `diffle --version`
 // through the launcher.
@@ -22,13 +22,13 @@ interface Platform {
   cpu: NodeJS.Architecture;
 }
 
-/** Release archive name → the npm platform it serves. */
+/** The Rust target triple a release archive is named after → the npm platform it serves. */
 export const TARGETS: Record<string, Platform> = {
-  'linux-x64': { os: 'linux', cpu: 'x64' },
-  'linux-arm64': { os: 'linux', cpu: 'arm64' },
-  'darwin-arm64': { os: 'darwin', cpu: 'arm64' },
-  'windows-x64': { os: 'win32', cpu: 'x64' },
-  'windows-arm64': { os: 'win32', cpu: 'arm64' },
+  'x86_64-unknown-linux-gnu': { os: 'linux', cpu: 'x64' },
+  'aarch64-unknown-linux-gnu': { os: 'linux', cpu: 'arm64' },
+  'aarch64-apple-darwin': { os: 'darwin', cpu: 'arm64' },
+  'x86_64-pc-windows-msvc': { os: 'win32', cpu: 'x64' },
+  'aarch64-pc-windows-msvc': { os: 'win32', cpu: 'arm64' },
 };
 
 const platformName = ({ os, cpu }: Platform) => `diffle-${os}-${cpu}`;

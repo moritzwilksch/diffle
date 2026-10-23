@@ -43,18 +43,16 @@
             npmConfigHook = pkgs.importNpmLock.npmConfigHook;
             npmBuildScript = "build";
             installPhase = ''
-              cp -r dist/client "$out"
+              cp -r crates/diffle/client "$out"
             '';
           };
-          # The Cargo sources plus what build.rs reads: the version from package.json and the
-          # wire contract it turns into Rust.
+          # The Cargo sources plus what build.rs reads: the wire contract it turns into Rust.
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
               (craneLib.fileset.commonCargoSources ./crates)
               ./Cargo.toml
               ./Cargo.lock
-              ./package.json
               ./crates/diffle/protocol.generated.json
             ];
           };
@@ -70,10 +68,9 @@
             common
             // {
               inherit cargoArtifacts;
-              # The release binary embeds dist/client, so the client goes in before cargo runs.
+              # The release binary embeds crates/diffle/client, so the client goes in before cargo runs.
               preBuild = ''
-                mkdir -p dist
-                cp -r ${client} dist/client
+                cp -r ${client} crates/diffle/client
               '';
               # The suites drive git, node and language servers; CI runs them.
               doCheck = false;

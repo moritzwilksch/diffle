@@ -1,4 +1,4 @@
-//! The real GitHub client against a local stand-in: tokens, endpoints, status mapping, proxies.
+//! The real GitHub client against a local stand-in: tokens, endpoints, status mapping.
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -107,7 +107,7 @@ async fn server(status: u16, body: Value, delay: Duration) -> (String, Arc<Mutex
 }
 
 fn client(base: &str) -> HttpClient {
-    HttpClient::with_env("tok".into(), base, |_| None).unwrap()
+    HttpClient::new("tok".into(), base).unwrap()
 }
 
 #[tokio::test]
@@ -120,8 +120,7 @@ async fn posts_the_document_and_variables_with_the_token_to_the_graphql_endpoint
     assert_eq!(seen.len(), 1);
     // GitHub Enterprise Server keeps GraphQL beside, not under, the REST root.
     assert_eq!(seen[0].path, "/api/graphql");
-    assert_eq!(seen[0].headers["authorization"], "token tok");
-    assert!(seen[0].headers["user-agent"].starts_with("diffle/"));
+    assert_eq!(seen[0].headers["authorization"], "Bearer tok");
     assert_eq!(seen[0].body, json!({ "query": "query{viewer{login}}", "variables": { "n": 1 } }));
 }
 
@@ -169,29 +168,4 @@ async fn gives_up_on_a_slow_github_after_the_timeout() {
     let (base, _) = server(200, json!({ "data": {} }), Duration::from_secs(5)).await;
     let err = client(&base).graphql("query{x}", json!({}), Some(Duration::from_millis(20))).await.unwrap_err();
     assert_eq!((err.status, err.message.as_str()), (502, "GitHub did not answer within 20ms"));
-}
-
-#[tokio::test]
-async fn sends_github_requests_through_the_proxy_the_environment_names() {
-    let (proxy, seen) = server(502, json!({}), Duration::ZERO).await;
-    let vars = env(&[("HTTP_PROXY", &proxy)]);
-    let client = HttpClient::with_env("t".into(), "http://github.invalid/api/v3", vars).unwrap();
-    assert!(client.graphql("{ viewer { login } }", json!({}), None).await.is_err());
-    // A plain HTTP request goes to the proxy in absolute form.
-    let seen = seen.lock().unwrap().clone();
-    assert_eq!(seen.len(), 1);
-    assert_eq!(seen[0].headers["host"], "github.invalid");
-    assert_eq!(seen[0].path, "/api/graphql");
-    // NO_PROXY exempts a host: the request then fails on its own, the proxy never sees it.
-    let exempt = env(&[("http_proxy", &proxy), ("no_proxy", "github.invalid")]);
-    let direct = HttpClient::with_env("t".into(), "http://github.invalid/api/v3", exempt).unwrap();
-    assert!(direct.graphql("{ viewer { login } }", json!({}), None).await.is_err());
-}
-
-#[test]
-fn turns_a_malformed_proxy_url_into_a_github_error() {
-    let err =
-        HttpClient::with_env("t".into(), "https://api.github.com", env(&[("HTTPS_PROXY", "not a url")])).err().unwrap();
-    assert_eq!(err.status, 400);
-    assert!(err.message.starts_with("invalid proxy environment: "), "{err}");
 }

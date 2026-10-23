@@ -1,11 +1,11 @@
-//! The client build, embedded in release builds and read from `dist/client` in debug ones. Build it
-//! (`npm run build`) before a release build.
+//! The client build, embedded in release builds and read from `crates/diffle/client` in debug ones.
+//! Build it (`npm run build`) before a release build; a published crate carries it.
 use axum::extract::Request;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 #[derive(rust_embed::Embed)]
-#[folder = "$CARGO_MANIFEST_DIR/../../dist/client"]
+#[folder = "$CARGO_MANIFEST_DIR/client"]
 // A checkout without a client build still compiles and tests; serving then says how to build it.
 #[allow_missing = true]
 struct Client;

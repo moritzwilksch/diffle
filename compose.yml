@@ -2,7 +2,7 @@
 # image, served over WebSocket. The tests, the fixture repositories and diffle run natively on the
 # host; the browser reaches them through Playwright's loopback tunnel. test/e2e/browser-server.ts
 # starts and stops this service and passes PLAYWRIGHT_VERSION from the installed @playwright/test,
-# which the server inside must match; the default below only serves hand-run compose commands
+# whose browsers the image must carry; the default below only serves hand-run compose commands
 # (`docker compose logs browser`).
 services:
   browser:
@@ -16,5 +16,8 @@ services:
     working_dir: /home/pwuser
     ports:
       - "127.0.0.1:${DIFFLE_BROWSER_PORT:-3000}:3000"
-    # The image holds the browsers alone; the package is fetched once and kept in this container.
-    command: npx -y playwright@${PLAYWRIGHT_VERSION:-1.63.0} run-server --port 3000 --host 0.0.0.0
+    # The image holds the browsers alone; the server runs from the installed playwright-core (pure JS,
+    # no dependencies), so a start needs no registry and always matches the client's version.
+    volumes:
+      - ./node_modules/playwright-core:/home/pwuser/playwright-core:ro
+    command: node playwright-core/cli.js run-server --port 3000 --host 0.0.0.0

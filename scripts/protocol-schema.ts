@@ -3,7 +3,14 @@
 // contract is documented once.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import {
+  type Comment,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSync,
+  visitorKeys,
+} from 'oxc-parser';
 import { z } from 'zod';
 import * as protocol from '@/shared/protocol.js';
 
@@ -70,66 +77,100 @@ function describe(schema: JsonSchema, doc: Doc | undefined, docs: Map<string, Do
   }
 }
 
-/** The JSDoc of every exported `*Schema` declaration in `source`, as `Doc`s by declaration name. */
+/** The JSDoc of every `*Schema` declaration in `source`, as `Doc`s by declaration name. */
 function jsDocs(source: string): Map<string, Doc> {
-  const file = ts.createSourceFile('protocol.ts', source, ts.ScriptTarget.Latest, true);
+  const { program, comments } = parseSync('protocol.ts', source, { lang: 'ts', sourceType: 'module' });
+  const docOf = jsDocReader(source, comments);
   const out = new Map<string, Doc>();
-  for (const statement of file.statements) {
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
-      const doc: Doc = { text: comment(statement), properties: new Map(), variants: new Map() };
-      collect(declaration.initializer, doc);
-      out.set(declaration.name.text, doc);
+  for (const statement of program.body) {
+    const declarations =
+      statement.type === 'VariableDeclaration'
+        ? statement
+        : statement.type === 'ExportNamedDeclaration' && statement.declaration?.type === 'VariableDeclaration'
+          ? statement.declaration
+          : undefined;
+    for (const declaration of declarations?.declarations ?? []) {
+      if (declaration.id.type !== 'Identifier' || !declaration.init) continue;
+      const doc: Doc = { text: docOf(statement), properties: new Map(), variants: new Map() };
+      collect(declaration.init, doc, docOf);
+      out.set(declaration.id.name, doc);
     }
   }
   return out;
 }
 
+type DocOf = (node: Node) => string | undefined;
+
 /** Walks a schema expression for `z.object({...})` and `X.extend({...})` literals and union variants. */
-function collect(node: ts.Node, doc: Doc): void {
-  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-    const method = node.expression.name.text;
-    const [arg] = node.arguments;
-    if ((method === 'object' || method === 'extend') && arg && ts.isObjectLiteralExpression(arg)) {
-      for (const [name, text] of propertyDocs(arg)) doc.properties.set(name, text);
-      if (method === 'extend' && ts.isIdentifier(node.expression.expression))
-        doc.base = node.expression.expression.text;
+function collect(node: Node, doc: Doc, docOf: DocOf): void {
+  if (node.type === 'CallExpression' && node.callee.type === 'MemberExpression' && !node.callee.computed) {
+    const method = node.callee.property.name;
+    const [arg, variants] = node.arguments;
+    if ((method === 'object' || method === 'extend') && arg?.type === 'ObjectExpression') {
+      for (const [name, text] of propertyDocs(arg, docOf)) doc.properties.set(name, text);
+      if (method === 'extend' && node.callee.object.type === 'Identifier') doc.base = node.callee.object.name;
     }
-    if (method === 'discriminatedUnion' && node.arguments[1] && ts.isArrayLiteralExpression(node.arguments[1])) {
-      for (const variant of node.arguments[1].elements) {
+    if (method === 'discriminatedUnion' && variants?.type === 'ArrayExpression') {
+      for (const variant of variants.elements) {
         // Every variant is a `z.object({...})` call; one shaped otherwise documents nothing.
-        const object = ts.isCallExpression(variant) ? variant.arguments[0] : undefined;
-        if (!object || !ts.isObjectLiteralExpression(object)) continue;
-        const shape = object;
-        const properties = propertyDocs(shape);
-        const kind = shape.properties.find(
-          (p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && p.name.getText() === 'kind',
-        );
-        const value = kind && ts.isCallExpression(kind.initializer) && kind.initializer.arguments[0];
-        if (value && ts.isStringLiteral(value)) doc.variants.set(value.text, properties);
+        const shape = variant?.type === 'CallExpression' ? variant.arguments[0] : undefined;
+        if (shape?.type !== 'ObjectExpression') continue;
+        const kind = shape.properties.find((p) => p.type === 'Property' && keyName(p) === 'kind');
+        const value = kind?.type === 'Property' && kind.value.type === 'CallExpression' && kind.value.arguments[0];
+        if (value && value.type === 'Literal' && typeof value.value === 'string')
+          doc.variants.set(value.value, propertyDocs(shape, docOf));
       }
     }
   }
-  ts.forEachChild(node, (child) => collect(child, doc));
+  for (const key of visitorKeys[node.type] ?? []) {
+    const child: unknown = (node as unknown as Record<string, unknown>)[key];
+    for (const c of Array.isArray(child) ? child : [child]) if (isNode(c)) collect(c, doc, docOf);
+  }
 }
 
-function propertyDocs(literal: ts.ObjectLiteralExpression): Map<string, string> {
+function propertyDocs(literal: ObjectExpression, docOf: DocOf): Map<string, string> {
   const out = new Map<string, string>();
   for (const property of literal.properties) {
-    const text = comment(property);
-    if (text && (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)))
-      out.set(property.name.getText(), text);
+    if (property.type !== 'Property') continue;
+    const name = keyName(property);
+    const text = docOf(property);
+    if (name && text) out.set(name, text);
   }
   return out;
 }
 
-/** The node's JSDoc text, paragraphs kept, or undefined without one. */
-function comment(node: ts.Node): string | undefined {
-  const docs = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
-  const text = docs.map((d) => (typeof d.comment === 'string' ? d.comment : ts.getTextOfJSDocComment(d.comment)) ?? '');
-  const joined = text.filter(Boolean).join('\n\n').trim();
-  return joined || undefined;
+function keyName(property: ObjectProperty): string | undefined {
+  if (property.computed) return undefined;
+  if (property.key.type === 'Identifier') return property.key.name;
+  return property.key.type === 'Literal' ? String(property.key.value) : undefined;
+}
+
+function isNode(value: unknown): value is Node {
+  return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
+}
+
+/** Reads the `/** ... *\/` blocks right before a node, paragraphs kept and tags dropped, or undefined without one. */
+function jsDocReader(source: string, comments: Comment[]): DocOf {
+  return (node) => {
+    const blocks: string[] = [];
+    let at = node.start;
+    for (let i = comments.length - 1; i >= 0; i--) {
+      const c = comments[i]!;
+      if (c.end > at) continue;
+      if (c.type !== 'Block' || !c.value.startsWith('*') || source.slice(c.end, at).trim()) break;
+      blocks.unshift(jsDocText(c.value.slice(1)));
+      at = c.start;
+    }
+    const joined = blocks.filter(Boolean).join('\n\n').trim();
+    return joined || undefined;
+  };
+}
+
+/** A JSDoc body without its `*` margins, up to its first tag. */
+function jsDocText(body: string): string {
+  const lines = body.split('\n').map((line) => line.replace(/^\s*\*? ?/, '').trimEnd());
+  const tag = lines.findIndex((line) => line.startsWith('@'));
+  return (tag < 0 ? lines : lines.slice(0, tag)).join('\n').trim();
 }
 
 /** typify tags a union only when it sees each variant's discriminator, so `$ref` variants are copied in. */

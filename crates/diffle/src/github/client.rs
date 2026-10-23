@@ -63,43 +63,30 @@ pub trait GithubClient: Send + Sync {
     ) -> BoxFuture<'_, Result<Value, GithubError>>;
 }
 
-/// The real client.
+/// The real client: octocrab over reqwest, which reads `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`
+/// (either case) as git does.
 pub struct HttpClient {
-    http: reqwest::Client,
-    endpoint: String,
-    token: String,
+    octocrab: octocrab::Octocrab,
 }
 
 impl HttpClient {
-    /// A client for the REST root `base_url` (see `api_base_url`); GraphQL sits beside it. Requests
-    /// go through the proxy `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` (either case) name, as git's do.
+    /// A client for the REST root `base_url` (see `api_base_url`); GraphQL sits beside it.
     pub fn new(token: String, base_url: &str) -> Result<Self, GithubError> {
-        Self::with_env(token, base_url, |name| std::env::var(name).ok())
-    }
-
-    /// `new`, reading the proxy variables from `env`. A malformed proxy url is a 400.
-    pub fn with_env(token: String, base_url: &str, env: impl Fn(&str) -> Option<String>) -> Result<Self, GithubError> {
-        let var = |name: &str| env(name).or_else(|| env(&name.to_lowercase())).filter(|v| !v.trim().is_empty());
-        let invalid = |e: reqwest::Error| GithubError::new(format!("invalid proxy environment: {e}"), 400);
-        let no_proxy = var("NO_PROXY").and_then(|list| reqwest::NoProxy::from_string(&list));
-        let mut builder = reqwest::Client::builder().user_agent(concat!("diffle/", env!("DIFFLE_VERSION"))).no_proxy();
-        for (name, scheme) in [("HTTPS_PROXY", "https"), ("HTTP_PROXY", "http")] {
-            let Some(url) = var(name) else { continue };
-            let proxy = if scheme == "https" { reqwest::Proxy::https(&url) } else { reqwest::Proxy::http(&url) };
-            builder = builder.proxy(proxy.map_err(invalid)?.no_proxy(no_proxy.clone()));
-        }
-        let http = builder.build().map_err(invalid)?;
-        Ok(Self { http, endpoint: graphql_endpoint(base_url), token })
+        let octocrab = octocrab::Octocrab::builder()
+            .base_uri(graphql_root(base_url))
+            .and_then(|b| b.personal_token(token).build_with_reqwest(octocrab::ReqwestClientConfig::Default))
+            .map_err(|e| {
+                GithubError::new(format!("cannot set up the GitHub client: {}", first_line(&e.to_string())), 400)
+            })?;
+        Ok(Self { octocrab })
     }
 }
 
-/// GitHub Enterprise Server's REST root ends in `/api/v3`; its GraphQL endpoint is `/api/graphql`.
-fn graphql_endpoint(base_url: &str) -> String {
+/// Where `/graphql` hangs: GitHub Enterprise Server's REST root ends in `/api/v3`, its GraphQL
+/// endpoint is `/api/graphql`.
+fn graphql_root(base_url: &str) -> String {
     let base = base_url.trim_end_matches('/');
-    match base.strip_suffix("/api/v3") {
-        Some(root) => format!("{root}/api/graphql"),
-        None => format!("{base}/graphql"),
-    }
+    base.strip_suffix("/v3").filter(|root| root.ends_with("/api")).unwrap_or(base).to_owned()
 }
 
 impl GithubClient for HttpClient {
@@ -109,39 +96,27 @@ impl GithubClient for HttpClient {
         variables: Value,
         timeout: Option<Duration>,
     ) -> BoxFuture<'_, Result<Value, GithubError>> {
-        // `token`, as Octokit sends it.
-        let auth = format!("token {}", self.token);
-        let mut request = self
-            .http
-            .post(&self.endpoint)
-            .header(reqwest::header::AUTHORIZATION, auth)
-            .json(&json!({ "query": query, "variables": variables }));
-        if let Some(timeout) = timeout {
-            request = request.timeout(timeout);
-        }
+        let body = json!({ "query": query, "variables": variables });
         Box::pin(async move {
-            let response = request.send().await.map_err(|e| unreachable(&e, timeout))?;
-            let status = response.status();
-            let body: Value = response.json().await.unwrap_or(Value::Null);
-            if !status.is_success() {
-                return Err(http_error(status.as_u16(), &body));
-            }
-            graphql_result(body)
+            // The raw body: octocrab's own `graphql` drops the error `type` that tells 409 from 502.
+            let request = self.octocrab.post::<_, Value>("/graphql", Some(&body));
+            let answer = match timeout {
+                Some(t) => tokio::time::timeout(t, request)
+                    .await
+                    .map_err(|_| GithubError::new(format!("GitHub did not answer within {}ms", t.as_millis()), 502))?,
+                None => request.await,
+            };
+            graphql_result(answer.map_err(request_error)?)
         })
     }
 }
 
-fn unreachable(e: &reqwest::Error, timeout: Option<Duration>) -> GithubError {
-    if e.is_timeout() {
-        let ms = timeout.map_or_else(|| "?".to_owned(), |t| t.as_millis().to_string());
-        return GithubError::new(format!("GitHub did not answer within {ms}ms"), 502);
-    }
-    GithubError::new(format!("cannot reach GitHub: {}", first_line(&e.to_string())), 502)
-}
-
 /// A rejected token or a missing resource is the user's to fix (409); anything else is GitHub's (502).
-fn http_error(status: u16, body: &Value) -> GithubError {
-    let detail = first_line(body.get("message").and_then(Value::as_str).unwrap_or("no message"));
+fn request_error(e: octocrab::Error) -> GithubError {
+    let octocrab::Error::GitHub { source, .. } = e else {
+        return GithubError::new(format!("cannot reach GitHub: {}", first_line(&e.to_string())), 502);
+    };
+    let (status, detail) = (source.status_code.as_u16(), first_line(&source.message));
     match status {
         401 => GithubError::conflict(format!("GitHub rejected the token (401): {detail}")),
         403 | 404 => GithubError::conflict(format!("GitHub {status}: {detail}")),
@@ -172,16 +147,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reads_tokens_per_host_kind_and_derives_the_graphql_endpoint() {
+    fn reads_tokens_per_host_kind_and_derives_the_graphql_root() {
         assert_eq!(token_variables("acme.ghe.com"), ["GITHUB_TOKEN", "GH_TOKEN"]);
         assert_eq!(token_variables("git.corp"), ["GITHUB_ENTERPRISE_TOKEN", "GH_ENTERPRISE_TOKEN"]);
         assert_eq!(
             no_token("git.corp"),
             "No GitHub token for git.corp: set GITHUB_ENTERPRISE_TOKEN or sign in with gh auth login --hostname git.corp"
         );
-        assert_eq!(graphql_endpoint("https://api.github.com"), "https://api.github.com/graphql");
-        assert_eq!(graphql_endpoint("https://git.corp/api/v3"), "https://git.corp/api/graphql");
-        assert_eq!(graphql_endpoint("https://api.acme.ghe.com/"), "https://api.acme.ghe.com/graphql");
+        assert_eq!(graphql_root("https://api.github.com"), "https://api.github.com");
+        assert_eq!(graphql_root("https://git.corp/api/v3"), "https://git.corp/api");
+        assert_eq!(graphql_root("https://api.acme.ghe.com/"), "https://api.acme.ghe.com");
     }
 
     #[test]
@@ -192,10 +167,5 @@ mod tests {
         let e = graphql_result(refused).unwrap_err();
         assert_eq!((e.status, e.message.as_str()), (502, "GitHub: a; b"));
         assert_eq!(graphql_result(json!({ "data": { "x": 1 } })).unwrap(), json!({ "x": 1 }));
-        assert_eq!(
-            http_error(401, &json!({ "message": "Bad credentials\nmore" })).message,
-            "GitHub rejected the token (401): Bad credentials"
-        );
-        assert_eq!(http_error(500, &json!(null)).status, 502);
     }
 }

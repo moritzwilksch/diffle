@@ -21,6 +21,8 @@ pre-commit:
       run: cargo clippy --locked --all-targets -- -D warnings
     - name: quality-gate
       run: npm run quality-gate
+    - name: version
+      run: npm run check-version
     - name: licenses
       glob: "{Cargo.lock,package-lock.json,about.toml,about.hbs,vite.config.ts,scripts/licenses*}"
       run: pixi run licenses

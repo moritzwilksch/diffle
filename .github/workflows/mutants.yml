@@ -36,8 +36,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-        with:
-          environments: mutants
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Diff against the base branch
         env:
@@ -67,8 +65,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-        with:
-          environments: mutants
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Mutate shard ${{ matrix.shard }} of 16
         run: pixi run mutants --in-place --shard ${{ matrix.shard }}/16

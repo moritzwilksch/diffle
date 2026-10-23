@@ -200,7 +200,6 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setEditingId(null);
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
             }}
             autoFocus
@@ -287,7 +286,6 @@ function ReplyComposer({ threadId }: { threadId: string }) {
         placeholder="Reply…"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') closeReply();
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
       />

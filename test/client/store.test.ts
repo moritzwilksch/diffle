@@ -2058,6 +2058,8 @@ describe('threads', () => {
     expect(useStore.getState().replyTo).toBeNull();
     useStore.getState().escape();
     expect(useStore.getState().draft).toBeNull();
+    // Cancelling the draft keeps the cursor on its lines.
+    expect(useStore.getState().selection?.range.start).toBe(2);
   });
 });
 

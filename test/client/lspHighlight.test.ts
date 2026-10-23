@@ -16,11 +16,11 @@ vi.mock('@pierre/diffs', () => ({
   getSharedHighlighter: async () => {
     if (++calls > holdFrom) await held;
     return {
-      codeToTokensBase: (line: string, opts: { theme: string }) => {
+      codeToTokens: (line: string, opts: { theme: string }) => {
         tokenized.push(line);
         // Each theme gets its own color in first-use order, so the first theme rendered paints #abc.
         if (!themeColors.has(opts.theme)) themeColors.set(opts.theme, ['#abc', '#def'][themeColors.size]!);
-        return [[{ content: line, color: themeColors.get(opts.theme) }]];
+        return { tokens: [[{ content: line, color: themeColors.get(opts.theme) }]] };
       },
     };
   },

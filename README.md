@@ -12,7 +12,7 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/review-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/review-light.gif">
-  <img alt="A review in diffle: two comments on a rate-limiting change, then yy copies them as one prompt" src=".github/assets/videos/review-light.gif">
+  <img alt="A review in diffle: a language-server hover, its references, a jump to one and a comment there, then yy copies the comments as one prompt" src=".github/assets/videos/review-light.gif">
 </picture>
 
 ## Install
@@ -20,6 +20,8 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 ```bash
 pixi global install diffle               # conda-forge
 npm install -g @moritzwilksch/diffle     # npm
+cargo binstall diffle                    # crates.io, the release binary
+cargo install diffle                     # crates.io, compiled from source
 ```
 
 Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon macOS:
@@ -28,7 +30,7 @@ Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon ma
 curl -fsSL https://diffle.app/install.sh | sh
 ```
 
-It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.1.9`
+It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.4.0`
 to pin a release. On Windows (x64, arm64), from PowerShell:
 
 ```powershell
@@ -51,6 +53,13 @@ language servers. Every package takes more with `withLsps`, and `#unwrapped` is 
 
 ```nix
 diffle.packages.${system}.default.withLsps [ pkgs.gopls pkgs.clang-tools ]
+```
+
+To build from source, pixi builds the checkout with `recipe/recipe.yaml` (a Rust toolchain and
+Node.js come from conda-forge):
+
+```bash
+pixi global install --git https://github.com/moritzwilksch/diffle diffle
 ```
 
 ## Pick what to review
@@ -214,7 +223,7 @@ pixi run mutants --file <path>            # mutation-test a server module (cargo
 
 The environment puts real language servers on PATH, so `pixi run diffle working` reviews with them.
 `pixi run lefthook-install` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `pixi run lefthook-run` runs the same hook over every file, as CI does.
-A debug build reads `dist/client` from disk: after a client change, run `npm run build`
+A debug build reads `crates/diffle/client` from disk: after a client change, run `npm run build`
 and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. The browser suite drives Playwright's Linux Chromium in a Docker container
