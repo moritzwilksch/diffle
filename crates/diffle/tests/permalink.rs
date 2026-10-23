@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use common::github::FakeGithub;
 use common::pr::{Fixture, as_git_url};
-use common::{TestRepo, git_in, revspec};
+use common::{TestRepo, git_in, revspec, session};
 use diffle::git::GitRepo;
 use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
 use diffle::github::metadata::discover_github;
 use diffle::mode::resolve::resolve_review;
-use diffle::protocol::{EnterRequest, Snapshot};
+use diffle::protocol::{EnterRequest, FollowRefs, Snapshot};
 use diffle::snapshotter::Snapshotter;
 
 /// (old, new) published, as the GitHub metadata reports them.
@@ -67,6 +67,22 @@ async fn publishes_commits_a_remote_tracking_branch_of_origin_reaches_and_never_
     t.git(&["update-ref", "refs/remotes/origin/feat/x", "HEAD"]);
     assert_eq!(sides(&repo, revspec(&["HEAD~1", "HEAD"])).await, (true, true));
     assert_eq!(sides(&repo, EnterRequest::Working).await, (true, false));
+}
+
+#[tokio::test]
+async fn shows_a_push_on_the_next_lookup_while_the_pull_request_lookup_stays_cached() {
+    let t = pushed_then_local();
+    let repo = Arc::new(t.open().await);
+    let (s, _) = session(&repo, false, 3, FollowRefs::Off);
+    let snap = s.enter(revspec(&["HEAD~1", "HEAD"])).await.unwrap();
+    let sides = async || {
+        let m = s.github_metadata(&snap).await.unwrap();
+        (m.published.old, m.published.new)
+    };
+    assert_eq!(sides().await, (true, false));
+    t.git(&["update-ref", "refs/remotes/origin/feat/x", "HEAD"]);
+    assert_eq!(sides().await, (true, true));
+    s.close().await;
 }
 
 #[tokio::test]

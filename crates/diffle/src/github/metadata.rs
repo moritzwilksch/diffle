@@ -63,7 +63,7 @@ pub async fn discover_github(
 /// Whether each side's commit is on origin's GitHub repository, from local refs alone: reachable
 /// from origin's remote-tracking branches, or from the reviewed pull request this run fetched when
 /// it lives in that repository. A failed query counts as unpublished, which only hides permalinks.
-async fn published(repo: &GitRepo, snap: &Snapshot, repository: Option<&str>) -> GithubMetadataPublished {
+pub async fn published(repo: &GitRepo, snap: &Snapshot, repository: Option<&str>) -> GithubMetadataPublished {
     let Some(repository) = repository else { return GithubMetadataPublished { old: false, new: false } };
     let mut prefixes = vec!["refs/remotes/origin".to_owned()];
     if let Review::Range { pr: Some(pr), .. } = &snap.review
