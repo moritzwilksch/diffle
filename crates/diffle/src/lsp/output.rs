@@ -1,8 +1,8 @@
 //! What one server reports while it runs: its output channel, the notice it shows, its progress.
-use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 
-use serde_json::Value;
+use async_lsp::lsp_types::{MessageType, NumberOrString, ProgressParams, ProgressParamsValue, WorkDoneProgress};
+use indexmap::IndexMap;
 
 use crate::iterations::now_ms;
 use crate::protocol::{LspLogCounts, LspLogEntry, LspLogLevel, LspLogSource, LspNotice, LspNoticeSeverity};
@@ -21,7 +21,7 @@ pub enum OutputChange {
 struct Progress {
     title: String,
     message: Option<String>,
-    percentage: Option<f64>,
+    percentage: Option<u32>,
 }
 
 /// Collects a server's output channel (what it showed, what it logged, what it wrote to stderr),
@@ -35,9 +35,8 @@ pub struct ServerOutput {
     /// stderr bytes since the last newline.
     stderr_tail: String,
     notice: Option<LspNotice>,
-    /// Keyed by the token's JSON text, ordered by when each piece began.
-    progress: BTreeMap<(u64, String), Progress>,
-    began: u64,
+    /// By token, in the order each piece began.
+    progress: IndexMap<NumberOrString, Progress>,
     on_change: Box<dyn Fn(OutputChange) + Send + Sync>,
 }
 
@@ -49,8 +48,7 @@ impl ServerOutput {
             summary: LspLogCounts { seq: 0, errors: 0, warnings: 0 },
             stderr_tail: String::new(),
             notice: None,
-            progress: BTreeMap::new(),
-            began: 0,
+            progress: IndexMap::new(),
             on_change: Box::new(on_change),
         }
     }
@@ -76,44 +74,29 @@ impl ServerOutput {
         }
     }
 
-    /// A server-to-client message: `window/*Message*` lands in the log, `$/progress` in the activity.
-    pub fn message(&mut self, method: &str, params: &Value) {
-        if !params.is_object() {
+    /// A `window/logMessage`: filed in the log.
+    pub fn log(&mut self, typ: MessageType, message: &str) {
+        self.record(LspLogSource::Log, level_of(typ), message);
+    }
+
+    /// A `window/showMessage` or `window/showMessageRequest`: filed in the log, and a problem stands
+    /// as the notice, as an editor pops those up and files the rest in an output channel.
+    pub fn show(&mut self, typ: MessageType, message: &str) {
+        let level = level_of(typ);
+        self.record(LspLogSource::Message, level, message);
+        let severity = match level {
+            LspLogLevel::Error => LspNoticeSeverity::Error,
+            LspLogLevel::Warning => LspNoticeSeverity::Warning,
+            _ => return,
+        };
+        let notice = LspNotice { severity, message: message.trim().to_owned() };
+        if notice.message.is_empty()
+            || self.notice.as_ref().is_some_and(|n| n.severity == severity && n.message == notice.message)
+        {
             return;
         }
-        match method {
-            "window/showMessage" | "window/logMessage" | "window/showMessageRequest" => {
-                let Some(text) = params.get("message").and_then(Value::as_str).filter(|m| !m.trim().is_empty()) else {
-                    return;
-                };
-                let level = match params.get("type").and_then(Value::as_i64) {
-                    Some(1) => LspLogLevel::Error,
-                    Some(2) => LspLogLevel::Warning,
-                    Some(3) => LspLogLevel::Info,
-                    _ => LspLogLevel::Log,
-                };
-                let source = if method == "window/logMessage" { LspLogSource::Log } else { LspLogSource::Message };
-                self.record(source, level, text);
-                // Only what the server shows the reader, and only a problem, stands as the notice: an
-                // editor pops those up and files the rest in an output channel.
-                let severity = match level {
-                    LspLogLevel::Error => LspNoticeSeverity::Error,
-                    LspLogLevel::Warning => LspNoticeSeverity::Warning,
-                    _ => return,
-                };
-                if method == "window/logMessage" {
-                    return;
-                }
-                let notice = LspNotice { severity, message: text.trim().to_owned() };
-                if self.notice.as_ref().is_some_and(|n| n.severity == notice.severity && n.message == notice.message) {
-                    return;
-                }
-                self.notice = Some(notice.clone());
-                (self.on_change)(OutputChange::Notice(notice));
-            }
-            "$/progress" => self.note_progress(params),
-            _ => {}
-        }
+        self.notice = Some(notice.clone());
+        (self.on_change)(OutputChange::Notice(notice));
     }
 
     /// Appends to the log, folding a line the server repeats into the previous entry's count.
@@ -144,44 +127,30 @@ impl ServerOutput {
     }
 
     /// Work-done progress by token; the activity lists every piece still running.
-    fn note_progress(&mut self, p: &Value) {
-        let token = match p.get("token") {
-            Some(t @ (Value::String(_) | Value::Number(_))) => t.to_string(),
-            _ => return,
-        };
-        let Some(value) = p.get("value").filter(|v| v.is_object()) else { return };
-        let text = |key: &str| value.get(key).and_then(Value::as_str).map(str::to_owned);
-        let percent = value.get("percentage").and_then(Value::as_f64).filter(|p| (0.0..=100.0).contains(p));
-        let key = self.progress.keys().find(|(_, t)| *t == token).cloned();
-        match (value.get("kind").and_then(Value::as_str), key) {
-            (Some("begin"), key) => {
-                let Some(title) = text("title") else { return };
-                // A token begun again keeps its place, as a Map entry set twice does.
-                let key = key.unwrap_or_else(|| {
-                    self.began += 1;
-                    (self.began, token)
-                });
-                self.progress.insert(key, Progress { title, message: text("message"), percentage: percent });
+    pub fn progress(&mut self, p: ProgressParams) {
+        let ProgressParamsValue::WorkDone(value) = p.value;
+        match value {
+            // A token begun again keeps its place.
+            WorkDoneProgress::Begin(b) => {
+                let piece = Progress { title: b.title, message: b.message, percentage: b.percentage };
+                self.progress.insert(p.token, piece);
             }
-            (Some("report"), Some(key)) => {
-                let piece = self.progress.get_mut(&key).expect("a running piece");
-                if let Some(message) = text("message") {
-                    piece.message = Some(message);
-                }
-                if percent.is_some() {
-                    piece.percentage = percent;
+            WorkDoneProgress::Report(r) => {
+                let Some(piece) = self.progress.get_mut(&p.token) else { return };
+                piece.message = r.message.or(piece.message.take());
+                piece.percentage = r.percentage.or(piece.percentage);
+            }
+            WorkDoneProgress::End(_) => {
+                if self.progress.shift_remove(&p.token).is_none() {
+                    return;
                 }
             }
-            (Some("end"), Some(key)) => {
-                self.progress.remove(&key);
-            }
-            _ => return,
         }
         let activity = self
             .progress
             .values()
             .map(|p| {
-                let percent = p.percentage.map_or_else(String::new, |n| format!(" ({}%)", number(n)));
+                let percent = p.percentage.map_or_else(String::new, |n| format!(" ({n}%)"));
                 let message = p.message.as_ref().map_or_else(String::new, |m| format!(": {m}"));
                 format!("{}{percent}{message}", p.title)
             })
@@ -190,15 +159,19 @@ impl ServerOutput {
     }
 }
 
-/// A percentage as JavaScript prints it: `40`, not `40.0`.
-fn number(n: f64) -> String {
-    if n.fract() == 0.0 { format!("{}", n as i64) } else { n.to_string() }
+fn level_of(typ: MessageType) -> LspLogLevel {
+    match typ {
+        MessageType::ERROR => LspLogLevel::Error,
+        MessageType::WARNING => LspLogLevel::Warning,
+        MessageType::INFO => LspLogLevel::Info,
+        _ => LspLogLevel::Log,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
     fn output() -> (ServerOutput, Arc<Mutex<Vec<OutputChange>>>) {
@@ -220,10 +193,10 @@ mod tests {
     #[test]
     fn lets_only_shown_problems_stand_as_the_notice() {
         let (mut out, changes) = output();
-        out.message("window/logMessage", &json!({ "type": 1, "message": "logged error" }));
-        out.message("window/showMessage", &json!({ "type": 3, "message": "fyi" }));
-        out.message("window/showMessage", &json!({ "type": 2, "message": " careful " }));
-        out.message("window/showMessage", &json!({ "type": 2, "message": "careful" }));
+        out.log(MessageType::ERROR, "logged error");
+        out.show(MessageType::INFO, "fyi");
+        out.show(MessageType::WARNING, " careful ");
+        out.show(MessageType::WARNING, "careful");
         let notices: Vec<_> = changes
             .lock()
             .unwrap()
@@ -242,27 +215,20 @@ mod tests {
     #[test]
     fn lists_running_progress_in_order_of_beginning() {
         let (mut out, changes) = output();
-        let progress = |token: Value, value: Value| json!({ "token": token, "value": value });
-        out.message(
-            "$/progress",
-            &progress(json!("a"), json!({ "kind": "begin", "title": "Indexing", "percentage": 10 })),
-        );
-        out.message(
-            "$/progress",
-            &progress(json!(2), json!({ "kind": "begin", "title": "Loading", "message": "crates" })),
-        );
-        out.message(
-            "$/progress",
-            &progress(json!("a"), json!({ "kind": "report", "message": "src", "percentage": 40 })),
-        );
-        out.message("$/progress", &progress(json!("x"), json!({ "kind": "report", "message": "unknown" })));
+        let mut progress = |token: Value, value: Value| {
+            out.progress(serde_json::from_value(json!({ "token": token, "value": value })).unwrap())
+        };
+        progress(json!("a"), json!({ "kind": "begin", "title": "Indexing", "percentage": 10 }));
+        progress(json!(2), json!({ "kind": "begin", "title": "Loading", "message": "crates" }));
+        progress(json!("a"), json!({ "kind": "report", "message": "src", "percentage": 40 }));
+        progress(json!("x"), json!({ "kind": "report", "message": "unknown" }));
         let last = |changes: &Mutex<Vec<OutputChange>>| match changes.lock().unwrap().last() {
             Some(OutputChange::Activity(a)) => a.clone(),
             other => panic!("{other:?}"),
         };
         assert_eq!(last(&changes), ["Indexing (40%): src", "Loading: crates"]);
-        out.message("$/progress", &progress(json!("a"), json!({ "kind": "end" })));
-        out.message("$/progress", &progress(json!(2), json!({ "kind": "end" })));
+        progress(json!("a"), json!({ "kind": "end" }));
+        progress(json!(2), json!({ "kind": "end" }));
         assert!(last(&changes).is_empty());
     }
 }

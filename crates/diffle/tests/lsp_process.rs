@@ -4,8 +4,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use async_lsp::LanguageServer;
+use async_lsp::lsp_types::{HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams, Url};
 use futures::FutureExt;
 use serde_json::{Value, json};
+
+mod common;
+use common::lsp::{Ask, Mark, Tell};
 
 use diffle::lsp::process::{LspProcess, ProcessOptions, SettingsFuture};
 use diffle::protocol::{LspFeature, LspProcessStatus, LspState};
@@ -71,16 +76,14 @@ async fn initializes_and_reads_the_advertised_features() {
     assert!(s.process.supports(LspFeature::Definition) && s.process.supports(LspFeature::Hover));
     assert!(!s.process.supports(LspFeature::References));
     eventually("the init log", || logged(&s.process).contains(&r#"init {"x":1}"#.to_owned())).await;
-    assert_eq!(
-        rpc.request(
-            "textDocument/hover",
-            json!({ "textDocument": { "uri": "file:///a" }, "position": { "line": 0, "character": 0 } }),
-            None
-        )
-        .await
-        .unwrap(),
-        Value::Null
-    );
+    let params = HoverParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: Url::parse("file:///a").unwrap() },
+            position: Position::new(0, 0),
+        },
+        work_done_progress_params: Default::default(),
+    };
+    assert_eq!(rpc.ask(|s| s.hover(params), None).await.unwrap(), None);
     s.process.close().await;
 }
 
@@ -90,7 +93,7 @@ async fn takes_a_registered_feature_until_it_is_unregistered() {
     let rpc = s.process.connection().await.unwrap();
     eventually("the registration", || s.process.supports(LspFeature::References)).await;
     let params = json!({ "unregisterations": [{ "id": "reg-references", "method": "textDocument/references" }] });
-    rpc.notify("test/request", json!({ "method": "client/unregisterCapability", "params": params }));
+    rpc.notify(|s| s.notify::<Ask>(json!({ "method": "client/unregisterCapability", "params": params })));
     eventually("the unregistration", || !s.process.supports(LspFeature::References)).await;
     assert!(s.process.supports(LspFeature::Definition));
     s.process.close().await;
@@ -106,7 +109,7 @@ async fn sends_settings_once_initialized_and_again_only_when_they_change() {
     eventually("the new settings", || logged(&s.process).contains(&r#"config {"yaml":{"hover":false}}"#.to_owned()))
         .await;
     // The repeat of the first settings was superseded before it was sent, and nothing went twice.
-    rpc.notify("test/mark", json!({ "mark": "settled" }));
+    rpc.notify(|s| s.notify::<Mark>(json!({ "mark": "settled" })));
     eventually("the mark", || logged(&s.process).contains(&"settled".to_owned())).await;
     assert_eq!(logged(&s.process).iter().filter(|l| l.starts_with("config ")).count(), 2);
     s.process.close().await;
@@ -130,7 +133,7 @@ async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the
     let Some(s) = start("", None, None) else { return };
     let rpc = s.process.connection().await.unwrap();
     let tell =
-        |method: &str, params: Value| rpc.notify("test/notification", json!({ "method": method, "params": params }));
+        |method: &str, params: Value| rpc.notify(|s| s.notify::<Tell>(json!({ "method": method, "params": params })));
     tell("window/logMessage", json!({ "type": 2, "message": "languageId not found" }));
     tell("window/logMessage", json!({ "type": 2, "message": "languageId not found" }));
     tell("window/showMessage", json!({ "type": 3, "message": "Indexing done" }));
@@ -139,7 +142,7 @@ async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the
     eventually("the notice", || s.process.status().notice.is_some_and(|n| n.message == "Could not find Astro")).await;
     eventually("the activity", || !s.process.status().activity.is_empty()).await;
     assert_eq!(s.process.busy().as_deref(), Some("server is busy: Loading workspace; try again when it finishes"));
-    rpc.notify("test/mark", json!({ "mark": "a line on stderr" }));
+    rpc.notify(|s| s.notify::<Mark>(json!({ "mark": "a line on stderr" })));
     eventually("the stderr line", || logged(&s.process).contains(&"a line on stderr".to_owned())).await;
     let entries = s.process.entries();
     let repeated = entries.iter().find(|e| e.message == "languageId not found").unwrap();
@@ -148,6 +151,18 @@ async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the
     assert_eq!((log.warnings, log.errors), (3, 0));
     tell("$/progress", json!({ "token": "load", "value": { "kind": "end" } }));
     eventually("the end of the work", || s.process.busy().is_none()).await;
+    s.process.close().await;
+}
+
+#[tokio::test]
+async fn takes_a_server_that_breaks_the_protocol_out_of_service() {
+    let Some(s) = start("", None, None) else { return };
+    let rpc = s.process.connection().await.unwrap();
+    rpc.notify(|s| s.notify::<Tell>(json!({ "method": "$/progress", "params": { "token": 2, "value": [1, 2, 3] } })));
+    eventually("the outage", || s.process.status().state == LspState::Unavailable).await;
+    let message = s.process.status().message.unwrap();
+    assert!(message.starts_with("the language server broke the protocol: deserialization failed"), "{message}");
+    assert!(matches!(s.process.connection().await, Err(diffle::error::Error::LspUnavailable(_))));
     s.process.close().await;
 }
 

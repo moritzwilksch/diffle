@@ -1,41 +1,26 @@
-//! JSON-RPC 2.0 over a byte stream with `Content-Length` framing (the LSP base protocol). No LSP semantics.
-use std::collections::HashMap;
+//! The connection to one server: async-lsp's main loop over its stdio, asked through the typed
+//! `LanguageServer` calls. A message that breaks the protocol ends the connection.
 use std::fmt;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::ops::ControlFlow;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use async_lsp::panic::CatchUnwindLayer;
+use async_lsp::router::Router;
+use async_lsp::{MainLoop, ResponseError, ServerSocket};
 use futures::future::BoxFuture;
-use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{mpsc, oneshot};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::watch;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tower_layer::Layer;
 
 /// How long a request waits for its answer unless the caller says otherwise.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// A server's error reply, carrying the code so callers can tell a refusal from an outage.
-#[derive(Debug, Clone)]
-pub struct RpcError {
-    pub code: i64,
-    pub message: String,
-}
-
-impl RpcError {
-    pub fn new(code: i64, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
-    }
-}
-
-impl fmt::Display for RpcError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
 /// Why a request got no result: the server refused it, the connection is gone, or time ran out.
 #[derive(Debug, Clone)]
 pub enum RequestError {
-    Rpc(RpcError),
+    Rpc(ResponseError),
     Closed(String),
     Timeout(String),
 }
@@ -51,276 +36,207 @@ impl fmt::Display for RequestError {
 
 impl std::error::Error for RequestError {}
 
-type Answer = Result<Value, RequestError>;
-type MessageHandler = Arc<dyn Fn(&str, &Value) + Send + Sync>;
-type RequestHandler = Arc<dyn Fn(Value) -> BoxFuture<'static, Result<Value, RpcError>> + Send + Sync>;
-
-struct Inner {
-    next_id: AtomicI64,
-    pending: Mutex<HashMap<i64, oneshot::Sender<Answer>>>,
-    handlers: Mutex<Vec<MessageHandler>>,
-    requests: Mutex<HashMap<String, RequestHandler>>,
-    disposed: Mutex<Option<String>>,
-    frames: mpsc::UnboundedSender<Vec<u8>>,
+/// How a connection ended without diffle ending it.
+pub struct Ended {
+    pub reason: String,
+    /// The server closed its output, as one that exits does: its exit may say more.
+    pub hung_up: bool,
 }
 
-/// One end of a JSON-RPC connection. Cheap to clone; every clone is the same connection.
+type OnClose = Box<dyn FnOnce(Ended) + Send>;
+
+struct Shared {
+    /// Why the connection ended, once it has.
+    closed: watch::Sender<Option<String>>,
+    /// Told why the connection ended, unless diffle ended it.
+    on_close: Mutex<Option<OnClose>>,
+}
+
+impl Shared {
+    fn reason(&self) -> Option<String> {
+        self.closed.borrow().clone()
+    }
+
+    fn end(&self, server: &ServerSocket, reason: String) {
+        self.closed.send_if_modified(|closed| closed.is_none() && closed.replace(reason).is_none());
+        let _ = server.emit(Stop);
+    }
+}
+
+/// Ends the main loop from diffle's side.
+struct Stop;
+
+/// One end of a connection to a server. Cheap to clone; every clone is the same connection.
 #[derive(Clone)]
 pub struct Connection {
-    inner: Arc<Inner>,
+    server: ServerSocket,
+    shared: Arc<Shared>,
 }
 
 impl Connection {
-    pub fn new(
+    /// Serves `router` to the server on the other end of `reader` and `writer`. A panicking handler
+    /// answers with an error. `on_close` hears why the connection ended unless `dispose` ended it.
+    pub fn new<St: Send + 'static>(
         reader: impl AsyncRead + Unpin + Send + 'static,
         writer: impl AsyncWrite + Unpin + Send + 'static,
+        mut router: Router<St>,
+        on_close: impl FnOnce(Ended) + Send + 'static,
     ) -> Self {
-        let (frames, queue) = mpsc::unbounded_channel();
-        let inner = Arc::new(Inner {
-            next_id: AtomicI64::new(1),
-            pending: Mutex::new(HashMap::new()),
-            handlers: Mutex::new(Vec::new()),
-            requests: Mutex::new(HashMap::new()),
-            disposed: Mutex::new(None),
-            frames,
+        router.event::<Stop>(|_, _| ControlFlow::Break(Ok(())));
+        let shared =
+            Arc::new(Shared { closed: watch::channel(None).0, on_close: Mutex::new(Some(Box::new(on_close))) });
+        let (main, server) = MainLoop::new_client(|_| CatchUnwindLayer::default().layer(router));
+        let ended = shared.clone();
+        tokio::spawn(async move {
+            let result = main.run_buffered(reader.compat(), writer.compat_write()).await;
+            let hung_up = matches!(result, Err(async_lsp::Error::Eof));
+            let reason = match result {
+                Ok(()) => "connection closed".to_owned(),
+                Err(async_lsp::Error::Eof) => "the language server closed its output".to_owned(),
+                Err(e) => format!("the language server broke the protocol: {e}"),
+            };
+            ended.closed.send_if_modified(|closed| closed.is_none() && closed.replace(reason).is_none());
+            let on_close = ended.on_close.lock().unwrap().take();
+            if let (Some(on_close), Some(reason)) = (on_close, ended.reason()) {
+                on_close(Ended { reason, hung_up });
+            }
         });
-        let conn = Self { inner };
-        tokio::spawn(write_frames(writer, queue, Arc::downgrade(&conn.inner)));
-        tokio::spawn(read_frames(reader, Arc::downgrade(&conn.inner)));
-        conn
+        Self { server, shared }
     }
 
-    /// Sends a request and waits for its result. `None` waits 30 seconds; a zero timeout waits forever.
-    pub async fn request(&self, method: &str, params: Value, timeout: Option<Duration>) -> Answer {
-        if let Some(reason) = self.inner.disposed.lock().unwrap().clone() {
+    /// Waits for the answer to `call`, a `LanguageServer` request. `None` waits 30 seconds; a zero
+    /// timeout waits forever. An answer that is not what the protocol says ends the connection.
+    pub async fn ask<T>(
+        &self,
+        call: impl FnOnce(&mut ServerSocket) -> BoxFuture<'static, async_lsp::Result<T>>,
+        timeout: Option<Duration>,
+    ) -> Result<T, RequestError> {
+        if let Some(reason) = self.shared.reason() {
             return Err(RequestError::Closed(reason));
         }
-        let id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
-        let (tx, rx) = oneshot::channel();
-        self.inner.pending.lock().unwrap().insert(id, tx);
-        self.send(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
+        let answer = call(&mut self.server.clone());
+        let answer = async {
+            match answer.await {
+                Ok(result) => Ok(result),
+                Err(async_lsp::Error::Response(e)) => Err(RequestError::Rpc(e)),
+                Err(async_lsp::Error::Deserialize(e)) => {
+                    self.shared.end(&self.server, format!("the language server sent an invalid answer: {e}"));
+                    Err(RequestError::Closed(self.shared.reason().unwrap_or_default()))
+                }
+                Err(_) => {
+                    // The loop drops its pending requests on the way out, a moment before it says why.
+                    let mut closed = self.shared.closed.subscribe();
+                    let reason = closed.wait_for(Option::is_some).await.ok().and_then(|r| r.clone());
+                    Err(RequestError::Closed(reason.unwrap_or_else(|| "connection closed".into())))
+                }
+            }
+        };
         let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
-        let answer = async { rx.await.unwrap_or_else(|_| Err(RequestError::Closed("connection closed".into()))) };
         if timeout.is_zero() {
             return answer.await;
         }
-        match tokio::time::timeout(timeout, answer).await {
-            Ok(answer) => answer,
-            Err(_) => {
-                self.inner.pending.lock().unwrap().remove(&id);
-                Err(RequestError::Timeout(format!("{method} timed out after {} ms", timeout.as_millis())))
-            }
+        tokio::time::timeout(timeout, answer)
+            .await
+            .unwrap_or_else(|_| Err(RequestError::Timeout(format!("no answer within {} ms", timeout.as_millis()))))
+    }
+
+    /// Sends a `LanguageServer` notification, unless the connection is gone.
+    pub fn notify(&self, send: impl FnOnce(&mut ServerSocket) -> async_lsp::Result<()>) {
+        if self.shared.reason().is_none() {
+            let _ = send(&mut self.server.clone());
         }
-    }
-
-    pub fn notify(&self, method: &str, params: Value) {
-        if self.inner.disposed.lock().unwrap().is_some() {
-            return;
-        }
-        self.send(&json!({ "jsonrpc": "2.0", "method": method, "params": params }));
-    }
-
-    /// Observes every message the server sends: notifications and requests alike.
-    pub fn on_message(&self, f: impl Fn(&str, &Value) + Send + Sync + 'static) {
-        self.inner.handlers.lock().unwrap().push(Arc::new(f));
-    }
-
-    /// Handles a server request and answers with its result, or its error.
-    pub fn on_request(
-        &self,
-        method: &str,
-        f: impl Fn(Value) -> BoxFuture<'static, Result<Value, RpcError>> + Send + Sync + 'static,
-    ) {
-        self.inner.requests.lock().unwrap().insert(method.to_owned(), Arc::new(f));
     }
 
     /// Fails every pending request with `reason` and ignores further traffic.
     pub fn dispose(&self, reason: String) {
-        dispose(&self.inner, reason);
+        self.shared.on_close.lock().unwrap().take();
+        self.shared.end(&self.server, reason);
     }
-
-    fn send(&self, msg: &Value) {
-        send(&self.inner, msg);
-    }
-}
-
-fn send(inner: &Inner, msg: &Value) {
-    if inner.disposed.lock().unwrap().is_some() {
-        return;
-    }
-    let body = serde_json::to_vec(msg).expect("messages serialize");
-    let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
-    frame.extend(body);
-    let _ = inner.frames.send(frame);
-}
-
-fn dispose(inner: &Inner, reason: String) {
-    let mut disposed = inner.disposed.lock().unwrap();
-    if disposed.is_some() {
-        return;
-    }
-    *disposed = Some(reason.clone());
-    drop(disposed);
-    for (_, tx) in inner.pending.lock().unwrap().drain() {
-        let _ = tx.send(Err(RequestError::Closed(reason.clone())));
-    }
-}
-
-async fn write_frames(
-    mut writer: impl AsyncWrite + Unpin,
-    mut queue: mpsc::UnboundedReceiver<Vec<u8>>,
-    inner: std::sync::Weak<Inner>,
-) {
-    while let Some(frame) = queue.recv().await {
-        // A server that dies mid-request turns the next write into EPIPE: the connection is over.
-        if let Err(e) = async {
-            writer.write_all(&frame).await?;
-            writer.flush().await
-        }
-        .await
-        {
-            if let Some(inner) = inner.upgrade() {
-                dispose(&inner, format!("cannot write to the language server: {e}"));
-            }
-            return;
-        }
-    }
-}
-
-async fn read_frames(reader: impl AsyncRead + Unpin, inner: std::sync::Weak<Inner>) {
-    let mut reader = BufReader::new(reader);
-    let reason = loop {
-        let mut length: Option<usize> = None;
-        let mut saw_header = false;
-        // Header lines up to the blank one; an unparseable frame is dropped and the next one read.
-        loop {
-            let mut line = Vec::new();
-            match reader.read_until(b'\n', &mut line).await {
-                Ok(0) => return closed(&inner, "the language server closed its output"),
-                Ok(_) => {}
-                Err(e) => return closed(&inner, &format!("cannot read from the language server: {e}")),
-            }
-            let text = String::from_utf8_lossy(&line);
-            let text = text.trim_end_matches(['\r', '\n']);
-            if text.is_empty() {
-                if saw_header {
-                    break;
-                }
-                continue;
-            }
-            saw_header = true;
-            if let Some((name, value)) = text.split_once(':')
-                && name.trim().eq_ignore_ascii_case("content-length")
-            {
-                length = value.trim().parse().ok();
-            }
-        }
-        let Some(length) = length else { continue };
-        let mut body = vec![0; length];
-        if let Err(e) = reader.read_exact(&mut body).await {
-            break format!("cannot read from the language server: {e}");
-        }
-        let Some(inner) = inner.upgrade() else { return };
-        receive(&inner, &body);
-    };
-    closed(&inner, &reason);
-}
-
-fn closed(inner: &std::sync::Weak<Inner>, reason: &str) {
-    if let Some(inner) = inner.upgrade() {
-        dispose(&inner, reason.to_owned());
-    }
-}
-
-fn receive(inner: &Arc<Inner>, body: &[u8]) {
-    let Ok(msg) = serde_json::from_slice::<Value>(body) else { return };
-    if inner.disposed.lock().unwrap().is_some() {
-        return;
-    }
-    if let Some(method) = msg.get("method").and_then(Value::as_str) {
-        let params = msg.get("params").cloned().unwrap_or(Value::Null);
-        let handlers: Vec<MessageHandler> = inner.handlers.lock().unwrap().clone();
-        for handler in handlers {
-            handler(method, &params);
-        }
-        let Some(id) = msg.get("id").filter(|id| !id.is_null()).cloned() else { return };
-        let handler = inner.requests.lock().unwrap().get(method).cloned();
-        let weak = Arc::downgrade(inner);
-        tokio::spawn(async move {
-            let result = match handler {
-                Some(handler) => handler(params).await,
-                None => Ok(Value::Null),
-            };
-            let Some(inner) = weak.upgrade() else { return };
-            let reply = match result {
-                Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
-                Err(e) => json!({ "jsonrpc": "2.0", "id": id, "error": { "code": e.code, "message": e.message } }),
-            };
-            send(&inner, &reply);
-        });
-        return;
-    }
-    let Some(id) = msg.get("id").and_then(Value::as_i64) else { return };
-    let Some(tx) = inner.pending.lock().unwrap().remove(&id) else { return };
-    let answer = match msg.get("error") {
-        Some(error) if !error.is_null() => Err(RequestError::Rpc(RpcError {
-            code: error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
-            message: error.get("message").and_then(Value::as_str).unwrap_or("Request failed").to_owned(),
-        })),
-        _ => Ok(msg.get("result").cloned().unwrap_or(Value::Null)),
-    };
-    let _ = tx.send(answer);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::FutureExt;
+    use async_lsp::LanguageServer;
+    use async_lsp::lsp_types::{HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams, Url};
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
-    #[tokio::test]
-    async fn answers_asynchronous_server_requests_and_returns_handler_errors_without_losing_the_connection() {
+    fn hover() -> HoverParams {
+        let uri = Url::parse("file:///a.py").unwrap();
+        HoverParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position::new(0, 0),
+            },
+            work_done_progress_params: Default::default(),
+        }
+    }
+
+    /// A connection to a hand-driven server, and what `on_close` heard.
+    fn connect() -> (Connection, impl AsyncRead + Unpin, impl AsyncWrite + Unpin, watch::Receiver<Option<String>>) {
         let (a, b) = tokio::io::duplex(4096);
         let (a_read, a_write) = tokio::io::split(a);
         let (b_read, b_write) = tokio::io::split(b);
-        let client = Connection::new(a_read, a_write);
-        let server = Connection::new(b_read, b_write);
-        client.on_request("workspace/configuration", |_| {
-            async {
-                tokio::task::yield_now().await;
-                Ok(json!([{ "hover": true }, null]))
+        let (heard, hear) = watch::channel(None);
+        let rpc = Connection::new(a_read, a_write, Router::new(()), move |e: Ended| drop(heard.send(Some(e.reason))));
+        (rpc, b_read, b_write, hear)
+    }
+
+    async fn frame(w: &mut (impl AsyncWrite + Unpin), body: &str) {
+        w.write_all(format!("Content-Length: {}\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+    }
+
+    /// Reads one request's frame off the wire, for its id.
+    async fn request_id(r: &mut BufReader<impl AsyncRead + Unpin>) -> i64 {
+        let mut length = 0;
+        loop {
+            let mut line = String::new();
+            r.read_line(&mut line).await.unwrap();
+            if line == "\r\n" {
+                break;
             }
-            .boxed()
-        });
-        client.on_request("fail", |_| async { Err(RpcError::new(-32602, "bad parameters")) }.boxed());
-        let config = server.request("workspace/configuration", json!({}), None).await.unwrap();
-        assert_eq!(config, json!([{ "hover": true }, null]));
-        match server.request("fail", json!({}), None).await {
-            Err(RequestError::Rpc(e)) => assert_eq!((e.code, e.message.as_str()), (-32602, "bad parameters")),
-            other => panic!("{other:?}"),
+            if let Some(n) = line.strip_prefix("Content-Length: ") {
+                length = n.trim().parse().unwrap();
+            }
         }
-        assert_eq!(server.request("window/workDoneProgress/create", json!({}), None).await.unwrap(), Value::Null);
-        client.dispose("done".into());
-        assert!(matches!(client.request("x", json!({}), None).await, Err(RequestError::Closed(r)) if r == "done"));
-        server.dispose("done".into());
+        let mut body = vec![0; length];
+        r.read_exact(&mut body).await.unwrap();
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap()["id"].as_i64().unwrap()
     }
 
     #[tokio::test]
-    async fn resyncs_after_a_frame_without_length_and_times_out_unanswered_requests() {
-        let (a, b) = tokio::io::duplex(4096);
-        let (a_read, a_write) = tokio::io::split(a);
-        let (mut b_read, mut b_write) = tokio::io::split(b);
-        let client = Connection::new(a_read, a_write);
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let record = seen.clone();
-        client.on_message(move |method, _| record.lock().unwrap().push(method.to_owned()));
-        let body = br#"{"jsonrpc":"2.0","method":"hello","params":{}}"#;
-        b_write.write_all(b"X-Junk: 1\r\n\r\n").await.unwrap();
-        b_write.write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes()).await.unwrap();
-        b_write.write_all(body).await.unwrap();
-        let err = client.request("slow", json!(null), Some(Duration::from_millis(50))).await.unwrap_err();
-        assert_eq!(err.to_string(), "slow timed out after 50 ms");
-        assert_eq!(*seen.lock().unwrap(), ["hello"]);
-        let mut sent = vec![0; 16];
-        assert!(b_read.read(&mut sent).await.unwrap() > 0);
+    async fn answers_and_times_out_and_ends_on_an_invalid_answer() {
+        let (rpc, read, mut write, mut hear) = connect();
+        let mut read = BufReader::new(read);
+        let err = rpc.ask(|s| s.hover(hover()), Some(Duration::from_millis(50))).await.unwrap_err();
+        assert_eq!(err.to_string(), "no answer within 50 ms");
+        let first = request_id(&mut read).await;
+        let asked = tokio::spawn({
+            let rpc = rpc.clone();
+            async move { rpc.ask(|s| s.hover(hover()), None).await }
+        });
+        let id = request_id(&mut read).await;
+        frame(&mut write, &format!(r#"{{"jsonrpc":"2.0","id":{first},"result":null}}"#)).await;
+        frame(&mut write, &format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{{"contents":7}}}}"#)).await;
+        let Err(RequestError::Closed(reason)) = asked.await.unwrap() else { panic!("the answer was accepted") };
+        assert!(reason.starts_with("the language server sent an invalid answer: "), "{reason}");
+        hear.wait_for(Option::is_some).await.unwrap();
+        assert_eq!(hear.borrow().as_deref(), Some(reason.as_str()));
+    }
+
+    #[tokio::test]
+    async fn ends_on_a_frame_without_length_and_not_on_dispose() {
+        let (rpc, _read, mut write, mut hear) = connect();
+        write.write_all(b"X-Junk: 1\r\n\r\n").await.unwrap();
+        hear.wait_for(Option::is_some).await.unwrap();
+        let reason = hear.borrow().clone().unwrap();
+        assert_eq!(reason, "the language server broke the protocol: protocol error: Missing content-length");
+        assert!(matches!(rpc.ask(|s| s.hover(hover()), None).await, Err(RequestError::Closed(r)) if r == reason));
+
+        let (rpc, _read, _write, hear) = connect();
+        rpc.dispose("done".into());
+        assert!(matches!(rpc.ask(|s| s.hover(hover()), None).await, Err(RequestError::Closed(r)) if r == "done"));
+        tokio::task::yield_now().await;
+        assert!(hear.borrow().is_none());
     }
 }

@@ -5,19 +5,23 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 
-use capabilities::truthy;
+use capabilities::{advertised, router};
 use child::{command, signal, spawn_settled};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
+use async_lsp::LanguageServer;
+use async_lsp::lsp_types::{
+    ClientInfo, DidChangeConfigurationParams, InitializeParams, InitializedParams, Url, WorkspaceFolder,
+};
 use futures::future::{BoxFuture, Shared};
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::sync::watch;
 
 use crate::error::{Error, Result};
 use crate::lsp::output::{OutputChange, ServerOutput};
 use crate::lsp::rpc::{Connection, RequestError};
-use crate::lsp::shapes::{all_features, client_capabilities, provider_of};
+use crate::lsp::shapes::client_capabilities;
 use crate::lsp::which::program_of;
 use crate::protocol::{LspFeature, LspLogEntry, LspProcessStatus, LspState};
 
@@ -161,7 +165,7 @@ impl LspProcess {
                 return;
             }
             if let Some(rpc) = &state.rpc {
-                rpc.notify("workspace/didChangeConfiguration", json!({ "settings": next }));
+                rpc.notify(|s| s.did_change_configuration(DidChangeConfigurationParams { settings: next }));
             }
         });
     }
@@ -192,9 +196,9 @@ impl LspProcess {
         };
         let mut exited = self.exited.subscribe();
         if let Some(rpc) = rpc.filter(|_| !*exited.borrow())
-            && rpc.request("shutdown", Value::Null, Some(SHUTDOWN_RPC)).await.is_ok()
+            && rpc.ask(|s| s.shutdown(()), Some(SHUTDOWN_RPC)).await.is_ok()
         {
-            rpc.notify("exit", Value::Null);
+            rpc.notify(|s| s.exit(()));
         }
         let Some(pid) = pid.filter(|_| !*exited.borrow()) else { return };
         signal(pid, false);
@@ -223,47 +227,46 @@ impl LspProcess {
         let (Some(stdin), Some(stdout), Some(stderr)) = (stdin, stdout, stderr) else {
             return self.fail(format!("cannot start \"{}\": no stdio", self.command));
         };
-        let rpc = Connection::new(stdout, stdin);
+        let root = Url::from_file_path(&opts.root).expect("the repository root is absolute");
+        let folder = WorkspaceFolder { uri: root.clone(), name: "workspace".into() };
+        let me = Arc::downgrade(self);
+        let rpc = Connection::new(stdout, stdin, router(me.clone(), folder.clone()), move |ended| {
+            let Some(me) = me.upgrade() else { return };
+            if !ended.hung_up {
+                let _ = me.fail(ended.reason);
+                return;
+            }
+            tokio::spawn(async move { me.fail_after_exit(ended.reason).await });
+        });
         {
             let mut state = self.state.lock().unwrap();
             state.rpc = Some(rpc.clone());
             state.pid = child.id();
         }
         tokio::spawn(child::watch(Arc::downgrade(self), stderr, child));
-        self.listen(&rpc);
-        let root_uri = url::Url::from_file_path(&opts.root).map(String::from).unwrap_or_default();
-        let mut params = json!({
-            "processId": std::process::id(),
-            "clientInfo": { "name": "diffle" },
-            "rootUri": root_uri,
-            "rootPath": opts.root.to_string_lossy(),
-            "workspaceFolders": [{ "uri": root_uri, "name": "workspace" }],
-            "capabilities": client_capabilities(),
-        });
-        if let Some(options) = opts.initialization_options {
-            params["initializationOptions"] = options;
-        }
-        let init = match rpc.request("initialize", params, Some(INIT_TIMEOUT)).await {
-            Ok(init) => init,
-            Err(e) => {
-                // A server that died says why through its exit, which lands a moment after its output closes.
-                if matches!(e, RequestError::Closed(_)) {
-                    let mut exited = self.exited.subscribe();
-                    let _ = tokio::time::timeout(Duration::from_millis(500), exited.wait_for(|e| *e)).await;
-                }
-                return self.fail(format!("initialize failed: {e}"));
-            }
+        #[allow(deprecated)]
+        let params = InitializeParams {
+            process_id: Some(std::process::id()),
+            client_info: Some(ClientInfo { name: "diffle".into(), version: None }),
+            root_uri: Some(root),
+            root_path: Some(opts.root.to_string_lossy().into_owned()),
+            workspace_folders: Some(vec![folder]),
+            capabilities: client_capabilities(),
+            initialization_options: opts.initialization_options,
+            ..Default::default()
         };
-        let capabilities = init.get("capabilities").cloned().unwrap_or_default();
-        let advertised: Vec<LspFeature> =
-            all_features().into_iter().filter(|f| capabilities.get(provider_of(*f)).is_some_and(truthy)).collect();
-        self.state.lock().unwrap().advertised.extend(advertised);
-        rpc.notify("initialized", json!({}));
+        let init = match rpc.ask(|s| s.initialize(params), Some(INIT_TIMEOUT)).await {
+            Ok(init) => init,
+            Err(e @ RequestError::Closed(_)) => return self.fail_after_exit(format!("initialize failed: {e}")).await,
+            Err(e) => return self.fail(format!("initialize failed: {e}")),
+        };
+        self.state.lock().unwrap().advertised.extend(advertised(&init.capabilities));
+        rpc.notify(|s| s.initialized(InitializedParams {}));
         let settings = self.state.lock().unwrap().settings.clone();
         if let Some(settings) = settings {
             let settings = settings.await;
             if !self.state.lock().unwrap().closing {
-                rpc.notify("workspace/didChangeConfiguration", json!({ "settings": settings }));
+                rpc.notify(|s| s.did_change_configuration(DidChangeConfigurationParams { settings }));
             }
         }
         let status = {

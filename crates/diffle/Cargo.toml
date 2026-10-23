@@ -12,6 +12,7 @@ publish = false
 anstream = "1"
 anstyle = "1"
 anyhow = "1"
+async-lsp = { version = "0.2.4", default-features = false, features = ["omni-trait"] }
 axum = { version = "0.8", features = ["ws"] }
 clap = { version = "4.6", features = ["derive", "string", "wrap_help"] }
 clap_complete = "4.6"
@@ -36,7 +37,9 @@ shlex = "2"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["compat"] }
 tower-http = { version = "0.7", features = ["compression-gzip", "compression-deflate"] }
+tower-layer = "0.3"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 

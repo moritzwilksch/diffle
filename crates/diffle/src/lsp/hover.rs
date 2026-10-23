@@ -1,9 +1,9 @@
-//! Pure shaping of a `textDocument/hover` result into one markdown string.
+//! Pure shaping of a `textDocument/hover` answer into one markdown string.
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
+use async_lsp::lsp_types::{HoverContents, MarkedString, MarkupKind};
 use regex::{Captures, Regex};
-use serde_json::Value;
 
 /// An inline markdown link whose target is a `file:` URI, as pyright and pyrefly write "Go to X".
 static FILE_LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\(\s*<?(file:[^\s)>]+)>?\s*\)").unwrap());
@@ -11,27 +11,23 @@ static BACKTICKS: LazyLock<Regex> = LazyLock::new(|| Regex::new("`+").unwrap());
 
 /// One markdown document for the tooltip, or none when the server sent nothing worth showing.
 /// Plaintext and `{language, value}` parts become fenced blocks, so their text is never re-read as
-/// markdown. Takes every shape LSP allows: a string, `{language, value}`, a list of those, or
-/// `MarkupContent`.
-pub fn hover_markdown(contents: &Value) -> Option<String> {
+/// markdown.
+pub fn hover_markdown(contents: &HoverContents) -> Option<String> {
     let parts: Vec<String> = match contents {
-        Value::Null => return None,
-        Value::Array(list) => list.iter().filter_map(part_markdown).collect(),
-        one => part_markdown(one).into_iter().collect(),
+        HoverContents::Scalar(one) => vec![marked(one)],
+        HoverContents::Array(list) => list.iter().map(marked).collect(),
+        HoverContents::Markup(m) if m.kind == MarkupKind::Markdown => vec![m.value.clone()],
+        HoverContents::Markup(m) => vec![fence(&m.value, "")],
     };
     let parts: Vec<String> = parts.into_iter().filter(|p| !p.trim().is_empty()).collect();
     (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
-fn part_markdown(part: &Value) -> Option<String> {
-    if let Some(s) = part.as_str() {
-        return Some(s.to_owned());
+fn marked(part: &MarkedString) -> String {
+    match part {
+        MarkedString::String(md) => md.clone(),
+        MarkedString::LanguageString(code) => fence(&code.value, &code.language),
     }
-    let value = part.get("value")?.as_str()?;
-    if let Some(kind) = part.get("kind").and_then(Value::as_str) {
-        return Some(if kind == "markdown" { value.to_owned() } else { fence(value, "") });
-    }
-    Some(fence(value, part.get("language").and_then(Value::as_str).unwrap_or_default()))
 }
 
 /// A fence long enough that a backtick run inside the code cannot close it early.
@@ -81,25 +77,24 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn md(v: serde_json::Value) -> Option<String> {
+        hover_markdown(&serde_json::from_value(v).unwrap())
+    }
+
     #[test]
     fn passes_markdown_through_and_drops_empty_results() {
-        assert_eq!(hover_markdown(&json!({ "kind": "markdown", "value": "**f**" })).as_deref(), Some("**f**"));
-        assert_eq!(hover_markdown(&json!("plain md")).as_deref(), Some("plain md"));
-        assert_eq!(hover_markdown(&Value::Null), None);
-        assert_eq!(hover_markdown(&json!([])), None);
-        assert_eq!(hover_markdown(&json!({ "kind": "markdown", "value": "  \n" })), None);
+        assert_eq!(md(json!({ "kind": "markdown", "value": "**f**" })).as_deref(), Some("**f**"));
+        assert_eq!(md(json!("plain md")).as_deref(), Some("plain md"));
+        assert_eq!(md(json!([])), None);
+        assert_eq!(md(json!({ "kind": "markdown", "value": "  \n" })), None);
     }
 
     #[test]
     fn fences_plaintext_and_language_blocks_longer_than_any_backtick_run_inside() {
-        assert_eq!(
-            hover_markdown(&json!({ "kind": "plaintext", "value": "x: int\n" })).as_deref(),
-            Some("```\nx: int\n```")
-        );
-        let block = hover_markdown(&json!({ "language": "python", "value": "a = ``` + 1" }));
+        assert_eq!(md(json!({ "kind": "plaintext", "value": "x: int\n" })).as_deref(), Some("```\nx: int\n```"));
+        let block = md(json!({ "language": "python", "value": "a = ``` + 1" }));
         assert_eq!(block.as_deref(), Some("````python\na = ``` + 1\n````"));
-        let mixed =
-            hover_markdown(&json!([{ "language": "python", "value": "def f() -> None" }, "Does the `f` thing."]));
+        let mixed = md(json!([{ "language": "python", "value": "def f() -> None" }, "Does the `f` thing."]));
         assert_eq!(mixed.as_deref(), Some("```python\ndef f() -> None\n```\n\nDoes the `f` thing."));
     }
 

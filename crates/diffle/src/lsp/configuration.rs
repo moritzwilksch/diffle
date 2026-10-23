@@ -2,9 +2,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
+use async_lsp::lsp_types::ConfigurationItem;
 use serde_json::Value;
 
-use super::rpc::RpcError;
 use crate::persist::write_file_atomic;
 
 pub const SCHEMA_CATALOG: &str = "https://www.schemastore.org/api/json/catalog.json";
@@ -69,25 +69,11 @@ async fn download(url: &str) -> Option<Vec<Value>> {
 }
 
 /// Answers a server's `workspace/configuration` request from `settings`: each requested section in
-/// order, null for unknown sections, the whole tree for an omitted one. Params are untrusted JSON
-/// from the server; malformed requests are refused before any settings are returned.
-pub fn configuration_items(settings: &Value, params: &Value) -> Result<Vec<Value>, RpcError> {
-    let invalid = || RpcError::new(-32602, "Invalid workspace/configuration parameters");
-    let items = params.get("items").and_then(Value::as_array).ok_or_else(invalid)?;
-    let mut sections = Vec::with_capacity(items.len());
-    for item in items {
-        if !item.is_object() {
-            return Err(invalid());
-        }
-        match item.get("section") {
-            None | Some(Value::Null) => sections.push(None),
-            Some(Value::String(s)) => sections.push(Some(s.as_str())),
-            Some(_) => return Err(invalid()),
-        }
-    }
-    Ok(sections
-        .into_iter()
-        .map(|section| match section {
+/// order, null for unknown sections, the whole tree for an omitted one.
+pub fn configuration_items(settings: &Value, items: &[ConfigurationItem]) -> Vec<Value> {
+    items
+        .iter()
+        .map(|item| match item.section.as_deref() {
             None | Some("") => settings.clone(),
             Some(section) => section
                 .split('.')
@@ -95,7 +81,7 @@ pub fn configuration_items(settings: &Value, params: &Value) -> Result<Vec<Value
                 .cloned()
                 .unwrap_or(Value::Null),
         })
-        .collect())
+        .collect()
 }
 
 #[cfg(test)]
@@ -125,32 +111,13 @@ mod tests {
     }
 
     #[test]
-    fn rejects_malformed_configuration_requests() {
-        let cases = [
-            Value::Null,
-            json!({}),
-            json!({ "items": null }),
-            json!({ "items": [null] }),
-            json!({ "items": [42] }),
-            json!({ "items": [{ "section": false }] }),
-        ];
-        for params in cases {
-            let e = configuration_items(&json!({}), &params).unwrap_err();
-            assert_eq!(
-                (e.code, e.message.as_str()),
-                (-32602, "Invalid workspace/configuration parameters"),
-                "{params}"
-            );
-        }
-    }
-
-    #[test]
     fn answers_whole_and_dotted_configuration_sections_in_request_order() {
         let settings = json!({ "yaml": { "hover": true }, "evenBetterToml": { "schema": { "enabled": true } } });
-        let params = json!({ "items": [
-            { "section": "yaml.hover" }, { "section": "evenBetterToml.schema.enabled" }, { "section": "missing" }, {}, { "section": "__proto__" },
-        ] });
-        let items = configuration_items(&settings, &params).unwrap();
+        let sections =
+            [Some("yaml.hover"), Some("evenBetterToml.schema.enabled"), Some("missing"), None, Some("__proto__")];
+        let params: Vec<_> =
+            sections.map(|section| ConfigurationItem { scope_uri: None, section: section.map(str::to_owned) }).into();
+        let items = configuration_items(&settings, &params);
         assert_eq!(Value::Array(items), json!([true, true, null, settings, null]));
     }
 

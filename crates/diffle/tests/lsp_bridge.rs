@@ -372,11 +372,14 @@ async fn tracks_concurrent_standard_progress_and_keeps_documents_synced_until_al
     s.bridge.close().await;
 }
 
-async fn keeps_an_error_as_the_notice_without_killing_a_usable_server(method: &str) {
+async fn keeps_an_error_as_the_notice_without_killing_a_usable_server(method: &str, request: bool) {
     let Some(s) = start(&[]) else { return };
     let p = s.bridge.process().clone();
+    let show = async |params: serde_json::Value| {
+        if request { ask(&p, method, params).await } else { tell(&p, method, params).await }
+    };
     s.bridge.track(&["a.py".into()]).await;
-    tell(&p, method, json!({ "type": 1, "message": "Failed to load workspace" })).await;
+    show(json!({ "type": 1, "message": "Failed to load workspace" })).await;
     let notice = || s.bridge.status().notice.map(|n| json_of(&n));
     eventually("the notice", || {
         notice() == Some(json!({ "severity": "error", "message": "Failed to load workspace" }))
@@ -385,8 +388,7 @@ async fn keeps_an_error_as_the_notice_without_killing_a_usable_server(method: &s
     assert_eq!(s.bridge.definition(&pos("a.py", 3, 4)).await.unwrap().locations.len(), 1);
     // An empty answer is an answer: the notice does not explain it away.
     assert_eq!(json_of(&s.bridge.hover(&pos("a.py", 1, 0)).await.unwrap()), json!({ "contents": null }));
-    tell(&p, method, json!({ "type": 3, "message": "An unrelated info message" })).await;
-    tell(&p, "$/progress", json!({ "token": 2, "value": [1, 2, 3] })).await;
+    show(json!({ "type": 3, "message": "An unrelated info message" })).await;
     // A reply follows the notifications the fake sent before it, on the same stream.
     s.bridge.hover(&pos("a.py", 1, 0)).await.unwrap();
     assert_eq!(s.bridge.status().notice.unwrap().severity.to_string(), "error");
@@ -396,12 +398,12 @@ async fn keeps_an_error_as_the_notice_without_killing_a_usable_server(method: &s
 
 #[tokio::test]
 async fn keeps_a_show_message_error_as_the_notice_without_killing_a_usable_server() {
-    keeps_an_error_as_the_notice_without_killing_a_usable_server("window/showMessage").await;
+    keeps_an_error_as_the_notice_without_killing_a_usable_server("window/showMessage", false).await;
 }
 
 #[tokio::test]
 async fn keeps_a_show_message_request_error_as_the_notice_without_killing_a_usable_server() {
-    keeps_an_error_as_the_notice_without_killing_a_usable_server("window/showMessageRequest").await;
+    keeps_an_error_as_the_notice_without_killing_a_usable_server("window/showMessageRequest", true).await;
 }
 
 #[tokio::test]

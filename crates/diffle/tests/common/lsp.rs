@@ -7,9 +7,24 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use serde_json::json;
+use async_lsp::lsp_types::notification::Notification;
+use serde_json::{Value, json};
 
 use diffle::lsp::process::LspProcess;
+
+/// The fake's own notifications: a mark to log, and a message to pass back as its own.
+macro_rules! fake_notification {
+    ($name:ident, $method:literal) => {
+        pub enum $name {}
+        impl Notification for $name {
+            type Params = Value;
+            const METHOD: &'static str = $method;
+        }
+    };
+}
+fake_notification!(Mark, "test/mark");
+fake_notification!(Tell, "test/notification");
+fake_notification!(Ask, "test/request");
 
 /// The commands the wrappers answer to.
 const COMMANDS: [&str; 7] =
@@ -66,20 +81,20 @@ pub async fn flush(process: &LspProcess) {
     static MARKS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let Ok(rpc) = process.connection().await else { return };
     let mark = format!("mark {}", MARKS.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-    rpc.notify("test/mark", json!({ "mark": mark }));
+    rpc.notify(|s| s.notify::<Mark>(json!({ "mark": mark })));
     eventually(&mark, || process.entries().iter().any(|e| e.message == mark)).await;
 }
 
 /// Sends the fake a notification to pass on to the client as if it were its own.
-pub async fn tell(process: &LspProcess, method: &str, params: serde_json::Value) {
+pub async fn tell(process: &LspProcess, method: &str, params: Value) {
     let rpc = process.connection().await.unwrap();
-    rpc.notify("test/notification", json!({ "method": method, "params": params }));
+    rpc.notify(|s| s.notify::<Tell>(json!({ "method": method, "params": params })));
 }
 
 /// Has the fake send the client a request of its own.
-pub async fn ask(process: &LspProcess, method: &str, params: serde_json::Value) {
+pub async fn ask(process: &LspProcess, method: &str, params: Value) {
     let rpc = process.connection().await.unwrap();
-    rpc.notify("test/request", json!({ "method": method, "params": params }));
+    rpc.notify(|s| s.notify::<Ask>(json!({ "method": method, "params": params })));
 }
 
 pub async fn eventually(what: &str, check: impl Fn() -> bool) {

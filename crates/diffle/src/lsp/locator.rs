@@ -3,13 +3,13 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
+use async_lsp::lsp_types::{Location, Url};
 use futures::future::BoxFuture;
 use indexmap::IndexSet;
 use regex::Regex;
 
 use super::documents::ReadFn;
 use super::hover::file_link_uris;
-use super::shapes::Range;
 use crate::concurrency::map_limit;
 use crate::protocol::LspLocation;
 
@@ -51,7 +51,7 @@ impl Locator {
 
     /// Repo-relative path for a file URI inside the root; none otherwise. Compares lexically first,
     /// then by realpath, so a canonicalized URI still matches a root reached through a symlink.
-    pub async fn path_of(&self, uri: &str) -> Option<String> {
+    pub async fn path_of(&self, uri: &Url) -> Option<String> {
         let abs = file_path(uri)?;
         if let Some(rel) = relative_inside(&self.root, &abs) {
             return Some(rel);
@@ -65,26 +65,26 @@ impl Locator {
     /// marked external. Each distinct URI is read once; a file readable neither way is dropped.
     pub async fn locations(
         &self,
-        locs: &[(String, Range)],
+        locs: &[Location],
         text_of: &(dyn Fn(&str) -> Option<String> + Sync),
     ) -> Vec<LspLocation> {
-        let mut uris: Vec<String> = Vec::new();
-        for (uri, _) in locs {
-            if !uris.contains(uri) {
-                uris.push(uri.clone());
+        let mut uris: Vec<Url> = Vec::new();
+        for loc in locs {
+            if !uris.contains(&loc.uri) {
+                uris.push(loc.uri.clone());
             }
         }
         let found =
             map_limit(uris.clone(), READ_CONCURRENCY, |uri| async move { self.locate(&uri, text_of).await }).await;
-        let by_uri: HashMap<String, Option<Found>> = uris.into_iter().zip(found).collect();
+        let by_uri: HashMap<Url, Option<Found>> = uris.into_iter().zip(found).collect();
         locs.iter()
-            .filter_map(|(uri, range)| {
-                let f = by_uri.get(uri)?.as_ref()?;
-                let line = range.start.line + 1;
+            .filter_map(|loc| {
+                let f = by_uri.get(&loc.uri)?.as_ref()?;
+                let line = i64::from(loc.range.start.line) + 1;
                 Some(LspLocation {
                     path: f.path.clone().try_into().ok()?,
                     line: std::num::NonZeroU64::new(u64::try_from(line).ok()?)?,
-                    col: range.start.character,
+                    col: loc.range.start.character.into(),
                     text: line_at(&f.text, line),
                     external: f.external.then_some(true),
                 })
@@ -98,7 +98,8 @@ impl Locator {
         let mut out = HashMap::new();
         for uri in file_link_uris(md) {
             let (file, fragment) = uri.split_once('#').map_or((uri.as_str(), None), |(f, h)| (f, Some(h)));
-            let Some(path) = self.path_of(file).await else { continue };
+            let Some(path) = Url::parse(file).ok() else { continue };
+            let Some(path) = self.path_of(&path).await else { continue };
             // Both fragment shapes servers write: `#12` / `#12,7` (pyright) and `#L12`.
             let line = fragment.and_then(|h| LINE_FRAGMENT.captures(h)).and_then(|m| m[1].parse().ok());
             out.insert(uri, (path, line));
@@ -123,7 +124,7 @@ impl Locator {
         tokio::fs::read(&path).await.ok()
     }
 
-    async fn locate(&self, uri: &str, text_of: &(dyn Fn(&str) -> Option<String> + Sync)) -> Option<Found> {
+    async fn locate(&self, uri: &Url, text_of: &(dyn Fn(&str) -> Option<String> + Sync)) -> Option<Found> {
         if let Some(path) = self.path_of(uri).await {
             let text = match text_of(&path) {
                 Some(text) => Some(text),
@@ -150,8 +151,8 @@ impl Locator {
     }
 }
 
-fn file_path(uri: &str) -> Option<PathBuf> {
-    url::Url::parse(uri).ok().filter(|u| u.scheme() == "file")?.to_file_path().ok()
+fn file_path(uri: &Url) -> Option<PathBuf> {
+    (uri.scheme() == "file").then(|| uri.to_file_path().ok()).flatten()
 }
 
 /// `abs` relative to `root` with forward slashes when it lies inside it; none otherwise.
