@@ -1,5 +1,5 @@
 import { ChevronRight, Eye, Link2, type LucideIcon } from 'lucide-react';
-import { type ComponentProps, useMemo } from 'react';
+import { type ComponentProps, useEffect, useMemo } from 'react';
 import { twMerge } from 'tailwind-merge';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { canvasControl } from '@/client/graph/GraphCanvas.js';
@@ -54,6 +54,9 @@ export function Links({
   /** Lists every entry's lines in the references overlay. */
   onPeek: (entries: PeekEntry[]) => void;
 }) {
+  // A card removed under the pointer never sees it leave, so its hover would outlive it and keep
+  // lighting a box once the panel shows another node (Ctrl+o back from a picked link).
+  useEffect(() => () => useGraph.getState().hoverEdge(null), [edges]);
   const placed = useGraph((s) => s.view?.stacked.nodes);
   const rank = useMemo(() => readingOrder(placed ?? []), [placed]);
   const rows = edges

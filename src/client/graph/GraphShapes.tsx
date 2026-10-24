@@ -128,6 +128,7 @@ export function Node({
       ref={group}
       data-node={node.id}
       data-selected={focus === 'selected' || undefined}
+      data-focus={focus ?? undefined}
       opacity={opacity}
       className="cursor-pointer"
     >

@@ -90,4 +90,26 @@ test.describe('the change graph', () => {
     await page.keyboard.press('Control+o');
     await expect(view).toBeVisible();
   });
+
+  test('Ctrl+o back from a picked link lights only the node it returns to', async ({ page, diffle }) => {
+    await waitForLsp(diffle.url);
+    await page.keyboard.press('M');
+    const graph = page.getByRole('img', { name: 'Change graph' });
+    await expect(graph.locator('[data-node]').first()).toBeVisible({ timeout: 15000 });
+    await page.keyboard.press('j');
+    const selected = await graph.locator('[data-node][data-selected]').getAttribute('data-node');
+
+    // The pick leaves the pointer over the new node's panel, where a card links back to the first.
+    const panel = page.getByRole('complementary').last();
+    await panel.getByRole('listitem').first().click();
+    await expect(graph.locator('[data-node][data-selected]')).not.toHaveAttribute('data-node', selected!);
+    const back = panel.getByRole('listitem').first();
+    const box = (await back.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(graph.locator('[data-focus="hinted"]')).not.toHaveCount(0);
+
+    await page.keyboard.press('Control+o');
+    await expect(graph.locator(`[data-node="${selected}"][data-selected]`)).toBeVisible();
+    await expect(graph.locator('[data-focus="hinted"]')).toHaveCount(0);
+  });
 });
