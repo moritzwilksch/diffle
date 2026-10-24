@@ -592,6 +592,52 @@ describe('client transitions', () => {
     api.file.mockReset();
   });
 
+  it('a view over the diff joins the jump list: a jump from it records it, Ctrl+o restores it, Ctrl+i leaves it', async () => {
+    const changed = [file({ path: 'a.txt', blob: 'b1' })];
+    api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt']), changed });
+    await useStore.getState().refreshSnapshot();
+    useStore.getState().moveFile('first');
+    // A stand-in for the change graph: shown over the diff until a jump leaves it.
+    let shown = true;
+    const events: string[] = [];
+    useStore.getState().registerView({
+      here: () =>
+        shown
+          ? {
+              view: 'graph',
+              restore: () => {
+                shown = true;
+                events.push('restore');
+              },
+            }
+          : null,
+      leave: () => {
+        shown = false;
+        events.push('leave');
+      },
+    });
+    try {
+      // The view jumps into the diff, then hides: the place left is the view, not the hidden cursor.
+      useStore.getState().jumpTo('a.txt', 1);
+      shown = false;
+      expect(useStore.getState().jumps).toEqual([expect.objectContaining({ view: 'graph' })]);
+      useStore.getState().jumpBack();
+      expect(events).toEqual(['restore']);
+      useStore.getState().jumpForward();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(events).toEqual(['restore', 'leave']);
+      expect(useStore.getState().selection).toEqual(
+        expect.objectContaining({
+          id: expect.stringMatching(/^diff:a\.txt@/),
+          range: expect.objectContaining({ end: 1 }),
+        }),
+      );
+    } finally {
+      useStore.getState().registerView({ here: () => null, leave: () => {} });
+    }
+  });
+
   it('the file view shows one file in place of the diff list, survives a refresh of that file, and Ctrl+o returns', async () => {
     const changed = [file({ path: 'a.txt', blob: 'b1' })];
     api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');

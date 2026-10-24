@@ -238,6 +238,25 @@ export interface JumpPosition {
 }
 
 /**
+ * A place outside the diff list that the jump list can return to, such as the change graph. The
+ * view that made it restores it; the store keeps it opaque.
+ */
+export interface ViewPlace {
+  view: string;
+  restore(): void;
+}
+
+export type JumpPlace = JumpPosition | ViewPlace;
+
+const isView = (place: JumpPlace): place is ViewPlace => 'restore' in place;
+
+/** The same line of the same view, or the same outside view: one jump list entry, not two. */
+function samePlace(a: JumpPlace, b: JumpPlace): boolean {
+  if (isView(a) || isView(b)) return isView(a) && isView(b) && a.view === b.view;
+  return a.path === b.path && a.line === b.line && a.side === b.side && !!a.full === !!b.full;
+}
+
+/**
  * The dedicated whole-file view: one path's new side in place of the diff list. `item` is
  * null while it loads. `from` is where the diff list was left, so leaving the view restores it.
  */
@@ -378,11 +397,16 @@ export interface ReviewState {
   moveSymbol(delta: 1 | -1): void;
   pickSymbol(): void;
   closeSymbols(): void;
-  /** Vim-style jump list: positions left behind by hunk/file/search/panel jumps. */
-  jumps: JumpPosition[];
+  /** Vim-style jump list: positions left behind by hunk/file/search/panel jumps, and views left for the diff. */
+  jumps: JumpPlace[];
   jumpIndex: number;
   jumpBack(): void;
   jumpForward(): void;
+  /**
+   * Lets a view shown in the diff's place join the jump list: `here` names the place while the
+   * view is shown, else null; `leave` hides the view when a jump lands in the diff.
+   */
+  registerView(view: { here(): ViewPlace | null; leave(): void }): void;
   moveCursor(delta: 1 | -1): void;
   /** Move by many rows (Ctrl+d / Ctrl+u), keeping the cursor at eye level. */
   moveCursorBy(rows: number): void;
@@ -1107,26 +1131,29 @@ export const useStore = create<ReviewState>((set, get) => {
     return { path, side: sideOf(sel), line: sel.range.end, full: true, ...(view.external ? { external: true } : {}) };
   };
 
+  /** The view shown in the diff's place that takes part in the jump list (see `registerView`). */
+  let outside: { here(): ViewPlace | null; leave(): void } | null = null;
+  /** Where the reader is: a view shown over the diff, else the diff's cursor. */
+  const currentPlace = (): JumpPlace | null => outside?.here() ?? currentPosition();
+
   /** Remember where we are before a jump (vim jumplist semantics). */
   const recordJump = () => {
     if (silent) return;
-    const pos = currentPosition();
+    const pos = currentPlace();
     if (!pos) return;
     const { jumps, jumpIndex } = get();
     const kept = jumps.slice(0, jumpIndex);
     const last = kept[kept.length - 1];
-    if (
-      last &&
-      last.path === pos.path &&
-      last.line === pos.line &&
-      last.side === pos.side &&
-      !!last.full === !!pos.full
-    ) {
-      set({ jumps: kept, jumpIndex: kept.length });
-      return;
-    }
+    if (last && samePlace(last, pos)) kept.pop();
     const next = [...kept, pos].slice(-100);
     set({ jumps: next, jumpIndex: next.length });
+  };
+
+  /** Goes to a jump list entry without recording a jump: a view restores itself, a position closes it. */
+  const goToPlace = (place: JumpPlace) => {
+    if (isView(place)) return place.restore();
+    outside?.leave();
+    void goToPositionSilently(place);
   };
 
   /** Expand a collapsed file so a jump into it has something to land on. */
@@ -2081,13 +2108,13 @@ export const useStore = create<ReviewState>((set, get) => {
       let index = jumpIndex;
       if (index === list.length) {
         // Leaving the newest position: save it so Ctrl+i can return.
-        const pos = currentPosition();
+        const pos = currentPlace();
         if (pos) list = [...list, pos];
       }
       index -= 1;
       set({ jumps: list, jumpIndex: index });
       const target = list[index];
-      if (target) void goToPositionSilently(target);
+      if (target) goToPlace(target);
     },
     jumpForward() {
       if (!canJumpForward(get())) return;
@@ -2095,7 +2122,10 @@ export const useStore = create<ReviewState>((set, get) => {
       const index = jumpIndex + 1;
       set({ jumpIndex: index });
       const target = jumps[index];
-      if (target) void goToPositionSilently(target);
+      if (target) goToPlace(target);
+    },
+    registerView(view) {
+      outside = view;
     },
     scrollCursorTo(edge) {
       if (!get().selection) return get().flash('No line under the cursor');
@@ -2500,11 +2530,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const { position, activePath } = view.from;
       // Point the jumplist at the position we return to, so Ctrl+i re-enters the view.
       const jumps = get().jumps;
-      const at = position
-        ? jumps.findLastIndex(
-            (j) => j.path === position.path && j.line === position.line && j.side === position.side && !j.full,
-          )
-        : -1;
+      const at = position ? jumps.findLastIndex((j) => !isView(j) && samePlace(j, position)) : -1;
       set({
         fileView: null,
         selection: null,

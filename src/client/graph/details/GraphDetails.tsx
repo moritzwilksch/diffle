@@ -58,7 +58,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         <div className={META}>
           {KIND_LABEL[node.kind]} · <StatusWord status={node.status} />
         </div>
-        <Jumps rows={[{ label: 'Defined', path: node.path, lines: [node.line] }]} />
+        <Jumps rows={[{ to: 'definition', path: node.path, lines: [node.line] }]} />
         <Code signature={signatures.get(node.id)} path={node.path} full />
       </div>
       <Links
@@ -117,8 +117,8 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
             </span>
             <Jumps
               rows={[
-                { label: 'Used at', path: user.path, lines: e.lines },
-                { label: 'Defined', path: used.path, lines: [used.line] },
+                { to: 'reference', path: user.path, lines: e.lines },
+                { to: 'definition', path: used.path, lines: [used.line] },
               ]}
             />
             <Code signature={signatures.get(used.id)} path={used.path} />

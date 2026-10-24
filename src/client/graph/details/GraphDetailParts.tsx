@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, FileCode2, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Crosshair, FileCode2, Link2, type LucideIcon } from 'lucide-react';
 import { type ComponentProps, type ReactNode, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { FilePath } from '@/client/FilePath.js';
@@ -103,8 +103,8 @@ export function Links({
             <NodeRow node={n} />
             <Jumps
               rows={[
-                ...(n.kind === 1 ? [] : [{ label: 'Defined', path: n.path, lines: [n.line] }]),
-                { label: 'Used at', path: site(n), lines: e.lines },
+                ...(n.kind === 1 ? [] : [{ to: 'definition' as const, path: n.path, lines: [n.line] }]),
+                { to: 'reference' as const, path: site(n), lines: e.lines },
               ]}
             />
             <Code signature={signatures.get(n.id)} path={n.path} />
@@ -161,30 +161,43 @@ export function Name({ node, className }: { node: GraphNode; className?: string 
   );
 }
 
+/** The two jumps a symbol row offers, with the review's symbol popover icons for the same jumps. */
+export type JumpKind = 'definition' | 'reference';
+const JUMPS: Record<JumpKind, { icon: LucideIcon; label: string }> = {
+  definition: { icon: Crosshair, label: 'Defined' },
+  reference: { icon: Link2, label: 'Used at' },
+};
+
 /**
  * Where to jump, one labelled row each: the file, then a chip per line that opens the diff there.
  * Every jump in the panel looks like this, so it is plain which clicks leave the graph.
  */
-export function Jumps({ rows }: { rows: { label: string; path: string; lines: number[] }[] }) {
+export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[] }[] }) {
   return (
-    <div className={`grid grid-cols-[4.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 ${META}`}>
-      {rows.map(({ label, path, lines }) => (
-        <div key={label} className="contents">
-          <span>{label}</span>
-          <span className="flex min-w-0 items-start gap-1.5">
-            <span className="flex min-w-[4rem] items-center gap-1.5">
-              <FileCode2 size="0.75rem" className="shrink-0" />
-              <ShortPath path={path} />
+    <div className={`grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 ${META}`}>
+      {rows.map(({ to, path, lines }) => {
+        const { icon: Icon, label } = JUMPS[to];
+        return (
+          <div key={to} className="contents">
+            <span className="inline-flex items-center gap-1">
+              <Icon size="0.75rem" className="shrink-0 self-center" />
+              {label}
             </span>
-            {/* The chips keep beside the path, which gives way first; many of them wrap among themselves. */}
-            <span className="flex max-w-[55%] shrink-0 flex-wrap gap-1">
-              {lines.map((line) => (
-                <JumpChip key={line} path={path} line={line} />
-              ))}
+            <span className="flex min-w-0 items-start gap-1.5">
+              <span className="flex min-w-[4rem] items-center gap-1.5">
+                <FileCode2 size="0.75rem" className="shrink-0" />
+                <ShortPath path={path} />
+              </span>
+              {/* The chips keep beside the path, which gives way first; many of them wrap among themselves. */}
+              <span className="flex max-w-[55%] shrink-0 flex-wrap gap-1">
+                {lines.map((line) => (
+                  <JumpChip key={line} path={path} line={line} />
+                ))}
+              </span>
             </span>
-          </span>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

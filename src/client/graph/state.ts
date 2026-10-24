@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '@/client/api.js';
-import { useStore } from '@/client/store.js';
+import { useStore, type ViewPlace } from '@/client/store.js';
 import { lspBlocker } from '@/shared/lsp.js';
 import type { GraphEdge, GraphResponse, Snapshot } from '@/shared/protocol.js';
 import { isTest, keepNodes } from './filters.js';
@@ -44,8 +44,8 @@ export interface GraphState {
   selectEdge(key: string | null): void;
   /** Moves the selection to the nearest node that way: up / down across layers, left / right within one. */
   step(direction: Direction): void;
-  /** Leaves the graph for the diff at `path:line`. */
-  pick(target: { path: string; line: number }): void;
+  /** Leaves the graph for the diff at `path:line`; Ctrl+o comes back to it as it was. */
+  pick(target: { path: string; line: number }): Promise<void>;
   setFilter(filter: Filter, on: boolean): void;
   showOnly(part: string | null): void;
 }
@@ -68,9 +68,7 @@ export const useGraph = create<GraphState>((set, get) => ({
     const review = useStore.getState();
     const blocked = lspBlocker(review.lsp, review.snapshot);
     if (blocked) return review.flash(blocked);
-    followReview();
-    set({ open: true, mounted: true, focusPath: null });
-    if (get().snapshot !== review.snapshot || get().load.state === 'idle') void get().reload();
+    show();
   },
 
   close() {
@@ -109,9 +107,10 @@ export const useGraph = create<GraphState>((set, get) => ({
     if (next) set({ selected: next.node.id, selectedEdge: null, focusPath: null });
   },
 
-  pick({ path, line }) {
+  async pick({ path, line }) {
+    // Closed only once the jump is made: the jump list records the graph as the place left.
+    await useStore.getState().goToLink(path, line);
     get().close();
-    void useStore.getState().goToLink(path, line);
   },
 
   setFilter(filter, on) {
@@ -131,14 +130,42 @@ export const useGraph = create<GraphState>((set, get) => ({
 
 let watching = false;
 
+/** Shows the graph over the diff, refetching it when the review moved on since it was loaded. */
+function show(): void {
+  followReview();
+  useGraph.setState({ open: true, mounted: true, focusPath: null });
+  const graph = useGraph.getState();
+  if (graph.snapshot !== useStore.getState().snapshot || graph.load.state === 'idle') void graph.reload();
+}
+
+/** The graph as it stands, for the jump list: Ctrl+o after a jump into the diff restores it. */
+function place(): ViewPlace {
+  const { selected, selectedEdge, filters, only } = useGraph.getState();
+  return {
+    view: 'graph',
+    restore() {
+      const graph = useGraph.getState();
+      const load = graph.load;
+      const changed = filters !== graph.filters || only !== graph.only;
+      const view = changed && load.state === 'ready' ? derive(load.graph, filters, only) : graph.view;
+      useGraph.setState({ filters, only, view, selected, selectedEdge });
+      show();
+    },
+  };
+}
+
 /**
  * Starts following the review, once, when the graph first opens: a new snapshot refreshes an open
- * graph (a closed one is refetched when it next opens), and a file picked in the tree while the
- * graph is open becomes its focus.
+ * graph (a closed one is refetched when it next opens), a file picked in the tree while the graph
+ * is open becomes its focus, and the graph takes part in the jump list.
  */
 function followReview(): void {
   if (watching) return;
   watching = true;
+  useStore.getState().registerView({
+    here: () => (useGraph.getState().open ? place() : null),
+    leave: () => useGraph.getState().close(),
+  });
   useStore.subscribe((s, prev) => {
     const graph = useGraph.getState();
     if (s.snapshot !== prev.snapshot && graph.open) void graph.reload();
