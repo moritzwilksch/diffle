@@ -1,9 +1,8 @@
-import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, ExternalLink, Link2, Waypoints } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, Link2, Waypoints } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL } from '@/client/lsp/symbolKind.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
-import { Button } from '@/client/ui/Button.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import {
   BODY,
@@ -60,14 +59,6 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
           {KIND_LABEL[node.kind]} · <StatusWord status={node.status} />
         </div>
         <Jumps rows={[{ label: 'Defined', path: node.path, lines: [node.line] }]} />
-        <Button
-          variant="primary"
-          className="self-start"
-          onClick={() => useGraph.getState().pick({ path: node.path, line: node.line })}
-          title="Open in the diff (Enter)"
-        >
-          <ExternalLink size="0.8125rem" /> Open in diff
-        </Button>
         <Code signature={signatures.get(node.id)} path={node.path} full />
       </div>
       <Links
