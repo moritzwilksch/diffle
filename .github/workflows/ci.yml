@@ -54,8 +54,7 @@ jobs:
           - windows-11-arm
         variant:
           - baseline
-          - devtemp
-          - defender
+          - devws
     permissions:
       contents: read
     steps:
@@ -68,27 +67,19 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: matrix.variant == 'devtemp'
+      # Mounted at the workspace before checkout, so every path (and so every cache key) stays the same.
+      - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
-          drive-size: 10GB
+          drive-size: 30GB
+          mount-path: ${{ github.workspace }}
           trusted-dev-drive: true
-          env-mapping: |
-            TEMP,{{ DEV_DRIVE }}\tmp
-            TMP,{{ DEV_DRIVE }}\tmp
-      - if: matrix.variant == 'devtemp'
-        name: Create temp dir on the dev drive
+      - if: matrix.variant == 'devws'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-          fsutil devdrv query $env:DEV_DRIVE
-      - if: matrix.variant == 'defender'
-        name: Disable Defender real-time protection
-        shell: pwsh
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled
+          fsutil devdrv query $env:GITHUB_WORKSPACE
+          Get-Item $env:GITHUB_WORKSPACE | Format-List FullName, LinkType, Target
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
@@ -107,8 +98,7 @@ jobs:
           - windows-11-arm
         variant:
           - baseline
-          - devtemp
-          - defender
+          - devws
     permissions:
       contents: read
     steps:
@@ -121,27 +111,19 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: matrix.variant == 'devtemp'
+      # Mounted at the workspace before checkout, so every path (and so every cache key) stays the same.
+      - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
-          drive-size: 10GB
+          drive-size: 30GB
+          mount-path: ${{ github.workspace }}
           trusted-dev-drive: true
-          env-mapping: |
-            TEMP,{{ DEV_DRIVE }}\tmp
-            TMP,{{ DEV_DRIVE }}\tmp
-      - if: matrix.variant == 'devtemp'
-        name: Create temp dir on the dev drive
+      - if: matrix.variant == 'devws'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-          fsutil devdrv query $env:DEV_DRIVE
-      - if: matrix.variant == 'defender'
-        name: Disable Defender real-time protection
-        shell: pwsh
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled
+          fsutil devdrv query $env:GITHUB_WORKSPACE
+          Get-Item $env:GITHUB_WORKSPACE | Format-List FullName, LinkType, Target
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # The runner's system config converts line endings in every repository the tests create and commit to.
@@ -203,7 +185,6 @@ jobs:
       - run: pixi run lefthook-run
 
   build:
-    if: false # EXPERIMENT: windows timing only
     name: build (${{ matrix.os }}, ${{ matrix.variant }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -214,8 +195,7 @@ jobs:
           - windows-11-arm
         variant:
           - baseline
-          - devtemp
-          - defender
+          - devws
     permissions:
       contents: read
     steps:
@@ -228,27 +208,19 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: matrix.variant == 'devtemp'
+      # Mounted at the workspace before checkout, so every path (and so every cache key) stays the same.
+      - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
-          drive-size: 10GB
+          drive-size: 30GB
+          mount-path: ${{ github.workspace }}
           trusted-dev-drive: true
-          env-mapping: |
-            TEMP,{{ DEV_DRIVE }}\tmp
-            TMP,{{ DEV_DRIVE }}\tmp
-      - if: matrix.variant == 'devtemp'
-        name: Create temp dir on the dev drive
+      - if: matrix.variant == 'devws'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-          fsutil devdrv query $env:DEV_DRIVE
-      - if: matrix.variant == 'defender'
-        name: Disable Defender real-time protection
-        shell: pwsh
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled
+          fsutil devdrv query $env:GITHUB_WORKSPACE
+          Get-Item $env:GITHUB_WORKSPACE | Format-List FullName, LinkType, Target
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # The runner's system config converts line endings in every repository the tests create and commit to.
