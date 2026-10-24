@@ -82,8 +82,14 @@ function stronglyConnected(ids: string[], uses: Map<string, string[]>): string[]
   return out;
 }
 
-/** The same graph with one node per file: changed when any symbol in it changed, edges merged. */
-export function byFile(graph: GraphResponse): GraphResponse {
+/** Names an edge, for selection and for what lies behind it. */
+export const edgeKey = (e: Pick<GraphEdge, 'from' | 'to'>): string => `${e.from}\0${e.to}`;
+
+/**
+ * The same graph with one node per file: changed when any symbol in it changed, edges merged.
+ * `via` keeps, per file edge, the symbol edges behind it.
+ */
+export function byFile(graph: GraphResponse): { graph: GraphResponse; via: Map<string, GraphEdge[]> } {
   const files = new Map<string, GraphNode[]>();
   for (const n of graph.nodes) files.set(n.path, [...(files.get(n.path) ?? []), n]);
   const nodes = [...files].map(([path, members]): GraphNode => {
@@ -102,14 +108,16 @@ export function byFile(graph: GraphResponse): GraphResponse {
   });
   const pathOf = new Map(graph.nodes.map((n) => [n.id, n.path]));
   const edges = new Map<string, GraphEdge>();
+  const via = new Map<string, GraphEdge[]>();
   for (const e of graph.edges) {
     const [from, to] = [pathOf.get(e.from)!, pathOf.get(e.to)!];
     if (from === to) continue;
-    const key = `${from}\0${to}`;
+    const key = edgeKey({ from, to });
     const lines = new Set([...(edges.get(key)?.lines ?? []), ...e.lines]);
     edges.set(key, { from, to, lines: [...lines].sort((a, b) => a - b) });
+    via.set(key, [...(via.get(key) ?? []), e]);
   }
-  return { ...graph, nodes, edges: [...edges.values()] };
+  return { graph: { ...graph, nodes, edges: [...edges.values()] }, via };
 }
 
 function fileStatus(statuses: GraphNodeStatus[]): GraphNodeStatus {

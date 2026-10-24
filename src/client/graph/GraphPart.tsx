@@ -1,14 +1,31 @@
+import { KindIcon } from '@/client/lsp/symbolKind.js';
 import { Cluster, Node } from './GraphShapes.js';
 import type { Box, Placed } from './layout.js';
+import { edgeKey } from './rank.js';
 
-/** What stays lit: the selection or the focused file (`seeds`), and everything linked to them (`ids`). */
+/**
+ * What stays lit: the selection, hovered node or focused file (`seeds`) and everything linked to
+ * them (`ids`); with an arrow selected, `edge` names it and only it lights up.
+ */
 export interface Lit {
   ids: Set<string>;
   seeds: Set<string>;
+  edge: string | null;
 }
 
-const FADED = 0.18;
+/** What a file view's arrow carries: the symbols it uses there. */
+export interface EdgeLabel {
+  kind: number;
+  names: string[];
+}
+
+const FADED = 0.35;
+const FADED_EDGE = 0.2;
 export const HEAD = 44;
+/** On-screen width of an arrow's invisible hit stroke, whatever the zoom. */
+const HIT_PX = 14;
+const LABEL_NAMES = 2;
+const LABEL_CHAR = 6.6;
 
 /** One placed part of the graph in its own coordinates: layer labels, file boxes, arrows, symbols. */
 export function GraphPart({
@@ -16,13 +33,20 @@ export function GraphPart({
   clustered,
   selected,
   lit,
+  zoom,
+  labels,
 }: {
   placed: Placed;
   clustered: boolean;
   selected: string | null;
   lit: Lit | null;
+  zoom: number;
+  /** File view only: each arrow's symbols, by `edgeKey`. */
+  labels: Map<string, EdgeLabel> | null;
 }) {
   const opacity = (ids: string[]) => (lit && !ids.some((id) => lit.ids.has(id)) ? FADED : 1);
+  const isOn = (key: string, from: string, to: string) =>
+    !!lit && (lit.edge ? lit.edge === key : lit.seeds.has(from) || lit.seeds.has(to));
   return (
     <>
       {placed.layers.length > 1 &&
@@ -43,25 +67,44 @@ export function GraphPart({
             key={`${c.path}@${c.layer}@${c.x},${c.y}`}
             cluster={c}
             members={members}
-            opacity={opacity(members.map((n) => n.node.id)) === 1 ? 1 : 0.25}
+            opacity={opacity(members.map((n) => n.node.id))}
           />
         );
       })}
       {placed.edges.map(({ edge, d, back }) => {
-        const on = !!lit && (lit.seeds.has(edge.from) || lit.seeds.has(edge.to));
+        const key = edgeKey(edge);
+        const on = isOn(key, edge.from, edge.to);
         return (
-          <path
-            key={`${edge.from}>${edge.to}`}
-            d={d}
-            fill="none"
-            stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
-            strokeOpacity={lit && !on ? 0.12 : on ? 0.95 : 0.5}
-            strokeWidth={1 + Math.min(2, Math.log2(edge.lines.length))}
-            strokeDasharray={back ? '4 3' : undefined}
-            markerEnd={on ? 'url(#graph-arrow-lit)' : 'url(#graph-arrow)'}
-          />
+          <g key={key} data-edge={key} className="cursor-pointer">
+            <path d={d} fill="none" stroke="transparent" strokeWidth={HIT_PX / zoom} />
+            <path
+              d={d}
+              fill="none"
+              stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
+              strokeOpacity={lit && !on ? FADED_EDGE : on ? 0.95 : 0.5}
+              strokeWidth={1 + Math.min(2, Math.log2(edge.lines.length))}
+              strokeDasharray={back ? '4 3' : undefined}
+              markerEnd={on ? 'url(#graph-arrow-lit)' : 'url(#graph-arrow)'}
+            />
+          </g>
         );
       })}
+      {labels &&
+        placed.edges.map(({ edge, mid }) => {
+          const key = edgeKey(edge);
+          const label = labels.get(key);
+          if (!label) return null;
+          return (
+            <Pill
+              key={key}
+              edgeKey={key}
+              label={label}
+              x={mid.x}
+              y={mid.y}
+              dim={!!lit && !isOn(key, edge.from, edge.to)}
+            />
+          );
+        })}
       {placed.nodes.map((p) => (
         <Node
           key={p.node.id}
@@ -72,6 +115,39 @@ export function GraphPart({
         />
       ))}
     </>
+  );
+}
+
+/**
+ * A file arrow's label: the used symbols' kind icon and full names, the first few and a count of
+ * the rest. Opaque, so a faded line never shows through it.
+ */
+function Pill({
+  edgeKey: key,
+  label,
+  x,
+  y,
+  dim,
+}: {
+  edgeKey: string;
+  label: EdgeLabel;
+  x: number;
+  y: number;
+  dim: boolean;
+}) {
+  const shown = label.names.slice(0, LABEL_NAMES).join(', ');
+  const more = label.names.length - LABEL_NAMES;
+  const text = more > 0 ? `${shown} +${more}` : shown;
+  const w = text.length * LABEL_CHAR + 30;
+  return (
+    <g data-edge={key} className="cursor-pointer" opacity={dim ? 0.55 : 1}>
+      <title>{label.names.join(', ')}</title>
+      <rect x={x - w / 2} y={y - 10} width={w} height={20} rx={10} fill="var(--bg-2)" stroke="var(--border)" />
+      <KindIcon kind={label.kind} x={x - w / 2 + 7} y={y - 6} size={12} color="var(--fg-2)" />
+      <text x={x - w / 2 + 23} y={y + 4} className="fill-foreground font-mono text-[11px]">
+        {text}
+      </text>
+    </g>
   );
 }
 

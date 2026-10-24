@@ -1,11 +1,22 @@
 import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
-import { PART_HEADER, type Stacked } from './components.js';
-import { GraphPart, HEAD, type Lit } from './GraphPart.js';
+import { PART_HEADER } from './components.js';
+import { type EdgeLabel, GraphPart, HEAD, type Lit } from './GraphPart.js';
 import { ArrowDefs } from './GraphShapes.js';
 import type { Box, PlacedNode } from './layout.js';
-import { useGraph } from './state.js';
+import { edgeKey } from './rank.js';
+import { useGraph, type View } from './state.js';
 
-interface View {
+/** A press on the canvas, and what it landed on: a node, an arrow, or a part's header action. */
+interface Press {
+  x: number;
+  y: number;
+  moved: boolean;
+  node: string | null;
+  edge: string | null;
+  part: string | null;
+}
+
+interface Viewport {
   x: number;
   y: number;
   k: number;
@@ -24,14 +35,18 @@ export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {} };
  * focused from the tree, stays lit with its links and the rest fades. A double-click on a node
  * jumps to it in the diff; on the background it fits the graph.
  */
-export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustered: boolean }) {
+export function GraphCanvas({ view: shown, clustered }: { view: View; clustered: boolean }) {
+  const stacked = shown.stacked;
   const only = useGraph((s) => s.only);
+  const selectedEdge = useGraph((s) => s.selectedEdge);
+  // With nothing selected, the node under the pointer previews its links.
+  const [hovered, setHovered] = useState<string | null>(null);
   const selected = useGraph((s) => s.selected);
   const focusPath = useGraph((s) => s.focusPath);
   const host = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
+  const [view, setView] = useState<Viewport>({ x: 0, y: 0, k: 1 });
   // Pointer capture retargets the release to the host, so the press remembers which node it hit.
-  const drag = useRef<{ x: number; y: number; moved: boolean; node: string | null; part: string | null } | null>(null);
+  const drag = useRef<Press | null>(null);
 
   const fitBox = (box: Box, maxZoom: number) => {
     const el = host.current;
@@ -80,12 +95,17 @@ export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustere
 
   const edges = useMemo(() => stacked.parts.flatMap((p) => p.placed.edges.map((e) => e.edge)), [stacked]);
   const lit = useMemo((): Lit | null => {
-    const seeds = selected ? [selected] : stacked.nodes.filter((p) => p.node.path === focusPath).map((p) => p.node.id);
+    const arrow = selectedEdge ? edges.find((e) => edgeKey(e) === selectedEdge) : undefined;
+    if (arrow)
+      return { ids: new Set([arrow.from, arrow.to]), seeds: new Set([arrow.from, arrow.to]), edge: selectedEdge };
+    const focused = stacked.nodes.filter((p) => p.node.path === focusPath).map((p) => p.node.id);
+    const seeds = selected ? [selected] : focused.length ? focused : hovered ? [hovered] : [];
     if (!seeds.length) return null;
     const ids = new Set(seeds);
     for (const edge of edges) if (seeds.includes(edge.from) || seeds.includes(edge.to)) ids.add(edge.from).add(edge.to);
-    return { ids, seeds: new Set(seeds) };
-  }, [stacked, edges, selected, focusPath]);
+    return { ids, seeds: new Set(seeds), edge: null };
+  }, [stacked, edges, selected, selectedEdge, focusPath, hovered]);
+  const labels = useMemo(() => (clustered ? null : edgeLabels(shown)), [shown, clustered]);
 
   const onWheel = (e: WheelEvent) => {
     const rect = host.current!.getBoundingClientRect();
@@ -94,7 +114,14 @@ export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustere
   const hit = (e: { target: EventTarget }, attr: string) =>
     (e.target as Element).closest(`[${attr}]`)?.getAttribute(attr) ?? null;
   const onPointerDown = (e: PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY, moved: false, node: hit(e, 'data-node'), part: hit(e, 'data-part') };
+    drag.current = {
+      x: e.clientX,
+      y: e.clientY,
+      moved: false,
+      node: hit(e, 'data-node'),
+      edge: hit(e, 'data-edge'),
+      part: hit(e, 'data-part'),
+    };
     host.current!.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: PointerEvent) => {
@@ -109,8 +136,10 @@ export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustere
     const d = drag.current;
     drag.current = null;
     if (!d || d.moved) return;
-    if (d.part != null) useGraph.getState().showOnly(only ? null : d.part);
-    else useGraph.getState().select(d.node);
+    const graph = useGraph.getState();
+    if (d.part != null) graph.showOnly(only ? null : d.part);
+    else if (d.node == null && d.edge != null) graph.selectEdge(d.edge);
+    else if (d.node != null || graph.selected || graph.selectedEdge) graph.select(d.node);
   };
   const onDoubleClick = (e: MouseEvent) => {
     if (hit(e, 'data-part') != null) return;
@@ -128,6 +157,8 @@ export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustere
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onDoubleClick={onDoubleClick}
+      onPointerOver={(e) => setHovered(hit(e, 'data-node'))}
+      onPointerLeave={() => setHovered(null)}
     >
       <svg className="absolute inset-0 h-full w-full" role="img" aria-label="Change graph">
         <ArrowDefs />
@@ -141,12 +172,26 @@ export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustere
                 partKey={part.key}
                 single={stacked.parts.length === 1 && only == null}
               />
-              <GraphPart placed={part.placed} clustered={clustered} selected={selected} lit={lit} />
+              <GraphPart
+                placed={part.placed}
+                clustered={clustered}
+                selected={selected}
+                lit={lit}
+                zoom={view.k}
+                labels={labels}
+              />
             </g>
           ))}
           {stacked.unlinked && (
             <g transform={`translate(0,${stacked.unlinked.y})`}>
-              <GraphPart placed={stacked.unlinked.placed} clustered={clustered} selected={selected} lit={lit} />
+              <GraphPart
+                placed={stacked.unlinked.placed}
+                clustered={clustered}
+                selected={selected}
+                lit={lit}
+                zoom={view.k}
+                labels={labels}
+              />
             </g>
           )}
         </g>
@@ -185,6 +230,24 @@ function PartHeader({
       </text>
     </g>
   );
+}
+
+/** File view's arrow labels: the symbols each file arrow uses, by name, the most-used first. */
+function edgeLabels(view: View): Map<string, EdgeLabel> {
+  const byId = new Map(view.symbols.nodes.map((n) => [n.id, n]));
+  const labels = new Map<string, EdgeLabel>();
+  for (const [key, behind] of view.via) {
+    const weight = new Map<string, { kind: number; n: number }>();
+    for (const e of behind) {
+      const to = byId.get(e.to);
+      if (!to || to.kind === 1) continue;
+      const w = weight.get(to.name) ?? { kind: to.kind, n: 0 };
+      weight.set(to.name, { ...w, n: w.n + e.lines.length });
+    }
+    const names = [...weight].sort((a, b) => b[1].n - a[1].n);
+    if (names.length) labels.set(key, { kind: names[0]![1].kind, names: names.map(([name]) => name) });
+  }
+  return labels;
 }
 
 function bounds(boxes: PlacedNode[]): Box {

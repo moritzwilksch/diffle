@@ -77,13 +77,15 @@ describe('byFile', () => {
       ],
       ['main>run', 'run>init', 'run>get', 'init>get'],
     );
-    const files = byFile(g);
+    const { graph: files, via } = byFile(g);
     expect(files.nodes.map((n) => [n.id, n.status])).toEqual([
       ['agent.py', 'modified'],
       ['client.py', 'added'],
       ['cli.py', 'consumer'],
     ]);
     expect(files.edges.map((e) => `${e.from}>${e.to}`)).toEqual(['cli.py>agent.py', 'agent.py>client.py']);
+    // The file arrow agent.py → client.py stands for both symbols there using `get`.
+    expect(via.get('agent.py\0client.py')!.map((e) => `${e.from}>${e.to}`)).toEqual(['run>get', 'init>get']);
   });
 });
 

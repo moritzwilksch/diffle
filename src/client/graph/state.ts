@@ -2,12 +2,12 @@ import { create } from 'zustand';
 import { api } from '@/client/api.js';
 import { useStore } from '@/client/store.js';
 import { lspBlocker } from '@/shared/lsp.js';
-import type { GraphResponse, Snapshot } from '@/shared/protocol.js';
+import type { GraphEdge, GraphResponse, Snapshot } from '@/shared/protocol.js';
 import { isTest, keepNodes } from './filters.js';
 import { nodeSize } from './labels.js';
 import { type Stacked, stack } from './components.js';
 import type { PlacedNode } from './layout.js';
-import { byFile } from './rank.js';
+import { byFile, edgeKey } from './rank.js';
 
 export type Filter = 'files' | 'consumers' | 'tests';
 export type Direction = 'left' | 'right' | 'up' | 'down';
@@ -28,16 +28,20 @@ export interface GraphState {
   snapshot: Snapshot | null;
   filters: Record<Filter, boolean>;
   /** The loaded graph, filtered and laid out. */
-  view: { graph: GraphResponse; stacked: Stacked } | null;
+  view: View | null;
   /** The key of the one connected part shown alone, or null for every part. */
   only: string | null;
   selected: string | null;
+  /** The selected arrow, by `edgeKey`; a node and an arrow are never selected together. */
+  selectedEdge: string | null;
   /** A file the reader picked in the tree: its nodes stay lit and the view pans to them. */
   focusPath: string | null;
   toggle(): void;
   close(): void;
   reload(): Promise<void>;
+  /** Selects a node; selecting the selected one again clears it. */
   select(id: string | null): void;
+  selectEdge(key: string | null): void;
   /** Moves the selection to the nearest node that way: up / down across layers, left / right within one. */
   step(direction: Direction): void;
   /** Leaves the graph for the diff at `path:line`. */
@@ -55,6 +59,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   filters: { files: false, consumers: true, tests: false },
   view: null,
   selected: null,
+  selectedEdge: null,
   focusPath: null,
   only: null,
 
@@ -82,22 +87,26 @@ export const useGraph = create<GraphState>((set, get) => ({
       if (!current()) return;
       const view = derive(graph, get().filters, get().only);
       const selected = view.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
-      set({ load: { state: 'ready', graph }, view, selected });
+      set({ load: { state: 'ready', graph }, view, selected, selectedEdge: keptEdge(view, get().selectedEdge) });
     } catch (e) {
       if (current()) set({ load: { state: 'error', message: e instanceof Error ? e.message : String(e) }, view: null });
     }
   },
 
   select(id) {
-    set({ selected: id, focusPath: null });
+    set({ selected: id === get().selected ? null : id, selectedEdge: null, focusPath: null });
+  },
+
+  selectEdge(key) {
+    set({ selectedEdge: key === get().selectedEdge ? null : key, selected: null, focusPath: null });
   },
 
   step(direction) {
     const nodes = get().view?.stacked.nodes ?? [];
     const from = nodes.find((p) => p.node.id === get().selected);
-    if (!from) return set({ selected: nearestToOrigin(nodes)?.node.id ?? null, focusPath: null });
+    if (!from) return set({ selected: nearestToOrigin(nodes)?.node.id ?? null, selectedEdge: null, focusPath: null });
     const next = nearest(from, nodes, direction);
-    if (next) set({ selected: next.node.id, focusPath: null });
+    if (next) set({ selected: next.node.id, selectedEdge: null, focusPath: null });
   },
 
   pick({ path, line }) {
@@ -110,7 +119,7 @@ export const useGraph = create<GraphState>((set, get) => ({
     const load = get().load;
     const view = load.state === 'ready' ? derive(load.graph, filters, get().only) : null;
     const selected = view?.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
-    set({ filters, view, selected });
+    set({ filters, view, selected, selectedEdge: view && keptEdge(view, get().selectedEdge) });
   },
 
   showOnly(part) {
@@ -134,15 +143,39 @@ function followReview(): void {
     const graph = useGraph.getState();
     if (s.snapshot !== prev.snapshot && graph.open) void graph.reload();
     if (s.activePath !== prev.activePath && s.activePath && graph.open)
-      useGraph.setState({ focusPath: s.activePath, selected: null });
+      useGraph.setState({ focusPath: s.activePath, selected: null, selectedEdge: null });
   });
 }
 
-function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: string | null): GraphState['view'] & {} {
-  const kept = keepNodes(graph, (n) => (filters.consumers || n.status !== 'consumer') && (filters.tests || !isTest(n)));
-  const shown = filters.files ? byFile(kept) : kept;
-  return { graph: shown, stacked: stack(shown, (n) => nodeSize(n, !filters.files), !filters.files, only) };
+/**
+ * The graph as shown: filtered, folded into files in file view, stacked into parts. `symbols` is
+ * the symbol graph under it and `via` the symbol edges behind each shown edge, for labels and the
+ * details of a selected arrow.
+ */
+export interface View {
+  graph: GraphResponse;
+  symbols: GraphResponse;
+  via: Map<string, GraphEdge[]>;
+  stacked: Stacked;
 }
+
+function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: string | null): View {
+  const symbols = keepNodes(
+    graph,
+    (n) => (filters.consumers || n.status !== 'consumer') && (filters.tests || !isTest(n)),
+  );
+  const { graph: shown, via } = filters.files
+    ? byFile(symbols)
+    : { graph: symbols, via: new Map(symbols.edges.map((e) => [edgeKey(e), [e]])) };
+  return {
+    graph: shown,
+    symbols,
+    via,
+    stacked: stack(shown, (n) => nodeSize(n, !filters.files), !filters.files, only),
+  };
+}
+
+const keptEdge = (view: View, key: string | null) => (key && view.via.has(key) ? key : null);
 
 const centerOf = (p: PlacedNode) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2 });
 

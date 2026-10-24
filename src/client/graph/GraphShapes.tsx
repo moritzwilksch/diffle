@@ -80,6 +80,19 @@ export function Node({
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
       <title>{`${node.path}:${node.line}`}</title>
+      {/* The selection ring sits outside the box, so the status border always shows. */}
+      {selected && (
+        <rect
+          x={x - 4}
+          y={y - 4}
+          width={w + 8}
+          height={h + 8}
+          rx={9}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth={2}
+        />
+      )}
       <rect
         x={x}
         y={y}
@@ -87,9 +100,9 @@ export function Node({
         height={h}
         rx={6}
         fill={consumer ? 'var(--bg)' : 'var(--bg-2)'}
-        stroke={selected ? 'var(--fg)' : STATUS_STROKE[node.status]}
-        strokeWidth={selected ? 2 : consumer ? 1 : 1.5}
-        strokeDasharray={consumer && !selected && !clustered ? '4 3' : undefined}
+        stroke={STATUS_STROKE[node.status]}
+        strokeWidth={consumer ? 1 : 1.5}
+        strokeDasharray={consumer && !clustered ? '4 3' : undefined}
       />
       <KindIcon
         kind={node.kind}
@@ -117,7 +130,7 @@ export function ArrowDefs() {
         ['graph-arrow', 'var(--fg-2)'],
         ['graph-arrow-lit', 'var(--accent)'],
       ].map(([id, fill]) => (
-        <marker key={id} id={id} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+        <marker key={id} id={id} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0.5 L7.5,4 L0,7.5 z" fill={fill} />
         </marker>
       ))}
