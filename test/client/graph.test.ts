@@ -196,7 +196,14 @@ describe('findMatches', () => {
 
 describe('hiddenReason', () => {
   const g = {
-    ...graph([node('run', 'modified', 'pkg/run.py'), node('t', 'modified', 'tests/test_run.py'), node('use', 'consumer', 'cli.py')], []),
+    ...graph(
+      [
+        node('run', 'modified', 'pkg/run.py'),
+        node('t', 'modified', 'tests/test_run.py'),
+        node('use', 'consumer', 'cli.py'),
+      ],
+      [],
+    ),
     cut: [node('late', 'modified', 'pkg/late.py')],
   };
   const shown = { drawn: new Set(['pkg/run.py']), graph: g, filters: { consumers: false, tests: false }, scope: 'pkg' };

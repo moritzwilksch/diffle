@@ -139,7 +139,10 @@ export function GraphPart({
                   lit?.marks?.has(p.node.id) ||
                   p.node.path === focusPath
                 ? 'hinted'
-                : null
+                : // Linked to the selection or the picked file, not merely to the box under the pointer.
+                  (selected || focusPath) && !lit?.marks && lit?.ids.has(p.node.id) && !lit.seeds.has(p.node.id)
+                  ? 'linked'
+                  : null
           }
           opacity={opacity([p.node.id])}
           test={isTest(p.node)}

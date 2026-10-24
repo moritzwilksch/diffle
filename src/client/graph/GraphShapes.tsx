@@ -74,12 +74,20 @@ const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; col
   modified: { icon: Pencil, color: 'var(--accent)' },
 };
 
-/** How a box stands out: the selection, or the far end of a hovered details row, more lightly. */
-export type Focus = 'selected' | 'hinted';
+/**
+ * How a box stands out: the selection; more lightly a find match, the picked file, or the far end of
+ * a hovered details row; lightest a box linked to the selection.
+ */
+export type Focus = 'selected' | 'hinted' | 'linked';
 
-const FOCUS: Record<Focus, { fill: string; width: number }> = {
-  selected: { fill: 'color-mix(in srgb, var(--accent) 12%, var(--bg-card))', width: 2.5 },
-  hinted: { fill: 'color-mix(in srgb, var(--accent) 6%, var(--bg-card))', width: 1.5 },
+const FOCUS: Record<Focus, { fill: string; stroke: string; width: number }> = {
+  selected: { fill: 'color-mix(in srgb, var(--accent) 12%, var(--bg-card))', stroke: 'var(--accent)', width: 2.5 },
+  hinted: { fill: 'color-mix(in srgb, var(--accent) 6%, var(--bg-card))', stroke: 'var(--accent)', width: 1.5 },
+  linked: {
+    fill: 'color-mix(in srgb, var(--accent) 3%, var(--bg-card))',
+    stroke: 'color-mix(in srgb, var(--accent) 45%, var(--border))',
+    width: 1.5,
+  },
 };
 
 /**
@@ -133,10 +141,14 @@ export function Node({
         // change status in view.
         fill={focus ? FOCUS[focus].fill : quiet ? 'var(--bg)' : 'var(--bg-card)'}
         stroke={
-          focus ? 'var(--accent)' : test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]
+          focus
+            ? FOCUS[focus].stroke
+            : test && node.status !== 'consumer'
+              ? 'var(--border)'
+              : STATUS_STROKE[node.status]
         }
         strokeWidth={focus ? FOCUS[focus].width : quiet ? 1 : 1.5}
-        strokeDasharray={node.status === 'consumer' && !clustered && !focus ? '4 3' : undefined}
+        strokeDasharray={node.status === 'consumer' && !clustered && (!focus || focus === 'linked') ? '4 3' : undefined}
       />
       <KindIcon kind={node.kind} x={x + 7} y={y + 7} size={14} opacity={quiet ? 0.6 : 1} />
       {hits.map((b) => (
