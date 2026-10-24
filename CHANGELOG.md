@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.4](https://github.com/moritzwilksch/diffle/compare/v0.3.3...v0.3.4) - 2026-10-24
+
+### Features
+
+- _(lsp)_ Navigate on from files outside the repository ([#396](https://github.com/moritzwilksch/diffle/pull/396))
+- Copy a GitHub permalink to the selected lines ([#395](https://github.com/moritzwilksch/diffle/pull/395))
+- Show the diff as a graph of changed symbols from the language servers ([#402](https://github.com/moritzwilksch/diffle/pull/402))
+
+### Bug fixes
+
+- _(client)_ Keep tree viewed marks in one column, hide counts together ([#397](https://github.com/moritzwilksch/diffle/pull/397))
+
+### Documentation
+
+- Open diffle from lazygit ([#398](https://github.com/moritzwilksch/diffle/pull/398))
+
+### Other
+
+- _(dev)_ Install rust-src so lsp works better on rust files ([#400](https://github.com/moritzwilksch/diffle/pull/400))
+
 ## [0.3.3](https://github.com/moritzwilksch/diffle/compare/v0.3.2...v0.3.3) - 2026-10-23
 
 ### Bug fixes
