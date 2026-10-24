@@ -54,7 +54,8 @@ jobs:
           - windows-11-arm
         variant:
           - baseline
-          - devdrive
+          - devtemp
+          - defender
     permissions:
       contents: read
     steps:
@@ -68,33 +69,31 @@ jobs:
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: matrix.variant == 'devdrive'
+      - if: matrix.variant == 'devtemp'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
-          drive-size: 20GB
-          workspace-copy: true
+          drive-size: 10GB
           trusted-dev-drive: true
           env-mapping: |
             TEMP,{{ DEV_DRIVE }}\tmp
             TMP,{{ DEV_DRIVE }}\tmp
-            CARGO_HOME,{{ DEV_DRIVE }}\.cargo
-            npm_config_cache,{{ DEV_DRIVE }}\.npm
-            PIXI_CACHE_DIR,{{ DEV_DRIVE }}\.cache\pixi
-      - if: matrix.variant == 'devdrive'
+      - if: matrix.variant == 'devtemp'
         name: Create temp dir on the dev drive
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-          Get-Volume | Format-Table -AutoSize
           fsutil devdrv query $env:DEV_DRIVE
+      - if: matrix.variant == 'defender'
+        name: Disable Defender real-time protection
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-        with:
-          working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         run: git config --system core.autocrlf false
       - run: pixi run test-node
-        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
 
 
   rust:
@@ -108,7 +107,8 @@ jobs:
           - windows-11-arm
         variant:
           - baseline
-          - devdrive
+          - devtemp
+          - defender
     permissions:
       contents: read
     steps:
@@ -122,37 +122,32 @@ jobs:
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: matrix.variant == 'devdrive'
+      - if: matrix.variant == 'devtemp'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
-          drive-size: 20GB
-          workspace-copy: true
+          drive-size: 10GB
           trusted-dev-drive: true
           env-mapping: |
             TEMP,{{ DEV_DRIVE }}\tmp
             TMP,{{ DEV_DRIVE }}\tmp
-            CARGO_HOME,{{ DEV_DRIVE }}\.cargo
-            npm_config_cache,{{ DEV_DRIVE }}\.npm
-            PIXI_CACHE_DIR,{{ DEV_DRIVE }}\.cache\pixi
-      - if: matrix.variant == 'devdrive'
+      - if: matrix.variant == 'devtemp'
         name: Create temp dir on the dev drive
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-          Get-Volume | Format-Table -AutoSize
           fsutil devdrv query $env:DEV_DRIVE
+      - if: matrix.variant == 'defender'
+        name: Disable Defender real-time protection
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-        with:
-          working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          key: ${{ matrix.variant }}
-          workspaces: ${{ env.DEV_DRIVE_WORKSPACE || '.' }} -> target
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         run: git config --system core.autocrlf false
       - run: pixi run test-rust
-        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
 
 
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
@@ -208,6 +203,7 @@ jobs:
       - run: pixi run lefthook-run
 
   build:
+    if: false # EXPERIMENT: windows timing only
     name: build (${{ matrix.os }}, ${{ matrix.variant }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -218,7 +214,8 @@ jobs:
           - windows-11-arm
         variant:
           - baseline
-          - devdrive
+          - devtemp
+          - defender
     permissions:
       contents: read
     steps:
@@ -232,41 +229,36 @@ jobs:
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: matrix.variant == 'devdrive'
+      - if: matrix.variant == 'devtemp'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
-          drive-size: 20GB
-          workspace-copy: true
+          drive-size: 10GB
           trusted-dev-drive: true
           env-mapping: |
             TEMP,{{ DEV_DRIVE }}\tmp
             TMP,{{ DEV_DRIVE }}\tmp
-            CARGO_HOME,{{ DEV_DRIVE }}\.cargo
-            npm_config_cache,{{ DEV_DRIVE }}\.npm
-            PIXI_CACHE_DIR,{{ DEV_DRIVE }}\.cache\pixi
-      - if: matrix.variant == 'devdrive'
+      - if: matrix.variant == 'devtemp'
         name: Create temp dir on the dev drive
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-          Get-Volume | Format-Table -AutoSize
           fsutil devdrv query $env:DEV_DRIVE
+      - if: matrix.variant == 'defender'
+        name: Disable Defender real-time protection
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-        with:
-          working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          key: ${{ matrix.variant }}
-          workspaces: ${{ env.DEV_DRIVE_WORKSPACE || '.' }} -> target
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         run: git config --system core.autocrlf false
       - run: pixi run package
-        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-${{ matrix.os }}-${{ matrix.variant }}
-          path: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}/out/*
+          path: out/*
 
 
   npm-packages:
