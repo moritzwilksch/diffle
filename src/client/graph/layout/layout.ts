@@ -132,6 +132,8 @@ export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Siz
 
   const nodes: PlacedNode[] = [];
   const clusters: PlacedCluster[] = [];
+  // Where arrows attach: a symbol's own column, but a cluster's top and bottom edge, so no arrow
+  // crosses the file name heading the cluster or the symbols above its row.
   const boxOf = new Map<string, Box>();
   layers.forEach((layer, i) => {
     const top = bands[i]!.y;
@@ -141,7 +143,7 @@ export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Siz
       for (const id of b.members) {
         const box = { x: x + offset.get(id)!.x, y: top + offset.get(id)!.y, ...memberSize(id) };
         if (b.waypoint) box.h = d.h;
-        boxOf.set(id, box);
+        boxOf.set(id, b.path != null ? { ...box, y: top, h: d.h } : box);
         if (!b.waypoint) nodes.push({ node: nodeById.get(id)!, ...box });
       }
     }

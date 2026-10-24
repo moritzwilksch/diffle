@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { KindIcon } from '@/client/lsp/symbolKind.js';
 import { isTest } from './filters.js';
-import { Cluster, Node } from './GraphShapes.js';
+import { arrowHead, Cluster, Node } from './GraphShapes.js';
 import type { Box, Placed } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 
@@ -93,9 +93,9 @@ export function GraphPart({
               fill="none"
               stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
               strokeOpacity={lit && !on ? FADED_EDGE : on ? 0.95 : 0.5}
-              strokeWidth={1 + Math.min(2, Math.log2(edge.lines.length))}
+              strokeWidth={width(edge.lines.length)}
               strokeDasharray={back ? '4 3' : undefined}
-              markerEnd={on ? 'url(#graph-arrow-lit)' : 'url(#graph-arrow)'}
+              markerEnd={arrowHead(width(edge.lines.length), on)}
             />
           </g>
         );
@@ -163,5 +163,8 @@ function Pill({
     </g>
   );
 }
+
+/** An arrow's weight: one per reference line, up to three. */
+const width = (lines: number) => Math.min(3, lines);
 
 const within = (n: Box, c: Box) => n.x >= c.x && n.x < c.x + c.w && n.y >= c.y && n.y < c.y + c.h;

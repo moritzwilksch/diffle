@@ -95,18 +95,31 @@ export function Node({
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
       <title>{`${node.path}:${node.line}${badge ? ` · ${badge.label}` : ''}`}</title>
-      {/* The selection ring sits outside the box, so the status border always shows. */}
+      {/* The selection rings sit outside the box, so the status border always shows. */}
       {selected && (
-        <rect
-          x={x - 4}
-          y={y - 4}
-          width={w + 8}
-          height={h + 8}
-          rx={9}
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth={2}
-        />
+        <>
+          <rect
+            x={x - 8}
+            y={y - 8}
+            width={w + 16}
+            height={h + 16}
+            rx={12}
+            fill="none"
+            stroke="var(--accent)"
+            strokeOpacity={0.3}
+            strokeWidth={4}
+          />
+          <rect
+            x={x - 4}
+            y={y - 4}
+            width={w + 8}
+            height={h + 8}
+            rx={9}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth={2}
+          />
+        </>
       )}
       <rect
         x={x}
@@ -114,7 +127,7 @@ export function Node({
         width={w}
         height={h}
         rx={6}
-        fill={quiet ? 'var(--bg)' : 'var(--bg-2)'}
+        fill={selected ? 'color-mix(in srgb, var(--accent) 16%, var(--bg-2))' : quiet ? 'var(--bg)' : 'var(--bg-2)'}
         stroke={test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]}
         strokeWidth={quiet ? 1 : 1.5}
         strokeDasharray={node.status === 'consumer' && !clustered ? '4 3' : undefined}
@@ -154,18 +167,36 @@ export function Node({
   );
 }
 
-/** Arrowheads for the edges: muted, and lit for the selection's. */
+/** Stroke widths an arrow is drawn in; each has its own head, sized to it. */
+export const ARROW_WIDTHS = [1, 2, 3] as const;
+
+/** The arrowhead for a stroke of `width`, muted or lit. */
+export const arrowHead = (width: number, lit: boolean) => `url(#graph-arrow-${width}${lit ? '-lit' : ''})`;
+
+/** Arrowheads in user units, so a head keeps to its line's weight instead of growing with it. */
 export function ArrowDefs() {
   return (
     <defs>
-      {[
-        ['graph-arrow', 'var(--fg-2)'],
-        ['graph-arrow-lit', 'var(--accent)'],
-      ].map(([id, fill]) => (
-        <marker key={id} id={id} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0.5 L7.5,4 L0,7.5 z" fill={fill} />
-        </marker>
-      ))}
+      {ARROW_WIDTHS.flatMap((w) =>
+        [false, true].map((lit) => {
+          const size = 5 + 2.5 * w;
+          return (
+            <marker
+              key={`${w}${lit}`}
+              id={`graph-arrow-${w}${lit ? '-lit' : ''}`}
+              viewBox="0 0 8 8"
+              refX="7"
+              refY="4"
+              markerUnits="userSpaceOnUse"
+              markerWidth={size}
+              markerHeight={size}
+              orient="auto"
+            >
+              <path d="M0,0.5 L7.5,4 L0,7.5 z" fill={lit ? 'var(--accent)' : 'var(--fg-2)'} />
+            </marker>
+          );
+        }),
+      )}
     </defs>
   );
 }

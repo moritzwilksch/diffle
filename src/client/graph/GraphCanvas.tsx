@@ -31,14 +31,15 @@ const MARGIN = 48;
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.15;
 const FIT_ZOOM = 1.25;
+/** The most a double-click zooms in on a node and its neighbours. */
+const FRAME_ZOOM = 1.6;
 
 /** What the keys do to the mounted canvas: fit the graph, zoom about the centre. */
 export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {} };
 
 /**
  * The placed graph as SVG, panned by dragging and zoomed by the wheel. The selection, or the file
- * focused from the tree, stays lit with its links and the rest fades. A double-click on a node
- * jumps to it in the diff; on the background it fits the graph.
+ * focused from the tree, stays lit with its links and the rest fades.
  */
 export function GraphCanvas({ view: shown, clustered }: { view: View; clustered: boolean }) {
   const stacked = shown.stacked;
@@ -148,11 +149,15 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     else if (d.node == null && d.edge != null) graph.selectEdge(d.edge);
     else if (d.node != null || graph.selected || graph.selectedEdge) graph.select(d.node);
   };
+  // A double-click frames a node with the nodes it links to; on the background it fits the graph.
   const onDoubleClick = (e: MouseEvent) => {
     if (hit(e, 'data-part') != null) return;
-    const node = stacked.nodes.find((p) => p.node.id === hit(e, 'data-node'))?.node;
-    if (node) useGraph.getState().pick({ path: node.path, line: node.line });
-    else fit();
+    const id = hit(e, 'data-node');
+    if (id == null) return fit();
+    const near = new Set([id]);
+    for (const edge of edges) if (edge.from === id || edge.to === id) near.add(edge.from).add(edge.to);
+    useGraph.setState({ selected: id, selectedEdge: null, focusPath: null });
+    fitBox(bounds(stacked.nodes.filter((p) => near.has(p.node.id))), FRAME_ZOOM);
   };
 
   return (
