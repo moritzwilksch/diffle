@@ -1,4 +1,4 @@
-import { Focus, Rows3 } from 'lucide-react';
+import { Focus, Folder, Rows3 } from 'lucide-react';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { PART_HEADER } from '@/client/graph/layout/components.js';
@@ -14,22 +14,37 @@ const TITLE_CHAR = 7.9;
 const COUNT_CHAR = 6.4;
 const ROW = 28;
 const BUTTON_H = 22;
+/** The muted "around" before a hub's icon. */
+const AROUND_W = 46;
+
+/** What a header names its group by: the hub it is around, the folder its files share, or a plain title. */
+export type HeaderName = { hub: GraphNode } | { folder: string } | { plain: string };
+
+/** File view names a group by its files' shared folder; with none, or in symbol view, by its hub. */
+export function groupName(hub: GraphNode, nodes: GraphNode[], files: boolean): HeaderName {
+  if (!files) return { hub };
+  const [first = [], ...rest] = nodes.map((n) => n.path.split('/').slice(0, -1));
+  let shared = first.length;
+  for (const dir of rest) {
+    let i = 0;
+    while (i < shared && dir[i] === first[i]) i++;
+    shared = i;
+  }
+  return shared ? { folder: first.slice(0, shared).join('/') } : { hub };
+}
 
 /**
- * A group's heading row above its boxes, ruled across the whole graph: the hub symbol it is named
- * after (or a plain title), how many boxes it holds, and the switch between it alone and every
- * group, which shows on hover until it is in use.
+ * A group's heading row above its boxes, ruled across the whole graph: its name, how many boxes it
+ * holds, and the switch between it alone and every group, which shows on hover until it is in use.
  */
 export function PartHeader({
-  hub,
-  title,
+  name,
   count,
   noun,
   width,
   action,
 }: {
-  hub: GraphNode | null;
-  title: string;
+  name: HeaderName;
   count: number;
   /** What the boxes are: symbols, or files in file view. */
   noun: 'symbol' | 'file';
@@ -38,9 +53,14 @@ export function PartHeader({
   action: { partKey: string; showingOnly: boolean } | null;
 }) {
   const top = -PART_HEADER;
-  const textX = hub ? 20 : 0;
+  // A hub reads "around" it: the group is named after its most-used box, not made of it.
+  const hub = 'hub' in name ? name.hub : null;
+  const title = 'hub' in name ? name.hub.name : 'folder' in name ? `${name.folder}/` : name.plain;
+  const plain = 'plain' in name;
+  const iconX = hub ? AROUND_W : 0;
+  const textX = plain ? 0 : iconX + 20;
   const countText = `${count} ${noun}${count === 1 ? '' : 's'}`;
-  const textEnd = textX + title.length * (hub ? TITLE_CHAR : COUNT_CHAR + 0.6) + 10 + countText.length * COUNT_CHAR;
+  const textEnd = textX + title.length * (plain ? COUNT_CHAR + 0.6 : TITLE_CHAR) + 10 + countText.length * COUNT_CHAR;
   const label = action?.showingOnly ? 'Show all' : 'Show only';
   const buttonW = 28 + label.length * COUNT_CHAR;
   const rowW = Math.max(width, textEnd + 16 + buttonW);
@@ -48,16 +68,22 @@ export function PartHeader({
     <g className="group">
       <rect x={0} y={top} width={rowW} height={ROW} fill="transparent" />
       {hub && (
-        <KindIcon
-          kind={hub.kind}
-          x={0}
-          y={top + 5}
-          size={14}
-          color={KIND_COLOR[kindGroup(hub.kind)] ?? 'var(--fg-2)'}
-        />
+        <>
+          <text x={0} y={top + 17} className="fill-muted font-sans text-[12px]">
+            around
+          </text>
+          <KindIcon
+            kind={hub.kind}
+            x={iconX}
+            y={top + 5}
+            size={14}
+            color={KIND_COLOR[kindGroup(hub.kind)] ?? 'var(--fg-2)'}
+          />
+        </>
       )}
+      {'folder' in name && <Folder x={0} y={top + 5} size={14} color="var(--fg-2)" />}
       <text x={textX} y={top + 17} className="font-sans text-[12px]">
-        <tspan className={`fill-foreground ${hub ? 'font-mono text-[13px]' : ''}`} fontWeight={600}>
+        <tspan className={`fill-foreground ${plain ? '' : 'font-mono text-[13px]'}`} fontWeight={600}>
           {title}
         </tspan>
         <tspan className="fill-muted" dx={10}>

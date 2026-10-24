@@ -1,7 +1,7 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasToolbar } from './CanvasToolbar.js';
 import { type EdgeLabel, GraphPart, type Lit } from './GraphPart.js';
-import { PartHeader } from './PartHeader.js';
+import { groupName, PartHeader } from './PartHeader.js';
 import { ArrowDefs } from './GraphShapes.js';
 import type { Box, PlacedNode } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
@@ -222,8 +222,11 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
               <g key={part.key} transform={`translate(${part.x},${part.y})`}>
                 {(stacked.parts.length > 1 || stacked.unlinked || only != null) && (
                   <PartHeader
-                    hub={part.hub}
-                    title={part.hub.name}
+                    name={groupName(
+                      part.hub,
+                      part.placed.nodes.map((p) => p.node),
+                      !clustered,
+                    )}
                     count={part.placed.nodes.length}
                     noun={clustered ? 'symbol' : 'file'}
                     width={stacked.width}
@@ -243,8 +246,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
             {stacked.unlinked && (
               <g transform={`translate(0,${stacked.unlinked.y})`}>
                 <PartHeader
-                  hub={null}
-                  title="No links"
+                  name={{ plain: 'No links' }}
                   count={stacked.unlinked.placed.nodes.length}
                   noun={clustered ? 'symbol' : 'file'}
                   width={stacked.width}

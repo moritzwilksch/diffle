@@ -3,6 +3,7 @@ import { split } from '@/client/graph/layout/components.js';
 import { type Box, layout } from '@/client/graph/layout/layout.js';
 import { byFile, rank } from '@/client/graph/layout/rank.js';
 import { signatureOf } from '@/client/graph/details/useSignatures.js';
+import { groupName } from '@/client/graph/PartHeader.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
 
 const node = (id: string, status: GraphNode['status'] = 'modified', path = `${id}.py`): GraphNode => ({
@@ -157,5 +158,19 @@ describe('split', () => {
       ['x', 'y'],
     ]);
     expect(unlinked.nodes.map((n) => n.id)).toEqual(['lone']);
+  });
+});
+
+describe('groupName', () => {
+  const file = (path: string) => ({ ...node(path), kind: 1, path });
+
+  it('names a file view group by the folder its files share, else by its hub', () => {
+    const hub = file('pkg/core/tools.py');
+    expect(groupName(hub, [hub, file('pkg/core/agent.py'), file('pkg/core/sub/x.py')], true)).toEqual({
+      folder: 'pkg/core',
+    });
+    expect(groupName(hub, [hub, file('pkg/coreutils/a.py')], true)).toEqual({ folder: 'pkg' });
+    expect(groupName(hub, [hub, file('main.py')], true)).toEqual({ hub });
+    expect(groupName(hub, [hub, file('pkg/core/agent.py')], false)).toEqual({ hub });
   });
 });
