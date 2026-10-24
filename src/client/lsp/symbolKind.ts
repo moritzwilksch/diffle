@@ -1,3 +1,19 @@
+import {
+  Box,
+  Braces,
+  Component,
+  FileCode2,
+  Hammer,
+  ListOrdered,
+  type LucideIcon,
+  type LucideProps,
+  Parentheses,
+  Shapes,
+  SquareFunction,
+  Type,
+} from 'lucide-react';
+import { createElement } from 'react';
+
 /** LSP SymbolKind → short label. */
 export const KIND_LABEL: Record<number, string> = {
   1: 'file',
@@ -34,4 +50,21 @@ export function kindGroup(kind: number): string {
   if ([6, 9, 12].includes(kind)) return 'callable';
   if ([7, 8, 13, 14, 20, 22, 24].includes(kind)) return 'value';
   return kind <= 4 ? 'scope' : 'other';
+}
+
+const KIND_ICON: Record<number, LucideIcon> = {
+  1: FileCode2,
+  5: Box,
+  6: Parentheses,
+  9: Hammer,
+  10: ListOrdered,
+  11: Component,
+  12: SquareFunction,
+  23: Braces,
+  26: Type,
+};
+
+/** An icon per SymbolKind, so a list or graph of symbols reads by shape before text. */
+export function KindIcon({ kind, ...props }: LucideProps & { kind: number }) {
+  return createElement(KIND_ICON[kind] ?? Shapes, props);
 }
