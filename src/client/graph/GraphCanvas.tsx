@@ -1,4 +1,4 @@
-import { type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
+import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { PART_HEADER } from '@/client/graph/layout/components.js';
 import { type EdgeLabel, GraphPart, HEAD, type Lit } from './GraphPart.js';
 import { GraphLegend, ZoomControls } from './GraphLegend.js';
@@ -31,6 +31,8 @@ const MARGIN = 48;
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.15;
 const FIT_ZOOM = 1.25;
+/** Pixels per line, for wheels that scroll by lines. */
+const LINE_PX = 16;
 /** The most a double-click zooms in on a node and its neighbours. */
 const FRAME_ZOOM = 1.6;
 
@@ -116,10 +118,30 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   }, [stacked, edges, selected, selectedEdge, focusPath, hovered]);
   const labels = useMemo(() => (clustered ? null : edgeLabels(shown)), [shown, clustered]);
 
-  const onWheel = (e: WheelEvent) => {
-    const rect = host.current!.getBoundingClientRect();
-    zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
-  };
+  // Two-finger scrolling pans and a pinch (a wheel with Ctrl, as browsers report it) zooms. React's
+  // wheel listeners are passive and cannot stop the page from scrolling along; this one can.
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const onWheel = (e: globalThis.WheelEvent) => {
+      e.preventDefault();
+      const unit =
+        e.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? LINE_PX
+          : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? el.clientHeight
+            : 1;
+      const [dx, dy] = [e.deltaX * unit, e.deltaY * unit];
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect();
+        zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-Math.max(-50, Math.min(50, dy)) * 0.01));
+      } else setView((v) => ({ ...v, x: v.x - dx, y: v.y - dy, ease: false }));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+    // zoomAt only calls the state setter, which React keeps stable.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const hit = (e: { target: EventTarget }, attr: string) =>
     (e.target as Element).closest(`[${attr}]`)?.getAttribute(attr) ?? null;
   const onPointerDown = (e: PointerEvent) => {
@@ -167,8 +189,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     <div className="relative h-full w-full">
       <div
         ref={host}
-        className="relative h-full w-full cursor-grab touch-none overflow-hidden bg-canvas select-none active:cursor-grabbing"
-        onWheel={onWheel}
+        className="relative h-full w-full cursor-grab touch-none overflow-hidden overscroll-none bg-canvas select-none active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

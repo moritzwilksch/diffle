@@ -84,6 +84,7 @@ export const COLUMNS: HelpSection[][] = [
         ['double-click', 'frame a symbol and the symbols it links to'],
         ['f / u / T', 'toggle file nodes / users / tests'],
         ['0  + / -', 'fit the graph / zoom in / out'],
+        ['scroll / pinch', 'pan / zoom the graph'],
       ],
     },
     {

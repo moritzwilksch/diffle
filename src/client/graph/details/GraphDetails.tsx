@@ -71,19 +71,19 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         <Code signature={signatures.get(node.id)} path={node.path} full />
       </div>
       <Links
-        icon={ArrowDownToLine}
-        title="Uses"
-        edges={uses}
-        other={(e) => byId.get(e.to)}
-        site={() => node.path}
-        signatures={signatures}
-      />
-      <Links
         icon={ArrowUpFromLine}
         title="Used by"
         edges={usedBy}
         other={(e) => byId.get(e.from)}
         site={(n) => n.path}
+        signatures={signatures}
+      />
+      <Links
+        icon={ArrowDownToLine}
+        title="Uses"
+        edges={uses}
+        other={(e) => byId.get(e.to)}
+        site={() => node.path}
         signatures={signatures}
       />
       {node.moreConsumers ? <p className={META}>and {node.moreConsumers} more unchanged users, not drawn</p> : null}

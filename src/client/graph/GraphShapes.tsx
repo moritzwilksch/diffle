@@ -47,7 +47,8 @@ export function Cluster({
         width={cluster.w}
         height={cluster.h}
         rx={9}
-        fill={unchanged ? 'transparent' : 'var(--bg-card)'}
+        // A file's box is a light grey between the canvas and the symbol cards it holds.
+        fill={unchanged ? 'transparent' : 'color-mix(in srgb, var(--fg) 5%, var(--bg))'}
         stroke="var(--border)"
         strokeDasharray={unchanged ? '5 4' : undefined}
       />
@@ -96,42 +97,22 @@ export function Node({
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
       <title>{`${node.path}:${node.line}${badge ? ` · ${badge.label}` : ''}`}</title>
-      {/* The selection rings sit outside the box, so the status border always shows. */}
-      {selected && (
-        <>
-          <rect
-            x={x - 8}
-            y={y - 8}
-            width={w + 16}
-            height={h + 16}
-            rx={12}
-            fill="none"
-            stroke="var(--accent)"
-            strokeOpacity={0.3}
-            strokeWidth={4}
-          />
-          <rect
-            x={x - 4}
-            y={y - 4}
-            width={w + 8}
-            height={h + 8}
-            rx={9}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth={2}
-          />
-        </>
-      )}
       <rect
         x={x}
         y={y}
         width={w}
         height={h}
         rx={6}
-        fill={selected ? 'color-mix(in srgb, var(--accent) 7%, var(--bg-2))' : quiet ? 'var(--bg)' : 'var(--bg-2)'}
-        stroke={test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]}
-        strokeWidth={quiet ? 1 : 1.5}
-        strokeDasharray={node.status === 'consumer' && !clustered ? '4 3' : undefined}
+        // The selection takes the box itself, an accent border over a light accent fill; the badge
+        // keeps the change status in view.
+        fill={
+          selected ? 'color-mix(in srgb, var(--accent) 12%, var(--bg-card))' : quiet ? 'var(--bg)' : 'var(--bg-card)'
+        }
+        stroke={
+          selected ? 'var(--accent)' : test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]
+        }
+        strokeWidth={selected ? 2.5 : quiet ? 1 : 1.5}
+        strokeDasharray={node.status === 'consumer' && !clustered && !selected ? '4 3' : undefined}
       />
       <KindIcon
         kind={node.kind}
