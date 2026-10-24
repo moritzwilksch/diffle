@@ -1,4 +1,4 @@
-import { FileDiff, Waypoints } from 'lucide-react';
+import { FileDiff, Network } from 'lucide-react';
 import { useStore } from '@/client/store.js';
 import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { lspBlocker } from '@/shared/lsp.js';
@@ -21,7 +21,7 @@ export function ViewSwitch() {
         aria-label="Graph"
         title={blocked ?? 'Changed symbols and the code using them (M)'}
       >
-        <Waypoints size="0.875rem" /> <span className="max-xl:hidden">Graph</span>
+        <Network size="0.875rem" /> <span className="max-xl:hidden">Graph</span>
       </ToggleButton>
     </SegmentedControl>
   );

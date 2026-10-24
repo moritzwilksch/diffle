@@ -1,5 +1,5 @@
 import type { ContextMenuAnchorRect } from '@pierre/trees';
-import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Waypoints } from 'lucide-react';
+import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Network } from 'lucide-react';
 import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGraph } from '@/client/graph/state.js';
@@ -124,7 +124,7 @@ function DirectoryMenu({ path, anchor, close }: MenuProps) {
           close();
         }}
       >
-        <Waypoints size="0.875rem" />
+        <Network size="0.875rem" />
         <span className="whitespace-nowrap">Show in graph</span>
         <span />
         <span />

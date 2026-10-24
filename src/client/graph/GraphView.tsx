@@ -1,4 +1,4 @@
-import { Braces, FlaskConical, FolderOpen, LoaderCircle, RefreshCw, Users, X } from 'lucide-react';
+import { Braces, FlaskConical, FolderOpen, LayersArrowUp, LoaderCircle, RefreshCw, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
 import { useStore } from '@/client/store.js';
@@ -54,7 +54,7 @@ export function GraphView() {
             <Braces size="0.8125rem" /> Symbols
           </FilterChip>
           <FilterChip filter="consumers" title="Unchanged code using the change (d)">
-            <Users size="0.8125rem" /> Dependents
+            <LayersArrowUp size="0.8125rem" /> Dependents
           </FilterChip>
           <FilterChip filter="tests" title="Tests (T)">
             <FlaskConical size="0.8125rem" /> Tests
