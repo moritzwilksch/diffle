@@ -58,6 +58,16 @@ export function GraphPart({
   const opacity = (ids: string[]) => (lit && !ids.some((id) => lit.ids.has(id)) ? FADED : 1);
   const isOn = (key: string, from: string, to: string) =>
     !!lit && (lit.edge ? lit.edge === key : lit.seeds.has(from) || lit.seeds.has(to));
+  // A file view's arrow labels: the unlit ones under the boxes, the lit ones (`on`) over them.
+  const pills = (on: boolean) =>
+    labels &&
+    placed.edges.map(({ edge, mid }) => {
+      const key = edgeKey(edge);
+      const label = labels.get(key);
+      const shown = isOn(key, edge.from, edge.to);
+      if (!label || shown !== on) return null;
+      return <Pill key={key} edgeKey={key} label={label} x={mid.x} y={mid.y} dim={!!lit && !shown} />;
+    });
   return (
     <>
       {placed.layers.length > 1 &&
@@ -101,22 +111,7 @@ export function GraphPart({
           </g>
         );
       })}
-      {labels &&
-        placed.edges.map(({ edge, mid }) => {
-          const key = edgeKey(edge);
-          const label = labels.get(key);
-          if (!label) return null;
-          return (
-            <Pill
-              key={key}
-              edgeKey={key}
-              label={label}
-              x={mid.x}
-              y={mid.y}
-              dim={!!lit && !isOn(key, edge.from, edge.to)}
-            />
-          );
-        })}
+      {pills(false)}
       {placed.nodes.map((p) => (
         <Node
           key={p.node.id}
@@ -128,6 +123,8 @@ export function GraphPart({
           degree={degrees.get(p.node.id) ?? { in: 0, out: 0 }}
         />
       ))}
+      {/* Lit labels over the boxes, so a selected arrow's label reads in full where it crosses one. */}
+      {pills(true)}
     </>
   );
 }
