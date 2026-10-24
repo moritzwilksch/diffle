@@ -180,6 +180,33 @@ Or persistently, in the config file (`diffle config` prints its path and content
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
+## Open from lazygit
+
+[lazygit](https://github.com/jesseduffield/lazygit) custom commands open diffle on what is
+selected. Add them to its `config.yml` (`lazygit --print-config-dir` prints the folder):
+
+```yaml
+customCommands:
+  - key: '<c-d>'
+    context: 'files'
+    command: 'diffle working'
+    output: terminal
+    description: 'Review uncommitted changes in diffle'
+  - key: '<c-d>'
+    context: 'commits'
+    command: 'diffle {{.SelectedCommitRange.From}}^..{{.SelectedCommitRange.To}}'
+    output: terminal
+    description: 'Review the selected commits in diffle'
+  - key: '<c-d>'
+    context: 'localBranches'
+    command: 'diffle main...{{.SelectedLocalBranch.Name}}'
+    output: terminal
+    description: 'Review the branch against main in diffle'
+```
+
+lazygit waits while you review; closing the tab returns to it with the open comments printed as
+a prompt. Append `| pbcopy` (or your clipboard tool) to a command to copy them instead.
+
 ## Shell completions
 
 ```bash

@@ -66,6 +66,8 @@ yaml-language-server = "*"
 
 [feature.lsp-rust.dependencies]
 rust-analyzer = "*"
+# The standard library's source; without it rust-analyzer resolves no method that needs core.
+rust-src = "1.99.*"
 
 [feature.lsp-python.dependencies]
 pyrefly = "*"
