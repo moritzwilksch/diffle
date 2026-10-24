@@ -3,6 +3,6 @@ pub mod client;
 pub mod hosts;
 pub mod metadata;
 pub mod pending_review;
-pub mod published;
+pub mod permalink;
 pub mod pulls;
 pub mod review;

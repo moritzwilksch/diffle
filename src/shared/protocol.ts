@@ -297,24 +297,28 @@ export const GithubMetadataSchema = z.object({
 });
 export type GithubMetadata = z.infer<typeof GithubMetadataSchema>;
 
-/**
- * Where a permalink to each side of a snapshot points, from local refs alone: no token, no
- * network, no cache, so a push shows on the next request.
- */
-export const PublishedSchema = z.object({
-  /** Snapshot.version it answers for. */
+/** Lines of one side of a snapshot to link to on the forge origin points at. */
+export const PermalinkRequestSchema = z.object({
+  /** Snapshot.version the lines were read from; another one is refused with a reason. */
   version: z.number().int(),
-  /** Origin's GitHub page; null when origin is no GitHub remote. */
-  repositoryUrl: z.string().nullable(),
-  /**
-   * Whether each side's commit is in that repository: reachable from origin's remote-tracking
-   * branches or from this run's fetch of the reviewed pull request. The worktree, an interdiff's
-   * replayed old side and an unpushed commit are not.
-   */
-  old: z.boolean(),
-  new: z.boolean(),
+  /** The changed file's path; an old-side link follows a rename to its old path. */
+  path: z.string(),
+  side: SideSchema,
+  startLine: z.number().int(),
+  endLine: z.number().int(),
 });
-export type Published = z.infer<typeof PublishedSchema>;
+export type PermalinkRequest = z.infer<typeof PermalinkRequestSchema>;
+
+/**
+ * A link to lines at the commit their side shows, judged from local refs alone (no token, no
+ * network, no cache, so a push shows on the next request), or why there is none.
+ */
+export const PermalinkSchema = z.object({
+  url: z.string().nullable(),
+  /** Why there is no link: no forge origin, the worktree, a review that changed, an unpushed commit. */
+  reason: z.string().nullable(),
+});
+export type Permalink = z.infer<typeof PermalinkSchema>;
 
 export const ChangeStatusSchema = z.enum(['A', 'M', 'D', 'R', 'C', 'T', 'U']);
 export type ChangeStatus = z.infer<typeof ChangeStatusSchema>;

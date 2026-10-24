@@ -1,4 +1,4 @@
-//! Which sides of a review GitHub can show, judged from local refs: what permalinks need.
+//! Links to lines on origin's GitHub, judged from local refs: which sides it can show, and how.
 mod common;
 
 use std::sync::Arc;
@@ -10,15 +10,21 @@ use common::{TestRepo, git_in, revspec};
 use diffle::git::GitRepo;
 use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
-use diffle::github::published::published as read_published;
+use diffle::github::permalink::permalink;
 use diffle::mode::resolve::resolve_review;
-use diffle::protocol::{EnterRequest, Snapshot};
+use diffle::protocol::{EnterRequest, Permalink, PermalinkRequest, Side, Snapshot};
 use diffle::snapshotter::Snapshotter;
 
-/// (old, new) published, read without a token.
+async fn link(repo: &GitRepo, snap: &Snapshot, path: &str, side: Side, lines: (i64, i64)) -> Permalink {
+    let req =
+        PermalinkRequest { version: snap.version, path: path.into(), side, start_line: lines.0, end_line: lines.1 };
+    permalink(repo, snap, &Github::tokenless().instance, &req).await.unwrap()
+}
+
+/// Whether (old, new) have a link, read without a token.
 async fn published(repo: &Arc<GitRepo>, snap: &Snapshot) -> (bool, bool) {
-    let p = read_published(repo, snap, &Github::tokenless().instance).await.unwrap();
-    (p.old, p.new)
+    let has = async |side| link(repo, snap, "a.txt", side, (1, 1)).await.url.is_some();
+    (has(Side::Old).await, has(Side::New).await)
 }
 
 async fn sides(repo: &Arc<GitRepo>, req: EnterRequest) -> (bool, bool) {
@@ -71,14 +77,69 @@ async fn publishes_commits_a_remote_tracking_branch_of_origin_reaches_and_never_
 }
 
 #[tokio::test]
+async fn links_a_sides_lines_at_its_commit_an_old_side_at_the_renames_old_path_escaped() {
+    let t = TestRepo::new();
+    t.write("src/old#name.ts", "one\ntwo\n");
+    t.commit("base");
+    t.git(&["mv", "src/old#name.ts", "src/new name.ts"]);
+    t.commit("rename");
+    t.git(&["remote", "add", "origin", "git@github.com:o/r.git"]);
+    t.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    let repo = Arc::new(t.open().await);
+    let (_, snap) = common::snapshot(&repo, revspec(&["HEAD^!"])).await;
+    let url = async |side, lines| link(&repo, &snap, "src/new name.ts", side, lines).await.url.unwrap();
+    assert_eq!(
+        [url(Side::New, (4, 4)).await, url(Side::Old, (2, 5)).await],
+        [
+            format!("https://github.com/o/r/blob/{}/src/new%20name.ts#L4", snap.new_sha),
+            format!("https://github.com/o/r/blob/{}/src/old%23name.ts#L2-L5", snap.old_sha),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn says_why_there_is_no_link() {
+    let t = pushed_then_local();
+    let repo = Arc::new(t.open().await);
+    let (_, local) = common::snapshot(&repo, revspec(&["HEAD~1", "HEAD"])).await;
+    let (_, working) = common::snapshot(&repo, EnterRequest::Working).await;
+    let why = async |snap: &Snapshot| link(&repo, snap, "a.txt", Side::New, (1, 1)).await.reason.unwrap();
+    // Lines read from the snapshot before this one.
+    let stale = PermalinkRequest {
+        version: local.version - 1,
+        path: "a.txt".into(),
+        side: Side::New,
+        start_line: 1,
+        end_line: 1,
+    };
+    let stale = permalink(&repo, &local, &Github::tokenless().instance, &stale).await.unwrap().reason.unwrap();
+    let reasons = [stale, why(&local).await, why(&working).await];
+    t.git(&["remote", "set-url", "origin", "https://gitlab.com/o/r"]);
+    assert_eq!(
+        [reasons.as_slice(), &[why(&local).await]].concat(),
+        [
+            "The review changed; try again",
+            "Not on GitHub: these lines are not in a pushed commit",
+            "Uncommitted lines have no GitHub link",
+            "No GitHub origin to link to",
+        ]
+    );
+}
+
+#[tokio::test]
 async fn serves_a_push_on_the_next_request_without_a_reload() {
     let s = TestServer::over(pushed_then_local(), revspec(&["HEAD~1", "HEAD"])).await;
-    let version = s.get("/api/snapshot").await.json()["version"].clone();
-    let published = async || s.get("/api/github/published").await.json();
-    let expected = |new: bool| serde_json::json!({ "version": version, "repositoryUrl": "https://github.com/o/r", "old": true, "new": new });
-    assert_eq!(published().await, expected(false));
+    let snap = s.get("/api/snapshot").await.json();
+    let req =
+        serde_json::json!({ "version": snap["version"], "path": "a.txt", "side": "new", "startLine": 3, "endLine": 3 });
+    let link = async || s.json("POST", "/api/permalink", req.clone()).await.json();
+    assert_eq!(
+        link().await,
+        serde_json::json!({ "url": null, "reason": "Not on GitHub: these lines are not in a pushed commit" })
+    );
     s.repo.git(&["update-ref", "refs/remotes/origin/feat/x", "HEAD"]);
-    assert_eq!(published().await, expected(true));
+    let url = format!("https://github.com/o/r/blob/{}/a.txt#L3", snap["newSha"].as_str().unwrap());
+    assert_eq!(link().await, serde_json::json!({ "url": url, "reason": null }));
     s.close().await;
 }
 

@@ -47,6 +47,20 @@ impl GithubInstance {
         }
     }
 
+    /// The web page of `<owner>/<repo>` on this instance.
+    pub fn repository_url(&self, repository: &str) -> String {
+        format!("https://{}/{repository}", self.host)
+    }
+
+    /// The page showing lines `start..=end` of `path` at commit `sha` in `repository`; each path
+    /// segment is escaped.
+    pub fn permalink(&self, repository: &str, sha: &str, path: &str, start: i64, end: i64) -> String {
+        let mut url = url::Url::parse(&self.repository_url(repository)).expect("a valid host");
+        url.path_segments_mut().expect("an http url").extend(["blob", sha]).extend(path.split('/'));
+        url.set_fragment(Some(&if start == end { format!("L{start}") } else { format!("L{start}-L{end}") }));
+        url.into()
+    }
+
     /// The instance whose web host is `host`: github.com, plus every `githubHosts` entry (git host →
     /// web host, the config file's `githubHosts`) that maps to it.
     fn at(host: &str, github_hosts: &HashMap<String, String>) -> Self {

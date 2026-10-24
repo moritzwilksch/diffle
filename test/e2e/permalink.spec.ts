@@ -26,7 +26,7 @@ const copyLink = (page: Page) => page.getByRole('button', { name: 'Copy link' })
 
 /** Selects lines and waits for the composer to learn whether they have a link. */
 async function select(page: Page, path: string, from: number, to: number, side: 'old' | 'new' = 'new') {
-  const answered = page.waitForResponse((r) => r.url().endsWith('/api/github/published'));
+  const answered = page.waitForResponse((r) => r.url().endsWith('/api/permalink'));
   await selectLines(page, path, from, to, side);
   await answered;
 }

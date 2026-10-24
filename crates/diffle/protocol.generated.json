@@ -1432,37 +1432,64 @@
       ],
       "description": "Body of `POST /api/patch`: the changed files whose patches to return, concatenated. Unknown paths are skipped."
     },
-    "Published": {
+    "Permalink": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why there is no link: no forge origin, the worktree, a review that changed, an unpushed commit."
+        }
+      },
+      "required": [
+        "url",
+        "reason"
+      ],
+      "description": "A link to lines at the commit their side shows, judged from local refs alone (no token, no\nnetwork, no cache, so a push shows on the next request), or why there is none."
+    },
+    "PermalinkRequest": {
       "type": "object",
       "properties": {
         "version": {
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991,
-          "description": "Snapshot.version it answers for."
+          "description": "Snapshot.version the lines were read from; another one is refused with a reason."
         },
-        "repositoryUrl": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Origin's GitHub page; null when origin is no GitHub remote."
+        "path": {
+          "type": "string",
+          "description": "The changed file's path; an old-side link follows a rename to its old path."
         },
-        "old": {
-          "type": "boolean",
-          "description": "Whether each side's commit is in that repository: reachable from origin's remote-tracking\nbranches or from this run's fetch of the reviewed pull request. The worktree, an interdiff's\nreplayed old side and an unpushed commit are not."
+        "side": {
+          "$ref": "#/$defs/Side"
         },
-        "new": {
-          "type": "boolean"
+        "startLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         }
       },
       "required": [
         "version",
-        "repositoryUrl",
-        "old",
-        "new"
+        "path",
+        "side",
+        "startLine",
+        "endLine"
       ],
-      "description": "Where a permalink to each side of a snapshot points, from local refs alone: no token, no\nnetwork, no cache, so a push shows on the next request."
+      "description": "Lines of one side of a snapshot to link to on the forge origin points at."
     },
     "PullRef": {
       "type": "object",

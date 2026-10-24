@@ -30,20 +30,33 @@ export function useCopied(): { done: boolean; copy(text: string): Promise<boolea
 /**
  * Copies text to the clipboard. `navigator.clipboard` only exists in secure
  * contexts (https or localhost); over plain http on a LAN address the legacy
- * `execCommand('copy')` path still works. Returns false when both fail so the
- * caller can offer a manual-copy fallback.
+ * `execCommand('copy')` path still works. Returns false when both fail, or
+ * when a pending text rejects, so the caller can offer a manual-copy fallback.
+ * Pass text still being fetched as a promise: the write then starts within the
+ * user gesture, which Safari requires, instead of after an await.
  */
-export async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string | Promise<string>): Promise<boolean> {
   if (navigator.clipboard && window.isSecureContext) {
     try {
-      await navigator.clipboard.writeText(text);
+      if (typeof text !== 'string' && typeof ClipboardItem !== 'undefined') {
+        const blob = text.then((t) => new Blob([t], { type: 'text/plain' }));
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+      } else {
+        await navigator.clipboard.writeText(await text);
+      }
       return true;
     } catch {
       /* fall through */
     }
   }
+  let value: string;
+  try {
+    value = await text;
+  } catch {
+    return false;
+  }
   const ta = document.createElement('textarea');
-  ta.value = text;
+  ta.value = value;
   ta.setAttribute('readonly', '');
   ta.style.position = 'fixed';
   ta.style.top = '0';
@@ -52,7 +65,7 @@ export async function copyText(text: string): Promise<boolean> {
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
-  ta.setSelectionRange(0, text.length);
+  ta.setSelectionRange(0, value.length);
   let ok = false;
   try {
     ok = document.execCommand('copy');
