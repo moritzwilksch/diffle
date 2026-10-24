@@ -50,7 +50,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - windows-latest
           - windows-11-arm
         variant:
           - baseline
@@ -67,29 +66,44 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 30GB
+          workspace-copy: true
           trusted-dev-drive: true
-      # The workspace becomes a junction into the dev drive before checkout, so every path (and so
-      # every cache key) stays the same. A volume mounted there directly breaks Node's scandir.
+          env-mapping: |
+            TEMP,{{ DEV_DRIVE }}\tmp
+            TMP,{{ DEV_DRIVE }}\tmp
       - if: matrix.variant == 'devws'
-        name: Move the workspace onto the dev drive
         shell: pwsh
-        working-directory: ${{ runner.temp }}
         run: |
-          $target = "$env:DEV_DRIVE\workspace"
-          New-Item -ItemType Directory -Force $target | Out-Null
-          Remove-Item -Recurse -Force $env:GITHUB_WORKSPACE
-          New-Item -ItemType Junction -Path $env:GITHUB_WORKSPACE -Target $target | Format-List FullName, LinkType, Target
-          fsutil devdrv query $env:DEV_DRIVE
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+          New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+          "DEV_DRIVE_WORKSPACE=$env:DEV_DRIVE_WORKSPACE"
+      - if: matrix.variant == 'baseline'
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+      # setup-pixi caches relative to github.workspace and pixi refuses a moved environment, so
+      # the dev-drive copy keeps its own cache at its own path.
+      - if: matrix.variant == 'devws'
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
+          cache: false
+          run-install: false
+      - if: matrix.variant == 'devws'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.DEV_DRIVE_WORKSPACE }}\.pixi
+          key: pixi-devws-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pixi.lock') }}
+      - if: matrix.variant == 'devws'
+        run: pixi install --locked
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         run: git config --system core.autocrlf false
       - run: pixi run test-node
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
 
 
   rust:
@@ -99,7 +113,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - windows-latest
           - windows-11-arm
         variant:
           - baseline
@@ -116,30 +129,48 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 30GB
+          workspace-copy: true
           trusted-dev-drive: true
-      # The workspace becomes a junction into the dev drive before checkout, so every path (and so
-      # every cache key) stays the same. A volume mounted there directly breaks Node's scandir.
+          env-mapping: |
+            TEMP,{{ DEV_DRIVE }}\tmp
+            TMP,{{ DEV_DRIVE }}\tmp
       - if: matrix.variant == 'devws'
-        name: Move the workspace onto the dev drive
         shell: pwsh
-        working-directory: ${{ runner.temp }}
         run: |
-          $target = "$env:DEV_DRIVE\workspace"
-          New-Item -ItemType Directory -Force $target | Out-Null
-          Remove-Item -Recurse -Force $env:GITHUB_WORKSPACE
-          New-Item -ItemType Junction -Path $env:GITHUB_WORKSPACE -Target $target | Format-List FullName, LinkType, Target
-          fsutil devdrv query $env:DEV_DRIVE
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+          New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+          "DEV_DRIVE_WORKSPACE=$env:DEV_DRIVE_WORKSPACE"
+      - if: matrix.variant == 'baseline'
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+      # setup-pixi caches relative to github.workspace and pixi refuses a moved environment, so
+      # the dev-drive copy keeps its own cache at its own path.
+      - if: matrix.variant == 'devws'
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
+          cache: false
+          run-install: false
+      - if: matrix.variant == 'devws'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.DEV_DRIVE_WORKSPACE }}\.pixi
+          key: pixi-devws-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pixi.lock') }}
+      - if: matrix.variant == 'devws'
+        run: pixi install --locked
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ${{ matrix.variant }}
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE || '.' }} -> target
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         run: git config --system core.autocrlf false
       - run: pixi run test-rust
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
 
 
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
@@ -201,7 +232,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - windows-latest
           - windows-11-arm
         variant:
           - baseline
@@ -218,34 +248,52 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 30GB
+          workspace-copy: true
           trusted-dev-drive: true
-      # The workspace becomes a junction into the dev drive before checkout, so every path (and so
-      # every cache key) stays the same. A volume mounted there directly breaks Node's scandir.
+          env-mapping: |
+            TEMP,{{ DEV_DRIVE }}\tmp
+            TMP,{{ DEV_DRIVE }}\tmp
       - if: matrix.variant == 'devws'
-        name: Move the workspace onto the dev drive
         shell: pwsh
-        working-directory: ${{ runner.temp }}
         run: |
-          $target = "$env:DEV_DRIVE\workspace"
-          New-Item -ItemType Directory -Force $target | Out-Null
-          Remove-Item -Recurse -Force $env:GITHUB_WORKSPACE
-          New-Item -ItemType Junction -Path $env:GITHUB_WORKSPACE -Target $target | Format-List FullName, LinkType, Target
-          fsutil devdrv query $env:DEV_DRIVE
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+          New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+          "DEV_DRIVE_WORKSPACE=$env:DEV_DRIVE_WORKSPACE"
+      - if: matrix.variant == 'baseline'
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+      # setup-pixi caches relative to github.workspace and pixi refuses a moved environment, so
+      # the dev-drive copy keeps its own cache at its own path.
+      - if: matrix.variant == 'devws'
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
+          cache: false
+          run-install: false
+      - if: matrix.variant == 'devws'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.DEV_DRIVE_WORKSPACE }}\.pixi
+          key: pixi-devws-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pixi.lock') }}
+      - if: matrix.variant == 'devws'
+        run: pixi install --locked
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ${{ matrix.variant }}
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE || '.' }} -> target
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         run: git config --system core.autocrlf false
       - run: pixi run package
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-${{ matrix.os }}-${{ matrix.variant }}
-          path: out/*
+          path: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}/out/*
 
 
   npm-packages:
