@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { split } from '@/client/graph/components.js';
-import { type Box, layout } from '@/client/graph/layout.js';
-import { byFile, rank } from '@/client/graph/rank.js';
-import { signatureOf } from '@/client/graph/useSignatures.js';
+import { split } from '@/client/graph/layout/components.js';
+import { type Box, layout } from '@/client/graph/layout/layout.js';
+import { byFile, rank } from '@/client/graph/layout/rank.js';
+import { signatureOf } from '@/client/graph/details/useSignatures.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
 
 const node = (id: string, status: GraphNode['status'] = 'modified', path = `${id}.py`): GraphNode => ({

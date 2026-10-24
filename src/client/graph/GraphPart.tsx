@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { KindIcon } from '@/client/lsp/symbolKind.js';
 import { isTest } from './filters.js';
 import { Cluster, Node } from './GraphShapes.js';
-import type { Box, Placed } from './layout.js';
-import { edgeKey } from './rank.js';
+import type { Box, Placed } from '@/client/graph/layout/layout.js';
+import { edgeKey } from '@/client/graph/layout/rank.js';
 
 /**
  * What stays lit: the selection, hovered node or focused file (`seeds`) and everything linked to

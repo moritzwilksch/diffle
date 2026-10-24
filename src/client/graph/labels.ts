@@ -1,6 +1,6 @@
 import { KIND_LABEL } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
-import type { Size } from './layout.js';
+import type { Size } from '@/client/graph/layout/layout.js';
 
 /** What a node box says: its name, and below it what kind of thing it is. */
 export interface NodeLabel {

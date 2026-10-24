@@ -2,7 +2,7 @@ import { FileCode2, Pencil, Plus } from 'lucide-react';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { basename, clip, dirname, nodeLabel } from './labels.js';
-import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from './layout.js';
+import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
 
 const STATUS_STROKE: Record<GraphNode['status'], string> = {
   added: 'var(--add)',

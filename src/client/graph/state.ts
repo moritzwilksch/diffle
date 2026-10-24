@@ -5,9 +5,9 @@ import { lspBlocker } from '@/shared/lsp.js';
 import type { GraphEdge, GraphResponse, Snapshot } from '@/shared/protocol.js';
 import { isTest, keepNodes } from './filters.js';
 import { nodeSize } from './labels.js';
-import { type Stacked, stack } from './components.js';
-import type { PlacedNode } from './layout.js';
-import { byFile, edgeKey } from './rank.js';
+import { type Stacked, stack } from '@/client/graph/layout/components.js';
+import type { PlacedNode } from '@/client/graph/layout/layout.js';
+import { byFile, edgeKey } from '@/client/graph/layout/rank.js';
 
 export type Filter = 'files' | 'consumers' | 'tests';
 export type Direction = 'left' | 'right' | 'up' | 'down';

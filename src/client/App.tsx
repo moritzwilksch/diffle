@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { connectWs } from './api.js';
 import { CommentPanel } from './comments/CommentPanel.js';
-import { GraphDetails } from './graph/GraphDetails.js';
+import { GraphDetails } from './graph/details/GraphDetails.js';
 import { useGraph } from './graph/state.js';
 import { GraphView } from './graph/GraphView.js';
 import { Header } from './header/Header.js';

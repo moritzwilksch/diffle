@@ -3,8 +3,8 @@ import { useMemo } from 'react';
 import { KIND_LABEL } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { Code, Heading, LinkButton, Links, Location, Name } from './GraphDetailParts.js';
-import { edgeKey } from './rank.js';
-import { useGraph, type View } from './state.js';
+import { edgeKey } from '@/client/graph/layout/rank.js';
+import { useGraph, type View } from '@/client/graph/state.js';
 import { useSignatures } from './useSignatures.js';
 
 const STATUS_LABEL: Record<GraphNode['status'], string> = {

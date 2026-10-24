@@ -4,8 +4,8 @@ import { FilePath } from '@/client/FilePath.js';
 import { Markdown } from '@/client/Markdown.js';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
-import { isTest } from './filters.js';
-import { useGraph } from './state.js';
+import { isTest } from '@/client/graph/filters.js';
+import { useGraph } from '@/client/graph/state.js';
 import { type Signature, signatureOf, type Signatures } from './useSignatures.js';
 
 const KIND_TEXT: Record<string, string> = {

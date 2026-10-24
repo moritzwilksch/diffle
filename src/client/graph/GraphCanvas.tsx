@@ -1,10 +1,10 @@
 import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
-import { PART_HEADER } from './components.js';
+import { PART_HEADER } from '@/client/graph/layout/components.js';
 import { type EdgeLabel, GraphPart, HEAD, type Lit } from './GraphPart.js';
 import { GraphLegend, ZoomControls } from './GraphLegend.js';
 import { ArrowDefs } from './GraphShapes.js';
-import type { Box, PlacedNode } from './layout.js';
-import { edgeKey } from './rank.js';
+import type { Box, PlacedNode } from '@/client/graph/layout/layout.js';
+import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from './state.js';
 
 /** A press on the canvas, and what it landed on: a node, an arrow, or a part's header action. */

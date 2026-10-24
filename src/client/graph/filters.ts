@@ -1,5 +1,5 @@
 import type { GraphNode } from '@/shared/protocol.js';
-import type { Graph } from './rank.js';
+import type { Graph } from '@/client/graph/layout/rank.js';
 
 /** The graph limited to the nodes `keep` accepts and the edges between them. */
 export function keepNodes<G extends Graph>(graph: G, keep: (n: GraphNode) => boolean): G {
