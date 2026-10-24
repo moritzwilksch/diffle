@@ -4,19 +4,19 @@ export type Graph = Pick<GraphResponse, 'nodes' | 'edges'>;
 
 /** Where each node of a graph stands between the code nothing uses (entry) and the code using nothing (core). */
 export interface Ranked {
-  /** Column per node id, 0 = entry. Every edge points to a higher column, except inside a cycle. */
-  column: Map<string, number>;
-  columns: number;
+  /** Layer per node id, 0 = entry, at the top. Every edge points to a later layer, except inside a cycle. */
+  layer: Map<string, number>;
+  layers: number;
   /** Martin's instability, out / (in + out): 1 uses only, 0 is only used; 0.5 for an isolated node. */
   instability: Map<string, number>;
-  /** The node ids of each cycle, which share a column. */
+  /** The node ids of each cycle, which share a layer. */
   cycles: string[][];
 }
 
 /**
  * Ranks by dependency depth, whatever the language: cycles collapse into one unit, and a unit's
- * column is how far it sits from the deepest core, so core code aligns right and each user sits
- * just left of what it uses.
+ * layer is how far it sits from the deepest core, so core code settles at the bottom and each user sits
+ * just above what it uses.
  */
 export function rank(graph: Graph): Ranked {
   const ids = graph.nodes.map((n) => n.id);
@@ -38,8 +38,8 @@ export function rank(graph: Graph): Ranked {
         if (used !== unit) height[unit] = Math.max(height[unit]!, height[used]! + 1);
       }
   });
-  const columns = Math.max(0, ...height) + 1;
-  const column = new Map(ids.map((id) => [id, columns - 1 - height[unitOf.get(id)!]!]));
+  const layers = Math.max(0, ...height) + 1;
+  const layer = new Map(ids.map((id) => [id, layers - 1 - height[unitOf.get(id)!]!]));
   const instability = new Map(
     ids.map((id) => {
       const out = uses.get(id)!.length;
@@ -47,7 +47,7 @@ export function rank(graph: Graph): Ranked {
       return [id, total === 0 ? 0.5 : out / total];
     }),
   );
-  return { column, columns, instability, cycles: components.filter((c) => c.length > 1) };
+  return { layer, layers, instability, cycles: components.filter((c) => c.length > 1) };
 }
 
 /** Tarjan's strongly connected components, each emitted after every component it reaches. */

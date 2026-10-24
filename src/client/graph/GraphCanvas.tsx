@@ -10,7 +10,7 @@ interface View {
 }
 
 const MARGIN = 48;
-const HEAD = 28;
+const HEAD = 44;
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.15;
 const FIT_ZOOM = 1.25;
@@ -35,12 +35,13 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
   const fitBox = (box: Box, maxZoom: number) => {
     const el = host.current;
     if (!el || !el.clientWidth) return;
-    const [w, h] = [box.w + 2 * MARGIN, box.h + 2 * MARGIN + HEAD];
+    // The layer labels sit in a gutter left of the graph.
+    const [w, h] = [box.w + 2 * MARGIN + HEAD, box.h + 2 * MARGIN];
     const k = Math.min(maxZoom, el.clientWidth / w, el.clientHeight / h);
     setView({
       k,
-      x: (el.clientWidth - w * k) / 2 + (MARGIN - box.x) * k,
-      y: (el.clientHeight - h * k) / 2 + (MARGIN + HEAD - box.y) * k,
+      x: (el.clientWidth - w * k) / 2 + (MARGIN + HEAD - box.x) * k,
+      y: (el.clientHeight - h * k) / 2 + (MARGIN - box.y) * k,
     });
   };
   const zoomAt = (px: number, py: number, factor: number) =>
@@ -128,15 +129,9 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
       <svg className="absolute inset-0 h-full w-full" role="img" aria-label="Change graph">
         <ArrowDefs />
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {placed.columns.map((c, i) => (
-            <text
-              key={i}
-              x={c.x + c.w / 2}
-              y={-HEAD + 6}
-              textAnchor="middle"
-              className="fill-muted font-sans text-[11px]"
-            >
-              {i === 0 ? 'entry' : i === placed.columns.length - 1 ? 'core' : ''}
+          {placed.layers.map((l, i) => (
+            <text key={i} x={-HEAD} y={l.y + 16} textAnchor="end" className="fill-muted font-sans text-[11px]">
+              {i === 0 ? 'entry' : i === placed.layers.length - 1 ? 'core' : ''}
             </text>
           ))}
           {placed.shelf != null && (
@@ -148,7 +143,7 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
             const members = placed.nodes.filter((n) => n.node.path === c.path && within(n, c));
             return (
               <Cluster
-                key={`${c.path}@${c.column}@${c.y}`}
+                key={`${c.path}@${c.layer}@${c.x},${c.y}`}
                 cluster={c}
                 members={members}
                 opacity={opacity(members.map((n) => n.node.id)) === 1 ? 1 : 0.25}

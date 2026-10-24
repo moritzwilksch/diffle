@@ -105,14 +105,6 @@ export function Node({
       <text x={x + 26} y={y + 32} className="fill-muted font-sans text-[10.5px]">
         {clip(detail, Math.floor((w - 32) / DETAIL_CHAR))}
       </text>
-      {node.moreConsumers ? (
-        <g>
-          <rect x={x - 34} y={y + h / 2 - 9} width={28} height={18} rx={9} fill="var(--bg-3)" />
-          <text x={x - 20} y={y + h / 2 + 4} textAnchor="middle" className="fill-muted font-sans text-[10.5px]">
-            +{node.moreConsumers}
-          </text>
-        </g>
-      ) : null}
     </g>
   );
 }

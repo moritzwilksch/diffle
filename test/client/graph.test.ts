@@ -27,7 +27,7 @@ function graph(nodes: GraphNode[], edges: string[]): GraphResponse {
   };
 }
 
-const columns = (g: GraphResponse) => Object.fromEntries(rank(g).column);
+const layers = (g: GraphResponse) => Object.fromEntries(rank(g).layer);
 
 describe('rank', () => {
   it('lays a chain out from entry to core', () => {
@@ -35,7 +35,7 @@ describe('rank', () => {
       ['cli', 'runner', 'agent', 'http'].map((id) => node(id)),
       ['cli>runner', 'runner>agent', 'agent>http'],
     );
-    expect(columns(g)).toEqual({ cli: 0, runner: 1, agent: 2, http: 3 });
+    expect(layers(g)).toEqual({ cli: 0, runner: 1, agent: 2, http: 3 });
   });
 
   it('puts a user just left of what it uses, aligning core code right', () => {
@@ -43,16 +43,16 @@ describe('rank', () => {
       ['cli', 'runner', 'agent', 'report'].map((id) => node(id)),
       ['cli>runner', 'runner>agent', 'report>agent'],
     );
-    expect(columns(g)).toEqual({ cli: 0, runner: 1, agent: 2, report: 1 });
+    expect(layers(g)).toEqual({ cli: 0, runner: 1, agent: 2, report: 1 });
   });
 
-  it('gives a cycle one column and reports it', () => {
+  it('gives a cycle one layer and reports it', () => {
     const g = graph(
       ['a', 'b', 'c', 'd'].map((id) => node(id)),
       ['a>b', 'b>c', 'c>b', 'c>d'],
     );
     const ranked = rank(g);
-    expect(Object.fromEntries(ranked.column)).toEqual({ a: 0, b: 1, c: 1, d: 2 });
+    expect(Object.fromEntries(ranked.layer)).toEqual({ a: 0, b: 1, c: 1, d: 2 });
     expect(ranked.cycles.map((c) => [...c].sort())).toEqual([['b', 'c']]);
   });
 
@@ -90,7 +90,7 @@ describe('layout', () => {
   const size = () => ({ w: 140, h: 40 });
   const overlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-  it('keeps boxes apart, columns in rank order, and unlinked symbols on a shelf below', () => {
+  it('keeps boxes apart, layers in rank order top to bottom, and unlinked symbols on a shelf below', () => {
     const g = graph(
       [
         node('main', 'consumer', 'cli.py'),
@@ -103,20 +103,20 @@ describe('layout', () => {
     );
     const placed = layout(g, rank(g), size, true);
     const at = new Map(placed.nodes.map((p) => [p.node.id, p]));
-    expect(at.get('main')!.x).toBeLessThan(at.get('run')!.x);
-    expect(at.get('run')!.x).toBeLessThan(at.get('get')!.x);
+    expect(at.get('main')!.y).toBeLessThan(at.get('run')!.y);
+    expect(at.get('run')!.y).toBeLessThan(at.get('get')!.y);
     for (const [i, a] of placed.nodes.entries())
       for (const b of placed.nodes.slice(i + 1)) expect(overlap(a, b), `${a.node.id} / ${b.node.id}`).toBe(false);
     expect(placed.shelf).not.toBeNull();
     expect(at.get('lone')!.y).toBeGreaterThanOrEqual(placed.shelf!);
-    // One cluster per file and column; the shelf's cluster has no column.
-    expect(placed.clusters.map((c) => [c.path, c.column])).toEqual(
+    // One cluster per file and layer; the shelf's cluster has no layer.
+    expect(placed.clusters.map((c) => [c.path, c.layer])).toEqual(
       expect.arrayContaining([
         ['agent.py', 1],
         ['misc.py', -1],
       ]),
     );
-    // main uses get two columns on: its edge passes a waypoint, so it is two curve segments plus one across.
+    // main uses get two layers on: its edge passes a waypoint, so it is two curves plus the straight run through it.
     const long = placed.edges.find((e) => e.edge.from === 'main' && e.edge.to === 'get')!;
     expect(long.d.match(/C/g)).toHaveLength(3);
   });

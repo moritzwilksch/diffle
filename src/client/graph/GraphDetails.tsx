@@ -39,14 +39,14 @@ export function GraphDetails() {
 
   if (!node)
     return (
-      <aside className="flex min-h-0 flex-col gap-2 overflow-y-auto bg-surface p-4 text-[0.8125rem] text-muted">
-        <p>An arrow points from code to the code it uses. Entry points sit left, core code right.</p>
+      <aside className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-surface p-4 text-[0.8125rem] text-muted">
+        <p>An arrow points from code to the code it uses. Entry points sit at the top, core code at the bottom.</p>
         <p>Framed boxes changed: green added, blue modified. Dashed boxes are unchanged code using the change.</p>
         <p>Select a box for its signature and links. Enter or a double-click opens it in the diff; M returns.</p>
       </aside>
     );
   return (
-    <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto bg-surface p-4 text-[0.8125rem]">
+    <aside className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-surface p-4 text-[0.8125rem]">
       <div className="flex flex-col gap-1">
         <Name node={node} className="text-[0.875rem]" />
         <div className="text-muted">

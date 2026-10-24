@@ -35,7 +35,7 @@ export interface GraphState {
   close(): void;
   reload(): Promise<void>;
   select(id: string | null): void;
-  /** Moves the selection to the nearest node that way: left / right across columns, up / down within one. */
+  /** Moves the selection to the nearest node that way: up / down across layers, left / right within one. */
   step(direction: Direction): void;
   /** Leaves the graph for the diff at `path:line`. */
   pick(target: { path: string; line: number }): void;
@@ -136,26 +136,26 @@ function derive(graph: GraphResponse, filters: Record<Filter, boolean>): GraphSt
 const centerOf = (p: PlacedNode) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2 });
 
 function nearestToOrigin(nodes: PlacedNode[]): PlacedNode | undefined {
-  return [...nodes].sort((a, b) => a.x - b.x || a.y - b.y)[0];
+  return [...nodes].sort((a, b) => a.y - b.y || a.x - b.x)[0];
 }
 
-/** The closest node strictly that way; across columns, vertical distance counts less than the column gap. */
+/** The closest node strictly that way; across layers, sideways distance counts less than the layer gap. */
 function nearest(from: PlacedNode, nodes: PlacedNode[], direction: Direction): PlacedNode | undefined {
   const a = centerOf(from);
-  const sameColumn = (p: PlacedNode) => p.x < from.x + from.w && from.x < p.x + p.w;
+  const sameLayer = (p: PlacedNode) => p.y < from.y + from.h && from.y < p.y + p.h;
   const ahead = nodes.filter((p) => {
     if (p === from) return false;
     const b = centerOf(p);
-    if (direction === 'left') return b.x < from.x;
-    if (direction === 'right') return b.x > from.x + from.w;
-    if (!sameColumn(p)) return false;
-    return direction === 'up' ? b.y < a.y : b.y > a.y;
+    if (direction === 'up') return b.y < from.y;
+    if (direction === 'down') return b.y > from.y + from.h;
+    if (!sameLayer(p)) return false;
+    return direction === 'left' ? b.x < a.x : b.x > a.x;
   });
   const cost = (p: PlacedNode) => {
     const b = centerOf(p);
-    return direction === 'left' || direction === 'right'
-      ? Math.abs(b.x - a.x) + 2 * Math.abs(b.y - a.y)
-      : Math.abs(b.y - a.y);
+    return direction === 'up' || direction === 'down'
+      ? Math.abs(b.y - a.y) + 2 * Math.abs(b.x - a.x)
+      : Math.abs(b.x - a.x);
   };
   return ahead.sort((p, q) => cost(p) - cost(q))[0];
 }
