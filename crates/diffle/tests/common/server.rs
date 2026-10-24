@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use diffle::github::hosts::Github;
 use diffle::lsp::pool::{LspPool, PoolOptions};
+use diffle::lsp::registry::{Lookup, default_lookup};
 use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
 use diffle::server::hub::Hub;
 use diffle::server::{ApiDeps, Server, ServerOptions};
@@ -12,9 +13,15 @@ use futures::FutureExt;
 
 use super::TestRepo;
 
+/// Which language servers a test server starts: commands per language, and how the catalog's are found.
+struct LspSetup {
+    overrides: std::collections::HashMap<LanguageId, String>,
+    lookup: Lookup,
+}
+
 /// A pool reading new-side text through the session, so the snapshot allowlist applies, and tracking
-/// every snapshot. Overrides are never probed; the rest of PATH is not consulted.
-fn start_lsp(session: &Arc<Session>, overrides: std::collections::HashMap<LanguageId, String>) -> Arc<LspPool> {
+/// every snapshot. Overrides are never probed.
+fn start_lsp(session: &Arc<Session>, LspSetup { overrides, lookup }: LspSetup) -> Arc<LspPool> {
     let (reader, checker) = (Arc::downgrade(session), Arc::downgrade(session));
     let pool = LspPool::new(PoolOptions {
         root: session.repo.root.clone(),
@@ -41,7 +48,7 @@ fn start_lsp(session: &Arc<Session>, overrides: std::collections::HashMap<Langua
         on_status: Arc::new(|_| {}),
         overrides,
         preload: Vec::new(),
-        lookup: Arc::new(|_| None),
+        lookup,
         max_open: None,
     });
     let tracking = Arc::downgrade(&pool);
@@ -92,19 +99,29 @@ impl TestServer {
     }
 
     /// A server over `repo` with language servers for `overrides` (language → command), started
-    /// and kept in step with the session's snapshots as a run does it.
+    /// and kept in step with the session's snapshots as a run does it. The rest of PATH is not consulted.
     pub async fn with_lsp(
         repo: TestRepo,
         req: EnterRequest,
-        overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+        overrides: Option<std::collections::HashMap<LanguageId, String>>,
     ) -> Self {
+        let setup = overrides.map(|overrides| LspSetup { overrides, lookup: Arc::new(|_| None) });
+        Self::build(repo, req, setup).await
+    }
+
+    /// A server over `repo` starting the built-in servers it finds on PATH, as a run does.
+    pub async fn with_path_lsp(repo: TestRepo, req: EnterRequest) -> Self {
+        Self::build(repo, req, Some(LspSetup { overrides: Default::default(), lookup: default_lookup() })).await
+    }
+
+    async fn build(repo: TestRepo, req: EnterRequest, lsp: Option<LspSetup>) -> Self {
         let git = Arc::new(repo.open().await);
         let hub = Hub::new();
         let config = Arc::new(UserConfigStore::open(repo.path.join("cfg").join("config.json")).await);
         let opts =
             SessionOptions { watch: false, github: Github::tokenless(), context: 3, follow_refs: FollowRefs::Off };
         let session = Session::new(git, hub.clone(), opts);
-        let lsp = overrides.map(|overrides| start_lsp(&session, overrides));
+        let lsp = lsp.map(|setup| start_lsp(&session, setup));
         let deps = ApiDeps {
             session: session.clone(),
             config: config.clone(),
