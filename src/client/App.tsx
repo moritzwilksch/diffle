@@ -156,7 +156,8 @@ export function App() {
 function Covered({ children, cover, shown }: { children: ReactNode; cover: ReactNode; shown: boolean }) {
   return (
     <div className="relative grid min-h-0 min-w-0 grid-cols-1 grid-rows-1">
-      {children}
+      {/* Laid out but not painted while covered, so it cannot show through as the cover repaints. */}
+      <div className={cover && shown ? 'invisible contents' : 'contents'}>{children}</div>
       {cover && <div className={shown ? 'absolute inset-0 z-10 flex min-h-0 flex-col' : 'hidden'}>{cover}</div>}
     </div>
   );
