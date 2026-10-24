@@ -10,6 +10,7 @@ import { canvasControl } from '@/client/graph/GraphCanvas.js';
 import { bySource } from '@/client/graph/layout/order.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph } from '@/client/graph/state.js';
+import { useStore } from '@/client/store.js';
 import { type Signature, signatureOf, type Signatures } from './useSignatures.js';
 
 // The panel's type scale: titles, then names and prose, then everything around them.
@@ -110,7 +111,7 @@ export function Links({
             // a text selection in it keep their clicks.
             onClick={(ev) => {
               if ((ev.target as Element).closest('button, a') || window.getSelection()?.toString()) return;
-              canvasControl.frame(n.id);
+              jumpTo(n.id);
             }}
             onPointerEnter={() => useGraph.getState().hoverEdge(edgeKey(e))}
             onPointerLeave={() => useGraph.getState().hoverEdge(null)}
@@ -139,12 +140,18 @@ export function Links({
   );
 }
 
+/** Selects and frames a linked node, a jump Ctrl+o returns from. */
+function jumpTo(id: string) {
+  if (id !== useGraph.getState().selected) useStore.getState().recordJump();
+  canvasControl.frame(id);
+}
+
 /** A linked node's name, selecting and framing it in the graph; the chevron says the row leads there. */
 function NodeRow({ node }: { node: GraphNode }) {
   return (
     <LinkButton
       className="group flex items-center justify-between gap-2 hover:no-underline"
-      onClick={() => canvasControl.frame(node.id)}
+      onClick={() => jumpTo(node.id)}
     >
       <span className="group-hover:underline">
         <Name node={node} />

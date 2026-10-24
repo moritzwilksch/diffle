@@ -242,6 +242,7 @@ export interface JumpPosition {
  * view that made it restores it; the store keeps it opaque.
  */
 export interface ViewPlace {
+  /** Names the place, within its view too: two places with one name are one jump list entry. */
   view: string;
   restore(): void;
 }
@@ -407,6 +408,8 @@ export interface ReviewState {
    * view is shown, else null; `leave` hides the view when a jump lands in the diff.
    */
   registerView(view: { here(): ViewPlace | null; leave(): void }): void;
+  /** Leaves the current place in the jump list before a registered view moves within itself. */
+  recordJump(): void;
   moveCursor(delta: 1 | -1): void;
   /** Move by many rows (Ctrl+d / Ctrl+u), keeping the cursor at eye level. */
   moveCursorBy(rows: number): void;
@@ -2127,6 +2130,7 @@ export const useStore = create<ReviewState>((set, get) => {
     registerView(view) {
       outside = view;
     },
+    recordJump,
     scrollCursorTo(edge) {
       if (!get().selection) return get().flash('No line under the cursor');
       set((s) => ({ scrollTarget: cursorTarget(s, edge) }));

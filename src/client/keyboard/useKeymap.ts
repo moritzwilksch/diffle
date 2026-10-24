@@ -183,9 +183,9 @@ export function useKeymap(): void {
           clearPending();
           return;
         }
-        // Escape in the graph returns to the diff, unless a field or an open menu claims it first.
+        // Escape in the graph clears its selection, unless a field or an open menu claims it first; M leaves it.
         if (useGraph.getState().open && !s.helpOpen && !s.modeMenuOpen && !isEditable(target)) {
-          useGraph.getState().close();
+          useGraph.getState().deselect();
           clearPending();
           return;
         }

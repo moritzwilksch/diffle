@@ -13,6 +13,9 @@ const STEPS: Record<string, Direction> = {
 };
 
 const ZOOM_STEP = 1.25;
+/** How soon a second `z` makes `zz`, as the review's chords wait. */
+const CHORD_MS = 800;
+let zAt = -Infinity;
 
 /** Keys the graph leaves to the review: help, theme, the mode picker, and `M` back to the diff. */
 export const GRAPH_PASSES = new Set(['?', 't', 'm', 'M', 'o']);
@@ -57,6 +60,17 @@ export function graphKeys(e: KeyboardEvent): boolean {
       return true;
     case '/':
       openFind();
+      return true;
+    case 'z':
+      // `zz` does what a double-click does: frames the selection with its links, else fits the graph.
+      if (e.repeat) return true;
+      if (e.timeStamp - zAt > CHORD_MS) {
+        zAt = e.timeStamp;
+        return true;
+      }
+      zAt = -Infinity;
+      if (graph.selected) canvasControl.frame(graph.selected);
+      else canvasControl.fit();
       return true;
     case '0':
       canvasControl.fit();

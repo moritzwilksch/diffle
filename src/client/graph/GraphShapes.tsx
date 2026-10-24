@@ -99,7 +99,12 @@ export function Node({
   const badge = STATUS_BADGE[node.status];
   const nameColor = kindColor(node.kind);
   return (
-    <g data-node={node.id} opacity={opacity} className="cursor-pointer">
+    <g
+      data-node={node.id}
+      data-selected={focus === 'selected' || undefined}
+      opacity={opacity}
+      className="cursor-pointer"
+    >
       <rect
         x={x}
         y={y}

@@ -46,6 +46,8 @@ export interface GraphState {
   /** Selects a node; selecting the selected one again clears it. */
   select(id: string | null): void;
   selectEdge(key: string | null): void;
+  /** Clears the selected node or arrow and the file focused from the tree, so nothing stays lit. */
+  deselect(): void;
   hoverEdge(key: string | null): void;
   /** Moves the selection to the nearest node that way: up / down across layers, left / right within one. */
   step(direction: Direction): void;
@@ -110,6 +112,10 @@ export const useGraph = create<GraphState>((set, get) => ({
 
   hoverEdge(key) {
     set({ hoveredEdge: key });
+  },
+
+  deselect() {
+    set({ selected: null, selectedEdge: null, hoveredEdge: null, focusPath: null });
   },
 
   selectEdge(key) {
@@ -190,11 +196,14 @@ function show(): void {
   if (graph.snapshot !== useStore.getState().snapshot || graph.load.state === 'idle') void graph.reload();
 }
 
-/** The graph as it stands, for the jump list: Ctrl+o after a jump into the diff restores it. */
+/**
+ * The graph as it stands, for the jump list: Ctrl+o after a jump into the diff restores it, and
+ * one selection to another within the graph steps between them.
+ */
 function place(): ViewPlace {
   const { selected, selectedEdge, filters, only } = useGraph.getState();
   return {
-    view: 'graph',
+    view: `graph:${selected ?? selectedEdge ?? ''}`,
     restore() {
       const graph = useGraph.getState();
       const load = graph.load;
