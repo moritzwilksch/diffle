@@ -1,29 +1,27 @@
-import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, Link2, Waypoints } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, Link2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL, kindGroup } from '@/client/lsp/symbolKind.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
-import type { GraphNode } from '@/shared/protocol.js';
+import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import {
   BODY,
   Code,
   Jumps,
-  LinkButton,
   Links,
   META,
   Name,
   SectionHeading,
   StatusWord,
   TITLE,
+  type UsedAt,
 } from './GraphDetailParts.js';
 import { useSignatures } from './useSignatures.js';
 
-/** Arrows the overview lists, heaviest first. */
-const STRONGEST = 8;
 const PANEL = `flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-surface px-4 pb-4 ${BODY}`;
 
 /**
- * What the side panel says in graph view: the selected node or arrow, else an overview. A name
+ * What the side panel says in graph view: the selected node or arrow, else a hint to select one. A name
  * selects that node in the graph; a `:line` chip opens the diff there.
  */
 export function GraphDetails() {
@@ -33,7 +31,13 @@ export function GraphDetails() {
   if (!view) return <aside className={PANEL} />;
   if (selectedEdge && view.via.has(selectedEdge)) return <EdgeDetails view={view} edge={selectedEdge} />;
   const node = view.graph.nodes.find((n) => n.id === selected);
-  return node ? <NodeDetails view={view} node={node} /> : <Overview view={view} />;
+  if (!node)
+    return (
+      <aside className={PANEL}>
+        <p className={`m-0 pt-6 text-center ${META}`}>Select a box or an arrow to see its links.</p>
+      </aside>
+    );
+  return <NodeDetails view={view} node={node} />;
 }
 
 /**
@@ -51,6 +55,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
     [node, uses, usedBy, byId],
   );
   const signatures = useSignatures(graph, asked);
+  const used = useMemo(() => (view.graph === view.symbols ? undefined : usedAt(view)), [view]);
   return (
     <aside className={PANEL}>
       <div className="flex flex-col gap-2 pt-4">
@@ -67,6 +72,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         edges={usedBy}
         other={(e) => byId.get(e.from)}
         site={(n) => n.path}
+        used={used}
         signatures={signatures}
       />
       <Links
@@ -75,11 +81,29 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         edges={uses}
         other={(e) => byId.get(e.to)}
         site={() => node.path}
+        used={used}
         signatures={signatures}
       />
       {node.moreConsumers ? <p className={META}>and {node.moreConsumers} more unchanged users, not drawn</p> : null}
     </aside>
   );
+}
+
+/** For a file arrow, the symbols each of its reference lines uses, from the symbol links behind it. */
+function usedAt(view: View): (e: GraphEdge) => UsedAt {
+  const symbols = new Map(view.symbols.nodes.map((n) => [n.id, n]));
+  return (e) => {
+    const byLine: UsedAt = new Map();
+    for (const link of view.via.get(edgeKey(e)) ?? []) {
+      const to = symbols.get(link.to);
+      if (!to) continue;
+      for (const line of link.lines) {
+        const at = byLine.get(line) ?? [];
+        if (!at.some((n) => n.id === to.id)) byLine.set(line, [...at, to]);
+      }
+    }
+    return byLine;
+  };
 }
 
 /** An arrow: its two ends, then every symbol pair behind it with the lines that make the link. */
@@ -109,8 +133,8 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
             <Pair user={user} used={used} />
             <Jumps
               rows={[
-                { to: 'reference', path: user.path, lines: e.lines },
                 { to: 'definition', path: used.path, lines: [used.line] },
+                { to: 'reference', path: user.path, lines: e.lines },
               ]}
             />
             <Code signature={signatures.get(used.id)} path={used.path} />
@@ -131,48 +155,5 @@ function Pair({ user, used, className = '' }: { user: GraphNode; used: GraphNode
       </span>
       <Name node={used} />
     </div>
-  );
-}
-
-/** Before anything is selected: the graph's heaviest arrows. */
-function Overview({ view }: { view: View }) {
-  const byId = useMemo(() => new Map(view.graph.nodes.map((n) => [n.id, n])), [view]);
-  const strongest = useMemo(() => {
-    const weight = (key: string) => (view.via.get(key) ?? []).reduce((sum, e) => sum + e.lines.length, 0);
-    return [...view.graph.edges]
-      .map((e) => ({ e, w: weight(edgeKey(e)) }))
-      .sort((a, b) => b.w - a.w)
-      .slice(0, STRONGEST);
-  }, [view]);
-  return (
-    <aside className={PANEL}>
-      {strongest.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <SectionHeading icon={Waypoints} count={strongest.length}>
-            Strongest links
-          </SectionHeading>
-          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-            {strongest.map(({ e, w }) => {
-              const [from, to] = [byId.get(e.from), byId.get(e.to)];
-              if (!from || !to) return null;
-              return (
-                <li key={edgeKey(e)}>
-                  <LinkButton
-                    className="flex flex-col items-start gap-0.5"
-                    onClick={() => useGraph.getState().selectEdge(edgeKey(e))}
-                  >
-                    <Name node={from} />
-                    <span className="flex items-center gap-1.5 pl-2">
-                      <span className="text-muted">→</span> <Name node={to} />
-                      <span className={META}>×{w}</span>
-                    </span>
-                  </LinkButton>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-    </aside>
   );
 }

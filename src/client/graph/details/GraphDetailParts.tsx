@@ -46,7 +46,7 @@ export function SectionHeading({
 }) {
   return (
     <h3
-      className={`sticky top-0 z-[1] -mx-4 flex items-center gap-1.5 border-b border-border bg-surface px-4 py-2 ${BODY} font-semibold`}
+      className={`sticky top-0 z-[1] -mx-4 my-0 flex items-center gap-1.5 border-b border-border bg-surface px-4 py-2 ${BODY} font-semibold`}
     >
       <Icon size="0.875rem" className="text-muted" />
       {children}
@@ -56,7 +56,7 @@ export function SectionHeading({
 }
 
 /** A plain button that reads as a link, without the browser's button chrome. */
-export function LinkButton({ className, ...props }: ComponentProps<'button'>) {
+function LinkButton({ className, ...props }: ComponentProps<'button'>) {
   return (
     <button
       type="button"
@@ -76,6 +76,7 @@ export function Links({
   edges,
   other,
   site,
+  used,
   signatures,
 }: {
   icon: LucideIcon;
@@ -84,6 +85,8 @@ export function Links({
   other: (e: GraphEdge) => GraphNode | undefined;
   /** The file holding the references, given the other end. */
   site: (other: GraphNode) => string;
+  /** File view only: the symbols each reference line uses. */
+  used?: (e: GraphEdge) => UsedAt;
   signatures: Signatures;
 }) {
   const [all, setAll] = useState(false);
@@ -110,7 +113,7 @@ export function Links({
             <Jumps
               rows={[
                 ...(n.kind === 1 ? [] : [{ to: 'definition' as const, path: n.path, lines: [n.line] }]),
-                { to: 'reference' as const, path: site(n), lines: e.lines },
+                { to: 'reference' as const, path: site(n), lines: e.lines, used: used?.(e) },
               ]}
             />
             <Code signature={signatures.get(n.id)} path={n.path} />
@@ -136,7 +139,6 @@ function NodeRow({ node }: { node: GraphNode }) {
     <LinkButton
       className="group flex items-center justify-between gap-2 hover:no-underline"
       onClick={() => useGraph.getState().select(node.id)}
-      title="Select in the graph"
     >
       <span className="group-hover:underline">
         <Name node={node} />
@@ -174,15 +176,47 @@ const JUMPS: Record<JumpKind, { icon: LucideIcon; label: string }> = {
   reference: { icon: Link2, label: 'Used at' },
 };
 
+/** The symbols a file arrow's reference lines use, by line. */
+export type UsedAt = Map<number, GraphNode[]>;
+
 /**
  * Where to jump, one labelled row each: the file, then a chip per line that opens the diff there.
- * Every jump in the panel looks like this, so it is plain which clicks leave the graph.
+ * Every jump in the panel looks like this, so it is plain which clicks leave the graph. With `used`,
+ * the chips stack, each beside the symbols its line uses.
  */
-export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[] }[] }) {
+export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[]; used?: UsedAt }[] }) {
   return (
     <div className={`grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 ${META}`}>
-      {rows.map(({ to, path, lines }) => {
+      {rows.map(({ to, path, lines, used }) => {
         const { icon: Icon, label } = JUMPS[to];
+        if (used)
+          return (
+            <div key={to} className="contents">
+              <span className="inline-flex items-center gap-1">
+                <Icon size="0.75rem" className="shrink-0 self-center" />
+                {label}
+              </span>
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <FileCode2 size="0.75rem" className="shrink-0" />
+                  <ShortPath path={path} />
+                </span>
+                {lines.map((line) => (
+                  <span key={line} className="flex min-w-0 items-center gap-2">
+                    {/* A column as wide as a four-digit chip, so the names line up. */}
+                    <span className="w-14 shrink-0">
+                      <JumpChip path={path} line={line} />
+                    </span>
+                    <span className="flex min-w-0 flex-wrap gap-x-2 text-foreground">
+                      {(used.get(line) ?? []).map((n) => (
+                        <Name key={n.id} node={n} className="text-[0.75rem]" />
+                      ))}
+                    </span>
+                  </span>
+                ))}
+              </span>
+            </div>
+          );
         return (
           <div key={to} className="contents">
             <span className="inline-flex items-center gap-1">
