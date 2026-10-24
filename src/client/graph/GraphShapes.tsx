@@ -70,9 +70,8 @@ const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; col
 };
 
 /**
- * A symbol: its kind's icon and colour, its name in monospace, what it is under it, its change
- * as a badge (an icon besides the colour), and its arrows in and out, `→2 5→`, in a corner. A test recedes:
- * quieter fill and name, and a `test` tag.
+ * A symbol: its kind's icon and colour, its name in monospace, what it is under it, and its change
+ * as a badge (an icon besides the colour). A test recedes: quieter fill and name, and a `test` tag.
  */
 export function Node({
   placed,
@@ -80,21 +79,17 @@ export function Node({
   selected,
   opacity,
   test,
-  degree,
 }: {
   placed: PlacedNode;
   clustered: boolean;
   selected: boolean;
   opacity: number;
   test: boolean;
-  degree: { in: number; out: number };
 }) {
   const { node, x, y, w, h } = placed;
   const { title, detail } = nodeLabel(node, clustered);
   const quiet = node.status === 'consumer' || test;
   const badge = STATUS_BADGE[node.status];
-  // An en space: SVG text collapses plain runs of spaces.
-  const counts = `→${degree.in}\u2002${degree.out}→`;
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
       <rect
@@ -127,7 +122,7 @@ export function Node({
       </text>
       <text x={x + 26} y={y + 32} className="fill-muted font-sans text-[10.5px]">
         {test && <tspan className="fill-foreground font-semibold">test · </tspan>}
-        {clip(detail, Math.floor((w - 74) / DETAIL_CHAR))}
+        {clip(detail, Math.floor((w - 34) / DETAIL_CHAR))}
       </text>
       {badge && (
         <g>
@@ -142,9 +137,6 @@ export function Node({
           <badge.icon x={x + w - 19} y={y + 8} size={10} color={badge.color} strokeWidth={2.5} />
         </g>
       )}
-      <text x={x + w - 7} y={y + 33} textAnchor="end" className="fill-muted font-mono text-[9px]">
-        {counts}
-      </text>
     </g>
   );
 }

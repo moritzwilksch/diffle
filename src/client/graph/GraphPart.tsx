@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { KindIcon } from '@/client/lsp/symbolKind.js';
 import { isTest } from './filters.js';
 import { arrowHead, Cluster, Node } from './GraphShapes.js';
@@ -46,15 +45,6 @@ export function GraphPart({
   /** File view only: each arrow's symbols, by `edgeKey`. */
   labels: Map<string, EdgeLabel> | null;
 }) {
-  const degrees = useMemo(() => {
-    const d = new Map<string, { in: number; out: number }>();
-    const of = (id: string) => d.get(id) ?? d.set(id, { in: 0, out: 0 }).get(id)!;
-    for (const { edge } of placed.edges) {
-      of(edge.from).out++;
-      of(edge.to).in++;
-    }
-    return d;
-  }, [placed]);
   // The arrow of the details row under the pointer: drawn last, so on top, with its ends in full.
   const hovered = useGraph((s) => s.hoveredEdge);
   const hot = placed.edges.find((e) => edgeKey(e.edge) === hovered)?.edge;
@@ -118,7 +108,6 @@ export function GraphPart({
           selected={p.node.id === selected}
           opacity={opacity([p.node.id])}
           test={isTest(p.node)}
-          degree={degrees.get(p.node.id) ?? { in: 0, out: 0 }}
         />
       ))}
       {pills}

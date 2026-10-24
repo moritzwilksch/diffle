@@ -12,8 +12,9 @@ const MAX_CHARS = 36;
 // The box is sized from character counts: a monospace title, a small sans detail line.
 const TITLE_CHAR = 7.3;
 const DETAIL_CHAR = 6.1;
-// The kind icon's column on the left; the status badge and the link counts on the right.
-const PAD_X = 72;
+// The kind icon's column on the left, and the status badge right of the name.
+const TITLE_PAD = 56;
+const DETAIL_PAD = 34;
 export const NODE_H = 40;
 
 export function basename(path: string): string {
@@ -40,6 +41,6 @@ export function nodeLabel(node: GraphNode, clustered: boolean): NodeLabel {
 
 export function nodeSize(node: GraphNode, clustered: boolean): Size {
   const { title, detail } = nodeLabel(node, clustered);
-  const w = Math.max(clip(title).length * TITLE_CHAR, clip(detail, 44).length * DETAIL_CHAR) + PAD_X;
+  const w = Math.max(clip(title).length * TITLE_CHAR + TITLE_PAD, clip(detail, 44).length * DETAIL_CHAR + DETAIL_PAD);
   return { w: Math.min(320, Math.max(120, Math.ceil(w))), h: NODE_H };
 }

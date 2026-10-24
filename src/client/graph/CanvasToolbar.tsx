@@ -82,9 +82,6 @@ function Legend() {
         <span className="text-accent">modified</span>
       </Row>
       <Row swatch={<Box border="var(--border)" dashed />}>unchanged, uses the change</Row>
-      <Row swatch={<span className="font-mono text-[0.625rem] whitespace-nowrap text-muted">→2 1→</span>}>
-        used by 2, uses 1
-      </Row>
       <Row swatch={<span className="w-6 border-t-2 border-dashed border-muted" />}>arrow inside a cycle</Row>
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1">
         {KINDS.map(([kind, label]) => (
