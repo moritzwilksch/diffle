@@ -108,16 +108,16 @@ export const useGraph = create<GraphState>((set, get) => ({
 
   async reload() {
     const snapshot = useStore.getState().snapshot;
+    const generation = ++loads;
     set({ load: { state: 'loading' }, snapshot });
     // A newer snapshot, or a newer reload, owns the result.
-    const current = () => useStore.getState().snapshot === snapshot && get().snapshot === snapshot;
+    const current = () => generation === loads && useStore.getState().snapshot === snapshot;
     try {
       const { all, scope } = get();
       const graph = await api.lspGraph({ ...(all ? { all: '1' } : {}), ...(scope ? { scope } : {}) });
       if (!current()) return;
       const view = derive(graph, get().filters, get().only);
-      const selected = view.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
-      set({ load: { state: 'ready', graph }, view, selected, selectedEdge: keptEdge(view, get().selectedEdge) });
+      set({ load: { state: 'ready', graph }, view, ...keptSelection(view) });
     } catch (e) {
       if (current()) set({ load: { state: 'error', message: e instanceof Error ? e.message : String(e) }, view: null });
     }
@@ -157,14 +157,14 @@ export const useGraph = create<GraphState>((set, get) => ({
     const filters = { ...get().filters, [filter]: on };
     const load = get().load;
     const view = load.state === 'ready' ? derive(load.graph, filters, get().only) : null;
-    const selected = view?.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
-    set({ filters, view, selected, selectedEdge: view && keptEdge(view, get().selectedEdge) });
+    set({ filters, view, ...(view ? keptSelection(view) : { selected: null, selectedEdge: null }) });
   },
 
   showOnly(part) {
     const load = get().load;
     if (load.state !== 'ready') return;
-    set({ only: part, view: derive(load.graph, get().filters, part) });
+    const view = derive(load.graph, get().filters, part);
+    set({ only: part, view, ...keptSelection(view) });
   },
 
   focusFile(path) {
@@ -225,6 +225,8 @@ export function findMatches(view: View | null, query: string | null): string[] {
 }
 
 let watching = false;
+/** Counts reloads: only the latest one commits its result. */
+let loads = 0;
 
 /** Shows the graph over the diff, refetching it when the review moved on since it was loaded. */
 function show(): void {
@@ -300,4 +302,14 @@ function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: st
   };
 }
 
-const keptEdge = (view: View, key: string | null) => (key && view.via.has(key) ? key : null);
+/** The selected node or arrow while `view` still draws it, else none: a filter or a part shown alone may hide it. */
+function keptSelection(view: View): Pick<GraphState, 'selected' | 'selectedEdge'> {
+  const drawn = new Set(view.stacked.nodes.map((p) => p.node.id));
+  const { selected, selectedEdge } = useGraph.getState();
+  const edgeDrawn =
+    selectedEdge != null && view.via.has(selectedEdge) && selectedEdge.split('\0').every((id) => drawn.has(id));
+  return {
+    selected: selected != null && drawn.has(selected) ? selected : null,
+    selectedEdge: edgeDrawn ? selectedEdge : null,
+  };
+}

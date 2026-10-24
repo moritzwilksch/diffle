@@ -200,7 +200,8 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     const near = new Set([id]);
     for (const edge of edges) if (edge.from === id || edge.to === id) near.add(edge.from).add(edge.to);
     useGraph.setState({ selected: id, selectedEdge: null, focusPath: null });
-    fitBox(bounds(stacked.nodes.filter((p) => near.has(p.node.id))), FRAME_ZOOM);
+    const boxes = stacked.nodes.filter((p) => near.has(p.node.id));
+    if (boxes.length) fitBox(bounds(boxes), FRAME_ZOOM);
   };
   const onDoubleClick = () => {
     // Pointer capture retargets the double-click to the host as well; the press knows what it hit.

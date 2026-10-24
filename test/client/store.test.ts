@@ -3,6 +3,7 @@ import type {
   GithubMetadata,
   ChangedFile,
   CommentThread,
+  GraphResponse,
   LspLogResponse,
   LspServerStatus,
   LspStatus,
@@ -72,6 +73,7 @@ const api = {
   lspReferences: vi.fn(),
   lspHover: vi.fn(),
   lspSymbols: vi.fn(),
+  lspGraph: vi.fn(),
   enter: vi.fn(),
   file: vi.fn(),
   patch: vi.fn(),
@@ -2303,4 +2305,29 @@ it('discards metadata for a newer server snapshot without changing the displayed
   await vi.waitFor(() => expect(useStore.getState().github.status).toBe('idle'));
   expect(useStore.getState().snapshot?.version).toBe(1);
   expect(useStore.getState().github.data).toBeUndefined();
+});
+
+describe('change graph', () => {
+  const graphOf = (path: string): GraphResponse => ({
+    nodes: [{ id: path, name: 'f', kind: 12, path, line: 1, startLine: 1, endLine: 1, col: 0, status: 'modified' }],
+    edges: [],
+    cut: [],
+  });
+
+  it('commits only the latest reload, so a folder picked while the graph loads keeps its graph', async () => {
+    const { useGraph } = await import('@/client/graph/state.js');
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']) });
+    const everything = deferred<GraphResponse>();
+    const folder = deferred<GraphResponse>();
+    api.lspGraph.mockReturnValueOnce(everything.promise).mockReturnValueOnce(folder.promise);
+    const first = useGraph.getState().reload();
+    useGraph.setState({ scope: 'pkg' });
+    const second = useGraph.getState().reload();
+    folder.resolve(graphOf('pkg/a.py'));
+    await second;
+    everything.resolve(graphOf('a.py'));
+    await first;
+    const load = useGraph.getState().load;
+    expect(load.state === 'ready' && load.graph.nodes.map((n) => n.path)).toEqual(['pkg/a.py']);
+  });
 });
