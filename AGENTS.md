@@ -34,6 +34,7 @@ Diffle is a local Git review app: a Rust server (`crates/diffle`, axum on tokio)
 - `ReviewPane` resolves estimated jump layouts synchronously: scroll, `render(true)`, then reissue the measured offset before paint. Avoid cross-frame correction.
 - Handled keys stop propagation in `useKeymap`; `CodeView` cancels pending scroll on propagated keydown.
 - The keymap runs the store's `escape()` on Escape and lets the key through, so a Base UI dialog also closes. A dialog whose Escape does more than close (References leaves a peek first) ignores the `escape-key` reason in `onOpenChange`.
+- No tautological tooltips: a `title` says what the element does not already show. `TooltipHost` skips one that repeats text shown whole, so a truncated name may carry its full text; never nest a `title` inside another, as both tips show.
 - User input errors are `Error` variants (`Revspec`, `Git`, `Github`, ...; `Error::is_user_error`) or clap usage errors and exit 2; `Error::Other` is the unexpected kind and exits 1.
 - Status goes to stderr through `crate::status!`, which never panics on a closed stream; stdout carries only the prompt at shutdown.
 
