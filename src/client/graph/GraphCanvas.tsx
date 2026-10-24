@@ -114,7 +114,13 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     const matches = findMatches(shown, find);
     if (matches.length) {
       const seeds = new Set(selected ? [selected] : []);
-      return { ids: new Set([...matches, ...seeds]), seeds, edge: null, marks: new Set(matches) };
+      return {
+        ids: new Set([...matches, ...seeds]),
+        seeds,
+        edge: null,
+        marks: new Set(matches),
+        query: find!.trim().toLowerCase(),
+      };
     }
     const arrow = selectedEdge ? edges.find((e) => edgeKey(e) === selectedEdge) : undefined;
     if (arrow)

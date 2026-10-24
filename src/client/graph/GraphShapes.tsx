@@ -1,6 +1,7 @@
 import { FileCode2, Pencil, Plus } from 'lucide-react';
 import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
+import { Marked, useFindHits } from './GraphFind.js';
 import { basename, clip, CODE_CHAR, dirname, KIND_CHAR, nodeLabel, SEPARATOR_W, TITLE_CHAR } from './labels.js';
 import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
 
@@ -77,6 +78,8 @@ const FOCUS: Record<Focus, { fill: string; width: number }> = {
  * A symbol: its kind's icon and colour, its name in monospace, what it is under it, and its change
  * as a badge (an icon besides the colour). A test recedes: quieter fill and name, and a `test` tag.
  * `focus` marks the selection, or more lightly the far end of the details row under the pointer.
+ * `mark` is find's query while the box matches it: its occurrences are painted as the diff paints
+ * search hits, the selected box's as the current one.
  */
 export function Node({
   placed,
@@ -84,12 +87,14 @@ export function Node({
   focus,
   opacity,
   test,
+  mark,
 }: {
   placed: PlacedNode;
   clustered: boolean;
   focus: Focus | null;
   opacity: number;
   test: boolean;
+  mark: string | null;
 }) {
   const { node, x, y, w, h } = placed;
   const { title, kind, code } = nodeLabel(node, clustered);
@@ -98,8 +103,13 @@ export function Node({
   const quiet = node.status === 'consumer' || test;
   const badge = STATUS_BADGE[node.status];
   const nameColor = kindColor(node.kind);
+  const shownTitle = clip(title, Math.floor((w - 56) / TITLE_CHAR));
+  const shownCode = clip(code, Math.floor(codeRoom / CODE_CHAR));
+  const current = focus === 'selected';
+  const [group, hits] = useFindHits(mark && `${mark}\0${shownTitle}\0${shownCode}\0${x},${y}`);
   return (
     <g
+      ref={group}
       data-node={node.id}
       data-selected={focus === 'selected' || undefined}
       opacity={opacity}
@@ -121,6 +131,17 @@ export function Node({
         strokeDasharray={node.status === 'consumer' && !clustered && !focus ? '4 3' : undefined}
       />
       <KindIcon kind={node.kind} x={x + 7} y={y + 7} size={14} opacity={quiet ? 0.6 : 1} />
+      {hits.map((b) => (
+        <rect
+          key={`${b.x},${b.y}`}
+          x={b.x}
+          y={b.y}
+          width={b.w}
+          height={b.h}
+          rx={2}
+          fill={current ? 'var(--search-current)' : 'var(--search-match)'}
+        />
+      ))}
       <text
         x={x + 26}
         y={y + 18}
@@ -128,13 +149,17 @@ export function Node({
         // A quiet box keeps its name muted, as it keeps its icon faded.
         style={quiet || !nameColor ? undefined : { fill: nameColor }}
       >
-        {clip(title, Math.floor((w - 56) / TITLE_CHAR))}
+        <Marked text={shownTitle} query={mark} current={current} />
       </text>
       <text x={x + 26} y={y + 32} className="fill-muted font-sans text-[10.5px]">
         {test && <tspan className="fill-foreground font-semibold">test · </tspan>}
         {kind}
         {kind && code && ' · '}
-        {code && <tspan className="font-mono">{clip(code, Math.floor(codeRoom / CODE_CHAR))}</tspan>}
+        {code && (
+          <tspan className="font-mono">
+            <Marked text={shownCode} query={mark} current={current} />
+          </tspan>
+        )}
       </text>
       {badge && (
         <g>

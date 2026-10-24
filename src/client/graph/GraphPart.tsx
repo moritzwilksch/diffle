@@ -16,6 +16,8 @@ export interface Lit {
   edge: string | null;
   /** Find's matches: drawn hinted, as the far end of a hovered details row is. */
   marks?: Set<string>;
+  /** Find's query, trimmed and lower-cased, while it has matches. */
+  query?: string;
 }
 
 /** The symbols behind a file view's arrow, which its label names, the most-used first. */
@@ -135,6 +137,7 @@ export function GraphPart({
           }
           opacity={opacity([p.node.id])}
           test={isTest(p.node)}
+          mark={lit?.marks?.has(p.node.id) ? (lit.query ?? null) : null}
         />
       ))}
       {pills}
