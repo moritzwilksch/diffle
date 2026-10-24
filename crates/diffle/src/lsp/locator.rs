@@ -125,7 +125,7 @@ impl Locator {
     /// is none. A lookup only; `promote` marks one as asked about.
     pub fn origin(&self, path: &str) -> Option<Origin> {
         if let Some(stored) = self.external.lock().unwrap().get(Path::new(path)) {
-            return Some(Origin::External(stored.clone()));
+            return Some(Origin::External { abs: stored.clone(), rel: relative_inside(&self.root, stored) });
         }
         (!Path::new(path).has_root()).then(|| Origin::Snapshot(path.to_owned()))
     }
@@ -133,7 +133,7 @@ impl Locator {
     /// Counts a query from an outside file as naming it again, so a file being read is the last
     /// to be forgotten. One forgotten meanwhile stays forgotten.
     pub fn promote(&self, origin: &Origin) {
-        let Origin::External(abs) = origin else { return };
+        let Origin::External { abs, .. } = origin else { return };
         let mut external = self.external.lock().unwrap();
         if external.shift_remove(abs) {
             external.insert(abs.clone());

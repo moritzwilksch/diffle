@@ -116,7 +116,7 @@ impl LspPool {
     /// Whether a running server may be asked about `path`, a file outside the snapshot: one of its
     /// results named it.
     pub fn named(&self, path: &str) -> bool {
-        self.servers().iter().any(|s| matches!(s.bridge.origin(path), Some(Origin::External(_))))
+        self.servers().iter().any(|s| matches!(s.bridge.origin(path), Some(Origin::External { .. })))
     }
 
     pub async fn definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {

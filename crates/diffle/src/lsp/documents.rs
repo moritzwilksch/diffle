@@ -21,16 +21,28 @@ pub const MAX_UNTRACKED_OPEN: usize = 64;
 pub type ReadFn = Arc<dyn Fn(String) -> BoxFuture<'static, Option<String>> + Send + Sync>;
 
 /// A document a server is asked about: a snapshot path, or a file outside the snapshot that one of
-/// the server's results named. Only `Locator::origin` hands out the latter.
+/// the server's results named, with the repository path it would have should it lie inside the
+/// root. Only `Locator::origin` hands out the latter.
 #[derive(Clone, Debug)]
 pub enum Origin {
     Snapshot(String),
-    External(PathBuf),
+    External { abs: PathBuf, rel: Option<String> },
+}
+
+impl std::fmt::Display for Origin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Snapshot(path) => f.write_str(path),
+            Self::External { abs, .. } => write!(f, "{}", abs.display()),
+        }
+    }
 }
 
 struct Doc {
     version: i64,
     text: String,
+    /// Whether `text` is the snapshot's rather than the disk's.
+    snapshot: bool,
 }
 
 /// Keyed by URI, so a file reached both as a snapshot path and from outside is one document.
@@ -73,13 +85,14 @@ impl Documents {
         uri_of(&*self.uri, origin)
     }
 
-    /// The text the server holds for an open snapshot path.
+    /// The snapshot text the server holds for an open snapshot path; none when it holds the disk's
+    /// text for a file the snapshot hides.
     pub fn text_of(&self, path: &str) -> Option<String> {
-        self.state.lock().unwrap().open.get(&(self.uri)(path)).map(|d| d.text.clone())
+        self.state.lock().unwrap().open.get(&(self.uri)(path)).filter(|d| d.snapshot).map(|d| d.text.clone())
     }
 
     /// Opens or updates the document so the server sees its text before a request: the snapshot's
-    /// for a snapshot path, the disk's for an outside file. Concurrent syncs of one document share
+    /// whenever the snapshot exposes it, else the disk's for an outside file. Concurrent syncs of one document share
     /// one read and notification. Untracked documents beyond the cap are closed, least recently
     /// used first.
     pub async fn sync(&self, origin: &Origin) -> Result<()> {
@@ -141,7 +154,9 @@ impl Documents {
 fn uri_of(snapshot_uri: &(dyn Fn(&str) -> String + Send + Sync), origin: &Origin) -> String {
     match origin {
         Origin::Snapshot(path) => snapshot_uri(path),
-        Origin::External(abs) => url::Url::from_file_path(abs).expect("an external path is absolute").to_string(),
+        Origin::External { abs, .. } => {
+            url::Url::from_file_path(abs).map_or_else(|()| format!("file://{}", abs.display()), |u| u.to_string())
+        }
     }
 }
 
@@ -154,21 +169,27 @@ async fn sync_now(
     uri: &str,
 ) -> Result<()> {
     let rpc = process.connection().await?;
-    let (text, path, missing) = match origin {
-        Origin::Snapshot(path) => (read(path.clone()).await, path.clone(), "is not in the snapshot"),
-        Origin::External(abs) => {
-            (tokio::fs::read_to_string(abs).await.ok(), abs.to_string_lossy().into_owned(), "is no longer readable")
-        }
+    // A hidden file that joined the snapshot shares its URI with the snapshot path: the snapshot's
+    // text wins, so the one document does not flip between the two.
+    let in_snapshot = match origin {
+        Origin::Snapshot(path) | Origin::External { rel: Some(path), .. } => read(path.clone()).await,
+        Origin::External { rel: None, .. } => None,
     };
-    let Some(text) = text else {
-        return Err(Error::Invalid(format!("{path} {missing}")));
+    let (text, snapshot) = match (in_snapshot, origin) {
+        (Some(text), _) => (text, true),
+        (None, Origin::Snapshot(path)) => return Err(Error::Invalid(format!("{path} is not in the snapshot"))),
+        (None, Origin::External { abs, .. }) => match tokio::fs::read_to_string(abs).await {
+            Ok(text) => (text, false),
+            Err(_) => return Err(Error::Invalid(format!("{origin} is no longer readable"))),
+        },
     };
+    let path = origin.to_string();
     let mut state = state.lock().unwrap();
     match state.open.shift_remove(uri) {
         None => {
             let language = language_of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
             let open = json!({ "textDocument": { "uri": uri, "languageId": language, "version": 1, "text": text } });
-            state.open.insert(uri.to_owned(), Doc { version: 1, text });
+            state.open.insert(uri.to_owned(), Doc { version: 1, text, snapshot });
             rpc.notify("textDocument/didOpen", open);
         }
         // Re-inserted at the end: the most recently used.
@@ -179,6 +200,7 @@ async fn sync_now(
                 doc.text = text;
                 rpc.notify("textDocument/didChange", change);
             }
+            doc.snapshot = snapshot;
             state.open.insert(uri.to_owned(), doc);
         }
     }

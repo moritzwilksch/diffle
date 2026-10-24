@@ -243,6 +243,36 @@ async fn opens_a_file_once_when_the_server_names_it_through_the_real_path_of_a_s
 }
 
 #[tokio::test]
+async fn keeps_a_hidden_file_inside_the_root_external_until_it_joins_the_snapshot_and_then_holds_its_text() {
+    let (dir, base) = root();
+    std::fs::create_dir(base.join(".venv")).unwrap();
+    std::fs::write(base.join(".venv/x.py"), "X = 1\ndef g():\n").unwrap();
+    let venv = base.join(".venv/x.py").to_string_lossy().into_owned();
+    let Some(s) = start_with(&[("FAKE_LSP_EXTERNAL", &venv)], Some(base.clone()), None, None) else { return };
+    s.bridge.definition(&pos("a.py", 3, 4)).await.unwrap();
+    // Asked from the hidden file, the server points back into it: still the outside file, not a
+    // repository path the snapshot lacks.
+    let res = s.bridge.definition(&pos(&venv, 1, 0)).await.unwrap();
+    assert_eq!(
+        json_of(&res.locations),
+        json!([
+            { "path": venv, "line": 2, "col": 4, "text": "def g():", "external": true },
+            { "path": venv, "line": 1, "col": 0, "text": "X = 1", "external": true },
+        ])
+    );
+    // Once it joins the snapshot with other text, a query through its outside spelling keeps the
+    // snapshot's text rather than flipping the one document back to the disk's.
+    s.set(".venv/x.py", "X = 2\ndef g():\n");
+    s.bridge.track(&[".venv/x.py".to_owned()]).await;
+    s.bridge.hover(&pos(&venv, 2, 0)).await.unwrap();
+    s.settle().await;
+    let about: Vec<String> = s.events().into_iter().filter(|e| e.contains("x.py")).collect();
+    assert_eq!(about, ["open x.py v1", "change x.py v2"]);
+    s.bridge.close().await;
+    drop(dir);
+}
+
+#[tokio::test]
 async fn maps_document_highlights_to_new_side_occurrences_with_their_kind_and_stays_quiet_without_them() {
     let Some(s) = start(&[]) else { return };
     // The fake marks `z = ` a write and every other `z` in the enclosing block a read; the `z` outside it is out of scope.

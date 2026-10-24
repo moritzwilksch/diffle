@@ -266,11 +266,7 @@ impl LspBridge {
                 Ok(result) => return Ok((result, self.process.busy().or(pending))),
                 Err(RequestError::Rpc(e)) if e.code == CONTENT_MODIFIED => {
                     let Some(backoff) = CONTENT_MODIFIED_BACKOFF.get(attempt) else {
-                        let what = match origin {
-                            Some(Origin::Snapshot(path)) => path.clone(),
-                            Some(Origin::External(abs)) => abs.display().to_string(),
-                            None => "the repository".to_owned(),
-                        };
+                        let what = origin.map_or_else(|| "the repository".to_owned(), Origin::to_string);
                         let name = self.process.name();
                         return Err(Error::LspUnavailable(format!(
                             "{name} could not answer while {what} kept changing; try again"
