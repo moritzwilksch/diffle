@@ -1,7 +1,7 @@
 import { Info, Maximize, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { KindIcon } from '@/client/lsp/symbolKind.js';
-import { Button } from '@/client/ui/Button.js';
+import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
 
 const KINDS: [number, string][] = [
   [12, 'function'],
@@ -42,7 +42,7 @@ export function CanvasToolbar({
           aria-pressed={legend}
           title="Legend"
           aria-label="Legend"
-          className={legend ? 'bg-hover' : undefined}
+          className={legend ? TOGGLE_ON : undefined}
         >
           <Info size="0.875rem" />
         </Button>

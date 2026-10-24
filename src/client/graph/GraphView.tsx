@@ -1,7 +1,6 @@
-import { Check, FileCode2, FlaskConical, LoaderCircle, RefreshCw, Users } from 'lucide-react';
+import { FileCode2, FlaskConical, LoaderCircle, RefreshCw, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { twMerge } from 'tailwind-merge';
-import { Button } from '@/client/ui/Button.js';
+import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
 import { GraphCanvas } from './GraphCanvas.js';
 import { type Filter, useGraph } from './state.js';
 
@@ -16,7 +15,7 @@ export function GraphView() {
   const loading = load.state === 'loading';
   return (
     <section className="flex h-full min-h-0 flex-col bg-canvas" aria-label="Change graph view">
-      <div className="flex items-center gap-2.5 border-b border-border px-3 py-1.5 text-[0.8125rem]">
+      <div className="flex items-center gap-2.5 border-b border-border bg-surface px-3 py-1.5 text-[0.8125rem]">
         {graph && (
           <span className="text-muted">
             {changed} changed · {graph.nodes.length - changed} using them · {graph.edges.length} links
@@ -29,7 +28,7 @@ export function GraphView() {
           </span>
         )}
         <span className="flex-1" />
-        <div className="flex items-center gap-1.5" role="group" aria-label="Show in the graph">
+        <div className="flex items-center gap-1" role="group" aria-label="Show in the graph">
           <FilterChip filter="files" title="One box per file instead of per symbol (f)">
             <FileCode2 size="0.8125rem" /> Files
           </FilterChip>
@@ -72,26 +71,20 @@ export function GraphView() {
 }
 
 /**
- * One on/off filter. Each stands alone, unlike the either/or segmented controls beside it: a
- * check and an accent tint say it is on.
+ * One on/off filter, as the search bar's toggles are: on is accent-tinted and outlined, off is
+ * muted text. Each stands alone, unlike the either/or segmented controls beside it.
  */
 function FilterChip({ filter, title, children }: { filter: Filter; title: string; children: ReactNode }) {
   const on = useGraph((s) => s.filters[filter]);
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       aria-pressed={on}
       title={title}
       onClick={() => useGraph.getState().setFilter(filter, !on)}
-      className={twMerge(
-        'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[0.8125rem] transition-colors motion-reduce:transition-none [&_svg]:flex-none',
-        on
-          ? 'border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-foreground'
-          : 'border-border bg-transparent text-muted hover:bg-hover hover:text-foreground',
-      )}
+      className={on ? TOGGLE_ON : 'text-muted hover:text-foreground'}
     >
-      {on ? <Check size="0.75rem" className="text-accent" /> : <span className="w-3" />}
       {children}
-    </button>
+    </Button>
   );
 }

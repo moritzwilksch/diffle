@@ -8,6 +8,10 @@ type ButtonProps = ComponentProps<'button'> & {
   feedback?: 'confirm' | 'posted' | 'copied';
 };
 
+/** An on/off toggle's on state, outlined and tinted in the accent; off, it is a muted ghost button. */
+export const TOGGLE_ON =
+  'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent hover:bg-[color-mix(in_srgb,_var(--accent)_18%,_transparent)]';
+
 /** Shared review controls; callers can override layout with utility classes. Pair `feedback` with a `ButtonLabel`. */
 export function Button({ variant = 'default', danger, icon, feedback, className, ...props }: ButtonProps) {
   return (
