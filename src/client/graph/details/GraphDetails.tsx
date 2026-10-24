@@ -5,19 +5,8 @@ import { bySource } from '@/client/graph/layout/order.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
-import {
-  BODY,
-  Code,
-  ENTRY,
-  Jumps,
-  Links,
-  META,
-  Name,
-  SectionHeading,
-  StatusWord,
-  TITLE,
-  type UsedAt,
-} from './GraphDetailParts.js';
+import { BODY, Code, ENTRY, Jumps, META, Name, SectionHeading, StatusWord, TITLE } from './GraphDetailParts.js';
+import { Links, type UsedAt } from './Links.js';
 import { NotShown } from './NotShown.js';
 import { peekLinks } from './peekLinks.js';
 import { useSignatures } from './useSignatures.js';
