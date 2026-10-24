@@ -10,8 +10,8 @@ export function ViewSwitch() {
   const blocked = useStore((s) => lspBlocker(s.lsp, s.snapshot));
   const toggle = () => useGraph.getState().toggle();
   return (
-    <SegmentedControl title="View (M)">
-      <ToggleButton selected={!open} onClick={() => open && toggle()} aria-label="Diff">
+    <SegmentedControl>
+      <ToggleButton selected={!open} onClick={() => open && toggle()} aria-label="Diff" title="The diff (M)">
         <FileDiff size="0.875rem" /> <span className="max-xl:hidden">Diff</span>
       </ToggleButton>
       <ToggleButton
