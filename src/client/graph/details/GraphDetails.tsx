@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, BookOpen, ExternalLink, Link2, Waypoints } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, ExternalLink, Link2, Waypoints } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL } from '@/client/lsp/symbolKind.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
@@ -138,7 +138,7 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
   );
 }
 
-/** Before anything is selected: how to read the graph, an example from it, and its heaviest arrows. */
+/** Before anything is selected: the graph's heaviest arrows. */
 function Overview({ view }: { view: View }) {
   const byId = useMemo(() => new Map(view.graph.nodes.map((n) => [n.id, n])), [view]);
   const strongest = useMemo(() => {
@@ -148,23 +148,8 @@ function Overview({ view }: { view: View }) {
       .sort((a, b) => b.w - a.w)
       .slice(0, STRONGEST);
   }, [view]);
-  const example = strongest[0];
-  const [exFrom, exTo] = [example && byId.get(example.e.from), example && byId.get(example.e.to)];
   return (
     <aside className={PANEL}>
-      <section className="flex flex-col gap-2">
-        <SectionHeading icon={BookOpen}>How to read it</SectionHeading>
-        <p className="text-muted">
-          An arrow points from code to the code it uses: entry points at the top, core code at the bottom. Select a box
-          or an arrow for its signatures; a <span className="font-mono text-accent">:line</span> chip opens the diff
-          there.
-        </p>
-        {exFrom && exTo && (
-          <p className="flex flex-wrap items-center gap-1.5 text-muted">
-            For example, <Name node={exFrom} /> uses <Name node={exTo} />
-          </p>
-        )}
-      </section>
       {strongest.length > 0 && (
         <section className="flex flex-col gap-2">
           <SectionHeading icon={Waypoints} count={strongest.length}>
