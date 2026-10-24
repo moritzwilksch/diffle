@@ -128,6 +128,16 @@ describe('layout', () => {
     expect(long.d.match(/C/g)).toHaveLength(3);
   });
 
+  it('spans every shelf row, not only the last and shortest', () => {
+    const g = graph(
+      Array.from({ length: 9 }, (_, i) => node(`lone${i}`, 'added', `f${i}.py`)),
+      [],
+    );
+    const placed = layout(g, rank(g), size, false);
+    expect(new Set(placed.nodes.map((p) => p.y)).size).toBeGreaterThan(1);
+    for (const p of placed.nodes) expect(p.x + p.w, p.node.id).toBeLessThanOrEqual(placed.width);
+  });
+
   it('keeps a file box in source order even where swapping its symbols would uncross arrows', () => {
     const at = (id: string, path: string, line: number) => ({ ...node(id, 'modified', path), line });
     const g = graph(

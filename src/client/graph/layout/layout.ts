@@ -157,7 +157,7 @@ export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Siz
 
   const shelf = linked.size ? layersH + SHELF_GAP : 0;
   const shelfW = Math.max(width, SHELF_MIN_W);
-  let [sx, sy, rowH] = [0, shelf, 0];
+  let [sx, sy, rowH, right] = [0, shelf, 0, width];
   const files = new Map<string, string[]>();
   for (const n of unlinked) {
     const key = clustered ? n.path : n.id;
@@ -169,10 +169,11 @@ export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Siz
     if (clustered) clusters.push({ path, layer: -1, x: sx, y: sy, ...d });
     for (const id of members)
       nodes.push({ node: nodeById.get(id)!, x: sx + offset.get(id)!.x, y: sy + offset.get(id)!.y, ...memberSize(id) });
+    right = Math.max(right, sx + d.w);
     sx += d.w + BLOCK_GAP;
     rowH = Math.max(rowH, d.h);
   }
-  return { nodes, clusters, edges, layers: bands, shelf, width: Math.max(width, sx), height: sy + rowH };
+  return { nodes, clusters, edges, layers: bands, shelf, width: right, height: sy + rowH };
 }
 
 /**
