@@ -1,5 +1,5 @@
 import { ArrowUpRight, ChevronRight, Crosshair, FileCode2, Link2, type LucideIcon } from 'lucide-react';
-import { type ComponentProps, type ReactNode, useState } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { FilePath } from '@/client/FilePath.js';
 import { Markdown } from '@/client/Markdown.js';
@@ -20,9 +20,6 @@ export const META = 'text-[0.75rem] text-muted';
 /** One entry of a list: a card, so its name, jumps and signature read as one and the next stands apart. */
 export const ENTRY =
   'flex flex-col gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--border)_60%,transparent)] bg-card p-3 transition-colors hover:border-accent';
-
-/** Rows a list shows before it folds behind "Show all". */
-const FOLD_AFTER = 6;
 
 /** A change in words, coloured as the diff colours it. */
 export function StatusWord({ status }: { status: GraphNode['status'] }) {
@@ -68,8 +65,7 @@ function LinkButton({ className, ...props }: ComponentProps<'button'>) {
 
 /**
  * The nodes at the other end of `edges`: each selects itself in the graph by its name, and opens
- * the diff where it is defined and where the link sits. Source before tests, each in source order;
- * a long list folds.
+ * the diff where it is defined and where the link sits. Source before tests, each in source order.
  */
 export function Links({
   icon,
@@ -90,20 +86,18 @@ export function Links({
   used?: (e: GraphEdge) => UsedAt;
   signatures: Signatures;
 }) {
-  const [all, setAll] = useState(false);
   const rows = edges
     .map((e) => ({ e, n: other(e) }))
     .filter((r): r is { e: GraphEdge; n: GraphNode } => r.n != null)
     .sort((a, b) => Number(isTest(a.n)) - Number(isTest(b.n)) || bySource(a.n, b.n));
   if (!rows.length) return null;
-  const shown = all ? rows : rows.slice(0, FOLD_AFTER);
   return (
     <section className="flex flex-col gap-3">
       <SectionHeading icon={icon} count={rows.length}>
         {title}
       </SectionHeading>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {shown.map(({ e, n }) => (
+        {rows.map(({ e, n }) => (
           <li
             key={`${e.from}>${e.to}`}
             className={`${ENTRY} cursor-pointer`}
@@ -127,15 +121,6 @@ export function Links({
           </li>
         ))}
       </ul>
-      {rows.length > shown.length && (
-        <button
-          type="button"
-          className={`cursor-pointer rounded-md border border-border bg-transparent py-1 text-foreground hover:bg-hover ${BODY}`}
-          onClick={() => setAll(true)}
-        >
-          Show all {rows.length}
-        </button>
-      )}
     </section>
   );
 }
