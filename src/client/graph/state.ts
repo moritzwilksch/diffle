@@ -149,7 +149,13 @@ export const useGraph = create<GraphState>((set, get) => ({
 
   async pick({ path, line }) {
     // Closed only once the jump is made: the jump list records the graph as the place left.
-    await useStore.getState().goToLink(path, line);
+    // The jump moves the active file while the graph is still open; that is no tree pick to focus.
+    picking = true;
+    try {
+      await useStore.getState().goToLink(path, line);
+    } finally {
+      picking = false;
+    }
     get().close();
   },
 
@@ -227,6 +233,8 @@ export function findMatches(view: View | null, query: string | null): string[] {
 let watching = false;
 /** Counts reloads: only the latest one commits its result. */
 let loads = 0;
+/** Set while `pick` jumps into the diff, so the file it lands on does not clear the graph's selection. */
+let picking = false;
 
 /** Shows the graph over the diff, refetching it when the review moved on since it was loaded. */
 function show(): void {
@@ -270,7 +278,7 @@ function followReview(): void {
   useStore.subscribe((s, prev) => {
     const graph = useGraph.getState();
     if (s.snapshot !== prev.snapshot && graph.open) void graph.reload();
-    if (s.activePath !== prev.activePath && s.activePath && graph.open) graph.focusFile(s.activePath);
+    if (s.activePath !== prev.activePath && s.activePath && graph.open && !picking) graph.focusFile(s.activePath);
   });
 }
 
