@@ -111,6 +111,7 @@ impl TestServer {
             extra_auto_viewed: Vec::new(),
             hub: hub.clone(),
             lsp: lsp.clone(),
+            graph: Arc::default(),
         };
         let opts = ServerOptions {
             port: 0,

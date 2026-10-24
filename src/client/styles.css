@@ -3,6 +3,7 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import './styles/fonts.css' layer(base);
 @import './styles/theme.css' layer(base);
+@import './styles/motion.css' layer(base);
 @import './styles/base.css' layer(base);
 @import './styles/markdown.css' layer(components);
 @import './styles/viewers.css' layer(components);

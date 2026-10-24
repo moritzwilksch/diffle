@@ -48,9 +48,11 @@ import {
   itemDeps,
   itemId,
   itemVersion,
-  orderedPaths,
+  contextPaths,
+  listedPaths,
   pathFromItemId,
   rangeLabel,
+  reviewPaths,
   viewedState,
   visibleThreads,
   type ItemVersion,
@@ -58,6 +60,8 @@ import {
 } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
+import { ContextBadge } from '@/client/connected/clusters/ContextBadge.js';
+import { sameFocus } from '@/client/connected/clusters/focus.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
@@ -292,6 +296,9 @@ export function ReviewPane() {
   const loaded = useStore((s) => s.loaded);
   const gens = useStore((s) => s.gens);
   const fileView = useStore((s) => s.fileView);
+  const graphData = useStore((s) => s.graph.data);
+  const focus = useStore((s) => s.focus);
+  const context = useStore((s) => s.context);
   const threads = useStore((s) => s.threads);
   const showResolved = useStore((s) => s.showResolved);
   const replyTo = useStore((s) => s.replyTo);
@@ -322,10 +329,18 @@ export function ReviewPane() {
   // CodeView re-renders an item only when its version changes, so each path's version is derived
   // here from what the item paints (its threads, draft, composers, collapsed state); no manual bump.
   const versions = useRef(new Map<string, ItemVersion>());
+  // The changed files the focus lists, then the context files after them: the order the cursor walks too.
+  const listState = useMemo(
+    () => ({ snapshot, graph: { data: graphData }, focus, context }),
+    [snapshot, graphData, focus, context],
+  );
+  const listed = useMemo(() => reviewPaths(listState), [listState]);
+  // Banners and the empty state speak of diffs: a context file has none, and a collapsed one loads nothing.
+  const changedListed = useMemo(() => listedPaths(listState), [listState]);
   const items = useMemo<CodeViewItem<Annot>[]>(() => {
     if (!snapshot) return [];
     const byPath = new Map(snapshot.changed.map((f) => [f.path, f]));
-    const state = { collapsed, viewed, config, snapshot };
+    const state = { ...listState, collapsed, viewed, config };
     const threadsByPath = new Map<string, CommentThread[]>();
     for (const t of visibleThreads({ threads, showResolved })) {
       const list = threadsByPath.get(t.anchor.path);
@@ -348,7 +363,7 @@ export function ReviewPane() {
       return one ? [one] : [];
     }
     const out: CodeViewItem<Annot>[] = [];
-    for (const path of orderedPaths(snapshot)) {
+    for (const path of listed) {
       // A file whose patch has not arrived is a header-only placeholder, so the pane and the nav model
       // hold the same items and a jump onto it has somewhere to land.
       const l = loaded[path] ?? LOADING;
@@ -367,7 +382,22 @@ export function ReviewPane() {
       if (item) out.push(item);
     }
     return out;
-  }, [snapshot, loaded, gens, fileView, threads, showResolved, replyTo, editingId, draft, collapsed, viewed, config]);
+  }, [
+    snapshot,
+    listState,
+    listed,
+    loaded,
+    gens,
+    fileView,
+    threads,
+    showResolved,
+    replyTo,
+    editingId,
+    draft,
+    collapsed,
+    viewed,
+    config,
+  ]);
 
   // The scroller is state, not a ref: CodeView mounts after the empty / error branches and remounts per
   // theme, and the effects that listen to it must re-run for each element, not only when the snapshot appears.
@@ -378,12 +408,19 @@ export function ReviewPane() {
     setScroller(el);
   }, []);
 
-  // Swapping the file view for the diff list (or back) makes the viewer drop its selection and
-  // report null before the controlled selection is re-applied. That null is not the user's; skip it.
+  // Swapping the file view for the diff list (or back), narrowing the list to another focus, or adding or
+  // removing its context files makes the viewer drop its selection and report null before the controlled
+  // selection is re-applied. That null is not the user's; skip it.
   const swapping = useRef(false);
   const prevView = useRef(fileView);
-  if ((prevView.current == null) !== (fileView == null) || prevView.current?.path !== fileView?.path) {
+  const prevFocus = useRef(focus);
+  const contextKey = useMemo(() => contextPaths(listState).join('\n'), [listState]);
+  const prevContext = useRef(contextKey);
+  const viewSwapped = (prevView.current == null) !== (fileView == null) || prevView.current?.path !== fileView?.path;
+  if (viewSwapped || !sameFocus(prevFocus.current, focus) || prevContext.current !== contextKey) {
     prevView.current = fileView;
+    prevFocus.current = focus;
+    prevContext.current = contextKey;
     swapping.current = true;
   }
   useEffect(() => {
@@ -991,7 +1028,7 @@ export function ReviewPane() {
         ? !fileView.item && (
             <div className="border-b border-b-border bg-hover px-3 py-2 text-muted">Loading {fileView.path}…</div>
           )
-        : snapshot.changed.some((f) => !loaded[f.path]) && (
+        : changedListed.some((p) => !loaded[p]) && (
             <div className="border-b border-b-border bg-hover px-3 py-2 text-muted">Loading diffs…</div>
           )}
       <CodeView<Annot>
@@ -1286,6 +1323,7 @@ function FileHeaderMeta({ path }: { path: string }) {
   const commentable = useStore((s) => s.snapshot == null || commentsOff(s.snapshot.review) == null);
   return (
     <span ref={ref} className="inline-flex items-center gap-2.5 font-mono text-[0.75rem]">
+      <ContextBadge path={path} />
       {count > 0 && (
         <span className="inline-flex items-center gap-0.75 rounded-[0.625rem] bg-hover px-1.75 py-0">
           <MessageSquare size="0.75rem" /> {count}
@@ -1326,7 +1364,7 @@ function FileHeaderMeta({ path }: { path: string }) {
         </Button>
       )}
       {/* In the file view the bar above already carries the way back, so the header offers no second button. */}
-      {!full && (!file || (!file.binary && !file.submodule && file.status !== 'D')) && (
+      {!full && file && !file.binary && !file.submodule && file.status !== 'D' && (
         <Button variant="ghost" icon onClick={() => void openFullFile(path)} title="View full file (F)">
           <FileText size="0.875rem" />
         </Button>

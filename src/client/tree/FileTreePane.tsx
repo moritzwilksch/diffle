@@ -1,9 +1,11 @@
-import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { Button } from '@/client/ui/Button.js';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
 import { EyeOff } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { ClusterBar } from '@/client/connected/clusters/ClusterBar.js';
+import { scopePaths } from '@/client/connected/clusters/rows.js';
+import { ScopeSwitch } from '@/client/connected/clusters/ScopeSwitch.js';
 import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
@@ -17,12 +19,13 @@ import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, 
 import { pinLanes, TREE_CSS } from './treeCss.js';
 import { toggleDirectoryViewed, TreeMenu } from './TreeMenu.js';
 
-type Scope = 'changed' | 'all';
-
 export function FileTreePane() {
   const snapshot = useStore((s) => s.snapshot);
   const openFile = useStore((s) => s.openFile);
-  const [scope, setScope] = useState<Scope>('changed');
+  const scope = useStore((s) => s.treeScope);
+  const graph = useStore((s) => s.graph.data);
+  const focus = useStore((s) => s.focus);
+  const context = useStore((s) => s.context);
   const setViewedMany = useStore((s) => s.setViewedMany);
   const viewed = useStore((s) => s.viewed);
   const config = useStore((s) => s.config);
@@ -33,10 +36,23 @@ export function FileTreePane() {
   );
   const unview = useConfirm(() => void setViewedMany(snapshot?.changed.map((f) => f.path) ?? [], false));
 
-  const paths = useMemo(() => {
-    if (!snapshot) return [] as string[];
-    return scope === 'changed' ? snapshot.changed.map((f) => f.path) : snapshot.tree;
-  }, [snapshot, scope]);
+  const paths = useMemo(
+    () =>
+      snapshot
+        ? scopePaths({
+            scope,
+            changed: snapshot.changed.map((f) => f.path),
+            tree: snapshot.tree,
+            graph,
+            focus,
+            context,
+          })
+        : [],
+    [snapshot, scope, graph, focus, context],
+  );
+  // A folder's viewed count covers the files the tree lists, not every changed file under it.
+  const listedRef = useRef(new Set<string>());
+  listedRef.current = useMemo(() => new Set(paths), [paths]);
 
   const gitStatus = useMemo<GitStatusEntry[]>(() => snapshot?.changed.map(toGitStatus) ?? [], [snapshot]);
 
@@ -67,7 +83,7 @@ export function FileTreePane() {
       const s = useStore.getState();
       const changed = s.snapshot?.changed ?? [];
       if (item.kind === 'directory') {
-        const files = filesUnder(changed, item.path);
+        const files = filesUnder(changed, item.path).filter((f) => listedRef.current.has(f.path));
         return files.length ? directoryDecoration(countViewed(s, files), files.length) : null;
       }
       const f = changed.find((x) => x.path === item.path);
@@ -252,14 +268,7 @@ export function FileTreePane() {
   return (
     <aside className="tree-theme flex min-h-0 flex-col bg-surface">
       <div className="@container flex items-center gap-2 border-b border-b-border px-2.5 py-1.5 text-muted [&_button]:flex-none [&_button]:whitespace-nowrap">
-        <SegmentedControl>
-          <ToggleButton selected={scope === 'changed'} onClick={() => setScope('changed')}>
-            Changed
-          </ToggleButton>
-          <ToggleButton selected={scope === 'all'} onClick={() => setScope('all')}>
-            All files
-          </ToggleButton>
-        </SegmentedControl>
+        <ScopeSwitch />
         {/* The count goes first when the bar is too narrow for every control: the buttons stay reachable. */}
         <div className="ml-auto flex items-center gap-2">
           <span className="@max-[15rem]:hidden">{paths.length}</span>
@@ -281,6 +290,7 @@ export function FileTreePane() {
           </Button>
         </div>
       </div>
+      {scope === 'connected' && <ClusterBar />}
       <div className="relative min-h-0 flex-1" ref={bodyRef}>
         <FileTree
           model={model}

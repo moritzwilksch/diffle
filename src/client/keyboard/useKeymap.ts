@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '@/client/clipboard.js';
+import { CONNECTED_COUNTED, CONNECTED_KEYS } from '@/client/connected/clusters/keys.js';
 import { api } from '@/client/api.js';
 import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '@/client/lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '@/client/model.js';
@@ -24,6 +25,7 @@ const COUNTED: Record<string, (s: ReviewState, count: number) => unknown> = {
   G: (s, n) => void s.goToLine(n),
   j: (s, n) => s.moveCursorBy(n),
   k: (s, n) => s.moveCursorBy(-n),
+  ...CONNECTED_COUNTED,
 };
 
 /** Single keys and two-key chords, by the key string(s) of the keydown events. */
@@ -79,6 +81,7 @@ const KEYMAP: Record<string, Action> = {
   gA: (s) => s.findReferences(),
   gs: (s) => s.openSymbols('document'),
   gS: (s) => s.openSymbols('workspace'),
+  ...CONNECTED_KEYS,
   F: (s) => {
     const path = currentPath(s);
     if (!s.fileView && path) void s.openFullFile(path);
@@ -181,6 +184,11 @@ export function useKeymap(): void {
         requestAnimationFrame(() => focusReview());
         clearWordFocus();
         s.escape();
+        clearPending();
+        return;
+      }
+      // The graph dialog's canvas handles its own keys; the review behind it must not move.
+      if (s.graphOpen) {
         clearPending();
         return;
       }

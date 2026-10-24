@@ -158,6 +158,16 @@ impl Snapshotter {
         Ok(cached?.concat() + &batch?)
     }
 
+    /// The patches of `paths` as `snap` names them, whatever snapshot is current by now: one git
+    /// call, concatenated, kept nowhere. Paths `snap` does not change are skipped.
+    pub async fn patches_of(&self, snap: &Snapshot, paths: &[String]) -> Result<String> {
+        let wanted: BTreeSet<&str> = paths.iter().map(String::as_str).collect();
+        let files: Vec<ChangedFile> =
+            snap.changed.iter().filter(|f| wanted.contains(f.path.as_str())).cloned().collect();
+        let context = u32::try_from(snap.context).unwrap_or_default();
+        Ok(self.repo.patch_many(&snap.old_sha, &snap.new_sha, &files, context).await?)
+    }
+
     fn patch_for(
         self: &Arc<Self>,
         snap: &Arc<Snapshot>,

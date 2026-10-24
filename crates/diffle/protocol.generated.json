@@ -559,6 +559,212 @@
         "isDraft"
       ]
     },
+    "GraphCluster": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The smallest member path; stays put across refreshes while that file stays in the cluster."
+        },
+        "label": {
+          "type": "string",
+          "description": "The deepest directory every member shares; '' when none."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Changed files, sorted by path."
+        },
+        "symbols": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Changed symbols behind the cluster."
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphContext"
+          },
+          "description": "Unchanged callers, most references first, capped at 15."
+        },
+        "contextTotal": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Unchanged callers before the cap."
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphLink"
+          },
+          "description": "Arrows between the cluster's files, sorted by `from` then `to`; the strongest 150 when there are more."
+        },
+        "linksTotal": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Arrows before the cap."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "files",
+        "symbols",
+        "context",
+        "contextTotal",
+        "links",
+        "linksTotal"
+      ]
+    },
+    "GraphContext": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "uses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphUse"
+          }
+        },
+        "refs": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "References from this file into the cluster; ranks the list."
+        }
+      },
+      "required": [
+        "path",
+        "uses",
+        "refs"
+      ],
+      "description": "An unchanged file that references a cluster's changed symbols."
+    },
+    "GraphLink": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "The referencing file."
+        },
+        "to": {
+          "type": "string",
+          "description": "The referenced file, which declares every symbol in `uses`."
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Distinct (used symbol, referencing symbol) pairs behind the arrow; its thickness."
+        },
+        "uses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphUse"
+          },
+          "description": "The used symbols, most referenced first then by name, at most five."
+        },
+        "total": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Used symbols before the cap."
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "weight",
+        "uses",
+        "total"
+      ],
+      "description": "One changed file referencing another changed file of the same cluster: an arrow from the user to the used."
+    },
+    "GraphResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "The snapshot version this was built for."
+        },
+        "clusters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphCluster"
+          },
+          "description": "Two or more files, largest first, ties by id."
+        },
+        "unlinked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Graphed files that no other changed file references or is referenced by."
+        },
+        "other": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Changed files no language server could graph: no server, binary, deleted, generated."
+        },
+        "note": {
+          "type": "string",
+          "description": "Why the graph is partial, for the reader: no server, indexing gave up, symbols capped."
+        }
+      },
+      "required": [
+        "version",
+        "clusters",
+        "unlinked",
+        "other"
+      ],
+      "description": "`GET /api/graph`: the changed files grouped into feature clusters by who references whom."
+    },
+    "GraphUse": {
+      "type": "object",
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "description": "The bare symbol name."
+        },
+        "kind": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "LSP SymbolKind number of the symbol; the client maps it to an icon and a label."
+        },
+        "path": {
+          "type": "string",
+          "description": "The changed file that declares the symbol."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "1-based new-side lines in the referencing file, in file order, at most five."
+        }
+      },
+      "required": [
+        "symbol",
+        "kind",
+        "path",
+        "lines"
+      ],
+      "description": "A changed symbol that another file references, and where."
+    },
     "ImageQuery": {
       "type": "object",
       "properties": {

@@ -112,6 +112,30 @@ Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattr
 them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
 globs in settings or with `diffle config`.
 
+## Review one feature at a time
+
+A big diff is often several features. The file tree's **Connected** scope groups the changed
+files into clusters by what references what, and the review pane narrows to the cluster you pick.
+`J` and `K` stay inside it. Code that was only moved to another file does not count as changed.
+
+- `gC`: enter or leave the Connected scope
+- `gt` / `gT`: next or previous group
+- `gc`: also list the unchanged files that call into the cluster, collapsed after the changed ones
+- `gm`: open the cluster's graph (the **Graph** button in the cluster bar does the same)
+
+The graph draws the cluster's files as cards coloured by change status, with arrows from a file to
+the files it uses, each labelled with the linking symbols. Inside it, the arrow keys walk along
+the arrows, `Space` selects a file or an arrow and lists its symbols in the side panel, `Enter`
+opens the file in the review and closes the graph, and `+` / `-` / `0` zoom and fit. **+ context**
+adds the unchanged callers as dashed cards. A cluster is named by the file its arrows point at
+most, with its folder beside it; test files are drawn smaller and tagged, and **Hide tests**
+takes them out. Only clusters have a graph: Unlinked and Other do not.
+
+Connected needs a [language server](#jump-to-definitions) for the changed files' languages, and
+the first analysis can take a while on a large repository. Files no server can graph (other
+languages, data, binaries, deleted files) land under **Other**, and code linked to nothing under
+**Unlinked**. Without any server, everything is under Other.
+
 ## Send comments to GitHub
 
 The pull request icon adds one thread, or all open threads, to a pending review on the PR.

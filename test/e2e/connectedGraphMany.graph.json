@@ -1,0 +1,267 @@
+{
+  "outlines": {
+    "tally/currency.py": [
+      {
+        "name": "_SYMBOLS",
+        "kind": 14,
+        "line": 7,
+        "endLine": 7,
+        "col": 0
+      },
+      {
+        "name": "minor_units",
+        "kind": 12,
+        "line": 10,
+        "endLine": 12,
+        "col": 4
+      },
+      {
+        "name": "round_amount",
+        "kind": 12,
+        "line": 15,
+        "endLine": 17,
+        "col": 4
+      },
+      {
+        "name": "format_amount",
+        "kind": 12,
+        "line": 20,
+        "endLine": 24,
+        "col": 4
+      }
+    ],
+    "tally/ledger.py": [
+      {
+        "name": "Kind",
+        "kind": 13,
+        "line": 17,
+        "endLine": 17,
+        "col": 0
+      },
+      {
+        "name": "Entry",
+        "kind": 5,
+        "line": 21,
+        "endLine": 34,
+        "col": 6,
+        "children": [
+          {
+            "name": "total",
+            "kind": 6,
+            "line": 32,
+            "endLine": 34,
+            "col": 8
+          }
+        ]
+      },
+      {
+        "name": "COLUMNS",
+        "kind": 14,
+        "line": 72,
+        "endLine": 72,
+        "col": 0
+      },
+      {
+        "name": "parse_row",
+        "kind": 12,
+        "line": 75,
+        "endLine": 87,
+        "col": 4
+      }
+    ],
+    "tally/refunds.py": [
+      {
+        "name": "unmatched_refunds",
+        "kind": 12,
+        "line": 12,
+        "endLine": 22,
+        "col": 4
+      },
+      {
+        "name": "net_by_account",
+        "kind": 12,
+        "line": 25,
+        "endLine": 32,
+        "col": 4
+      }
+    ],
+    "tests/test_ledger.py": [
+      {
+        "name": "test_refund_counts_negative",
+        "kind": 12,
+        "line": 44,
+        "endLine": 48,
+        "col": 4
+      },
+      {
+        "name": "test_parse_row_rejects_unknown_kind",
+        "kind": 12,
+        "line": 51,
+        "endLine": 54,
+        "col": 4
+      }
+    ],
+    "tests/test_refunds.py": [
+      {
+        "name": "ledger",
+        "kind": 12,
+        "line": 7,
+        "endLine": 12,
+        "col": 4
+      },
+      {
+        "name": "test_unmatched_refunds",
+        "kind": 12,
+        "line": 15,
+        "endLine": 16,
+        "col": 4
+      },
+      {
+        "name": "test_net_by_account",
+        "kind": 12,
+        "line": 19,
+        "endLine": 20,
+        "col": 4
+      }
+    ],
+    "tally/a/util.py": [
+      {
+        "name": "a_total",
+        "kind": 12,
+        "line": 5,
+        "endLine": 7,
+        "col": 4
+      }
+    ],
+    "tally/adapters/storage/postgres/migrations/b/util.py": [
+      {
+        "name": "b_total",
+        "kind": 12,
+        "line": 5,
+        "endLine": 7,
+        "col": 4
+      }
+    ],
+    "tally/report.py": [
+      {
+        "name": "build_report",
+        "kind": 12,
+        "line": 5,
+        "endLine": 7,
+        "col": 4
+      }
+    ],
+    "tests/test_report.py": [
+      {
+        "name": "test_report",
+        "kind": 12,
+        "line": 5,
+        "endLine": 7,
+        "col": 4
+      }
+    ],
+    "tests/test_export.py": [
+      {
+        "name": "test_export",
+        "kind": 12,
+        "line": 5,
+        "endLine": 7,
+        "col": 4
+      }
+    ],
+    "tests/test_audit.py": [
+      {
+        "name": "test_audit",
+        "kind": 12,
+        "line": 5,
+        "endLine": 7,
+        "col": 4
+      }
+    ]
+  },
+  "references": {
+    "tally/ledger.py:21:6": [
+      {
+        "path": "tally/refunds.py",
+        "line": 13,
+        "col": 25
+      },
+      {
+        "path": "tests/test_ledger.py",
+        "line": 45,
+        "col": 12
+      },
+      {
+        "path": "tests/test_refunds.py",
+        "line": 8,
+        "col": 25
+      },
+      {
+        "path": "tally/a/util.py",
+        "line": 7,
+        "col": 36
+      },
+      {
+        "path": "tally/adapters/storage/postgres/migrations/b/util.py",
+        "line": 7,
+        "col": 36
+      },
+      {
+        "path": "tally/report.py",
+        "line": 7,
+        "col": 36
+      },
+      {
+        "path": "tests/test_report.py",
+        "line": 7,
+        "col": 36
+      },
+      {
+        "path": "tests/test_export.py",
+        "line": 7,
+        "col": 36
+      },
+      {
+        "path": "tests/test_audit.py",
+        "line": 7,
+        "col": 36
+      }
+    ],
+    "tally/ledger.py:17:0": [
+      {
+        "path": "tally/refunds.py",
+        "line": 16,
+        "col": 20
+      }
+    ],
+    "tally/ledger.py:75:4": [
+      {
+        "path": "tests/test_ledger.py",
+        "line": 52,
+        "col": 8
+      },
+      {
+        "path": "tally/a/util.py",
+        "line": 6,
+        "col": 16
+      },
+      {
+        "path": "tally/report.py",
+        "line": 6,
+        "col": 16
+      },
+      {
+        "path": "tests/test_report.py",
+        "line": 6,
+        "col": 16
+      }
+    ],
+    "tally/currency.py:7:0": [
+      {
+        "path": "tally/ledger.py",
+        "line": 80,
+        "col": 10
+      }
+    ]
+  }
+}

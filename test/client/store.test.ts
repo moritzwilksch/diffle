@@ -7,10 +7,12 @@ import type {
   LspServerStatus,
   LspStatus,
   Moved,
+  GraphResponse,
   Snapshot,
   UserConfig,
   ViewedEntry,
 } from '@/shared/protocol.js';
+import { IDLE_GRAPH } from '@/client/connected/clusters/focus.js';
 
 /** One python server in `state`; LSP_OFF is a run started with --no-lsp. */
 const lspStatus = (state: LspServerStatus['state'], extra: Partial<LspServerStatus> = {}): LspStatus => ({
@@ -74,6 +76,8 @@ const api = {
   lspSymbols: vi.fn(),
   enter: vi.fn(),
   file: vi.fn(),
+  graph: vi.fn(),
+  reload: vi.fn(),
   patch: vi.fn(),
   patches: vi.fn(),
   setResolved: vi.fn(),
@@ -97,6 +101,9 @@ const {
   itemDeps,
   itemVersion,
   visibleThreads,
+  listedPaths,
+  reviewPaths,
+  countViewed,
   OVERSIZED_LINES,
   PATCH_BATCH_LINES,
   PATCH_BATCH_FILES,
@@ -147,7 +154,13 @@ beforeEach(() => {
     reason: 'No matching pull request',
   }));
   blocksSymbol.mockReset().mockResolvedValue(false);
+  api.graph.mockReset();
   useStore.setState({
+    treeScope: 'changed',
+    connectedFrom: 'changed',
+    graph: IDLE_GRAPH,
+    focus: null,
+    context: false,
     snapshot: null,
     loaded: {},
     fileView: null,
@@ -2257,4 +2270,996 @@ it('discards metadata for a newer server snapshot without changing the displayed
   await vi.waitFor(() => expect(useStore.getState().github.status).toBe('idle'));
   expect(useStore.getState().snapshot?.version).toBe(1);
   expect(useStore.getState().github.data).toBeUndefined();
+});
+
+describe('connected scope', () => {
+  // Tree order: a/x, a/y, b/w, b/z, c/solo, d.md.
+  const FILES = ['a/x.ts', 'a/y.ts', 'b/w.ts', 'b/z.ts', 'c/solo.ts', 'd.md'];
+  const cluster = (id: string, files: string[]) => ({
+    id,
+    label: '',
+    files,
+    symbols: files.length,
+    context: [],
+    contextTotal: 0,
+    links: [],
+    linksTotal: 0,
+  });
+  const graphOf = (
+    version: number,
+    clusters = [cluster('a/x.ts', ['a/x.ts', 'a/y.ts']), cluster('b/w.ts', ['b/w.ts', 'b/z.ts'])],
+  ): GraphResponse => ({
+    version,
+    clusters,
+    unlinked: ['c/solo.ts'],
+    other: ['d.md'],
+  });
+  const snapshotAt = (version: number, key = 'working') => ({
+    ...snap(version, key, FILES),
+    changed: FILES.map((path) => file({ path, blob: `b-${path}` })),
+  });
+  async function open(version = 1) {
+    api.patch.mockImplementation(async (p: string) => patchesFor([p]));
+    api.patches.mockImplementation(async (paths: string[]) => patchesFor(paths));
+    api.snapshot.mockResolvedValueOnce(snapshotAt(version));
+    await useStore.getState().refreshSnapshot();
+  }
+  /** Enter Connected with `graph` as the server's answer and wait for the first focus. */
+  async function connect(graph: GraphResponse) {
+    api.graph.mockResolvedValueOnce(graph);
+    useStore.getState().setTreeScope('connected');
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+  }
+  const focusedPaths = () => listedPaths(useStore.getState());
+
+  it('entering Connected loads the graph, then focuses the first cluster and lists only its files', async () => {
+    await open();
+    const answer = deferred<GraphResponse>();
+    api.graph.mockReturnValueOnce(answer.promise);
+    useStore.getState().setTreeScope('connected');
+    expect(useStore.getState().treeScope).toBe('connected');
+    expect(useStore.getState().graph).toEqual({ status: 'loading', data: null, error: null });
+    expect(useStore.getState().focus).toBeNull();
+    expect(focusedPaths()).toEqual(FILES);
+
+    answer.resolve(graphOf(1));
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+    expect(focusedPaths()).toEqual(['a/x.ts', 'a/y.ts']);
+    // Narrowing the list does not stop the other clusters' patches from loading.
+    await vi.waitFor(() => expect(Object.keys(useStore.getState().loaded)).toHaveLength(FILES.length));
+  });
+
+  it('focuses unlinked, then other, when the graph has no clusters', async () => {
+    await open();
+    await connect({ ...graphOf(1, []), unlinked: [] });
+    expect(useStore.getState().focus).toEqual({ kind: 'other' });
+    expect(focusedPaths()).toEqual(['d.md']);
+  });
+
+  it('drops a response built for another snapshot version and asks again', async () => {
+    await open(2);
+    api.graph.mockResolvedValueOnce(graphOf(1, [cluster('stale.ts', ['a/x.ts'])])).mockResolvedValueOnce(graphOf(2));
+    useStore.getState().setTreeScope('connected');
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+    expect(api.graph).toHaveBeenCalledTimes(2);
+    expect(useStore.getState().graph.data?.version).toBe(2);
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+  });
+
+  it('stops asking after a few stale answers and reports the graph as out of date', async () => {
+    await open(2);
+    api.graph.mockResolvedValue(graphOf(1));
+    useStore.getState().setTreeScope('connected');
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('error'));
+    expect(api.graph.mock.calls.length).toBeGreaterThan(1);
+    expect(api.graph.mock.calls.length).toBeLessThan(10);
+    expect(useStore.getState().graph.data).toBeNull();
+    expect(useStore.getState().focus).toBeNull();
+    expect(useStore.getState().toast).toContain('Loading the connected graph failed');
+  });
+
+  it('a failed load toasts, keeps the error on the graph, and loadGraph again retries', async () => {
+    await open();
+    api.graph.mockRejectedValueOnce(new Error('boom'));
+    useStore.getState().setTreeScope('connected');
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('error'));
+    expect(useStore.getState().graph.error).toBe('boom');
+    expect(useStore.getState().toast).toBe('Loading the connected graph failed: boom');
+
+    api.graph.mockResolvedValueOnce(graphOf(1));
+    await useStore.getState().loadGraph();
+    expect(useStore.getState().graph).toEqual({ status: 'ready', data: graphOf(1), error: null });
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+  });
+
+  it('leaving Connected aborts the request in flight and a late answer lands nowhere', async () => {
+    await open();
+    const answer = deferred<GraphResponse>();
+    let signal: AbortSignal | undefined;
+    api.graph.mockImplementationOnce((s: AbortSignal) => {
+      signal = s;
+      return answer.promise;
+    });
+    useStore.getState().setTreeScope('connected');
+    expect(signal?.aborted).toBe(false);
+    useStore.getState().setTreeScope('all');
+    expect(signal?.aborted).toBe(true);
+    expect(useStore.getState().graph).toEqual(IDLE_GRAPH);
+
+    answer.resolve(graphOf(1));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(useStore.getState().graph).toEqual(IDLE_GRAPH);
+    expect(useStore.getState().focus).toBeNull();
+  });
+
+  it('leaving Connected clears the focus and lists every changed file again', async () => {
+    await open();
+    await connect(graphOf(1));
+    expect(focusedPaths()).toHaveLength(2);
+    useStore.getState().setTreeScope('changed');
+    expect(useStore.getState().focus).toBeNull();
+    expect(useStore.getState().graph).toEqual(IDLE_GRAPH);
+    expect(focusedPaths()).toEqual(FILES);
+  });
+
+  describe('the graph dialog flag', () => {
+    const A = { kind: 'cluster', id: 'a/x.ts' } as const;
+    const isOpen = () => useStore.getState().graphOpen;
+
+    it('opens only on a focused cluster of the Connected scope', async () => {
+      await open();
+      useStore.getState().setGraphOpen(true);
+      expect(isOpen()).toBe(false);
+      await connect(graphOf(1));
+      useStore.getState().focusCluster({ kind: 'unlinked' });
+      useStore.getState().setGraphOpen(true);
+      expect(isOpen()).toBe(false);
+      useStore.getState().focusCluster(A);
+      useStore.getState().setGraphOpen(true);
+      expect(isOpen()).toBe(true);
+      useStore.getState().setGraphOpen(false);
+      expect(isOpen()).toBe(false);
+    });
+
+    it('closes when the focus moves to another group or to none', async () => {
+      await open();
+      await connect(graphOf(1));
+      for (const next of [{ kind: 'cluster', id: 'b/w.ts' } as const, { kind: 'other' } as const, null]) {
+        useStore.getState().focusCluster(A);
+        useStore.getState().setGraphOpen(true);
+        useStore.getState().focusCluster(next);
+        expect(isOpen()).toBe(false);
+      }
+    });
+
+    it('survives a refresh that keeps the cluster and closes when the refresh drops it', async () => {
+      await open();
+      await connect(graphOf(1));
+      useStore.getState().setGraphOpen(true);
+      api.graph.mockResolvedValueOnce(graphOf(1));
+      await useStore.getState().loadGraph();
+      expect(isOpen()).toBe(true);
+      api.graph.mockResolvedValueOnce(graphOf(1, [cluster('b/w.ts', ['b/w.ts', 'b/z.ts'])]));
+      await useStore.getState().loadGraph();
+      expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'b/w.ts' });
+      expect(isOpen()).toBe(false);
+    });
+
+    it('closes when Connected is left, and Escape closes it without clearing the review selection', async () => {
+      await open();
+      await connect(graphOf(1));
+      useStore.getState().setGraphOpen(true);
+      useStore.getState().setTreeScope('changed');
+      expect(isOpen()).toBe(false);
+
+      await connect(graphOf(1));
+      const selection = useStore.getState().selection;
+      useStore.getState().setGraphOpen(true);
+      useStore.getState().escape();
+      expect(isOpen()).toBe(false);
+      expect(useStore.getState().selection).toBe(selection);
+    });
+  });
+
+  it('an answer that lands after a newer transition is dropped for the newer one’s', async () => {
+    await open();
+    const slow = deferred<GraphResponse>();
+    api.graph.mockReturnValueOnce(slow.promise);
+    useStore.getState().setTreeScope('connected');
+    // A mode switch begins a transition and reloads the graph for the new snapshot.
+    api.graph.mockResolvedValueOnce({ ...graphOf(2), clusters: [cluster('b/w.ts', ['b/w.ts', 'b/z.ts'])] });
+    api.enter.mockResolvedValueOnce(snapshotAt(2, 'pr:abc'));
+    await useStore.getState().enter({ kind: 'pr' });
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+
+    slow.resolve(graphOf(1));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(useStore.getState().graph.data?.version).toBe(2);
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'b/w.ts' });
+  });
+
+  it('a mode switch resets the graph and the focus, then loads the graph of the new mode', async () => {
+    await open();
+    await connect(graphOf(1));
+    useStore.getState().moveCluster(1);
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'b/w.ts' });
+
+    const answer = deferred<GraphResponse>();
+    api.graph.mockReturnValueOnce(answer.promise);
+    api.enter.mockResolvedValueOnce(snapshotAt(2, 'pr:abc'));
+    await useStore.getState().enter({ kind: 'pr' });
+    expect(useStore.getState().graph).toEqual({ status: 'loading', data: null, error: null });
+    expect(useStore.getState().focus).toBeNull();
+    expect(useStore.getState().treeScope).toBe('connected');
+
+    answer.resolve(graphOf(2));
+    await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+  });
+
+  it('a refresh that bumps the version reloads the graph and keeps the focus while its id exists', async () => {
+    await open();
+    await connect(graphOf(1));
+    useStore.getState().moveCluster(1);
+
+    api.graph.mockResolvedValueOnce(graphOf(2));
+    api.snapshot.mockResolvedValueOnce(snapshotAt(2));
+    await useStore.getState().refreshSnapshot();
+    await vi.waitFor(() => expect(useStore.getState().graph.data?.version).toBe(2));
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'b/w.ts' });
+    expect(focusedPaths()).toEqual(['b/w.ts', 'b/z.ts']);
+  });
+
+  it('a refresh that removes the focused cluster focuses the first group', async () => {
+    await open();
+    await connect(graphOf(1));
+    useStore.getState().moveCluster(1);
+    useStore.setState({ activePath: 'b/z.ts' });
+
+    api.graph.mockResolvedValueOnce(graphOf(2, [cluster('a/x.ts', ['a/x.ts', 'a/y.ts'])]));
+    api.snapshot.mockResolvedValueOnce(snapshotAt(2));
+    await useStore.getState().refreshSnapshot();
+    await vi.waitFor(() => expect(useStore.getState().graph.data?.version).toBe(2));
+    expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+    // The reader's file left the list: the cursor followed it to the first listed one.
+    expect(useStore.getState().activePath).toBe('a/x.ts');
+  });
+
+  it('a refresh that keeps the version does not ask for the graph again', async () => {
+    await open();
+    await connect(graphOf(1));
+    api.snapshot.mockResolvedValueOnce(snapshotAt(1));
+    await useStore.getState().refreshSnapshot();
+    expect(api.graph).toHaveBeenCalledTimes(1);
+    expect(useStore.getState().graph.status).toBe('ready');
+  });
+
+  it('J / K and ] / [ walk the focused cluster and stop at its ends', async () => {
+    await open();
+    await connect(graphOf(1));
+    const store = useStore.getState();
+    const at = () => useStore.getState().activePath;
+
+    store.moveFile('first');
+    expect(at()).toBe('a/x.ts');
+    store.moveFile(1);
+    expect(at()).toBe('a/y.ts');
+    store.moveFile(1);
+    expect(at()).toBe('a/y.ts');
+    store.moveFile('last');
+    expect(at()).toBe('a/y.ts');
+    store.moveFile(-1);
+    store.moveFile(-1);
+    expect(at()).toBe('a/x.ts');
+
+    await vi.waitFor(() => expect(useStore.getState().loaded['a/y.ts']?.kind).toBe('diff'));
+    store.moveFile('first');
+    store.moveHunk(1);
+    store.moveHunk(1);
+    expect(at()).toBe('a/y.ts');
+    store.moveHunk(1);
+    expect(at()).toBe('a/y.ts');
+    store.moveHunk(-1);
+    store.moveHunk(-1);
+    store.moveHunk(-1);
+    expect(at()).toBe('a/x.ts');
+  });
+
+  it('the cursor moves to the first listed file, header first, when the active file leaves the list', async () => {
+    await open();
+    await connect(graphOf(1));
+    await vi.waitFor(() => expect(useStore.getState().loaded['b/z.ts']?.kind).toBe('diff'));
+    const store = useStore.getState();
+    store.focusCluster({ kind: 'cluster', id: 'b/w.ts' });
+    store.moveFile('last');
+    expect(useStore.getState().activePath).toBe('b/z.ts');
+    const jumps = useStore.getState().jumps;
+
+    store.focusCluster({ kind: 'cluster', id: 'a/x.ts' });
+    const s = useStore.getState();
+    expect(s.activePath).toBe('a/x.ts');
+    expect(s.scrollTarget).toEqual(expect.objectContaining({ id: itemIdOf(s, 'a/x.ts'), align: 'start' }));
+    expect(s.selection?.id).toBe(itemIdOf(s, 'a/x.ts'));
+    // The path that left was not a place the reader chose to leave: no jumplist entry names it.
+    expect(s.jumps).toEqual(jumps);
+  });
+
+  it('the cursor stays where it is when the active file is still listed', async () => {
+    await open();
+    await connect(graphOf(1));
+    const store = useStore.getState();
+    store.moveFile('last');
+    const before = useStore.getState();
+    expect(before.activePath).toBe('a/y.ts');
+    store.focusCluster(null);
+    expect(useStore.getState().activePath).toBe('a/y.ts');
+    expect(useStore.getState().scrollTarget).toBe(before.scrollTarget);
+    expect(focusedPaths()).toEqual(FILES);
+  });
+
+  it('a draft on a file that left the list is closed', async () => {
+    await open();
+    await connect(graphOf(1));
+    useStore.setState({ activePath: 'b/z.ts', draft: { path: 'b/z.ts', selection: null }, visualAnchor: null });
+    useStore.getState().focusCluster({ kind: 'cluster', id: 'a/x.ts' });
+    expect(useStore.getState().draft).toBeNull();
+  });
+
+  it('moveCluster cycles clusters, unlinked and other, and toggleContext flips the flag', async () => {
+    await open();
+    await connect(graphOf(1));
+    const focus = () => useStore.getState().focus;
+    useStore.getState().moveCluster(1);
+    expect(focus()).toEqual({ kind: 'cluster', id: 'b/w.ts' });
+    useStore.getState().moveCluster(1);
+    expect(focus()).toEqual({ kind: 'unlinked' });
+    expect(focusedPaths()).toEqual(['c/solo.ts']);
+    useStore.getState().moveCluster(1);
+    expect(focus()).toEqual({ kind: 'other' });
+    useStore.getState().moveCluster(1);
+    expect(focus()).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+    useStore.getState().moveCluster(-1);
+    expect(focus()).toEqual({ kind: 'other' });
+
+    expect(useStore.getState().context).toBe(false);
+    useStore.getState().toggleContext();
+    expect(useStore.getState().context).toBe(true);
+    useStore.getState().toggleContext();
+    expect(useStore.getState().context).toBe(false);
+  });
+
+  it('moveCluster does nothing before a graph is ready', async () => {
+    await open();
+    useStore.getState().moveCluster(1);
+    expect(useStore.getState().focus).toBeNull();
+  });
+
+  it('viewing a directory marks every file under it, whatever the focus', async () => {
+    await open();
+    await connect(graphOf(1));
+    api.setViewedBulk.mockResolvedValue([]);
+    await useStore.getState().setViewedMany(FILES, true);
+    expect(api.setViewedBulk).toHaveBeenCalledTimes(1);
+    expect(api.setViewedBulk.mock.calls[0]![0]).toHaveLength(FILES.length);
+  });
+
+  describe('jumps across clusters', () => {
+    const focusOf = () => useStore.getState().focus;
+    const B = { kind: 'cluster', id: 'b/w.ts' } as const;
+    const A = { kind: 'cluster', id: 'a/x.ts' } as const;
+    async function inClusterA() {
+      await open();
+      await connect(graphOf(1));
+      await vi.waitFor(() => expect(useStore.getState().loaded['b/z.ts']?.kind).toBe('diff'));
+    }
+
+    it('opening a changed file of another cluster widens the focus to its cluster and lands on the file', async () => {
+      await inClusterA();
+      expect(focusOf()).toEqual(A);
+      await useStore.getState().openFile('b/z.ts');
+      const s = useStore.getState();
+      expect(s.focus).toEqual(B);
+      expect(reviewPaths(s)).toEqual(['b/w.ts', 'b/z.ts']);
+      expect(s.activePath).toBe('b/z.ts');
+      expect(s.scrollTarget).toEqual(expect.objectContaining({ id: itemIdOf(s, 'b/z.ts') }));
+    });
+
+    it('a file the graph does not know, or one in a bucket, widens to no focus or to the bucket', async () => {
+      await inClusterA();
+      await useStore.getState().openFile('c/solo.ts');
+      expect(focusOf()).toEqual({ kind: 'unlinked' });
+      expect(useStore.getState().activePath).toBe('c/solo.ts');
+      // The graph predates the file: it names no group for it.
+      useStore.setState({ graph: { status: 'ready', data: { ...graphOf(1), unlinked: [] }, error: null }, focus: A });
+      await useStore.getState().openFile('c/solo.ts');
+      expect(focusOf()).toBeNull();
+      expect(reviewPaths(useStore.getState())).toEqual(FILES);
+      expect(useStore.getState().activePath).toBe('c/solo.ts');
+    });
+
+    it('keeps the focus for a file it already lists', async () => {
+      await inClusterA();
+      await useStore.getState().openFile('a/y.ts');
+      expect(focusOf()).toEqual(A);
+      expect(useStore.getState().activePath).toBe('a/y.ts');
+    });
+
+    it('gd, a hover link or a reference onto another cluster’s line widens the focus and puts the cursor on that line', async () => {
+      await inClusterA();
+      await useStore.getState().goToLink('b/z.ts', 1);
+      const s = useStore.getState();
+      expect(s.focus).toEqual(B);
+      expect(s.activePath).toBe('b/z.ts');
+      expect(s.selection).toEqual({
+        id: itemIdOf(s, 'b/z.ts'),
+        range: { start: 1, side: 'additions', end: 1, endSide: 'additions' },
+      });
+      expect(s.scrollTarget).toEqual(expect.objectContaining({ id: itemIdOf(s, 'b/z.ts'), align: 'eye' }));
+    });
+
+    it('records the jump at the origin once, not at the file the widened focus parks the cursor on', async () => {
+      await inClusterA();
+      await useStore.getState().goToLink('a/y.ts', 1);
+      expect(useStore.getState().jumps).toEqual([]);
+      await useStore.getState().goToLink('b/z.ts', 1);
+      expect(useStore.getState().jumps).toEqual([{ path: 'a/y.ts', side: 'new', line: 1 }]);
+      useStore.setState({ jumps: [], jumpIndex: 0 });
+      await useStore.getState().openFile('a/x.ts');
+      expect(useStore.getState().jumps).toEqual([{ path: 'b/z.ts', side: 'new', line: 1 }]);
+    });
+
+    it('stepping a search match onto another cluster widens the focus first', async () => {
+      await inClusterA();
+      useStore.setState((s) => ({
+        search: { ...s.search, matches: [{ path: 'b/w.ts', line: 1, text: 'y' }], index: -1, direction: 1 },
+      }));
+      useStore.getState().moveMatch(1);
+      await vi.waitFor(() => expect(focusOf()).toEqual(B));
+      await vi.waitFor(() => expect(useStore.getState().selection?.id).toBe(itemIdOf(useStore.getState(), 'b/w.ts')));
+      expect(useStore.getState().activePath).toBe('b/w.ts');
+    });
+
+    it('Ctrl+o onto a position recorded under another focus widens the focus to it', async () => {
+      await inClusterA();
+      await useStore.getState().goToLink('b/z.ts', 1);
+      await useStore.getState().goToLink('a/y.ts', 1);
+      expect(focusOf()).toEqual(A);
+      useStore.getState().jumpBack();
+      await vi.waitFor(() => expect(focusOf()).toEqual(B));
+      const s = useStore.getState();
+      expect(s.activePath).toBe('b/z.ts');
+      expect(s.selection?.id).toBe(itemIdOf(s, 'b/z.ts'));
+      expect(s.jumpIndex).toBe(0);
+      expect(s.scrollTarget).toEqual(expect.objectContaining({ id: itemIdOf(s, 'b/z.ts') }));
+    });
+
+    it('Ctrl+o and Ctrl+i step over entries whose file is gone instead of stalling on them', async () => {
+      await inClusterA();
+      const at = (path: string) => ({ path, side: 'new' as const, line: 1 });
+      useStore.setState({ jumps: [at('a/y.ts'), at('gone.ts'), at('b/z.ts')], jumpIndex: 3 });
+      useStore.getState().jumpBack();
+      await vi.waitFor(() => expect(useStore.getState().activePath).toBe('b/z.ts'));
+      expect(useStore.getState().jumpIndex).toBe(2);
+      useStore.getState().jumpBack();
+      await vi.waitFor(() => expect(useStore.getState().activePath).toBe('a/y.ts'));
+      expect(useStore.getState().jumpIndex).toBe(0);
+      useStore.getState().jumpForward();
+      await vi.waitFor(() => expect(useStore.getState().activePath).toBe('b/z.ts'));
+      expect(useStore.getState().jumpIndex).toBe(2);
+    });
+
+    it('Ctrl+o does not advance the jumplist when no earlier entry is alive', async () => {
+      await inClusterA();
+      useStore.setState({ jumps: [{ path: 'gone.ts', side: 'new', line: 1 }], jumpIndex: 1 });
+      useStore.getState().jumpBack();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(useStore.getState().jumpIndex).toBe(1);
+      expect(useStore.getState().jumps).toEqual([{ path: 'gone.ts', side: 'new', line: 1 }]);
+    });
+  });
+
+  describe('a graph that is out of date or never lands', () => {
+    it('shows the changed files, not an empty review, when the focused cluster’s files are all gone', async () => {
+      await open();
+      await connect(graphOf(1));
+      expect(focusedPaths()).toEqual(['a/x.ts', 'a/y.ts']);
+      api.graph.mockReturnValueOnce(deferred<GraphResponse>().promise);
+      const rest = FILES.slice(2);
+      api.snapshot.mockResolvedValueOnce({
+        ...snapshotAt(2),
+        changed: rest.map((path) => file({ path, blob: `b-${path}` })),
+      });
+      await useStore.getState().refreshSnapshot();
+      expect(useStore.getState().graph.data?.version).toBe(1);
+      expect(focusedPaths()).toEqual(rest);
+    });
+
+    it('a transition that fails while the graph loads leaves the graph to land', async () => {
+      await open();
+      const answer = deferred<GraphResponse>();
+      api.graph.mockReturnValueOnce(answer.promise);
+      useStore.getState().setTreeScope('connected');
+      api.reload.mockRejectedValueOnce(new Error('git is busy'));
+      await useStore.getState().reload();
+      expect(useStore.getState().toast).toBe('Reloading failed: git is busy');
+      answer.resolve(graphOf(1));
+      await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+      expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+    });
+
+    it('a refresh while the graph loads takes the newer answer and drops the older one that lands late', async () => {
+      await open();
+      const stale = deferred<GraphResponse>();
+      api.graph.mockReturnValueOnce(stale.promise).mockResolvedValueOnce(graphOf(2));
+      useStore.getState().setTreeScope('connected');
+      api.snapshot.mockResolvedValueOnce(snapshotAt(2));
+      await useStore.getState().refreshSnapshot();
+      await vi.waitFor(() => expect(useStore.getState().graph.data?.version).toBe(2));
+      stale.resolve(graphOf(1, [cluster('late.ts', ['a/x.ts'])]));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(useStore.getState().graph.data?.version).toBe(2);
+      expect(useStore.getState().focus).toEqual({ kind: 'cluster', id: 'a/x.ts' });
+      expect(api.graph).toHaveBeenCalledTimes(2);
+    });
+
+    it('a retry that a refresh starts fails quietly: the error shows on the graph, not as another toast', async () => {
+      await open();
+      api.graph.mockRejectedValueOnce(new Error('boom'));
+      useStore.getState().setTreeScope('connected');
+      await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('error'));
+      expect(useStore.getState().toast).toBe('Loading the connected graph failed: boom');
+      useStore.setState({ toast: null });
+
+      api.graph.mockRejectedValueOnce(new Error('still boom'));
+      api.snapshot.mockResolvedValueOnce(snapshotAt(2));
+      await useStore.getState().refreshSnapshot();
+      await vi.waitFor(() => expect(useStore.getState().graph.error).toBe('still boom'));
+      expect(useStore.getState().graph.status).toBe('error');
+      expect(useStore.getState().toast).toBeNull();
+    });
+
+    it('leaving Connected with the cursor on a caller moves the cursor to the first listed file and closes its draft', async () => {
+      await open();
+      api.file.mockImplementation(async (path: string) => ({ path, contents: 'one\ntwo\n', binary: false }));
+      const g = graphOf(1);
+      g.clusters[0] = {
+        ...g.clusters[0]!,
+        context: [{ path: 'ctx/u.ts', refs: 1, uses: [{ symbol: 'fx', kind: 12, path: 'src/lib.ts', lines: [2] }] }],
+        contextTotal: 1,
+      };
+      api.snapshot.mockResolvedValueOnce({ ...snapshotAt(2), tree: [...FILES, 'ctx/u.ts'] });
+      await useStore.getState().refreshSnapshot();
+      await connect({ ...g, version: 2 });
+      useStore.getState().toggleContext();
+      await useStore.getState().openFile('ctx/u.ts');
+      await useStore.getState().openDraft(useStore.getState().selection!);
+      expect(useStore.getState().draft?.path).toBe('ctx/u.ts');
+
+      useStore.getState().setTreeScope('changed');
+      const s = useStore.getState();
+      expect(s.activePath).toBe('a/x.ts');
+      expect(s.draft).toBeNull();
+      expect(s.selection?.id).not.toContain('ctx/u.ts');
+    });
+  });
+
+  it('remembers the scope Connected was entered from, so gC returns there', async () => {
+    await open();
+    expect(useStore.getState().connectedFrom).toBe('changed');
+    useStore.getState().setTreeScope('all');
+    useStore.getState().setTreeScope('connected');
+    expect(useStore.getState().connectedFrom).toBe('all');
+    useStore.getState().setTreeScope('changed');
+    useStore.getState().setTreeScope('connected');
+    expect(useStore.getState().connectedFrom).toBe('changed');
+    // Entering Connected again from Connected is not an entry.
+    useStore.getState().setTreeScope('all');
+    useStore.getState().setTreeScope('connected');
+    useStore.getState().setTreeScope('connected');
+    expect(useStore.getState().connectedFrom).toBe('all');
+  });
+
+  describe('context files', () => {
+    const CTX_U = 'ctx/u.ts';
+    const CTX_V = 'ctx/v.ts';
+    const BODY = 'one\ntwo\nthree\nfour\nfive\n';
+    const withContext = (version: number, key = 'working') => ({
+      ...snapshotAt(version, key),
+      tree: [...FILES, CTX_U, CTX_V, 'other/plain.ts'],
+    });
+    /** The first cluster has two callers: `u` uses it on lines 2 and 4, `v` on line 1. */
+    const contextGraph = (version: number): GraphResponse => {
+      const g = graphOf(version);
+      g.clusters[0] = {
+        ...g.clusters[0]!,
+        context: [
+          { path: CTX_U, refs: 3, uses: [{ symbol: 'fx', kind: 12, path: 'src/lib.ts', lines: [2, 4] }] },
+          { path: CTX_V, refs: 1, uses: [{ symbol: 'fy', kind: 12, path: 'src/lib.ts', lines: [1] }] },
+        ],
+        contextTotal: 2,
+      };
+      return g;
+    };
+    const review = () => reviewPaths(useStore.getState());
+    const loadedKind = (path: string) => useStore.getState().loaded[path]?.kind;
+    // The changed files' own diffs read their sides through the same endpoint; only callers count here.
+    const fetched = () => api.file.mock.calls.map((c) => c[0]).filter((p) => p.startsWith('ctx/'));
+
+    async function enterConnected(version = 1) {
+      api.patch.mockImplementation(async (p: string) => patchesFor([p]));
+      api.patches.mockImplementation(async (paths: string[]) => patchesFor(paths));
+      api.file.mockImplementation(async (path: string) => ({ path, contents: BODY, binary: false }));
+      api.snapshot.mockResolvedValueOnce(withContext(version));
+      await useStore.getState().refreshSnapshot();
+      api.graph.mockResolvedValueOnce(contextGraph(version));
+      useStore.getState().setTreeScope('connected');
+      await vi.waitFor(() => expect(useStore.getState().graph.status).toBe('ready'));
+    }
+
+    it('lists the callers after the changed files only with context on and a cluster focused', async () => {
+      await enterConnected();
+      expect(review()).toEqual(['a/x.ts', 'a/y.ts']);
+      useStore.getState().toggleContext();
+      expect(review()).toEqual(['a/x.ts', 'a/y.ts', CTX_U, CTX_V]);
+      // Viewed progress, patch loading and the global changed set stay about changed files.
+      expect(listedPaths(useStore.getState())).toEqual(['a/x.ts', 'a/y.ts']);
+      useStore.getState().moveCluster(1);
+      expect(review()).toEqual(['b/w.ts', 'b/z.ts']);
+      useStore.getState().moveCluster(1);
+      expect(review()).toEqual(['c/solo.ts']);
+      useStore.getState().toggleContext();
+      expect(review()).toEqual(['c/solo.ts']);
+    });
+
+    it('starts every caller collapsed and fetches none until the reader expands one', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      expect(isCollapsed(useStore.getState(), CTX_U)).toBe(true);
+      expect(isCollapsed(useStore.getState(), CTX_V)).toBe(true);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(fetched()).toEqual([]);
+      expect(Object.keys(useStore.getState().loaded).filter((p) => p.startsWith('ctx/'))).toEqual([]);
+
+      useStore.getState().toggleCollapsed(CTX_U);
+      await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      expect(api.file).toHaveBeenCalledWith(CTX_U, 'new', expect.anything());
+      expect(fetched()).toEqual([CTX_U]);
+      const s = useStore.getState();
+      expect(s.gens[CTX_U]).toBeGreaterThan(0);
+      expect(itemIdOf(s, CTX_U)).toBe(`file:${CTX_U}@${s.gens[CTX_U]}`);
+      expect(s.contents[CTX_U]?.new).toBe(BODY);
+    });
+
+    it('zo on a collapsed caller loads it too', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      useStore.getState().moveFile('last');
+      expect(useStore.getState().activePath).toBe(CTX_V);
+      useStore.getState().setCollapsedAtCursor(false);
+      await vi.waitFor(() => expect(loadedKind(CTX_V)).toBe('file'));
+    });
+
+    it('J / K walk from the last changed file onto the callers and back', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      const at = () => useStore.getState().activePath;
+      useStore.getState().moveFile('first');
+      useStore.getState().moveFile(1);
+      expect(at()).toBe('a/y.ts');
+      useStore.getState().moveFile(1);
+      expect(at()).toBe(CTX_U);
+      useStore.getState().moveFile(1);
+      expect(at()).toBe(CTX_V);
+      useStore.getState().moveFile(1);
+      expect(at()).toBe(CTX_V);
+      useStore.getState().moveFile(-1);
+      useStore.getState().moveFile(-1);
+      expect(at()).toBe('a/y.ts');
+    });
+
+    it('drops a late file when the focus changed meanwhile', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      const slow = deferred<{ path: string; contents: string; binary: boolean }>();
+      api.file.mockReturnValueOnce(slow.promise);
+      useStore.getState().toggleCollapsed(CTX_U);
+      useStore.getState().moveCluster(1);
+      slow.resolve({ path: CTX_U, contents: BODY, binary: false });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(loadedKind(CTX_U)).toBeUndefined();
+      expect(review()).toEqual(['b/w.ts', 'b/z.ts']);
+    });
+
+    it('drops a late file when context was switched off meanwhile', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      const slow = deferred<{ path: string; contents: string; binary: boolean }>();
+      api.file.mockReturnValueOnce(slow.promise);
+      useStore.getState().toggleCollapsed(CTX_U);
+      useStore.getState().toggleContext();
+      slow.resolve({ path: CTX_U, contents: BODY, binary: false });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(loadedKind(CTX_U)).toBeUndefined();
+    });
+
+    it('turning context off, or focusing another group, removes the loaded callers', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      useStore.getState().toggleCollapsed(CTX_U);
+      await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      useStore.getState().toggleContext();
+      expect(loadedKind(CTX_U)).toBeUndefined();
+      expect(review()).toEqual(['a/x.ts', 'a/y.ts']);
+
+      // Opened by the reader, so it comes back open and fetches again.
+      useStore.getState().toggleContext();
+      await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      useStore.getState().moveCluster(1);
+      expect(loadedKind(CTX_U)).toBeUndefined();
+    });
+
+    describe('across a refresh', () => {
+      /** Context on, `ctx/u.ts` open with the cursor on its first linking line and a comment started there. */
+      async function readingCaller() {
+        await enterConnected();
+        useStore.getState().toggleContext();
+        await useStore.getState().openFile(CTX_U);
+        await useStore.getState().openDraft(useStore.getState().selection!);
+        return useStore.getState();
+      }
+
+      it('a version bump leaves the open caller, its cursor and its draft where they are while the new graph loads', async () => {
+        const before = await readingCaller();
+        const item = before.loaded[CTX_U];
+        const fetches = api.file.mock.calls.length;
+
+        api.graph.mockReturnValueOnce(deferred<GraphResponse>().promise);
+        api.snapshot.mockResolvedValueOnce(withContext(2));
+        await useStore.getState().refreshSnapshot();
+
+        const s = useStore.getState();
+        expect(review()).toEqual(['a/x.ts', 'a/y.ts', CTX_U, CTX_V]);
+        expect(s.loaded[CTX_U]).toBe(item);
+        expect(itemIdOf(s, CTX_U)).toBe(itemIdOf(before, CTX_U));
+        expect(s.selection).toEqual(before.selection);
+        expect(s.activePath).toBe(CTX_U);
+        expect(s.draft).toEqual(before.draft);
+        expect(s.scrollTarget).toBe(before.scrollTarget);
+        expect(api.file.mock.calls.length).toBe(fetches);
+      });
+
+      it('the new graph that still lists the caller changes nothing for the reader', async () => {
+        const before = await readingCaller();
+        const item = before.loaded[CTX_U];
+        const answer = deferred<GraphResponse>();
+        api.graph.mockReturnValueOnce(answer.promise);
+        api.snapshot.mockResolvedValueOnce(withContext(2));
+        await useStore.getState().refreshSnapshot();
+
+        answer.resolve(contextGraph(2));
+        await vi.waitFor(() => expect(useStore.getState().graph.data?.version).toBe(2));
+        const s = useStore.getState();
+        expect(s.loaded[CTX_U]).toBe(item);
+        expect(itemIdOf(s, CTX_U)).toBe(itemIdOf(before, CTX_U));
+        expect(s.selection).toEqual(before.selection);
+        expect(s.draft).toEqual(before.draft);
+        expect(s.scrollTarget).toBe(before.scrollTarget);
+        expect(review()).toEqual(['a/x.ts', 'a/y.ts', CTX_U, CTX_V]);
+      });
+
+      it('a new graph that no longer lists the caller prunes it, moves the cursor to the first listed file and closes the draft', async () => {
+        await readingCaller();
+        const answer = deferred<GraphResponse>();
+        api.graph.mockReturnValueOnce(answer.promise);
+        api.snapshot.mockResolvedValueOnce(withContext(2));
+        await useStore.getState().refreshSnapshot();
+        expect(loadedKind(CTX_U)).toBe('file');
+
+        answer.resolve(graphOf(2));
+        await vi.waitFor(() => expect(loadedKind(CTX_U)).toBeUndefined());
+        const s = useStore.getState();
+        expect(review()).toEqual(['a/x.ts', 'a/y.ts']);
+        expect(s.activePath).toBe('a/x.ts');
+        expect(s.draft).toBeNull();
+      });
+
+      it('fetches an open caller again when a side of the review moved, since its text may differ', async () => {
+        await readingCaller();
+        expect(fetched()).toEqual([CTX_U]);
+        api.graph.mockResolvedValueOnce(contextGraph(2));
+        api.snapshot.mockResolvedValueOnce({ ...withContext(2), oldSha: 'moved' });
+        await useStore.getState().refreshSnapshot();
+        await vi.waitFor(() => expect(fetched()).toEqual([CTX_U, CTX_U]));
+        await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      });
+
+      it('drops a caller from the pane the moment it becomes a changed file, and never lists it twice', async () => {
+        await readingCaller();
+        const patch = deferred<string>();
+        api.patch.mockReturnValueOnce(patch.promise);
+        api.graph.mockReturnValueOnce(deferred<GraphResponse>().promise);
+        const now = withContext(2);
+        api.snapshot.mockResolvedValueOnce({
+          ...now,
+          changed: [...now.changed, file({ path: CTX_U, blob: 'new' })],
+        });
+        const refreshed = useStore.getState().refreshSnapshot();
+        await vi.waitFor(() => expect(useStore.getState().snapshot?.version).toBe(2));
+        expect(loadedKind(CTX_U)).toBeUndefined();
+        expect(review()).toEqual(['a/x.ts', 'a/y.ts', CTX_V]);
+        patch.resolve(patchesFor([CTX_U]));
+        await refreshed;
+      });
+
+      it('keeps a draft on a caller across a refresh, and discards one on a file that left the review', async () => {
+        const before = await readingCaller();
+        api.graph.mockReturnValueOnce(deferred<GraphResponse>().promise);
+        api.snapshot.mockResolvedValueOnce(withContext(2));
+        await useStore.getState().refreshSnapshot();
+        expect(useStore.getState().draft).toEqual(before.draft);
+
+        useStore.getState().toggleContext();
+        expect(useStore.getState().draft).toBeNull();
+      });
+
+      it('a mode switch while a caller is loading drops its text', async () => {
+        await enterConnected();
+        useStore.getState().toggleContext();
+        const slow = deferred<{ path: string; contents: string; binary: boolean }>();
+        api.file.mockReturnValueOnce(slow.promise);
+        useStore.getState().toggleCollapsed(CTX_U);
+        api.graph.mockReturnValueOnce(deferred<GraphResponse>().promise);
+        api.enter.mockResolvedValueOnce(withContext(2, 'pr:abc'));
+        await useStore.getState().enter({ kind: 'pr' });
+        slow.resolve({ path: CTX_U, contents: BODY, binary: false });
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect(loadedKind(CTX_U)).toBeUndefined();
+      });
+    });
+
+    describe('zO and zC', () => {
+      it('open and close the listed callers too, loading each one that opens', async () => {
+        await enterConnected();
+        useStore.getState().toggleContext();
+        useStore.getState().setAllCollapsed(false);
+        await vi.waitFor(() => expect(fetched().sort()).toEqual([CTX_U, CTX_V]));
+        await vi.waitFor(() => expect(loadedKind(CTX_V)).toBe('file'));
+        expect(isCollapsed(useStore.getState(), CTX_U)).toBe(false);
+        expect(isCollapsed(useStore.getState(), 'a/x.ts')).toBe(false);
+
+        useStore.getState().setAllCollapsed(true);
+        expect(isCollapsed(useStore.getState(), CTX_U)).toBe(true);
+        expect(isCollapsed(useStore.getState(), CTX_V)).toBe(true);
+        expect(isCollapsed(useStore.getState(), 'a/y.ts')).toBe(true);
+      });
+
+      it('leave the explicit state of files outside the list alone', async () => {
+        await enterConnected();
+        useStore.getState().toggleCollapsed('b/z.ts');
+        expect(isCollapsed(useStore.getState(), 'b/z.ts')).toBe(true);
+        useStore.getState().setAllCollapsed(false);
+        expect(isCollapsed(useStore.getState(), 'b/z.ts')).toBe(true);
+        expect(isCollapsed(useStore.getState(), 'a/x.ts')).toBe(false);
+      });
+    });
+
+    it('a mode switch removes the callers with everything else loaded', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      useStore.getState().toggleCollapsed(CTX_U);
+      await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      api.graph.mockReturnValueOnce(deferred<GraphResponse>().promise);
+      api.enter.mockResolvedValueOnce(withContext(2, 'pr:abc'));
+      await useStore.getState().enter({ kind: 'pr' });
+      expect(loadedKind(CTX_U)).toBeUndefined();
+      expect(review()).not.toContain(CTX_U);
+    });
+
+    it('leaving Connected removes the callers', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      useStore.getState().toggleCollapsed(CTX_U);
+      await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      useStore.getState().setTreeScope('changed');
+      expect(loadedKind(CTX_U)).toBeUndefined();
+      expect(review()).toEqual(FILES);
+    });
+
+    it('moves the cursor to the first listed file when its caller leaves the list', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      useStore.getState().moveFile('last');
+      expect(useStore.getState().activePath).toBe(CTX_V);
+      useStore.getState().toggleContext();
+      expect(useStore.getState().activePath).toBe('a/x.ts');
+
+      useStore.getState().toggleContext();
+      useStore.getState().moveFile('last');
+      useStore.getState().moveCluster(1);
+      expect(useStore.getState().activePath).toBe('b/w.ts');
+    });
+
+    it('openFile on a caller reveals it: expanded, loaded, the cursor on its first linking line at the gaze point', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      await useStore.getState().openFile(CTX_U);
+      const s = useStore.getState();
+      expect(s.fileView).toBeNull();
+      expect(isCollapsed(s, CTX_U)).toBe(false);
+      expect(s.loaded[CTX_U]?.kind).toBe('file');
+      expect(s.activePath).toBe(CTX_U);
+      expect(s.selection).toEqual({
+        id: itemIdOf(s, CTX_U),
+        range: { start: 2, side: 'additions', end: 2, endSide: 'additions' },
+      });
+      expect(s.scrollTarget).toEqual(expect.objectContaining({ id: itemIdOf(s, CTX_U), line: 2, align: 'eye' }));
+    });
+
+    it('openFile on a caller leaves an open file view for the list', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      await useStore.getState().openFile('other/plain.ts');
+      expect(useStore.getState().fileView?.path).toBe('other/plain.ts');
+      await useStore.getState().openFile(CTX_V);
+      expect(useStore.getState().fileView).toBeNull();
+      expect(useStore.getState().activePath).toBe(CTX_V);
+    });
+
+    it('openFile opens the file view for any other unchanged path, and for a caller while context is off', async () => {
+      await enterConnected();
+      await useStore.getState().openFile('other/plain.ts');
+      expect(useStore.getState().fileView?.path).toBe('other/plain.ts');
+      useStore.getState().closeFullFile();
+      await useStore.getState().openFile(CTX_U);
+      expect(useStore.getState().fileView?.path).toBe(CTX_U);
+      expect(useStore.getState().loaded[CTX_U]).toBeUndefined();
+    });
+
+    it('] / [ stop on the linking lines of an open caller, at the gaze point', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      await useStore.getState().openFile(CTX_U);
+      const line = () => useStore.getState().selection?.range.end;
+      expect(line()).toBe(2);
+      useStore.getState().moveHunk(1);
+      expect(line()).toBe(4);
+      expect(useStore.getState().scrollTarget).toEqual(expect.objectContaining({ line: 4, align: 'eye' }));
+      useStore.getState().moveHunk(-1);
+      expect(line()).toBe(2);
+    });
+
+    it('counts no caller in viewed progress and marks none viewed', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      useStore.getState().toggleCollapsed(CTX_U);
+      await vi.waitFor(() => expect(loadedKind(CTX_U)).toBe('file'));
+      api.setViewed.mockResolvedValue([]);
+      // The server answers with the marks it now holds.
+      api.setViewedBulk.mockImplementation(async (entries: unknown[]) => entries);
+      const before = countViewed(useStore.getState(), useStore.getState().snapshot!.changed);
+
+      await useStore.getState().setViewed(CTX_U, true);
+      useStore.setState({ activePath: CTX_U });
+      await useStore.getState().toggleViewedAtCursor();
+      await useStore.getState().setViewedMany([...FILES, CTX_U], true);
+
+      expect(api.setViewed).not.toHaveBeenCalled();
+      expect(api.setViewedBulk.mock.calls[0]![0].map((e: { path: string }) => e.path)).toEqual(FILES);
+      expect(useStore.getState().viewed.some((v) => v.path === CTX_U)).toBe(false);
+      expect(before).toBe(0);
+      expect(countViewed(useStore.getState(), useStore.getState().snapshot!.changed)).toBe(FILES.length);
+    });
+
+    it('lets the reader comment on a caller without touching changed-file state', async () => {
+      await enterConnected();
+      useStore.getState().toggleContext();
+      await useStore.getState().openFile(CTX_U);
+      const sel = useStore.getState().selection!;
+      await useStore.getState().openDraft(sel);
+      expect(useStore.getState().draft).toEqual({ path: CTX_U, selection: sel });
+      useStore.getState().openFileDraft(CTX_V);
+      expect(useStore.getState().draft).toEqual({ path: CTX_V, selection: null });
+    });
+  });
 });

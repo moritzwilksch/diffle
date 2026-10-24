@@ -1,6 +1,5 @@
 import type { CodeViewLineSelection, FileDiffMetadata, SelectionSide } from '@pierre/diffs';
-import type { Snapshot } from '@/shared/protocol.js';
-import { itemId, orderedPaths } from '@/client/model.js';
+import { itemId } from '@/client/model.js';
 import type { DiffStyle, FileView, Loaded } from '@/client/store.js';
 
 export interface Row {
@@ -111,24 +110,35 @@ function revealedLines(fileDiff: FileDiffMetadata, revealed: LineRange[]): numbe
   return [...lines].sort((a, b) => a - b);
 }
 
-function fileRows(contents: string): Row[] {
+/** A whole file's lines; ] / [ stop at its first line, or at `stops` when the file is listed for the lines that use a cluster. */
+function fileRows(contents: string, stops?: readonly number[]): Row[] {
   const lines = contents.split('\n');
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
-  return lines.map((_, i) => ({ side: 'additions' as const, line: i + 1, hunkStart: i === 0 }));
+  const at = stops && new Set(stops);
+  return lines.map((_, i) => ({
+    side: 'additions' as const,
+    line: i + 1,
+    hunkStart: at ? at.has(i + 1) : i === 0,
+  }));
 }
 
+/** Per context file, the new-side lines `]` / `[` visit; a path in the map is listed as an unchanged file, not a diff. */
+export type ContextStops = ReadonlyMap<string, readonly number[]>;
+const NO_STOPS: ContextStops = new Map();
+
 /**
- * Ordered navigation model over the review pane's items: every changed file's
- * diff, or, while the file view is open, that one file's whole new side.
+ * Ordered navigation model over the review pane's items: the diff of every listed file, then each
+ * context file whole (`context`; see `reviewPaths`), or, while the file view is open, that one file's whole new side.
  */
 export function buildNav(
-  snapshot: Snapshot,
+  listed: readonly string[],
   loaded: Record<string, Loaded>,
   gens: Record<string, number>,
   isCollapsed: (path: string) => boolean,
   revealed: Record<string, LineRange[]> = {},
   style: DiffStyle = 'unified',
   fileView: FileView | null = null,
+  context: ContextStops = NO_STOPS,
 ): NavItem[] {
   if (fileView) {
     if (!fileView.item) return [];
@@ -136,12 +146,13 @@ export function buildNav(
     return [{ id, path: fileView.path, collapsed: false, rows: rowsOf(fileView.item, revealed[id], style) }];
   }
   const out: NavItem[] = [];
-  // Every changed file is an item, loaded or not, so J / K walk the tree in order from the first
+  // Every listed file is an item, loaded or not, so J / K walk the list in order from the first
   // keypress; a file still loading has no rows yet and lands on its header.
-  for (const path of orderedPaths(snapshot)) {
+  for (const path of listed) {
     const l = loaded[path];
-    const id = itemId(true, path, gens[path] ?? 0);
-    out.push({ id, path, collapsed: isCollapsed(path), rows: l ? rowsOf(l, revealed[id], style) : [] });
+    const stops = context.get(path);
+    const id = itemId(stops === undefined, path, gens[path] ?? 0);
+    out.push({ id, path, collapsed: isCollapsed(path), rows: l ? rowsOf(l, revealed[id], style, stops) : [] });
   }
   return out;
 }
@@ -151,18 +162,21 @@ export function buildNav(
  * clone replaces it), plus the `revealed` array and style they were built with.
  * Rebuilding the nav model must not rebuild every row of every file.
  */
-const rowCache = new WeakMap<object, { revealed: LineRange[] | undefined; style: DiffStyle; rows: Row[] }>();
+const rowCache = new WeakMap<
+  object,
+  { revealed: LineRange[] | undefined; style: DiffStyle; stops: readonly number[] | undefined; rows: Row[] }
+>();
 
-function rowsOf(l: Loaded, revealed: LineRange[] | undefined, style: DiffStyle): Row[] {
+function rowsOf(l: Loaded, revealed: LineRange[] | undefined, style: DiffStyle, stops?: readonly number[]): Row[] {
   const key: object | null = l.kind === 'diff' ? l.fileDiff : l.kind === 'file' ? l.file : null;
   if (!key) return [];
   const hit = rowCache.get(key);
-  if (hit && hit.revealed === revealed && hit.style === style) return hit.rows;
+  if (hit && hit.revealed === revealed && hit.style === style && hit.stops === stops) return hit.rows;
   const rows =
     l.kind === 'diff'
       ? diffRows(l.fileDiff, revealed, style)
-      : fileRows((l as Extract<Loaded, { kind: 'file' }>).file.contents);
-  rowCache.set(key, { revealed, style, rows });
+      : fileRows((l as Extract<Loaded, { kind: 'file' }>).file.contents, stops);
+  rowCache.set(key, { revealed, style, stops, rows });
   return rows;
 }
 

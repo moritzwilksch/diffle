@@ -1,6 +1,7 @@
 // Minimal stdio language server for tests: answers initialize, definition, references,
 // documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. Definitions point
 // at line 2 (FAKE_LSP_DEFINITION_LINE) of the queried file plus one location outside the root; references echo the open document's text length.
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 let buf = Buffer.alloc(0);
@@ -53,6 +54,26 @@ const offers = (process.env.FAKE_LSP_OFFERS ?? ALL_FEATURES)
 const registers = (process.env.FAKE_LSP_REGISTERS ?? '').split(',').filter(Boolean);
 let nextId = 1000;
 
+/**
+ * FAKE_LSP_GRAPH: a JSON file scripting a code graph. `outlines` maps a root-relative path to
+ * symbols `{ name, kind, line, endLine, col, children? }` (1-based lines, 0-based col), and
+ * `references` maps "path:line:col" to locations `{ path, line, col }`. A scripted path answers
+ * documentSymbol from it, and with the file set every references request answers from it (empty
+ * when unscripted) and is logged as `references path:line:col`.
+ */
+const GRAPH = process.env.FAKE_LSP_GRAPH ? JSON.parse(readFileSync(process.env.FAKE_LSP_GRAPH, 'utf8')) : null;
+// The harness exports FAKE_LSP_ROOT; a server started without it (e2e) takes the workspace root from initialize.
+let workspaceRoot = process.env.FAKE_LSP_ROOT;
+const relative = (uri) => decodeURIComponent(new URL(uri).pathname).slice(workspaceRoot.length + 1);
+const scriptedSymbols = (symbols) =>
+  symbols.map((s) => ({
+    name: s.name,
+    kind: s.kind,
+    range: { start: { line: s.line - 1, character: 0 }, end: { line: s.endLine - 1, character: 1000 } },
+    selectionRange: range(s.line - 1, s.col),
+    children: scriptedSymbols(s.children ?? []),
+  }));
+
 function handle(msg) {
   // A response to a request of ours: nothing to do with it.
   if (!msg.method) return;
@@ -65,6 +86,7 @@ function handle(msg) {
     case 'initialize':
       if (process.env.FAKE_LSP_DIE === '1') process.exit(3);
       if (!msg.params.capabilities.window?.workDoneProgress) process.exit(4);
+      workspaceRoot ??= msg.params.rootUri ? decodeURIComponent(new URL(msg.params.rootUri).pathname) : undefined;
       if (msg.params.initializationOptions) log('init ' + JSON.stringify(msg.params.initializationOptions));
       // A server may only register later what the client allowed it to.
       for (const f of registers) {
@@ -136,6 +158,18 @@ function handle(msg) {
       ]);
     }
     case 'textDocument/references': {
+      if (GRAPH) {
+        const { line, character } = msg.params.position;
+        const key = `${relative(msg.params.textDocument.uri)}:${line + 1}:${character}`;
+        log(`references ${key}`);
+        return reply(
+          msg.id,
+          (GRAPH.references?.[key] ?? []).map((l) => ({
+            uri: pathToFileURL(`${workspaceRoot}/${l.path}`).href,
+            range: range(l.line - 1, l.col),
+          })),
+        );
+      }
       const text = docs.get(msg.params.textDocument.uri) ?? '';
       return reply(msg.id, [
         { uri: msg.params.textDocument.uri, range: range(0, text.length) },
@@ -182,6 +216,8 @@ function handle(msg) {
       return reply(msg.id, out);
     }
     case 'textDocument/documentSymbol':
+      if (GRAPH?.outlines?.[relative(msg.params.textDocument.uri)])
+        return reply(msg.id, scriptedSymbols(GRAPH.outlines[relative(msg.params.textDocument.uri)]));
       return reply(msg.id, [
         {
           name: 'Foo',

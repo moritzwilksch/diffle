@@ -1,0 +1,144 @@
+/* Graph canvas motion (transitions.dev tokens from styles/motion.css). Colours and layout stay in utility
+   classes; the layer keeps these rules from outranking them. */
+@layer components {
+  /* Fit and zoom ease; `data-smooth` is off while a drag or the wheel drives the transform. */
+  [data-motion='content'] {
+    transform-origin: 0 0;
+  }
+  [data-motion='content'][data-smooth='true'] {
+    transition: transform var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  /* The outer group places the node (and eases it to a new place) and dims it; the inner one enters. */
+  [data-motion='node'] {
+    transition:
+      transform var(--duration-fast) var(--ease-smooth-out),
+      opacity var(--duration-quick) var(--ease-out);
+  }
+  [data-motion='node-in'] {
+    animation: graph-rise var(--duration-fast) var(--ease-smooth-out) backwards;
+    animation-delay: calc(var(--i) * var(--duration-stagger));
+  }
+
+  /* Arrows start once the nodes are in (`--n` nodes staggered), a little apart from each other. With the caps
+     in view.ts (8 nodes, 6 arrows) the last head is done at 8*40 + 125 + 6*40 + 350 + 150 = 1185 ms. */
+  [data-motion='edge'] {
+    --edge-delay: calc(
+      var(--n) * var(--duration-stagger) + var(--duration-fast) / 2 + var(--i) * var(--duration-stagger)
+    );
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+  /* A pill dims its stroke and text only; its fill stays opaque. */
+  [data-motion='dim'] {
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+  /* `pathLength="1"` makes the dash length independent of the arrow's size. */
+  [data-motion='edge-draw'] {
+    stroke-dasharray: 1 2;
+    animation: graph-draw var(--duration-slow) var(--ease-smooth-out) backwards;
+    animation-delay: var(--edge-delay);
+  }
+  /* A dashed arrow cannot also be a dash-offset draw, so it fades in at the same time. */
+  [data-motion='edge-fade'] {
+    animation: graph-fade var(--duration-slow) var(--ease-smooth-out) backwards;
+    animation-delay: var(--edge-delay);
+  }
+  /* Heads and labels follow their arrow. */
+  [data-motion='edge-late'] {
+    animation: graph-fade var(--duration-quick) var(--ease-out) backwards;
+    animation-delay: calc(var(--edge-delay) + var(--duration-medium));
+  }
+
+  [data-motion='legend-in'] {
+    animation: graph-rise var(--duration-fast) var(--ease-smooth-out) backwards;
+  }
+
+  /* Modal (06): scales up and fades in; out is quicker. Base UI keeps the popup mounted until the exit ends,
+     and marks the first and last frames with data-starting-style / data-ending-style. */
+  [data-motion='dialog'] {
+    transform-origin: center;
+    transition:
+      transform var(--duration-fast) var(--ease-smooth-out),
+      opacity var(--duration-fast) var(--ease-smooth-out);
+  }
+  [data-motion='dialog'][data-starting-style],
+  [data-motion='dialog'][data-ending-style] {
+    opacity: 0;
+    transform: scale(var(--scale-large));
+  }
+  [data-motion='dialog'][data-ending-style] {
+    transition-duration: var(--duration-quick);
+  }
+  /* The shared backdrop is not ours to tag, so it is found by the graph popup that follows it. */
+  [data-slot='dialog-overlay']:has(+ * [data-motion='dialog']) {
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
+  }
+  [data-slot='dialog-overlay']:has(+ * [data-motion='dialog'])[data-starting-style],
+  [data-slot='dialog-overlay']:has(+ * [data-motion='dialog'])[data-ending-style] {
+    opacity: 0;
+  }
+  [data-slot='dialog-overlay']:has(+ * [data-motion='dialog'])[data-ending-style] {
+    transition-duration: var(--duration-quick);
+  }
+
+  /* Panel reveal (07): a short rise with a cross-blur whenever the selection changes. */
+  [data-motion='panel'] {
+    animation: graph-rise-blur var(--duration-slow) var(--ease-smooth-out) backwards;
+  }
+
+  /* Nodes only rise and fade: blur on dozens of SVG groups at once is too costly. */
+  @keyframes graph-rise {
+    from {
+      opacity: 0;
+      transform: translateY(var(--distance-base));
+    }
+  }
+  @keyframes graph-rise-blur {
+    from {
+      opacity: 0;
+      transform: translateY(var(--distance-base));
+      filter: blur(var(--blur-small));
+    }
+  }
+  @keyframes graph-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes graph-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* A big graph skips the entrance (ENTRANCE_MAX_NODES in view.ts). */
+  [data-entrance='false']
+    :is([data-motion='node-in'], [data-motion='edge-draw'], [data-motion='edge-fade'], [data-motion='edge-late']) {
+    animation: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-motion='content'],
+    [data-motion='content'][data-smooth='true'],
+    [data-motion='node'],
+    [data-motion='dim'],
+    [data-motion='edge'] {
+      transition: none;
+    }
+    [data-motion='dialog'],
+    [data-slot='dialog-overlay']:has(+ * [data-motion='dialog']) {
+      transition: none !important;
+    }
+    [data-motion='panel'],
+    [data-motion='node-in'],
+    [data-motion='edge-draw'],
+    [data-motion='edge-fade'],
+    [data-motion='edge-late'],
+    [data-motion='legend-in'] {
+      animation: none;
+    }
+  }
+}

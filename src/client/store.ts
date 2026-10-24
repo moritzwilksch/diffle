@@ -11,6 +11,7 @@ import {
   type ChangedFile,
   type CommentThread,
   type FileResponse,
+  type GraphResponse,
   type LspFeature,
   type LspLocation,
   type LspOccurrence,
@@ -32,6 +33,16 @@ import {
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
+import {
+  groupOf,
+  IDLE_GRAPH,
+  keptFocus,
+  moveFocus,
+  sameFocus,
+  type Focus,
+  type GraphState,
+  type TreeScope,
+} from './connected/clusters/focus.js';
 import {
   buildNav,
   cursorFromSelection,
@@ -56,10 +67,14 @@ import {
   isViewed,
   nextFileAfter,
   itemIdOf,
+  contextPaths,
+  contextStops,
   linesOf,
+  listedPaths,
   MODE_PANES,
   OVERSIZED_LINES,
   patchBatches,
+  reviewPaths,
   pathFromItemId,
   rangeStep,
   reuseThreads,
@@ -70,6 +85,8 @@ import {
   iterationStep,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
+
+export type { Focus, GraphState, TreeScope } from './connected/clusters/focus.js';
 
 export type Loaded =
   | { kind: 'diff'; fileDiff: FileDiffMetadata }
@@ -91,6 +108,8 @@ export type DiffStyle = 'split' | 'unified';
 const DIFF_STYLE_KEY = 'diffle:diffStyle';
 /** Typing pause before a workspace symbol query goes to the server. */
 export const WORKSPACE_SYMBOL_DEBOUNCE_MS = 150;
+/** Times `loadGraph` asks for a graph built for the snapshot on screen before it reports the graph as out of date. */
+const GRAPH_ATTEMPTS = 3;
 /** How long every toast stays visible: long enough to read a full sentence, since errors are the main thing shown. */
 export const TOAST_MS = 3500;
 /** How an image diff shows its two sides: next to each other, or stacked with a swipe, a fade or a pixel difference. */
@@ -300,6 +319,9 @@ export interface ReviewState {
   setModeCommit(revision: string): void;
   helpOpen: boolean;
   setHelpOpen(open: boolean): void;
+  /** The Connected graph dialog; it can be open only while the Connected scope focuses a cluster. */
+  graphOpen: boolean;
+  setGraphOpen(open: boolean): void;
   treeModel: FileTree | null;
   setTreeModel(model: FileTree | null): void;
   toast: string | null;
@@ -408,6 +430,28 @@ export interface ReviewState {
   setAllCollapsed(collapsed: boolean): void;
   escape(): void;
   snapshot: Snapshot | null;
+  /** Which file set the tree shows; 'connected' also narrows the review to `focus`. */
+  treeScope: TreeScope;
+  /** Entering 'connected' loads the graph and focuses its first group; leaving aborts the load and clears the focus. */
+  setTreeScope(scope: TreeScope): void;
+  /** The scope Connected was entered from, which leaving it by key returns to. */
+  connectedFrom: Exclude<TreeScope, 'connected'>;
+  graph: GraphState;
+  /**
+   * Fetch the cluster graph of the snapshot on screen, replacing a request in flight. An answer built for
+   * another snapshot version is dropped and asked for again; a failure toasts and lands in `graph.error`,
+   * and calling this again retries.
+   */
+  loadGraph(): Promise<void>;
+  /** The group the review is narrowed to; null lists every changed file. Set from the graph, not by hand. */
+  focus: Focus | null;
+  /** Narrow the review to `focus`; if the reader's file is not listed any more, the cursor moves to the first listed one. */
+  focusCluster(focus: Focus | null): void;
+  /** Focus the group `delta` steps on (negative: back), wrapping: clusters, then unlinked, then other, empty groups skipped. */
+  moveCluster(delta: number): void;
+  /** Whether the focused cluster's unchanged callers are listed beside its changed files. */
+  context: boolean;
+  toggleContext(): void;
   /** The compared refs left the snapshot behind; `reload` catches up. Null while they agree. */
   moved: Moved | null;
   setMoved(moved: Moved | null): void;
@@ -599,6 +643,9 @@ export const useStore = create<ReviewState>((set, get) => {
   const threadsSeq = sequence();
   const viewedSeq = sequence();
   const configSeq = sequence();
+  /** Graph requests, newest wins; leaving Connected or a mode switch ends the one in flight. */
+  const graphSeq = sequence();
+  let graphAbort = new AbortController();
   /** Runs writes one after another: the server applies same-key mutations in the order the user made them. */
   const serial = () => {
     let tail: Promise<unknown> = Promise.resolve();
@@ -775,7 +822,9 @@ export const useStore = create<ReviewState>((set, get) => {
     const first = [s.fileView?.path, s.activePath, s.selection && pathFromItemId(s.selection.id)].filter(
       (p): p is string => p != null,
     );
-    const batches = patchBatches(snap, textual, first, (p) => isCollapsed(s, p));
+    const batches = patchBatches(listedPaths({ snapshot: snap, graph: s.graph, focus: s.focus }), textual, first, (p) =>
+      isCollapsed(s, p),
+    );
     await mapLimit(
       batches,
       2,
@@ -965,6 +1014,11 @@ export const useStore = create<ReviewState>((set, get) => {
     const nextChanged = new Map(next.changed.map((f) => [f.path, f]));
 
     const loaded: Record<string, Loaded> = modeChanged ? {} : { ...get().loaded };
+    // An unchanged file in `loaded` is a context file. It stays put across a refresh (the reader may be in it),
+    // unless its text may have moved or it is a changed file now, which loads as a diff.
+    for (const path of Object.keys(loaded)) {
+      if (!prevChanged.has(path) && (sidesMoved || nextChanged.has(path))) delete loaded[path];
+    }
     // Cached sides of any path are stale once either side moved.
     const contents = modeChanged || sidesMoved ? {} : { ...get().contents };
     const reload: string[] = [];
@@ -1012,7 +1066,10 @@ export const useStore = create<ReviewState>((set, get) => {
     }
     // A watcher refresh must not take the comment being typed with it; only a new mode or a vanished file does.
     const draft = get().draft;
-    const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
+    const keepDraft =
+      draft != null &&
+      !modeChanged &&
+      (nextChanged.has(draft.path) || fileView?.path === draft.path || contextPaths(get()).includes(draft.path));
     resyncing = false;
     set((s) => ({
       snapshot: next,
@@ -1044,6 +1101,8 @@ export const useStore = create<ReviewState>((set, get) => {
         search: { ...s.search, open: false, kind: 'text', direction: 1, matches: [], index: -1 },
       }));
     }
+    syncGraph(next.version, modeChanged);
+    syncContext();
     await Promise.all([
       loadPatches(next, reload, g),
       ...(fileView && (viewMoved || !fileView.item) ? [loadFileView(fileView.path, fileView.external, g, true)] : []),
@@ -1072,9 +1131,7 @@ export const useStore = create<ReviewState>((set, get) => {
     try {
       const res = await fetchFile(path, 'new');
       contents = res.contents;
-      item = res.binary
-        ? { kind: 'binary' }
-        : { kind: 'file', file: { name: path, contents: res.contents, cacheKey: `${path}@full@${Date.now()}` } };
+      item = wholeFile(path, res);
     } catch (e) {
       item = { kind: 'error', message: String(e) };
     }
@@ -1091,9 +1148,31 @@ export const useStore = create<ReviewState>((set, get) => {
   const nav = (): NavItem[] => {
     const s = get();
     if (!s.snapshot) return [];
-    const inputs = [s.snapshot, s.loaded, s.gens, s.revealed, s.collapsed, s.viewed, s.config, s.diffStyle, s.fileView];
+    const inputs = [
+      s.snapshot,
+      s.graph.data,
+      s.focus,
+      s.context,
+      s.loaded,
+      s.gens,
+      s.revealed,
+      s.collapsed,
+      s.viewed,
+      s.config,
+      s.diffStyle,
+      s.fileView,
+    ];
     if (navCache && navCache.inputs.every((v, i) => v === inputs[i])) return navCache.items;
-    const items = buildNav(s.snapshot, s.loaded, s.gens, (p) => isCollapsed(s, p), s.revealed, s.diffStyle, s.fileView);
+    const items = buildNav(
+      reviewPaths(s),
+      s.loaded,
+      s.gens,
+      (p) => isCollapsed(s, p),
+      s.revealed,
+      s.diffStyle,
+      s.fileView,
+      contextStops(s),
+    );
     navCache = { inputs, items };
     return items;
   };
@@ -1109,7 +1188,7 @@ export const useStore = create<ReviewState>((set, get) => {
 
   /** Remember where we are before a jump (vim jumplist semantics). */
   const recordJump = () => {
-    if (silent) return;
+    if (silent > 0) return;
     const pos = currentPosition();
     if (!pos) return;
     const { jumps, jumpIndex } = get();
@@ -1133,15 +1212,18 @@ export const useStore = create<ReviewState>((set, get) => {
   const ensureExpanded = (path: string) => {
     if (!isCollapsed(get(), path)) return;
     set((s) => ({ collapsed: { ...s.collapsed, [path]: false } }));
+    void loadContext(path);
   };
 
-  /** Move to a jumplist entry without recording another jump. */
-  let silent = false;
+  /** Open quiet windows (see `quietly`); the jumplist records nothing while any is open. */
+  let silent = 0;
   /** Run `fn` with the jumplist closed: positions it passes through are not the reader's. */
   const quietly = <T>(fn: () => T): T => {
-    silent = true;
+    // A depth, not a flag: windows nest (a jump that widens the focus runs its own inside the jump's) and
+    // async ones overlap, and the jumplist stays closed until the last of them ends.
+    silent++;
     const done = () => {
-      silent = false;
+      silent--;
     };
     let out: T;
     try {
@@ -1154,6 +1236,16 @@ export const useStore = create<ReviewState>((set, get) => {
     done();
     return out;
   };
+  /**
+   * Whether a jumplist entry can still be landed on. A file view reopens (an external file is not in the
+   * snapshot at all); a diff position needs its file changed, or listed as a caller. Entries that are not
+   * live are stepped over, not stalled on.
+   */
+  const isLive = (pos: JumpPosition): boolean => {
+    if (pos.full) return true;
+    const s = get();
+    return (s.snapshot?.changed.some((f) => f.path === pos.path) ?? false) || contextPaths(s).includes(pos.path);
+  };
   const goToPositionSilently = async (pos: JumpPosition) => {
     // Switching views first, outside the silent window: the load records no jump of its own.
     if (pos.full && get().fileView?.path !== pos.path) {
@@ -1163,16 +1255,14 @@ export const useStore = create<ReviewState>((set, get) => {
     } else if (!pos.full && get().fileView) {
       set({ fileView: null, selection: null, visualAnchor: null, draft: null, focusedThread: null });
     }
-    silent = true;
-    try {
-      goToPosition(pos);
-    } finally {
-      silent = false;
-    }
+    quietly(() => goToPosition(pos));
   };
 
   const goToPosition = (pos: JumpPosition) => {
-    if (!pos.full) ensureExpanded(pos.path);
+    if (!pos.full) {
+      ensureListed(pos.path);
+      ensureExpanded(pos.path);
+    }
     const items = nav();
     const itemIndex = items.findIndex((i) => i.path === pos.path);
     if (itemIndex === -1) return;
@@ -1207,7 +1297,7 @@ export const useStore = create<ReviewState>((set, get) => {
     const items = nav();
     const item = items.find((i) => i.path === path);
     if (!snapshot || !item) return;
-    const target = nextFileAfter(snapshot, path, accept);
+    const target = nextFileAfter(get(), path, accept);
     const nextIndex = target ? items.findIndex((i) => i.path === target.path) : -1;
     const next = items[nextIndex];
     let sel: CodeViewLineSelection | null = null;
@@ -1228,6 +1318,168 @@ export const useStore = create<ReviewState>((set, get) => {
   const notViewed = (f: ChangedFile) => !isViewed(get(), f);
   /** After zc, review continues at the next open file. */
   const notCollapsed = (f: ChangedFile) => !isCollapsed(get(), f.path);
+
+  /**
+   * Narrow the review to `focus`, then settle the list it leaves (see `settleReview`).
+   */
+  const applyFocus = (focus: Focus | null) => {
+    const prev = get().focus;
+    const same = sameFocus(prev, focus);
+    // The dialog draws one cluster: any other focus, or a refresh that dropped it, ends the dialog.
+    set({ focus: same ? prev : focus, ...(same && focus?.kind === 'cluster' ? {} : { graphOpen: false }) });
+    settleReview();
+  };
+
+  /**
+   * The review list changed (focus, context, graph). Context files that left it are forgotten and the ones
+   * the reader opened are fetched. A reader whose file left the list gets the first listed file, header at
+   * the top as `J` places it, and loses the draft and visual anchor that named the old one. The move is
+   * not a jump of the reader's, so the jumplist stays out of it.
+   */
+  const settleReview = () => {
+    syncContext();
+    const s = get();
+    if (s.fileView || !s.activePath) return;
+    const listed = reviewPaths(s);
+    if (listed.includes(s.activePath)) return;
+    set({
+      visualAnchor: null,
+      focusedThread: null,
+      draft: s.draft && listed.includes(s.draft.path) ? s.draft : null,
+    });
+    quietly(() => get().moveFile('first'));
+  };
+
+  /**
+   * A jump onto a changed file the focus does not list has no item to land on: widen the focus to the group
+   * that holds the file (none when the graph does not know it) first. Returns whether it widened; the jump
+   * is recorded at its origin before the cursor moves, so the caller must not record it again.
+   */
+  const ensureListed = (path: string): boolean => {
+    const s = get();
+    const changed = s.snapshot?.changed.some((f) => f.path === path);
+    if (!changed || listedPaths(s).includes(path)) return false;
+    recordJump();
+    applyFocus(groupOf(s.graph.data, path));
+    return true;
+  };
+
+  /** Fetch an opened context file's text. Committed only while the review still lists it; an unchanged file is not a diff, so it loads whole. */
+  const loadContext = async (path: string) => {
+    const g = generation;
+    const s = get();
+    if (s.loaded[path] || isCollapsed(s, path) || !contextPaths(s).includes(path)) return;
+    let item: Loaded;
+    let contents: string | undefined;
+    try {
+      const res = await fetchFile(path, 'new');
+      contents = res.contents;
+      item = wholeFile(path, res);
+    } catch (e) {
+      item = { kind: 'error', message: String(e) };
+    }
+    if (!current(g) || get().loaded[path] || !contextPaths(get()).includes(path)) return;
+    set((s) => ({
+      loaded: { ...s.loaded, [path]: item },
+      ...regen(s, [path]),
+      contents: contents == null ? s.contents : { ...s.contents, [path]: { ...s.contents[path], new: contents } },
+    }));
+  };
+
+  /** Forget the loaded context files the review no longer lists, and fetch the listed ones the reader has open. */
+  const syncContext = () => {
+    const s = get();
+    const listed = contextPaths(s);
+    const changed = new Set(s.snapshot?.changed.map((f) => f.path));
+    const stale = Object.keys(s.loaded).filter((p) => !changed.has(p) && !listed.includes(p));
+    if (stale.length > 0)
+      set((now) => ({ loaded: Object.fromEntries(Object.entries(now.loaded).filter(([p]) => !stale.includes(p))) }));
+    for (const path of listed) void loadContext(path);
+  };
+
+  /** Open a context file in the list: expand it, wait for its text, and put the cursor on its first linking line. */
+  const revealContext = async (path: string) => {
+    const g = generation;
+    if (get().fileView) {
+      recordJump();
+      set({ fileView: null, selection: null, visualAnchor: null, draft: null, focusedThread: null });
+    }
+    set((s) => ({ collapsed: { ...s.collapsed, [path]: false } }));
+    await loadContext(path);
+    if (!current(g) || !contextPaths(get()).includes(path)) return;
+    const items = nav();
+    const itemIndex = items.findIndex((i) => i.path === path);
+    const rows = items[itemIndex]?.rows ?? [];
+    recordJump();
+    placeNavCursor(
+      {
+        itemIndex,
+        rowIndex:
+          rows.length === 0
+            ? -1
+            : Math.max(
+                0,
+                rows.findIndex((r) => r.hunkStart),
+              ),
+      },
+      false,
+      'eye',
+    );
+  };
+
+  const commitGraph = (data: GraphResponse) => {
+    set({ graph: { status: 'ready', data, error: null } });
+    applyFocus(keptFocus(data, get().focus));
+  };
+
+  /** Forget the graph and the focus built on it, end the request in flight, and settle the list that is left. */
+  const dropGraph = () => {
+    // Only a focus narrowed the review; without one a mode switch keeps the cursor rules it always had.
+    const narrowed = get().focus !== null;
+    graphAbort.abort();
+    graphSeq.start();
+    set({ graph: IDLE_GRAPH, focus: null, graphOpen: false });
+    if (narrowed) settleReview();
+  };
+
+  /**
+   * Fetch the graph of the snapshot on screen. The previous graph stays up meanwhile, so a refresh does not
+   * flash the list. Only `graphSeq` and the version check decide whether an answer lands: a transition that
+   * began meanwhile (and may have failed) does not own the graph. `quiet` is for loads the reader did not ask
+   * for: the failure shows on the graph, with its Retry, instead of toasting on every refresh.
+   */
+  const fetchGraph = async (quiet: boolean) => {
+    if (!get().snapshot) return;
+    const t = graphSeq.start();
+    graphAbort.abort();
+    graphAbort = new AbortController();
+    const { signal } = graphAbort;
+    set((s) => ({ graph: { status: 'loading', data: s.graph.data, error: null } }));
+    try {
+      for (let attempt = 0; attempt < GRAPH_ATTEMPTS; attempt++) {
+        const data = await api.graph(signal);
+        if (!graphSeq.latest(t)) return;
+        if (data.version === get().snapshot?.version) {
+          commitGraph(data);
+          return;
+        }
+      }
+      throw new Error('the graph is older than the snapshot on screen');
+    } catch (e) {
+      if (!graphSeq.latest(t) || isAbort(e)) return;
+      set({ graph: { status: 'error', data: null, error: errorMessage(e) } });
+      if (!quiet) report('Loading the connected graph', e);
+    }
+  };
+
+  /** A committed snapshot outdates the graph: a new mode forgets it, and Connected asks for the new version's. */
+  const syncGraph = (version: number, modeChanged: boolean) => {
+    if (modeChanged) dropGraph();
+    if (get().treeScope !== 'connected') return;
+    const { status, data } = get().graph;
+    if (status === 'ready' && data?.version === version) return;
+    void fetchGraph(true);
+  };
 
   /** Place the cursor: update selection, active path, and scroll into view. */
   /** A scroll request that pins the cursor line at `edge`; the caller checks that a selection exists. */
@@ -1556,6 +1808,10 @@ export const useStore = create<ReviewState>((set, get) => {
     modeCommit: 'HEAD',
     setModeCommit(revision) {
       set({ modeCommit: revision });
+    },
+    graphOpen: false,
+    setGraphOpen(open) {
+      set((s) => ({ graphOpen: open && s.treeScope === 'connected' && s.focus?.kind === 'cluster' }));
     },
     helpOpen: false,
     setHelpOpen(open) {
@@ -2078,24 +2334,23 @@ export const useStore = create<ReviewState>((set, get) => {
       if (get().fileView) return get().closeFullFile();
       const { jumps, jumpIndex } = get();
       let list = jumps;
-      let index = jumpIndex;
-      if (index === list.length) {
+      if (jumpIndex === list.length) {
         // Leaving the newest position: save it so Ctrl+i can return.
         const pos = currentPosition();
         if (pos) list = [...list, pos];
       }
-      index -= 1;
+      const index = list.findLastIndex((pos, i) => i < jumpIndex && isLive(pos));
+      if (index === -1) return;
       set({ jumps: list, jumpIndex: index });
-      const target = list[index];
-      if (target) void goToPositionSilently(target);
+      void goToPositionSilently(list[index]!);
     },
     jumpForward() {
       if (!canJumpForward(get())) return;
       const { jumps, jumpIndex } = get();
-      const index = jumpIndex + 1;
+      const index = jumps.findIndex((pos, i) => i > jumpIndex && isLive(pos));
+      if (index === -1) return;
       set({ jumpIndex: index });
-      const target = jumps[index];
-      if (target) void goToPositionSilently(target);
+      void goToPositionSilently(jumps[index]!);
     },
     scrollCursorTo(edge) {
       if (!get().selection) return get().flash('No line under the cursor');
@@ -2208,18 +2463,22 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!path) return;
       set((s) => ({ collapsed: { ...s.collapsed, [path]: collapsed } }));
       if (collapsed) afterCollapse(path, notCollapsed);
-      else void get().loadPatch(path);
+      else {
+        void get().loadPatch(path);
+        void loadContext(path);
+      }
     },
     setAllCollapsed(collapsed) {
-      const paths = get().snapshot?.changed.map((f) => f.path) ?? [];
-      const next: Record<string, boolean> = {};
-      for (const p of paths) next[p] = collapsed;
-      set({ collapsed: next });
+      // The files the review lists, callers included; an explicit state elsewhere (another cluster) stays.
+      const paths = reviewPaths(get());
+      set((s) => ({ collapsed: { ...s.collapsed, ...Object.fromEntries(paths.map((p) => [p, collapsed])) } }));
+      if (!collapsed) for (const p of contextPaths(get())) void loadContext(p);
     },
     /** Closes the topmost transient thing, innermost first; with nothing open, drops the selection. */
     escape() {
       const s = get();
       if (s.helpOpen) set({ helpOpen: false });
+      else if (s.graphOpen) set({ graphOpen: false });
       else if (s.modePane) s.closeModePane();
       else if (s.modeMenuOpen) set({ modeMenuOpen: false });
       else if (s.githubMenuOpen) set({ githubMenuOpen: false });
@@ -2256,6 +2515,29 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ imageCompare: compare });
     },
     snapshot: null,
+    treeScope: 'changed',
+    setTreeScope(scope) {
+      const was = get().treeScope;
+      if (scope === was) return;
+      set({ treeScope: scope, ...(scope === 'connected' && was !== 'connected' ? { connectedFrom: was } : {}) });
+      if (scope === 'connected') void get().loadGraph();
+      else if (was === 'connected') dropGraph();
+    },
+    connectedFrom: 'changed',
+    graph: IDLE_GRAPH,
+    loadGraph: () => fetchGraph(false),
+    focus: null,
+    focusCluster: (focus) => applyFocus(focus),
+    moveCluster(delta) {
+      const { graph, focus } = get();
+      const next = graph.data && moveFocus(graph.data, focus, delta);
+      if (next) applyFocus(next);
+    },
+    context: false,
+    toggleContext() {
+      set((s) => ({ context: !s.context }));
+      settleReview();
+    },
     error: null,
     threads: [],
     showResolved: false,
@@ -2451,6 +2733,8 @@ export const useStore = create<ReviewState>((set, get) => {
     async openFile(path, line, side) {
       const snap = get().snapshot;
       if (!snap) return;
+      // A context file is already in the list: reveal it there instead of leaving for the single-file view.
+      if (contextPaths(get()).includes(path)) return revealContext(path);
       const changed = snap.changed.some((f) => f.path === path);
       // The file view stays for a new-side line of the file it shows; old-side lines exist only in the diff.
       if (!changed || (get().fileView?.path === path && side !== 'old')) {
@@ -2461,7 +2745,9 @@ export const useStore = create<ReviewState>((set, get) => {
         recordJump();
         set({ fileView: null, selection: null, visualAnchor: null, draft: null, focusedThread: null });
       }
-      get().jumpTo(path, line, side);
+      const jump = () => get().jumpTo(path, line, side);
+      if (ensureListed(path)) quietly(jump);
+      else jump();
       set({ activePath: path });
     },
 
@@ -2691,7 +2977,10 @@ export const useStore = create<ReviewState>((set, get) => {
     toggleCollapsed(path) {
       const cur = isCollapsed(get(), path);
       set((s) => ({ collapsed: { ...s.collapsed, [path]: !cur } }));
-      if (cur) void get().loadPatch(path);
+      if (cur) {
+        void get().loadPatch(path);
+        void loadContext(path);
+      }
     },
     selectFile(path) {
       set({ selection: null, visualAnchor: null, activePath: path });
@@ -2761,6 +3050,13 @@ export const useStore = create<ReviewState>((set, get) => {
     },
   };
 });
+
+/** The whole new side of a file as a review item: its text, or the notice a binary file gets. */
+function wholeFile(path: string, res: FileResponse): Loaded {
+  return res.binary
+    ? { kind: 'binary' }
+    : { kind: 'file', file: { name: path, contents: res.contents, cacheKey: `${path}@full@${Date.now()}` } };
+}
 
 function sameChange(a: ChangedFile, b: ChangedFile): boolean {
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { connectWs } from './api.js';
 import { CommentPanel } from './comments/CommentPanel.js';
 import { Header } from './header/Header.js';
@@ -10,6 +10,50 @@ import { ServerLost } from './ServerLost.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
 import { TooltipHost } from './ui/TitleTooltips.js';
+
+// The graph (dagre, the canvas, the dialog) is a chunk of its own, fetched when the dialog first opens.
+const loadGraphDialog = () =>
+  lazy(() => import('./connected/dialog/GraphDialog.js').then((m) => ({ default: m.GraphDialog })));
+
+/** Catches a failed chunk load (or a crash in the dialog), so it cannot unmount the whole app. */
+class GraphBoundary extends Component<{ onError(error: unknown): void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    this.props.onError(error);
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+function GraphDialogHost() {
+  const open = useStore((s) => s.graphOpen);
+  // A rejected import stays rejected inside its lazy component: after a failure the next open builds a new one.
+  const [Dialog, setDialog] = useState(loadGraphDialog);
+  const [attempt, setAttempt] = useState(0);
+  const seen = useRef(false);
+  if (open) seen.current = true;
+  if (!seen.current) return null;
+  return (
+    <GraphBoundary
+      key={attempt}
+      onError={(e) => {
+        seen.current = false;
+        useStore.getState().report('Loading the graph', e);
+        useStore.getState().setGraphOpen(false);
+        setDialog(loadGraphDialog);
+        setAttempt((n) => n + 1);
+      }}
+    >
+      <Suspense fallback={null}>
+        <Dialog />
+      </Suspense>
+    </GraphBoundary>
+  );
+}
 
 export function App() {
   const boot = useStore((s) => s.boot);
@@ -130,6 +174,7 @@ export function App() {
         </>
       )}
       <HelpOverlay />
+      <GraphDialogHost />
       <TooltipHost />
       {lost && <ServerLost />}
       {toast && (

@@ -1,6 +1,15 @@
 import { parseDiffFromFile, parsePatchFiles } from '@pierre/diffs';
 import { describe, expect, it } from 'vitest';
-import { cursorFromSelection, diffRows, renderedContext, step, stepFile, type NavItem } from '@/client/keyboard/nav.js';
+import {
+  buildNav,
+  cursorFromSelection,
+  diffRows,
+  renderedContext,
+  step,
+  stepFile,
+  stepHunk,
+  type NavItem,
+} from '@/client/keyboard/nav.js';
 
 const patch = `diff --git a/f.txt b/f.txt
 --- a/f.txt
@@ -45,6 +54,79 @@ describe('navigation', () => {
     const leadingCollapsed = [nav[1]!, nav[2]!];
     expect(step(leadingCollapsed, null, 1)).toEqual({ itemIndex: 0, rowIndex: -1 });
     expect(stepFile(leadingCollapsed, null, 1)).toEqual({ itemIndex: 0, rowIndex: -1 });
+  });
+});
+
+describe('buildNav over a listing', () => {
+  const loaded = { 'a.txt': { kind: 'diff' as const, fileDiff }, 'c.txt': { kind: 'diff' as const, fileDiff } };
+  const items = buildNav(['a.txt', 'c.txt'], loaded, { 'c.txt': 2 }, (p) => p === 'c.txt');
+
+  it('holds exactly the listed paths, in the order given, whatever else is loaded', () => {
+    expect(items.map((i) => i.path)).toEqual(['a.txt', 'c.txt']);
+    expect(items.map((i) => i.id)).toEqual(['diff:a.txt@0', 'diff:c.txt@2']);
+    expect(items.map((i) => i.collapsed)).toEqual([false, true]);
+  });
+
+  it('walks files and hunks inside the listing only', () => {
+    const last = stepFile(items, { itemIndex: 0, rowIndex: 0 }, 1);
+    expect(last).toEqual({ itemIndex: 1, rowIndex: -1 });
+    expect(stepFile(items, last, 1)).toEqual(last);
+    expect(stepHunk(items, { itemIndex: 0, rowIndex: 7 }, 1)).toEqual({ itemIndex: 0, rowIndex: 7 });
+  });
+
+  it('gives a listed file whose patch has not arrived a header-only item', () => {
+    expect(buildNav(['b.txt'], {}, {}, () => false)).toEqual([
+      { id: 'diff:b.txt@0', path: 'b.txt', collapsed: false, rows: [] },
+    ]);
+  });
+});
+
+describe('buildNav with context files', () => {
+  const body = { kind: 'file' as const, file: { name: 'ctx/x.ts', contents: 'a\nb\nc\nd\ne\n', cacheKey: 'k' } };
+  const loaded = { 'a.txt': { kind: 'diff' as const, fileDiff }, 'ctx/x.ts': body };
+  const stops = new Map([['ctx/x.ts', [2, 4]]]);
+  const items = buildNav(
+    ['a.txt', 'ctx/x.ts', 'ctx/y.ts'],
+    loaded,
+    { 'ctx/x.ts': 3 },
+    (p) => p !== 'a.txt',
+    {},
+    'unified',
+    null,
+    new Map([...stops, ['ctx/y.ts', [1]]]),
+  );
+
+  it('gives a caller a file id and puts it after the changed files', () => {
+    expect(items.map((i) => i.id)).toEqual(['diff:a.txt@0', 'file:ctx/x.ts@3', 'file:ctx/y.ts@0']);
+  });
+
+  it('walks J / K from the last changed file onto the callers and back', () => {
+    const lastChanged = { itemIndex: 0, rowIndex: 0 };
+    const x = stepFile(items, lastChanged, 1);
+    expect(x).toEqual({ itemIndex: 1, rowIndex: -1 });
+    expect(stepFile(items, x, 1)).toEqual({ itemIndex: 2, rowIndex: -1 });
+    expect(stepFile(items, { itemIndex: 1, rowIndex: -1 }, -1)).toEqual({ itemIndex: 0, rowIndex: 0 });
+  });
+
+  it('stops ] / [ on the linking lines of an open caller, not on its first line', () => {
+    const open = items.map((i) => ({ ...i, collapsed: false }));
+    const x = open[1]!;
+    expect(x.rows.filter((r) => r.hunkStart).map((r) => r.line)).toEqual([2, 4]);
+    expect(x.rows).toHaveLength(5);
+    const afterLast = { itemIndex: 0, rowIndex: 6 };
+    const first = stepHunk(open, afterLast, 1);
+    expect(first).toEqual({ itemIndex: 1, rowIndex: 1 });
+    const second = stepHunk(open, first, 1);
+    expect(second).toEqual({ itemIndex: 1, rowIndex: 3 });
+    expect(stepHunk(open, second, -1)).toEqual(first);
+    expect(stepHunk(open, first, -1)).toEqual(afterLast);
+  });
+
+  it('skips a collapsed caller’s lines and keeps the file view’s own stop on its first line', () => {
+    expect(stepHunk(items, { itemIndex: 0, rowIndex: 7 }, 1)).toEqual({ itemIndex: 0, rowIndex: 7 });
+    const view = { path: 'ctx/x.ts', external: false, item: body, from: { position: null, activePath: null } };
+    const [one] = buildNav([], loaded, {}, () => false, {}, 'unified', view, stops);
+    expect(one!.rows.filter((r) => r.hunkStart).map((r) => r.line)).toEqual([1]);
   });
 });
 

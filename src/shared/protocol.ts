@@ -820,6 +820,78 @@ export type LspSymbol = z.infer<typeof LspSymbolSchema>;
 export const LspSymbolsResponseSchema = z.object({ symbols: LspSymbolSchema.array(), inconclusive });
 export type LspSymbolsResponse = z.infer<typeof LspSymbolsResponseSchema>;
 
+/** A changed symbol that another file references, and where. */
+export const GraphUseSchema = z.object({
+  /** The bare symbol name. */
+  symbol: z.string(),
+  /** LSP SymbolKind number of the symbol; the client maps it to an icon and a label. */
+  kind: z.number().int(),
+  /** The changed file that declares the symbol. */
+  path: z.string(),
+  /** 1-based new-side lines in the referencing file, in file order, at most five. */
+  lines: z.number().int().array(),
+});
+export type GraphUse = z.infer<typeof GraphUseSchema>;
+
+/** One changed file referencing another changed file of the same cluster: an arrow from the user to the used. */
+export const GraphLinkSchema = z.object({
+  /** The referencing file. */
+  from: z.string(),
+  /** The referenced file, which declares every symbol in `uses`. */
+  to: z.string(),
+  /** Distinct (used symbol, referencing symbol) pairs behind the arrow; its thickness. */
+  weight: z.number().int(),
+  /** The used symbols, most referenced first then by name, at most five. */
+  uses: GraphUseSchema.array(),
+  /** Used symbols before the cap. */
+  total: z.number().int(),
+});
+export type GraphLink = z.infer<typeof GraphLinkSchema>;
+
+/** An unchanged file that references a cluster's changed symbols. */
+export const GraphContextSchema = z.object({
+  path: z.string(),
+  uses: GraphUseSchema.array(),
+  /** References from this file into the cluster; ranks the list. */
+  refs: z.number().int(),
+});
+export type GraphContext = z.infer<typeof GraphContextSchema>;
+
+export const GraphClusterSchema = z.object({
+  /** The smallest member path; stays put across refreshes while that file stays in the cluster. */
+  id: z.string(),
+  /** The deepest directory every member shares; '' when none. */
+  label: z.string(),
+  /** Changed files, sorted by path. */
+  files: z.string().array(),
+  /** Changed symbols behind the cluster. */
+  symbols: z.number().int(),
+  /** Unchanged callers, most references first, capped at 15. */
+  context: GraphContextSchema.array(),
+  /** Unchanged callers before the cap. */
+  contextTotal: z.number().int(),
+  /** Arrows between the cluster's files, sorted by `from` then `to`; the strongest 150 when there are more. */
+  links: GraphLinkSchema.array(),
+  /** Arrows before the cap. */
+  linksTotal: z.number().int(),
+});
+export type GraphCluster = z.infer<typeof GraphClusterSchema>;
+
+/** `GET /api/graph`: the changed files grouped into feature clusters by who references whom. */
+export const GraphResponseSchema = z.object({
+  /** The snapshot version this was built for. */
+  version: z.number().int(),
+  /** Two or more files, largest first, ties by id. */
+  clusters: GraphClusterSchema.array(),
+  /** Graphed files that no other changed file references or is referenced by. */
+  unlinked: z.string().array(),
+  /** Changed files no language server could graph: no server, binary, deleted, generated. */
+  other: z.string().array(),
+  /** Why the graph is partial, for the reader: no server, indexing gave up, symbols capped. */
+  note: z.string().optional(),
+});
+export type GraphResponse = z.infer<typeof GraphResponseSchema>;
+
 /** Derived per changed file: 'restale' means viewed at an older blob. */
 export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
 export type ViewedState = z.infer<typeof ViewedStateSchema>;

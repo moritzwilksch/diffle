@@ -10,6 +10,7 @@ import {
   type CommentThread,
   type LspSymbol,
   type EnterRequest,
+  type GraphContext,
   type Review,
   type Moved,
   type Side,
@@ -19,6 +20,7 @@ import {
 } from '@/shared/protocol.js';
 import { fuzzyFilter } from '@/shared/fuzzy.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
+import { callers, linkLines, listing } from './connected/clusters/focus.js';
 import type { ReviewState } from './store.js';
 
 // Pure functions over store state. No effects, no store import at runtime, so
@@ -47,6 +49,8 @@ export function itemIdOf(state: Pick<ReviewState, 'snapshot' | 'gens' | 'fileVie
 export const PATCH_BATCH_FILES = 12;
 /** Most changed lines (additions + deletions) a patch request carries; a single larger file rides alone. */
 export const PATCH_BATCH_LINES = 4000;
+/** Added to the rank of a file outside the focused group, so it loads after every listed one. */
+const UNLISTED_RANK = 8;
 /** A diff past this many changed lines is not loaded until asked for: parsing it would stall the review. */
 export const OVERSIZED_LINES = 10_000;
 
@@ -54,21 +58,28 @@ export const linesOf = (f: ChangedFile): number => f.additions + f.deletions;
 
 /**
  * Splits the textual files to load into request batches, first-needed first: `first` (the file
- * the reader is on), then expanded files in list order, collapsed ones last; within each tier a
- * file too big for a shared batch sinks below the rest, so a lockfile never delays a source file.
- * Each batch stays within PATCH_BATCH_FILES and PATCH_BATCH_LINES.
+ * the reader is on), then the `listed` files in list order, expanded before collapsed, then the
+ * rest in tree order so a later focus change finds them loaded; within each tier a file too big
+ * for a shared batch sinks below the rest, so a lockfile never delays a source file. Each batch
+ * stays within PATCH_BATCH_FILES and PATCH_BATCH_LINES.
  */
 export function patchBatches(
-  snapshot: Snapshot,
+  listed: readonly string[],
   files: ChangedFile[],
   first: string[],
   isCollapsed: (path: string) => boolean,
 ): string[][] {
   const byPath = new Map(files.map((f) => [f.path, f]));
+  const inList = new Set(listed);
   const rank = (p: string) =>
-    first.includes(p) ? 0 : (isCollapsed(p) ? 4 : 2) + (linesOf(byPath.get(p)!) > PATCH_BATCH_LINES ? 1 : 0);
-  const order = orderedPaths(snapshot)
-    .filter((p) => byPath.has(p))
+    first.includes(p)
+      ? 0
+      : (isCollapsed(p) ? 4 : 2) +
+        (linesOf(byPath.get(p)!) > PATCH_BATCH_LINES ? 1 : 0) +
+        (inList.has(p) ? 0 : UNLISTED_RANK);
+  const order = files
+    .map((f) => f.path)
+    .sort(compareTreeOrder)
     .sort((a, b) => rank(a) - rank(b));
   const batches: string[][] = [];
   let batch: string[] = [];
@@ -92,14 +103,49 @@ export function orderedPaths(snapshot: Snapshot): string[] {
   return snapshot.changed.map((f) => f.path).sort(compareTreeOrder);
 }
 
-/** The first changed file after `path` in tree order that `accept` admits, or null when none follows. */
+/** The state the review order derives from. */
+export type ListedState = Pick<ReviewState, 'snapshot' | 'focus'> & { graph: Pick<ReviewState['graph'], 'data'> };
+
+/**
+ * The changed files the review lists, in tree order: every one, or with a focus only that group's.
+ * What patch loading, viewed progress and the next-file motions walk; `snapshot.changed` stays the global set.
+ */
+export function listedPaths(state: ListedState): string[] {
+  if (!state.snapshot) return [];
+  return listing(orderedPaths(state.snapshot), state.graph.data, state.focus);
+}
+
+/** The state the review order, callers included, derives from. */
+export type ReviewListState = ListedState & Pick<ReviewState, 'context'>;
+
+/**
+ * The unchanged callers listed after the changed files: the focused cluster's, while `context` is on.
+ * Whatever graph is on screen answers, even one built for an older snapshot: a refresh must not move the
+ * reader's files, and a file that is changed now is never a caller (see `callers`).
+ */
+export function contextEntries(state: ReviewListState): readonly GraphContext[] {
+  const { snapshot, graph, focus, context } = state;
+  if (!snapshot) return [];
+  return callers(new Set(snapshot.changed.map((f) => f.path)), graph.data, focus, context);
+}
+
+export const contextPaths = (state: ReviewListState): string[] => contextEntries(state).map((c) => c.path);
+
+/** Everything the review pane and the cursor walk: the listed changed files, then the context files. The one source of the item order. */
+export const reviewPaths = (state: ReviewListState): string[] => [...listedPaths(state), ...contextPaths(state)];
+
+/** Where `]` / `[` stop in each context file: the lines it uses the cluster on. */
+export const contextStops = (state: ReviewListState): Map<string, readonly number[]> =>
+  new Map(contextEntries(state).map((c) => [c.path, linkLines(c)]));
+
+/** The first listed file after `path` that `accept` admits, or null when none follows or `path` is not listed. */
 export function nextFileAfter(
-  snapshot: Snapshot,
+  state: ListedState,
   path: string,
   accept: (file: ChangedFile) => boolean,
 ): ChangedFile | null {
-  const byPath = new Map(snapshot.changed.map((f) => [f.path, f]));
-  const paths = orderedPaths(snapshot);
+  const byPath = new Map(state.snapshot?.changed.map((f) => [f.path, f]));
+  const paths = listedPaths(state);
   const at = paths.indexOf(path);
   if (at === -1) return null;
   for (const p of paths.slice(at + 1)) {
@@ -113,8 +159,8 @@ export function nextFileAfter(
  * The file the reader is in: the one the cursor landed on, else the open whole-file view,
  * else the first file in the list, which is the one in view before the cursor has landed anywhere.
  */
-export function currentPath(state: Pick<ReviewState, 'snapshot' | 'activePath' | 'fileView'>): string | null {
-  return state.activePath ?? state.fileView?.path ?? (state.snapshot && orderedPaths(state.snapshot)[0]) ?? null;
+export function currentPath(state: ListedState & Pick<ReviewState, 'activePath' | 'fileView'>): string | null {
+  return state.activePath ?? state.fileView?.path ?? listedPaths(state)[0] ?? null;
 }
 
 /** Back is open in a full-file view (which always leaves for the diff) or at any jumplist position past the oldest. */
@@ -209,15 +255,16 @@ export function filesUnder(changed: readonly ChangedFile[], dir: string): Change
   return changed.filter((f) => f.path.startsWith(prefix));
 }
 
-/** Collapsed defaults to viewed or generated, until the user toggles it. */
+/** Collapsed defaults to viewed or generated (and, for a context file, to closed), until the user toggles it. */
 export function isCollapsed(
-  state: Pick<ReviewState, 'collapsed' | 'viewed' | 'config' | 'snapshot'>,
+  state: Pick<ReviewState, 'collapsed' | 'viewed' | 'config' | 'snapshot'> & ReviewListState,
   path: string,
 ): boolean {
   const explicit = state.collapsed[path];
   if (explicit != null) return explicit;
   const f = state.snapshot?.changed.find((x) => x.path === path);
-  return f ? isViewed(state, f) || f.generated : false;
+  // A context file is fetched only once the reader opens it.
+  return f ? isViewed(state, f) || f.generated : contextEntries(state).some((c) => c.path === path);
 }
 
 /** Threads the UI shows: open ones, plus resolved when the user asked for them. */

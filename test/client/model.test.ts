@@ -7,6 +7,7 @@ import {
   type CommentThread,
   type GithubMetadata,
   type RangeView,
+  type GraphResponse,
   type Review,
   type Snapshot,
 } from '@/shared/protocol.js';
@@ -23,16 +24,43 @@ import {
   imageSides,
   isCollapsed,
   isViewed,
+  listedPaths,
   iterationPick,
   iterationStep,
+  contextEntries,
+  contextPaths,
+  contextStops,
   movedLabel,
   nextFileAfter,
+  patchBatches,
   relativeTime,
+  reviewPaths,
   rangeStep,
   reuseThreads,
   viewedState,
 } from '@/client/model.js';
+import { IDLE_GRAPH, type Focus } from '@/client/connected/clusters/focus.js';
 import type { ReviewState } from '@/client/store.js';
+
+const GRAPH: GraphResponse = {
+  version: 1,
+  clusters: [
+    {
+      id: 'src/b.ts',
+      label: 'src',
+      files: ['src/b.ts'],
+      symbols: 1,
+      context: [],
+      contextTotal: 0,
+      links: [],
+      linksTotal: 0,
+    },
+  ],
+  unlinked: [],
+  other: ['src/a.ts'],
+};
+const ready = (data: GraphResponse) => ({ status: 'ready' as const, data, error: null });
+const CLUSTER_B: Focus = { kind: 'cluster', id: 'src/b.ts' };
 
 describe('compareTreeOrder', () => {
   it('matches the tree library on the cases where locale order and dot-first rules disagree with it', () => {
@@ -179,10 +207,18 @@ describe('search scope', () => {
     }));
     const snapshot = { changed, tree: ['src/a.ts', 'src/b.ts', 'src/c.ts'] } as unknown as Snapshot;
     const view = { path: 'src/c.ts', external: false, item: null, from: { position: null, activePath: null } };
-    expect(currentPath({ snapshot, activePath: 'src/b.ts', fileView: view })).toBe('src/b.ts');
-    expect(currentPath({ snapshot, activePath: null, fileView: view })).toBe('src/c.ts');
-    expect(currentPath({ snapshot, activePath: null, fileView: null })).toBe('src/a.ts');
-    expect(currentPath({ snapshot: null, activePath: null, fileView: null })).toBeNull();
+    const none = { graph: IDLE_GRAPH, focus: null };
+    expect(currentPath({ ...none, snapshot, activePath: 'src/b.ts', fileView: view })).toBe('src/b.ts');
+    expect(currentPath({ ...none, snapshot, activePath: null, fileView: view })).toBe('src/c.ts');
+    expect(currentPath({ ...none, snapshot, activePath: null, fileView: null })).toBe('src/a.ts');
+    expect(currentPath({ ...none, snapshot: null, activePath: null, fileView: null })).toBeNull();
+  });
+
+  it('with a focus, the first file in view is the first of the focused group', () => {
+    const changed = ['src/b.ts', 'src/a.ts'].map((path) => ({ path }));
+    const snapshot = { changed } as unknown as Snapshot;
+    const state = { snapshot, graph: ready(GRAPH), focus: CLUSTER_B, activePath: null, fileView: null };
+    expect(currentPath(state)).toBe('src/b.ts');
   });
 });
 
@@ -230,6 +266,9 @@ describe('viewed state', () => {
       viewed: [{ path: 'a.py', blob, viewed: true }],
       config,
       snapshot,
+      graph: IDLE_GRAPH,
+      focus: null,
+      context: false,
     });
     expect(isCollapsed(state({}), 'gen.py')).toBe(true);
     expect(isCollapsed(state({}), 'a.py')).toBe(true);
@@ -261,10 +300,76 @@ describe('nextFileAfter', () => {
       { path: 'c.ts', blob: 'old', viewed: true },
     ];
     const unviewed = (f: ChangedFile) => !isViewed({ viewed, config }, f);
-    expect(nextFileAfter(snapshot, 'a.ts', unviewed)?.path).toBe('c.ts');
-    expect(nextFileAfter(snapshot, 'c.ts', unviewed)?.path).toBe('d.ts');
-    expect(nextFileAfter(snapshot, 'd.ts', unviewed)).toBeNull();
-    expect(nextFileAfter(snapshot, 'missing.ts', unviewed)).toBeNull();
+    const state = { snapshot, graph: IDLE_GRAPH, focus: null };
+    expect(nextFileAfter(state, 'a.ts', unviewed)?.path).toBe('c.ts');
+    expect(nextFileAfter(state, 'c.ts', unviewed)?.path).toBe('d.ts');
+    expect(nextFileAfter(state, 'd.ts', unviewed)).toBeNull();
+    expect(nextFileAfter(state, 'missing.ts', unviewed)).toBeNull();
+  });
+
+  it('stops at the end of the focused group instead of walking into the next one', () => {
+    const graph = ready({ ...GRAPH, clusters: [{ ...GRAPH.clusters[0]!, id: 'a.ts', files: ['a.ts', 'd.ts'] }] });
+    const state = { snapshot, graph, focus: { kind: 'cluster', id: 'a.ts' } as Focus };
+    const any = () => true;
+    expect(nextFileAfter(state, 'a.ts', any)?.path).toBe('d.ts');
+    expect(nextFileAfter(state, 'd.ts', any)).toBeNull();
+    expect(nextFileAfter(state, 'b.ts', any)).toBeNull();
+  });
+});
+
+describe('listedPaths', () => {
+  const file = (path: string): ChangedFile => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob: 'b',
+    oldBlob: '',
+    generated: false,
+  });
+  const snapshot = { changed: [file('src/b.ts'), file('src/a.ts'), file('src/c.ts')] } as Snapshot;
+
+  it('lists every changed file in tree order without a focus, and nothing without a snapshot', () => {
+    expect(listedPaths({ snapshot, graph: IDLE_GRAPH, focus: null })).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts']);
+    expect(listedPaths({ snapshot: null, graph: IDLE_GRAPH, focus: null })).toEqual([]);
+  });
+
+  it('lists only the focused group, still in tree order', () => {
+    const graph = ready({ ...GRAPH, clusters: [{ ...GRAPH.clusters[0]!, files: ['src/c.ts', 'src/a.ts'] }] });
+    expect(listedPaths({ snapshot, graph, focus: CLUSTER_B })).toEqual(['src/a.ts', 'src/c.ts']);
+    expect(listedPaths({ snapshot, graph: ready(GRAPH), focus: { kind: 'other' } })).toEqual(['src/a.ts']);
+  });
+
+  it('lists everything for a focus the graph does not know, or while no graph is loaded', () => {
+    const all = ['src/a.ts', 'src/b.ts', 'src/c.ts'];
+    expect(listedPaths({ snapshot, graph: ready(GRAPH), focus: { kind: 'cluster', id: 'gone' } })).toEqual(all);
+    expect(listedPaths({ snapshot, graph: IDLE_GRAPH, focus: CLUSTER_B })).toEqual(all);
+  });
+});
+
+describe('patchBatches', () => {
+  const file = (path: string, additions = 1): ChangedFile => ({
+    path,
+    status: 'M',
+    additions,
+    deletions: 0,
+    binary: false,
+    blob: 'b',
+    oldBlob: '',
+    generated: false,
+  });
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'].map((p) => file(p));
+  const open = () => false;
+
+  it('requests the listed files before the rest, then the rest in tree order', () => {
+    expect(patchBatches(['c.ts', 'd.ts'], files, [], open)).toEqual([['c.ts', 'd.ts', 'a.ts', 'b.ts']]);
+  });
+
+  it('puts an unlisted expanded file after a listed collapsed one, and the reader’s file first of all', () => {
+    const folded = (p: string) => p === 'd.ts';
+    expect(patchBatches(['c.ts', 'd.ts'], files, [], folded)).toEqual([['c.ts', 'd.ts', 'a.ts', 'b.ts']]);
+    expect(patchBatches(['c.ts', 'd.ts'], files, ['b.ts'], folded)).toEqual([['b.ts', 'c.ts', 'd.ts', 'a.ts']]);
   });
 });
 
@@ -500,5 +605,96 @@ describe('rangeStep', () => {
     expect(rangeStep(focused('c'.repeat(40)), 1)).toBeNull();
     expect(rangeStep(focused('c'.repeat(40)), -1)).toBeUndefined();
     expect(rangeStep({ review: { kind: 'commit', sha: 'a'.repeat(40) }, commits }, 1)).toBeUndefined();
+  });
+});
+
+describe('the review list with context', () => {
+  const file = (path: string): ChangedFile => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    blob: 'b',
+    oldBlob: '',
+    generated: false,
+  });
+  const snapshot = { version: 1, changed: [file('src/b.ts'), file('src/a.ts'), file('src/c.ts')] } as Snapshot;
+  const entry = (path: string, lines: number[]) => ({
+    path,
+    refs: lines.length,
+    uses: [{ symbol: 'fn', kind: 12, path: 'src/lib.ts', lines }],
+  });
+  const graph = ready({
+    ...GRAPH,
+    clusters: [
+      {
+        ...GRAPH.clusters[0]!,
+        files: ['src/b.ts', 'src/a.ts'],
+        context: [entry('ctx/x.ts', [9, 3]), entry('ctx/y.ts', [5]), entry('src/c.ts', [1])],
+      },
+    ],
+  });
+  const state = { snapshot, graph, focus: CLUSTER_B, context: true };
+
+  it('lists the changed files first, then the cluster’s callers in rank order', () => {
+    expect(listedPaths(state)).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(contextPaths(state)).toEqual(['ctx/x.ts', 'ctx/y.ts']);
+    expect(reviewPaths(state)).toEqual(['src/a.ts', 'src/b.ts', 'ctx/x.ts', 'ctx/y.ts']);
+  });
+
+  it('never lists a changed file as context, whatever the graph says', () => {
+    expect(contextEntries(state).map((c) => c.path)).not.toContain('src/c.ts');
+  });
+
+  it('adds nothing while context is off, without a cluster focus, or without a graph', () => {
+    const changedOnly = ['src/a.ts', 'src/b.ts'];
+    expect(reviewPaths({ ...state, context: false })).toEqual(changedOnly);
+    expect(reviewPaths({ ...state, focus: { kind: 'other' } })).toEqual(['src/a.ts']);
+    expect(reviewPaths({ ...state, focus: null })).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts']);
+    const withUnlinked = ready({ ...graph.data, unlinked: ['src/c.ts'] });
+    expect(reviewPaths({ ...state, graph: withUnlinked, focus: { kind: 'unlinked' } })).toEqual(['src/c.ts']);
+    // A group with no changed file left is a stale graph's, not an empty review.
+    expect(reviewPaths({ ...state, focus: { kind: 'unlinked' } })).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts']);
+    expect(reviewPaths({ ...state, graph: IDLE_GRAPH })).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts']);
+    expect(reviewPaths({ ...state, snapshot: null })).toEqual([]);
+  });
+
+  it('keeps listing the callers while the graph is older than the snapshot, so a refresh leaves the pane alone', () => {
+    const bumped = { ...snapshot, version: 2 } as Snapshot;
+    expect(reviewPaths({ ...state, snapshot: bumped })).toEqual(reviewPaths(state));
+    expect(reviewPaths({ ...state, snapshot: bumped, graph: ready({ ...graph.data, version: 2 }) })).toEqual(
+      reviewPaths(state),
+    );
+  });
+
+  it('drops a caller the moment the new snapshot makes it a changed file, even before its graph lands', () => {
+    const bumped = { version: 2, changed: [...snapshot.changed, file('ctx/x.ts')] } as Snapshot;
+    expect(contextPaths({ ...state, snapshot: bumped })).toEqual(['ctx/y.ts']);
+    // The changed file is not listed twice: the old graph's cluster does not know it, so it is not listed at all yet.
+    expect(reviewPaths({ ...state, snapshot: bumped })).toEqual(['src/a.ts', 'src/b.ts', 'ctx/y.ts']);
+  });
+
+  it('keeps the changed order for patch loading and the viewed count out of it', () => {
+    // listedPaths stays about changed files: nothing in it names a caller.
+    expect(listedPaths(state)).not.toContain('ctx/x.ts');
+  });
+
+  it('hands the nav model each caller’s linking lines in file order', () => {
+    expect(contextStops(state)).toEqual(
+      new Map([
+        ['ctx/x.ts', [3, 9]],
+        ['ctx/y.ts', [5]],
+      ]),
+    );
+    expect(contextStops({ ...state, context: false })).toEqual(new Map());
+  });
+
+  it('starts a caller collapsed, until the reader opens it, and leaves other unchanged files open', () => {
+    const full = { ...state, collapsed: {}, viewed: [], config: DEFAULT_USER_CONFIG };
+    expect(isCollapsed(full, 'ctx/x.ts')).toBe(true);
+    expect(isCollapsed({ ...full, collapsed: { 'ctx/x.ts': false } }, 'ctx/x.ts')).toBe(false);
+    expect(isCollapsed(full, 'elsewhere/z.ts')).toBe(false);
+    expect(isCollapsed({ ...full, context: false }, 'ctx/x.ts')).toBe(false);
   });
 });

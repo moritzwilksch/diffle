@@ -127,6 +127,7 @@ async fn start(
         extra_auto_viewed: opts.auto_viewed.clone(),
         hub: hub.clone(),
         lsp: lsp.clone(),
+        graph: Arc::default(),
     };
     let server_opts = ServerOptions {
         port: opts.port.unwrap_or(DEFAULT_PORT),

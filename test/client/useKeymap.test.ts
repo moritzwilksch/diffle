@@ -16,6 +16,7 @@ const api = {
 vi.mock('@/client/api.js', () => ({ api }));
 
 const { useStore } = await import('@/client/store.js');
+const { IDLE_GRAPH } = await import('@/client/connected/clusters/focus.js');
 const { hasModifier, useKeymap } = await import('@/client/keyboard/useKeymap.js');
 
 function Keys() {
@@ -385,5 +386,171 @@ describe('useKeymap', () => {
     await flush();
     expect(api.exportComments).toHaveBeenCalledTimes(1);
     expect(useStore.getState().toast).toBe('Copying comments failed: boom');
+  });
+
+  describe('Connected scope chords', () => {
+    const cluster = (id: string, contextTotal = 0) => ({
+      id,
+      label: '',
+      files: [id],
+      symbols: 1,
+      context: [],
+      contextTotal,
+      links: [],
+      linksTotal: 0,
+    });
+    const GRAPH = {
+      version: 1,
+      clusters: [cluster('a.ts', 3), cluster('b.ts'), cluster('c.ts')],
+      unlinked: ['u.ts'],
+      other: [],
+    };
+    const A = { kind: 'cluster', id: 'a.ts' } as const;
+    const actions = () => {
+      const moveCluster = vi.fn();
+      const focusCluster = vi.fn();
+      const toggleContext = vi.fn();
+      const setTreeScope = vi.fn();
+      useStore.setState({ moveCluster, focusCluster, toggleContext, setTreeScope });
+      return { moveCluster, focusCluster, toggleContext, setTreeScope };
+    };
+    const inConnected = (focus: typeof A | { kind: 'unlinked' } | { kind: 'cluster'; id: string } = A) =>
+      useStore.setState({
+        treeScope: 'connected',
+        graph: { status: 'ready', data: GRAPH, error: null },
+        focus,
+      });
+    const chord = (second: string) => {
+      press('g');
+      const e = press(second);
+      // Releasing g ends the chord, as a real keyboard does between two chords.
+      document.body.dispatchEvent(new KeyboardEvent('keyup', { key: 'g', bubbles: true }));
+      return e;
+    };
+    afterEach(() =>
+      useStore.setState({
+        treeScope: 'changed',
+        connectedFrom: 'changed',
+        graph: IDLE_GRAPH,
+        focus: null,
+        graphOpen: false,
+      }),
+    );
+
+    it('gt and gT step the cluster focus, gc toggles context, inside Connected', () => {
+      const a = actions();
+      inConnected();
+      expect(chord('t').defaultPrevented).toBe(true);
+      expect(a.moveCluster).toHaveBeenLastCalledWith(1);
+      expect(chord('T').defaultPrevented).toBe(true);
+      expect(a.moveCluster).toHaveBeenLastCalledWith(-1);
+      expect(chord('c').defaultPrevented).toBe(true);
+      expect(a.toggleContext).toHaveBeenCalledTimes(1);
+    });
+
+    it('gt, gT and gc do nothing in Changed or All files', () => {
+      const a = actions();
+      for (const scope of ['changed', 'all'] as const) {
+        useStore.setState({ treeScope: scope, graph: { status: 'ready', data: GRAPH, error: null }, focus: A });
+        for (const k of ['t', 'T', 'c']) chord(k);
+        press('2');
+        chord('t');
+      }
+      expect(a.moveCluster).not.toHaveBeenCalled();
+      expect(a.focusCluster).not.toHaveBeenCalled();
+      expect(a.toggleContext).not.toHaveBeenCalled();
+    });
+
+    it('{n}gt jumps to cluster n, counted from 1 over the clusters only', () => {
+      const a = actions();
+      inConnected();
+      press('2');
+      expect(chord('t').defaultPrevented).toBe(true);
+      expect(a.focusCluster).toHaveBeenLastCalledWith({ kind: 'cluster', id: 'b.ts' });
+      press('1');
+      chord('t');
+      expect(a.focusCluster).toHaveBeenLastCalledWith(A);
+      expect(a.moveCluster).not.toHaveBeenCalled();
+    });
+
+    it('{n}gt past the last cluster clamps to the last cluster, not to a bucket', () => {
+      const a = actions();
+      inConnected();
+      press('9');
+      chord('t');
+      expect(a.focusCluster).toHaveBeenLastCalledWith({ kind: 'cluster', id: 'c.ts' });
+    });
+
+    it('{n}gT steps n groups back, wrapping', () => {
+      const a = actions();
+      inConnected();
+      press('3');
+      chord('T');
+      expect(a.moveCluster).toHaveBeenLastCalledWith(-3);
+      expect(a.focusCluster).not.toHaveBeenCalled();
+    });
+
+    it('gc lists callers only for a focused cluster that has some', () => {
+      const a = actions();
+      inConnected({ kind: 'cluster', id: 'b.ts' });
+      expect(chord('c').defaultPrevented).toBe(true);
+      inConnected({ kind: 'unlinked' });
+      chord('c');
+      expect(a.toggleContext).not.toHaveBeenCalled();
+      inConnected(A);
+      chord('c');
+      expect(a.toggleContext).toHaveBeenCalledTimes(1);
+    });
+
+    it('gm opens the graph of the focused cluster, and only there', () => {
+      inConnected();
+      expect(chord('m').defaultPrevented).toBe(true);
+      expect(useStore.getState().graphOpen).toBe(true);
+      useStore.setState({ graphOpen: false });
+      inConnected({ kind: 'unlinked' });
+      chord('m');
+      expect(useStore.getState().graphOpen).toBe(false);
+      useStore.setState({ treeScope: 'changed', graph: { status: 'ready', data: GRAPH, error: null }, focus: A });
+      chord('m');
+      expect(useStore.getState().graphOpen).toBe(false);
+      useStore.setState({ treeScope: 'connected', graph: { status: 'loading', data: null, error: null } });
+      chord('m');
+      expect(useStore.getState().graphOpen).toBe(false);
+    });
+
+    it('leaves the keys to the graph dialog while it is open, but Escape still reaches the store', () => {
+      const moveCursor = vi.fn();
+      useStore.setState({ moveCursor });
+      inConnected();
+      useStore.getState().setGraphOpen(true);
+      for (const key of ['j', 'k', 'ArrowDown', 'ArrowLeft', 'f', '0', '+', 'h', 'l', 'Enter', ' ']) {
+        expect(press(key).defaultPrevented).toBe(false);
+      }
+      expect(moveCursor).not.toHaveBeenCalled();
+      expect(chord('t').defaultPrevented).toBe(false);
+      expect(useStore.getState().graphOpen).toBe(true);
+
+      const escape = press('Escape');
+      expect(escape.defaultPrevented).toBe(false);
+      expect(useStore.getState().graphOpen).toBe(false);
+      press('j');
+      expect(moveCursor).toHaveBeenCalledWith(1);
+    });
+
+    it('gC enters Connected from either other scope and leaves it for the scope it came from', () => {
+      const a = actions();
+      for (const scope of ['changed', 'all'] as const) {
+        useStore.setState({ treeScope: scope });
+        expect(chord('C').defaultPrevented).toBe(true);
+        expect(a.setTreeScope).toHaveBeenLastCalledWith('connected');
+      }
+      useStore.setState({ treeScope: 'connected', connectedFrom: 'changed' });
+      chord('C');
+      expect(a.setTreeScope).toHaveBeenLastCalledWith('changed');
+      useStore.setState({ treeScope: 'connected', connectedFrom: 'all' });
+      chord('C');
+      expect(a.setTreeScope).toHaveBeenLastCalledWith('all');
+      expect(a.setTreeScope).toHaveBeenCalledTimes(4);
+    });
   });
 });

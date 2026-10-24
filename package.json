@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@dagrejs/dagre": "3.1.1",
     "@pierre/diffs": "1.6.1",
     "@pierre/trees": "1.0.0-beta.6",
     "commander": "^15.0.0",

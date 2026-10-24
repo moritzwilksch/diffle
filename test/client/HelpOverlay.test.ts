@@ -20,4 +20,9 @@ describe('HelpOverlay', () => {
   it('keeps every description short enough for one line', () => {
     for (const [, action] of COLUMNS.flat().flatMap((s) => s.rows)) expect(action.length).toBeLessThanOrEqual(60);
   });
+
+  it('lists the graph key under the Connected scope', () => {
+    const connected = COLUMNS.flat().find((s) => s.title === 'Connected scope');
+    expect(connected?.rows.map(([k]) => k)).toContain('gm');
+  });
 });

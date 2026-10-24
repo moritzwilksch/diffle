@@ -50,6 +50,15 @@ export const COLUMNS: HelpSection[][] = [
         ['yp', 'copy the current file’s path'],
       ],
     },
+    {
+      title: 'Connected scope',
+      rows: [
+        ['gC', 'toggle the Connected file scope'],
+        ['gt / gT', 'next / previous cluster ({n}gt jumps to cluster n)'],
+        ['gc', 'show / hide unchanged callers (+ context)'],
+        ['gm', 'graph of how the cluster’s files connect'],
+      ],
+    },
   ],
   [
     {
