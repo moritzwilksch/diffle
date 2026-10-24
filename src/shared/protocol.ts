@@ -881,8 +881,8 @@ export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
 export const GraphResponseSchema = z.object({
   nodes: GraphNodeSchema.array(),
   edges: GraphEdgeSchema.array(),
-  /** Changed symbols left out past the server's cap; the first ones by path and line are kept. */
-  cutSymbols: z.number().int(),
+  /** Changed symbols past the server's cap, by whole files, most telling first; drawn with `GraphQuery.all`. */
+  cut: GraphNodeSchema.array(),
   /** Why the graph may lack nodes or edges: a server was busy or unavailable while answering. */
   inconclusive: z.string().optional(),
 });
@@ -1035,6 +1035,9 @@ export const SymbolsQuerySchema = z
   .object({ path: z.string().min(1).optional(), q: z.string().optional() })
   .refine((query) => query.path != null || query.q != null, 'path or q required');
 export type SymbolsQuery = z.infer<typeof SymbolsQuerySchema>;
+/** `GET /api/lsp/graph`: `all` lifts the cap on changed symbols. */
+export const GraphQuerySchema = z.object({ all: z.literal('1').optional() });
+export type GraphQuery = z.infer<typeof GraphQuerySchema>;
 export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
 export const PatchQuerySchema = z.object({ path: z.string().optional() });
 export const ApiErrorSchema = z.object({ error: z.string() });

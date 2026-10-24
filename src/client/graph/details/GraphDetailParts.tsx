@@ -254,7 +254,8 @@ function ShortPath({ path }: { path: string }) {
   );
 }
 
-function JumpChip({ path, line }: { path: string; line: number }) {
+/** Opens the diff at `path:line`. */
+export function JumpChip({ path, line }: { path: string; line: number }) {
   return (
     <button
       type="button"

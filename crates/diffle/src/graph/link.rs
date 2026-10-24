@@ -76,7 +76,7 @@ fn user_at(outlines: &HashMap<String, Vec<LspSymbol>>, path: &str, line: i64) ->
     }
 }
 
-fn node(symbol: &LspSymbol, id: String, status: GraphNodeStatus, more_consumers: Option<i64>) -> GraphNode {
+pub fn node(symbol: &LspSymbol, id: String, status: GraphNodeStatus, more_consumers: Option<i64>) -> GraphNode {
     GraphNode {
         id,
         name: symbol.name.clone(),

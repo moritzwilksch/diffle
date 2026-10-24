@@ -74,7 +74,10 @@ fn render(graph: &Value) -> String {
             e["lines"]
         );
     }
-    out + &format!("cut symbols: {}\n", graph["cutSymbols"])
+    for n in graph["cut"].as_array().unwrap() {
+        out += &format!("cut {} {}\n", n["path"].as_str().unwrap(), n["name"].as_str().unwrap());
+    }
+    out
 }
 
 #[tokio::test]

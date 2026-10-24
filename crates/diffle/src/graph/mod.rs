@@ -18,7 +18,8 @@ use crate::lsp::pool::LspPool;
 use crate::protocol::{ChangeStatus, GraphResponse, LspLocation, LspPosition, LspSymbol, Snapshot, language_of};
 use crate::snapshotter::Snapshotter;
 
-/// Changed symbols one graph holds; past it the least telling files are cut whole (`select`).
+/// Changed symbols one graph holds unless asked for all; past it the least telling files are cut
+/// whole (`select`).
 pub const MAX_NODES: usize = 80;
 /// Language server requests in flight at once.
 const PARALLEL: usize = 8;
@@ -34,8 +35,14 @@ struct Answer<T> {
     why: Option<String>,
 }
 
-/// Builds the graph of `snap`, whose new side the servers read (the caller has checked).
-pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapshot) -> Result<GraphResponse> {
+/// Builds the graph of `snap`, whose new side the servers read (the caller has checked), of at
+/// most `cap` changed symbols.
+pub async fn build(
+    pool: &LspPool,
+    snapshotter: &Arc<Snapshotter>,
+    snap: &Snapshot,
+    cap: Option<usize>,
+) -> Result<GraphResponse> {
     let by = Instant::now() + BUDGET;
     let mut reasons = Vec::new();
     // Owned items: a closure over borrowed ones is not general enough for axum's `Send` bound.
@@ -64,8 +71,11 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     }
     // Ranked, the references are asked most telling first too, so a budget run out costs the least.
     select::rank(&mut changed);
-    let (changed, cut) = select::keep(changed, MAX_NODES);
-    let cut_symbols = cut.len() as i64;
+    let (changed, cut) = match cap {
+        Some(cap) => select::keep(changed, cap),
+        None => (changed, Vec::new()),
+    };
+    let cut = cut.iter().map(|c| link::node(&c.symbol, link::node_id(&c.symbol), c.status, None)).collect();
 
     let symbols: Vec<LspSymbol> = changed.iter().map(|c| c.symbol.clone()).collect();
     let references = map_limit(symbols, PARALLEL, |symbol| async move { references(pool, &symbol, by).await }).await;
@@ -88,7 +98,7 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
 
     let changed = changed.into_iter().map(|c| (c.symbol, c.status)).collect();
     let (nodes, edges) = link::link(changed, locations, &outlines);
-    Ok(GraphResponse { nodes, edges, cut_symbols, inconclusive: reasons.into_iter().next() })
+    Ok(GraphResponse { nodes, edges, cut, inconclusive: reasons.into_iter().next() })
 }
 
 /// The interface-level symbols of `path`.

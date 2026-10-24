@@ -38,6 +38,8 @@ export interface GraphState {
   hoveredEdge: string | null;
   /** A file the reader picked in the tree: its nodes stay lit and the view pans to them. */
   focusPath: string | null;
+  /** Draw every changed symbol, past the server's cap. */
+  all: boolean;
   /** The find field's text while it is open; its matches are `findMatches(view, find)`. */
   find: string | null;
   toggle(): void;
@@ -55,6 +57,8 @@ export interface GraphState {
   pick(target: { path: string; line: number }): Promise<void>;
   setFilter(filter: Filter, on: boolean): void;
   showOnly(part: string | null): void;
+  /** Reloads the graph with every changed symbol the cap left out. */
+  showAll(): void;
   openFind(): void;
   /** Searches for `query`, selecting its first match. */
   setFind(query: string): void;
@@ -77,6 +81,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   focusPath: null,
   find: null,
   only: null,
+  all: false,
 
   toggle() {
     if (get().open) return get().close();
@@ -96,7 +101,7 @@ export const useGraph = create<GraphState>((set, get) => ({
     // A newer snapshot, or a newer reload, owns the result.
     const current = () => useStore.getState().snapshot === snapshot && get().snapshot === snapshot;
     try {
-      const graph = await api.lspGraph();
+      const graph = await api.lspGraph(get().all ? { all: '1' } : {});
       if (!current()) return;
       const view = derive(graph, get().filters, get().only);
       const selected = view.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
@@ -148,6 +153,11 @@ export const useGraph = create<GraphState>((set, get) => ({
     const load = get().load;
     if (load.state !== 'ready') return;
     set({ only: part, view: derive(load.graph, get().filters, part) });
+  },
+
+  showAll() {
+    set({ all: true });
+    void get().reload();
   },
 
   openFind() {

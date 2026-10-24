@@ -12,8 +12,8 @@ use axum::routing::{get, post};
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::lsp::pool::LspPool;
 use crate::protocol::{
-    LspFeature, LspHoverRequest, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery, lsp_blocker,
-    readable_by_servers,
+    GraphQuery, LspFeature, LspHoverRequest, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery,
+    lsp_blocker, readable_by_servers,
 };
 
 /// The largest integer a JavaScript client can send exactly; zod's `.int()` refuses anything past it.
@@ -123,9 +123,11 @@ async fn symbols(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiR
     Ok(Json(answer).into_response())
 }
 
-async fn graph(State(d): State<Arc<ApiDeps>>) -> ApiResult {
+async fn graph(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
+    let q: GraphQuery = query(raw.as_deref())?;
+    let cap = q.all.is_none().then_some(crate::graph::MAX_NODES);
     let pool = pool_for(&d, None, Some(LspFeature::References)).await?;
     let snapshotter = d.session.snapshotter()?;
     let snap = snapshotter.current().await?;
-    Ok(Json(crate::graph::build(&pool, &snapshotter, &snap).await?).into_response())
+    Ok(Json(crate::graph::build(&pool, &snapshotter, &snap, cap).await?).into_response())
 }

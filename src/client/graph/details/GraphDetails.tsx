@@ -18,18 +18,21 @@ import {
   TITLE,
   type UsedAt,
 } from './GraphDetailParts.js';
+import { NotShown } from './NotShown.js';
 import { useSignatures } from './useSignatures.js';
 
+const NONE: GraphNode[] = [];
 const PANEL = `flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-surface px-4 pb-4 ${BODY}`;
 
 /**
- * What the side panel says in graph view: the selected node or arrow, else a hint to select one. A name
- * selects that node in the graph; a `:line` chip opens the diff there.
+ * What the side panel says in graph view: the selected node or arrow, else a hint to select one and
+ * what the graph left out. A name selects that node in the graph; a `:line` chip opens the diff there.
  */
 export function GraphDetails() {
   const view = useGraph((s) => s.view);
   const selected = useGraph((s) => s.selected);
   const selectedEdge = useGraph((s) => s.selectedEdge);
+  const cut = useGraph((s) => (s.load.state === 'ready' ? s.load.graph.cut : NONE));
   if (!view) return <aside className={PANEL} />;
   if (selectedEdge && view.via.has(selectedEdge)) return <EdgeDetails view={view} edge={selectedEdge} />;
   const node = view.graph.nodes.find((n) => n.id === selected);
@@ -37,6 +40,7 @@ export function GraphDetails() {
     return (
       <aside className={PANEL}>
         <p className={`m-0 pt-6 text-center ${META}`}>Select a box or an arrow to see its links.</p>
+        {cut.length > 0 && <NotShown cut={cut} />}
       </aside>
     );
   return <NodeDetails view={view} node={node} />;

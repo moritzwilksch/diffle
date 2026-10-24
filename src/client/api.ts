@@ -36,6 +36,7 @@ import {
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import type {
+  GraphQuery,
   GithubExportRequest,
   LspHoverRequest,
   LspPosition,
@@ -219,7 +220,7 @@ export const api = {
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   /** The snapshot's changed symbols and the code using them. */
-  lspGraph: () => json(GraphResponseSchema, 'api/lsp/graph'),
+  lspGraph: (query: GraphQuery) => json(GraphResponseSchema, `api/lsp/graph?${q(query)}`),
   lspOccurrences: (pos: LspPosition) =>
     json(LspOccurrencesResponseSchema, 'api/lsp/occurrences', { method: 'POST', body: encode(LspPositionSchema, pos) }),
 

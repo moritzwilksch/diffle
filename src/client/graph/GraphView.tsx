@@ -1,6 +1,7 @@
 import { Braces, FlaskConical, LoaderCircle, RefreshCw, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
+import { useStore } from '@/client/store.js';
 import { GraphCanvas } from './GraphCanvas.js';
 import { type Filter, useGraph } from './state.js';
 
@@ -21,7 +22,16 @@ export function GraphView() {
             {changed} changed · {graph.nodes.length - changed} using them · {graph.edges.length} links
           </span>
         )}
-        {full?.cutSymbols ? <span className="text-warn">+{full.cutSymbols} changed symbols not drawn</span> : null}
+        {full?.cut.length ? (
+          <button
+            type="button"
+            className="cursor-pointer border-0 bg-transparent p-0 text-warn hover:underline"
+            onClick={revealCut}
+            title="List them in the side panel"
+          >
+            {full.cut.length} changed symbols not shown
+          </button>
+        ) : null}
         {full?.inconclusive && (
           <span className="text-warn" title={full.inconclusive}>
             may be incomplete
@@ -68,6 +78,13 @@ export function GraphView() {
       </div>
     </section>
   );
+}
+
+/** Shows the side panel's list of what the graph left out: it stands where a selection's details do. */
+function revealCut() {
+  useGraph.getState().deselect();
+  const review = useStore.getState();
+  if (!review.layout.panelVisible) review.setLayout({ panelVisible: true });
 }
 
 /**

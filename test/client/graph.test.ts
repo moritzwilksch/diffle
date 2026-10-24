@@ -26,7 +26,7 @@ function graph(nodes: GraphNode[], edges: string[]): GraphResponse {
       const [from, to] = e.split('>') as [string, string];
       return { from, to, lines: [1] };
     }),
-    cutSymbols: 0,
+    cut: [],
   };
 }
 

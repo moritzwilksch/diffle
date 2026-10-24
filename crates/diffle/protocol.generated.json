@@ -655,6 +655,16 @@
       ],
       "description": "A changed symbol carries its change; a `consumer` is unchanged code that uses one."
     },
+    "GraphQuery": {
+      "type": "object",
+      "properties": {
+        "all": {
+          "type": "string",
+          "const": "1"
+        }
+      },
+      "description": "`GET /api/lsp/graph`: `all` lifts the cap on changed symbols."
+    },
     "GraphResponse": {
       "type": "object",
       "properties": {
@@ -670,11 +680,12 @@
             "$ref": "#/$defs/GraphEdge"
           }
         },
-        "cutSymbols": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "description": "Changed symbols left out past the server's cap; the first ones by path and line are kept."
+        "cut": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphNode"
+          },
+          "description": "Changed symbols past the server's cap, by whole files, most telling first; drawn with `GraphQuery.all`."
         },
         "inconclusive": {
           "type": "string",
@@ -684,7 +695,7 @@
       "required": [
         "nodes",
         "edges",
-        "cutSymbols"
+        "cut"
       ],
       "description": "`GET /api/lsp/graph`: the snapshot's changed symbols and the code using them, from the language servers."
     },
