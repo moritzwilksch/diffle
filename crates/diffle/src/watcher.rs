@@ -1,5 +1,5 @@
 //! Turns filesystem changes into one debounced `dirty` signal for the session.
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -11,6 +11,8 @@ use tokio::task::JoinHandle;
 
 /// How often git metadata is polled.
 const META_POLL: Duration = Duration::from_millis(100);
+/// Changed paths one settle reports; past this it reports `Dirty::Meta`, as checking them would cost more than a refresh.
+const MAX_PATHS: usize = 10_000;
 
 pub type IgnoredFn = Arc<dyn Fn() -> Arc<HashSet<String>> + Send + Sync>;
 
@@ -54,8 +56,19 @@ pub struct Watcher {
     tasks: Vec<JoinHandle<()>>,
 }
 
+/// What changed while the watch settled.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Dirty {
+    /// Git metadata moved (HEAD, refs, the index), or too many paths to list: anything may have changed.
+    Meta,
+    /// Only these worktree paths, absolute, none of them known to be ignored. A new path may still
+    /// match an ignore rule: `ignored` lists the paths that existed when it was taken.
+    Paths(Vec<PathBuf>),
+}
+
 enum Signal {
-    Changed,
+    Meta,
+    Path(PathBuf),
     /// A directory appeared that a per-directory backend must start watching.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     NewDir(PathBuf),
@@ -66,7 +79,7 @@ impl Watcher {
     pub async fn start(
         target: WatchTarget,
         debounce: Duration,
-        on_dirty: impl Fn() + Send + Sync + 'static,
+        on_dirty: impl Fn(Dirty) + Send + Sync + 'static,
     ) -> anyhow::Result<Self> {
         let (tx, mut rx) = mpsc::unbounded_channel::<Signal>();
         let target = Arc::new(target);
@@ -84,16 +97,19 @@ impl Watcher {
         let (native_for_dirs, target_for_dirs) = (native.clone(), target.clone());
         let debounced = tokio::spawn(async move {
             while let Some(signal) = rx.recv().await {
-                handle(signal, &native_for_dirs, &target_for_dirs);
+                let mut settled = Settled::default();
+                settled.add(signal, &native_for_dirs, &target_for_dirs);
                 // Each further signal restarts the quiet period.
                 loop {
                     match tokio::time::timeout(debounce, rx.recv()).await {
-                        Ok(Some(signal)) => handle(signal, &native_for_dirs, &target_for_dirs),
+                        Ok(Some(signal)) => settled.add(signal, &native_for_dirs, &target_for_dirs),
                         Ok(None) => return,
                         Err(_) => break,
                     }
                 }
-                on_dirty();
+                if let Some(dirty) = settled.dirty() {
+                    on_dirty(dirty);
+                }
             }
         });
         Ok(Self { _native: native, tasks: vec![meta, debounced] })
@@ -114,13 +130,44 @@ impl Drop for Watcher {
     }
 }
 
-/// A new directory's subtree gets its watches off the runtime, like the initial walk: a checkout
-/// can create thousands at once.
-fn handle(signal: Signal, native: &Option<Arc<Mutex<RecommendedWatcher>>>, target: &Arc<WatchTarget>) {
-    let Signal::NewDir(dir) = signal else { return };
-    if let (Some(native), WatchTarget::Worktree { root, .. }) = (native, &**target) {
-        let (native, target, root) = (native.clone(), target.clone(), root.clone());
-        tokio::task::spawn_blocking(move || watch_dirs(&mut native.lock().unwrap(), &target, &root, &dir));
+/// The signals of one quiet period, folded into what it reports.
+#[derive(Default)]
+struct Settled {
+    meta: bool,
+    paths: BTreeSet<PathBuf>,
+}
+
+impl Settled {
+    /// A new directory's subtree gets its watches off the runtime, like the initial walk: a checkout
+    /// can create thousands at once.
+    fn add(&mut self, signal: Signal, native: &Option<Arc<Mutex<RecommendedWatcher>>>, target: &Arc<WatchTarget>) {
+        match signal {
+            Signal::Meta => self.meta = true,
+            Signal::Path(path) => {
+                if !self.meta && self.paths.len() < MAX_PATHS {
+                    self.paths.insert(path);
+                } else {
+                    self.meta = true;
+                }
+            }
+            Signal::NewDir(dir) => {
+                if let (Some(native), WatchTarget::Worktree { root, .. }) = (native, &**target) {
+                    let (native, target, root) = (native.clone(), target.clone(), root.clone());
+                    tokio::task::spawn_blocking(move || watch_dirs(&mut native.lock().unwrap(), &target, &root, &dir));
+                }
+            }
+        }
+    }
+
+    /// None when the period only registered watches.
+    fn dirty(self) -> Option<Dirty> {
+        if self.meta {
+            Some(Dirty::Meta)
+        } else if self.paths.is_empty() {
+            None
+        } else {
+            Some(Dirty::Paths(self.paths.into_iter().collect()))
+        }
     }
 }
 
@@ -142,7 +189,7 @@ fn watch_worktree(
             if cfg!(target_os = "linux") && matches!(event.kind, EventKind::Create(_)) && path.is_dir() {
                 let _ = tx.send(Signal::NewDir(path.clone()));
             }
-            let _ = tx.send(Signal::Changed);
+            let _ = tx.send(Signal::Path(path.clone()));
         }
     })?;
     if cfg!(target_os = "linux") {
@@ -235,7 +282,7 @@ async fn poll_meta(paths: Vec<PathBuf>, tx: mpsc::UnboundedSender<Signal>) -> Jo
             tokio::time::sleep(META_POLL).await;
             let scan = paths.clone();
             let Ok(now) = tokio::task::spawn_blocking(move || fingerprint(&scan)).await else { return };
-            if now != last && tx.send(Signal::Changed).is_err() {
+            if now != last && tx.send(Signal::Meta).is_err() {
                 return;
             }
             last = now;

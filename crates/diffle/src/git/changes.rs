@@ -29,14 +29,16 @@ impl GitRepo {
         Ok(split_z(&self.exec(&args, ExecOptions::default()).await?))
     }
 
-    /// Paths git ignores, from a candidate list.
+    /// Paths from a candidate list that an ignore rule matches, whether or not they are tracked.
+    /// Without `--no-index` git scans the whole index for every path: seconds in a large repository.
     pub async fn ignored(&self, paths: &[String]) -> Result<HashSet<String>, GitError> {
         if paths.is_empty() {
             return Ok(HashSet::new());
         }
         let input = paths.join("\0");
         let opts = ExecOptions { input: Some(input.as_bytes()), ok_codes: &[0, 1], ..Default::default() };
-        Ok(split_z(&self.exec(&["check-ignore", "-z", "--stdin"], opts).await?).into_iter().collect())
+        let args = ["check-ignore", "--no-index", "-z", "--stdin"];
+        Ok(split_z(&self.exec(&args, opts).await?).into_iter().collect())
     }
 
     /// Boolean value of a gitattribute per path: `attr` or `attr=true` reads true, `-attr` or

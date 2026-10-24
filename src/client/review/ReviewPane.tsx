@@ -41,6 +41,7 @@ import { SymbolMenu } from '@/client/lsp/SymbolMenu.js';
 import { SymbolPicker } from '@/client/lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '@/client/lsp/target.js';
 import {
+  changedFile,
   draftRange,
   imageSides,
   type ImageSides,
@@ -1013,7 +1014,7 @@ export function ReviewPane() {
 /** The file view's header: the path, its change stats, and the note on files outside the repository. */
 function FileViewBar({ path }: { path: string }) {
   const external = useStore((s) => s.fileView?.external ?? false);
-  const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
+  const file = useStore((s) => changedFile(s.snapshot, path));
   return (
     <div className="flex items-center gap-3 border-b border-b-border bg-hover px-3 py-1.5 text-[0.75rem]">
       <span className="min-w-0 flex-1 truncate font-mono">
@@ -1176,7 +1177,7 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
     observer.observe(element);
     return () => observer.disconnect();
   }, [id, resizeHeader, localSearch]);
-  const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
+  const file = useStore((s) => changedFile(s.snapshot, path));
   return (
     // `data-path` names the file for tests and scripts; the visible title splits it into styled parts.
     <div ref={ref} data-path={path}>
@@ -1233,7 +1234,7 @@ function CopyPathButton({ path }: { path: string }) {
 }
 
 function FileHeaderMeta({ path }: { path: string }) {
-  const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
+  const file = useStore((s) => changedFile(s.snapshot, path));
   const active = useStore((s) => s.activePath === path);
   const ref = useRef<HTMLSpanElement | null>(null);
   // The header lives in the viewer's shadow DOM; flag its host so the injected CSS can tint the active file.

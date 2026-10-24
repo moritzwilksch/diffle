@@ -417,6 +417,39 @@ async fn refreshes_the_worktree_snapshot_when_only_the_index_or_head_changed() {
 }
 
 #[tokio::test]
+async fn a_new_file_git_ignores_does_not_refresh_the_worktree_snapshot() {
+    let t = TestRepo::new();
+    t.write(".gitignore", "*.o\nout/\n");
+    t.write("a.c", "a\n");
+    t.commit("base");
+    let repo = Arc::new(t.open().await);
+    let (s, _) = session(&repo, true, 3, FollowRefs::Off);
+    let published = Arc::new(Mutex::new(0));
+    let count = published.clone();
+    s.on_snapshot(move |_| *count.lock().unwrap() += 1);
+    let first = s.start(s.resolve(EnterRequest::Working).await.unwrap()).await.unwrap();
+    let start = *published.lock().unwrap();
+
+    // Build artifacts that did not exist when the watch began: ignored by rule, not by a listed path.
+    t.write("a.o", "obj\n");
+    t.write("out/deep/b.o", "obj\n");
+    // And a temporary file that comes and goes within the burst, as an archiver's does.
+    t.write("stTmp123", "tmp\n");
+    std::fs::remove_file(t.path.join("stTmp123")).unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert_eq!(*published.lock().unwrap(), start, "a build artifact refreshed the review");
+
+    // A source file written in the same burst as an artifact still refreshes.
+    t.write("c.o", "obj\n");
+    t.write("c.c", "c\n");
+    let current = async || s.snapshotter().unwrap().current().await.unwrap();
+    eventually("the new source file", async || current().await.changed.iter().any(|f| f.path == "c.c")).await;
+    assert!(current().await.version > first.version);
+    assert!(current().await.changed.iter().all(|f| !f.path.ends_with(".o")));
+    s.close().await;
+}
+
+#[tokio::test]
 async fn follows_moved_refs_live_when_configured_recording_each_state_as_an_iteration() {
     let t = TestRepo::new();
     t.write("a.txt", "a\n");

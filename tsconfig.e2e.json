@@ -3,10 +3,12 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
+  "exclude": ["test/client"],
   "include": [
     "test/e2e",
     "scripts/screenshot.ts",
     "scripts/record-videos.ts",
+    "scripts/bench",
     "test/fixture",
     "test/tmp.ts",
     "src/shared",

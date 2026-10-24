@@ -37,9 +37,22 @@ export function pathFromItemId(id: string): string {
   return id.replace(/^(diff|file):/, '').replace(/@\d+$/, '');
 }
 
+const changedIndex = new WeakMap<Snapshot, Map<string, ChangedFile>>();
+
+/** The changed file at `path`, if any. Indexed once per snapshot: a review can change tens of thousands of files. */
+export function changedFile(snapshot: Snapshot | null | undefined, path: string): ChangedFile | undefined {
+  if (!snapshot) return undefined;
+  let index = changedIndex.get(snapshot);
+  if (!index) {
+    index = new Map(snapshot.changed.map((f) => [f.path, f]));
+    changedIndex.set(snapshot, index);
+  }
+  return index.get(path);
+}
+
 /** The id of the item that shows `path` right now: its whole-file item while the file view is open on it, else its diff. */
 export function itemIdOf(state: Pick<ReviewState, 'snapshot' | 'gens' | 'fileView'>, path: string): string {
-  const changed = state.fileView?.path !== path && (state.snapshot?.changed.some((f) => f.path === path) ?? false);
+  const changed = state.fileView?.path !== path && changedFile(state.snapshot, path) != null;
   return itemId(changed, path, state.gens[path] ?? 0);
 }
 
@@ -87,9 +100,17 @@ export function patchBatches(
   return batches;
 }
 
+// Sorted once per snapshot: every store commit rebuilds the item list in this order.
+const treeOrder = new WeakMap<Snapshot, string[]>();
+
 /** Changed files in the order the file tree pane shows them: the order the review pane and the cursor share. */
-export function orderedPaths(snapshot: Snapshot): string[] {
-  return snapshot.changed.map((f) => f.path).sort(compareTreeOrder);
+export function orderedPaths(snapshot: Snapshot): readonly string[] {
+  let order = treeOrder.get(snapshot);
+  if (!order) {
+    order = snapshot.changed.map((f) => f.path).sort(compareTreeOrder);
+    treeOrder.set(snapshot, order);
+  }
+  return order;
 }
 
 /** The first changed file after `path` in tree order that `accept` admits, or null when none follows. */
@@ -216,7 +237,7 @@ export function isCollapsed(
 ): boolean {
   const explicit = state.collapsed[path];
   if (explicit != null) return explicit;
-  const f = state.snapshot?.changed.find((x) => x.path === path);
+  const f = changedFile(state.snapshot, path);
   return f ? isViewed(state, f) || f.generated : false;
 }
 

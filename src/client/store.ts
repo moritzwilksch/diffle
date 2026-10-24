@@ -47,6 +47,7 @@ import { isToken, lspTarget, type TokenTarget } from './lsp/target.js';
 import { blocksSymbol } from './lsp/syntax.js';
 import type { ExportOutcome, ModePane } from './model.js';
 import {
+  changedFile,
   composerKey,
   canJumpBack,
   canJumpForward,
@@ -2180,7 +2181,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     async toggleViewedAtCursor() {
       const path = get().activePath;
-      const f = path ? get().snapshot?.changed.find((x) => x.path === path) : undefined;
+      const f = path ? changedFile(get().snapshot, path) : undefined;
       if (!path || !f) return;
       const viewed = !isViewed(get(), f);
       // setViewed flips the mark before its first await, so the cursor moves on without
@@ -2664,7 +2665,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     async setViewed(path, viewed) {
-      const f = get().snapshot?.changed.find((x) => x.path === path);
+      const f = changedFile(get().snapshot, path);
       if (!f) return;
       // Optimistic: flip locally, then persist. Older marks for the path stay so
       // `restale` can still be derived until the server answers.

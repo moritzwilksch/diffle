@@ -1,6 +1,6 @@
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
 import { useMemo } from 'react';
-import { countViewed, filesUnder, isCollapsed, isViewed } from '@/client/model.js';
+import { changedFile, countViewed, filesUnder, isCollapsed, isViewed } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 
@@ -53,7 +53,7 @@ function DirectoryMenu({ path, close }: { path: string; close: () => void }) {
 }
 
 function FileMenu({ path, close }: { path: string; close: () => void }) {
-  const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
+  const file = useStore((s) => changedFile(s.snapshot, path));
   const viewed = useStore((s) => (file ? isViewed(s, file) : false));
   const collapsed = useStore((s) => isCollapsed(s, path));
   const setViewed = useStore((s) => s.setViewed);

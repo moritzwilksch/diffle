@@ -1,12 +1,12 @@
 mod common;
 
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use common::TestRepo;
-use diffle::watcher::{IgnoredFn, WatchTarget, Watcher};
+use diffle::watcher::{Dirty, IgnoredFn, WatchTarget, Watcher};
 
 const DEBOUNCE: Duration = Duration::from_millis(150);
 
@@ -22,7 +22,7 @@ fn repo() -> TestRepo {
 async fn start(target: WatchTarget) -> (Watcher, Arc<AtomicUsize>) {
     let dirty = Arc::new(AtomicUsize::new(0));
     let count = dirty.clone();
-    let watcher = Watcher::start(target, DEBOUNCE, move || {
+    let watcher = Watcher::start(target, DEBOUNCE, move |_| {
         count.fetch_add(1, Ordering::SeqCst);
     })
     .await
@@ -73,6 +73,31 @@ async fn a_worktree_edit_signals_once_and_an_ignored_one_not_at_all() {
     settle().await;
     t.write("src/deep/new.txt", "m\n");
     changed_from(&dirty, after).await;
+    watcher.close().await;
+}
+
+#[tokio::test]
+async fn reports_the_settled_worktree_paths_or_that_git_metadata_moved() {
+    let t = repo();
+    let seen: Arc<Mutex<Vec<Dirty>>> = Arc::default();
+    let record = seen.clone();
+    let watcher = Watcher::start(worktree(&t), DEBOUNCE, move |d| record.lock().unwrap().push(d)).await.unwrap();
+    settle().await;
+    seen.lock().unwrap().clear();
+    t.write("a.txt", "b\n");
+    t.write("new.txt", "n\n");
+    t.write("ignored.txt", "i\n");
+    settle().await;
+    let names = |d: &Dirty| match d {
+        Dirty::Paths(paths) => paths.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect(),
+        Dirty::Meta => vec!["<meta>".to_owned()],
+    };
+    let reported: Vec<Vec<String>> = seen.lock().unwrap().iter().map(names).collect();
+    assert_eq!(reported, [["a.txt", "new.txt"]], "one settle naming the written, not the ignored, paths");
+    seen.lock().unwrap().clear();
+    t.git(&["add", "a.txt"]);
+    settle().await;
+    assert_eq!(*seen.lock().unwrap(), [Dirty::Meta], "staging moves the index");
     watcher.close().await;
 }
 

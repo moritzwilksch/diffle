@@ -15,5 +15,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src/shared", "test", "scripts", "vite.config.ts"],
-  "exclude": ["test/client", "test/e2e", "scripts/screenshot.ts", "scripts/record-videos.ts"]
+  "exclude": ["test/client", "test/e2e", "scripts/screenshot.ts", "scripts/record-videos.ts", "scripts/bench"]
 }
