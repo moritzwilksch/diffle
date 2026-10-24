@@ -61,6 +61,11 @@ export function graphKeys(e: KeyboardEvent): boolean {
     case '/':
       openFind();
       return true;
+    case 'n':
+    case 'N':
+      if (graph.find == null) return false;
+      graph.stepFind(e.key === 'n' ? 1 : -1);
+      return true;
     case 'z':
       // `zz` does what a double-click does: frames the selection with its links, else fits the graph.
       if (e.repeat) return true;

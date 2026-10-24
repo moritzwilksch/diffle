@@ -82,7 +82,7 @@ export const COLUMNS: HelpSection[][] = [
         ['h / j / k / l', 'select the next symbol left / down / up / right'],
         ['Enter', 'open the selected symbol in the diff'],
         ['zz  double-click', 'frame the selection and its links, or fit the graph'],
-        ['/  Ctrl+F', 'find a box by name; Enter / Shift+Enter: next / previous'],
+        ['/  Ctrl+F', 'find a box by name; Enter, then n / N between matches'],
         ['s / d / T', 'toggle symbol nodes / dependents / tests'],
         ['0  + / -', 'fit the graph / zoom in / out'],
         ['scroll / pinch', 'pan / zoom the graph'],

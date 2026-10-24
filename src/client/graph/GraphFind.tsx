@@ -3,8 +3,9 @@ import { Button } from '@/client/ui/Button.js';
 import { findMatches, useGraph } from './state.js';
 
 /**
- * The graph's find, top left over the canvas while open (`/` or Ctrl/⌘+F): it matches box names,
- * and Enter / Shift+Enter step through the matches, selecting each. Escape closes it.
+ * The graph's find, top left over the canvas while open (`/` or Ctrl/⌘+F): it matches box names as
+ * typed, selecting the first. Enter hands the keys back to the graph, where n / N step through the
+ * matches, as they do through a search in the diff. Escape closes it.
  */
 export function GraphFind() {
   const find = useGraph((s) => s.find);
@@ -27,9 +28,10 @@ export function GraphFind() {
         onKeyDown={(e) => {
           if (e.key !== 'Enter') return;
           e.preventDefault();
-          graph.stepFind(e.shiftKey ? -1 : 1);
+          if (matches.length && at < 0) graph.stepFind(1);
+          e.currentTarget.blur();
         }}
-        placeholder="Find a box"
+        placeholder="Find a box… (Enter, then n / N)"
         aria-label="Find in the graph"
         className="w-44 border-0 bg-transparent px-1 py-1 text-[0.8125rem] text-foreground outline-none placeholder:text-muted"
       />
@@ -41,7 +43,7 @@ export function GraphFind() {
         icon
         disabled={!matches.length}
         onClick={() => graph.stepFind(-1)}
-        title="Previous (Shift+Enter)"
+        title="Previous (N)"
         aria-label="Previous match"
       >
         <ChevronUp size="0.875rem" />
@@ -51,7 +53,7 @@ export function GraphFind() {
         icon
         disabled={!matches.length}
         onClick={() => graph.stepFind(1)}
-        title="Next (Enter)"
+        title="Next (n)"
         aria-label="Next match"
       >
         <ChevronDown size="0.875rem" />
