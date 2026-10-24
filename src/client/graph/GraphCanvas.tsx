@@ -50,7 +50,11 @@ export function GraphCanvas({
     if (!el) return;
     const [w, h] = [placed.width + 2 * MARGIN, placed.height + 2 * MARGIN + HEAD];
     const k = Math.min(1.25, el.clientWidth / w, el.clientHeight / h);
-    setView({ k, x: (el.clientWidth - w * k) / 2 + MARGIN * k, y: (el.clientHeight - h * k) / 2 + (MARGIN + HEAD) * k });
+    setView({
+      k,
+      x: (el.clientWidth - w * k) / 2 + MARGIN * k,
+      y: (el.clientHeight - h * k) / 2 + (MARGIN + HEAD) * k,
+    });
   };
   useEffect(fit, [placed]);
 
@@ -105,13 +109,27 @@ export function GraphCanvas({
           <marker id="graph-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
             <path d="M0,0.5 L7.5,4 L0,7.5 z" fill="var(--fg-2)" />
           </marker>
-          <marker id="graph-arrow-lit" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <marker
+            id="graph-arrow-lit"
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
             <path d="M0,0.5 L7.5,4 L0,7.5 z" fill="var(--accent)" />
           </marker>
         </defs>
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
           {placed.columns.map((c, i) => (
-            <text key={i} x={c.x + c.w / 2} y={-HEAD + 6} textAnchor="middle" className="fill-muted font-sans text-[11px]">
+            <text
+              key={i}
+              x={c.x + c.w / 2}
+              y={-HEAD + 6}
+              textAnchor="middle"
+              className="fill-muted font-sans text-[11px]"
+            >
               {i === 0 ? 'entry' : i === placed.columns.length - 1 ? 'core' : ''}
             </text>
           ))}
@@ -124,7 +142,9 @@ export function GraphCanvas({
             <Cluster key={`${c.path}@${c.column}@${c.y}`} cluster={c} nodes={placed.nodes} lit={lit} />
           ))}
           {placed.edges.map(({ edge, d, back }) => {
-            const on = lit ? lit.has(edge.from) && lit.has(edge.to) && (edge.from === selected || edge.to === selected) : false;
+            const on = lit
+              ? lit.has(edge.from) && lit.has(edge.to) && (edge.from === selected || edge.to === selected)
+              : false;
             return (
               <path
                 key={`${edge.from}>${edge.to}`}
@@ -139,7 +159,13 @@ export function GraphCanvas({
             );
           })}
           {placed.nodes.map((p) => (
-            <Node key={p.node.id} placed={p} clustered={clustered} selected={p.node.id === selected} opacity={dim(p.node.id)} />
+            <Node
+              key={p.node.id}
+              placed={p}
+              clustered={clustered}
+              selected={p.node.id === selected}
+              opacity={dim(p.node.id)}
+            />
           ))}
         </g>
       </svg>
@@ -183,7 +209,17 @@ function Cluster({ cluster, nodes, lit }: { cluster: PlacedCluster; nodes: Place
   );
 }
 
-function Node({ placed, clustered, selected, opacity }: { placed: PlacedNode; clustered: boolean; selected: boolean; opacity: number }) {
+function Node({
+  placed,
+  clustered,
+  selected,
+  opacity,
+}: {
+  placed: PlacedNode;
+  clustered: boolean;
+  selected: boolean;
+  opacity: number;
+}) {
   const { node, x, y, w, h } = placed;
   const { title, detail } = nodeLabel(node, clustered);
   const consumer = node.status === 'consumer';
@@ -202,7 +238,13 @@ function Node({ placed, clustered, selected, opacity }: { placed: PlacedNode; cl
         strokeWidth={selected ? 2 : consumer ? 1 : 1.5}
         strokeDasharray={consumer && !selected && !clustered ? '4 3' : undefined}
       />
-      <circle cx={x + 11} cy={y + 14} r={3.5} fill={KIND_FILL[kindGroup(node.kind)] ?? 'var(--fg-2)'} opacity={consumer ? 0.6 : 1} />
+      <circle
+        cx={x + 11}
+        cy={y + 14}
+        r={3.5}
+        fill={KIND_FILL[kindGroup(node.kind)] ?? 'var(--fg-2)'}
+        opacity={consumer ? 0.6 : 1}
+      />
       <text x={x + 20} y={y + 18} className={`font-mono text-[12px] ${consumer ? 'fill-muted' : 'fill-foreground'}`}>
         {clip(title, room)}
       </text>

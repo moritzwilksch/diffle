@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type Box, layout } from '@/client/graph/layout.js';
 import { byFile, rank } from '@/client/graph/rank.js';
+import { signatureOf } from '@/client/graph/useSignatures.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
 
 const node = (id: string, status: GraphNode['status'] = 'modified', path = `${id}.py`): GraphNode => ({
@@ -118,5 +119,14 @@ describe('layout', () => {
     // main uses get two columns on: its edge passes a waypoint, so it is two curve segments plus one across.
     const long = placed.edges.find((e) => e.edge.from === 'main' && e.edge.to === 'get')!;
     expect(long.d.match(/C/g)).toHaveLength(3);
+  });
+});
+
+describe('signatureOf', () => {
+  it('keeps the code blocks a hover opens with and drops the docs after them', () => {
+    const rust = '```rust\ndiffle::graph\n```\n\n```rust\npub fn link()\n```\n\n---\nLinks things.';
+    expect(signatureOf(rust)).toBe('```rust\ndiffle::graph\n```\n\n```rust\npub fn link()\n```');
+    expect(signatureOf('```python\ndef get(url: str)\n```\nGo to [str](x)')).toBe('```python\ndef get(url: str)\n```');
+    expect(signatureOf('plain text')).toBe('plain text');
   });
 });

@@ -33,10 +33,7 @@ export function GraphPage() {
     const graph = keepNodes(load.graph, (n) => (consumers || n.status !== 'consumer') && (tests || !isTest(n)));
     return files ? byFile(graph) : graph;
   }, [load, files, consumers, tests]);
-  const placed = useMemo(
-    () => shown && layout(shown, rank(shown), (n) => nodeSize(n, !files), !files),
-    [shown, files],
-  );
+  const placed = useMemo(() => shown && layout(shown, rank(shown), (n) => nodeSize(n, !files), !files), [shown, files]);
 
   const changed = shown?.nodes.filter((n) => n.status !== 'consumer').length ?? 0;
   return (
@@ -79,7 +76,7 @@ export function GraphPage() {
           )}
         </div>
         {shown && (
-          <aside className="w-80 shrink-0 overflow-y-auto border-l border-border">
+          <aside className="w-[28rem] shrink-0 overflow-y-auto border-l border-border">
             <GraphDetails graph={shown} selected={selected} />
           </aside>
         )}

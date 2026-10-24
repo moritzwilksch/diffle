@@ -141,10 +141,15 @@ export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Siz
         boxOf.set(b.members[0]!, { x: col.x, y: top.get(b)!, w: col.w, h: WAYPOINT_H });
         continue;
       }
-      if (b.path != null) clusters.push({ path: b.path, column: c, x: col.x, y: top.get(b)!, w: col.w, h: height.get(b)! });
+      if (b.path != null)
+        clusters.push({ path: b.path, column: c, x: col.x, y: top.get(b)!, w: col.w, h: height.get(b)! });
       for (const id of b.members) {
         const s = sizeOf.get(id)!;
-        const box = { x: col.x + (isCluster(b) ? CLUSTER_PAD : (col.w - s.w) / 2), y: top.get(b)! + offset.get(id)!, ...s };
+        const box = {
+          x: col.x + (isCluster(b) ? CLUSTER_PAD : (col.w - s.w) / 2),
+          y: top.get(b)! + offset.get(id)!,
+          ...s,
+        };
         boxOf.set(id, box);
         nodes.push({ node: nodeById.get(id)!, ...box });
       }

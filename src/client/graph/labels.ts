@@ -30,7 +30,9 @@ export function clip(text: string, max = MAX_CHARS): string {
 /** In file mode, or for a use from a file's top level, the node is the file itself. */
 export function nodeLabel(node: GraphNode, clustered: boolean): NodeLabel {
   if (node.kind === 1)
-    return clustered ? { title: 'top level', detail: 'module' } : { title: basename(node.path), detail: dirname(node.path) };
+    return clustered
+      ? { title: 'top level', detail: 'module' }
+      : { title: basename(node.path), detail: dirname(node.path) };
   const kind = KIND_LABEL[node.kind] ?? 'symbol';
   return { title: node.name, detail: node.container ? `${kind} · ${node.container}` : kind };
 }
