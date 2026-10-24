@@ -100,7 +100,8 @@ function Code({ signature, path, full = false }: { signature: Signature | undefi
     .filter(Boolean)
     .join('\n\n');
   return (
-    <div className="rounded-md border border-border bg-surface px-2 py-1 [&_pre]:break-all [&_pre]:whitespace-pre-wrap">
+    // `.markdown pre code` sets `white-space: pre`, so the wrap goes on the code, not the block.
+    <div className="hover-markdown rounded-md border border-border bg-surface px-2 py-1.5 [&_pre_code]:[overflow-wrap:anywhere] [&_pre_code]:whitespace-pre-wrap">
       <Markdown text={text} path={path} highlight />
     </div>
   );
