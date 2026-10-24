@@ -133,12 +133,9 @@ impl LspPool {
 
     /// Every server's hover for `pos`, owner first; with `owner_only`, the owner's alone.
     pub async fn hover(&self, pos: &LspPosition, owner_only: bool) -> Result<LspHoverResponse> {
-        if owner_only {
-            return self.owner_for(&pos.path)?.bridge.hover(pos).await;
-        }
         let servers = self.servers_for(&pos.path)?;
-        let asked = servers.iter().map(|s| s.bridge.hover(pos).boxed()).collect();
-        union(asked, merge_hovers, |r: &LspHoverResponse| r.contents.is_none(), |r| &mut r.inconclusive).await
+        let asked = servers.iter().take(if owner_only { 1 } else { usize::MAX }).map(|s| s.bridge.hover(pos).boxed());
+        union(asked.collect(), merge_hovers, |r: &LspHoverResponse| r.contents.is_none(), |r| &mut r.inconclusive).await
     }
 
     pub async fn occurrences(&self, pos: &LspPosition) -> Result<LspOccurrencesResponse> {
