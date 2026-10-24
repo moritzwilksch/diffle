@@ -18,8 +18,9 @@ export function toggleDirectoryViewed(dir: string) {
 
 const MENU =
   'fixed z-50 min-w-64 rounded-[0.625rem] border border-border bg-canvas p-1.5 shadow-[0_0.625rem_1.875rem_rgba(0,_0,_0,_0.18)]';
-/** The menu's distance from the viewport's edges. */
+/** The menu's distance from the viewport's edges, and from the pointer, as native menus keep. */
 const EDGE = 8;
+const GAP = 2;
 const MENU_ITEM =
   'grid min-h-8.5 w-full grid-cols-[1.125rem_1fr_auto_1.5rem] items-center gap-2.5 rounded-[0.4375rem] border-0 bg-transparent px-2.5 py-1.75 text-left font-sans text-[0.8125rem] leading-[1.3] text-foreground hover:bg-hover [&_kbd]:ml-1 [&_kbd]:justify-self-end [&_kbd]:text-muted [&>svg]:text-muted';
 
@@ -42,22 +43,44 @@ export function TreeMenu({
   return <FileMenu path={path} anchor={anchor} close={close} />;
 }
 
+/** Where the last right-click in the tree landed, and when: the menu opens there. */
+let pointer: { x: number; y: number; at: number } | null = null;
+/** A right-click this recent opened the menu; an older one was before a keyboard or button open. */
+const POINTER_MS = 500;
+
+/** Records right-clicks in `el` for the menu to open at; returns the cleanup. */
+export function trackMenuPointer(el: HTMLElement | null): (() => void) | undefined {
+  if (!el) return;
+  const record = (e: MouseEvent) => {
+    pointer = { x: e.clientX, y: e.clientY, at: performance.now() };
+  };
+  el.addEventListener('contextmenu', record, true);
+  return () => el.removeEventListener('contextmenu', record, true);
+}
+
 /**
- * Where the menu box goes: fixed under the anchor, so the sidebar's overflow cannot clip it, and kept
- * inside the viewport, left of the anchor near the right edge and above it near the bottom.
+ * Where the menu box goes, as a native context menu opens: its top-left corner just past the
+ * pointer, flipped to the pointer's left or above it where the viewport ends. Opened without a
+ * right-click, it hangs under its row. Fixed, so the sidebar's overflow cannot clip it.
  */
 function useFloating(anchor: ContextMenuAnchorRect) {
   const ref = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState({ left: anchor.left, top: anchor.bottom + 4 });
+  const [at] = useState(() =>
+    pointer && performance.now() - pointer.at < POINTER_MS
+      ? { x: pointer.x, y: pointer.y }
+      : { x: anchor.left, y: anchor.bottom },
+  );
+  const [style, setStyle] = useState({ left: at.x + GAP, top: at.y + GAP });
   useLayoutEffect(() => {
     const menu = ref.current?.getBoundingClientRect();
     if (!menu) return;
-    const below = anchor.bottom + 4 + menu.height <= innerHeight - EDGE;
+    const right = at.x + GAP + menu.width <= innerWidth - EDGE;
+    const below = at.y + GAP + menu.height <= innerHeight - EDGE;
     setStyle({
-      left: Math.max(EDGE, Math.min(anchor.left, innerWidth - EDGE - menu.width)),
-      top: below ? anchor.bottom + 4 : Math.max(EDGE, anchor.top - 4 - menu.height),
+      left: right ? at.x + GAP : Math.max(EDGE, at.x - GAP - menu.width),
+      top: below ? at.y + GAP : Math.max(EDGE, at.y - GAP - menu.height),
     });
-  }, [anchor]);
+  }, [at]);
   return { ref, style };
 }
 

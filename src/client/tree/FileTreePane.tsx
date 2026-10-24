@@ -15,7 +15,7 @@ import { directoryDecoration, rowDecoration } from './decoration.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
 import { pinLanes, TREE_CSS } from './treeCss.js';
-import { toggleDirectoryViewed, TreeMenu } from './TreeMenu.js';
+import { toggleDirectoryViewed, trackMenuPointer, TreeMenu } from './TreeMenu.js';
 
 type Scope = 'changed' | 'all';
 
@@ -181,6 +181,7 @@ export function FileTreePane() {
   }, []);
 
   useCutNameTitles(bodyRef);
+  useEffect(() => trackMenuPointer(bodyRef.current), []);
 
   useEffect(() => {
     const input = bodyRef.current?.firstElementChild?.shadowRoot?.querySelector<HTMLInputElement>(
