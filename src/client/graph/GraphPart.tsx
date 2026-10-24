@@ -92,7 +92,8 @@ export function GraphPart({
               d={d}
               fill="none"
               stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
-              strokeOpacity={lit && !on ? FADED_EDGE : on ? 0.95 : 0.5}
+              // Opacity, not stroke-opacity: the arrowhead marker fades only with the whole path.
+              opacity={lit && !on ? FADED_EDGE : on ? 0.95 : 0.5}
               strokeWidth={width(edge.lines.length)}
               strokeDasharray={back ? '4 3' : undefined}
               markerEnd={arrowHead(width(edge.lines.length), on)}
