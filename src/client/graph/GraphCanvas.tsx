@@ -1,11 +1,12 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasToolbar } from './CanvasToolbar.js';
+import { GraphFind } from './GraphFind.js';
 import { type EdgeLabel, GraphPart, type Lit } from './GraphPart.js';
 import { groupName, PartHeader } from './PartHeader.js';
 import { ArrowDefs } from './GraphShapes.js';
 import type { Box, PlacedNode } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
-import { useGraph, type View } from './state.js';
+import { findMatches, useGraph, type View } from './state.js';
 
 /** A press on the canvas, and what it landed on: a node, an arrow, or a part's header action. */
 interface Press {
@@ -38,8 +39,8 @@ const LINE_PX = 16;
 /** The most a double-click zooms in on a node and its neighbours. */
 const FRAME_ZOOM = 1.6;
 
-/** What the keys do to the mounted canvas: fit the graph, zoom about the centre. */
-export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {} };
+/** What the keys and the side panel do to the mounted canvas: fit, zoom about the centre, frame a node. */
+export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {}, frame: (_id: string) => {} };
 
 /**
  * The placed graph as SVG, panned by dragging and zoomed by the wheel. The selection, or the file
@@ -53,6 +54,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   const [hovered, setHovered] = useState<string | null>(null);
   const selected = useGraph((s) => s.selected);
   const focusPath = useGraph((s) => s.focusPath);
+  const find = useGraph((s) => s.find);
   const host = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<Viewport>({ x: 0, y: 0, k: 1 });
   // Pointer capture retargets the release to the host, so the press remembers which node it hit.
@@ -80,6 +82,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   useEffect(fit, [stacked]);
   useEffect(() => {
     canvasControl.fit = fit;
+    canvasControl.frame = frame;
     canvasControl.zoom = (factor) => {
       const el = host.current;
       if (el) zoomAt(el.clientWidth / 2, el.clientHeight / 2, factor, true);
@@ -107,6 +110,12 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
 
   const edges = useMemo(() => stacked.parts.flatMap((p) => p.placed.edges.map((e) => e.edge)), [stacked]);
   const lit = useMemo((): Lit | null => {
+    // While find has matches they stay lit, the current one (the selection) with its arrows.
+    const matches = findMatches(shown, find);
+    if (matches.length) {
+      const seeds = new Set(selected ? [selected] : []);
+      return { ids: new Set([...matches, ...seeds]), seeds, edge: null, marks: new Set(matches) };
+    }
     const arrow = selectedEdge ? edges.find((e) => edgeKey(e) === selectedEdge) : undefined;
     if (arrow)
       return { ids: new Set([arrow.from, arrow.to]), seeds: new Set([arrow.from, arrow.to]), edge: selectedEdge };
@@ -116,7 +125,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     const ids = new Set(seeds);
     for (const edge of edges) if (seeds.includes(edge.from) || seeds.includes(edge.to)) ids.add(edge.from).add(edge.to);
     return { ids, seeds: new Set(seeds), edge: null };
-  }, [stacked, edges, selected, selectedEdge, focusPath, hovered]);
+  }, [shown, find, stacked, edges, selected, selectedEdge, focusPath, hovered]);
   const labels = useMemo(() => (clustered ? null : edgeLabels(shown)), [shown, clustered]);
 
   // Two-finger scrolling pans and a pinch (a wheel with Ctrl, as browsers report it) zooms. React's
@@ -174,16 +183,20 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     else if (d.node != null || graph.selected || graph.selectedEdge) graph.select(d.node);
   };
   // A double-click frames a node with the nodes it links to; on the background it fits the graph.
+  // Selects a node and frames it with the nodes it links to.
+  const frame = (id: string) => {
+    const near = new Set([id]);
+    for (const edge of edges) if (edge.from === id || edge.to === id) near.add(edge.from).add(edge.to);
+    useGraph.setState({ selected: id, selectedEdge: null, focusPath: null });
+    fitBox(bounds(stacked.nodes.filter((p) => near.has(p.node.id))), FRAME_ZOOM);
+  };
   const onDoubleClick = () => {
     // Pointer capture retargets the double-click to the host as well; the press knows what it hit.
     const press = lastPress.current;
     if (press?.part != null) return;
     const id = press?.node ?? null;
     if (id == null) return fit();
-    const near = new Set([id]);
-    for (const edge of edges) if (edge.from === id || edge.to === id) near.add(edge.from).add(edge.to);
-    useGraph.setState({ selected: id, selectedEdge: null, focusPath: null });
-    fitBox(bounds(stacked.nodes.filter((p) => near.has(p.node.id))), FRAME_ZOOM);
+    frame(id);
   };
 
   return (
@@ -266,6 +279,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
         </svg>
       </div>
       {/* Beside the canvas, not in it: the canvas captures the pointer on press. */}
+      <GraphFind />
       <CanvasToolbar zoom={view.k} onZoom={(factor) => canvasControl.zoom(factor)} onFit={() => canvasControl.fit()} />
     </div>
   );

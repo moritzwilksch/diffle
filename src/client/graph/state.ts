@@ -38,6 +38,8 @@ export interface GraphState {
   hoveredEdge: string | null;
   /** A file the reader picked in the tree: its nodes stay lit and the view pans to them. */
   focusPath: string | null;
+  /** The find field's text while it is open; its matches are `findMatches(view, find)`. */
+  find: string | null;
   toggle(): void;
   close(): void;
   reload(): Promise<void>;
@@ -51,6 +53,12 @@ export interface GraphState {
   pick(target: { path: string; line: number }): Promise<void>;
   setFilter(filter: Filter, on: boolean): void;
   showOnly(part: string | null): void;
+  openFind(): void;
+  /** Searches for `query`, selecting its first match. */
+  setFind(query: string): void;
+  /** Selects the next match, or the previous one; both wrap around. */
+  stepFind(by: 1 | -1): void;
+  closeFind(): void;
 }
 
 /** The change graph view. It reads the review store and never the other way round. */
@@ -65,6 +73,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   selectedEdge: null,
   hoveredEdge: null,
   focusPath: null,
+  find: null,
   only: null,
 
   toggle() {
@@ -76,7 +85,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   },
 
   close() {
-    set({ open: false, focusPath: null, hoveredEdge: null });
+    set({ open: false, focusPath: null, hoveredEdge: null, find: null });
   },
 
   async reload() {
@@ -134,7 +143,42 @@ export const useGraph = create<GraphState>((set, get) => ({
     if (load.state !== 'ready') return;
     set({ only: part, view: derive(load.graph, get().filters, part) });
   },
+
+  openFind() {
+    if (get().find == null) set({ find: '' });
+  },
+
+  setFind(query) {
+    const first = findMatches(get().view, query)[0];
+    set({ find: query, ...(first ? { selected: first, selectedEdge: null, focusPath: null } : {}) });
+  },
+
+  stepFind(by) {
+    const matches = findMatches(get().view, get().find);
+    if (!matches.length) return;
+    const at = matches.indexOf(get().selected ?? '');
+    // Off the matches, the first step lands on the first or the last one.
+    const next = matches[at < 0 ? (by > 0 ? 0 : matches.length - 1) : (at + by + matches.length) % matches.length]!;
+    set({ selected: next, selectedEdge: null, focusPath: null });
+  },
+
+  closeFind() {
+    set({ find: null });
+  },
 }));
+
+/**
+ * The nodes whose name holds `query`, ignoring case (a file by its path), in reading order: top to
+ * bottom, then left to right. None for an empty query.
+ */
+export function findMatches(view: View | null, query: string | null): string[] {
+  const q = query?.trim().toLowerCase();
+  if (!view || !q) return [];
+  return view.stacked.nodes
+    .filter((p) => (p.node.kind === 1 ? p.node.path : p.node.name).toLowerCase().includes(q))
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((p) => p.node.id);
+}
 
 let watching = false;
 

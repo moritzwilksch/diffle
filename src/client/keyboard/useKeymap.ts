@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '@/client/clipboard.js';
 import { api } from '@/client/api.js';
-import { GRAPH_PASSES, graphKeys } from '@/client/graph/keys.js';
+import { GRAPH_PASSES, graphKeys, isGraphFind, openFind } from '@/client/graph/keys.js';
 import { useGraph } from '@/client/graph/state.js';
 import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '@/client/lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '@/client/model.js';
@@ -177,6 +177,12 @@ export function useKeymap(): void {
           clearPending();
           return;
         }
+        // An open find in the graph closes first, even from its own field.
+        if (useGraph.getState().open && useGraph.getState().find != null && !s.helpOpen && !s.modeMenuOpen) {
+          useGraph.getState().closeFind();
+          clearPending();
+          return;
+        }
         // Escape in the graph returns to the diff, unless a field or an open menu claims it first.
         if (useGraph.getState().open && !s.helpOpen && !s.modeMenuOpen && !isEditable(target)) {
           useGraph.getState().close();
@@ -209,6 +215,12 @@ export function useKeymap(): void {
         clearPending();
         if ([...e.key].length === 1 || e.key === 'Backspace') s.typeSearchInput(e.key);
         else if (e.key === 'Enter') void s.runSearch(s.search.input);
+        return;
+      }
+      if (!s.modeMenuOpen && !s.helpOpen && isGraphFind(e)) {
+        e.preventDefault();
+        clearPending();
+        openFind();
         return;
       }
       if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {

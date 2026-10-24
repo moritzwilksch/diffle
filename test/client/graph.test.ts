@@ -4,6 +4,7 @@ import { type Box, layout } from '@/client/graph/layout/layout.js';
 import { byFile, rank } from '@/client/graph/layout/rank.js';
 import { signatureOf } from '@/client/graph/details/useSignatures.js';
 import { groupName } from '@/client/graph/PartHeader.js';
+import { findMatches, type View } from '@/client/graph/state.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
 
 const node = (id: string, status: GraphNode['status'] = 'modified', path = `${id}.py`): GraphNode => ({
@@ -172,5 +173,22 @@ describe('groupName', () => {
     expect(groupName(hub, [hub, file('pkg/coreutils/a.py')], true)).toEqual({ folder: 'pkg' });
     expect(groupName(hub, [hub, file('main.py')], true)).toEqual({ hub });
     expect(groupName(hub, [hub, file('pkg/core/agent.py')], false)).toEqual({ hub });
+  });
+});
+
+describe('findMatches', () => {
+  const at = (n: GraphNode, x: number, y: number) => ({ node: n, x, y, w: 10, h: 10 });
+  const view = (...nodes: ReturnType<typeof at>[]) => ({ stacked: { nodes } }) as unknown as View;
+
+  it('matches box names ignoring case, a file by its path, in reading order', () => {
+    const v = view(
+      at(node('total_by_day'), 50, 100),
+      at(node('Total'), 0, 100),
+      at(node('subtotal'), 90, 0),
+      at({ ...node('x'), kind: 1, path: 'pkg/totals.py' }, 0, 200),
+      at(node('other'), 0, 0),
+    );
+    expect(findMatches(v, ' total ')).toEqual(['subtotal', 'Total', 'total_by_day', 'x']);
+    expect(findMatches(v, '')).toEqual([]);
   });
 });

@@ -13,6 +13,8 @@ export interface Lit {
   ids: Set<string>;
   seeds: Set<string>;
   edge: string | null;
+  /** Find's matches: drawn hinted, as the far end of a hovered details row is. */
+  marks?: Set<string>;
 }
 
 /** The symbols behind a file view's arrow, which its label names. */
@@ -106,7 +108,11 @@ export function GraphPart({
           placed={p}
           clustered={clustered}
           focus={
-            p.node.id === selected ? 'selected' : p.node.id === hot?.from || p.node.id === hot?.to ? 'hinted' : null
+            p.node.id === selected
+              ? 'selected'
+              : p.node.id === hot?.from || p.node.id === hot?.to || lit?.marks?.has(p.node.id)
+                ? 'hinted'
+                : null
           }
           opacity={opacity([p.node.id])}
           test={isTest(p.node)}
