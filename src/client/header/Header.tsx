@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { repoName } from '@/client/model.js';
+import { ViewSwitch } from '@/client/graph/ViewSwitch.js';
 import { useStore } from '@/client/store.js';
 import { nextTheme, type ThemeChoice } from '@/client/theme.js';
 import { CommitStepper } from './CommitStepper.js';
@@ -73,6 +74,7 @@ export function Header() {
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
+      <ViewSwitch />
       <SegmentedControl title="Diff layout (s)">
         <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')} aria-label="Split">
           <Columns2 size="0.875rem" /> <span className="max-xl:hidden">Split</span>

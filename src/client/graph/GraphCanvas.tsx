@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
-import { kindGroup } from '@/client/lsp/symbolKind.js';
-import type { GraphNode } from '@/shared/protocol.js';
-import { basename, clip, dirname, nodeLabel } from './labels.js';
-import { CLUSTER_HEADER, type Placed, type PlacedCluster, type PlacedNode } from './layout.js';
+import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
+import { ArrowDefs, Cluster, Node } from './GraphShapes.js';
+import type { Box, Placed, PlacedNode } from './layout.js';
+import { useGraph } from './state.js';
 
 interface View {
   x: number;
@@ -12,71 +11,88 @@ interface View {
 
 const MARGIN = 48;
 const HEAD = 28;
+const MAX_ZOOM = 3;
+const MIN_ZOOM = 0.15;
+const FIT_ZOOM = 1.25;
+const FADED = 0.18;
 
-const STATUS_STROKE: Record<GraphNode['status'], string> = {
-  added: 'var(--add)',
-  modified: 'var(--accent)',
-  consumer: 'var(--border)',
-};
-
-const KIND_FILL: Record<string, string> = {
-  type: 'var(--kind-type)',
-  callable: 'var(--kind-callable)',
-  value: 'var(--kind-value)',
-};
+/** What the keys do to the mounted canvas: fit the graph, zoom about the centre. */
+export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {} };
 
 /**
- * The placed graph as SVG, panned by dragging and zoomed by the wheel. Selecting a node keeps it,
- * its edges and its neighbours lit and fades the rest.
+ * The placed graph as SVG, panned by dragging and zoomed by the wheel. The selection, or the file
+ * focused from the tree, stays lit with its links and the rest fades. A double-click on a node
+ * jumps to it in the diff; on the background it fits the graph.
  */
-export function GraphCanvas({
-  placed,
-  clustered,
-  selected,
-  onSelect,
-}: {
-  placed: Placed;
-  clustered: boolean;
-  selected: string | null;
-  onSelect: (id: string | null) => void;
-}) {
+export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: boolean }) {
+  const selected = useGraph((s) => s.selected);
+  const focusPath = useGraph((s) => s.focusPath);
   const host = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   // Pointer capture retargets the release to the host, so the press remembers which node it hit.
   const drag = useRef<{ x: number; y: number; moved: boolean; node: string | null } | null>(null);
 
-  const fit = () => {
+  const fitBox = (box: Box, maxZoom: number) => {
     const el = host.current;
-    if (!el) return;
-    const [w, h] = [placed.width + 2 * MARGIN, placed.height + 2 * MARGIN + HEAD];
-    const k = Math.min(1.25, el.clientWidth / w, el.clientHeight / h);
+    if (!el || !el.clientWidth) return;
+    const [w, h] = [box.w + 2 * MARGIN, box.h + 2 * MARGIN + HEAD];
+    const k = Math.min(maxZoom, el.clientWidth / w, el.clientHeight / h);
     setView({
       k,
-      x: (el.clientWidth - w * k) / 2 + MARGIN * k,
-      y: (el.clientHeight - h * k) / 2 + (MARGIN + HEAD) * k,
+      x: (el.clientWidth - w * k) / 2 + (MARGIN - box.x) * k,
+      y: (el.clientHeight - h * k) / 2 + (MARGIN + HEAD - box.y) * k,
     });
   };
+  const zoomAt = (px: number, py: number, factor: number) =>
+    setView((v) => {
+      const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * factor));
+      return { k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k };
+    });
+  const fit = () => fitBox({ x: 0, y: 0, w: placed.width, h: placed.height }, FIT_ZOOM);
   useEffect(fit, [placed]);
+  useEffect(() => {
+    canvasControl.fit = fit;
+    canvasControl.zoom = (factor) => {
+      const el = host.current;
+      if (el) zoomAt(el.clientWidth / 2, el.clientHeight / 2, factor);
+    };
+  });
+
+  // A file picked in the tree: show its boxes whole.
+  useEffect(() => {
+    const boxes = placed.nodes.filter((p) => p.node.path === focusPath);
+    if (boxes.length) fitBox(bounds(boxes), 1);
+  }, [focusPath, placed]);
+  // A selection moved by the keys: bring it into view when it left it.
+  useEffect(() => {
+    const p = placed.nodes.find((n) => n.node.id === selected);
+    const el = host.current;
+    if (!p || !el) return;
+    setView((v) => {
+      const [left, top] = [p.x * v.k + v.x, p.y * v.k + v.y];
+      const inside = left >= 0 && top >= 0 && left + p.w * v.k <= el.clientWidth && top + p.h * v.k <= el.clientHeight;
+      if (inside) return v;
+      return { ...v, x: el.clientWidth / 2 - (p.x + p.w / 2) * v.k, y: el.clientHeight / 2 - (p.y + p.h / 2) * v.k };
+    });
+  }, [selected, placed]);
 
   const lit = useMemo(() => {
-    if (!selected) return null;
-    const ids = new Set([selected]);
+    const seeds = selected ? [selected] : placed.nodes.filter((p) => p.node.path === focusPath).map((p) => p.node.id);
+    if (!seeds.length) return null;
+    const ids = new Set(seeds);
     for (const { edge } of placed.edges)
-      if (edge.from === selected || edge.to === selected) ids.add(edge.from).add(edge.to);
-    return ids;
-  }, [placed, selected]);
+      if (seeds.includes(edge.from) || seeds.includes(edge.to)) ids.add(edge.from).add(edge.to);
+    return { ids, seeds: new Set(seeds) };
+  }, [placed, selected, focusPath]);
 
   const onWheel = (e: WheelEvent) => {
     const rect = host.current!.getBoundingClientRect();
-    const [px, py] = [e.clientX - rect.left, e.clientY - rect.top];
-    setView((v) => {
-      const k = Math.min(3, Math.max(0.15, v.k * Math.exp(-e.deltaY * 0.0015)));
-      return { k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k };
-    });
+    zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
   };
+  const nodeAt = (e: { target: EventTarget }) =>
+    (e.target as Element).closest('[data-node]')?.getAttribute('data-node') ?? null;
   const onPointerDown = (e: PointerEvent) => {
-    const node = (e.target as Element).closest('[data-node]')?.getAttribute('data-node') ?? null;
-    drag.current = { x: e.clientX, y: e.clientY, moved: false, node };
+    drag.current = { x: e.clientX, y: e.clientY, moved: false, node: nodeAt(e) };
     host.current!.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: PointerEvent) => {
@@ -90,10 +106,15 @@ export function GraphCanvas({
   const onPointerUp = () => {
     const d = drag.current;
     drag.current = null;
-    if (d && !d.moved) onSelect(d.node);
+    if (d && !d.moved) useGraph.getState().select(d.node);
+  };
+  const onDoubleClick = (e: MouseEvent) => {
+    const node = placed.nodes.find((p) => p.node.id === nodeAt(e))?.node;
+    if (node) useGraph.getState().pick({ path: node.path, line: node.line });
+    else fit();
   };
 
-  const dim = (id: string) => (lit && !lit.has(id) ? 0.18 : 1);
+  const opacity = (ids: string[]) => (lit && !ids.some((id) => lit.ids.has(id)) ? FADED : 1);
   return (
     <div
       ref={host}
@@ -102,25 +123,10 @@ export function GraphCanvas({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onDoubleClick={fit}
+      onDoubleClick={onDoubleClick}
     >
       <svg className="absolute inset-0 h-full w-full" role="img" aria-label="Change graph">
-        <defs>
-          <marker id="graph-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
-            <path d="M0,0.5 L7.5,4 L0,7.5 z" fill="var(--fg-2)" />
-          </marker>
-          <marker
-            id="graph-arrow-lit"
-            viewBox="0 0 8 8"
-            refX="7"
-            refY="4"
-            markerWidth="7"
-            markerHeight="7"
-            orient="auto"
-          >
-            <path d="M0,0.5 L7.5,4 L0,7.5 z" fill="var(--accent)" />
-          </marker>
-        </defs>
+        <ArrowDefs />
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
           {placed.columns.map((c, i) => (
             <text
@@ -138,13 +144,19 @@ export function GraphCanvas({
               No links to other changes or their users
             </text>
           )}
-          {placed.clusters.map((c) => (
-            <Cluster key={`${c.path}@${c.column}@${c.y}`} cluster={c} nodes={placed.nodes} lit={lit} />
-          ))}
+          {placed.clusters.map((c) => {
+            const members = placed.nodes.filter((n) => n.node.path === c.path && within(n, c));
+            return (
+              <Cluster
+                key={`${c.path}@${c.column}@${c.y}`}
+                cluster={c}
+                members={members}
+                opacity={opacity(members.map((n) => n.node.id)) === 1 ? 1 : 0.25}
+              />
+            );
+          })}
           {placed.edges.map(({ edge, d, back }) => {
-            const on = lit
-              ? lit.has(edge.from) && lit.has(edge.to) && (edge.from === selected || edge.to === selected)
-              : false;
+            const on = !!lit && (lit.seeds.has(edge.from) || lit.seeds.has(edge.to));
             return (
               <path
                 key={`${edge.from}>${edge.to}`}
@@ -164,7 +176,7 @@ export function GraphCanvas({
               placed={p}
               clustered={clustered}
               selected={p.node.id === selected}
-              opacity={dim(p.node.id)}
+              opacity={opacity([p.node.id])}
             />
           ))}
         </g>
@@ -173,92 +185,11 @@ export function GraphCanvas({
   );
 }
 
-function Cluster({ cluster, nodes, lit }: { cluster: PlacedCluster; nodes: PlacedNode[]; lit: Set<string> | null }) {
-  const inside = (n: PlacedNode) =>
-    n.x >= cluster.x && n.x < cluster.x + cluster.w && n.y >= cluster.y && n.y < cluster.y + cluster.h;
-  const members = nodes.filter((n) => n.node.path === cluster.path && inside(n));
-  const unchanged = members.every((n) => n.node.status === 'consumer');
-  const faded = lit && !members.some((n) => lit.has(n.node.id));
-  const dir = dirname(cluster.path);
-  const room = Math.floor((cluster.w - 20) / 6.6);
-  const name = clip(basename(cluster.path), room);
-  return (
-    <g opacity={faded ? 0.25 : 1}>
-      <title>{cluster.path}</title>
-      <rect
-        x={cluster.x}
-        y={cluster.y}
-        width={cluster.w}
-        height={cluster.h}
-        rx={9}
-        fill={unchanged ? 'transparent' : 'var(--bg-card)'}
-        stroke="var(--border)"
-        strokeDasharray={unchanged ? '5 4' : undefined}
-      />
-      <text x={cluster.x + 10} y={cluster.y + CLUSTER_HEADER / 2 + 4} className="font-sans text-[11.5px]">
-        <tspan className={unchanged ? 'fill-muted' : 'fill-foreground'} fontWeight={600}>
-          {name}
-        </tspan>
-        {dir && room - name.length > 4 && (
-          <tspan className="fill-muted" dx={6}>
-            {clip(dir, room - name.length - 2)}
-          </tspan>
-        )}
-      </text>
-    </g>
-  );
-}
+const within = (n: Box, c: Box) => n.x >= c.x && n.x < c.x + c.w && n.y >= c.y && n.y < c.y + c.h;
 
-function Node({
-  placed,
-  clustered,
-  selected,
-  opacity,
-}: {
-  placed: PlacedNode;
-  clustered: boolean;
-  selected: boolean;
-  opacity: number;
-}) {
-  const { node, x, y, w, h } = placed;
-  const { title, detail } = nodeLabel(node, clustered);
-  const consumer = node.status === 'consumer';
-  const room = Math.floor((w - 26) / 7.3);
-  return (
-    <g data-node={node.id} opacity={opacity} className="cursor-pointer">
-      <title>{`${node.path}:${node.line}`}</title>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={6}
-        fill={consumer ? 'var(--bg)' : 'var(--bg-2)'}
-        stroke={selected ? 'var(--fg)' : STATUS_STROKE[node.status]}
-        strokeWidth={selected ? 2 : consumer ? 1 : 1.5}
-        strokeDasharray={consumer && !selected && !clustered ? '4 3' : undefined}
-      />
-      <circle
-        cx={x + 11}
-        cy={y + 14}
-        r={3.5}
-        fill={KIND_FILL[kindGroup(node.kind)] ?? 'var(--fg-2)'}
-        opacity={consumer ? 0.6 : 1}
-      />
-      <text x={x + 20} y={y + 18} className={`font-mono text-[12px] ${consumer ? 'fill-muted' : 'fill-foreground'}`}>
-        {clip(title, room)}
-      </text>
-      <text x={x + 20} y={y + 32} className="fill-muted font-sans text-[10.5px]">
-        {clip(detail, Math.floor((w - 26) / 6.1))}
-      </text>
-      {node.moreConsumers ? (
-        <g>
-          <rect x={x - 34} y={y + h / 2 - 9} width={28} height={18} rx={9} fill="var(--bg-3)" />
-          <text x={x - 20} y={y + h / 2 + 4} textAnchor="middle" className="fill-muted font-sans text-[10.5px]">
-            +{node.moreConsumers}
-          </text>
-        </g>
-      ) : null}
-    </g>
-  );
+function bounds(boxes: PlacedNode[]): Box {
+  const [x, y] = [Math.min(...boxes.map((b) => b.x)), Math.min(...boxes.map((b) => b.y))];
+  const right = Math.max(...boxes.map((b) => b.x + b.w));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  return { x, y, w: right - x, h: bottom - y };
 }

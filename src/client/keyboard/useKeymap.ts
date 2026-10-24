@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '@/client/clipboard.js';
 import { api } from '@/client/api.js';
+import { GRAPH_PASSES, graphKeys } from '@/client/graph/keys.js';
+import { useGraph } from '@/client/graph/state.js';
 import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '@/client/lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
@@ -98,6 +100,7 @@ const KEYMAP: Record<string, Action> = {
   ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`i${n}`, (s: ReviewState) => s.pickIteration(n)])),
   r: (s) => s.reloadIfMoved(),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
+  M: () => useGraph.getState().toggle(),
 };
 
 /** The page's text selection, else the focused word (`w`), as a search query: one line only, escaped when regex search is on. */
@@ -171,6 +174,12 @@ export function useKeymap(): void {
         if (s.modePane && !s.helpOpen) {
           s.escape();
           if (target?.closest('#mode-picker')) focusModeEntry();
+          clearPending();
+          return;
+        }
+        // Escape in the graph returns to the diff, unless a field or an open menu claims it first.
+        if (useGraph.getState().open && !s.helpOpen && !s.modeMenuOpen && !isEditable(target)) {
+          useGraph.getState().close();
           clearPending();
           return;
         }
@@ -267,6 +276,15 @@ export function useKeymap(): void {
         return; // the tree owns every other key while focused
       }
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
+      // The graph owns the keys while it covers the diff, but for a few that act on the whole review.
+      if (useGraph.getState().open && !s.modeMenuOpen && !s.helpOpen) {
+        if (graphKeys(e)) {
+          e.preventDefault();
+          clearPending();
+          return;
+        }
+        if (!GRAPH_PASSES.has(e.key)) return;
+      }
       // The open compare menu owns its navigation keys wherever focus sits. A focused button and the
       // configuration pane keep native Enter, so Enter and Space activate the same control.
       if (s.modeMenuOpen && !s.helpOpen) {

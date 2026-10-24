@@ -76,6 +76,16 @@ export const COLUMNS: HelpSection[][] = [
       ],
     },
     {
+      title: 'Change graph (language server)',
+      rows: [
+        ['M', 'graph of changed symbols and their users; again: the diff'],
+        ['h / j / k / l', 'select the next symbol left / down / up / right'],
+        ['Enter  or  double-click', 'open the selected symbol in the diff'],
+        ['f / u / T', 'toggle file nodes / users / tests'],
+        ['0  + / -', 'fit the graph / zoom in / out'],
+      ],
+    },
+    {
       title: 'View',
       rows: [
         ['zz', 'scroll the current line to eye level'],

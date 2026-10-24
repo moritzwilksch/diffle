@@ -12,7 +12,8 @@ const MAX_CHARS = 36;
 // The box is sized from character counts: a monospace title, a small sans detail line.
 const TITLE_CHAR = 7.3;
 const DETAIL_CHAR = 6.1;
-const PAD_X = 30;
+// The kind icon's column on the left, and a margin on the right.
+const PAD_X = 36;
 export const NODE_H = 40;
 
 export function basename(path: string): string {
