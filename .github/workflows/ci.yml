@@ -67,18 +67,22 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
-      # Mounted at the workspace before checkout, so every path (and so every cache key) stays the same.
       - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 30GB
-          mount-path: ${{ github.workspace }}
           trusted-dev-drive: true
+      # The workspace becomes a junction into the dev drive before checkout, so every path (and so
+      # every cache key) stays the same. A volume mounted there directly breaks Node's scandir.
       - if: matrix.variant == 'devws'
+        name: Move the workspace onto the dev drive
         shell: pwsh
         run: |
-          fsutil devdrv query $env:GITHUB_WORKSPACE
-          Get-Item $env:GITHUB_WORKSPACE | Format-List FullName, LinkType, Target
+          $target = "$env:DEV_DRIVE\workspace"
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Remove-Item -Recurse -Force $env:GITHUB_WORKSPACE
+          New-Item -ItemType Junction -Path $env:GITHUB_WORKSPACE -Target $target | Format-List FullName, LinkType, Target
+          fsutil devdrv query $env:DEV_DRIVE
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       # The runner's system config converts line endings in every repository the tests create and commit to.
@@ -111,18 +115,22 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
-      # Mounted at the workspace before checkout, so every path (and so every cache key) stays the same.
       - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 30GB
-          mount-path: ${{ github.workspace }}
           trusted-dev-drive: true
+      # The workspace becomes a junction into the dev drive before checkout, so every path (and so
+      # every cache key) stays the same. A volume mounted there directly breaks Node's scandir.
       - if: matrix.variant == 'devws'
+        name: Move the workspace onto the dev drive
         shell: pwsh
         run: |
-          fsutil devdrv query $env:GITHUB_WORKSPACE
-          Get-Item $env:GITHUB_WORKSPACE | Format-List FullName, LinkType, Target
+          $target = "$env:DEV_DRIVE\workspace"
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Remove-Item -Recurse -Force $env:GITHUB_WORKSPACE
+          New-Item -ItemType Junction -Path $env:GITHUB_WORKSPACE -Target $target | Format-List FullName, LinkType, Target
+          fsutil devdrv query $env:DEV_DRIVE
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -208,18 +216,22 @@ jobs:
           try { Get-MpComputerStatus | Format-List RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected } catch { "Defender status unavailable: $_" }
           try { Get-MpPreference | Format-List ExclusionPath } catch { }
           "TEMP=$env:TEMP"
-      # Mounted at the workspace before checkout, so every path (and so every cache key) stays the same.
       - if: matrix.variant == 'devws'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 30GB
-          mount-path: ${{ github.workspace }}
           trusted-dev-drive: true
+      # The workspace becomes a junction into the dev drive before checkout, so every path (and so
+      # every cache key) stays the same. A volume mounted there directly breaks Node's scandir.
       - if: matrix.variant == 'devws'
+        name: Move the workspace onto the dev drive
         shell: pwsh
         run: |
-          fsutil devdrv query $env:GITHUB_WORKSPACE
-          Get-Item $env:GITHUB_WORKSPACE | Format-List FullName, LinkType, Target
+          $target = "$env:DEV_DRIVE\workspace"
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Remove-Item -Recurse -Force $env:GITHUB_WORKSPACE
+          New-Item -ItemType Junction -Path $env:GITHUB_WORKSPACE -Target $target | Format-List FullName, LinkType, Target
+          fsutil devdrv query $env:DEV_DRIVE
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
