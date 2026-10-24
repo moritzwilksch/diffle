@@ -107,9 +107,45 @@ jobs:
             npm publish "./$tarball" --access public --provenance
           done
 
+  # Publishes the crate, its client build included, through trusted publishing (OIDC). A version
+  # already on crates.io is skipped, so a rerun finishes what an earlier one left.
+  crates-io:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: cratesio
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          activate-environment: true
+      - name: Check whether this version is published
+        id: published
+        run: |
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -A 'diffle-release (github.com/moritzwilksch/diffle)' \
+            "https://crates.io/api/v1/crates/diffle/${GITHUB_REF_NAME#v}")
+          if [ "$status" = 200 ]; then
+            echo "diffle ${GITHUB_REF_NAME#v} is already published."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.published.outputs.skip != 'true'
+        run: pixi run package-crate
+      - if: steps.published.outputs.skip != 'true'
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        id: auth
+      # package-crate already compiled the package on its own.
+      - if: steps.published.outputs.skip != 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked --allow-dirty --no-verify -p diffle
+
   # Attaches the binaries, their checksums, and the installers to the tag's release.
   release:
-    needs: [build, npm]
+    needs: [build, npm, crates-io]
     runs-on: ubuntu-latest
     permissions:
       contents: write

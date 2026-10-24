@@ -105,11 +105,11 @@ test('a directory mark views every changed file under it, then un-views them', a
     'file-tree-container [data-item-type="folder"][data-item-path="scripts/"] [data-item-section="decoration"] > span',
   );
   const fileMark = page.locator(
-    'file-tree-container [data-item-path="scripts/build.bat"] [data-item-section="decoration"] > span > span:last-child',
+    'file-tree-container [data-item-path="scripts/build.bat"] [data-item-section="decoration"] > span > span:first-child',
   );
   await expect(mark).toHaveText('○');
   await fileMark.click();
-  await expect(mark).toHaveText('1/2○');
+  await expect(mark).toHaveText('○1/2');
   // A partly viewed directory completes; the click marks the files without folding the directory.
   await mark.click();
   await expect.poll(() => viewed(page, 'scripts/tally.sh')).toBe(true);

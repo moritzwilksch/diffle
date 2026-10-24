@@ -156,3 +156,8 @@ snapshot-report.html
 
 # pixi
 .pixi/
+
+# The client build the crate embeds, and the licence files scripts/package-crate.ts copies in
+/crates/diffle/client/
+/crates/diffle/LICENSE
+/crates/diffle/THIRD_PARTY_NOTICES.md

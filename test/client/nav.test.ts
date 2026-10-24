@@ -1,6 +1,6 @@
-import { parsePatchFiles } from '@pierre/diffs';
+import { parseDiffFromFile, parsePatchFiles } from '@pierre/diffs';
 import { describe, expect, it } from 'vitest';
-import { cursorFromSelection, diffRows, step, stepFile, type NavItem } from '@/client/keyboard/nav.js';
+import { cursorFromSelection, diffRows, renderedContext, step, stepFile, type NavItem } from '@/client/keyboard/nav.js';
 
 const patch = `diff --git a/f.txt b/f.txt
 --- a/f.txt
@@ -137,5 +137,50 @@ describe('diffRows with revealed context', () => {
   it('puts lines revealed past the last hunk at the end', () => {
     const rows = diffRows(fileDiff, [[33, 34]]);
     expect(rows.slice(-3).map((r) => r.line)).toEqual([32, 33, 34]);
+  });
+});
+
+describe('renderedContext', () => {
+  const lines = (n: number, changed: number[]) =>
+    Array.from({ length: n }, (_, i) => `line ${i + 1}${changed.includes(i + 1) ? ' changed' : ''}\n`).join('');
+  // Hunks 1–8 and 33–40 around changes at 3 and 38, five lines of context: lines 9–32 fold.
+  const full = parseDiffFromFile(
+    { name: 'a.txt', contents: lines(40, []) },
+    { name: 'a.txt', contents: lines(40, [3, 38]) },
+    { context: 5 },
+  );
+  const hunkLines = new Set(diffRows(full).map((r) => r.line));
+  const showing =
+    (...ranges: [number, number][]) =>
+    (line: number) =>
+      line >= 1 && line <= 40 && (hunkLines.has(line) || ranges.some(([a, b]) => line >= a && line <= b));
+
+  it('reports a separator expanded in full, and each end of one expanded part-way', () => {
+    expect(renderedContext(full, showing())).toEqual([]);
+    expect(renderedContext(full, showing([9, 32]))).toEqual([[9, 32]]);
+    expect(renderedContext(full, showing([9, 12], [25, 32]))).toEqual([
+      [9, 12],
+      [25, 32],
+    ]);
+  });
+
+  it('lets j walk a fully expanded separator line by line', () => {
+    const rows = diffRows(full, renderedContext(full, showing([9, 32])));
+    expect(rows.map((r) => r.line).filter((l, i, all) => all.indexOf(l) === i)).toEqual(
+      Array.from({ length: 40 }, (_, i) => i + 1),
+    );
+  });
+
+  it('bounds the gap after the last hunk by the file length', () => {
+    const early = parseDiffFromFile(
+      { name: 'b.txt', contents: lines(40, []) },
+      { name: 'b.txt', contents: lines(40, [3]) },
+      { context: 5 },
+    );
+    expect(renderedContext(early, (line) => line >= 1)).toEqual([[9, 40]]);
+  });
+
+  it('reports nothing for a partial diff, which the viewer calls renderable throughout', () => {
+    expect(renderedContext(fileDiff, () => true)).toEqual([]);
   });
 });

@@ -15,7 +15,8 @@ import { settle, type PageOptions } from './browser.js';
 export function baseCheckout(rev: string): string {
   const sha = quiet('git', ['rev-parse', '--verify', `${rev}^{commit}`]).trim();
   const dir = join(tmpdir(), 'diffle-base', sha);
-  if (existsSync(join(dir, 'dist/client/index.html'))) return dir;
+  // The directory appears only by the rename below, once its build is done.
+  if (existsSync(dir)) return dir;
   const staging = `${dir}.${process.pid}`;
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging, { recursive: true });
@@ -110,12 +111,14 @@ export async function newVideoPage(
  */
 export async function saveVideo(
   context: BrowserContext,
-  video: { path(): Promise<string> },
+  video: { saveAs(path: string): Promise<void> },
   webmPath: string,
 ): Promise<string> {
-  const recorded = await video.path();
   await context.close();
   await mkdir(dirname(webmPath), { recursive: true });
+  // The browser runs in a container, so the recording is copied out rather than read in place.
+  const recorded = `${webmPath}.vp8.webm`;
+  await video.saveAs(recorded);
   quiet('ffmpeg', [
     '-y',
     '-v',

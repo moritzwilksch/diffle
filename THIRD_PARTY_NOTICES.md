@@ -6,8 +6,8 @@ packages bundled into the browser client, and the Rust crates linked into the bi
 
 ## Fonts
 
-The client bundles these fonts in `dist/client/assets`. Each is licensed under the SIL Open Font
-License, Version 1.1, reproduced below.
+The client bundles these fonts in `crates/diffle/client/assets`. Each is licensed under the SIL
+Open Font License, Version 1.1, reproduced below.
 
 - Inter: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
 - JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
@@ -4612,7 +4612,7 @@ Apache License
 ### Apache License 2.0
 
 Used by:
-- diffle 0.3.1
+- diffle 0.3.3 (https://github.com/moritzwilksch/diffle)
 - aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
 - dunce 1.0.5 (https://gitlab.com/kornelski/dunce)
 - ryu 1.0.23 (https://github.com/dtolnay/ryu)

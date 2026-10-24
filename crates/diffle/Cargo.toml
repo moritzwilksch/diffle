@@ -1,12 +1,28 @@
 [package]
 name = "diffle"
 # Kept equal to package.json's version; `scripts/check-version.ts` enforces it and the release bumps both.
-version = "0.3.1"
+version = "0.3.3"
 description = "Local git diff reviewer in the browser with line comments exported as agent prompts"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-publish = false
+repository = "https://github.com/moritzwilksch/diffle"
+homepage = "https://diffle.app"
+readme = "../../README.md"
+keywords = ["git", "diff", "code-review", "review"]
+categories = ["command-line-utilities", "development-tools"]
+# The client build and the licence files are git-ignored: scripts/package-crate.ts builds and copies them in.
+include = ["/src/**/*.rs", "/build.rs", "/protocol.generated.json", "/client/**", "/LICENSE", "/THIRD_PARTY_NOTICES.md"]
+
+# `cargo binstall diffle` downloads the release archive rather than compiling; a target without one compiles.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/diffle-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
+bin-dir = "{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides]
+x86_64-pc-windows-msvc = { pkg-fmt = "zip" }
+aarch64-pc-windows-msvc = { pkg-fmt = "zip" }
 
 [dependencies]
 anstream = "1"

@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "diffle"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1416,7 +1416,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c93ead32f1aded3f2ce985c3af4b4492f403a3f0d433250362eb845732d74893"
 dependencies = [
  "bstr",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]

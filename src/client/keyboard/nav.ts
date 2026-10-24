@@ -29,8 +29,8 @@ export type LineRange = [start: number, end: number];
  * eye one line. Unified: context, then a block's deletions, then its additions.
  * Split: a deletion and an addition on the same visual line are one row, on the
  * new side; deletions beyond the additions stay reachable on the old side.
- * `revealed` adds the context lines the viewer expanded (via a jump into
- * collapsed context), so the cursor can walk them like any other row.
+ * `revealed` adds the context lines the viewer expanded, so the cursor can walk
+ * them like any other row.
  */
 export function diffRows(fileDiff: FileDiffMetadata, revealed: LineRange[] = [], style: DiffStyle = 'unified'): Row[] {
   const rows: Row[] = [];
@@ -66,6 +66,32 @@ export function diffRows(fileDiff: FileDiffMetadata, revealed: LineRange[] = [],
   }
   while (e < extra.length) rows.push({ side: 'additions', line: extra[e++]!, hunkStart: false });
   return rows;
+}
+
+/**
+ * New-side ranges between and around `fileDiff`'s hunks that `isRenderable` reports on screen:
+ * the context the viewer expanded, and gaps too short to collapse. Empty for a partial diff,
+ * which has no line count to bound its last gap.
+ */
+export function renderedContext(fileDiff: FileDiffMetadata, isRenderable: (line: number) => boolean): LineRange[] {
+  if (fileDiff.isPartial) return [];
+  const ranges: LineRange[] = [];
+  // Expansion grows a gap from its ends, so walking in from both ends finds every rendered line.
+  const probe = (start: number, end: number) => {
+    let lo = start;
+    while (lo <= end && isRenderable(lo)) lo++;
+    if (lo > start) ranges.push([start, lo - 1]);
+    let hi = end;
+    while (hi >= lo && isRenderable(hi)) hi--;
+    if (hi < end) ranges.push([hi + 1, end]);
+  };
+  let next = 1;
+  for (const h of fileDiff.hunks) {
+    probe(next, h.additionStart - 1);
+    next = h.additionStart + h.additionCount;
+  }
+  probe(next, fileDiff.additionLines.length);
+  return ranges;
 }
 
 /** Sorted new-side lines from `revealed` that no hunk already renders. */
