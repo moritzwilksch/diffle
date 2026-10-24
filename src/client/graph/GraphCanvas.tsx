@@ -298,7 +298,7 @@ function edgeLabels(view: View): Map<string, EdgeLabel> {
       weight.set(to.name, { ...w, n: w.n + e.lines.length });
     }
     const names = [...weight].sort((a, b) => b[1].n - a[1].n);
-    if (names.length) labels.set(key, { kind: names[0]![1].kind, names: names.map(([name]) => name) });
+    if (names.length) labels.set(key, { symbols: names.map(([name, { kind }]) => ({ name, kind })) });
   }
   return labels;
 }

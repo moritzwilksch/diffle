@@ -1,4 +1,5 @@
-import { KindIcon } from '@/client/lsp/symbolKind.js';
+import { Fragment } from 'react';
+import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import { isTest } from './filters.js';
 import { arrowHead, Cluster, Node } from './GraphShapes.js';
 import { useGraph } from './state.js';
@@ -17,10 +18,9 @@ export interface Lit {
   marks?: Set<string>;
 }
 
-/** The symbols behind a file view's arrow, which its label names. */
+/** The symbols behind a file view's arrow, which its label names, the most-used first. */
 export interface EdgeLabel {
-  kind: number;
-  names: string[];
+  symbols: { name: string; kind: number }[];
 }
 
 const FADED = 0.35;
@@ -159,19 +159,29 @@ function Pill({
 }) {
   return (
     <g data-edge={key} className="cursor-pointer">
-      {label.names.length > LABEL_NAMES && <title>{label.names.join(', ')}</title>}
+      {label.symbols.length > LABEL_NAMES && <title>{label.symbols.map((s) => s.name).join(', ')}</title>}
       <rect x={x} y={y} width={w} height={LABEL_H} rx={LABEL_H / 2} fill="var(--bg-2)" stroke="var(--border)" />
-      <KindIcon kind={label.kind} x={x + 7} y={y + 4} size={12} />
-      <text x={x + 23} y={y + 14} className="fill-foreground font-mono text-[11px]">
-        {text}
+      <KindIcon kind={label.symbols[0]!.kind} x={x + 7} y={y + 4} size={12} />
+      {/* `text` is what was measured; each name takes its kind's color, as in the boxes. */}
+      <text x={x + 23} y={y + 14} className="fill-foreground font-mono text-[11px]" aria-label={text}>
+        {label.symbols.slice(0, LABEL_NAMES).map((s, i) => (
+          <Fragment key={s.name}>
+            {i > 0 && ', '}
+            <tspan style={kindColor(s.kind) ? { fill: kindColor(s.kind) } : undefined}>{s.name}</tspan>
+          </Fragment>
+        ))}
+        {label.symbols.length > LABEL_NAMES && ` +${label.symbols.length - LABEL_NAMES}`}
       </text>
     </g>
   );
 }
 
 function pillText(label: EdgeLabel): string {
-  const shown = label.names.slice(0, LABEL_NAMES).join(', ');
-  const more = label.names.length - LABEL_NAMES;
+  const shown = label.symbols
+    .slice(0, LABEL_NAMES)
+    .map((s) => s.name)
+    .join(', ');
+  const more = label.symbols.length - LABEL_NAMES;
   return more > 0 ? `${shown} +${more}` : shown;
 }
 
