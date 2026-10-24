@@ -30,7 +30,7 @@
   --trees-git-added-color-override: var(--add);
   --trees-git-untracked-color-override: var(--add);
   --trees-git-modified-color-override: var(--accent);
-  --trees-git-renamed-color-override: var(--kind-type);
+  --trees-git-renamed-color-override: var(--kind-value);
   --trees-git-deleted-color-override: var(--del);
   --trees-git-ignored-color-override: var(--fg-2);
 }

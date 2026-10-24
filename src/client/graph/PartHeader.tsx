@@ -1,5 +1,5 @@
 import { Focus, Folder, Rows3 } from 'lucide-react';
-import { KindIcon } from '@/client/lsp/symbolKind.js';
+import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { PART_HEADER } from '@/client/graph/layout/components.js';
 
@@ -51,6 +51,7 @@ export function PartHeader({
   const hub = 'hub' in name ? name.hub : null;
   const title = 'hub' in name ? name.hub.name : 'folder' in name ? `${name.folder}/` : name.plain;
   const plain = 'plain' in name;
+  const hubColor = hub && kindColor(hub.kind);
   const iconX = hub ? AROUND_W : 0;
   const textX = plain ? 0 : iconX + 20;
   const countText = `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -71,7 +72,11 @@ export function PartHeader({
       )}
       {'folder' in name && <Folder x={0} y={top + 5} size={14} color="var(--fg-2)" />}
       <text x={textX} y={top + 17} className="font-sans text-[12px]">
-        <tspan className={`fill-foreground ${plain ? '' : 'font-mono text-[13px]'}`} fontWeight={600}>
+        <tspan
+          className={`fill-foreground ${plain ? '' : 'font-mono text-[13px]'}`}
+          style={hubColor ? { fill: hubColor } : undefined}
+          fontWeight={600}
+        >
           {title}
         </tspan>
         <tspan className="fill-muted" dx={10}>

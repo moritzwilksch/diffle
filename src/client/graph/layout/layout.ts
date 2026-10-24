@@ -240,7 +240,7 @@ function route(edges: GraphEdge[], routes: Route[], boxOf: Map<string, Box>): Pl
     if (points) return { edge, d: curve(points), along: alongCurve(points), back: false };
     const [from, to] = [boxOf.get(edge.from)!, boxOf.get(edge.to)!];
     const [x0, y0, x1, y1] = [mid(from), from.y + from.h, mid(to), to.y + to.h];
-    const d = `M${x0},${y0} C${x0},${y0 + BACK_BOW} ${x1},${y1 + BACK_BOW} ${x1},${y1}`;
+    const d = `M${x0},${y0} C${x0},${y0 + BACK_BOW} ${x1},${y1 + BACK_BOW + HEAD_RUN} ${x1},${y1 + HEAD_RUN} L${x1},${y1}`;
     return { edge, d, along: bezier([x0, y0], [x0, y0 + BACK_BOW], [x1, y1 + BACK_BOW], [x1, y1]), back: true };
   });
 }
@@ -287,13 +287,23 @@ function keepOrder(wanted: number[], space: number[]): number[] {
   return shifts.map((z, i) => z + before[i]!);
 }
 
-/** A smooth path through `points`, vertical where it leaves and enters each one. */
+/** The straight drop into the target box, at least the largest arrowhead's length. */
+const HEAD_RUN = 12;
+
+/**
+ * A smooth path through `points`, vertical where it leaves and enters each one. It ends in a
+ * straight drop, so the arrowhead sits on a straight stretch: a shallow curve that turned vertical
+ * only within the head's length would leave its side.
+ */
 function curve(points: [number, number][]): string {
   let d = `M${points[0]![0]},${points[0]![1]}`;
   for (let i = 1; i < points.length; i++) {
-    const [[x0, y0], [x1, y1]] = [points[i - 1]!, points[i]!];
+    const [[x0, y0], [x1, end]] = [points[i - 1]!, points[i]!];
+    const run = i === points.length - 1 ? Math.min(HEAD_RUN, (end - y0) / 3) : 0;
+    const y1 = end - run;
     const dy = (y1 - y0) / 2;
     d += ` C${x0},${y0 + dy} ${x1},${y1 - dy} ${x1},${y1}`;
+    if (run > 0) d += ` L${x1},${end}`;
   }
   return d;
 }

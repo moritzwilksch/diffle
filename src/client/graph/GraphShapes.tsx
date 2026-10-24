@@ -1,5 +1,5 @@
 import { FileCode2, Pencil, Plus } from 'lucide-react';
-import { KindIcon } from '@/client/lsp/symbolKind.js';
+import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { basename, clip, CODE_CHAR, dirname, KIND_CHAR, nodeLabel, SEPARATOR_W, TITLE_CHAR } from './labels.js';
 import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
@@ -42,10 +42,11 @@ export function Cluster({
         width={cluster.w}
         height={cluster.h}
         rx={9}
-        // A changed file is a tinted area under its symbol cards, no border; an unchanged one only
-        // dependents live in keeps the dashed outline that marks them, over the canvas without its dots.
-        fill={unchanged ? CANVAS_BG : 'color-mix(in srgb, var(--fg) 10%, var(--bg))'}
-        stroke={unchanged ? 'var(--border)' : 'none'}
+        // A changed file is a plain panel under its symbol cards, a hairline off the grey canvas; an
+        // unchanged one only dependents live in keeps the dashed outline that marks them, over the
+        // canvas without its dots.
+        fill={unchanged ? CANVAS_BG : 'var(--bg)'}
+        stroke={unchanged ? 'var(--border)' : 'color-mix(in srgb, var(--border) 70%, transparent)'}
         strokeDasharray={unchanged ? '5 4' : undefined}
       />
       <FileCode2 x={cluster.x + 9} y={cluster.y + 7} size={13} color="var(--fg-2)" />
@@ -96,6 +97,7 @@ export function Node({
   const codeRoom = w - 34 - (test ? 30 : 0) - kind.length * KIND_CHAR - (kind && code ? SEPARATOR_W : 0);
   const quiet = node.status === 'consumer' || test;
   const badge = STATUS_BADGE[node.status];
+  const nameColor = kindColor(node.kind);
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
       <rect
@@ -114,7 +116,13 @@ export function Node({
         strokeDasharray={node.status === 'consumer' && !clustered && !focus ? '4 3' : undefined}
       />
       <KindIcon kind={node.kind} x={x + 7} y={y + 7} size={14} opacity={quiet ? 0.6 : 1} />
-      <text x={x + 26} y={y + 18} className={`font-mono text-[12px] ${quiet ? 'fill-muted' : 'fill-foreground'}`}>
+      <text
+        x={x + 26}
+        y={y + 18}
+        className={`font-mono text-[12px] ${quiet ? 'fill-muted' : 'fill-foreground'}`}
+        // A quiet box keeps its name muted, as it keeps its icon faded.
+        style={quiet || !nameColor ? undefined : { fill: nameColor }}
+      >
         {clip(title, Math.floor((w - 56) / TITLE_CHAR))}
       </text>
       <text x={x + 26} y={y + 32} className="fill-muted font-sans text-[10.5px]">

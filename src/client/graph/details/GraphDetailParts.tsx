@@ -3,7 +3,7 @@ import { type ComponentProps, type ReactNode, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { FilePath } from '@/client/FilePath.js';
 import { Markdown } from '@/client/Markdown.js';
-import { KindIcon } from '@/client/lsp/symbolKind.js';
+import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { isTest } from '@/client/graph/filters.js';
 import { canvasControl } from '@/client/graph/GraphCanvas.js';
@@ -156,6 +156,7 @@ function NodeRow({ node }: { node: GraphNode }) {
 
 /** A symbol as the graph draws it: its kind's icon and colour, its name in monospace; a file as everywhere in diffle. */
 export function Name({ node, className }: { node: GraphNode; className?: string }) {
+  const color = kindColor(node.kind);
   if (node.kind === 1)
     return (
       <span className={twMerge(`inline-flex items-center gap-1.5 ${BODY}`, className)}>
@@ -166,7 +167,7 @@ export function Name({ node, className }: { node: GraphNode; className?: string 
   return (
     <span className={twMerge(`inline-flex items-center gap-1.5 font-mono ${BODY}`, className)}>
       <KindIcon kind={node.kind} size="0.875rem" className="shrink-0" />
-      {node.name}
+      <span style={color ? { color } : undefined}>{node.name}</span>
     </span>
   );
 }

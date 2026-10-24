@@ -70,10 +70,10 @@ const KIND_COLOR: Record<string, string> = {
   value: 'var(--kind-value)',
 };
 
-/**
- * An icon per SymbolKind, so a list or graph of symbols reads by shape before text, colored by
- * its `kindGroup` everywhere alike.
- */
+/** The color of a symbol's name and icon: the code theme's for its `kindGroup`, none for the rest. */
+export const kindColor = (kind: number): string | undefined => KIND_COLOR[kindGroup(kind)];
+
+/** An icon per SymbolKind, so a list or graph of symbols reads by shape before text, in its `kindColor`. */
 export function KindIcon({ kind, ...props }: LucideProps & { kind: number }) {
-  return createElement(KIND_ICON[kind] ?? Shapes, { color: KIND_COLOR[kindGroup(kind)] ?? 'var(--fg-2)', ...props });
+  return createElement(KIND_ICON[kind] ?? Shapes, { color: kindColor(kind) ?? 'var(--fg-2)', ...props });
 }
