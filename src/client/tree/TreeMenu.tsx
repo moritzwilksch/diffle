@@ -1,6 +1,7 @@
 import type { ContextMenuAnchorRect } from '@pierre/trees';
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Waypoints } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useGraph } from '@/client/graph/state.js';
 import { countViewed, filesUnder, isCollapsed, isViewed } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
@@ -61,9 +62,9 @@ export function trackMenuPointer(el: HTMLElement | null): (() => void) | undefin
 /**
  * Where the menu box goes, as a native context menu opens: its top-left corner just past the
  * pointer, flipped to the pointer's left or above it where the viewport ends. Opened without a
- * right-click, it hangs under its row. Fixed, so the sidebar's overflow cannot clip it.
+ * right-click, it hangs under its row.
  */
-function useFloating(anchor: ContextMenuAnchorRect) {
+function Floating({ anchor, children }: { anchor: ContextMenuAnchorRect; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [at] = useState(() =>
     pointer && performance.now() - pointer.at < POINTER_MS
@@ -81,13 +82,19 @@ function useFloating(anchor: ContextMenuAnchorRect) {
       top: below ? at.y + GAP : Math.max(EDGE, at.y - GAP - menu.height),
     });
   }, [at]);
-  return { ref, style };
+  // In the body, above every pane: inside the sidebar, the graph beside it painted over the menu. The
+  // root attribute tells the tree a press in it is a press in its menu, not one that closes it.
+  return createPortal(
+    <div ref={ref} className={MENU} style={style} data-file-tree-context-menu-root="true">
+      {children}
+    </div>,
+    document.body,
+  );
 }
 
 type MenuProps = { path: string; anchor: ContextMenuAnchorRect; close: () => void };
 
 function DirectoryMenu({ path, anchor, close }: MenuProps) {
-  const floating = useFloating(anchor);
   const snapshot = useStore((s) => s.snapshot);
   const viewed = useStore((s) => s.viewed);
   const config = useStore((s) => s.config);
@@ -95,7 +102,7 @@ function DirectoryMenu({ path, anchor, close }: MenuProps) {
   if (!files.length) return null;
   const all = countViewed({ viewed, config }, files) === files.length;
   return (
-    <div className={MENU} {...floating}>
+    <Floating anchor={anchor}>
       <Button
         className={MENU_ITEM}
         onClick={() => {
@@ -122,12 +129,11 @@ function DirectoryMenu({ path, anchor, close }: MenuProps) {
         <span />
         <span />
       </Button>
-    </div>
+    </Floating>
   );
 }
 
 function FileMenu({ path, anchor, close }: MenuProps) {
-  const floating = useFloating(anchor);
   const file = useStore((s) => s.snapshot?.changed.find((f) => f.path === path));
   const viewed = useStore((s) => (file ? isViewed(s, file) : false));
   const collapsed = useStore((s) => isCollapsed(s, path));
@@ -135,7 +141,7 @@ function FileMenu({ path, anchor, close }: MenuProps) {
   const toggleCollapsed = useStore((s) => s.toggleCollapsed);
   const openFile = useStore((s) => s.openFile);
   return (
-    <div className={MENU} {...floating}>
+    <Floating anchor={anchor}>
       {file ? (
         <>
           <Button
@@ -179,6 +185,6 @@ function FileMenu({ path, anchor, close }: MenuProps) {
           <span />
         </Button>
       )}
-    </div>
+    </Floating>
   );
 }
