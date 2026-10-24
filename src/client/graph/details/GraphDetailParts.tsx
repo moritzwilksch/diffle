@@ -14,6 +14,9 @@ import { type Signature, signatureOf, type Signatures } from './useSignatures.js
 export const TITLE = 'text-[0.9375rem] font-semibold';
 export const BODY = 'text-[0.8125rem]';
 export const META = 'text-[0.75rem] text-muted';
+/** One entry of a list: a card, so its name, jumps and signature read as one and the next stands apart. */
+export const ENTRY =
+  'flex flex-col gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--border)_60%,transparent)] bg-card p-3 transition-colors hover:border-accent';
 
 const KIND_TEXT: Record<string, string> = {
   type: 'text-kind-type',
@@ -101,11 +104,11 @@ export function Links({
       <SectionHeading icon={icon} count={rows.length}>
         {title}
       </SectionHeading>
-      <ul className="m-0 flex list-none flex-col gap-4 p-0">
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {shown.map(({ e, n }) => (
           <li
             key={`${e.from}>${e.to}`}
-            className="flex flex-col gap-1.5"
+            className={ENTRY}
             onPointerEnter={() => useGraph.getState().hoverEdge(edgeKey(e))}
             onPointerLeave={() => useGraph.getState().hoverEdge(null)}
           >

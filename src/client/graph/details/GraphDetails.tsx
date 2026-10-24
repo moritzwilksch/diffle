@@ -7,6 +7,7 @@ import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import {
   BODY,
   Code,
+  ENTRY,
   Jumps,
   Links,
   META,
@@ -125,22 +126,24 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
       <SectionHeading icon={Link2} count={behind.length}>
         Links
       </SectionHeading>
-      {behind.map((e) => {
-        const [user, used] = [symbols.get(e.from), symbols.get(e.to)];
-        if (!user || !used) return null;
-        return (
-          <section key={edgeKey(e)} className="flex flex-col gap-1.5">
-            <Pair user={user} used={used} />
-            <Jumps
-              rows={[
-                { to: 'definition', path: used.path, lines: [used.line] },
-                { to: 'reference', path: user.path, lines: e.lines },
-              ]}
-            />
-            <Code signature={signatures.get(used.id)} path={used.path} />
-          </section>
-        );
-      })}
+      <div className="flex flex-col gap-2">
+        {behind.map((e) => {
+          const [user, used] = [symbols.get(e.from), symbols.get(e.to)];
+          if (!user || !used) return null;
+          return (
+            <section key={edgeKey(e)} className={ENTRY}>
+              <Pair user={user} used={used} />
+              <Jumps
+                rows={[
+                  { to: 'definition', path: used.path, lines: [used.line] },
+                  { to: 'reference', path: user.path, lines: e.lines },
+                ]}
+              />
+              <Code signature={signatures.get(used.id)} path={used.path} />
+            </section>
+          );
+        })}
+      </div>
     </aside>
   );
 }
