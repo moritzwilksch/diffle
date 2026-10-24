@@ -1,4 +1,5 @@
 //! Which symbols of a file outline make up its interface, and which of them a patch touches.
+use super::select::Changed;
 use crate::comments::hunks::NewSideChanges;
 use crate::protocol::{GraphNodeStatus, LspSymbol};
 
@@ -37,23 +38,24 @@ pub fn enclosing(outline: &[LspSymbol], line: i64) -> Option<&LspSymbol> {
 }
 
 /// The symbols of an interface outline `changes` falls inside, each the innermost around some
-/// change, in outline order. A symbol is added when the patch adds every line of it.
-pub fn changed_symbols(outline: &[LspSymbol], changes: &NewSideChanges) -> Vec<(LspSymbol, GraphNodeStatus)> {
+/// change, in outline order, with the changed lines it holds. A symbol is added when the patch adds
+/// every line of it.
+pub fn changed_symbols(outline: &[LspSymbol], changes: &NewSideChanges) -> Vec<Changed> {
     let lines = changes.added.iter().flat_map(|&(start, end)| start..=end).chain(changes.removed_at.iter().copied());
-    let mut hit = vec![false; outline.len()];
+    let mut hits = vec![0; outline.len()];
     for line in lines {
         if let Some(s) = enclosing(outline, line) {
-            hit[outline.iter().position(|o| std::ptr::eq(o, s)).unwrap()] = true;
+            hits[outline.iter().position(|o| std::ptr::eq(o, s)).unwrap()] += 1;
         }
     }
     outline
         .iter()
-        .zip(hit)
-        .filter(|(_, hit)| *hit)
-        .map(|(s, _)| {
+        .zip(hits)
+        .filter(|(_, hits)| *hits > 0)
+        .map(|(s, lines)| {
             let status =
                 if changes.adds_all(s.line, s.end_line) { GraphNodeStatus::Added } else { GraphNodeStatus::Modified };
-            (s.clone(), status)
+            Changed { symbol: s.clone(), status, lines }
         })
         .collect()
 }
@@ -83,8 +85,8 @@ mod tests {
         ])
     }
 
-    fn names(changed: &[(LspSymbol, GraphNodeStatus)]) -> Vec<(&str, GraphNodeStatus)> {
-        changed.iter().map(|(s, status)| (s.name.as_str(), *status)).collect()
+    fn names(changed: &[Changed]) -> Vec<(&str, GraphNodeStatus)> {
+        changed.iter().map(|c| (c.symbol.name.as_str(), c.status)).collect()
     }
 
     #[test]
