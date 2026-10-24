@@ -171,9 +171,7 @@ impl Snapshotter {
                 .patches
                 .entry(file.path.clone())
                 .or_insert_with(|| {
-                    async move { Ok(repo.patch(&snap.old_sha, &snap.new_sha, &file, context, None).await?) }
-                        .boxed()
-                        .shared()
+                    async move { Ok(repo.patch(&snap.old_sha, &snap.new_sha, &file, context).await?) }.boxed().shared()
                 })
                 .clone()
         };

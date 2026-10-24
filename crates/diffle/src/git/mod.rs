@@ -1,29 +1,27 @@
-//! All Git execution. Calls run with cwd = the repository root, except reading a submodule's HEAD.
-mod catfile;
-mod changes;
+//! All Git access, in-process through gix: no git executable is spawned.
 mod commits;
-pub mod exec;
+mod diff;
 mod files;
 mod grep;
-mod patch;
+mod index;
 mod refs;
+mod remote;
+mod walk;
 
 use std::path::{Path, PathBuf};
 
-use catfile::CatFileBatch;
-pub use catfile::CatFileObject;
-pub use changes::is_binary;
+pub use diff::is_binary;
 pub use grep::{GrepMatch, GrepOptions, GrepResult};
 pub use refs::{Remote, Upstream};
 
 use crate::error::{GitError, Result};
-use exec::{ExecOptions, exec_git, text};
+
+/// Objects a thread-local handle keeps decoded, so walks and repeated lookups skip re-inflating.
+const OBJECT_CACHE: usize = 16 * 1024 * 1024;
 
 /// Git's `core.bigFileThreshold` default: a file this large is diffed as binary without reading
 /// it, which also bounds what sizing an untracked file loads.
 pub const BIG_FILE_THRESHOLD: u64 = 512 * 1024 * 1024;
-/// Concurrent worktree reads while sizing or hashing files.
-const READ_CONCURRENCY: usize = 8;
 
 /// The uncommitted tree, accepted on either side of a comparison.
 pub const WORKTREE: &str = "worktree";
@@ -35,66 +33,49 @@ pub struct GitRepo {
     pub common_dir: PathBuf,
     /// Where this run fetches pull requests; unique, so two servers never share refs.
     pub review_refs: String,
-    cat_file: CatFileBatch,
+    repo: gix::ThreadSafeRepository,
 }
 
 impl GitRepo {
     pub async fn open(dir: &Path) -> Result<Self> {
-        let out = exec_git(
-            dir,
-            &["rev-parse", "--show-toplevel", "--absolute-git-dir", "--git-common-dir"],
-            ExecOptions::default(),
-        )
-        .await?;
-        let out = text(out);
-        let mut lines = out.trim().lines();
-        let (Some(root), Some(git_dir)) = (lines.next(), lines.next()) else {
-            return Err(GitError {
+        let dir = dir.to_owned();
+        let opened = tokio::task::spawn_blocking(move || {
+            let not_repo = || GitError {
                 code: Some(128),
                 ..GitError::refused(format!("not a git repository: {}", dir.display()), &[])
-            }
-            .into());
-        };
-        // Git prints POSIX separators even on Windows; normalise them to native ones.
-        let root = native(root);
-        let git_dir = native(git_dir);
-        let common_dir = lines.next().map_or_else(|| git_dir.clone(), |common| native_path(&root.join(native(common))));
-        Ok(Self {
-            cat_file: CatFileBatch::new(root.clone()),
-            review_refs: format!("refs/diffle/{}", uuid::Uuid::new_v4()),
-            root,
-            git_dir,
-            common_dir,
+            };
+            let repo = gix::ThreadSafeRepository::discover_with_environment_overrides(&dir).map_err(|_| not_repo())?;
+            let local = repo.to_thread_local();
+            // Paths as git prints them: absolute, links resolved, `.`/`..` folded.
+            let canonical = |p: &Path| dunce::canonicalize(p).map(|p| native_path(&p)).map_err(|_| not_repo());
+            let root = canonical(local.workdir().ok_or_else(not_repo)?)?;
+            let (git_dir, common_dir) = (canonical(local.git_dir())?, canonical(local.common_dir())?);
+            Ok::<_, GitError>((repo, root, git_dir, common_dir))
         })
+        .await
+        .map_err(|e| GitError::refused(format!("opening the repository failed: {e}"), &[]))?;
+        let (repo, root, git_dir, common_dir) = opened?;
+        Ok(Self { review_refs: format!("refs/diffle/{}", uuid::Uuid::new_v4()), root, git_dir, common_dir, repo })
     }
 
-    /// Clone into an empty directory; full history preserves merge bases.
-    pub async fn clone_into(url: &str, dir: &Path) -> Result<Self> {
-        let opts = ExecOptions { env: &[("GIT_TERMINAL_PROMPT", "0")], ..Default::default() };
-        exec_git(dir, &["clone", "--quiet", "--no-tags", "--", url, "."], opts).await?;
-        Self::open(dir).await
+    /// Runs `f` on a thread-local gix handle off the async runtime, as gix blocks. `op` names the
+    /// failure in the error.
+    async fn gix<T, F>(&self, op: &str, f: F) -> Result<T, GitError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&gix::Repository) -> anyhow::Result<T> + Send + 'static,
+    {
+        let repo = self.repo.clone();
+        let failed = |e: &dyn std::fmt::Display| GitError::refused(format!("{op} failed: {e:#}"), &[]);
+        tokio::task::spawn_blocking(move || {
+            let mut repo = repo.to_thread_local();
+            repo.object_cache_size_if_unset(OBJECT_CACHE);
+            f(&repo)
+        })
+        .await
+        .map_err(|e| failed(&e))?
+        .map_err(|e| failed(&e))
     }
-
-    /// How many `cat-file --batch` processes this repository has started. Diagnostics and tests.
-    pub fn cat_file_spawns(&self) -> usize {
-        self.cat_file.spawns()
-    }
-
-    async fn exec(&self, args: &[&str], opts: ExecOptions<'_>) -> Result<Vec<u8>, GitError> {
-        exec_git(&self.root, args, opts).await
-    }
-
-    async fn text(&self, args: &[&str]) -> Result<String, GitError> {
-        Ok(text(self.exec(args, ExecOptions::default()).await?))
-    }
-
-    async fn text_with(&self, args: &[&str], opts: ExecOptions<'_>) -> Result<String, GitError> {
-        Ok(text(self.exec(args, opts).await?))
-    }
-}
-
-fn native(path: &str) -> PathBuf {
-    native_path(Path::new(path))
 }
 
 /// Separators as the platform writes them, and `.`/`..` folded, so paths compare equal to joined ones.
@@ -110,17 +91,6 @@ fn native_path(path: &Path) -> PathBuf {
         }
     }
     out
-}
-
-/// Git reverses the commit-to-worktree diff when the worktree is the old endpoint.
-fn diff_range<'a>(old: &'a str, new: &'a str) -> Vec<&'a str> {
-    if old == WORKTREE {
-        vec!["-R", new]
-    } else if new == WORKTREE {
-        vec![old]
-    } else {
-        vec![old, new]
-    }
 }
 
 /// `path` under `root`, or none when it would leave the repository.

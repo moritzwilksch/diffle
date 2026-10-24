@@ -11,3 +11,14 @@ rust-version = "1.89"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# gix hashes worktree files in-process; unoptimised SHA-1 makes debug builds crawl over a large file.
+[profile.dev.package.sha1dc]
+opt-level = 3
+
+# In-process search runs the regex engine over whole repositories; tests run it unoptimised otherwise.
+[profile.dev.package.regex-automata]
+opt-level = 3
+
+[profile.dev.package.memchr]
+opt-level = 3
