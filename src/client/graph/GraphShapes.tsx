@@ -69,20 +69,29 @@ const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; col
   modified: { icon: Pencil, color: 'var(--accent)' },
 };
 
+/** How a box stands out: the selection, or the far end of a hovered details row, more lightly. */
+export type Focus = 'selected' | 'hinted';
+
+const FOCUS: Record<Focus, { fill: string; width: number }> = {
+  selected: { fill: 'color-mix(in srgb, var(--accent) 12%, var(--bg-card))', width: 2.5 },
+  hinted: { fill: 'color-mix(in srgb, var(--accent) 6%, var(--bg-card))', width: 1.5 },
+};
+
 /**
  * A symbol: its kind's icon and colour, its name in monospace, what it is under it, and its change
  * as a badge (an icon besides the colour). A test recedes: quieter fill and name, and a `test` tag.
+ * `focus` marks the selection, or more lightly the far end of the details row under the pointer.
  */
 export function Node({
   placed,
   clustered,
-  selected,
+  focus,
   opacity,
   test,
 }: {
   placed: PlacedNode;
   clustered: boolean;
-  selected: boolean;
+  focus: Focus | null;
   opacity: number;
   test: boolean;
 }) {
@@ -98,16 +107,14 @@ export function Node({
         width={w}
         height={h}
         rx={6}
-        // The selection takes the box itself, an accent border over a light accent fill; the badge
-        // keeps the change status in view.
-        fill={
-          selected ? 'color-mix(in srgb, var(--accent) 12%, var(--bg-card))' : quiet ? 'var(--bg)' : 'var(--bg-card)'
-        }
+        // Focus takes the box itself, an accent border over a light accent fill; the badge keeps the
+        // change status in view.
+        fill={focus ? FOCUS[focus].fill : quiet ? 'var(--bg)' : 'var(--bg-card)'}
         stroke={
-          selected ? 'var(--accent)' : test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]
+          focus ? 'var(--accent)' : test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]
         }
-        strokeWidth={selected ? 2.5 : quiet ? 1 : 1.5}
-        strokeDasharray={node.status === 'consumer' && !clustered && !selected ? '4 3' : undefined}
+        strokeWidth={focus ? FOCUS[focus].width : quiet ? 1 : 1.5}
+        strokeDasharray={node.status === 'consumer' && !clustered && !focus ? '4 3' : undefined}
       />
       <KindIcon
         kind={node.kind}

@@ -105,7 +105,9 @@ export function GraphPart({
           key={p.node.id}
           placed={p}
           clustered={clustered}
-          selected={p.node.id === selected}
+          focus={
+            p.node.id === selected ? 'selected' : p.node.id === hot?.from || p.node.id === hot?.to ? 'hinted' : null
+          }
           opacity={opacity([p.node.id])}
           test={isTest(p.node)}
         />
