@@ -74,6 +74,7 @@ export function CommentComposer({ label }: { label: string }) {
       <div className="flex items-center gap-2 border-b border-b-border bg-hover px-2.5 py-1 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
         <span className="font-mono font-semibold text-foreground">{label}</span>
+        <CopyLinkButton />
       </div>
       <div className="p-2">
         <textarea
@@ -101,7 +102,6 @@ export function CommentComposer({ label }: { label: string }) {
               <FileDiff size="0.8125rem" /> <span className="@max-[18rem]:hidden">Suggest change</span>
             </Button>
           )}
-          <CopyLinkButton />
           <Button onClick={closeDraft}>Cancel</Button>
           <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
             Comment
@@ -113,8 +113,9 @@ export function CommentComposer({ label }: { label: string }) {
 }
 
 /**
- * Copies a GitHub permalink to the draft's lines; absent when GitHub could not show them. Each
- * draft and snapshot asks afresh, so lines pushed since show the button.
+ * Copies a GitHub permalink to the draft's lines, an icon at the header's end so the actions stay
+ * uncrowded; absent when GitHub could not show them. Each draft and snapshot asks afresh, so lines
+ * pushed since show the button.
  */
 function CopyLinkButton() {
   const flash = useStore((s) => s.flash);
@@ -134,6 +135,9 @@ function CopyLinkButton() {
   return (
     <Button
       variant="ghost"
+      icon
+      // The header row stays as tall as its label.
+      className="-my-0.5 ml-auto py-0.5 text-muted hover:text-foreground"
       title="Copy a GitHub permalink to these lines (yl)"
       aria-label="Copy link"
       onClick={async () => {
@@ -142,8 +146,7 @@ function CopyLinkButton() {
     >
       <CopyIcon done={done} size="0.8125rem">
         <Link size="0.8125rem" />
-      </CopyIcon>{' '}
-      <span className="@max-[18rem]:hidden">Copy link</span>
+      </CopyIcon>
     </Button>
   );
 }
