@@ -3,9 +3,10 @@ use crate::comments::hunks::NewSideChanges;
 use crate::protocol::{GraphNodeStatus, LspSymbol};
 
 /// LSP `SymbolKind`s that name an interface rather than an implementation detail: Class, Method,
-/// Constructor, Enum, Interface, Function, Constant, Struct and TypeParameter (rust-analyzer's type
-/// aliases). Each server maps its language onto these, so the choice holds for every language.
-const INTERFACE_KINDS: [i64; 9] = [5, 6, 9, 10, 11, 12, 14, 23, 26];
+/// Constructor, Enum, Interface, Function, Struct and TypeParameter (rust-analyzer's type aliases).
+/// Constants and variables are left out: they are many, and their type says little about the design.
+/// Each server maps its language onto these, so the choice holds for every language.
+const INTERFACE_KINDS: [i64; 8] = [5, 6, 9, 10, 11, 12, 23, 26];
 /// Kinds that only group declarations: Module, Namespace, Package, Class, Enum, Interface, Object
 /// (rust-analyzer's `impl`) and Struct. Anything inside another kind, such as a function's local
 /// constant or nested `def`, is its implementation.
@@ -66,17 +67,19 @@ mod tests {
     }
 
     /// class Foo (1-10) holding method bar (2-4) and field x (5); function baz (12-14) holding the
-    /// local constant k (13); variable v (16); constant c (18-20) holding a callback over the same lines.
+    /// local function k (13); variable v (16); class C (18-20) holding a callback over the same
+    /// lines; constant K (22).
     fn outline() -> Vec<LspSymbol> {
         interface(vec![
             symbol("Foo", 5, 1, 10),
             symbol("bar", 6, 2, 4),
             symbol("x", 8, 5, 5),
             symbol("baz", 12, 12, 14),
-            symbol("k", 14, 13, 13),
+            symbol("k", 12, 13, 13),
             symbol("v", 13, 16, 16),
-            symbol("c", 14, 18, 20),
+            symbol("C", 5, 18, 20),
             symbol("callback", 12, 18, 20),
+            symbol("K", 14, 22, 22),
         ])
     }
 
@@ -86,14 +89,14 @@ mod tests {
 
     #[test]
     fn maps_each_change_to_the_innermost_interface_symbol_around_it() {
-        let changes = NewSideChanges { added: vec![(3, 3), (5, 5)], removed_at: vec![13, 19] };
+        let changes = NewSideChanges { added: vec![(3, 3), (5, 5), (22, 22)], removed_at: vec![13, 19] };
         assert_eq!(
             names(&changed_symbols(&outline(), &changes)),
             [
                 ("Foo", GraphNodeStatus::Modified),
                 ("bar", GraphNodeStatus::Modified),
                 ("baz", GraphNodeStatus::Modified),
-                ("c", GraphNodeStatus::Modified)
+                ("C", GraphNodeStatus::Modified)
             ]
         );
     }
