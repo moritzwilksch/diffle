@@ -1,7 +1,7 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { PART_HEADER } from '@/client/graph/layout/components.js';
-import { type EdgeLabel, GraphPart, HEAD, type Lit } from './GraphPart.js';
-import { GraphLegend, ZoomControls } from './GraphLegend.js';
+import { CanvasToolbar } from './CanvasToolbar.js';
+import { type EdgeLabel, GraphPart, type Lit } from './GraphPart.js';
+import { PartHeader } from './PartHeader.js';
 import { ArrowDefs } from './GraphShapes.js';
 import type { Box, PlacedNode } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
@@ -26,6 +26,8 @@ interface Viewport {
 }
 
 const EASE_MS = 200;
+/** The dot grid's spacing at zoom 1. */
+const GRID = 20;
 
 const MARGIN = 48;
 const MAX_ZOOM = 3;
@@ -60,12 +62,11 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   const fitBox = (box: Box, maxZoom: number) => {
     const el = host.current;
     if (!el || !el.clientWidth) return;
-    // The layer labels sit in a gutter left of the graph.
-    const [w, h] = [box.w + 2 * MARGIN + HEAD, box.h + 2 * MARGIN];
+    const [w, h] = [box.w + 2 * MARGIN, box.h + 2 * MARGIN];
     const k = Math.min(maxZoom, el.clientWidth / w, el.clientHeight / h);
     setView({
       k,
-      x: (el.clientWidth - w * k) / 2 + (MARGIN + HEAD - box.x) * k,
+      x: (el.clientWidth - w * k) / 2 + (MARGIN - box.x) * k,
       y: (el.clientHeight - h * k) / 2 + (MARGIN - box.y) * k,
       ease: true,
     });
@@ -189,7 +190,17 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     <div className="relative h-full w-full">
       <div
         ref={host}
-        className="relative h-full w-full cursor-grab touch-none overflow-hidden overscroll-none bg-canvas select-none active:cursor-grabbing"
+        className="relative h-full w-full cursor-grab touch-none overflow-hidden overscroll-none select-none active:cursor-grabbing"
+        // A faint grey with a dot grid that pans and zooms with the graph: the cue that it drags.
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--fg) 2.5%, var(--bg))',
+          backgroundImage: 'radial-gradient(color-mix(in srgb, var(--fg) 18%, transparent) 1px, transparent 1.2px)',
+          backgroundSize: `${GRID * view.k}px ${GRID * view.k}px`,
+          backgroundPosition: `${view.x}px ${view.y}px`,
+          transition: view.ease
+            ? `background-size ${EASE_MS}ms ease-out, background-position ${EASE_MS}ms ease-out`
+            : undefined,
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -209,13 +220,16 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
           >
             {stacked.parts.map((part) => (
               <g key={part.key} transform={`translate(${part.x},${part.y})`}>
-                <PartHeader
-                  title={part.hub.name}
-                  size={part.placed.nodes.length}
-                  showingOnly={only != null}
-                  partKey={part.key}
-                  single={stacked.parts.length === 1 && only == null}
-                />
+                {(stacked.parts.length > 1 || stacked.unlinked || only != null) && (
+                  <PartHeader
+                    hub={part.hub}
+                    title={part.hub.name}
+                    count={part.placed.nodes.length}
+                    noun={clustered ? 'symbol' : 'file'}
+                    width={stacked.width}
+                    action={{ partKey: part.key, showingOnly: only != null }}
+                  />
+                )}
                 <GraphPart
                   placed={part.placed}
                   clustered={clustered}
@@ -228,6 +242,14 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
             ))}
             {stacked.unlinked && (
               <g transform={`translate(0,${stacked.unlinked.y})`}>
+                <PartHeader
+                  hub={null}
+                  title="No links"
+                  count={stacked.unlinked.placed.nodes.length}
+                  noun={clustered ? 'symbol' : 'file'}
+                  width={stacked.width}
+                  action={null}
+                />
                 <GraphPart
                   placed={stacked.unlinked.placed}
                   clustered={clustered}
@@ -242,41 +264,8 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
         </svg>
       </div>
       {/* Beside the canvas, not in it: the canvas captures the pointer on press. */}
-      <GraphLegend />
-      <ZoomControls zoom={canvasControl.zoom} fit={() => canvasControl.fit()} />
+      <CanvasToolbar zoom={view.k} onZoom={(factor) => canvasControl.zoom(factor)} onFit={() => canvasControl.fit()} />
     </div>
-  );
-}
-
-/** A part's name, after its most-used symbol, and the switch between it alone and every part. */
-function PartHeader({
-  title,
-  size,
-  showingOnly,
-  partKey,
-  single,
-}: {
-  title: string;
-  size: number;
-  showingOnly: boolean;
-  partKey: string;
-  single: boolean;
-}) {
-  if (single) return null;
-  const y = -PART_HEADER + 14;
-  return (
-    <g>
-      <text x={0} y={y} className="font-sans text-[13px]">
-        <tspan className="fill-muted">around </tspan>
-        <tspan className="fill-foreground font-mono" fontWeight={600}>
-          {title}
-        </tspan>
-        <tspan className="fill-muted"> · {size} symbols · </tspan>
-        <tspan data-part={partKey} className="cursor-pointer fill-accent">
-          {showingOnly ? 'show every part' : 'show only this'}
-        </tspan>
-      </text>
-    </g>
   );
 }
 

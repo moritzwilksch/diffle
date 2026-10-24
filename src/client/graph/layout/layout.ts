@@ -56,8 +56,9 @@ const WAYPOINT_W = 4;
 const RELAX_PASSES = 8;
 /** How far a cycle's edge bows out into the gap below its layer. */
 const BACK_BOW = 44;
-/** Space between edge ends sharing one side of a box. */
-const PORT_STEP = 9;
+/** The most space between edge ends sharing one side of a box, and the share of its width they spread over. */
+const PORT_STEP = 28;
+const PORT_SPAN = 0.7;
 const SHELF_GAP = 72;
 const SHELF_MIN_W = 960;
 
@@ -222,7 +223,7 @@ function route(edges: GraphEdge[], routes: Route[], boxOf: Map<string, Box>): Pl
   });
   const spread = (ends: { point: [number, number]; toward: number }[], box: Box) => {
     ends.sort((a, b) => a.toward - b.toward);
-    const step = ends.length > 1 ? Math.min(PORT_STEP, (box.w * 0.6) / (ends.length - 1)) : 0;
+    const step = ends.length > 1 ? Math.min(PORT_STEP, (box.w * PORT_SPAN) / (ends.length - 1)) : 0;
     ends.forEach((end, i) => (end.point[0] = mid(box) + (i - (ends.length - 1) / 2) * step));
   };
   for (const [id, box] of boxOf) {

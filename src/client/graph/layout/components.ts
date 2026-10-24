@@ -16,7 +16,7 @@ export interface Part {
 
 export interface Stacked {
   parts: Part[];
-  /** The symbols linked to nothing, laid out below the parts; null when there are none. */
+  /** The symbols linked to nothing, laid out below the parts under their own header; null when there are none. */
   unlinked: { placed: Placed; y: number } | null;
   /** Every node at its place in the whole stack, for selection, keys and focus. */
   nodes: PlacedNode[];
@@ -50,8 +50,15 @@ export function stack(graph: Graph, size: (n: GraphNode) => Size, clustered: boo
   const nodes = parts.flatMap((p) => p.placed.nodes.map((n) => ({ ...n, x: n.x + p.x, y: n.y + p.y })));
   if (!unlinked.nodes.length) return { parts, unlinked: null, nodes, width, height: Math.max(0, y - PART_GAP) };
   const placed = layout(unlinked, rank(unlinked), size, clustered);
-  nodes.push(...placed.nodes.map((n) => ({ ...n, y: n.y + y })));
-  return { parts, unlinked: { placed, y }, nodes, width: Math.max(width, placed.width), height: y + placed.height };
+  const top = y + PART_HEADER;
+  nodes.push(...placed.nodes.map((n) => ({ ...n, y: n.y + top })));
+  return {
+    parts,
+    unlinked: { placed, y: top },
+    nodes,
+    width: Math.max(width, placed.width),
+    height: top + placed.height,
+  };
 }
 
 /** The weakly connected parts with at least one link, largest first, and the nodes with none. */

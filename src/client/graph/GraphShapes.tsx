@@ -40,16 +40,17 @@ export function Cluster({
   const shownDir = !dir || dirRoom < 4 ? '' : dir.length + 1 > dirRoom ? `…${dir.slice(-(dirRoom - 2))}/` : `${dir}/`;
   return (
     <g opacity={opacity}>
-      <title>{cluster.path}</title>
+      {`${shownDir}${name}` !== cluster.path && <title>{cluster.path}</title>}
       <rect
         x={cluster.x}
         y={cluster.y}
         width={cluster.w}
         height={cluster.h}
         rx={9}
-        // A file's box is a light grey between the canvas and the symbol cards it holds.
-        fill={unchanged ? 'transparent' : 'color-mix(in srgb, var(--fg) 5%, var(--bg))'}
-        stroke="var(--border)"
+        // A changed file is a tinted area under its symbol cards, no border; an unchanged one only
+        // users live in keeps the dashed outline that marks users.
+        fill={unchanged ? 'transparent' : 'color-mix(in srgb, var(--fg) 6%, var(--bg))'}
+        stroke={unchanged ? 'var(--border)' : 'none'}
         strokeDasharray={unchanged ? '5 4' : undefined}
       />
       <FileCode2 x={cluster.x + 9} y={cluster.y + 7} size={13} color="var(--fg-2)" />
@@ -63,9 +64,9 @@ export function Cluster({
   );
 }
 
-const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; color: string; label: string }>> = {
-  added: { icon: Plus, color: 'var(--add)', label: 'added' },
-  modified: { icon: Pencil, color: 'var(--accent)', label: 'modified' },
+const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; color: string }>> = {
+  added: { icon: Plus, color: 'var(--add)' },
+  modified: { icon: Pencil, color: 'var(--accent)' },
 };
 
 /**
@@ -96,7 +97,6 @@ export function Node({
   const counts = `→${degree.in}\u2002${degree.out}→`;
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
-      <title>{`${node.path}:${node.line}${badge ? ` · ${badge.label}` : ''}`}</title>
       <rect
         x={x}
         y={y}

@@ -24,13 +24,12 @@ export interface EdgeLabel {
 
 const FADED = 0.35;
 const FADED_EDGE = 0.2;
-export const HEAD = 44;
 /** On-screen width of an arrow's invisible hit stroke, whatever the zoom. */
 const HIT_PX = 14;
 const LABEL_NAMES = 2;
 const LABEL_CHAR = 6.6;
 
-/** One placed part of the graph in its own coordinates: layer labels, file boxes, arrows, symbols. */
+/** One placed part of the graph in its own coordinates: file boxes, arrows, symbols. */
 export function GraphPart({
   placed,
   clustered,
@@ -66,29 +65,18 @@ export function GraphPart({
     lit && !ids.some((id) => lit.ids.has(id) || id === hot?.from || id === hot?.to) ? FADED : 1;
   const isOn = (key: string, from: string, to: string) =>
     !!lit && (lit.edge ? lit.edge === key : lit.seeds.has(from) || lit.seeds.has(to));
-  // A file view's arrow labels: the unlit ones under the boxes, the lit ones (`on`) over them.
-  const pills = (on: boolean) =>
+  // A file view's arrow labels, on the lit arrows only and over the boxes: every label at once
+  // piles up where arrows run close.
+  const pills =
     labels &&
     placed.edges.map(({ edge, mid }) => {
       const key = edgeKey(edge);
       const label = labels.get(key);
-      const shown = isOn(key, edge.from, edge.to);
-      if (!label || shown !== on) return null;
-      return <Pill key={key} edgeKey={key} label={label} x={mid.x} y={mid.y} dim={!!lit && !shown} />;
+      if (!label || !(edge === hot || isOn(key, edge.from, edge.to))) return null;
+      return <Pill key={key} edgeKey={key} label={label} x={mid.x} y={mid.y} />;
     });
   return (
     <>
-      {placed.layers.length > 1 &&
-        placed.layers.map((l, i) => (
-          <text key={i} x={-HEAD} y={l.y + 16} textAnchor="end" className="fill-muted font-sans text-[11px]">
-            {i === 0 ? 'entry' : i === placed.layers.length - 1 ? 'core' : ''}
-          </text>
-        ))}
-      {placed.shelf != null && (
-        <text x={0} y={placed.shelf - 12} className="fill-muted font-sans text-[11px]">
-          No links to other changes or their users
-        </text>
-      )}
       {placed.clusters.map((c) => {
         const members = placed.nodes.filter((n) => n.node.path === c.path && within(n, c));
         return (
@@ -104,6 +92,8 @@ export function GraphPart({
         const key = edgeKey(edge);
         const isHot = edge === hot;
         const on = isHot || isOn(key, edge.from, edge.to);
+        // A lit arrow is a step heavier than its weight, the details row's arrow two.
+        const w = Math.min(3, width(edge.lines.length) + (isHot ? 2 : on ? 1 : 0));
         return (
           <g key={key} data-edge={key} className="cursor-pointer">
             <path d={d} fill="none" stroke="transparent" strokeWidth={HIT_PX / zoom} />
@@ -113,14 +103,13 @@ export function GraphPart({
               stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
               // Opacity, not stroke-opacity: the arrowhead marker fades only with the whole path.
               opacity={isHot ? 1 : (lit && !on) || hot ? FADED_EDGE : on ? 0.95 : 0.5}
-              strokeWidth={width(edge.lines.length) + (isHot ? 1.5 : 0)}
+              strokeWidth={w}
               strokeDasharray={back ? '4 3' : undefined}
-              markerEnd={arrowHead(Math.min(3, width(edge.lines.length) + (isHot ? 1 : 0)), on)}
+              markerEnd={arrowHead(w, on)}
             />
           </g>
         );
       })}
-      {pills(false)}
       {placed.nodes.map((p) => (
         <Node
           key={p.node.id}
@@ -132,8 +121,7 @@ export function GraphPart({
           degree={degrees.get(p.node.id) ?? { in: 0, out: 0 }}
         />
       ))}
-      {/* Lit labels over the boxes, so a selected arrow's label reads in full where it crosses one. */}
-      {pills(true)}
+      {pills}
     </>
   );
 }
@@ -142,26 +130,14 @@ export function GraphPart({
  * A file arrow's label: the used symbols' kind icon and full names, the first few and a count of
  * the rest. Opaque, so a faded line never shows through it.
  */
-function Pill({
-  edgeKey: key,
-  label,
-  x,
-  y,
-  dim,
-}: {
-  edgeKey: string;
-  label: EdgeLabel;
-  x: number;
-  y: number;
-  dim: boolean;
-}) {
+function Pill({ edgeKey: key, label, x, y }: { edgeKey: string; label: EdgeLabel; x: number; y: number }) {
   const shown = label.names.slice(0, LABEL_NAMES).join(', ');
   const more = label.names.length - LABEL_NAMES;
   const text = more > 0 ? `${shown} +${more}` : shown;
   const w = text.length * LABEL_CHAR + 30;
   return (
-    <g data-edge={key} className="cursor-pointer" opacity={dim ? 0.55 : 1}>
-      <title>{label.names.join(', ')}</title>
+    <g data-edge={key} className="cursor-pointer">
+      {more > 0 && <title>{label.names.join(', ')}</title>}
       <rect x={x - w / 2} y={y - 10} width={w} height={20} rx={10} fill="var(--bg-2)" stroke="var(--border)" />
       <KindIcon kind={label.kind} x={x - w / 2 + 7} y={y - 6} size={12} color="var(--fg-2)" />
       <text x={x - w / 2 + 23} y={y + 4} className="fill-foreground font-mono text-[11px]">
