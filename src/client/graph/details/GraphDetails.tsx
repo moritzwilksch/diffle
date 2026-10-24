@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, Link2, Waypoints } from 'lucide-react';
 import { useMemo } from 'react';
-import { KIND_LABEL } from '@/client/lsp/symbolKind.js';
+import { KIND_LABEL, kindGroup } from '@/client/lsp/symbolKind.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
 import type { GraphNode } from '@/shared/protocol.js';
@@ -97,13 +97,7 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
   if (!from || !to) return <aside className={PANEL} />;
   return (
     <aside className={PANEL}>
-      <div className="flex flex-col items-start gap-1 pt-4">
-        <Name node={from} className={TITLE} />
-        <span className={`inline-flex items-center gap-1 ${META}`}>
-          <ArrowDown size="0.8125rem" /> uses
-        </span>
-        <Name node={to} className={TITLE} />
-      </div>
+      <Pair user={from} used={to} className="pt-4" />
       <SectionHeading icon={Link2} count={behind.length}>
         Links
       </SectionHeading>
@@ -112,9 +106,7 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
         if (!user || !used) return null;
         return (
           <section key={edgeKey(e)} className="flex flex-col gap-1.5">
-            <span className="flex flex-wrap items-center gap-1.5">
-              <Name node={user} /> <span className="text-muted">→</span> <Name node={used} />
-            </span>
+            <Pair user={user} used={used} />
             <Jumps
               rows={[
                 { to: 'reference', path: user.path, lines: e.lines },
@@ -126,6 +118,19 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
         );
       })}
     </aside>
+  );
+}
+
+/** One end above the other, as a call stack reads: the user, then what it calls or uses. */
+function Pair({ user, used, className = '' }: { user: GraphNode; used: GraphNode; className?: string }) {
+  return (
+    <div className={`flex flex-col items-start gap-1 ${className}`}>
+      <Name node={user} />
+      <span className={`inline-flex items-center gap-1 ${META}`}>
+        <ArrowDown size="0.8125rem" /> {kindGroup(used.kind) === 'callable' ? 'calls' : 'uses'}
+      </span>
+      <Name node={used} />
+    </div>
   );
 }
 

@@ -229,7 +229,7 @@ function JumpChip({ path, line }: { path: string; line: number }) {
     <button
       type="button"
       onClick={() => useGraph.getState().pick({ path, line })}
-      title={`Open ${path}:${line} in the diff`}
+      aria-label={`Open ${path}:${line} in the diff`}
       className="inline-flex cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-1.5 py-px font-mono text-[0.75rem] text-accent hover:bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]"
     >
       :{line}
