@@ -1,7 +1,7 @@
 schema_version: 1
 
 context:
-  version: "0.3.1"
+  version: "0.3.3"
 
 package:
   name: diffle
@@ -18,7 +18,7 @@ build:
       CARGO_PROFILE_RELEASE_STRIP: symbols
       CARGO_PROFILE_RELEASE_LTO: fat
     content:
-      # The Rust binary embeds the web client from dist/client
+      # The Rust binary embeds the web client from crates/diffle/client
       - npm ci --ignore-scripts
       - npm run build
       # aws-lc-sys needs clang-cl to assemble its ARM64 sources; conda-forge sets CC to cl.exe

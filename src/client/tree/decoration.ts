@@ -1,7 +1,8 @@
 import type { ChangedFile, ViewedState } from '@/shared/protocol.js';
 
-// The decoration lane holds one span of colored text parts: the file's +/− counts, then
-// the viewed mark as a glyph (the lane takes either text or one icon, not both).
+// The decoration lane holds one span of colored text parts: the viewed mark as a glyph, then the
+// file's +/− counts (the lane takes either text or one icon, not both). The mark leads so it can
+// float right of the counts (`treeCss.ts`).
 const MARK: Record<ViewedState, { glyph: string; color: string; title: string }> = {
   viewed: {
     glyph: '✓',
@@ -21,11 +22,10 @@ const MARK: Record<ViewedState, { glyph: string; color: string; title: string }>
 };
 
 export function rowDecoration(f: ChangedFile, state: ViewedState) {
-  const parts: { text: string; color?: string }[] = [];
+  const mark = MARK[state];
+  const parts: { text: string; color?: string }[] = [{ text: mark.glyph, color: mark.color }];
   if (f.additions > 0) parts.push({ text: `+${f.additions}`, color: 'var(--add)' });
   if (f.deletions > 0) parts.push({ text: `−${f.deletions}`, color: 'var(--del)' });
-  const mark = MARK[state];
-  parts.push({ text: mark.glyph, color: mark.color });
   const counts = f.binary ? 'binary' : `+${f.additions} −${f.deletions}`;
   return {
     text: parts.map((p) => p.text).join(' '),
@@ -44,9 +44,8 @@ export function directoryDecoration(viewedCount: number, total: number) {
       title,
     };
   }
-  const parts: { text: string; color?: string }[] = [];
+  const parts: { text: string; color?: string }[] = [{ text: MARK.unviewed.glyph, color: MARK.unviewed.color }];
   if (viewedCount > 0) parts.push({ text: `${viewedCount}/${total}`, color: 'var(--fg-2)' });
-  parts.push({ text: MARK.unviewed.glyph, color: MARK.unviewed.color });
   const title = `${viewedCount} of ${total} changed file(s) viewed · click to mark all viewed`;
   return { text: parts.map((p) => p.text).join(' '), parts, title };
 }

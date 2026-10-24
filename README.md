@@ -20,6 +20,8 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 ```bash
 pixi global install diffle               # conda-forge
 npm install -g @moritzwilksch/diffle     # npm
+cargo binstall diffle                    # crates.io, the release binary
+cargo install diffle                     # crates.io, compiled from source
 ```
 
 Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon macOS:
@@ -28,7 +30,7 @@ Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon ma
 curl -fsSL https://diffle.app/install.sh | sh
 ```
 
-It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.1.9`
+It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.4.0`
 to pin a release. On Windows (x64, arm64), from PowerShell:
 
 ```powershell
@@ -178,6 +180,33 @@ Or persistently, in the config file (`diffle config` prints its path and content
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
+## Open from lazygit
+
+[lazygit](https://github.com/jesseduffield/lazygit) custom commands open diffle on what is
+selected. Add them to its `config.yml` (`lazygit --print-config-dir` prints the folder):
+
+```yaml
+customCommands:
+  - key: '<c-d>'
+    context: 'files'
+    command: 'diffle working'
+    output: terminal
+    description: 'Review uncommitted changes in diffle'
+  - key: '<c-d>'
+    context: 'commits'
+    command: 'diffle {{.SelectedCommitRange.From}}^..{{.SelectedCommitRange.To}}'
+    output: terminal
+    description: 'Review the selected commits in diffle'
+  - key: '<c-d>'
+    context: 'localBranches'
+    command: 'diffle main...{{.SelectedLocalBranch.Name}}'
+    output: terminal
+    description: 'Review the branch against main in diffle'
+```
+
+lazygit waits while you review; closing the tab returns to it with the open comments printed as
+a prompt. Append `| pbcopy` (or your clipboard tool) to a command to copy them instead.
+
 ## Shell completions
 
 ```bash
@@ -220,7 +249,7 @@ pixi run diffle lsp                       # the language servers the environment
 
 The environment puts real language servers on PATH, so `pixi run diffle working` reviews with them.
 `pixi run lefthook-install` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `pixi run lefthook-run` runs the same hook over every file, as CI does.
-A debug build reads `dist/client` from disk: after a client change, run `npm run build`
+A debug build reads `crates/diffle/client` from disk: after a client change, run `npm run build`
 and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. The browser suite drives Playwright's Linux Chromium in a Docker container

@@ -441,7 +441,8 @@ export interface ReviewState {
   reveal: { id: string; path: string; line: number; col?: number; nonce: number } | null;
   /** Context lines the viewer has expanded, by item id, so the cursor can walk them. */
   revealed: Record<string, LineRange[]>;
-  addRevealed(id: string, start: number, end: number): void;
+  /** Replace item `id`'s expanded context with what its renderer now shows. */
+  setRevealed(id: string, ranges: LineRange[]): void;
   /**
    * Where the viewer scrolls next; a new object (nonce) lands it. 'eye' pins the line at the gaze
    * point for jump navigation and 'top' / 'bottom' near the edges (zt / zb). 'keep' pins it `offset`
@@ -2276,14 +2277,16 @@ export const useStore = create<ReviewState>((set, get) => {
     scrollTarget: null,
     reveal: null,
     revealed: {},
-    addRevealed(id, start, end) {
+    setRevealed(id, ranges) {
       set((s) => {
+        // Every render reports, so an unchanged report must not rebuild the cursor model.
+        const prev = s.revealed[id] ?? [];
+        if (prev.length === ranges.length && prev.every(([a, b], i) => a === ranges[i]![0] && b === ranges[i]![1]))
+          return s;
         const path = pathFromItemId(id);
         // Ranges from an older generation of the same file describe a renderer that no longer exists.
-        const kept = Object.fromEntries(
-          Object.entries(s.revealed).filter(([k]) => k === id || pathFromItemId(k) !== path),
-        );
-        return { revealed: { ...kept, [id]: [...(kept[id] ?? []), [start, end] as LineRange] } };
+        const kept = Object.fromEntries(Object.entries(s.revealed).filter(([k]) => pathFromItemId(k) !== path));
+        return { revealed: { ...kept, [id]: ranges } };
       });
     },
 

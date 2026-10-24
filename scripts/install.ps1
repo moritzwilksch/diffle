@@ -20,15 +20,15 @@ if ($env:OS -ne 'Windows_NT') { Fail 'this installer is for Windows; use install
 # see AMD64 in $env:PROCESSOR_ARCHITECTURE and in .NET's OSArchitecture.
 $native = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
 $arch = switch ($native) {
-  'AMD64' { 'x64' }
-  'ARM64' { 'arm64' }
+  'AMD64' { 'x86_64' }
+  'ARM64' { 'aarch64' }
   default { Fail "no binary for $_; install with npm or pixi instead" }
 }
 
 $base = if ($env:DIFFLE_DOWNLOAD_URL) { $env:DIFFLE_DOWNLOAD_URL }
 elseif ($version -eq 'latest') { "https://github.com/$repo/releases/latest/download" }
 else { "https://github.com/$repo/releases/download/$version" }
-$asset = "diffle-windows-$arch.zip"
+$asset = "diffle-$arch-pc-windows-msvc.zip"
 
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "diffle-install-$([guid]::NewGuid())"
 New-Item -ItemType Directory -Path $tmp | Out-Null

@@ -3,8 +3,8 @@ import { ensureBrowserServer } from './browser-server.js';
 import { diffleCommand } from './server.js';
 
 /**
- * The suite drives the release binary, which embeds `dist/client`; `pixi run e2e` builds both
- * first, and `DIFFLE_BIN=<path>` names another build. Then make sure the browser container
+ * The suite drives the release binary, which embeds `crates/diffle/client`; `pixi run e2e` builds
+ * both first, and `DIFFLE_BIN=<path>` names another build. Then make sure the browser container
  * answers; the teardown stops what this started.
  */
 export default async function globalSetup(): Promise<void> {

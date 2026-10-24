@@ -80,7 +80,7 @@ export function FileTreePane() {
 
   // A click on the decoration toggles viewed without selecting (or, on a directory, folding) the row. The tree renders in
   // a shadow root, so the hit test walks the composed path from the pointer target. Only the
-  // decoration's own <span>s count: a click on the lane's padding must select the row, not toggle viewed.
+  // decoration's parts count (the lane > span > part): a click on the lane's empty width must select the row, not toggle viewed.
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bodyRef.current?.firstElementChild?.toggleAttribute('data-search-empty', searchEmpty);
@@ -138,7 +138,7 @@ export function FileTreePane() {
     const decorationClick = (e: Event): { path: string; directory: boolean } | null => {
       const path = e.composedPath() as HTMLElement[];
       const lane = path.findIndex((n) => n instanceof HTMLElement && n.dataset.itemSection === 'decoration');
-      if (lane <= 0) return null;
+      if (lane < 2) return null;
       const row = path.find((n) => n instanceof HTMLElement && n.dataset.itemPath != null);
       const p = row?.dataset.itemPath;
       return p ? { path: p, directory: row.dataset.itemType === 'folder' } : null;

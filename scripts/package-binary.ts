@@ -1,5 +1,5 @@
 // Packages this host's release binary the way a release ships it, then proves the package: the
-// archive goes to `out/diffle-<target>` with the licence files, a checksum list beside a copy of
+// archive goes to `out/diffle-<rust target triple>` with the licence files, a checksum list beside a copy of
 // it is served over HTTP, and the installers install from there as a user would, running the
 // installed binary's --version before they report success. usage: node scripts/package-binary.ts
 import { execFileSync, spawn } from 'node:child_process';
@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const windows = process.platform === 'win32';
-const target = `${windows ? 'windows' : process.platform}-${process.arch}`;
+// The triple rustc builds for when no --target is given: the one target/release holds.
+const target = /^host: (.+)$/m.exec(execFileSync('rustc', ['-vV'], { encoding: 'utf8' }))![1]!;
 const archive = `diffle-${target}.${windows ? 'zip' : 'tar.gz'}`;
 
 const out = join(ROOT, 'out');

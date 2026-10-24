@@ -191,7 +191,7 @@ export function quiet(cmd: string, args: string[], cwd = REPO_ROOT): string {
   }
 }
 
-/** Inputs of the client build; a change to any of them makes `dist/client` stale. */
+/** Inputs of the client build; a change to any of them makes `crates/diffle/client` stale. */
 const CLIENT_INPUTS = ['src/client', 'src/shared', 'vite.config.ts', 'tsconfig.client.json', 'package-lock.json'];
 
 function clientInputsKey(root: string): string {
@@ -210,7 +210,7 @@ function clientInputsKey(root: string): string {
 }
 
 /**
- * Build `cwd`'s client unless `dist/client` already matches its sources. Output appears only on
+ * Build `cwd`'s client unless `crates/diffle/client` already matches its sources. Output appears only on
  * failure. Returns whether it built.
  */
 /**
@@ -240,7 +240,7 @@ export function buildServer(root = REPO_ROOT): void {
 }
 
 export function buildClient(cwd = REPO_ROOT): boolean {
-  const stamp = join(cwd, 'dist/client/.build-stamp');
+  const stamp = join(cwd, 'crates/diffle/client/.build-stamp');
   const key = clientInputsKey(cwd);
   if (existsSync(stamp) && readFileSync(stamp, 'utf8') === key) return false;
   // A base checkout from before the server moved to Rust names the client build `build:client`.
