@@ -1,7 +1,8 @@
 // Record the demo videos: `npm run videos [-- <scene>...]`. A real diffle reviews the demo repository
 // from `lib/demo-repo.ts`, driven by Playwright, once per theme. Each scene writes
 // `.github/assets/videos/<scene>-<theme>.mp4` and a `.webp` poster (its last frame). The README embeds
-// `review-<theme>.gif`, a smaller cut of the same take, since GitHub plays no video stored in the repo.
+// `review-<theme>.gif` and `graph-<theme>.gif`, smaller cuts of the same takes, since GitHub plays no
+// video stored in the repo.
 // diffle.app copies the rest from its `diffle` submodule, along with `prompt.md`, the text `yy`
 // copied in the review scene.
 //
@@ -9,7 +10,7 @@
 // CRF 24 it beat VP9 webm on size). Needs ffmpeg on PATH (with libx264 and libwebp), Docker for
 // the browser container (`compose.yml`), and for the review and lsp scenes the pinned pyrefly that
 // `PYTHON_LSP` starts (pixi by default). `KEEP_FRAMES=1` keeps the raw frames and a `last.png` and prints where.
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -295,6 +296,16 @@ async function pickFromSymbolMenu(page: Page, title: string) {
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
+/** Glide to the middle of `target` and click it. */
+async function clickOn(page: Page, target: Locator) {
+  await target.waitFor();
+  const box = await target.boundingBox();
+  if (!box) throw new Error(`${target} is not on screen`);
+  await glide(page, box.x + box.width / 2, box.y + box.height / 2, 20);
+  await pause(page, 250);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Scenes. Each gets a fresh repository and a fresh diffle, so no review state carries over.
 
@@ -422,6 +433,60 @@ const SCENES: Record<string, Scene> = {
       await pause(page, 600);
       await page.keyboard.press('Enter');
       await pause(page, 2200);
+    },
+  },
+
+  /** The change graph: files, then symbols, a node's links in the panel, a peek at them, a pan to another node. */
+  graph: {
+    args: ['--lsp', `python=${PYTHON_LSP}`],
+    gif: true,
+    async play(page) {
+      await pause(page, 900);
+      await page.keyboard.press('M');
+      const graph = page.getByRole('img', { name: 'Change graph' });
+      await graph.locator('[data-node]').first().waitFor({ timeout: 30000 });
+      await pause(page, 2000);
+      await clickOn(page, page.getByRole('button', { name: 'Symbols' }));
+      await pause(page, 2000);
+
+      // `shorten` in app.py uses the limiter, its retry hint and the store.
+      const node = (id: string) => graph.locator(`[data-node=${JSON.stringify(id)}]`);
+      await clickOn(page, node('shortlink/app.py:18:10'));
+      await pause(page, 1800);
+      const panel = page.locator('aside').last();
+      const box = (await panel.boundingBox())!;
+      await glide(page, box.x + box.width / 2, box.y + box.height * 0.6, 20);
+      for (let i = 0; i < 6; i++) {
+        await page.mouse.wheel(0, 120);
+        await pause(page, 220);
+      }
+      await pause(page, 1200);
+
+      await clickOn(page, panel.getByRole('button', { name: 'Peek' }).first());
+      const list = page.getByRole('dialog', { name: 'References' });
+      await list.waitFor();
+      await pause(page, 1200);
+      await page.keyboard.press(' ');
+      await list.getByRole('region', { name: 'Peek' }).waitFor();
+      await pause(page, 1400);
+      for (let i = 0; i < 2; i++) {
+        await page.keyboard.press('j');
+        await pause(page, 1100);
+      }
+      await page.keyboard.press('Escape');
+      await pause(page, 300);
+      await page.keyboard.press('Escape');
+      await list.waitFor({ state: 'hidden' });
+      await pause(page, 900);
+
+      // A card in the panel frames its node; a double-click frames one in the graph.
+      await clickOn(page, panel.getByRole('listitem').first());
+      await pause(page, 2000);
+      const bucket = (await node('shortlink/ratelimit.py:6:6').boundingBox())!;
+      await glide(page, bucket.x + bucket.width / 2, bucket.y + bucket.height / 2);
+      await pause(page, 250);
+      await page.mouse.dblclick(bucket.x + bucket.width / 2, bucket.y + bucket.height / 2);
+      await pause(page, 2400);
     },
   },
 

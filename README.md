@@ -181,6 +181,26 @@ Or persistently, in the config file (`diffle config` prints its path and content
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
+## See the change as a graph
+
+Press `M` to swap the diff for a graph of what changed: one box per file, or per symbol with
+`s`, and an arrow wherever one uses another. `d` adds the unchanged code that uses the change,
+`T` the tests.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/graph-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/graph-light.gif">
+  <img alt="The change graph in diffle: files, then symbols, a function's links in the side panel, a peek at the lines behind them, then a pan to two linked symbols" src=".github/assets/videos/graph-light.gif">
+</picture>
+
+Click a box to list what it uses and what uses it in the side panel; **Peek** steps through the
+lines behind those links without leaving the graph. A card in the panel, or a double-click on a
+box, frames that box with its neighbours. `Enter` opens the selection in the diff, and `M`
+returns to the graph as you left it.
+
+The graph needs the language servers, the same ones [Jump to definitions](#jump-to-definitions)
+uses.
+
 ## Open from lazygit
 
 [lazygit](https://github.com/jesseduffield/lazygit) custom commands open diffle on what is
