@@ -96,7 +96,9 @@ const JUMPS: Record<JumpKind, { icon: LucideIcon; label: string }> = {
  */
 export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[] }[] }) {
   return (
-    <div className={`grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 ${META}`}>
+    // Centred, not on the baseline: the truncated path has none of its own, so its box's bottom edge
+    // would stand in and push the row below its label.
+    <div className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 ${META}`}>
       {rows.map(({ to, path, lines }) => {
         const { icon: Icon, label } = JUMPS[to];
         return (
@@ -105,7 +107,7 @@ export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: num
               <Icon size="0.75rem" className="shrink-0 self-center" />
               {label}
             </span>
-            <span className="flex min-w-0 items-start gap-1.5">
+            <span className="flex min-w-0 items-center gap-1.5">
               <span className="flex min-w-[4rem]">
                 <ShortPath path={path} />
               </span>
