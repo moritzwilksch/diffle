@@ -3,7 +3,7 @@ import { type ComponentProps, type ReactNode, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { FilePath } from '@/client/FilePath.js';
 import { Markdown } from '@/client/Markdown.js';
-import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
+import { KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { isTest } from '@/client/graph/filters.js';
 import { canvasControl } from '@/client/graph/GraphCanvas.js';
@@ -19,12 +19,6 @@ export const META = 'text-[0.75rem] text-muted';
 /** One entry of a list: a card, so its name, jumps and signature read as one and the next stands apart. */
 export const ENTRY =
   'flex flex-col gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--border)_60%,transparent)] bg-card p-3 transition-colors hover:border-accent';
-
-const KIND_TEXT: Record<string, string> = {
-  type: 'text-kind-type',
-  callable: 'text-kind-callable',
-  value: 'text-kind-value',
-};
 
 /** Rows a list shows before it folds behind "Show all". */
 const FOLD_AFTER = 6;
@@ -171,11 +165,7 @@ export function Name({ node, className }: { node: GraphNode; className?: string 
     );
   return (
     <span className={twMerge(`inline-flex items-center gap-1.5 font-mono ${BODY}`, className)}>
-      <KindIcon
-        kind={node.kind}
-        size="0.875rem"
-        className={`shrink-0 ${KIND_TEXT[kindGroup(node.kind)] ?? 'text-muted'}`}
-      />
+      <KindIcon kind={node.kind} size="0.875rem" className="shrink-0" />
       {node.name}
     </span>
   );
@@ -184,8 +174,8 @@ export function Name({ node, className }: { node: GraphNode; className?: string 
 /** The two jumps a symbol row offers, with the review's symbol popover icons for the same jumps. */
 export type JumpKind = 'definition' | 'reference';
 const JUMPS: Record<JumpKind, { icon: LucideIcon; label: string }> = {
-  definition: { icon: Crosshair, label: 'Defined' },
-  reference: { icon: Link2, label: 'Used at' },
+  definition: { icon: Crosshair, label: 'Definition' },
+  reference: { icon: Link2, label: 'Usages' },
 };
 
 /** The symbols a file arrow's reference lines use, by line. */
@@ -198,7 +188,7 @@ export type UsedAt = Map<number, GraphNode[]>;
  */
 export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[]; used?: UsedAt }[] }) {
   return (
-    <div className={`grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 ${META}`}>
+    <div className={`grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 ${META}`}>
       {rows.map(({ to, path, lines: given, used }) => {
         const { icon: Icon, label } = JUMPS[to];
         const lines = [...given].sort((a, b) => a - b);

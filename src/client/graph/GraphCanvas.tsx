@@ -3,7 +3,7 @@ import { CanvasToolbar } from './CanvasToolbar.js';
 import { GraphFind } from './GraphFind.js';
 import { type EdgeLabel, GraphPart, type Lit } from './GraphPart.js';
 import { groupName, PartHeader } from './PartHeader.js';
-import { ArrowDefs } from './GraphShapes.js';
+import { ArrowDefs, CANVAS_BG } from './GraphShapes.js';
 import type { Box, PlacedNode } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { findMatches, useGraph, type View } from './state.js';
@@ -206,7 +206,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
         className="relative h-full w-full cursor-grab touch-none overflow-hidden overscroll-none select-none active:cursor-grabbing"
         // A faint grey with a dot grid that pans and zooms with the graph: the cue that it drags.
         style={{
-          backgroundColor: 'color-mix(in srgb, var(--fg) 2.5%, var(--bg))',
+          backgroundColor: CANVAS_BG,
           backgroundImage: 'radial-gradient(color-mix(in srgb, var(--fg) 18%, transparent) 1px, transparent 1.2px)',
           backgroundSize: `${GRID * view.k}px ${GRID * view.k}px`,
           backgroundPosition: `${view.x}px ${view.y}px`,

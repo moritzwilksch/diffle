@@ -64,7 +64,16 @@ const KIND_ICON: Record<number, LucideIcon> = {
   26: Type,
 };
 
-/** An icon per SymbolKind, so a list or graph of symbols reads by shape before text. */
+const KIND_COLOR: Record<string, string> = {
+  type: 'var(--kind-type)',
+  callable: 'var(--kind-callable)',
+  value: 'var(--kind-value)',
+};
+
+/**
+ * An icon per SymbolKind, so a list or graph of symbols reads by shape before text, colored by
+ * its `kindGroup` everywhere alike.
+ */
 export function KindIcon({ kind, ...props }: LucideProps & { kind: number }) {
-  return createElement(KIND_ICON[kind] ?? Shapes, props);
+  return createElement(KIND_ICON[kind] ?? Shapes, { color: KIND_COLOR[kindGroup(kind)] ?? 'var(--fg-2)', ...props });
 }

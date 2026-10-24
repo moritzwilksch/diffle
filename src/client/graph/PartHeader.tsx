@@ -1,13 +1,7 @@
 import { Focus, Folder, Rows3 } from 'lucide-react';
-import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
+import { KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { PART_HEADER } from '@/client/graph/layout/components.js';
-
-const KIND_COLOR: Record<string, string> = {
-  type: 'var(--kind-type)',
-  callable: 'var(--kind-callable)',
-  value: 'var(--kind-value)',
-};
 
 // Text widths at the sizes below, to place the action past the title.
 const TITLE_CHAR = 7.9;
@@ -72,13 +66,7 @@ export function PartHeader({
           <text x={0} y={top + 17} className="fill-muted font-sans text-[12px]">
             around
           </text>
-          <KindIcon
-            kind={hub.kind}
-            x={iconX}
-            y={top + 5}
-            size={14}
-            color={KIND_COLOR[kindGroup(hub.kind)] ?? 'var(--fg-2)'}
-          />
+          <KindIcon kind={hub.kind} x={iconX} y={top + 5} size={14} />
         </>
       )}
       {'folder' in name && <Folder x={0} y={top + 5} size={14} color="var(--fg-2)" />}

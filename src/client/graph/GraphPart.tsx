@@ -161,7 +161,7 @@ function Pill({
     <g data-edge={key} className="cursor-pointer">
       {label.names.length > LABEL_NAMES && <title>{label.names.join(', ')}</title>}
       <rect x={x} y={y} width={w} height={LABEL_H} rx={LABEL_H / 2} fill="var(--bg-2)" stroke="var(--border)" />
-      <KindIcon kind={label.kind} x={x + 7} y={y + 4} size={12} color="var(--fg-2)" />
+      <KindIcon kind={label.kind} x={x + 7} y={y + 4} size={12} />
       <text x={x + 23} y={y + 14} className="fill-foreground font-mono text-[11px]">
         {text}
       </text>

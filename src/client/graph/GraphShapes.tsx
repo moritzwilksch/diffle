@@ -1,5 +1,5 @@
 import { FileCode2, Pencil, Plus } from 'lucide-react';
-import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
+import { KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { basename, clip, CODE_CHAR, dirname, KIND_CHAR, nodeLabel, SEPARATOR_W, TITLE_CHAR } from './labels.js';
 import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
@@ -10,14 +10,11 @@ const STATUS_STROKE: Record<GraphNode['status'], string> = {
   consumer: 'var(--border)',
 };
 
-const KIND_COLOR: Record<string, string> = {
-  type: 'var(--kind-type)',
-  callable: 'var(--kind-callable)',
-  value: 'var(--kind-value)',
-};
-
 // The file header's monospace character width, to clip its path to the box.
 const HEADER_CHAR = 6.9;
+
+/** The canvas grey, also under a dependents-only file so its dots stop at the dashed outline. */
+export const CANVAS_BG = 'color-mix(in srgb, var(--fg) 2.5%, var(--bg))';
 
 /** A file's box in one column: the file icon and its path as everywhere in diffle, dim directories and a bold name. */
 export function Cluster({
@@ -46,8 +43,8 @@ export function Cluster({
         height={cluster.h}
         rx={9}
         // A changed file is a tinted area under its symbol cards, no border; an unchanged one only
-        // users live in keeps the dashed outline that marks users.
-        fill={unchanged ? 'transparent' : 'color-mix(in srgb, var(--fg) 6%, var(--bg))'}
+        // dependents live in keeps the dashed outline that marks them, over the canvas without its dots.
+        fill={unchanged ? CANVAS_BG : 'color-mix(in srgb, var(--fg) 10%, var(--bg))'}
         stroke={unchanged ? 'var(--border)' : 'none'}
         strokeDasharray={unchanged ? '5 4' : undefined}
       />
@@ -116,14 +113,7 @@ export function Node({
         strokeWidth={focus ? FOCUS[focus].width : quiet ? 1 : 1.5}
         strokeDasharray={node.status === 'consumer' && !clustered && !focus ? '4 3' : undefined}
       />
-      <KindIcon
-        kind={node.kind}
-        x={x + 7}
-        y={y + 7}
-        size={14}
-        color={KIND_COLOR[kindGroup(node.kind)] ?? 'var(--fg-2)'}
-        opacity={quiet ? 0.6 : 1}
-      />
+      <KindIcon kind={node.kind} x={x + 7} y={y + 7} size={14} opacity={quiet ? 0.6 : 1} />
       <text x={x + 26} y={y + 18} className={`font-mono text-[12px] ${quiet ? 'fill-muted' : 'fill-foreground'}`}>
         {clip(title, Math.floor((w - 56) / TITLE_CHAR))}
       </text>
