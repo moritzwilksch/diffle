@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { type Box, layout } from '@/client/graph/layout.js';
 import { byFile, rank } from '@/client/graph/rank.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
 
@@ -81,5 +82,41 @@ describe('byFile', () => {
       ['cli.py', 'consumer'],
     ]);
     expect(files.edges.map((e) => `${e.from}>${e.to}`)).toEqual(['cli.py>agent.py', 'agent.py>client.py']);
+  });
+});
+
+describe('layout', () => {
+  const size = () => ({ w: 140, h: 40 });
+  const overlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  it('keeps boxes apart, columns in rank order, and unlinked symbols on a shelf below', () => {
+    const g = graph(
+      [
+        node('main', 'consumer', 'cli.py'),
+        node('run', 'modified', 'agent.py'),
+        node('init', 'added', 'agent.py'),
+        node('get', 'modified', 'http.py'),
+        node('lone', 'added', 'misc.py'),
+      ],
+      ['main>run', 'main>get', 'run>get', 'init>get'],
+    );
+    const placed = layout(g, rank(g), size, true);
+    const at = new Map(placed.nodes.map((p) => [p.node.id, p]));
+    expect(at.get('main')!.x).toBeLessThan(at.get('run')!.x);
+    expect(at.get('run')!.x).toBeLessThan(at.get('get')!.x);
+    for (const [i, a] of placed.nodes.entries())
+      for (const b of placed.nodes.slice(i + 1)) expect(overlap(a, b), `${a.node.id} / ${b.node.id}`).toBe(false);
+    expect(placed.shelf).not.toBeNull();
+    expect(at.get('lone')!.y).toBeGreaterThanOrEqual(placed.shelf!);
+    // One cluster per file and column; the shelf's cluster has no column.
+    expect(placed.clusters.map((c) => [c.path, c.column])).toEqual(
+      expect.arrayContaining([
+        ['agent.py', 1],
+        ['misc.py', -1],
+      ]),
+    );
+    // main uses get two columns on: its edge passes a waypoint, so it is two curve segments plus one across.
+    const long = placed.edges.find((e) => e.edge.from === 'main' && e.edge.to === 'get')!;
+    expect(long.d.match(/C/g)).toHaveLength(3);
   });
 });

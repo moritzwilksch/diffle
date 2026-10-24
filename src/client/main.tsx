@@ -3,6 +3,7 @@ import { WorkerPoolContextProvider } from '@pierre/diffs/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import { GraphPage } from './graph/GraphPage.js';
 import './styles.css';
 import { applyTheme, CODE_THEMES, HIGHLIGHTER, readTheme } from './theme.js';
 
@@ -20,7 +21,8 @@ createRoot(document.getElementById('root')!).render(
       // useTokenTransformer: token spans get hit-test data so symbol clicks work; the pool's options win over the viewer's.
       highlighterOptions={{ preferredHighlighter: HIGHLIGHTER, useTokenTransformer: true, theme: CODE_THEMES }}
     >
-      <App />
+      {/* Prototype: the change graph on its own page until it joins the review. */}
+      {location.hash === '#graph' ? <GraphPage /> : <App />}
     </WorkerPoolContextProvider>
   </StrictMode>,
 );

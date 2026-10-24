@@ -16,6 +16,7 @@ import {
   FileResponseSchema,
   GithubExportResponseSchema,
   GithubMetadataSchema,
+  GraphResponseSchema,
   LastCommitsPreviewSchema,
   LspHoverResponseSchema,
   LspLocationsResponseSchema,
@@ -215,6 +216,8 @@ export const api = {
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  /** The snapshot's changed symbols and the code using them. */
+  lspGraph: () => json(GraphResponseSchema, 'api/lsp/graph'),
   lspOccurrences: (pos: LspPosition) =>
     json(LspOccurrencesResponseSchema, 'api/lsp/occurrences', { method: 'POST', body: encode(LspPositionSchema, pos) }),
 
