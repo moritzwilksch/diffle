@@ -27,8 +27,8 @@ export interface PlacedEdge {
   edge: GraphEdge;
   /** SVG path data. */
   d: string;
-  /** Halfway along the path, where a label sits. */
-  mid: { x: number; y: number };
+  /** A point on the path, 0 to 1 along its segments; a label sits at 0.5 unless that is taken. */
+  along: (t: number) => Point;
   /** Runs inside a cycle, within one layer. */
   back: boolean;
 }
@@ -237,19 +237,35 @@ function route(edges: GraphEdge[], routes: Route[], boxOf: Map<string, Box>): Pl
     spread(ins, box);
   }
   return lines.map(({ edge, points }) => {
-    if (points) return { edge, d: curve(points), mid: halfway(points), back: false };
+    if (points) return { edge, d: curve(points), along: alongCurve(points), back: false };
     const [from, to] = [boxOf.get(edge.from)!, boxOf.get(edge.to)!];
     const [x0, y0, x1, y1] = [mid(from), from.y + from.h, mid(to), to.y + to.h];
     const d = `M${x0},${y0} C${x0},${y0 + BACK_BOW} ${x1},${y1 + BACK_BOW} ${x1},${y1}`;
-    return { edge, d, mid: { x: (x0 + x1) / 2, y: Math.max(y0, y1) + BACK_BOW * 0.75 }, back: true };
+    return { edge, d, along: bezier([x0, y0], [x0, y0 + BACK_BOW], [x1, y1 + BACK_BOW], [x1, y1]), back: true };
   });
 }
 
-/** The point halfway along a polyline's segments: where a label sits on its curve. */
-function halfway(points: [number, number][]): { x: number; y: number } {
-  const i = Math.floor((points.length - 1) / 2);
-  const [[x0, y0], [x1, y1]] = [points[i]!, points[i + 1]!];
-  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+type Point = { x: number; y: number };
+
+/** The path `curve` draws, each segment an equal share of 0 to 1. */
+function alongCurve(points: [number, number][]): (t: number) => Point {
+  const n = points.length - 1;
+  return (t) => {
+    const i = Math.min(n - 1, Math.floor(t * n));
+    const [[x0, y0], [x1, y1]] = [points[i]!, points[i + 1]!];
+    const dy = (y1 - y0) / 2;
+    return bezier([x0, y0], [x0, y0 + dy], [x1, y1 - dy], [x1, y1])(t * n - i);
+  };
+}
+
+type Xy = [number, number];
+
+function bezier(a: Xy, b: Xy, c: Xy, d: Xy): (t: number) => Point {
+  return (t) => {
+    const u = 1 - t;
+    const at = (k: 0 | 1) => u ** 3 * a[k] + 3 * u * u * t * b[k] + 3 * u * t * t * c[k] + t ** 3 * d[k];
+    return { x: at(0), y: at(1) };
+  };
 }
 
 /**

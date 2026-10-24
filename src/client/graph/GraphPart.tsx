@@ -29,6 +29,10 @@ const FADED_EDGE = 0.2;
 const HIT_PX = 14;
 const LABEL_NAMES = 2;
 const LABEL_CHAR = 6.6;
+const LABEL_H = 20;
+const LABEL_GAP = 4;
+/** Where along its arrow a label may sit, in order of preference: the middle, then toward either end. */
+const LABEL_SPOTS = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8];
 
 /** One placed part of the graph in its own coordinates: file boxes, arrows, symbols. */
 export function GraphPart({
@@ -58,14 +62,29 @@ export function GraphPart({
   const isOn = (key: string, from: string, to: string) =>
     !!lit && (lit.edge ? lit.edge === key : lit.seeds.has(from) || lit.seeds.has(to));
   // A file view's arrow labels, on the lit arrows only and over the boxes: every label at once
-  // piles up where arrows run close.
+  // piles up where arrows run close. Each slides along its arrow to the first spot clear of the
+  // labels before it and of the boxes, else to the one covering least; the hovered arrow's goes
+  // first, so it keeps the middle.
+  const taken: Box[] = [];
   const pills =
     labels &&
-    placed.edges.map(({ edge, mid }) => {
+    [...edges].reverse().map(({ edge, along }) => {
       const key = edgeKey(edge);
       const label = labels.get(key);
       if (!label || !(edge === hot || isOn(key, edge.from, edge.to))) return null;
-      return <Pill key={key} edgeKey={key} label={label} x={mid.x} y={mid.y} />;
+      const text = pillText(label);
+      const w = text.length * LABEL_CHAR + 30;
+      const spots = LABEL_SPOTS.map((t) => along(t)).map((p) => ({
+        x: p.x - w / 2,
+        y: p.y - LABEL_H / 2,
+        w,
+        h: LABEL_H,
+      }));
+      const cost = (r: Box) =>
+        2 * taken.filter((o) => overlaps(r, o)).length + placed.nodes.filter((n) => overlaps(r, n)).length;
+      const rect = spots.reduce((best, r) => (cost(r) < cost(best) ? r : best));
+      taken.push(rect);
+      return <Pill key={key} edgeKey={key} label={label} text={text} rect={rect} />;
     });
   return (
     <>
@@ -127,22 +146,40 @@ export function GraphPart({
  * A file arrow's label: the used symbols' kind icon and full names, the first few and a count of
  * the rest. Opaque, so a faded line never shows through it.
  */
-function Pill({ edgeKey: key, label, x, y }: { edgeKey: string; label: EdgeLabel; x: number; y: number }) {
-  const shown = label.names.slice(0, LABEL_NAMES).join(', ');
-  const more = label.names.length - LABEL_NAMES;
-  const text = more > 0 ? `${shown} +${more}` : shown;
-  const w = text.length * LABEL_CHAR + 30;
+function Pill({
+  edgeKey: key,
+  label,
+  text,
+  rect: { x, y, w },
+}: {
+  edgeKey: string;
+  label: EdgeLabel;
+  text: string;
+  rect: Box;
+}) {
   return (
     <g data-edge={key} className="cursor-pointer">
-      {more > 0 && <title>{label.names.join(', ')}</title>}
-      <rect x={x - w / 2} y={y - 10} width={w} height={20} rx={10} fill="var(--bg-2)" stroke="var(--border)" />
-      <KindIcon kind={label.kind} x={x - w / 2 + 7} y={y - 6} size={12} color="var(--fg-2)" />
-      <text x={x - w / 2 + 23} y={y + 4} className="fill-foreground font-mono text-[11px]">
+      {label.names.length > LABEL_NAMES && <title>{label.names.join(', ')}</title>}
+      <rect x={x} y={y} width={w} height={LABEL_H} rx={LABEL_H / 2} fill="var(--bg-2)" stroke="var(--border)" />
+      <KindIcon kind={label.kind} x={x + 7} y={y + 4} size={12} color="var(--fg-2)" />
+      <text x={x + 23} y={y + 14} className="fill-foreground font-mono text-[11px]">
         {text}
       </text>
     </g>
   );
 }
+
+function pillText(label: EdgeLabel): string {
+  const shown = label.names.slice(0, LABEL_NAMES).join(', ');
+  const more = label.names.length - LABEL_NAMES;
+  return more > 0 ? `${shown} +${more}` : shown;
+}
+
+const overlaps = (a: Box, b: Box) =>
+  a.x < b.x + b.w + LABEL_GAP &&
+  b.x < a.x + a.w + LABEL_GAP &&
+  a.y < b.y + b.h + LABEL_GAP &&
+  b.y < a.y + a.h + LABEL_GAP;
 
 /** An arrow's weight: one per reference line, up to three. */
 const width = (lines: number) => Math.min(3, lines);
