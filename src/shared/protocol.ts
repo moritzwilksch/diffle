@@ -1035,8 +1035,11 @@ export const SymbolsQuerySchema = z
   .object({ path: z.string().min(1).optional(), q: z.string().optional() })
   .refine((query) => query.path != null || query.q != null, 'path or q required');
 export type SymbolsQuery = z.infer<typeof SymbolsQuerySchema>;
-/** `GET /api/lsp/graph`: `all` lifts the cap on changed symbols. */
-export const GraphQuerySchema = z.object({ all: z.literal('1').optional() });
+/**
+ * `GET /api/lsp/graph`: `all` lifts the cap on changed symbols; `scope`, a folder without its
+ * trailing slash, graphs only the changed files under it, whose dependents may live anywhere.
+ */
+export const GraphQuerySchema = z.object({ all: z.literal('1').optional(), scope: z.string().min(1).optional() });
 export type GraphQuery = z.infer<typeof GraphQuerySchema>;
 export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
 export const PatchQuerySchema = z.object({ path: z.string().optional() });

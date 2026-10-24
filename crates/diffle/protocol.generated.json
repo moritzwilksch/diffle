@@ -661,9 +661,13 @@
         "all": {
           "type": "string",
           "const": "1"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
         }
       },
-      "description": "`GET /api/lsp/graph`: `all` lifts the cap on changed symbols."
+      "description": "`GET /api/lsp/graph`: `all` lifts the cap on changed symbols; `scope`, a folder without its\ntrailing slash, graphs only the changed files under it, whose dependents may live anywhere."
     },
     "GraphResponse": {
       "type": "object",

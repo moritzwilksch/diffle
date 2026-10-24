@@ -36,13 +36,15 @@ struct Answer<T> {
 }
 
 /// Builds the graph of `snap`, whose new side the servers read (the caller has checked), of at
-/// most `cap` changed symbols.
+/// most `cap` changed symbols, from the changed files under the folder `scope` when given.
 pub async fn build(
     pool: &LspPool,
     snapshotter: &Arc<Snapshotter>,
     snap: &Snapshot,
     cap: Option<usize>,
+    scope: Option<&str>,
 ) -> Result<GraphResponse> {
+    let under = scope.map(|dir| format!("{dir}/"));
     let by = Instant::now() + BUDGET;
     let mut reasons = Vec::new();
     // Owned items: a closure over borrowed ones is not general enough for axum's `Send` bound.
@@ -50,6 +52,7 @@ pub async fn build(
         .changed
         .iter()
         .filter(|f| f.status != ChangeStatus::D && !f.binary && f.submodule.is_none() && language_of(&f.path).is_some())
+        .filter(|f| under.as_ref().is_none_or(|dir| f.path.starts_with(dir.as_str())))
         .map(|f| f.path.clone())
         .collect();
 

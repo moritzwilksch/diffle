@@ -1,4 +1,4 @@
-import { Braces, FlaskConical, LoaderCircle, RefreshCw, Users } from 'lucide-react';
+import { Braces, FlaskConical, FolderOpen, LoaderCircle, RefreshCw, Users, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
 import { useStore } from '@/client/store.js';
@@ -10,6 +10,7 @@ export function GraphView() {
   const load = useGraph((s) => s.load);
   const view = useGraph((s) => s.view);
   const filters = useGraph((s) => s.filters);
+  const scope = useGraph((s) => s.scope);
   const graph = view?.graph;
   const changed = graph?.nodes.filter((n) => n.status !== 'consumer').length ?? 0;
   const full = load.state === 'ready' ? load.graph : null;
@@ -21,6 +22,16 @@ export function GraphView() {
           <span className="text-muted">
             {changed} changed · {graph.nodes.length - changed} using them · {graph.edges.length} links
           </span>
+        )}
+        {scope && (
+          <Button
+            variant="ghost"
+            className={TOGGLE_ON}
+            onClick={() => useGraph.getState().setScope(null)}
+            title="Graph every change again (click the folder in the tree again)"
+          >
+            <FolderOpen size="0.8125rem" /> {scope}/ <X size="0.75rem" />
+          </Button>
         )}
         {full?.cut.length ? (
           <button

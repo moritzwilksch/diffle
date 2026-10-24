@@ -100,6 +100,26 @@ async fn graphs_changed_symbols_with_the_code_using_them() {
 }
 
 #[tokio::test]
+async fn a_scope_graphs_only_the_changed_files_under_it() {
+    if fake_servers().is_none() {
+        return;
+    }
+    let t = agent_repo();
+    t.write("jobs/nightly.py", "def nightly():\n    return 1\n");
+    fake_env(&t.path, Some("fake"), &[("FAKE_LSP_GRAPH", "1")]);
+    let overrides = HashMap::from([(LanguageId::Python, "fake".to_owned())]);
+    let s = TestServer::with_lsp(t, EnterRequest::Working, Some(overrides)).await;
+    eventually("a ready server", || {
+        s.lsp.as_ref().unwrap().status().servers.iter().any(|x| x.state == LspState::Ready)
+    })
+    .await;
+    let res = s.get("/api/lsp/graph?scope=jobs").await;
+    assert_eq!(res.status, 200, "{}", res.body);
+    insta::assert_snapshot!(render(&res.json()), @"modified  kind 12 jobs/nightly.py nightly:1-3");
+    s.close().await;
+}
+
+#[tokio::test]
 async fn refuses_a_graph_when_the_new_side_is_not_the_checkout() {
     if fake_servers().is_none() {
         return;

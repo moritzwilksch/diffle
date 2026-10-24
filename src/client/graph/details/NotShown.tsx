@@ -17,8 +17,8 @@ export function NotShown({ cut }: { cut: GraphNode[] }) {
         Not in the graph
       </SectionHeading>
       <p className={`m-0 ${META}`}>
-        The graph draws so many changed symbols at once, whole files, tests and private helpers last. These
-        files did not fit.
+        The graph draws so many changed symbols at once, whole files, tests and private helpers last. These files did
+        not fit.
       </p>
       <button
         type="button"

@@ -129,5 +129,6 @@ async fn graph(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiRes
     let pool = pool_for(&d, None, Some(LspFeature::References)).await?;
     let snapshotter = d.session.snapshotter()?;
     let snap = snapshotter.current().await?;
-    Ok(Json(crate::graph::build(&pool, &snapshotter, &snap, cap).await?).into_response())
+    Ok(Json(crate::graph::build(&pool, &snapshotter, &snap, cap, q.scope.as_deref().map(String::as_str)).await?)
+        .into_response())
 }

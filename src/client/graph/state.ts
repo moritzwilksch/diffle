@@ -40,6 +40,8 @@ export interface GraphState {
   focusPath: string | null;
   /** Draw every changed symbol, past the server's cap. */
   all: boolean;
+  /** A folder picked in the tree: only the changes under it are graphed. */
+  scope: string | null;
   /** The find field's text while it is open; its matches are `findMatches(view, find)`. */
   find: string | null;
   toggle(): void;
@@ -59,6 +61,8 @@ export interface GraphState {
   showOnly(part: string | null): void;
   /** Reloads the graph with every changed symbol the cap left out. */
   showAll(): void;
+  /** Graphs only the changes under `dir`, or all of them again for null or the current scope. */
+  setScope(dir: string | null): void;
   openFind(): void;
   /** Searches for `query`, selecting its first match. */
   setFind(query: string): void;
@@ -82,6 +86,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   find: null,
   only: null,
   all: false,
+  scope: null,
 
   toggle() {
     if (get().open) return get().close();
@@ -101,7 +106,8 @@ export const useGraph = create<GraphState>((set, get) => ({
     // A newer snapshot, or a newer reload, owns the result.
     const current = () => useStore.getState().snapshot === snapshot && get().snapshot === snapshot;
     try {
-      const graph = await api.lspGraph(get().all ? { all: '1' } : {});
+      const { all, scope } = get();
+      const graph = await api.lspGraph({ ...(all ? { all: '1' } : {}), ...(scope ? { scope } : {}) });
       if (!current()) return;
       const view = derive(graph, get().filters, get().only);
       const selected = view.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
@@ -157,6 +163,12 @@ export const useGraph = create<GraphState>((set, get) => ({
 
   showAll() {
     set({ all: true });
+    void get().reload();
+  },
+
+  setScope(dir) {
+    const scope = dir === get().scope ? null : dir;
+    set({ scope, all: false, selected: null, selectedEdge: null, focusPath: null });
     void get().reload();
   },
 
