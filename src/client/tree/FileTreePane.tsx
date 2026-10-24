@@ -4,6 +4,7 @@ import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
 import { EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useGraph } from '@/client/graph/state.js';
 import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
@@ -161,8 +162,12 @@ export function FileTreePane() {
         requestAnimationFrame(focusReview);
         const s = useStore.getState();
         if (isCollapsed(s, path)) s.toggleCollapsed(path);
-        // Re-clicking the active file changes no selection, so `onSelectionChange` stays silent.
-        if (path === s.activePath) void openRef.current(path);
+        // Re-clicking the active file changes no selection, so `onSelectionChange` stays silent; over
+        // the graph, it frames the file's boxes again.
+        if (path === s.activePath) {
+          void openRef.current(path);
+          if (useGraph.getState().open) useGraph.getState().focusFile(path);
+        }
         return;
       }
       e.preventDefault();

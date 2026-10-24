@@ -55,6 +55,8 @@ export function GraphPart({
 }) {
   // The arrow of the details row under the pointer: drawn last, so on top, with its ends in full.
   const hovered = useGraph((s) => s.hoveredEdge);
+  // The file picked in the tree: its boxes, and its frame in symbol view, take the accent.
+  const focusPath = useGraph((s) => s.focusPath);
   const hot = placed.edges.find((e) => edgeKey(e.edge) === hovered)?.edge;
   const edges = hot
     ? [...placed.edges.filter((e) => e.edge !== hot), placed.edges.find((e) => e.edge === hot)!]
@@ -98,6 +100,7 @@ export function GraphPart({
             cluster={c}
             members={members}
             opacity={opacity(members.map((n) => n.node.id))}
+            focused={c.path === focusPath}
           />
         );
       })}
@@ -131,7 +134,10 @@ export function GraphPart({
           focus={
             p.node.id === selected
               ? 'selected'
-              : p.node.id === hot?.from || p.node.id === hot?.to || lit?.marks?.has(p.node.id)
+              : p.node.id === hot?.from ||
+                  p.node.id === hot?.to ||
+                  lit?.marks?.has(p.node.id) ||
+                  p.node.path === focusPath
                 ? 'hinted'
                 : null
           }

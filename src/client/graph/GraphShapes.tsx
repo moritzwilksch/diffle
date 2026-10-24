@@ -17,15 +17,20 @@ const HEADER_CHAR = 6.9;
 /** The canvas grey, also under a dependents-only file so its dots stop at the dashed outline. */
 export const CANVAS_BG = 'color-mix(in srgb, var(--fg) 2.5%, var(--bg))';
 
-/** A file's box in one column: the file icon and its path as everywhere in diffle, dim directories and a bold name. */
+/**
+ * A file's box in one column: the file icon and its path as everywhere in diffle, dim directories and
+ * a bold name. `focused`, the file picked in the tree, takes the accent.
+ */
 export function Cluster({
   cluster,
   members,
   opacity,
+  focused,
 }: {
   cluster: PlacedCluster;
   members: PlacedNode[];
   opacity: number;
+  focused: boolean;
 }) {
   const unchanged = members.every((n) => n.node.status === 'consumer');
   const room = Math.floor((cluster.w - 34) / HEADER_CHAR);
@@ -46,9 +51,12 @@ export function Cluster({
         // A changed file is a plain panel under its symbol cards, a hairline off the grey canvas; an
         // unchanged one only dependents live in keeps the dashed outline that marks them, over the
         // canvas without its dots.
-        fill={unchanged ? CANVAS_BG : 'var(--bg)'}
-        stroke={unchanged ? 'var(--border)' : 'color-mix(in srgb, var(--border) 70%, transparent)'}
-        strokeDasharray={unchanged ? '5 4' : undefined}
+        fill={focused ? 'color-mix(in srgb, var(--accent) 5%, var(--bg))' : unchanged ? CANVAS_BG : 'var(--bg)'}
+        stroke={
+          focused ? 'var(--accent)' : unchanged ? 'var(--border)' : 'color-mix(in srgb, var(--border) 70%, transparent)'
+        }
+        strokeWidth={focused ? 1.5 : 1}
+        strokeDasharray={unchanged && !focused ? '5 4' : undefined}
       />
       <FileCode2 x={cluster.x + 9} y={cluster.y + 7} size={13} color="var(--fg-2)" />
       <text x={cluster.x + 27} y={cluster.y + CLUSTER_HEADER / 2 + 4} className="font-mono text-[11.5px]">

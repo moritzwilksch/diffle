@@ -4,13 +4,14 @@ import { useStore, type ViewPlace } from '@/client/store.js';
 import { lspBlocker } from '@/shared/lsp.js';
 import type { GraphEdge, GraphResponse, Snapshot } from '@/shared/protocol.js';
 import { isTest, keepNodes } from './filters.js';
+import { hiddenReason } from './focus.js';
 import { nodeSize } from './labels.js';
 import { type Stacked, stack } from '@/client/graph/layout/components.js';
-import type { PlacedNode } from '@/client/graph/layout/layout.js';
+import { type Direction, nearest, nearestToOrigin } from '@/client/graph/layout/nearest.js';
 import { byFile, edgeKey } from '@/client/graph/layout/rank.js';
 
 export type Filter = 'symbols' | 'consumers' | 'tests';
-export type Direction = 'left' | 'right' | 'up' | 'down';
+export type { Direction };
 
 type Load =
   | { state: 'idle' }
@@ -36,8 +37,10 @@ export interface GraphState {
   selectedEdge: string | null;
   /** The arrow of the details row under the pointer, by `edgeKey`: the canvas shows it on top. */
   hoveredEdge: string | null;
-  /** A file the reader picked in the tree: its nodes stay lit and the view pans to them. */
+  /** A file the reader picked in the tree: its boxes are highlighted and the view frames them. */
   focusPath: string | null;
+  /** Counts the picks, so picking the same file again frames it again. */
+  focusSeq: number;
   /** Draw every changed symbol, past the server's cap. */
   all: boolean;
   /** A folder picked in the tree: only the changes under it are graphed. */
@@ -59,6 +62,8 @@ export interface GraphState {
   pick(target: { path: string; line: number }): Promise<void>;
   setFilter(filter: Filter, on: boolean): void;
   showOnly(part: string | null): void;
+  /** Highlights and frames the boxes of `path`, a file picked in the tree, or says why it has none. */
+  focusFile(path: string): void;
   /** Reloads the graph with every changed symbol the cap left out. */
   showAll(): void;
   /** Shows the graph of only the changes under `dir`, or of all of them again for null. */
@@ -83,6 +88,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   selectedEdge: null,
   hoveredEdge: null,
   focusPath: null,
+  focusSeq: 0,
   find: null,
   only: null,
   all: false,
@@ -159,6 +165,15 @@ export const useGraph = create<GraphState>((set, get) => ({
     const load = get().load;
     if (load.state !== 'ready') return;
     set({ only: part, view: derive(load.graph, get().filters, part) });
+  },
+
+  focusFile(path) {
+    const { view, load, filters, scope } = get();
+    const drawn = new Set(view?.stacked.nodes.map((p) => p.node.path));
+    const why = hiddenReason({ drawn, graph: load.state === 'ready' ? load.graph : null, filters, scope }, path);
+    if (why === 'only') get().showOnly(null);
+    else if (why) useStore.getState().flash(why);
+    set({ focusPath: path, focusSeq: get().focusSeq + 1, selected: null, selectedEdge: null });
   },
 
   showAll() {
@@ -253,8 +268,7 @@ function followReview(): void {
   useStore.subscribe((s, prev) => {
     const graph = useGraph.getState();
     if (s.snapshot !== prev.snapshot && graph.open) void graph.reload();
-    if (s.activePath !== prev.activePath && s.activePath && graph.open)
-      useGraph.setState({ focusPath: s.activePath, selected: null, selectedEdge: null });
+    if (s.activePath !== prev.activePath && s.activePath && graph.open) graph.focusFile(s.activePath);
   });
 }
 
@@ -287,30 +301,3 @@ function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: st
 }
 
 const keptEdge = (view: View, key: string | null) => (key && view.via.has(key) ? key : null);
-
-const centerOf = (p: PlacedNode) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2 });
-
-function nearestToOrigin(nodes: PlacedNode[]): PlacedNode | undefined {
-  return [...nodes].sort((a, b) => a.y - b.y || a.x - b.x)[0];
-}
-
-/** The closest node strictly that way; across layers, sideways distance counts less than the layer gap. */
-function nearest(from: PlacedNode, nodes: PlacedNode[], direction: Direction): PlacedNode | undefined {
-  const a = centerOf(from);
-  const sameLayer = (p: PlacedNode) => p.y < from.y + from.h && from.y < p.y + p.h;
-  const ahead = nodes.filter((p) => {
-    if (p === from) return false;
-    const b = centerOf(p);
-    if (direction === 'up') return b.y < from.y;
-    if (direction === 'down') return b.y > from.y + from.h;
-    if (!sameLayer(p)) return false;
-    return direction === 'left' ? b.x < a.x : b.x > a.x;
-  });
-  const cost = (p: PlacedNode) => {
-    const b = centerOf(p);
-    return direction === 'up' || direction === 'down'
-      ? Math.abs(b.y - a.y) + 2 * Math.abs(b.x - a.x)
-      : Math.abs(b.x - a.x);
-  };
-  return ahead.sort((p, q) => cost(p) - cost(q))[0];
-}

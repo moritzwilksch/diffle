@@ -3,6 +3,7 @@ import { split } from '@/client/graph/layout/components.js';
 import { type Box, layout } from '@/client/graph/layout/layout.js';
 import { byFile, rank } from '@/client/graph/layout/rank.js';
 import { signatureOf } from '@/client/graph/details/useSignatures.js';
+import { hiddenReason } from '@/client/graph/focus.js';
 import { groupName } from '@/client/graph/PartHeader.js';
 import { findMatches, type View } from '@/client/graph/state.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
@@ -190,5 +191,34 @@ describe('findMatches', () => {
     );
     expect(findMatches(v, ' total ')).toEqual(['subtotal', 'Total', 'total_by_day', 'x']);
     expect(findMatches(v, '')).toEqual([]);
+  });
+});
+
+describe('hiddenReason', () => {
+  const g = {
+    ...graph([node('run', 'modified', 'pkg/run.py'), node('t', 'modified', 'tests/test_run.py'), node('use', 'consumer', 'cli.py')], []),
+    cut: [node('late', 'modified', 'pkg/late.py')],
+  };
+  const shown = { drawn: new Set(['pkg/run.py']), graph: g, filters: { consumers: false, tests: false }, scope: 'pkg' };
+
+  it('says why a picked file has no box, or that another part shown alone hides it', () => {
+    const why = (path: string, over = {}) => hiddenReason({ ...shown, ...over }, path);
+    expect({
+      drawn: why('pkg/run.py'),
+      test: why('tests/test_run.py'),
+      dependent: why('cli.py'),
+      otherPart: why('cli.py', { filters: { consumers: true, tests: false } }),
+      cut: why('pkg/late.py'),
+      outside: why('docs/conf.py'),
+      nothing: why('pkg/empty.py'),
+    }).toEqual({
+      drawn: null,
+      test: 'test_run.py is test code, and tests are hidden: T shows them',
+      dependent: 'cli.py only uses the change, and dependents are hidden: d shows them',
+      otherPart: 'only',
+      cut: 'late.py did not fit in the graph: see Not in the graph',
+      outside: 'conf.py is outside pkg/, the folder the graph shows',
+      nothing: 'empty.py has no changed function, class or type, and uses none',
+    });
   });
 });

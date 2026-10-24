@@ -36,6 +36,8 @@ const MIN_ZOOM = 0.15;
 const FIT_ZOOM = 1.25;
 /** Pixels per line, for wheels that scroll by lines. */
 const LINE_PX = 16;
+/** The most a file picked in the tree is zoomed in on: one box reads at its natural size. */
+const FOCUS_ZOOM = 1;
 /** The most a double-click zooms in on a node and its neighbours. */
 const FRAME_ZOOM = 1.6;
 
@@ -46,7 +48,6 @@ export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {}, fra
  * The placed graph as SVG, panned by dragging and zoomed by the wheel. The selection, or the file
  * focused from the tree, stays lit with its links and the rest fades.
  */
-useGraph.subscribe((s, p) => { if (s.selected !== p.selected) console.log('SEL', p.selected, '->', s.selected, new Error().stack); });
 export function GraphCanvas({ view: shown, clustered }: { view: View; clustered: boolean }) {
   const stacked = shown.stacked;
   const only = useGraph((s) => s.only);
@@ -55,6 +56,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   const [hovered, setHovered] = useState<string | null>(null);
   const selected = useGraph((s) => s.selected);
   const focusPath = useGraph((s) => s.focusPath);
+  const focusSeq = useGraph((s) => s.focusSeq);
   const find = useGraph((s) => s.find);
   const host = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<Viewport>({ x: 0, y: 0, k: 1 });
@@ -90,11 +92,11 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     };
   });
 
-  // A file picked in the tree: show its boxes whole.
+  // A file picked in the tree: frame its boxes, all of them, the same way on every pick.
   useEffect(() => {
     const boxes = stacked.nodes.filter((p) => p.node.path === focusPath);
-    if (boxes.length) fitBox(bounds(boxes), 1);
-  }, [focusPath, stacked]);
+    if (boxes.length) fitBox(bounds(boxes), FOCUS_ZOOM);
+  }, [focusPath, focusSeq, stacked]);
   // A selection moved by the keys: bring it into view when it left it.
   useEffect(() => {
     const p = stacked.nodes.find((n) => n.node.id === selected);
