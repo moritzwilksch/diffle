@@ -98,6 +98,58 @@ async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language
 }
 
 #[tokio::test]
+async fn navigates_on_from_files_outside_the_snapshot_that_the_language_server_named_and_from_no_others() {
+    let (outside, dir) = root();
+    let (site, next, secret) = (dir.join("site.py"), dir.join("next.py"), dir.join("secret.py"));
+    std::fs::write(&site, "import sys\ndef g():\n    pass\n").unwrap();
+    std::fs::write(&next, "def h():\n    pass\n").unwrap();
+    std::fs::write(&secret, "token = 1\n").unwrap();
+    let [site_s, next_s, secret_s] = [&site, &next, &secret].map(|p| p.to_string_lossy().into_owned());
+    let env = [("FAKE_LSP_EXTERNAL", site_s.as_str()), ("FAKE_LSP_EXTERNAL_NEXT", next_s.as_str())];
+    let overrides = [(LanguageId::Python, "fake")];
+    let Some(s) = serve(python_repo(), EnterRequest::Working, &env, &overrides).await else { return };
+    ready(&s).await;
+    let at = |path: &str| json!({ "path": path, "line": 2, "col": 4 });
+    let refused = s.json("POST", "/api/lsp/definition", at(&site_s)).await;
+    assert_eq!(
+        (refused.status, refused.json()["error"].clone()),
+        (409, json!(format!("{site_s} is not in the snapshot")))
+    );
+    // Hop one, from the repository: the server names site.py.
+    assert_eq!(s.json("POST", "/api/lsp/definition", at("source.py")).await.status, 200);
+    // Hop two, from site.py: it names next.py, which becomes readable and a further origin.
+    let def = s.json("POST", "/api/lsp/definition", at(&site_s)).await;
+    assert_eq!(
+        (def.status, def.json()["locations"].clone()),
+        (
+            200,
+            json!([
+                { "path": site_s, "line": 2, "col": 4, "text": "def g():", "external": true },
+                { "path": next_s, "line": 1, "col": 0, "text": "def h():", "external": true },
+            ])
+        )
+    );
+    assert_eq!(s.get(&file_query(&next_s, "new")).await.status, 200);
+    for route in ["definition", "type-definition", "hover", "references", "occurrences"] {
+        let res = s.json("POST", &format!("/api/lsp/{route}"), at(&next_s)).await;
+        assert_eq!(res.status, 200, "{route}: {}", res.body);
+    }
+    let encoded: String = form_urlencoded::byte_serialize(next_s.as_bytes()).collect();
+    assert_eq!(s.get(&format!("/api/lsp/symbols?path={encoded}")).await.status, 200);
+    // Nothing named the secret or the detour to site.py through `sub/..`, and a repository path
+    // stays bound to the snapshot.
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    let detour = dir.join("sub/../site.py").to_string_lossy().into_owned();
+    for unnamed in [&secret_s, &detour] {
+        assert_eq!(s.json("POST", "/api/lsp/hover", at(unnamed)).await.status, 409, "{unnamed}");
+        assert_eq!(s.get(&file_query(unnamed, "new")).await.status, 404, "{unnamed}");
+    }
+    assert_eq!(s.json("POST", "/api/lsp/hover", at("missing.py")).await.status, 409);
+    s.close().await;
+    drop(outside);
+}
+
+#[tokio::test]
 async fn answers_definition_hover_references_occurrences_and_symbols() {
     let overrides = [(LanguageId::Python, "fake")];
     let Some(s) = serve(python_repo(), EnterRequest::Working, &[], &overrides).await else { return };

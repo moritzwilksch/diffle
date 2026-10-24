@@ -1318,14 +1318,12 @@ export const useStore = create<ReviewState>((set, get) => {
   const blocker = (path?: string, feature?: LspFeature): string | null =>
     lspBlocker(get().lsp, get().snapshot, { path, feature });
 
-  /** Why the server cannot be asked about `target`, or null. Only snapshot files on the new side are open in it. */
+  /**
+   * Why the server cannot be asked about `target`, or null. It reads the new side only: a snapshot file, or a
+   * file outside the repository that a result named.
+   */
   const targetBlocker = (target: Pick<TokenTarget, 'path' | 'side'>, feature?: LspFeature): string | null =>
-    blocker(target.path, feature) ??
-    (target.side === 'old'
-      ? 'Symbol navigation works on the new side only'
-      : get().fileView?.external
-        ? 'Symbol navigation starts from a repository file'
-        : null);
+    blocker(target.path, feature) ?? (target.side === 'old' ? 'Symbol navigation works on the new side only' : null);
 
   /** The LSP position for a hovered token, or null after flashing why not. */
   const lspPosition = (target: TokenTarget | null | undefined, feature: LspFeature): LspPosition | null => {

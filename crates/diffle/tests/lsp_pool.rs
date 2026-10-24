@@ -104,7 +104,9 @@ fn start(setup: Setup) -> Option<Started> {
     for (command, vars) in &setup.env {
         let name = command.split(' ').next().unwrap();
         let mut vars = vars.clone();
-        vars.push(("FAKE_LSP_EXTERNAL", "/nonexistent/site.py"));
+        if !vars.iter().any(|(k, _)| *k == "FAKE_LSP_EXTERNAL") {
+            vars.push(("FAKE_LSP_EXTERNAL", "/nonexistent/site.py"));
+        }
         fake_env(&root, Some(name), &vars);
     }
     let reads_disk = setup.on_disk.is_some();
@@ -447,4 +449,29 @@ async fn has_nothing_to_say_once_closed() {
     assert_eq!(s.statuses.lock().unwrap().len(), seen);
     let err = s.pool.definition(&pos("a.py", 1, 0)).await.unwrap_err();
     assert!(err.to_string().contains("shutting down"), "{err}");
+}
+
+#[tokio::test]
+async fn asks_about_a_file_outside_the_snapshot_only_the_servers_that_named_it() {
+    let (outside, dir) = root();
+    let lib = dir.join("lib.tsx");
+    std::fs::write(&lib, "const g = 1;\ng;\n").unwrap();
+    let lib_s: &'static str = Box::leak(lib.to_string_lossy().into_owned().into_boxed_str());
+    let env = vec![("ts-server", vec![("FAKE_LSP_EXTERNAL", lib_s)])];
+    let Some(s) = overlay(&[(LanguageId::Typescriptreact, "ts-server")], env) else { return };
+    s.pool.track(&diff(&["a.tsx"])).await;
+    assert!(!s.pool.named(lib_s));
+    // The owner names lib.tsx; the joined Tailwind answers with its own file alone.
+    s.pool.definition(&pos("a.tsx", 2, 0)).await.unwrap();
+    assert!(s.pool.named(lib_s));
+    // So the owner answers from lib.tsx alone: no "tailwind says hi" merged in.
+    assert_eq!(
+        json_of(&s.pool.hover(&pos(lib_s, 2, 0)).await.unwrap()),
+        json!({ "contents": OWNER_HOVER, "range": { "line": 2, "col": 4, "endLine": 2, "endCol": 5 } })
+    );
+    s.settle().await;
+    assert!(s.events("ts-server").unwrap().contains(&"open lib.tsx v1".to_owned()));
+    assert!(!s.events(TAILWIND).unwrap().iter().any(|e| e.contains("lib.tsx")));
+    s.pool.close().await;
+    drop(outside);
 }

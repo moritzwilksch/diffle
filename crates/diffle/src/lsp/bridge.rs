@@ -1,13 +1,12 @@
 //! One language server as diffle asks it: requests against synced documents, answers in snapshot paths.
 use std::collections::HashSet;
 use std::num::NonZeroU64;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::documents::{Documents, ReadFn};
+use super::documents::{Documents, Origin, ReadFn};
 use super::hover::{hover_markdown, localize_file_links};
 use super::locator::{HasFn, Locator};
 use super::process::{LspProcess, ProcessOptions, SettingsFuture};
@@ -43,7 +42,6 @@ pub struct LspBridge {
     process: Arc<LspProcess>,
     documents: Documents,
     locator: Locator,
-    root: PathBuf,
 }
 
 impl LspBridge {
@@ -53,8 +51,8 @@ impl LspBridge {
         let uri_root = root.clone();
         let uri = Arc::new(move |path: &str| file_uri(&uri_root, path));
         let documents = Documents::new(process.clone(), opts.read.clone(), uri, opts.max_open);
-        let locator = Locator::new(root.clone(), opts.read, opts.has);
-        Self { process, documents, locator, root }
+        let locator = Locator::new(root, opts.read, opts.has);
+        Self { process, documents, locator }
     }
 
     /// The server process, for what goes to it beside the queries: diagnostics and tests.
@@ -88,8 +86,9 @@ impl LspBridge {
     }
 
     pub async fn hover(&self, pos: &LspPosition) -> Result<LspHoverResponse> {
-        let params = self.at(pos, json!({}));
-        let (result, busy) = self.query("textDocument/hover", params, Some(&pos.path), Some(LspFeature::Hover)).await?;
+        let origin = self.document(&pos.path)?;
+        let params = self.at(&origin, pos, json!({}));
+        let (result, busy) = self.query("textDocument/hover", params, Some(&origin), Some(LspFeature::Hover)).await?;
         let Some(md) = result.get("contents").and_then(hover_markdown) else {
             return Ok(LspHoverResponse { contents: None, range: None, inconclusive: inconclusive(true, busy) });
         };
@@ -105,9 +104,10 @@ impl LspBridge {
     /// scope and shadowing are the server's call. A server not offering it, or a position holding
     /// no symbol, yields none: the answer is advisory.
     pub async fn occurrences(&self, pos: &LspPosition) -> Result<LspOccurrencesResponse> {
-        let params = self.at(pos, json!({}));
+        let origin = self.document(&pos.path)?;
+        let params = self.at(&origin, pos, json!({}));
         let result = match self
-            .query("textDocument/documentHighlight", params, Some(&pos.path), Some(LspFeature::DocumentHighlight))
+            .query("textDocument/documentHighlight", params, Some(&origin), Some(LspFeature::DocumentHighlight))
             .await
         {
             Ok((result, _)) => result,
@@ -144,9 +144,10 @@ impl LspBridge {
     }
 
     pub async fn document_symbols(&self, path: &str) -> Result<LspSymbolsResponse> {
-        let params = json!({ "textDocument": { "uri": file_uri(&self.root, path) } });
+        let origin = self.document(path)?;
+        let params = json!({ "textDocument": { "uri": self.documents.uri(&origin) } });
         let (result, busy) =
-            self.query("textDocument/documentSymbol", params, Some(path), Some(LspFeature::DocumentSymbol)).await?;
+            self.query("textDocument/documentSymbol", params, Some(&origin), Some(LspFeature::DocumentSymbol)).await?;
         let symbols = if result.is_null() { Vec::new() } else { flatten_symbols(&result, path) };
         Ok(LspSymbolsResponse { inconclusive: inconclusive(symbols.is_empty(), busy), symbols })
     }
@@ -188,6 +189,12 @@ impl LspBridge {
         self.locator.read_external(path).await
     }
 
+    /// The document this server would be asked about for `path`: a repository path, or an outside
+    /// file one of its own results named; none for any other path (see `Locator::origin`).
+    pub fn origin(&self, path: &str) -> Option<Origin> {
+        self.locator.origin(path)
+    }
+
     /// Replaces the server's settings (see `LspProcess::reconfigure`).
     pub fn reconfigure(&self, settings: SettingsFuture) {
         self.process.reconfigure(settings);
@@ -197,9 +204,17 @@ impl LspBridge {
         self.process.close().await;
     }
 
-    fn at(&self, pos: &LspPosition, extra: Value) -> Value {
+    /// The document a query asks about, promoted in the locator's memory: the one place a query counts.
+    fn document(&self, path: &str) -> Result<Origin> {
+        let origin =
+            self.locator.origin(path).ok_or_else(|| Error::Invalid(format!("{path} is not in the snapshot")))?;
+        self.locator.promote(&origin);
+        Ok(origin)
+    }
+
+    fn at(&self, origin: &Origin, pos: &LspPosition, extra: Value) -> Value {
         let mut params = json!({
-            "textDocument": { "uri": file_uri(&self.root, &pos.path) },
+            "textDocument": { "uri": self.documents.uri(origin) },
             "position": to_lsp(pos.line.get() as i64, pos.col),
         });
         if let (Some(params), Some(extra)) = (params.as_object_mut(), extra.as_object()) {
@@ -215,7 +230,8 @@ impl LspBridge {
         pos: &LspPosition,
         extra: Value,
     ) -> Result<LspLocationsResponse> {
-        let (result, busy) = self.query(method, self.at(pos, extra), Some(&pos.path), Some(feature)).await?;
+        let origin = self.document(&pos.path)?;
+        let (result, busy) = self.query(method, self.at(&origin, pos, extra), Some(&origin), Some(feature)).await?;
         let text_of = |path: &str| self.documents.text_of(path);
         let locations = self.locator.locations(&normalize_locations(&result), &text_of).await;
         Ok(LspLocationsResponse { inconclusive: inconclusive(locations.is_empty(), busy), locations })
@@ -230,12 +246,12 @@ impl LspBridge {
         &self,
         method: &str,
         params: Value,
-        path: Option<&str>,
+        origin: Option<&Origin>,
         feature: Option<LspFeature>,
     ) -> Result<(Value, Option<String>)> {
         for attempt in 0.. {
-            if let Some(path) = path {
-                self.documents.sync(path).await?;
+            if let Some(origin) = origin {
+                self.documents.sync(origin).await?;
             }
             let rpc = self.process.connection().await?;
             if let Some(feature) = feature.filter(|f| !self.process.supports(*f)) {
@@ -250,7 +266,7 @@ impl LspBridge {
                 Ok(result) => return Ok((result, self.process.busy().or(pending))),
                 Err(RequestError::Rpc(e)) if e.code == CONTENT_MODIFIED => {
                     let Some(backoff) = CONTENT_MODIFIED_BACKOFF.get(attempt) else {
-                        let what = path.unwrap_or("the repository");
+                        let what = origin.map_or_else(|| "the repository".to_owned(), Origin::to_string);
                         let name = self.process.name();
                         return Err(Error::LspUnavailable(format!(
                             "{name} could not answer while {what} kept changing; try again"

@@ -168,6 +168,111 @@ async fn reads_a_file_inside_the_root_that_the_snapshot_hides_from_disk_and_mark
 }
 
 #[tokio::test]
+async fn asks_about_a_file_outside_the_root_once_a_result_named_it_opening_it_from_disk_under_its_own_uri() {
+    let (outside, dir) = root();
+    let (site, next) = (dir.join("site.py"), dir.join("next.py"));
+    std::fs::write(&site, "import sys\ndef g():\n    pass\n").unwrap();
+    std::fs::write(&next, "def h():\n    pass\n").unwrap();
+    let (site_s, next_s) = (site.to_string_lossy().into_owned(), next.to_string_lossy().into_owned());
+    let Some(s) = start(&[("FAKE_LSP_EXTERNAL", &site_s), ("FAKE_LSP_EXTERNAL_NEXT", &next_s)]) else { return };
+    // Never named: refused before anything reaches the server.
+    assert!(matches!(s.bridge.definition(&pos(&site_s, 2, 4)).await, Err(Error::Invalid(_))));
+    s.bridge.definition(&pos("a.py", 3, 4)).await.unwrap();
+    let res = s.bridge.definition(&pos(&site_s, 2, 4)).await.unwrap();
+    assert_eq!(
+        json_of(&res.locations),
+        json!([
+            { "path": site_s, "line": 2, "col": 4, "text": "def g():", "external": true },
+            { "path": next_s, "line": 1, "col": 0, "text": "def h():", "external": true },
+        ])
+    );
+    // The file the outside file named is the next origin, and so on.
+    assert!(s.bridge.hover(&pos(&next_s, 2, 0)).await.unwrap().contents.is_some());
+    s.settle().await;
+    let opened: Vec<String> = s.events().into_iter().filter(|e| e.starts_with("open ")).collect();
+    assert_eq!(opened, ["open a.py v1", "open site.py v1", "open next.py v1"]);
+    // Outside files come from disk, never through the snapshot read.
+    assert_eq!(*s.reads.lock().unwrap(), ["a.py"]);
+    s.bridge.close().await;
+    drop(outside);
+}
+
+#[tokio::test]
+async fn opens_a_file_once_when_it_is_asked_about_from_outside_and_then_tracked_as_a_snapshot_path() {
+    let Some(s) = start(&[]) else { return };
+    std::fs::write(s.root.join("ignored.py"), "VENV = True\n").unwrap();
+    s.bridge.references(&pos("a.py", 1, 0)).await.unwrap();
+    let ignored = s.root.join("ignored.py").to_string_lossy().into_owned();
+    s.bridge.hover(&pos(&ignored, 1, 0)).await.unwrap();
+    // The file joins the snapshot (no longer ignored): one URI, so one document.
+    s.set("ignored.py", "VENV = True\n");
+    s.bridge.track(&["ignored.py".to_owned()]).await;
+    s.set("ignored.py", "VENV = False\n");
+    s.bridge.track(&["ignored.py".to_owned()]).await;
+    s.settle().await;
+    let about: Vec<String> = s.events().into_iter().filter(|e| e.contains("ignored.py")).collect();
+    assert_eq!(about, ["open ignored.py v1", "change ignored.py v2"]);
+    s.bridge.close().await;
+}
+
+#[tokio::test]
+async fn opens_a_file_once_when_the_server_names_it_through_the_real_path_of_a_symlinked_root() {
+    let (dir, base) = root();
+    let (real, link) = (base.join("real"), base.join("link"));
+    std::fs::create_dir(&real).unwrap();
+    std::fs::write(real.join("ignored.py"), "VENV = True\n").unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let named = real.join("ignored.py").to_string_lossy().into_owned();
+    let Some(s) = start_with(&[("FAKE_LSP_EXTERNAL", &named)], Some(link.clone()), None, None) else { return };
+    let res = s.bridge.definition(&pos("a.py", 3, 4)).await.unwrap();
+    // The server spelled it through the real path; diffle remembers it through the root it was given.
+    let ignored = link.join("ignored.py").to_string_lossy().into_owned();
+    assert_eq!(
+        json_of(res.locations.last().unwrap()),
+        json!({ "path": ignored, "line": 1, "col": 0, "text": "VENV = True", "external": true })
+    );
+    assert!(s.bridge.origin(&named).is_none());
+    s.bridge.hover(&pos(&ignored, 1, 0)).await.unwrap();
+    s.set("ignored.py", "VENV = False\n");
+    s.bridge.track(&["ignored.py".to_owned()]).await;
+    s.settle().await;
+    let about: Vec<String> = s.events().into_iter().filter(|e| e.contains("ignored.py")).collect();
+    assert_eq!(about, ["open ignored.py v1", "change ignored.py v2"]);
+    s.bridge.close().await;
+    drop(dir);
+}
+
+#[tokio::test]
+async fn keeps_a_hidden_file_inside_the_root_external_until_it_joins_the_snapshot_and_then_holds_its_text() {
+    let (dir, base) = root();
+    std::fs::create_dir(base.join(".venv")).unwrap();
+    std::fs::write(base.join(".venv/x.py"), "X = 1\ndef g():\n").unwrap();
+    let venv = base.join(".venv/x.py").to_string_lossy().into_owned();
+    let Some(s) = start_with(&[("FAKE_LSP_EXTERNAL", &venv)], Some(base.clone()), None, None) else { return };
+    s.bridge.definition(&pos("a.py", 3, 4)).await.unwrap();
+    // Asked from the hidden file, the server points back into it: still the outside file, not a
+    // repository path the snapshot lacks.
+    let res = s.bridge.definition(&pos(&venv, 1, 0)).await.unwrap();
+    assert_eq!(
+        json_of(&res.locations),
+        json!([
+            { "path": venv, "line": 2, "col": 4, "text": "def g():", "external": true },
+            { "path": venv, "line": 1, "col": 0, "text": "X = 1", "external": true },
+        ])
+    );
+    // Once it joins the snapshot with other text, a query through its outside spelling keeps the
+    // snapshot's text rather than flipping the one document back to the disk's.
+    s.set(".venv/x.py", "X = 2\ndef g():\n");
+    s.bridge.track(&[".venv/x.py".to_owned()]).await;
+    s.bridge.hover(&pos(&venv, 2, 0)).await.unwrap();
+    s.settle().await;
+    let about: Vec<String> = s.events().into_iter().filter(|e| e.contains("x.py")).collect();
+    assert_eq!(about, ["open x.py v1", "change x.py v2"]);
+    s.bridge.close().await;
+    drop(dir);
+}
+
+#[tokio::test]
 async fn maps_document_highlights_to_new_side_occurrences_with_their_kind_and_stays_quiet_without_them() {
     let Some(s) = start(&[]) else { return };
     // The fake marks `z = ` a write and every other `z` in the enclosing block a read; the `z` outside it is out of scope.

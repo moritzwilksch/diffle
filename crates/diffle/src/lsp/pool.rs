@@ -8,7 +8,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use indexmap::IndexMap;
 
-use super::documents::ReadFn;
+use super::documents::{Origin, ReadFn};
 use super::locator::HasFn;
 use super::merge::{merge_hovers, merge_locations, union};
 use super::pool_server::{PathsByLanguage, PoolServer, ServerOptions, paths_of};
@@ -113,6 +113,12 @@ impl LspPool {
         None
     }
 
+    /// Whether a running server may be asked about `path`, a file outside the snapshot: one of its
+    /// results named it.
+    pub fn named(&self, path: &str) -> bool {
+        self.servers().iter().any(|s| matches!(s.bridge.origin(path), Some(Origin::External { .. })))
+    }
+
     pub async fn definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
         self.locations(pos, Locate::Definition).await
     }
@@ -193,7 +199,10 @@ impl LspPool {
     }
 
     /// Every server for `path`, owner first; a language nothing owns is still served by the servers
-    /// joining it. The route has asked `lsp_blocker` already, so none here is a race.
+    /// joining it. A file outside the snapshot goes only to the servers that named it: another
+    /// server for its language may resolve it in a different environment, or not index it at all.
+    /// This decides routing, not access: each bridge refuses what its own results never named.
+    /// The route has asked `lsp_blocker` already, so none here is a race.
     fn servers_for(&self, path: &str) -> Result<Vec<Arc<PoolServer>>> {
         if self.closing.load(Ordering::SeqCst) {
             return Err(Error::LspUnavailable("the language servers are shutting down".into()));
@@ -202,7 +211,8 @@ impl LspPool {
         let found: Vec<Arc<PoolServer>> = match language_of(path) {
             Some(language) => {
                 let owners = all.iter().filter(|s| s.routes().languages.contains(&language));
-                owners.chain(all.iter().filter(|s| s.routes().joins.contains(&language))).cloned().collect()
+                let joiners = all.iter().filter(|s| s.routes().joins.contains(&language));
+                owners.chain(joiners).filter(|s| s.bridge.origin(path).is_some()).cloned().collect()
             }
             None => Vec::new(),
         };

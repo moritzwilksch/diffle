@@ -60,7 +60,8 @@ async fn pool_for(d: &ApiDeps, path: Option<&str>, feature: Option<LspFeature>) 
         return Err(refuse(blocked));
     }
     let Some(pool) = d.lsp.clone() else { return Err(refuse("language servers are off".into())) };
-    if let Some(path) = path.filter(|p| !d.session.has_side(&snap, p, Side::New)) {
+    // Beyond the snapshot, only a file a running server named may be asked about (see `Locator::origin`).
+    if let Some(path) = path.filter(|p| !d.session.has_side(&snap, p, Side::New) && !pool.named(p)) {
         return Err(refuse(format!("{path} is not in the snapshot")));
     }
     Ok(pool)

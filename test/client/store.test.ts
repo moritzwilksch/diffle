@@ -1305,19 +1305,16 @@ describe('symbol navigation', () => {
     expect(s.fileView).toMatchObject({ path: site, external: true, item: { kind: 'file' } });
     expect(s.activePath).toBe(site);
     expect(s.selection?.range.end).toBe(2);
-    // No comments on it, and no navigation from it: the server knows only snapshot files.
+    // No comments on it, but navigation goes on from it: the server that named it is asked by its absolute path.
     await useStore.getState().openDraft(s.selection!);
     expect(useStore.getState().draft).toBeNull();
     expect(useStore.getState().toast).toMatch(/repository files only/);
     api.lspDefinition.mockClear();
     await useStore.getState().goToDefinition({ ...target, path: site });
-    expect(api.lspDefinition).not.toHaveBeenCalled();
-    expect(useStore.getState().toast).toMatch(/starts from a repository file/);
-    useStore.setState({ toast: null });
+    expect(api.lspDefinition).toHaveBeenCalledWith({ path: site, line: 3, col: 4 });
+    api.lspSymbols.mockResolvedValue({ symbols: [] });
     await useStore.getState().openSymbols('document');
-    expect(api.lspSymbols).not.toHaveBeenCalled();
-    expect(useStore.getState().symbols.open).toBe(false);
-    expect(useStore.getState().toast).toMatch(/starts from a repository file/);
+    expect(api.lspSymbols).toHaveBeenCalledWith({ path: site });
     // Jumps inside the view (G, 123gg) reopen the same path; that must not read as the file vanishing.
     useStore.setState({ toast: null });
     await useStore.getState().goToLine(1);
