@@ -6,6 +6,7 @@ import { Markdown } from '@/client/Markdown.js';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { isTest } from '@/client/graph/filters.js';
+import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph } from '@/client/graph/state.js';
 import { type Signature, signatureOf, type Signatures } from './useSignatures.js';
 
@@ -99,7 +100,12 @@ export function Links({
       </SectionHeading>
       <ul className="m-0 flex list-none flex-col gap-4 p-0">
         {shown.map(({ e, n }) => (
-          <li key={`${e.from}>${e.to}`} className="flex flex-col gap-1.5">
+          <li
+            key={`${e.from}>${e.to}`}
+            className="flex flex-col gap-1.5"
+            onPointerEnter={() => useGraph.getState().hoverEdge(edgeKey(e))}
+            onPointerLeave={() => useGraph.getState().hoverEdge(null)}
+          >
             <NodeRow node={n} />
             <Jumps
               rows={[

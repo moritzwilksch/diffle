@@ -34,6 +34,8 @@ export interface GraphState {
   selected: string | null;
   /** The selected arrow, by `edgeKey`; a node and an arrow are never selected together. */
   selectedEdge: string | null;
+  /** The arrow of the details row under the pointer, by `edgeKey`: the canvas shows it on top. */
+  hoveredEdge: string | null;
   /** A file the reader picked in the tree: its nodes stay lit and the view pans to them. */
   focusPath: string | null;
   toggle(): void;
@@ -42,6 +44,7 @@ export interface GraphState {
   /** Selects a node; selecting the selected one again clears it. */
   select(id: string | null): void;
   selectEdge(key: string | null): void;
+  hoverEdge(key: string | null): void;
   /** Moves the selection to the nearest node that way: up / down across layers, left / right within one. */
   step(direction: Direction): void;
   /** Leaves the graph for the diff at `path:line`; Ctrl+o comes back to it as it was. */
@@ -60,6 +63,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   view: null,
   selected: null,
   selectedEdge: null,
+  hoveredEdge: null,
   focusPath: null,
   only: null,
 
@@ -72,7 +76,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   },
 
   close() {
-    set({ open: false, focusPath: null });
+    set({ open: false, focusPath: null, hoveredEdge: null });
   },
 
   async reload() {
@@ -92,11 +96,15 @@ export const useGraph = create<GraphState>((set, get) => ({
   },
 
   select(id) {
-    set({ selected: id === get().selected ? null : id, selectedEdge: null, focusPath: null });
+    set({ selected: id === get().selected ? null : id, selectedEdge: null, hoveredEdge: null, focusPath: null });
+  },
+
+  hoverEdge(key) {
+    set({ hoveredEdge: key });
   },
 
   selectEdge(key) {
-    set({ selectedEdge: key === get().selectedEdge ? null : key, selected: null, focusPath: null });
+    set({ selectedEdge: key === get().selectedEdge ? null : key, selected: null, hoveredEdge: null, focusPath: null });
   },
 
   step(direction) {

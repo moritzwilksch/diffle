@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { KindIcon } from '@/client/lsp/symbolKind.js';
 import { isTest } from './filters.js';
 import { arrowHead, Cluster, Node } from './GraphShapes.js';
+import { useGraph } from './state.js';
 import type { Box, Placed } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 
@@ -55,7 +56,14 @@ export function GraphPart({
     }
     return d;
   }, [placed]);
-  const opacity = (ids: string[]) => (lit && !ids.some((id) => lit.ids.has(id)) ? FADED : 1);
+  // The arrow of the details row under the pointer: drawn last, so on top, with its ends in full.
+  const hovered = useGraph((s) => s.hoveredEdge);
+  const hot = placed.edges.find((e) => edgeKey(e.edge) === hovered)?.edge;
+  const edges = hot
+    ? [...placed.edges.filter((e) => e.edge !== hot), placed.edges.find((e) => e.edge === hot)!]
+    : placed.edges;
+  const opacity = (ids: string[]) =>
+    lit && !ids.some((id) => lit.ids.has(id) || id === hot?.from || id === hot?.to) ? FADED : 1;
   const isOn = (key: string, from: string, to: string) =>
     !!lit && (lit.edge ? lit.edge === key : lit.seeds.has(from) || lit.seeds.has(to));
   // A file view's arrow labels: the unlit ones under the boxes, the lit ones (`on`) over them.
@@ -92,9 +100,10 @@ export function GraphPart({
           />
         );
       })}
-      {placed.edges.map(({ edge, d, back }) => {
+      {edges.map(({ edge, d, back }) => {
         const key = edgeKey(edge);
-        const on = isOn(key, edge.from, edge.to);
+        const isHot = edge === hot;
+        const on = isHot || isOn(key, edge.from, edge.to);
         return (
           <g key={key} data-edge={key} className="cursor-pointer">
             <path d={d} fill="none" stroke="transparent" strokeWidth={HIT_PX / zoom} />
@@ -103,10 +112,10 @@ export function GraphPart({
               fill="none"
               stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
               // Opacity, not stroke-opacity: the arrowhead marker fades only with the whole path.
-              opacity={lit && !on ? FADED_EDGE : on ? 0.95 : 0.5}
-              strokeWidth={width(edge.lines.length)}
+              opacity={isHot ? 1 : (lit && !on) || hot ? FADED_EDGE : on ? 0.95 : 0.5}
+              strokeWidth={width(edge.lines.length) + (isHot ? 1.5 : 0)}
               strokeDasharray={back ? '4 3' : undefined}
-              markerEnd={arrowHead(width(edge.lines.length), on)}
+              markerEnd={arrowHead(Math.min(3, width(edge.lines.length) + (isHot ? 1 : 0)), on)}
             />
           </g>
         );
