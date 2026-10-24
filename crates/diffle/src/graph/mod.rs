@@ -18,8 +18,13 @@ pub const MAX_NODES: usize = 80;
 /// Language server requests in flight at once.
 const PARALLEL: usize = 8;
 
-/// One request's answer; `None` when no server could take it, which leaves a gap, not an error.
-type Answer<T> = Result<Option<(T, Option<String>)>>;
+/// One request's answer, and why the graph may lack something it would have said. A failed
+/// request is a gap, not a failed graph: the graph gathers many advisory queries, and one server
+/// cancelling one of them while it indexes should not cost the rest.
+struct Answer<T> {
+    found: Option<T>,
+    why: Option<String>,
+}
 
 /// Builds the graph of `snap`, whose new side the servers read (the caller has checked).
 pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapshot) -> Result<GraphResponse> {
@@ -33,16 +38,16 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
         .collect();
 
     let changed_files = map_limit(files, PARALLEL, |path| async move {
-        let Some(patch) = snapshotter.patch(&path).await? else { return Ok(None) };
-        let outline = answer(pool.document_symbols(&path).await.map(|r| (r.symbols, r.inconclusive)))?;
-        Ok::<_, Error>(outline.map(|(symbols, why)| (path, symbols::interface(symbols), new_side_changes(&patch), why)))
+        let patch = snapshotter.patch(&path).await?;
+        Ok::<_, Error>((outline(pool, &path).await, patch.map(|p| new_side_changes(&p)), path))
     })
     .await;
     let mut outlines = HashMap::new();
     let mut changed = Vec::new();
     for file in changed_files {
-        let Some((path, outline, changes, why)) = file? else { continue };
-        reasons.extend(why);
+        let (outline, changes, path) = file?;
+        reasons.extend(outline.why);
+        let (Some(outline), Some(changes)) = (outline.found, changes) else { continue };
         changed.extend(symbols::changed_symbols(&outline, &changes));
         outlines.insert(path, outline);
     }
@@ -54,9 +59,8 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     let references = map_limit(symbols, PARALLEL, |symbol| async move { references(pool, &symbol).await }).await;
     let mut locations = Vec::with_capacity(references.len());
     for answer in references {
-        let (found, why) = answer?.unwrap_or_default();
-        reasons.extend(why);
-        locations.push(found);
+        reasons.extend(answer.why);
+        locations.push(answer.found.unwrap_or_default());
     }
 
     let mut unread: Vec<String> =
@@ -64,33 +68,35 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     unread.sort_unstable();
     unread.dedup();
     unread.retain(|p| !outlines.contains_key(p));
-    let more = map_limit(unread, PARALLEL, |path| async move {
-        let outline = answer(pool.document_symbols(&path).await.map(|r| (r.symbols, r.inconclusive)))?;
-        Ok::<_, Error>(outline.map(|(outline, why)| (path, symbols::interface(outline), why)))
-    })
-    .await;
-    for outline in more {
-        let Some((path, symbols, why)) = outline? else { continue };
-        reasons.extend(why);
-        outlines.insert(path, symbols);
+    let more = map_limit(unread, PARALLEL, |path| async move { (outline(pool, &path).await, path) }).await;
+    for (outline, path) in more {
+        reasons.extend(outline.why);
+        outlines.extend(outline.found.map(|o| (path, o)));
     }
 
     let (nodes, edges) = link::link(changed, locations, &outlines);
     Ok(GraphResponse { nodes, edges, truncated, inconclusive: reasons.into_iter().next() })
 }
 
+/// The interface-level symbols of `path`.
+async fn outline(pool: &LspPool, path: &str) -> Answer<Vec<LspSymbol>> {
+    answer(pool.document_symbols(path).await.map(|r| (symbols::interface(r.symbols), r.inconclusive)))
+}
+
 async fn references(pool: &LspPool, symbol: &LspSymbol) -> Answer<Vec<LspLocation>> {
     let line = u64::try_from(symbol.line).ok().and_then(std::num::NonZeroU64::new);
-    let (Some(line), Ok(path)) = (line, symbol.path.clone().try_into()) else { return Ok(None) };
+    let (Some(line), Ok(path)) = (line, symbol.path.clone().try_into()) else {
+        return Answer { found: None, why: None };
+    };
     let pos = LspPosition { path, line, col: symbol.col };
     answer(pool.references(&pos).await.map(|r| (r.locations, r.inconclusive)))
 }
 
-/// A refusal for want of a server or a feature is a gap in the graph; anything else fails it.
+/// No server for the language, or none offering the request, is a gap with nothing to explain.
 fn answer<T>(result: Result<(T, Option<String>)>) -> Answer<T> {
     match result {
-        Ok(found) => Ok(Some(found)),
-        Err(Error::LspUnavailable(_) | Error::LspUnsupported(_)) => Ok(None),
-        Err(e) => Err(e),
+        Ok((found, why)) => Answer { found: Some(found), why },
+        Err(Error::LspUnavailable(_) | Error::LspUnsupported(_)) => Answer { found: None, why: None },
+        Err(e) => Answer { found: None, why: Some(e.to_string()) },
     }
 }
