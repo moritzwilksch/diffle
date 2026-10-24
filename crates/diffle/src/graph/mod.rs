@@ -35,7 +35,7 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     let changed_files = map_limit(files, PARALLEL, |path| async move {
         let Some(patch) = snapshotter.patch(&path).await? else { return Ok(None) };
         let outline = answer(pool.document_symbols(&path).await.map(|r| (r.symbols, r.inconclusive)))?;
-        Ok::<_, Error>(outline.map(|(symbols, why)| (path, symbols, new_side_changes(&patch), why)))
+        Ok::<_, Error>(outline.map(|(symbols, why)| (path, symbols::interface(symbols), new_side_changes(&patch), why)))
     })
     .await;
     let mut outlines = HashMap::new();
@@ -66,11 +66,11 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     unread.retain(|p| !outlines.contains_key(p));
     let more = map_limit(unread, PARALLEL, |path| async move {
         let outline = answer(pool.document_symbols(&path).await.map(|r| (r.symbols, r.inconclusive)))?;
-        Ok::<_, Error>(outline.map(|o| (path, o)))
+        Ok::<_, Error>(outline.map(|(outline, why)| (path, symbols::interface(outline), why)))
     })
     .await;
     for outline in more {
-        let Some((path, (symbols, why))) = outline? else { continue };
+        let Some((path, symbols, why)) = outline? else { continue };
         reasons.extend(why);
         outlines.insert(path, symbols);
     }
