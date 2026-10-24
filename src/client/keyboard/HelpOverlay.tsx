@@ -51,6 +51,21 @@ export const COLUMNS: HelpSection[][] = [
         ['yl', 'copy a GitHub link to the line or selection'],
       ],
     },
+    {
+      title: 'View',
+      rows: [
+        ['zz', 'scroll the current line to eye level'],
+        ['zt / zb', 'scroll the current line to the top / bottom'],
+        ['s', 'toggle split / unified'],
+        ['zw', 'toggle line wrapping'],
+        ['zh / zl', 'scroll long lines left / right; hold z to repeat'],
+        ['t', 'cycle theme'],
+        ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
+        ['o', 'GitHub repository and pull request'],
+        ['m, then 1–6', 'open the mode picker and choose an entry'],
+        ['< / >', 'older / newer commit or range-diff pair'],
+      ],
+    },
   ],
   [
     {
@@ -87,21 +102,6 @@ export const COLUMNS: HelpSection[][] = [
         ['s / d / T', 'toggle symbol nodes / dependents / tests'],
         ['0  + / -', 'fit the graph / zoom in / out'],
         ['scroll / pinch', 'pan / zoom the graph'],
-      ],
-    },
-    {
-      title: 'View',
-      rows: [
-        ['zz', 'scroll the current line to eye level'],
-        ['zt / zb', 'scroll the current line to the top / bottom'],
-        ['s', 'toggle split / unified'],
-        ['zw', 'toggle line wrapping'],
-        ['zh / zl', 'scroll long lines left / right; hold z to repeat'],
-        ['t', 'cycle theme'],
-        ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],
-        ['o', 'GitHub repository and pull request'],
-        ['m, then 1–6', 'open the mode picker and choose an entry'],
-        ['< / >', 'older / newer commit or range-diff pair'],
       ],
     },
     {
