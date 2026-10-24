@@ -3,7 +3,7 @@ import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { PART_HEADER } from '@/client/graph/layout/components.js';
 
-// Text widths at the sizes below, to place the action past the title.
+// Text widths at the sizes below, to place the action just past the title and count.
 const TITLE_CHAR = 7.9;
 const COUNT_CHAR = 6.4;
 const ROW = 28;
@@ -29,7 +29,8 @@ export function groupName(hub: GraphNode, nodes: GraphNode[], files: boolean): H
 
 /**
  * A group's heading row above its boxes, ruled across the whole graph: its name, how many boxes it
- * holds, and the switch between it alone and every group, which shows on hover until it is in use.
+ * holds, and beside them the switch between it alone and every group, which shows on hover until it
+ * is in use.
  */
 export function PartHeader({
   name,
@@ -58,7 +59,9 @@ export function PartHeader({
   const textEnd = textX + title.length * (plain ? COUNT_CHAR + 0.6 : TITLE_CHAR) + 10 + countText.length * COUNT_CHAR;
   const label = action?.showingOnly ? 'Show all' : 'Show only';
   const buttonW = 28 + label.length * COUNT_CHAR;
-  const rowW = Math.max(width, textEnd + 16 + buttonW);
+  // Beside the text, where the eye already is; the rule still runs the whole row.
+  const buttonX = textEnd + 12;
+  const rowW = Math.max(width, buttonX + buttonW);
   return (
     <g className="group">
       <rect x={0} y={top} width={rowW} height={ROW} fill="transparent" />
@@ -90,7 +93,7 @@ export function PartHeader({
           className={`cursor-pointer transition-opacity ${action.showingOnly ? '' : 'opacity-0 group-hover:opacity-100'}`}
         >
           <rect
-            x={rowW - buttonW}
+            x={buttonX}
             y={top + (ROW - BUTTON_H) / 2 - 1}
             width={buttonW}
             height={BUTTON_H}
@@ -99,11 +102,11 @@ export function PartHeader({
             stroke="var(--border)"
           />
           {action.showingOnly ? (
-            <Rows3 x={rowW - buttonW + 8} y={top + 7} size={12} color="var(--fg-2)" />
+            <Rows3 x={buttonX + 8} y={top + 7} size={12} color="var(--fg-2)" />
           ) : (
-            <Focus x={rowW - buttonW + 8} y={top + 7} size={12} color="var(--fg-2)" />
+            <Focus x={buttonX + 8} y={top + 7} size={12} color="var(--fg-2)" />
           )}
-          <text x={rowW - buttonW + 24} y={top + 17} className="fill-foreground font-sans text-[11.5px]">
+          <text x={buttonX + 24} y={top + 17} className="fill-foreground font-sans text-[11.5px]">
             {label}
           </text>
         </g>
