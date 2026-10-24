@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { KindIcon } from '@/client/lsp/symbolKind.js';
+import { isTest } from './filters.js';
 import { Cluster, Node } from './GraphShapes.js';
 import type { Box, Placed } from './layout.js';
 import { edgeKey } from './rank.js';
@@ -44,6 +46,15 @@ export function GraphPart({
   /** File view only: each arrow's symbols, by `edgeKey`. */
   labels: Map<string, EdgeLabel> | null;
 }) {
+  const degrees = useMemo(() => {
+    const d = new Map<string, { in: number; out: number }>();
+    const of = (id: string) => d.get(id) ?? d.set(id, { in: 0, out: 0 }).get(id)!;
+    for (const { edge } of placed.edges) {
+      of(edge.from).out++;
+      of(edge.to).in++;
+    }
+    return d;
+  }, [placed]);
   const opacity = (ids: string[]) => (lit && !ids.some((id) => lit.ids.has(id)) ? FADED : 1);
   const isOn = (key: string, from: string, to: string) =>
     !!lit && (lit.edge ? lit.edge === key : lit.seeds.has(from) || lit.seeds.has(to));
@@ -112,6 +123,8 @@ export function GraphPart({
           clustered={clustered}
           selected={p.node.id === selected}
           opacity={opacity([p.node.id])}
+          test={isTest(p.node)}
+          degree={degrees.get(p.node.id) ?? { in: 0, out: 0 }}
         />
       ))}
     </>

@@ -1,6 +1,7 @@
 import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
 import { PART_HEADER } from './components.js';
 import { type EdgeLabel, GraphPart, HEAD, type Lit } from './GraphPart.js';
+import { GraphLegend, ZoomControls } from './GraphLegend.js';
 import { ArrowDefs } from './GraphShapes.js';
 import type { Box, PlacedNode } from './layout.js';
 import { edgeKey } from './rank.js';
@@ -20,7 +21,11 @@ interface Viewport {
   x: number;
   y: number;
   k: number;
+  /** Glide to this view: a fit or a focus does, a drag or the wheel follows the pointer at once. */
+  ease?: boolean;
 }
+
+const EASE_MS = 200;
 
 const MARGIN = 48;
 const MAX_ZOOM = 3;
@@ -58,12 +63,13 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
       k,
       x: (el.clientWidth - w * k) / 2 + (MARGIN + HEAD - box.x) * k,
       y: (el.clientHeight - h * k) / 2 + (MARGIN - box.y) * k,
+      ease: true,
     });
   };
-  const zoomAt = (px: number, py: number, factor: number) =>
+  const zoomAt = (px: number, py: number, factor: number, ease = false) =>
     setView((v) => {
       const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * factor));
-      return { k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k };
+      return { k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k, ease };
     });
   const fit = () => fitBox({ x: 0, y: 0, w: stacked.width, h: stacked.height }, FIT_ZOOM);
   useEffect(fit, [stacked]);
@@ -71,7 +77,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     canvasControl.fit = fit;
     canvasControl.zoom = (factor) => {
       const el = host.current;
-      if (el) zoomAt(el.clientWidth / 2, el.clientHeight / 2, factor);
+      if (el) zoomAt(el.clientWidth / 2, el.clientHeight / 2, factor, true);
     };
   });
 
@@ -89,7 +95,8 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
       const [left, top] = [p.x * v.k + v.x, p.y * v.k + v.y];
       const inside = left >= 0 && top >= 0 && left + p.w * v.k <= el.clientWidth && top + p.h * v.k <= el.clientHeight;
       if (inside) return v;
-      return { ...v, x: el.clientWidth / 2 - (p.x + p.w / 2) * v.k, y: el.clientHeight / 2 - (p.y + p.h / 2) * v.k };
+      const [x, y] = [el.clientWidth / 2 - (p.x + p.w / 2) * v.k, el.clientHeight / 2 - (p.y + p.h / 2) * v.k];
+      return { ...v, x, y, ease: true };
     });
   }, [selected, stacked]);
 
@@ -130,7 +137,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     const [dx, dy] = [e.clientX - d.x, e.clientY - d.y];
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
     drag.current = { ...d, x: e.clientX, y: e.clientY, moved: true };
-    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy, ease: false }));
   };
   const onPointerUp = () => {
     const d = drag.current;
@@ -149,53 +156,65 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   };
 
   return (
-    <div
-      ref={host}
-      className="relative h-full w-full cursor-grab touch-none overflow-hidden bg-canvas select-none active:cursor-grabbing"
-      onWheel={onWheel}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onDoubleClick={onDoubleClick}
-      onPointerOver={(e) => setHovered(hit(e, 'data-node'))}
-      onPointerLeave={() => setHovered(null)}
-    >
-      <svg className="absolute inset-0 h-full w-full" role="img" aria-label="Change graph">
-        <ArrowDefs />
-        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {stacked.parts.map((part) => (
-            <g key={part.key} transform={`translate(${part.x},${part.y})`}>
-              <PartHeader
-                title={part.hub.name}
-                size={part.placed.nodes.length}
-                showingOnly={only != null}
-                partKey={part.key}
-                single={stacked.parts.length === 1 && only == null}
-              />
-              <GraphPart
-                placed={part.placed}
-                clustered={clustered}
-                selected={selected}
-                lit={lit}
-                zoom={view.k}
-                labels={labels}
-              />
-            </g>
-          ))}
-          {stacked.unlinked && (
-            <g transform={`translate(0,${stacked.unlinked.y})`}>
-              <GraphPart
-                placed={stacked.unlinked.placed}
-                clustered={clustered}
-                selected={selected}
-                lit={lit}
-                zoom={view.k}
-                labels={labels}
-              />
-            </g>
-          )}
-        </g>
-      </svg>
+    <div className="relative h-full w-full">
+      <div
+        ref={host}
+        className="relative h-full w-full cursor-grab touch-none overflow-hidden bg-canvas select-none active:cursor-grabbing"
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onDoubleClick={onDoubleClick}
+        onPointerOver={(e) => setHovered(hit(e, 'data-node'))}
+        onPointerLeave={() => setHovered(null)}
+      >
+        <svg className="absolute inset-0 h-full w-full" role="img" aria-label="Change graph">
+          <ArrowDefs />
+          <g
+            style={{
+              transform: `translate(${view.x}px,${view.y}px) scale(${view.k})`,
+              transformOrigin: '0 0',
+              transition: view.ease ? `transform ${EASE_MS}ms ease-out` : undefined,
+            }}
+            className="motion-reduce:transition-none!"
+          >
+            {stacked.parts.map((part) => (
+              <g key={part.key} transform={`translate(${part.x},${part.y})`}>
+                <PartHeader
+                  title={part.hub.name}
+                  size={part.placed.nodes.length}
+                  showingOnly={only != null}
+                  partKey={part.key}
+                  single={stacked.parts.length === 1 && only == null}
+                />
+                <GraphPart
+                  placed={part.placed}
+                  clustered={clustered}
+                  selected={selected}
+                  lit={lit}
+                  zoom={view.k}
+                  labels={labels}
+                />
+              </g>
+            ))}
+            {stacked.unlinked && (
+              <g transform={`translate(0,${stacked.unlinked.y})`}>
+                <GraphPart
+                  placed={stacked.unlinked.placed}
+                  clustered={clustered}
+                  selected={selected}
+                  lit={lit}
+                  zoom={view.k}
+                  labels={labels}
+                />
+              </g>
+            )}
+          </g>
+        </svg>
+      </div>
+      {/* Beside the canvas, not in it: the canvas captures the pointer on press. */}
+      <GraphLegend />
+      <ZoomControls zoom={canvasControl.zoom} fit={() => canvasControl.fit()} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { FileCode2 } from 'lucide-react';
+import { FileCode2, Pencil, Plus } from 'lucide-react';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { basename, clip, dirname, nodeLabel } from './labels.js';
@@ -62,24 +62,39 @@ export function Cluster({
   );
 }
 
-/** A symbol: its kind's icon and colour, its name in monospace, and what it is under it. */
+const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; color: string; label: string }>> = {
+  added: { icon: Plus, color: 'var(--add)', label: 'added' },
+  modified: { icon: Pencil, color: 'var(--accent)', label: 'modified' },
+};
+
+/**
+ * A symbol: its kind's icon and colour, its name in monospace, what it is under it, its change
+ * as a badge (an icon besides the colour), and `←used-by →uses` in a corner. A test recedes:
+ * quieter fill and name, and a `test` tag.
+ */
 export function Node({
   placed,
   clustered,
   selected,
   opacity,
+  test,
+  degree,
 }: {
   placed: PlacedNode;
   clustered: boolean;
   selected: boolean;
   opacity: number;
+  test: boolean;
+  degree: { in: number; out: number };
 }) {
   const { node, x, y, w, h } = placed;
   const { title, detail } = nodeLabel(node, clustered);
-  const consumer = node.status === 'consumer';
+  const quiet = node.status === 'consumer' || test;
+  const badge = STATUS_BADGE[node.status];
+  const counts = `←${degree.in} →${degree.out}`;
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
-      <title>{`${node.path}:${node.line}`}</title>
+      <title>{`${node.path}:${node.line}${badge ? ` · ${badge.label}` : ''}`}</title>
       {/* The selection ring sits outside the box, so the status border always shows. */}
       {selected && (
         <rect
@@ -99,10 +114,10 @@ export function Node({
         width={w}
         height={h}
         rx={6}
-        fill={consumer ? 'var(--bg)' : 'var(--bg-2)'}
-        stroke={STATUS_STROKE[node.status]}
-        strokeWidth={consumer ? 1 : 1.5}
-        strokeDasharray={consumer && !clustered ? '4 3' : undefined}
+        fill={quiet ? 'var(--bg)' : 'var(--bg-2)'}
+        stroke={test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]}
+        strokeWidth={quiet ? 1 : 1.5}
+        strokeDasharray={node.status === 'consumer' && !clustered ? '4 3' : undefined}
       />
       <KindIcon
         kind={node.kind}
@@ -110,13 +125,30 @@ export function Node({
         y={y + 7}
         size={14}
         color={KIND_COLOR[kindGroup(node.kind)] ?? 'var(--fg-2)'}
-        opacity={consumer ? 0.6 : 1}
+        opacity={quiet ? 0.6 : 1}
       />
-      <text x={x + 26} y={y + 18} className={`font-mono text-[12px] ${consumer ? 'fill-muted' : 'fill-foreground'}`}>
-        {clip(title, Math.floor((w - 32) / TITLE_CHAR))}
+      <text x={x + 26} y={y + 18} className={`font-mono text-[12px] ${quiet ? 'fill-muted' : 'fill-foreground'}`}>
+        {clip(title, Math.floor((w - 56) / TITLE_CHAR))}
       </text>
       <text x={x + 26} y={y + 32} className="fill-muted font-sans text-[10.5px]">
-        {clip(detail, Math.floor((w - 32) / DETAIL_CHAR))}
+        {test && <tspan className="fill-foreground font-semibold">test · </tspan>}
+        {clip(detail, Math.floor((w - 74) / DETAIL_CHAR))}
+      </text>
+      {badge && (
+        <g>
+          <rect
+            x={x + w - 22}
+            y={y + 5}
+            width={16}
+            height={16}
+            rx={4}
+            fill={`color-mix(in srgb, ${badge.color} 15%, transparent)`}
+          />
+          <badge.icon x={x + w - 19} y={y + 8} size={10} color={badge.color} strokeWidth={2.5} />
+        </g>
+      )}
+      <text x={x + w - 7} y={y + 33} textAnchor="end" className="fill-muted font-mono text-[9px]">
+        {counts}
       </text>
     </g>
   );
