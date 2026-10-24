@@ -47,7 +47,7 @@ export interface GraphState {
   toggle(): void;
   close(): void;
   reload(): Promise<void>;
-  /** Selects a node; selecting the selected one again clears it. */
+  /** Selects a node, or clears the selection with null. */
   select(id: string | null): void;
   selectEdge(key: string | null): void;
   /** Clears the selected node or arrow and the file focused from the tree, so nothing stays lit. */
@@ -61,8 +61,8 @@ export interface GraphState {
   showOnly(part: string | null): void;
   /** Reloads the graph with every changed symbol the cap left out. */
   showAll(): void;
-  /** Graphs only the changes under `dir`, or all of them again for null or the current scope. */
-  setScope(dir: string | null): void;
+  /** Shows the graph of only the changes under `dir`, or of all of them again for null. */
+  showScope(dir: string | null): void;
   openFind(): void;
   /** Searches for `query`, selecting its first match. */
   setFind(query: string): void;
@@ -118,7 +118,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   },
 
   select(id) {
-    set({ selected: id === get().selected ? null : id, selectedEdge: null, hoveredEdge: null, focusPath: null });
+    set({ selected: id, selectedEdge: null, hoveredEdge: null, focusPath: null });
   },
 
   hoverEdge(key) {
@@ -166,10 +166,11 @@ export const useGraph = create<GraphState>((set, get) => ({
     void get().reload();
   },
 
-  setScope(dir) {
-    const scope = dir === get().scope ? null : dir;
-    set({ scope, all: false, selected: null, selectedEdge: null, focusPath: null });
-    void get().reload();
+  showScope(scope) {
+    // A cleared snapshot makes opening the graph load it afresh, once.
+    set({ scope, all: false, selected: null, selectedEdge: null, focusPath: null, snapshot: null });
+    if (get().open) void get().reload();
+    else get().toggle();
   },
 
   openFind() {

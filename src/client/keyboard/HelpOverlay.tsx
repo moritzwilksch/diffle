@@ -79,7 +79,7 @@ export const COLUMNS: HelpSection[][] = [
       title: 'Change graph (language server)',
       rows: [
         ['M', 'graph of changed symbols and dependents; again: the diff'],
-        ['click a folder', 'graph only the changes under it; again: all of them'],
+        ['right-click a folder', 'Show in graph: only the changes under it'],
         ['h / j / k / l', 'select the next symbol left / down / up / right'],
         ['Enter', 'open the selected symbol in the diff'],
         ['zz  double-click', 'frame the selection and its links, or fit the graph'],

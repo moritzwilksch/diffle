@@ -1,4 +1,4 @@
-import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasToolbar } from './CanvasToolbar.js';
 import { GraphFind } from './GraphFind.js';
 import { type EdgeLabel, GraphPart, type Lit } from './GraphPart.js';
@@ -46,6 +46,7 @@ export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {}, fra
  * The placed graph as SVG, panned by dragging and zoomed by the wheel. The selection, or the file
  * focused from the tree, stays lit with its links and the rest fades.
  */
+useGraph.subscribe((s, p) => { if (s.selected !== p.selected) console.log('SEL', p.selected, '->', s.selected, new Error().stack); });
 export function GraphCanvas({ view: shown, clustered }: { view: View; clustered: boolean }) {
   const stacked = shown.stacked;
   const only = useGraph((s) => s.only);
@@ -176,13 +177,16 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     if (!d) return;
     const [dx, dy] = [e.clientX - d.x, e.clientY - d.y];
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
-    drag.current = { ...d, x: e.clientX, y: e.clientY, moved: true };
+    drag.current = lastPress.current = { ...d, x: e.clientX, y: e.clientY, moved: true };
     setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy, ease: false }));
   };
   const onPointerUp = () => {
-    const d = drag.current;
     drag.current = null;
-    if (!d || d.moved) return;
+  };
+  // A double-click's second click is left to it: acting on it too would flash the selection off and on.
+  const onClick = (e: MouseEvent) => {
+    const d = lastPress.current;
+    if (!d || d.moved || e.detail > 1) return;
     const graph = useGraph.getState();
     if (d.part != null) graph.showOnly(only ? null : d.part);
     else if (d.node == null && d.edge != null) graph.selectEdge(d.edge);
@@ -223,6 +227,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onClick={onClick}
         onDoubleClick={onDoubleClick}
         onPointerOver={(e) => setHovered(hit(e, 'data-node'))}
         onPointerLeave={() => setHovered(null)}

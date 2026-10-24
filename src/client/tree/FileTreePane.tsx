@@ -4,7 +4,6 @@ import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react';
 import { EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useGraph } from '@/client/graph/state.js';
 import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { countViewed, filesUnder, isCollapsed, isViewed, viewedState } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
@@ -153,15 +152,10 @@ export function FileTreePane() {
       const hit = decorationClick(e);
       if (!hit) {
         const row = (e.composedPath() as HTMLElement[]).find(
-          (n) => n instanceof HTMLElement && (n.dataset.itemType === 'file' || n.dataset.itemType === 'folder'),
+          (n) => n instanceof HTMLElement && n.dataset.itemType === 'file',
         );
         const path = row?.dataset.itemPath;
         if (!path) return;
-        // Over the graph, a folder narrows it to the changes under that folder; again, it widens back.
-        if (row!.dataset.itemType === 'folder') {
-          if (useGraph.getState().open) useGraph.getState().setScope(path.replace(/\/$/, ''));
-          return;
-        }
         // Choosing a file is the start of reading it: expand it and hand the keys to the review pane.
         // The tree focuses its row on click, so hand focus over a frame later.
         requestAnimationFrame(focusReview);
@@ -291,7 +285,9 @@ export function FileTreePane() {
         <FileTree
           model={model}
           className="h-full"
-          renderContextMenu={(item, ctx) => <TreeMenu path={item.path} kind={item.kind} close={ctx.close} />}
+          renderContextMenu={(item, ctx) => (
+            <TreeMenu path={item.path} kind={item.kind} anchor={ctx.anchorRect} close={ctx.close} />
+          )}
         />
         {searchEmpty && (
           <div role="status" className="absolute inset-x-0 top-14 pr-2.5 pl-[calc(1.5rem+1px)] text-muted">

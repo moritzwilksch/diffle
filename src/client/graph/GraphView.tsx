@@ -27,8 +27,8 @@ export function GraphView() {
           <Button
             variant="ghost"
             className={TOGGLE_ON}
-            onClick={() => useGraph.getState().setScope(null)}
-            title="Graph every change again (click the folder in the tree again)"
+            onClick={() => useGraph.getState().showScope(null)}
+            title="Graph every change again"
           >
             <FolderOpen size="0.8125rem" /> {scope}/ <X size="0.75rem" />
           </Button>
