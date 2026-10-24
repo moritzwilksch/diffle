@@ -1,25 +1,31 @@
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, BookOpen, ExternalLink, Link2, Waypoints } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL } from '@/client/lsp/symbolKind.js';
-import type { GraphNode } from '@/shared/protocol.js';
-import { Code, Heading, LinkButton, Links, Location, Name } from './GraphDetailParts.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
+import { Button } from '@/client/ui/Button.js';
+import type { GraphNode } from '@/shared/protocol.js';
+import {
+  BODY,
+  Code,
+  Jumps,
+  LinkButton,
+  Links,
+  META,
+  Name,
+  SectionHeading,
+  StatusWord,
+  TITLE,
+} from './GraphDetailParts.js';
 import { useSignatures } from './useSignatures.js';
-
-const STATUS_LABEL: Record<GraphNode['status'], string> = {
-  added: 'added',
-  modified: 'modified',
-  consumer: 'unchanged, uses the change',
-};
 
 /** Arrows the overview lists, heaviest first. */
 const STRONGEST = 8;
-const PANEL = 'flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-surface p-4 text-[0.8125rem]';
+const PANEL = `flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-surface px-4 pb-4 ${BODY}`;
 
 /**
  * What the side panel says in graph view: the selected node or arrow, else an overview. A name
- * selects that node in the graph; a location jumps into the diff.
+ * selects that node in the graph; a `:line` chip opens the diff there.
  */
 export function GraphDetails() {
   const view = useGraph((s) => s.view);
@@ -48,25 +54,39 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
   const signatures = useSignatures(graph, asked);
   return (
     <aside className={PANEL}>
-      <div className="flex flex-col gap-1">
-        <Name node={node} className="text-[0.875rem]" />
-        <div className="text-muted">
-          {KIND_LABEL[node.kind]} · {STATUS_LABEL[node.status]}
+      <div className="flex flex-col gap-2 pt-4">
+        <Name node={node} className={TITLE} />
+        <div className={META}>
+          {KIND_LABEL[node.kind]} · <StatusWord status={node.status} />
         </div>
-        <Location path={node.path} lines={[node.line]} />
+        <Jumps rows={[{ label: 'Defined', path: node.path, lines: [node.line] }]} />
+        <Button
+          variant="primary"
+          className="self-start"
+          onClick={() => useGraph.getState().pick({ path: node.path, line: node.line })}
+          title="Open in the diff (Enter)"
+        >
+          <ExternalLink size="0.8125rem" /> Open in diff
+        </Button>
         <Code signature={signatures.get(node.id)} path={node.path} full />
       </div>
-      <Links title="Uses" edges={uses} other={(e) => byId.get(e.to)} site={() => node.path} signatures={signatures} />
       <Links
+        icon={ArrowDownToLine}
+        title="Uses"
+        edges={uses}
+        other={(e) => byId.get(e.to)}
+        site={() => node.path}
+        signatures={signatures}
+      />
+      <Links
+        icon={ArrowUpFromLine}
         title="Used by"
         edges={usedBy}
         other={(e) => byId.get(e.from)}
         site={(n) => n.path}
         signatures={signatures}
       />
-      {node.moreConsumers ? (
-        <p className="text-muted">and {node.moreConsumers} more unchanged users, not drawn</p>
-      ) : null}
+      {node.moreConsumers ? <p className={META}>and {node.moreConsumers} more unchanged users, not drawn</p> : null}
     </aside>
   );
 }
@@ -86,24 +106,31 @@ function EdgeDetails({ view, edge }: { view: View; edge: string }) {
   if (!from || !to) return <aside className={PANEL} />;
   return (
     <aside className={PANEL}>
-      <div className="flex flex-col items-start gap-1">
-        <Name node={from} className="text-[0.875rem]" />
-        <span className="inline-flex items-center gap-1 text-muted">
-          <ArrowDown size="0.875rem" /> uses
+      <div className="flex flex-col items-start gap-1 pt-4">
+        <Name node={from} className={TITLE} />
+        <span className={`inline-flex items-center gap-1 ${META}`}>
+          <ArrowDown size="0.8125rem" /> uses
         </span>
-        <Name node={to} className="text-[0.875rem]" />
+        <Name node={to} className={TITLE} />
       </div>
+      <SectionHeading icon={Link2} count={behind.length}>
+        Links
+      </SectionHeading>
       {behind.map((e) => {
         const [user, used] = [symbols.get(e.from), symbols.get(e.to)];
         if (!user || !used) return null;
         return (
-          <section key={edgeKey(e)} className="flex flex-col gap-1">
-            <Heading>
-              {user.kind === 1 ? 'top level' : user.name} → {used.name}
-            </Heading>
+          <section key={edgeKey(e)} className="flex flex-col gap-1.5">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <Name node={user} /> <span className="text-muted">→</span> <Name node={used} />
+            </span>
+            <Jumps
+              rows={[
+                { label: 'Used at', path: user.path, lines: e.lines },
+                { label: 'Defined', path: used.path, lines: [used.line] },
+              ]}
+            />
             <Code signature={signatures.get(used.id)} path={used.path} />
-            <Location path={user.path} lines={e.lines} />
-            {user.kind !== 1 && <Code signature={signatures.get(user.id)} path={user.path} />}
           </section>
         );
       })}
@@ -125,21 +152,25 @@ function Overview({ view }: { view: View }) {
   const [exFrom, exTo] = [example && byId.get(example.e.from), example && byId.get(example.e.to)];
   return (
     <aside className={PANEL}>
-      <section className="flex flex-col gap-2 text-muted">
-        <p>
-          An arrow points from code to the code it uses: entry points at the top, core code at the bottom. Click a box
-          or an arrow for its signatures and lines; Enter or a double-click opens it in the diff.
+      <section className="flex flex-col gap-2">
+        <SectionHeading icon={BookOpen}>How to read it</SectionHeading>
+        <p className="text-muted">
+          An arrow points from code to the code it uses: entry points at the top, core code at the bottom. Select a box
+          or an arrow for its signatures; a <span className="font-mono text-accent">:line</span> chip opens the diff
+          there.
         </p>
         {exFrom && exTo && (
-          <p className="flex flex-wrap items-center gap-1.5">
+          <p className="flex flex-wrap items-center gap-1.5 text-muted">
             For example, <Name node={exFrom} /> uses <Name node={exTo} />
           </p>
         )}
       </section>
       {strongest.length > 0 && (
-        <section>
-          <Heading>Strongest links</Heading>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        <section className="flex flex-col gap-2">
+          <SectionHeading icon={Waypoints} count={strongest.length}>
+            Strongest links
+          </SectionHeading>
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {strongest.map(({ e, w }) => {
               const [from, to] = [byId.get(e.from), byId.get(e.to)];
               if (!from || !to) return null;
@@ -152,7 +183,7 @@ function Overview({ view }: { view: View }) {
                     <Name node={from} />
                     <span className="flex items-center gap-1.5 pl-2">
                       <span className="text-muted">→</span> <Name node={to} />
-                      <span className="font-mono text-[0.6875rem] text-muted">×{w}</span>
+                      <span className={META}>×{w}</span>
                     </span>
                   </LinkButton>
                 </li>

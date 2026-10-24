@@ -33,10 +33,16 @@ export function GraphLegend() {
           Hide
         </Button>
       </div>
-      <Row swatch={<Box border="var(--add)" icon={<Plus size={10} color="var(--add)" />} />}>added</Row>
-      <Row swatch={<Box border="var(--accent)" icon={<Pencil size={10} color="var(--accent)" />} />}>modified</Row>
+      <Row swatch={<Box border="var(--add)" icon={<Plus size={10} color="var(--add)" />} />}>
+        <span className="text-add">added</span>
+      </Row>
+      <Row swatch={<Box border="var(--accent)" icon={<Pencil size={10} color="var(--accent)" />} />}>
+        <span className="text-accent">modified</span>
+      </Row>
       <Row swatch={<Box border="var(--border)" dashed />}>unchanged, uses the change</Row>
-      <Row swatch={<span className="font-mono text-[0.625rem] text-muted">←2 →1</span>}>used by 2, uses 1</Row>
+      <Row swatch={<span className="font-mono text-[0.625rem] whitespace-nowrap text-muted">→2 1→</span>}>
+        used by 2, uses 1
+      </Row>
       <Row swatch={<span className="w-6 border-t-2 border-dashed border-muted" />}>arrow inside a cycle</Row>
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1">
         {KINDS.map(([kind, label]) => (
@@ -69,7 +75,7 @@ export function ZoomControls({ zoom, fit }: { zoom: (factor: number) => void; fi
 function Row({ swatch, children }: { swatch: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="flex w-8 justify-center">{swatch}</span>
+      <span className="flex w-10 shrink-0 justify-center">{swatch}</span>
       <span className="text-muted">{children}</span>
     </div>
   );

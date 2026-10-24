@@ -1,4 +1,4 @@
-import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
+import { type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
 import { PART_HEADER } from '@/client/graph/layout/components.js';
 import { type EdgeLabel, GraphPart, HEAD, type Lit } from './GraphPart.js';
 import { GraphLegend, ZoomControls } from './GraphLegend.js';
@@ -53,6 +53,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   const [view, setView] = useState<Viewport>({ x: 0, y: 0, k: 1 });
   // Pointer capture retargets the release to the host, so the press remembers which node it hit.
   const drag = useRef<Press | null>(null);
+  const lastPress = useRef<Press | null>(null);
 
   const fitBox = (box: Box, maxZoom: number) => {
     const el = host.current;
@@ -122,7 +123,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
   const hit = (e: { target: EventTarget }, attr: string) =>
     (e.target as Element).closest(`[${attr}]`)?.getAttribute(attr) ?? null;
   const onPointerDown = (e: PointerEvent) => {
-    drag.current = {
+    drag.current = lastPress.current = {
       x: e.clientX,
       y: e.clientY,
       moved: false,
@@ -150,9 +151,11 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
     else if (d.node != null || graph.selected || graph.selectedEdge) graph.select(d.node);
   };
   // A double-click frames a node with the nodes it links to; on the background it fits the graph.
-  const onDoubleClick = (e: MouseEvent) => {
-    if (hit(e, 'data-part') != null) return;
-    const id = hit(e, 'data-node');
+  const onDoubleClick = () => {
+    // Pointer capture retargets the double-click to the host as well; the press knows what it hit.
+    const press = lastPress.current;
+    if (press?.part != null) return;
+    const id = press?.node ?? null;
     if (id == null) return fit();
     const near = new Set([id]);
     for (const edge of edges) if (edge.from === id || edge.to === id) near.add(edge.from).add(edge.to);

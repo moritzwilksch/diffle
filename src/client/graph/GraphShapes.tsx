@@ -69,7 +69,7 @@ const STATUS_BADGE: Partial<Record<GraphNode['status'], { icon: typeof Plus; col
 
 /**
  * A symbol: its kind's icon and colour, its name in monospace, what it is under it, its change
- * as a badge (an icon besides the colour), and `←used-by →uses` in a corner. A test recedes:
+ * as a badge (an icon besides the colour), and its arrows in and out, `→2 5→`, in a corner. A test recedes:
  * quieter fill and name, and a `test` tag.
  */
 export function Node({
@@ -91,7 +91,8 @@ export function Node({
   const { title, detail } = nodeLabel(node, clustered);
   const quiet = node.status === 'consumer' || test;
   const badge = STATUS_BADGE[node.status];
-  const counts = `←${degree.in} →${degree.out}`;
+  // An en space: SVG text collapses plain runs of spaces.
+  const counts = `→${degree.in}\u2002${degree.out}→`;
   return (
     <g data-node={node.id} opacity={opacity} className="cursor-pointer">
       <title>{`${node.path}:${node.line}${badge ? ` · ${badge.label}` : ''}`}</title>
@@ -127,7 +128,7 @@ export function Node({
         width={w}
         height={h}
         rx={6}
-        fill={selected ? 'color-mix(in srgb, var(--accent) 16%, var(--bg-2))' : quiet ? 'var(--bg)' : 'var(--bg-2)'}
+        fill={selected ? 'color-mix(in srgb, var(--accent) 7%, var(--bg-2))' : quiet ? 'var(--bg)' : 'var(--bg-2)'}
         stroke={test && node.status !== 'consumer' ? 'var(--border)' : STATUS_STROKE[node.status]}
         strokeWidth={quiet ? 1 : 1.5}
         strokeDasharray={node.status === 'consumer' && !clustered ? '4 3' : undefined}

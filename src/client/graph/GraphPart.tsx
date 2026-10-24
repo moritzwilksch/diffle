@@ -15,7 +15,7 @@ export interface Lit {
   edge: string | null;
 }
 
-/** What a file view's arrow carries: the symbols it uses there. */
+/** The symbols behind a file view's arrow, which its label names. */
 export interface EdgeLabel {
   kind: number;
   names: string[];

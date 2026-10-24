@@ -1,5 +1,6 @@
-import { FileCode2 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { ArrowUpRight, ChevronRight, FileCode2, type LucideIcon } from 'lucide-react';
+import { type ComponentProps, type ReactNode, useState } from 'react';
+import { twMerge } from 'tailwind-merge';
 import { FilePath } from '@/client/FilePath.js';
 import { Markdown } from '@/client/Markdown.js';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
@@ -7,6 +8,11 @@ import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { isTest } from '@/client/graph/filters.js';
 import { useGraph } from '@/client/graph/state.js';
 import { type Signature, signatureOf, type Signatures } from './useSignatures.js';
+
+// The panel's type scale: titles, then names and prose, then everything around them.
+export const TITLE = 'text-[0.9375rem] font-semibold';
+export const BODY = 'text-[0.8125rem]';
+export const META = 'text-[0.75rem] text-muted';
 
 const KIND_TEXT: Record<string, string> = {
   type: 'text-kind-type',
@@ -17,31 +23,61 @@ const KIND_TEXT: Record<string, string> = {
 /** Rows a list shows before it folds behind "Show all". */
 const FOLD_AFTER = 6;
 
-export function Heading({ children }: { children: ReactNode }) {
-  return <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-[0.06em] text-muted uppercase">{children}</h3>;
+/** A change in words, coloured as the diff colours it. */
+export function StatusWord({ status }: { status: GraphNode['status'] }) {
+  if (status === 'added') return <span className="text-add">added</span>;
+  if (status === 'modified') return <span className="text-accent">modified</span>;
+  return <span className="text-muted">unchanged</span>;
+}
+
+/**
+ * A section's heading: what the section holds and how many, kept in view while its list scrolls
+ * past, so a long panel stays easy to find one's way in.
+ */
+export function SectionHeading({
+  icon: Icon,
+  count,
+  children,
+}: {
+  icon: LucideIcon;
+  count?: number;
+  children: ReactNode;
+}) {
+  return (
+    <h3
+      className={`sticky top-0 z-[1] -mx-4 flex items-center gap-1.5 border-b border-border bg-surface px-4 py-2 ${BODY} font-semibold`}
+    >
+      <Icon size="0.875rem" className="text-muted" />
+      {children}
+      {count != null && <span className="font-normal text-muted">{count}</span>}
+    </h3>
+  );
 }
 
 /** A plain button that reads as a link, without the browser's button chrome. */
-export function LinkButton({ className, ...props }: React.ComponentProps<'button'>) {
+export function LinkButton({ className, ...props }: ComponentProps<'button'>) {
   return (
     <button
+      type="button"
       {...props}
-      className={`cursor-pointer border-0 bg-transparent p-0 text-left hover:underline ${className ?? ''}`}
+      className={twMerge('cursor-pointer border-0 bg-transparent p-0 text-left hover:underline', className)}
     />
   );
 }
 
 /**
- * The nodes at the other end of `edges`, each with where the references sit and its signature.
- * Source code comes before tests, and a long list folds after a few rows.
+ * The nodes at the other end of `edges`: each selects itself in the graph by its name, and opens
+ * the diff where it is defined and where the link sits. Source before tests; a long list folds.
  */
 export function Links({
+  icon,
   title,
   edges,
   other,
   site,
   signatures,
 }: {
+  icon: LucideIcon;
   title: string;
   edges: GraphEdge[];
   other: (e: GraphEdge) => GraphNode | undefined;
@@ -57,25 +93,50 @@ export function Links({
   if (!rows.length) return null;
   const shown = all ? rows : rows.slice(0, FOLD_AFTER);
   return (
-    <section>
-      <Heading>{title}</Heading>
+    <section className="flex flex-col gap-3">
+      <SectionHeading icon={icon} count={rows.length}>
+        {title}
+      </SectionHeading>
       <ul className="m-0 flex list-none flex-col gap-4 p-0">
         {shown.map(({ e, n }) => (
-          <li key={`${e.from}>${e.to}`} className="flex flex-col gap-1">
-            <LinkButton onClick={() => useGraph.getState().select(n.id)} title="Select in the graph">
-              <Name node={n} />
-            </LinkButton>
-            <Location path={site(n)} lines={e.lines} />
+          <li key={`${e.from}>${e.to}`} className="flex flex-col gap-1.5">
+            <NodeRow node={n} />
+            <Jumps
+              rows={[
+                ...(n.kind === 1 ? [] : [{ label: 'Defined', path: n.path, lines: [n.line] }]),
+                { label: 'Used at', path: site(n), lines: e.lines },
+              ]}
+            />
             <Code signature={signatures.get(n.id)} path={n.path} />
           </li>
         ))}
       </ul>
       {rows.length > shown.length && (
-        <LinkButton className="mt-2 text-accent" onClick={() => setAll(true)}>
+        <button
+          type="button"
+          className={`cursor-pointer rounded-md border border-border bg-transparent py-1 text-foreground hover:bg-hover ${BODY}`}
+          onClick={() => setAll(true)}
+        >
           Show all {rows.length}
-        </LinkButton>
+        </button>
       )}
     </section>
+  );
+}
+
+/** A linked node's name, selecting it in the graph; the chevron says the row leads there. */
+function NodeRow({ node }: { node: GraphNode }) {
+  return (
+    <LinkButton
+      className="group flex items-center justify-between gap-2 hover:no-underline"
+      onClick={() => useGraph.getState().select(node.id)}
+      title="Select in the graph"
+    >
+      <span className="group-hover:underline">
+        <Name node={node} />
+      </span>
+      <ChevronRight size="0.875rem" className="shrink-0 text-muted" />
+    </LinkButton>
   );
 }
 
@@ -83,13 +144,13 @@ export function Links({
 export function Name({ node, className }: { node: GraphNode; className?: string }) {
   if (node.kind === 1)
     return (
-      <span className={`inline-flex items-center gap-1.5 ${className ?? ''}`}>
+      <span className={twMerge(`inline-flex items-center gap-1.5 ${BODY}`, className)}>
         <FileCode2 size="0.875rem" className="shrink-0 text-muted" />
         <FilePath path={node.path} />
       </span>
     );
   return (
-    <span className={`inline-flex items-center gap-1.5 font-mono ${className ?? ''}`}>
+    <span className={twMerge(`inline-flex items-center gap-1.5 font-mono ${BODY}`, className)}>
       <KindIcon
         kind={node.kind}
         size="0.875rem"
@@ -100,24 +161,61 @@ export function Name({ node, className }: { node: GraphNode; className?: string 
   );
 }
 
-/** A file and the lines in it, each line a jump into the diff. */
-export function Location({ path, lines }: { path: string; lines: number[] }) {
-  const pick = useGraph((s) => s.pick);
+/**
+ * Where to jump, one labelled row each: the file, then a chip per line that opens the diff there.
+ * Every jump in the panel looks like this, so it is plain which clicks leave the graph.
+ */
+export function Jumps({ rows }: { rows: { label: string; path: string; lines: number[] }[] }) {
   return (
-    <span className="flex flex-wrap items-center gap-x-1.5 text-[0.75rem] text-muted">
-      <FileCode2 size="0.75rem" className="shrink-0" />
-      <FilePath path={path} className="text-[0.75rem]" />
-      {lines.map((line) => (
-        <LinkButton
-          key={line}
-          className="font-mono text-accent"
-          onClick={() => pick({ path, line })}
-          title="Open in the diff"
-        >
-          :{line}
-        </LinkButton>
+    <div className={`grid grid-cols-[4.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 ${META}`}>
+      {rows.map(({ label, path, lines }) => (
+        <div key={label} className="contents">
+          <span>{label}</span>
+          <span className="flex min-w-0 items-start gap-1.5">
+            <span className="flex min-w-[4rem] items-center gap-1.5">
+              <FileCode2 size="0.75rem" className="shrink-0" />
+              <ShortPath path={path} />
+            </span>
+            {/* The chips keep beside the path, which gives way first; many of them wrap among themselves. */}
+            <span className="flex max-w-[55%] shrink-0 flex-wrap gap-1">
+              {lines.map((line) => (
+                <JumpChip key={line} path={path} line={line} />
+              ))}
+            </span>
+          </span>
+        </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * A path on one line, styled as `FilePath` styles paths. The folders give way from the start, so
+ * the file name next to the line chips stays.
+ */
+function ShortPath({ path }: { path: string }) {
+  const cut = path.lastIndexOf('/') + 1;
+  return (
+    <span className="block min-w-0 truncate text-left font-mono text-[0.75rem] [direction:rtl]" title={path}>
+      <bdi>
+        <span className="text-muted">{path.slice(0, cut)}</span>
+        <span className="font-semibold text-foreground">{path.slice(cut)}</span>
+      </bdi>
     </span>
+  );
+}
+
+function JumpChip({ path, line }: { path: string; line: number }) {
+  return (
+    <button
+      type="button"
+      onClick={() => useGraph.getState().pick({ path, line })}
+      title={`Open ${path}:${line} in the diff`}
+      className="inline-flex cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-1.5 py-px font-mono text-[0.75rem] text-accent hover:bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]"
+    >
+      :{line}
+      <ArrowUpRight size="0.6875rem" />
+    </button>
   );
 }
 
@@ -137,7 +235,7 @@ export function Code({
     .join('\n\n');
   return (
     // `.markdown pre code` sets `white-space: pre`, so the wrap goes on the code, not the block.
-    <div className="hover-markdown rounded-lg bg-[color-mix(in_srgb,var(--bg-3)_45%,transparent)] px-3 py-2 text-[0.75rem] leading-normal [&_hr]:my-2 [&_hr]:border-0 [&_hr]:border-t [&_hr]:border-[color-mix(in_srgb,var(--border)_50%,transparent)] [&_pre_code]:[overflow-wrap:anywhere] [&_pre_code]:whitespace-pre-wrap">
+    <div className="hover-markdown rounded-lg bg-[color-mix(in_srgb,var(--bg-3)_45%,transparent)] px-3 py-2 text-[0.75rem] leading-normal [&_hr]:my-2 [&_hr]:border-0 [&_hr]:border-t [&_hr]:border-[color-mix(in_srgb,var(--border)_50%,transparent)] [&_p]:text-[0.75rem] [&_pre_code]:[overflow-wrap:anywhere] [&_pre_code]:whitespace-pre-wrap">
       <Markdown text={text} path={path} highlight />
     </div>
   );
