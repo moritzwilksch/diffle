@@ -1,6 +1,7 @@
 //! Which changed symbols a graph holds when the change has more than it draws: the most telling
 //! ones, so a cap drops tests and private helpers before the code a reviewer came to see.
 use std::cmp::Reverse;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -38,6 +39,30 @@ pub fn rank(changed: &mut [Changed]) {
     });
 }
 
+/// Splits ranked `changed` into what a graph of `cap` symbols holds and what it cuts, by whole
+/// files, so a file shows all of its changes or none: a file ranks by its most telling symbol, and
+/// one too big for the room left is cut while smaller ones after it still fit. Both keep the order.
+pub fn keep(changed: Vec<Changed>, cap: usize) -> (Vec<Changed>, Vec<Changed>) {
+    let mut sizes: HashMap<&str, usize> = HashMap::new();
+    let mut files = Vec::new();
+    for c in &changed {
+        let n = sizes.entry(&c.symbol.path).or_default();
+        if *n == 0 {
+            files.push(c.symbol.path.as_str());
+        }
+        *n += 1;
+    }
+    let mut room = cap;
+    let mut kept = HashSet::new();
+    for path in files {
+        if sizes[path] <= room {
+            room -= sizes[path];
+            kept.insert(path.to_owned());
+        }
+    }
+    changed.into_iter().partition(|c| kept.contains(&c.symbol.path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,5 +89,19 @@ mod tests {
         ];
         rank(&mut all);
         assert_eq!(names(&all), ["big", "__init__", "small", "_helper", "case", "test_run"]);
+    }
+
+    #[test]
+    fn keeps_whole_files_by_their_best_symbol_and_fills_the_room_left_with_smaller_ones() {
+        let ranked = vec![
+            changed("a.py", "a1", 1, 9),
+            changed("b.py", "b1", 1, 8),
+            changed("b.py", "b2", 5, 7),
+            changed("a.py", "a2", 5, 6),
+            changed("c.py", "c1", 1, 5),
+        ];
+        let (kept, cut) = keep(ranked, 3);
+        assert_eq!(names(&kept), ["a1", "a2", "c1"]);
+        assert_eq!(names(&cut), ["b1", "b2"]);
     }
 }

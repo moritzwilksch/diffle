@@ -18,7 +18,7 @@ use crate::lsp::pool::LspPool;
 use crate::protocol::{ChangeStatus, GraphResponse, LspLocation, LspPosition, LspSymbol, Snapshot, language_of};
 use crate::snapshotter::Snapshotter;
 
-/// Changed symbols one graph holds; past it the least telling are cut (`select::rank`).
+/// Changed symbols one graph holds; past it the least telling files are cut whole (`select`).
 pub const MAX_NODES: usize = 80;
 /// Language server requests in flight at once.
 const PARALLEL: usize = 8;
@@ -64,8 +64,8 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     }
     // Ranked, the references are asked most telling first too, so a budget run out costs the least.
     select::rank(&mut changed);
-    let cut_symbols = changed.len().saturating_sub(MAX_NODES) as i64;
-    changed.truncate(MAX_NODES);
+    let (changed, cut) = select::keep(changed, MAX_NODES);
+    let cut_symbols = cut.len() as i64;
 
     let symbols: Vec<LspSymbol> = changed.iter().map(|c| c.symbol.clone()).collect();
     let references = map_limit(symbols, PARALLEL, |symbol| async move { references(pool, &symbol, by).await }).await;
