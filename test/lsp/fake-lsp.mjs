@@ -246,18 +246,25 @@ function graphOutline(text) {
   return out;
 }
 
-/** Every whole-word occurrence, in every `.py` file of the root, of the word at the position. */
+/** The `.py` files under the root, depth first; the server's working directory is the root. */
+function pyFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((e) =>
+      e.isDirectory() ? pyFiles(`${dir}/${e.name}`) : e.name.endsWith('.py') ? [`${dir}/${e.name}`] : [],
+    );
+}
+
+/** Every whole-word occurrence, in every `.py` file under the root, of the word at the position. */
 function graphReferences(uri, { line, character }) {
   const word = [...(textOf(uri).split('\n')[line] ?? '').matchAll(/\w+/g)].find(
     (m) => character >= m.index && character <= m.index + m[0].length,
   )?.[0];
   if (!word) return [];
-  const root = process.env.FAKE_LSP_ROOT;
   const out = [];
-  for (const name of readdirSync(root)
-    .filter((n) => n.endsWith('.py'))
-    .sort()) {
-    const file = pathToFileURL(`${root}/${name}`).href;
+  for (const path of pyFiles(process.env.FAKE_LSP_ROOT ?? process.cwd())) {
+    const file = pathToFileURL(path).href;
     textOf(file)
       .split('\n')
       .forEach((l, at) => {
