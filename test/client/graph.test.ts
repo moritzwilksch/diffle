@@ -123,6 +123,17 @@ describe('layout', () => {
     const long = placed.edges.find((e) => e.edge.from === 'main' && e.edge.to === 'get')!;
     expect(long.d.match(/C/g)).toHaveLength(3);
   });
+
+  it('keeps a file box in source order even where swapping its symbols would uncross arrows', () => {
+    const at = (id: string, path: string, line: number) => ({ ...node(id, 'modified', path), line });
+    const g = graph(
+      [at('first', 'users.py', 1), at('second', 'users.py', 9), at('early', 'lib.py', 3), at('late', 'lib.py', 7)],
+      ['first>late', 'second>early'],
+    );
+    const x = new Map(layout(g, rank(g), size, true).nodes.map((p) => [p.node.id, p.x]));
+    expect(x.get('first')!).toBeLessThan(x.get('second')!);
+    expect(x.get('early')!).toBeLessThan(x.get('late')!);
+  });
 });
 
 describe('signatureOf', () => {

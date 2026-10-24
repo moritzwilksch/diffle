@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, Link2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL, kindGroup } from '@/client/lsp/symbolKind.js';
+import { bySource } from '@/client/graph/layout/order.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
@@ -100,7 +101,7 @@ function usedAt(view: View): (e: GraphEdge) => UsedAt {
       if (!to) continue;
       for (const line of link.lines) {
         const at = byLine.get(line) ?? [];
-        if (!at.some((n) => n.id === to.id)) byLine.set(line, [...at, to]);
+        if (!at.some((n) => n.id === to.id)) byLine.set(line, [...at, to].sort(bySource));
       }
     }
     return byLine;
@@ -111,7 +112,14 @@ function usedAt(view: View): (e: GraphEdge) => UsedAt {
 function EdgeDetails({ view, edge }: { view: View; edge: string }) {
   const shown = useMemo(() => new Map(view.graph.nodes.map((n) => [n.id, n])), [view]);
   const symbols = useMemo(() => new Map(view.symbols.nodes.map((n) => [n.id, n])), [view]);
-  const behind = useMemo(() => view.via.get(edge) ?? [], [view, edge]);
+  // In source order of the user, then of what it uses.
+  const behind = useMemo(() => {
+    const at = (id: string) => symbols.get(id);
+    return [...(view.via.get(edge) ?? [])].sort((a, b) => {
+      const [ua, ub, ta, tb] = [at(a.from), at(b.from), at(a.to), at(b.to)];
+      return (ua && ub ? bySource(ua, ub) : 0) || (ta && tb ? bySource(ta, tb) : 0);
+    });
+  }, [view, edge, symbols]);
   const arrow = view.graph.edges.find((e) => edgeKey(e) === edge);
   const asked = useMemo(
     () => behind.flatMap((e) => [symbols.get(e.to), symbols.get(e.from)]).filter((n) => n != null),

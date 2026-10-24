@@ -1,5 +1,5 @@
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
-import { type Block, order, type Route } from './order.js';
+import { type Block, bySource, order, type Route } from './order.js';
 import type { Graph, Ranked } from './rank.js';
 
 export interface Size {
@@ -70,7 +70,7 @@ const SHELF_MIN_W = 960;
 export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Size, clustered: boolean): Placed {
   // A symbol with no links has no rank to show; it waits on a shelf below instead of crowding the core.
   const linked = new Set(graph.edges.flatMap((e) => [e.from, e.to]));
-  const unlinked = graph.nodes.filter((n) => !linked.has(n.id));
+  const unlinked = graph.nodes.filter((n) => !linked.has(n.id)).sort(bySource);
   const { layers, routes } = order(
     { nodes: graph.nodes.filter((n) => linked.has(n.id)), edges: graph.edges },
     ranked,

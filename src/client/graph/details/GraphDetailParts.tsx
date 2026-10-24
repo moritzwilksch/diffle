@@ -6,6 +6,7 @@ import { Markdown } from '@/client/Markdown.js';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { isTest } from '@/client/graph/filters.js';
+import { bySource } from '@/client/graph/layout/order.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph } from '@/client/graph/state.js';
 import { type Signature, signatureOf, type Signatures } from './useSignatures.js';
@@ -71,7 +72,8 @@ function LinkButton({ className, ...props }: ComponentProps<'button'>) {
 
 /**
  * The nodes at the other end of `edges`: each selects itself in the graph by its name, and opens
- * the diff where it is defined and where the link sits. Source before tests; a long list folds.
+ * the diff where it is defined and where the link sits. Source before tests, each in source order;
+ * a long list folds.
  */
 export function Links({
   icon,
@@ -96,7 +98,7 @@ export function Links({
   const rows = edges
     .map((e) => ({ e, n: other(e) }))
     .filter((r): r is { e: GraphEdge; n: GraphNode } => r.n != null)
-    .sort((a, b) => Number(isTest(a.n)) - Number(isTest(b.n)));
+    .sort((a, b) => Number(isTest(a.n)) - Number(isTest(b.n)) || bySource(a.n, b.n));
   if (!rows.length) return null;
   const shown = all ? rows : rows.slice(0, FOLD_AFTER);
   return (
@@ -190,8 +192,9 @@ export type UsedAt = Map<number, GraphNode[]>;
 export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[]; used?: UsedAt }[] }) {
   return (
     <div className={`grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 ${META}`}>
-      {rows.map(({ to, path, lines, used }) => {
+      {rows.map(({ to, path, lines: given, used }) => {
         const { icon: Icon, label } = JUMPS[to];
+        const lines = [...given].sort((a, b) => a - b);
         if (used)
           return (
             <div key={to} className="contents">
