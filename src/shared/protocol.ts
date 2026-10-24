@@ -653,6 +653,13 @@ export const LspLocationSchema = LspPositionSchema.extend({
 });
 export type LspLocation = z.infer<typeof LspLocationSchema>;
 
+/**
+ * `POST /api/lsp/hover`. `ownerOnly` asks the file's own server alone: a server joining the
+ * language, such as Tailwind's, adds notes for markup that read as noise on a declaration.
+ */
+export const LspHoverRequestSchema = LspPositionSchema.extend({ ownerOnly: z.boolean().optional() });
+export type LspHoverRequest = z.infer<typeof LspHoverRequestSchema>;
+
 /** One language server process, as its bridge sees it. */
 export const LspStateSchema = z.enum(['starting', 'ready', 'unavailable']);
 export type LspState = z.infer<typeof LspStateSchema>;

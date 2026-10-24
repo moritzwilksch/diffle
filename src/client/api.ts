@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ConfigUpdateSchema,
   GithubExportRequestSchema,
+  LspHoverRequestSchema,
   LspPositionSchema,
   MessagePatchSchema,
   EnterRequestSchema,
@@ -36,6 +37,7 @@ import {
 } from '@/shared/protocol.js';
 import type {
   GithubExportRequest,
+  LspHoverRequest,
   LspPosition,
   EnterRequest,
   PermalinkRequest,
@@ -211,8 +213,8 @@ export const api = {
       body: encode(LspPositionSchema, pos),
     }),
   /** What the server knows about the symbol at `pos`, as markdown. */
-  lspHover: (pos: LspPosition) =>
-    json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  lspHover: (req: LspHoverRequest) =>
+    json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspHoverRequestSchema, req) }),
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),

@@ -131,7 +131,11 @@ impl LspPool {
         self.locations(pos, Locate::References).await
     }
 
-    pub async fn hover(&self, pos: &LspPosition) -> Result<LspHoverResponse> {
+    /// Every server's hover for `pos`, owner first; with `owner_only`, the owner's alone.
+    pub async fn hover(&self, pos: &LspPosition, owner_only: bool) -> Result<LspHoverResponse> {
+        if owner_only {
+            return self.owner_for(&pos.path)?.bridge.hover(pos).await;
+        }
         let servers = self.servers_for(&pos.path)?;
         let asked = servers.iter().map(|s| s.bridge.hover(pos).boxed()).collect();
         union(asked, merge_hovers, |r: &LspHoverResponse| r.contents.is_none(), |r| &mut r.inconclusive).await

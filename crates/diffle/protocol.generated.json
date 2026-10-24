@@ -915,6 +915,36 @@
       ],
       "description": "A request the bridge sends a server only once it advertised the capability, in its\n`initialize` result or by registering it later, as an editor does. Document highlights\nare advisory: without them the answer is empty, never an error."
     },
+    "LspHoverRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "1-based."
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "0-based UTF-16 offset in the line."
+        },
+        "ownerOnly": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "col"
+      ],
+      "description": "`POST /api/lsp/hover`. `ownerOnly` asks the file's own server alone: a server joining the\nlanguage, such as Tailwind's, adds notes for markup that read as noise on a declaration."
+    },
     "LspHoverResponse": {
       "type": "object",
       "properties": {

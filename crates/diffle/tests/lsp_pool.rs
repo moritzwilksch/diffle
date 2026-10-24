@@ -165,7 +165,7 @@ async fn starts_a_server_per_language_in_the_diff_and_opens_each_file_in_its_own
     let res = s.pool.definition(&pos("a.py", 3, 4)).await.unwrap();
     assert_eq!(json_of(&res.locations), json!([{ "path": "a.py", "line": 2, "col": 4, "text": "def f():" }]));
     assert_eq!(
-        json_of(&s.pool.hover(&pos("b.go", 2, 5)).await.unwrap()),
+        json_of(&s.pool.hover(&pos("b.go", 2, 5), false).await.unwrap()),
         json!({ "contents": OWNER_HOVER, "range": { "line": 2, "col": 4, "endLine": 2, "endCol": 5 } })
     );
     s.pool.close().await;
@@ -262,7 +262,7 @@ async fn starts_preloaded_languages_before_any_snapshot_arrives() {
     assert_eq!(s.commands(), ["py-server"]);
     let states: Vec<LspState> = s.pool.status().servers.into_iter().map(|s| s.state).collect();
     assert_eq!(states, [LspState::Starting]);
-    assert!(s.pool.hover(&pos("a.py", 2, 4)).await.unwrap().contents.unwrap().contains("def f()"));
+    assert!(s.pool.hover(&pos("a.py", 2, 4), false).await.unwrap().contents.unwrap().contains("def f()"));
     s.pool.close().await;
 }
 
@@ -342,9 +342,11 @@ async fn starts_for_a_joined_language_and_merges_its_hovers_and_locations_after_
         ]
     );
     assert_eq!(
-        json_of(&s.pool.hover(&pos("a.tsx", 2, 0)).await.unwrap()),
+        json_of(&s.pool.hover(&pos("a.tsx", 2, 0), false).await.unwrap()),
         json!({ "contents": format!("{OWNER_HOVER}\n\n---\n\ntailwind says hi"), "range": { "line": 2, "col": 4, "endLine": 2, "endCol": 5 } })
     );
+    // Asked for the owner alone, the joined server's notes stay out.
+    assert_eq!(s.pool.hover(&pos("a.tsx", 2, 0), true).await.unwrap().contents.as_deref(), Some(OWNER_HOVER));
     assert_eq!(
         json_of(&s.pool.definition(&pos("a.tsx", 2, 0)).await.unwrap().locations),
         json!([
@@ -375,7 +377,10 @@ async fn serves_a_language_nothing_owns_by_itself() {
         json_of(&status.missing),
         json!([{ "language": "javascript", "tried": ["typescript-language-server", "vtsls"] }])
     );
-    assert_eq!(json_of(&s.pool.hover(&pos("b.js", 2, 0)).await.unwrap()), json!({ "contents": "tailwind says hi" }));
+    assert_eq!(
+        json_of(&s.pool.hover(&pos("b.js", 2, 0), false).await.unwrap()),
+        json!({ "contents": "tailwind says hi" })
+    );
     assert_eq!(s.pool.occurrences(&pos("b.js", 2, 0)).await.unwrap().occurrences.len(), 1);
     s.pool.close().await;
 }
@@ -392,7 +397,7 @@ async fn keeps_the_owners_answer_when_the_joined_server_is_gone_and_the_owners_e
     })
     .await;
     assert_eq!(
-        json_of(&s.pool.hover(&pos("a.tsx", 2, 0)).await.unwrap()),
+        json_of(&s.pool.hover(&pos("a.tsx", 2, 0), false).await.unwrap()),
         json!({ "contents": OWNER_HOVER, "range": { "line": 2, "col": 4, "endLine": 2, "endCol": 5 } })
     );
     s.pool.close().await;
@@ -406,11 +411,11 @@ async fn keeps_the_owners_answer_when_the_joined_server_is_gone_and_the_owners_e
     eventually("the owner gone", || dead.pool.status().servers.first().map(|x| x.state) == Some(LspState::Unavailable))
         .await;
     assert_eq!(
-        json_of(&dead.pool.hover(&pos("a.tsx", 2, 0)).await.unwrap()),
+        json_of(&dead.pool.hover(&pos("a.tsx", 2, 0), false).await.unwrap()),
         json!({ "contents": "tailwind says hi" })
     );
     // Line 1 has no hover anywhere, so the owner's outage is why the answer may be incomplete.
-    let empty = dead.pool.hover(&pos("a.tsx", 1, 0)).await.unwrap();
+    let empty = dead.pool.hover(&pos("a.tsx", 1, 0), false).await.unwrap();
     assert_eq!(empty.contents, None);
     let reason = empty.inconclusive.unwrap();
     assert!(reason.contains("\"ts-server\" exited"), "{reason}");
@@ -466,7 +471,7 @@ async fn asks_about_a_file_outside_the_snapshot_only_the_servers_that_named_it()
     assert!(s.pool.named(lib_s));
     // So the owner answers from lib.tsx alone: no "tailwind says hi" merged in.
     assert_eq!(
-        json_of(&s.pool.hover(&pos(lib_s, 2, 0)).await.unwrap()),
+        json_of(&s.pool.hover(&pos(lib_s, 2, 0), false).await.unwrap()),
         json!({ "contents": OWNER_HOVER, "range": { "line": 2, "col": 4, "endLine": 2, "endCol": 5 } })
     );
     s.settle().await;

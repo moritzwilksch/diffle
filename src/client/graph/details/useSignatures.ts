@@ -64,7 +64,7 @@ async function describe(n: GraphNode): Promise<Signature> {
 }
 
 function hoverAt(s: { path: string; line: number; col: number }): Promise<string | null> {
-  return api.lspHover({ path: s.path, line: s.line, col: s.col }).then(
+  return api.lspHover({ path: s.path, line: s.line, col: s.col, ownerOnly: true }).then(
     (r) => r.contents,
     () => null,
   );

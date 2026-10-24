@@ -12,7 +12,8 @@ use axum::routing::{get, post};
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::lsp::pool::LspPool;
 use crate::protocol::{
-    LspFeature, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery, lsp_blocker, readable_by_servers,
+    LspFeature, LspHoverRequest, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery, lsp_blocker,
+    readable_by_servers,
 };
 
 /// The largest integer a JavaScript client can send exactly; zod's `.int()` refuses anything past it.
@@ -90,8 +91,9 @@ async fn type_definition(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult
 
 async fn hover(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let pos = position(&raw)?;
+    let req: LspHoverRequest = body(&raw)?;
     let pool = pool_for(&d, Some(&pos.path), Some(LspFeature::Hover)).await?;
-    Ok(Json(pool.hover(&pos).await?).into_response())
+    Ok(Json(pool.hover(&pos, req.owner_only.unwrap_or(false)).await?).into_response())
 }
 
 async fn references(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
