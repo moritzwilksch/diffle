@@ -5,8 +5,9 @@ import { lspBlocker } from '@/shared/lsp.js';
 import type { GraphResponse, Snapshot } from '@/shared/protocol.js';
 import { isTest, keepNodes } from './filters.js';
 import { nodeSize } from './labels.js';
-import { layout, type Placed, type PlacedNode } from './layout.js';
-import { byFile, rank } from './rank.js';
+import { type Stacked, stack } from './components.js';
+import type { PlacedNode } from './layout.js';
+import { byFile } from './rank.js';
 
 export type Filter = 'files' | 'consumers' | 'tests';
 export type Direction = 'left' | 'right' | 'up' | 'down';
@@ -27,7 +28,9 @@ export interface GraphState {
   snapshot: Snapshot | null;
   filters: Record<Filter, boolean>;
   /** The loaded graph, filtered and laid out. */
-  view: { graph: GraphResponse; placed: Placed } | null;
+  view: { graph: GraphResponse; stacked: Stacked } | null;
+  /** The key of the one connected part shown alone, or null for every part. */
+  only: string | null;
   selected: string | null;
   /** A file the reader picked in the tree: its nodes stay lit and the view pans to them. */
   focusPath: string | null;
@@ -40,6 +43,7 @@ export interface GraphState {
   /** Leaves the graph for the diff at `path:line`. */
   pick(target: { path: string; line: number }): void;
   setFilter(filter: Filter, on: boolean): void;
+  showOnly(part: string | null): void;
 }
 
 /** The change graph view. It reads the review store and never the other way round. */
@@ -52,6 +56,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   view: null,
   selected: null,
   focusPath: null,
+  only: null,
 
   toggle() {
     if (get().open) return get().close();
@@ -75,7 +80,7 @@ export const useGraph = create<GraphState>((set, get) => ({
     try {
       const graph = await api.lspGraph();
       if (!current()) return;
-      const view = derive(graph, get().filters);
+      const view = derive(graph, get().filters, get().only);
       const selected = view.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
       set({ load: { state: 'ready', graph }, view, selected });
     } catch (e) {
@@ -88,7 +93,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   },
 
   step(direction) {
-    const nodes = get().view?.placed.nodes ?? [];
+    const nodes = get().view?.stacked.nodes ?? [];
     const from = nodes.find((p) => p.node.id === get().selected);
     if (!from) return set({ selected: nearestToOrigin(nodes)?.node.id ?? null, focusPath: null });
     const next = nearest(from, nodes, direction);
@@ -103,9 +108,15 @@ export const useGraph = create<GraphState>((set, get) => ({
   setFilter(filter, on) {
     const filters = { ...get().filters, [filter]: on };
     const load = get().load;
-    const view = load.state === 'ready' ? derive(load.graph, filters) : null;
+    const view = load.state === 'ready' ? derive(load.graph, filters, get().only) : null;
     const selected = view?.graph.nodes.some((n) => n.id === get().selected) ? get().selected : null;
     set({ filters, view, selected });
+  },
+
+  showOnly(part) {
+    const load = get().load;
+    if (load.state !== 'ready') return;
+    set({ only: part, view: derive(load.graph, get().filters, part) });
   },
 }));
 
@@ -127,10 +138,10 @@ function followReview(): void {
   });
 }
 
-function derive(graph: GraphResponse, filters: Record<Filter, boolean>): GraphState['view'] & {} {
+function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: string | null): GraphState['view'] & {} {
   const kept = keepNodes(graph, (n) => (filters.consumers || n.status !== 'consumer') && (filters.tests || !isTest(n)));
   const shown = filters.files ? byFile(kept) : kept;
-  return { graph: shown, placed: layout(shown, rank(shown), (n) => nodeSize(n, !filters.files), !filters.files) };
+  return { graph: shown, stacked: stack(shown, (n) => nodeSize(n, !filters.files), !filters.files, only) };
 }
 
 const centerOf = (p: PlacedNode) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2 });

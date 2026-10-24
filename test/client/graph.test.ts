@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { split } from '@/client/graph/components.js';
 import { type Box, layout } from '@/client/graph/layout.js';
 import { byFile, rank } from '@/client/graph/rank.js';
 import { signatureOf } from '@/client/graph/useSignatures.js';
@@ -128,5 +129,20 @@ describe('signatureOf', () => {
     expect(signatureOf(rust)).toBe('```rust\ndiffle::graph\n```\n\n```rust\npub fn link()\n```');
     expect(signatureOf('```python\ndef get(url: str)\n```\nGo to [str](x)')).toBe('```python\ndef get(url: str)\n```');
     expect(signatureOf('plain text')).toBe('plain text');
+  });
+});
+
+describe('split', () => {
+  it('parts the linked symbols by connection, largest first, and sets the unlinked apart', () => {
+    const g = graph(
+      ['a', 'b', 'c', 'x', 'y', 'lone'].map((id) => node(id)),
+      ['a>b', 'b>c', 'x>y'],
+    );
+    const { parts, unlinked } = split(g);
+    expect(parts.map((p) => p.nodes.map((n) => n.id))).toEqual([
+      ['a', 'b', 'c'],
+      ['x', 'y'],
+    ]);
+    expect(unlinked.nodes.map((n) => n.id)).toEqual(['lone']);
   });
 });

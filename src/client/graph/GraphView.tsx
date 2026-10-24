@@ -62,7 +62,7 @@ export function GraphView() {
         {view && graph!.nodes.length === 0 && (
           <p className="p-4 text-muted">No changed functions, classes or types in this diff.</p>
         )}
-        {view && graph!.nodes.length > 0 && <GraphCanvas placed={view.placed} clustered={!filters.files} />}
+        {view && graph!.nodes.length > 0 && <GraphCanvas stacked={view.stacked} clustered={!filters.files} />}
       </div>
     </section>
   );

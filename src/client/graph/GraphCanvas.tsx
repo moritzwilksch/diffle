@@ -1,6 +1,8 @@
 import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
-import { ArrowDefs, Cluster, Node } from './GraphShapes.js';
-import type { Box, Placed, PlacedNode } from './layout.js';
+import { PART_HEADER, type Stacked } from './components.js';
+import { GraphPart, HEAD, type Lit } from './GraphPart.js';
+import { ArrowDefs } from './GraphShapes.js';
+import type { Box, PlacedNode } from './layout.js';
 import { useGraph } from './state.js';
 
 interface View {
@@ -10,11 +12,9 @@ interface View {
 }
 
 const MARGIN = 48;
-const HEAD = 44;
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.15;
 const FIT_ZOOM = 1.25;
-const FADED = 0.18;
 
 /** What the keys do to the mounted canvas: fit the graph, zoom about the centre. */
 export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {} };
@@ -24,13 +24,14 @@ export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {} };
  * focused from the tree, stays lit with its links and the rest fades. A double-click on a node
  * jumps to it in the diff; on the background it fits the graph.
  */
-export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: boolean }) {
+export function GraphCanvas({ stacked, clustered }: { stacked: Stacked; clustered: boolean }) {
+  const only = useGraph((s) => s.only);
   const selected = useGraph((s) => s.selected);
   const focusPath = useGraph((s) => s.focusPath);
   const host = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   // Pointer capture retargets the release to the host, so the press remembers which node it hit.
-  const drag = useRef<{ x: number; y: number; moved: boolean; node: string | null } | null>(null);
+  const drag = useRef<{ x: number; y: number; moved: boolean; node: string | null; part: string | null } | null>(null);
 
   const fitBox = (box: Box, maxZoom: number) => {
     const el = host.current;
@@ -49,8 +50,8 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
       const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * factor));
       return { k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k };
     });
-  const fit = () => fitBox({ x: 0, y: 0, w: placed.width, h: placed.height }, FIT_ZOOM);
-  useEffect(fit, [placed]);
+  const fit = () => fitBox({ x: 0, y: 0, w: stacked.width, h: stacked.height }, FIT_ZOOM);
+  useEffect(fit, [stacked]);
   useEffect(() => {
     canvasControl.fit = fit;
     canvasControl.zoom = (factor) => {
@@ -61,12 +62,12 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
 
   // A file picked in the tree: show its boxes whole.
   useEffect(() => {
-    const boxes = placed.nodes.filter((p) => p.node.path === focusPath);
+    const boxes = stacked.nodes.filter((p) => p.node.path === focusPath);
     if (boxes.length) fitBox(bounds(boxes), 1);
-  }, [focusPath, placed]);
+  }, [focusPath, stacked]);
   // A selection moved by the keys: bring it into view when it left it.
   useEffect(() => {
-    const p = placed.nodes.find((n) => n.node.id === selected);
+    const p = stacked.nodes.find((n) => n.node.id === selected);
     const el = host.current;
     if (!p || !el) return;
     setView((v) => {
@@ -75,25 +76,25 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
       if (inside) return v;
       return { ...v, x: el.clientWidth / 2 - (p.x + p.w / 2) * v.k, y: el.clientHeight / 2 - (p.y + p.h / 2) * v.k };
     });
-  }, [selected, placed]);
+  }, [selected, stacked]);
 
-  const lit = useMemo(() => {
-    const seeds = selected ? [selected] : placed.nodes.filter((p) => p.node.path === focusPath).map((p) => p.node.id);
+  const edges = useMemo(() => stacked.parts.flatMap((p) => p.placed.edges.map((e) => e.edge)), [stacked]);
+  const lit = useMemo((): Lit | null => {
+    const seeds = selected ? [selected] : stacked.nodes.filter((p) => p.node.path === focusPath).map((p) => p.node.id);
     if (!seeds.length) return null;
     const ids = new Set(seeds);
-    for (const { edge } of placed.edges)
-      if (seeds.includes(edge.from) || seeds.includes(edge.to)) ids.add(edge.from).add(edge.to);
+    for (const edge of edges) if (seeds.includes(edge.from) || seeds.includes(edge.to)) ids.add(edge.from).add(edge.to);
     return { ids, seeds: new Set(seeds) };
-  }, [placed, selected, focusPath]);
+  }, [stacked, edges, selected, focusPath]);
 
   const onWheel = (e: WheelEvent) => {
     const rect = host.current!.getBoundingClientRect();
     zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
   };
-  const nodeAt = (e: { target: EventTarget }) =>
-    (e.target as Element).closest('[data-node]')?.getAttribute('data-node') ?? null;
+  const hit = (e: { target: EventTarget }, attr: string) =>
+    (e.target as Element).closest(`[${attr}]`)?.getAttribute(attr) ?? null;
   const onPointerDown = (e: PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY, moved: false, node: nodeAt(e) };
+    drag.current = { x: e.clientX, y: e.clientY, moved: false, node: hit(e, 'data-node'), part: hit(e, 'data-part') };
     host.current!.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: PointerEvent) => {
@@ -107,15 +108,17 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
   const onPointerUp = () => {
     const d = drag.current;
     drag.current = null;
-    if (d && !d.moved) useGraph.getState().select(d.node);
+    if (!d || d.moved) return;
+    if (d.part != null) useGraph.getState().showOnly(only ? null : d.part);
+    else useGraph.getState().select(d.node);
   };
   const onDoubleClick = (e: MouseEvent) => {
-    const node = placed.nodes.find((p) => p.node.id === nodeAt(e))?.node;
+    if (hit(e, 'data-part') != null) return;
+    const node = stacked.nodes.find((p) => p.node.id === hit(e, 'data-node'))?.node;
     if (node) useGraph.getState().pick({ path: node.path, line: node.line });
     else fit();
   };
 
-  const opacity = (ids: string[]) => (lit && !ids.some((id) => lit.ids.has(id)) ? FADED : 1);
   return (
     <div
       ref={host}
@@ -129,58 +132,60 @@ export function GraphCanvas({ placed, clustered }: { placed: Placed; clustered: 
       <svg className="absolute inset-0 h-full w-full" role="img" aria-label="Change graph">
         <ArrowDefs />
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {placed.layers.map((l, i) => (
-            <text key={i} x={-HEAD} y={l.y + 16} textAnchor="end" className="fill-muted font-sans text-[11px]">
-              {i === 0 ? 'entry' : i === placed.layers.length - 1 ? 'core' : ''}
-            </text>
+          {stacked.parts.map((part) => (
+            <g key={part.key} transform={`translate(${part.x},${part.y})`}>
+              <PartHeader
+                title={part.hub.name}
+                size={part.placed.nodes.length}
+                showingOnly={only != null}
+                partKey={part.key}
+                single={stacked.parts.length === 1 && only == null}
+              />
+              <GraphPart placed={part.placed} clustered={clustered} selected={selected} lit={lit} />
+            </g>
           ))}
-          {placed.shelf != null && (
-            <text x={0} y={placed.shelf - 12} className="fill-muted font-sans text-[11px]">
-              No links to other changes or their users
-            </text>
+          {stacked.unlinked && (
+            <g transform={`translate(0,${stacked.unlinked.y})`}>
+              <GraphPart placed={stacked.unlinked.placed} clustered={clustered} selected={selected} lit={lit} />
+            </g>
           )}
-          {placed.clusters.map((c) => {
-            const members = placed.nodes.filter((n) => n.node.path === c.path && within(n, c));
-            return (
-              <Cluster
-                key={`${c.path}@${c.layer}@${c.x},${c.y}`}
-                cluster={c}
-                members={members}
-                opacity={opacity(members.map((n) => n.node.id)) === 1 ? 1 : 0.25}
-              />
-            );
-          })}
-          {placed.edges.map(({ edge, d, back }) => {
-            const on = !!lit && (lit.seeds.has(edge.from) || lit.seeds.has(edge.to));
-            return (
-              <path
-                key={`${edge.from}>${edge.to}`}
-                d={d}
-                fill="none"
-                stroke={on ? 'var(--accent)' : 'var(--fg-2)'}
-                strokeOpacity={lit && !on ? 0.12 : on ? 0.95 : 0.5}
-                strokeWidth={1 + Math.min(2, Math.log2(edge.lines.length))}
-                strokeDasharray={back ? '4 3' : undefined}
-                markerEnd={on ? 'url(#graph-arrow-lit)' : 'url(#graph-arrow)'}
-              />
-            );
-          })}
-          {placed.nodes.map((p) => (
-            <Node
-              key={p.node.id}
-              placed={p}
-              clustered={clustered}
-              selected={p.node.id === selected}
-              opacity={opacity([p.node.id])}
-            />
-          ))}
         </g>
       </svg>
     </div>
   );
 }
 
-const within = (n: Box, c: Box) => n.x >= c.x && n.x < c.x + c.w && n.y >= c.y && n.y < c.y + c.h;
+/** A part's name, after its most-used symbol, and the switch between it alone and every part. */
+function PartHeader({
+  title,
+  size,
+  showingOnly,
+  partKey,
+  single,
+}: {
+  title: string;
+  size: number;
+  showingOnly: boolean;
+  partKey: string;
+  single: boolean;
+}) {
+  if (single) return null;
+  const y = -PART_HEADER + 14;
+  return (
+    <g>
+      <text x={0} y={y} className="font-sans text-[13px]">
+        <tspan className="fill-muted">around </tspan>
+        <tspan className="fill-foreground font-mono" fontWeight={600}>
+          {title}
+        </tspan>
+        <tspan className="fill-muted"> · {size} symbols · </tspan>
+        <tspan data-part={partKey} className="cursor-pointer fill-accent">
+          {showingOnly ? 'show every part' : 'show only this'}
+        </tspan>
+      </text>
+    </g>
+  );
+}
 
 function bounds(boxes: PlacedNode[]): Box {
   const [x, y] = [Math.min(...boxes.map((b) => b.x)), Math.min(...boxes.map((b) => b.y))];
