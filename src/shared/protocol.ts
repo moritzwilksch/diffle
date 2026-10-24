@@ -839,7 +839,10 @@ export const LspSymbolSchema = z.object({
   /** Enclosing class or function, when any. */
   container: z.string().optional(),
   path: z.string(),
+  /** Line of the name, where navigation lands. */
   line: z.number().int(),
+  /** First line of the declaration's full range, before `line` when a decorator or doc comment leads it. */
+  startLine: z.number().int(),
   /** Last line of the declaration's full range. */
   endLine: z.number().int(),
   col: z.number().int(),

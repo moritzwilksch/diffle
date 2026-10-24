@@ -68,8 +68,16 @@ mod tests {
     use super::*;
 
     fn changed(path: &str, name: &str, line: i64, lines: usize) -> Changed {
-        let symbol =
-            LspSymbol { name: name.into(), kind: 12, container: None, path: path.into(), line, end_line: line, col: 0 };
+        let symbol = LspSymbol {
+            name: name.into(),
+            kind: 12,
+            container: None,
+            path: path.into(),
+            line,
+            start_line: line,
+            end_line: line,
+            col: 0,
+        };
         Changed { symbol, status: GraphNodeStatus::Modified, lines }
     }
 

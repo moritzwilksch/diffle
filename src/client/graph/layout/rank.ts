@@ -100,6 +100,7 @@ export function byFile(graph: GraphResponse): { graph: GraphResponse; via: Map<s
       kind: 1,
       path,
       line: 1,
+      startLine: 1,
       endLine: 1,
       col: 0,
       status: fileStatus(members.map((n) => n.status)),

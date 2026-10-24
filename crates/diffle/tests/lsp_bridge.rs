@@ -359,14 +359,14 @@ async fn flattens_hierarchical_document_symbols_and_filters_workspace_symbols_to
     assert_eq!(
         json_of(&s.bridge.document_symbols("a.py").await.unwrap()),
         json!({ "symbols": [
-            { "name": "Foo", "kind": 5, "path": "a.py", "line": 1, "endLine": 4, "col": 6 },
-            { "name": "bar", "kind": 6, "container": "Foo", "path": "a.py", "line": 2, "endLine": 3, "col": 8 },
-            { "name": "baz", "kind": 12, "path": "a.py", "line": 6, "endLine": 7, "col": 4 },
+            { "name": "Foo", "kind": 5, "path": "a.py", "line": 1, "startLine": 1, "endLine": 4, "col": 6 },
+            { "name": "bar", "kind": 6, "container": "Foo", "path": "a.py", "line": 2, "startLine": 2, "endLine": 3, "col": 8 },
+            { "name": "baz", "kind": 12, "path": "a.py", "line": 6, "startLine": 6, "endLine": 7, "col": 4 },
         ] })
     );
     assert_eq!(
         json_of(&s.bridge.workspace_symbols("q").await.unwrap()),
-        json!({ "symbols": [{ "name": "q_sym", "kind": 12, "container": "mod", "path": "other.py", "line": 5, "endLine": 5, "col": 2 }] })
+        json!({ "symbols": [{ "name": "q_sym", "kind": 12, "container": "mod", "path": "other.py", "line": 5, "startLine": 5, "endLine": 5, "col": 2 }] })
     );
     s.bridge.close().await;
 }

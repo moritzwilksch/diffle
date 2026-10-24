@@ -14,6 +14,7 @@ const node = (id: string, status: GraphNode['status'] = 'modified', path = `${id
   kind: 12,
   path,
   line: 1,
+  startLine: 1,
   endLine: 1,
   col: 0,
   status,

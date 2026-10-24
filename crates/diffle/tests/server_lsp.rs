@@ -184,7 +184,7 @@ async fn answers_definition_hover_references_occurrences_and_symbols() {
     let workspace = s.get("/api/lsp/symbols?q=q").await.json();
     assert_eq!(
         workspace,
-        json!({ "symbols": [{ "name": "q_sym", "kind": 12, "container": "mod", "path": "other.py", "line": 5, "endLine": 5, "col": 2 }] })
+        json!({ "symbols": [{ "name": "q_sym", "kind": 12, "container": "mod", "path": "other.py", "line": 5, "startLine": 5, "endLine": 5, "col": 2 }] })
     );
     s.close().await;
 }

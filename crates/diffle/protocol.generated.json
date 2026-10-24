@@ -607,7 +607,14 @@
         "line": {
           "type": "integer",
           "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Line of the name, where navigation lands."
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "First line of the declaration's full range, before `line` when a decorator or doc comment leads it."
         },
         "endLine": {
           "type": "integer",
@@ -639,6 +646,7 @@
         "kind",
         "path",
         "line",
+        "startLine",
         "endLine",
         "col",
         "id",
@@ -1495,7 +1503,14 @@
         "line": {
           "type": "integer",
           "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Line of the name, where navigation lands."
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "First line of the declaration's full range, before `line` when a decorator or doc comment leads it."
         },
         "endLine": {
           "type": "integer",
@@ -1514,6 +1529,7 @@
         "kind",
         "path",
         "line",
+        "startLine",
         "endLine",
         "col"
       ]

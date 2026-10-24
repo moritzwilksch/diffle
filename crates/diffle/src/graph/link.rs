@@ -68,6 +68,7 @@ fn user_at(outlines: &HashMap<String, Vec<LspSymbol>>, path: &str, line: i64) ->
             container: None,
             path: path.to_owned(),
             line: 1,
+            start_line: 1,
             end_line: 1,
             col: 0,
             status: GraphNodeStatus::Consumer,
@@ -84,6 +85,7 @@ pub fn node(symbol: &LspSymbol, id: String, status: GraphNodeStatus, more_consum
         container: symbol.container.clone(),
         path: symbol.path.clone(),
         line: symbol.line,
+        start_line: symbol.start_line,
         end_line: symbol.end_line,
         col: symbol.col,
         status,
@@ -98,7 +100,16 @@ mod tests {
     use super::*;
 
     fn symbol(path: &str, name: &str, line: i64, end_line: i64) -> LspSymbol {
-        LspSymbol { name: name.into(), kind: 12, container: None, path: path.into(), line, end_line, col: 4 }
+        LspSymbol {
+            name: name.into(),
+            kind: 12,
+            container: None,
+            path: path.into(),
+            line,
+            start_line: line,
+            end_line,
+            col: 4,
+        }
     }
 
     fn at(path: &str, line: u64) -> LspLocation {

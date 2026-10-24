@@ -19,7 +19,7 @@ pub fn interface(outline: Vec<LspSymbol>) -> Vec<LspSymbol> {
     // Servers list a parent before its children, which settles equal spans: tsserver gives
     // `const useStore = create(...)` and the callback inside it the same lines.
     let encloses = |(i, a): (usize, &LspSymbol), (j, s): (usize, &LspSymbol)| {
-        i < j && a.line <= s.line && s.end_line <= a.end_line
+        i < j && a.start_line <= s.start_line && s.end_line <= a.end_line
     };
     let keep: Vec<bool> = outline
         .iter()
@@ -32,9 +32,9 @@ pub fn interface(outline: Vec<LspSymbol>) -> Vec<LspSymbol> {
     outline.into_iter().zip(keep).filter_map(|(s, keep)| keep.then_some(s)).collect()
 }
 
-/// The innermost symbol of an interface outline whose declaration spans `line`.
+/// The innermost symbol of an interface outline whose declaration, decorators included, spans `line`.
 pub fn enclosing(outline: &[LspSymbol], line: i64) -> Option<&LspSymbol> {
-    outline.iter().filter(|s| s.line <= line && line <= s.end_line).min_by_key(|s| s.end_line - s.line)
+    outline.iter().filter(|s| s.start_line <= line && line <= s.end_line).min_by_key(|s| s.end_line - s.start_line)
 }
 
 /// The symbols of an interface outline `changes` falls inside, each the innermost around some
@@ -53,8 +53,11 @@ pub fn changed_symbols(outline: &[LspSymbol], changes: &NewSideChanges) -> Vec<C
         .zip(hits)
         .filter(|(_, hits)| *hits > 0)
         .map(|(s, lines)| {
-            let status =
-                if changes.adds_all(s.line, s.end_line) { GraphNodeStatus::Added } else { GraphNodeStatus::Modified };
+            let status = if changes.adds_all(s.start_line, s.end_line) {
+                GraphNodeStatus::Added
+            } else {
+                GraphNodeStatus::Modified
+            };
             Changed { symbol: s.clone(), status, lines }
         })
         .collect()
@@ -65,7 +68,16 @@ mod tests {
     use super::*;
 
     fn symbol(name: &str, kind: i64, line: i64, end_line: i64) -> LspSymbol {
-        LspSymbol { name: name.into(), kind, container: None, path: "a.py".into(), line, end_line, col: 0 }
+        LspSymbol {
+            name: name.into(),
+            kind,
+            container: None,
+            path: "a.py".into(),
+            line,
+            start_line: line,
+            end_line,
+            col: 0,
+        }
     }
 
     /// class Foo (1-10) holding method bar (2-4) and field x (5); function baz (12-14) holding the
@@ -108,5 +120,12 @@ mod tests {
     fn a_wholly_added_symbol_is_added_and_a_change_outside_every_interface_symbol_is_none() {
         let changes = NewSideChanges { added: vec![(12, 16)], ..Default::default() };
         assert_eq!(names(&changed_symbols(&outline(), &changes)), [("baz", GraphNodeStatus::Added)]);
+    }
+
+    #[test]
+    fn a_change_to_a_decorator_alone_modifies_the_symbol_it_decorates() {
+        let route = LspSymbol { start_line: 3, ..symbol("route", 12, 4, 6) };
+        let changes = NewSideChanges { added: vec![(3, 3)], ..Default::default() };
+        assert_eq!(names(&changed_symbols(&interface(vec![route]), &changes)), [("route", GraphNodeStatus::Modified)]);
     }
 }
