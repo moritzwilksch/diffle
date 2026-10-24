@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpFromLine, Link2, MoveDown } from 'lucide-react';
+import { LayerArrowDown, LayerArrowUp, Link2, MoveDown } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL, kindGroup } from '@/client/lsp/symbolKind.js';
 import { bySource } from '@/client/graph/layout/order.js';
@@ -73,7 +73,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         <Code signature={signatures.get(node.id)} path={node.path} full />
       </div>
       <Links
-        icon={ArrowUpFromLine}
+        icon={LayerArrowUp}
         title="Used by"
         edges={usedBy}
         other={(e) => byId.get(e.from)}
@@ -82,7 +82,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         signatures={signatures}
       />
       <Links
-        icon={ArrowDownToLine}
+        icon={LayerArrowDown}
         title="Uses"
         edges={uses}
         other={(e) => byId.get(e.to)}
