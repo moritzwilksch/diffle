@@ -87,8 +87,8 @@ function Links({
   if (!edges.length) return null;
   return (
     <section>
-      <h3 className="mb-2 font-semibold">{title}</h3>
-      <ul className="flex flex-col gap-3">
+      <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-[0.06em] text-muted uppercase">{title}</h3>
+      <ul className="m-0 flex list-none flex-col gap-4 p-0">
         {edges.map((e) => {
           const n = other(e);
           if (!n) return null;
@@ -161,7 +161,7 @@ function Code({ signature, path, full = false }: { signature: Signature | undefi
     .join('\n\n');
   return (
     // `.markdown pre code` sets `white-space: pre`, so the wrap goes on the code, not the block.
-    <div className="hover-markdown rounded-md border border-border bg-canvas px-2 py-1.5 [&_pre_code]:[overflow-wrap:anywhere] [&_pre_code]:whitespace-pre-wrap">
+    <div className="hover-markdown rounded-lg bg-[color-mix(in_srgb,var(--bg-3)_45%,transparent)] px-3 py-2 text-[0.75rem] leading-normal [&_hr]:my-2 [&_hr]:border-0 [&_hr]:border-t [&_hr]:border-[color-mix(in_srgb,var(--border)_50%,transparent)] [&_pre_code]:[overflow-wrap:anywhere] [&_pre_code]:whitespace-pre-wrap">
       <Markdown text={text} path={path} highlight />
     </div>
   );
