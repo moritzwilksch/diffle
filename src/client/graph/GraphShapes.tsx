@@ -1,7 +1,7 @@
 import { FileCode2, Pencil, Plus } from 'lucide-react';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
-import { basename, clip, dirname, nodeLabel } from './labels.js';
+import { basename, clip, CODE_CHAR, dirname, KIND_CHAR, nodeLabel, SEPARATOR_W, TITLE_CHAR } from './labels.js';
 import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
 
 const STATUS_STROKE: Record<GraphNode['status'], string> = {
@@ -16,10 +16,8 @@ const KIND_COLOR: Record<string, string> = {
   value: 'var(--kind-value)',
 };
 
-// Monospace character widths at the sizes below, to clip text to its box.
+// The file header's monospace character width, to clip its path to the box.
 const HEADER_CHAR = 6.9;
-const TITLE_CHAR = 7.3;
-const DETAIL_CHAR = 6.1;
 
 /** A file's box in one column: the file icon and its path as everywhere in diffle, dim directories and a bold name. */
 export function Cluster({
@@ -96,7 +94,9 @@ export function Node({
   test: boolean;
 }) {
   const { node, x, y, w, h } = placed;
-  const { title, detail } = nodeLabel(node, clustered);
+  const { title, kind, code } = nodeLabel(node, clustered);
+  // The code part takes what room the kind leaves on its line.
+  const codeRoom = w - 34 - (test ? 30 : 0) - kind.length * KIND_CHAR - (kind && code ? SEPARATOR_W : 0);
   const quiet = node.status === 'consumer' || test;
   const badge = STATUS_BADGE[node.status];
   return (
@@ -129,7 +129,9 @@ export function Node({
       </text>
       <text x={x + 26} y={y + 32} className="fill-muted font-sans text-[10.5px]">
         {test && <tspan className="fill-foreground font-semibold">test · </tspan>}
-        {clip(detail, Math.floor((w - 34) / DETAIL_CHAR))}
+        {kind}
+        {kind && code && ' · '}
+        {code && <tspan className="font-mono">{clip(code, Math.floor(codeRoom / CODE_CHAR))}</tspan>}
       </text>
       {badge && (
         <g>
