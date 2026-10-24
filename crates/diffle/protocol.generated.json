@@ -559,6 +559,133 @@
         "isDraft"
       ]
     },
+    "GraphEdge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "Lines in `from`'s file holding those references, ascending."
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "lines"
+      ],
+      "description": "`from` uses `to`: the language server lists places inside `from` among `to`'s references."
+    },
+    "GraphNode": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "LSP SymbolKind number; the client maps it to a label."
+        },
+        "container": {
+          "type": "string",
+          "description": "Enclosing class or function, when any."
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Last line of the declaration's full range."
+        },
+        "col": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "type": "string",
+          "description": "`path:line:col` of the symbol's name, or the path of a file-level consumer. Stable within a snapshot."
+        },
+        "status": {
+          "$ref": "#/$defs/GraphNodeStatus"
+        },
+        "moreConsumers": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Consumers left out beyond the per-symbol cap; changed symbols only."
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "path",
+        "line",
+        "endLine",
+        "col",
+        "id",
+        "status"
+      ],
+      "description": "A symbol in the change graph: an interface-level symbol the diff touches, or an unchanged one\nusing it. A consumer used from a file's top level, outside any symbol, is that file: kind 1 (File),\nnamed by its path, at line 1."
+    },
+    "GraphNodeStatus": {
+      "type": "string",
+      "enum": [
+        "added",
+        "modified",
+        "consumer"
+      ],
+      "description": "A changed symbol carries its change; a `consumer` is unchanged code that uses one."
+    },
+    "GraphResponse": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphNode"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphEdge"
+          }
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "More changed symbols than the server lays out; the first ones by path and line are kept."
+        },
+        "inconclusive": {
+          "type": "string",
+          "description": "Why the graph may lack nodes or edges: a server was busy or unavailable while answering."
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "truncated"
+      ],
+      "description": "`GET /api/lsp/graph`: the snapshot's changed symbols and the code using them, from the language servers."
+    },
     "ImageQuery": {
       "type": "object",
       "properties": {

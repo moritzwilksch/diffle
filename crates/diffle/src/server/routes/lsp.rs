@@ -28,6 +28,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/lsp/references", post(references))
         .route("/api/lsp/occurrences", post(occurrences))
         .route("/api/lsp/symbols", get(symbols))
+        .route("/api/lsp/graph", get(graph))
 }
 
 pub fn lsp_status(d: &ApiDeps) -> LspStatus {
@@ -118,4 +119,11 @@ async fn symbols(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiR
         None => pool.workspace_symbols(q.q.as_deref().unwrap_or_default()).await?,
     };
     Ok(Json(answer).into_response())
+}
+
+async fn graph(State(d): State<Arc<ApiDeps>>) -> ApiResult {
+    let pool = pool_for(&d, None, Some(LspFeature::References)).await?;
+    let snapshotter = d.session.snapshotter()?;
+    let snap = snapshotter.current().await?;
+    Ok(Json(crate::graph::build(&pool, &snapshotter, &snap).await?).into_response())
 }

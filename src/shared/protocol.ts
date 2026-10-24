@@ -843,6 +843,44 @@ export type LspSymbol = z.infer<typeof LspSymbolSchema>;
 export const LspSymbolsResponseSchema = z.object({ symbols: LspSymbolSchema.array(), inconclusive });
 export type LspSymbolsResponse = z.infer<typeof LspSymbolsResponseSchema>;
 
+/** A changed symbol carries its change; a `consumer` is unchanged code that uses one. */
+export const GraphNodeStatusSchema = z.enum(['added', 'modified', 'consumer']);
+export type GraphNodeStatus = z.infer<typeof GraphNodeStatusSchema>;
+
+/**
+ * A symbol in the change graph: an interface-level symbol the diff touches, or an unchanged one
+ * using it. A consumer used from a file's top level, outside any symbol, is that file: kind 1 (File),
+ * named by its path, at line 1.
+ */
+export const GraphNodeSchema = LspSymbolSchema.extend({
+  /** `path:line:col` of the symbol's name, or the path of a file-level consumer. Stable within a snapshot. */
+  id: z.string(),
+  status: GraphNodeStatusSchema,
+  /** Consumers left out beyond the per-symbol cap; changed symbols only. */
+  moreConsumers: z.number().int().optional(),
+});
+export type GraphNode = z.infer<typeof GraphNodeSchema>;
+
+/** `from` uses `to`: the language server lists places inside `from` among `to`'s references. */
+export const GraphEdgeSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  /** Lines in `from`'s file holding those references, ascending. */
+  lines: z.number().int().array(),
+});
+export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
+
+/** `GET /api/lsp/graph`: the snapshot's changed symbols and the code using them, from the language servers. */
+export const GraphResponseSchema = z.object({
+  nodes: GraphNodeSchema.array(),
+  edges: GraphEdgeSchema.array(),
+  /** More changed symbols than the server lays out; the first ones by path and line are kept. */
+  truncated: z.boolean(),
+  /** Why the graph may lack nodes or edges: a server was busy or unavailable while answering. */
+  inconclusive: z.string().optional(),
+});
+export type GraphResponse = z.infer<typeof GraphResponseSchema>;
+
 /** Derived per changed file: 'restale' means viewed at an older blob. */
 export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
 export type ViewedState = z.infer<typeof ViewedStateSchema>;

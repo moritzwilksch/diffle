@@ -1,7 +1,9 @@
 // Minimal stdio language server for tests: answers initialize, definition, references,
-// documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. Definitions point
+// documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. FAKE_LSP_GRAPH=1 makes
+// outlines and references real enough for the change graph (see `graphOutline`). Definitions point
 // at line 2 (FAKE_LSP_DEFINITION_LINE) of the queried file plus one location outside the root; references echo the open document's text length.
-import { pathToFileURL } from 'node:url';
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 let buf = Buffer.alloc(0);
 const docs = new Map();
@@ -136,6 +138,7 @@ function handle(msg) {
       ]);
     }
     case 'textDocument/references': {
+      if (GRAPH) return reply(msg.id, graphReferences(msg.params.textDocument.uri, msg.params.position));
       const text = docs.get(msg.params.textDocument.uri) ?? '';
       return reply(msg.id, [
         { uri: msg.params.textDocument.uri, range: range(0, text.length) },
@@ -182,6 +185,7 @@ function handle(msg) {
       return reply(msg.id, out);
     }
     case 'textDocument/documentSymbol':
+      if (GRAPH) return reply(msg.id, graphOutline(textOf(msg.params.textDocument.uri)));
       return reply(msg.id, [
         {
           name: 'Foo',
@@ -212,4 +216,54 @@ function handle(msg) {
     default:
       if (msg.id != null) reply(msg.id, null);
   }
+}
+
+const GRAPH = process.env.FAKE_LSP_GRAPH === '1';
+const textOf = (uri) => docs.get(uri) ?? readFileSync(fileURLToPath(uri), 'utf8');
+
+/**
+ * A Python outline from indentation: each `class`/`def` spans until the next line indented no
+ * deeper; a `def` inside another symbol is a method (6), else a function (12); classes are 5.
+ */
+function graphOutline(text) {
+  const lines = text.split('\n');
+  const indent = (l) => (/\S/.test(l) ? /^\s*/.exec(l)[0].length : Infinity);
+  const out = [];
+  lines.forEach((l, line) => {
+    const m = /^(\s*)(class|def) (\w+)/.exec(l);
+    if (!m) return;
+    let end = line;
+    while (end + 1 < lines.length && indent(lines[end + 1]) > m[1].length) end++;
+    const kind = m[2] === 'class' ? 5 : m[1] ? 6 : 12;
+    const ch = m[1].length + m[2].length + 1;
+    out.push({
+      name: m[3],
+      kind,
+      range: span(line, end, m[1].length),
+      selectionRange: { start: { line, character: ch }, end: { line, character: ch + m[3].length } },
+    });
+  });
+  return out;
+}
+
+/** Every whole-word occurrence, in every `.py` file of the root, of the word at the position. */
+function graphReferences(uri, { line, character }) {
+  const word = [...(textOf(uri).split('\n')[line] ?? '').matchAll(/\w+/g)].find(
+    (m) => character >= m.index && character <= m.index + m[0].length,
+  )?.[0];
+  if (!word) return [];
+  const root = process.env.FAKE_LSP_ROOT;
+  const out = [];
+  for (const name of readdirSync(root)
+    .filter((n) => n.endsWith('.py'))
+    .sort()) {
+    const file = pathToFileURL(`${root}/${name}`).href;
+    textOf(file)
+      .split('\n')
+      .forEach((l, at) => {
+        for (const m of l.matchAll(new RegExp(`(?<!\\w)${word}(?!\\w)`, 'g')))
+          out.push({ uri: file, range: range(at, m.index) });
+      });
+  }
+  return out;
 }

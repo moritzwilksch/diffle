@@ -17,6 +17,7 @@ pub mod error;
 pub mod generated;
 pub mod git;
 pub mod github;
+pub mod graph;
 pub mod iterations;
 pub mod lsp;
 pub mod mode;
