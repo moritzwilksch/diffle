@@ -6,6 +6,7 @@ import { Markdown } from '@/client/Markdown.js';
 import { kindGroup, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { isTest } from '@/client/graph/filters.js';
+import { canvasControl } from '@/client/graph/GraphCanvas.js';
 import { bySource } from '@/client/graph/layout/order.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph } from '@/client/graph/state.js';
@@ -110,7 +111,13 @@ export function Links({
         {shown.map(({ e, n }) => (
           <li
             key={`${e.from}>${e.to}`}
-            className={ENTRY}
+            className={`${ENTRY} cursor-pointer`}
+            // The card frames its node in the graph, as a double-click there does; its own buttons and
+            // a text selection in it keep their clicks.
+            onClick={(ev) => {
+              if ((ev.target as Element).closest('button, a') || window.getSelection()?.toString()) return;
+              canvasControl.frame(n.id);
+            }}
             onPointerEnter={() => useGraph.getState().hoverEdge(edgeKey(e))}
             onPointerLeave={() => useGraph.getState().hoverEdge(null)}
           >
@@ -138,12 +145,12 @@ export function Links({
   );
 }
 
-/** A linked node's name, selecting it in the graph; the chevron says the row leads there. */
+/** A linked node's name, selecting and framing it in the graph; the chevron says the row leads there. */
 function NodeRow({ node }: { node: GraphNode }) {
   return (
     <LinkButton
       className="group flex items-center justify-between gap-2 hover:no-underline"
-      onClick={() => useGraph.getState().select(node.id)}
+      onClick={() => canvasControl.frame(node.id)}
     >
       <span className="group-hover:underline">
         <Name node={node} />
