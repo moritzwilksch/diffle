@@ -157,9 +157,12 @@ export function Name({ node, className }: { node: GraphNode; className?: string 
       </span>
     );
   return (
-    <span className={twMerge(`inline-flex items-center gap-1.5 font-mono ${BODY}`, className)}>
+    // A long name, a test's sentence of one, gives way with an ellipsis rather than widen the panel.
+    <span className={twMerge(`inline-flex max-w-full min-w-0 items-center gap-1.5 font-mono ${BODY}`, className)}>
       <KindIcon kind={node.kind} size="0.875rem" className="shrink-0" />
-      <span style={color ? { color } : undefined}>{node.name}</span>
+      <span className="min-w-0 truncate" style={color ? { color } : undefined} title={node.name}>
+        {node.name}
+      </span>
     </span>
   );
 }

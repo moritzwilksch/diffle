@@ -35,9 +35,11 @@ export function NotShown({ cut }: { cut: GraphNode[] }) {
               <FilePath path={path} />
             </span>
             {nodes.map((n) => (
-              <span key={n.id} className="flex items-center justify-between gap-2">
+              <span key={n.id} className="flex min-w-0 items-center justify-between gap-2">
                 <Name node={n} />
-                <JumpChip path={n.path} line={n.line} />
+                <span className="shrink-0">
+                  <JumpChip path={n.path} line={n.line} />
+                </span>
               </span>
             ))}
           </li>
