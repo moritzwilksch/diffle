@@ -74,7 +74,7 @@ fn render(graph: &Value) -> String {
             e["lines"]
         );
     }
-    out + &format!("truncated: {}\n", graph["truncated"])
+    out + &format!("cut symbols: {}\n", graph["cutSymbols"])
 }
 
 #[tokio::test]

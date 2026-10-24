@@ -1,10 +1,14 @@
 //! The change graph: the snapshot's changed symbols and the code using them, all from the language
 //! servers' outlines and references.
 pub mod link;
+pub mod moved;
 pub mod symbols;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::time::{Instant, timeout_at};
 
 use crate::comments::hunks::new_side_changes;
 use crate::concurrency::map_limit;
@@ -17,6 +21,9 @@ use crate::snapshotter::Snapshotter;
 pub const MAX_NODES: usize = 80;
 /// Language server requests in flight at once.
 const PARALLEL: usize = 8;
+/// How long a graph may take. A cold server can take minutes to index; past this the graph is
+/// answered with what came back, and says so.
+const BUDGET: Duration = Duration::from_secs(30);
 
 /// One request's answer, and why the graph may lack something it would have said. A failed
 /// request is a gap, not a failed graph: the graph gathers many advisory queries, and one server
@@ -28,6 +35,7 @@ struct Answer<T> {
 
 /// Builds the graph of `snap`, whose new side the servers read (the caller has checked).
 pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapshot) -> Result<GraphResponse> {
+    let by = Instant::now() + BUDGET;
     let mut reasons = Vec::new();
     // Owned items: a closure over borrowed ones is not general enough for axum's `Send` bound.
     let files: Vec<String> = snap
@@ -37,9 +45,10 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
         .map(|f| f.path.clone())
         .collect();
 
+    let moves = moved::Moves::of(&new_side_changes(&snapshotter.patch_all().await?));
     let changed_files = map_limit(files, PARALLEL, |path| async move {
         let patch = snapshotter.patch(&path).await?;
-        Ok::<_, Error>((outline(pool, &path).await, patch.map(|p| new_side_changes(&p)), path))
+        Ok::<_, Error>((outline(pool, &path, by).await, patch.map(|p| new_side_changes(&p)), path))
     })
     .await;
     let mut outlines = HashMap::new();
@@ -47,16 +56,17 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     for file in changed_files {
         let (outline, changes, path) = file?;
         reasons.extend(outline.why);
-        let (Some(outline), Some(changes)) = (outline.found, changes) else { continue };
+        let (Some(outline), Some(mut changes)) = (outline.found, changes) else { continue };
+        moves.drop_from(&mut changes);
         changed.extend(symbols::changed_symbols(&outline, &changes));
         outlines.insert(path, outline);
     }
     changed.sort_by(|(a, _), (b, _)| (&a.path, a.line).cmp(&(&b.path, b.line)));
-    let truncated = changed.len() > MAX_NODES;
+    let cut_symbols = changed.len().saturating_sub(MAX_NODES) as i64;
     changed.truncate(MAX_NODES);
 
     let symbols: Vec<LspSymbol> = changed.iter().map(|(s, _)| s.clone()).collect();
-    let references = map_limit(symbols, PARALLEL, |symbol| async move { references(pool, &symbol).await }).await;
+    let references = map_limit(symbols, PARALLEL, |symbol| async move { references(pool, &symbol, by).await }).await;
     let mut locations = Vec::with_capacity(references.len());
     for answer in references {
         reasons.extend(answer.why);
@@ -68,35 +78,46 @@ pub async fn build(pool: &LspPool, snapshotter: &Arc<Snapshotter>, snap: &Snapsh
     unread.sort_unstable();
     unread.dedup();
     unread.retain(|p| !outlines.contains_key(p));
-    let more = map_limit(unread, PARALLEL, |path| async move { (outline(pool, &path).await, path) }).await;
+    let more = map_limit(unread, PARALLEL, |path| async move { (outline(pool, &path, by).await, path) }).await;
     for (outline, path) in more {
         reasons.extend(outline.why);
         outlines.extend(outline.found.map(|o| (path, o)));
     }
 
     let (nodes, edges) = link::link(changed, locations, &outlines);
-    Ok(GraphResponse { nodes, edges, truncated, inconclusive: reasons.into_iter().next() })
+    Ok(GraphResponse { nodes, edges, cut_symbols, inconclusive: reasons.into_iter().next() })
 }
 
 /// The interface-level symbols of `path`.
-async fn outline(pool: &LspPool, path: &str) -> Answer<Vec<LspSymbol>> {
-    answer(pool.document_symbols(path).await.map(|r| (symbols::interface(r.symbols), r.inconclusive)))
+async fn outline(pool: &LspPool, path: &str, by: Instant) -> Answer<Vec<LspSymbol>> {
+    answer(timeout_at(by, pool.document_symbols(path)).await, |r| (symbols::interface(r.symbols), r.inconclusive))
 }
 
-async fn references(pool: &LspPool, symbol: &LspSymbol) -> Answer<Vec<LspLocation>> {
+async fn references(pool: &LspPool, symbol: &LspSymbol, by: Instant) -> Answer<Vec<LspLocation>> {
     let line = u64::try_from(symbol.line).ok().and_then(std::num::NonZeroU64::new);
     let (Some(line), Ok(path)) = (line, symbol.path.clone().try_into()) else {
         return Answer { found: None, why: None };
     };
     let pos = LspPosition { path, line, col: symbol.col };
-    answer(pool.references(&pos).await.map(|r| (r.locations, r.inconclusive)))
+    answer(timeout_at(by, pool.references(&pos)).await, |r| (r.locations, r.inconclusive))
 }
 
-/// No server for the language, or none offering the request, is a gap with nothing to explain.
-fn answer<T>(result: Result<(T, Option<String>)>) -> Answer<T> {
+/// No server for the language, or none offering the request, is a gap with nothing to explain;
+/// a request past the budget is one that says so.
+fn answer<R, T>(
+    result: std::result::Result<Result<R>, tokio::time::error::Elapsed>,
+    take: impl FnOnce(R) -> (T, Option<String>),
+) -> Answer<T> {
     match result {
-        Ok((found, why)) => Answer { found: Some(found), why },
-        Err(Error::LspUnavailable(_) | Error::LspUnsupported(_)) => Answer { found: None, why: None },
-        Err(e) => Answer { found: None, why: Some(e.to_string()) },
+        Ok(Ok(r)) => {
+            let (found, why) = take(r);
+            Answer { found: Some(found), why }
+        }
+        Ok(Err(Error::LspUnavailable(_) | Error::LspUnsupported(_))) => Answer { found: None, why: None },
+        Ok(Err(e)) => Answer { found: None, why: Some(e.to_string()) },
+        Err(_) => Answer {
+            found: None,
+            why: Some(format!("the language servers took over {} s; links may be missing", BUDGET.as_secs())),
+        },
     }
 }

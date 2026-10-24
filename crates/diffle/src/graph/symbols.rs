@@ -89,7 +89,8 @@ mod tests {
 
     #[test]
     fn maps_each_change_to_the_innermost_interface_symbol_around_it() {
-        let changes = NewSideChanges { added: vec![(3, 3), (5, 5), (22, 22)], removed_at: vec![13, 19] };
+        let changes =
+            NewSideChanges { added: vec![(3, 3), (5, 5), (22, 22)], removed_at: vec![13, 19], ..Default::default() };
         assert_eq!(
             names(&changed_symbols(&outline(), &changes)),
             [
@@ -103,7 +104,7 @@ mod tests {
 
     #[test]
     fn a_wholly_added_symbol_is_added_and_a_change_outside_every_interface_symbol_is_none() {
-        let changes = NewSideChanges { added: vec![(12, 16)], removed_at: vec![] };
+        let changes = NewSideChanges { added: vec![(12, 16)], ..Default::default() };
         assert_eq!(names(&changed_symbols(&outline(), &changes)), [("baz", GraphNodeStatus::Added)]);
     }
 }

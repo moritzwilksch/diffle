@@ -36,6 +36,10 @@ pub struct NewSideChanges {
     pub added: Vec<(i64, i64)>,
     /// For each run of removed lines, the new-side line that now stands where they were.
     pub removed_at: Vec<i64>,
+    /// Each run of added lines with its new-side line numbers and text, for matching moved code.
+    pub added_runs: Vec<Vec<(i64, String)>>,
+    /// Each run of removed lines' text, parallel to `removed_at`.
+    pub removed_runs: Vec<Vec<String>>,
 }
 
 impl NewSideChanges {
@@ -56,34 +60,47 @@ pub fn new_side_changes(patch: &str) -> NewSideChanges {
     let mut changes = NewSideChanges::default();
     // The next new-side line, once inside a hunk.
     let mut next: Option<i64> = None;
-    let mut removing = false;
+    // What the previous line did, so a run continues or a new one starts.
+    let mut last = b' ';
     for line in patch.lines() {
         if let Some(m) = HUNK.captures(line) {
             next = m.get(3).and_then(|s| s.as_str().parse().ok());
-            removing = false;
+            last = b' ';
+            continue;
+        }
+        // A patch of several files: the next file's header is no line of this hunk.
+        if line.starts_with("diff --git ") {
+            next = None;
             continue;
         }
         let Some(n) = next.as_mut() else { continue };
+        let text = line.get(1..).unwrap_or_default().to_owned();
         match line.as_bytes().first() {
             Some(b'+') => {
                 match changes.added.last_mut() {
                     Some((_, end)) if *end == *n - 1 => *end = *n,
                     _ => changes.added.push((*n, *n)),
                 }
+                if last != b'+' {
+                    changes.added_runs.push(Vec::new());
+                }
+                changes.added_runs.last_mut().unwrap().push((*n, text));
                 *n += 1;
-                removing = false;
+                last = b'+';
             }
             Some(b'-') => {
-                if !removing {
+                if last != b'-' {
                     changes.removed_at.push((*n).max(1));
+                    changes.removed_runs.push(Vec::new());
                 }
-                removing = true;
+                changes.removed_runs.last_mut().unwrap().push(text);
+                last = b'-';
             }
             // `\ No newline at end of file` belongs to the line before it.
             Some(b'\\') => {}
             _ => {
                 *n += 1;
-                removing = false;
+                last = b' ';
             }
         }
     }
@@ -123,9 +140,19 @@ mod tests {
     fn reads_added_runs_and_where_removals_were() {
         let patch = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,6 +1,6 @@\n a\n-b\n-c\n+B\n d\n-e\n f\n+g\n+h\n\\ No newline at end of file\n";
         let changes = new_side_changes(patch);
-        assert_eq!(changes, NewSideChanges { added: vec![(2, 2), (5, 6)], removed_at: vec![2, 4] });
+        assert_eq!((&changes.added, &changes.removed_at), (&vec![(2, 2), (5, 6)], &vec![2, 4]));
+        assert_eq!(changes.added_runs, [vec![(2, "B".to_owned())], vec![(5, "g".to_owned()), (6, "h".to_owned())]]);
+        assert_eq!(changes.removed_runs, [vec!["b".to_owned(), "c".to_owned()], vec!["e".to_owned()]]);
         assert!(changes.touches(4, 4) && changes.touches(1, 2) && !changes.touches(3, 3));
         assert!(changes.adds_all(5, 6) && !changes.adds_all(4, 5));
+    }
+
+    #[test]
+    fn reads_no_file_header_of_a_later_file_as_lines() {
+        let two = "@@ -1 +1 @@\n-a\n+b\ndiff --git a/g b/g\n--- a/g\n+++ b/g\n@@ -1 +1 @@\n-c\n+d\n";
+        let changes = new_side_changes(two);
+        assert_eq!(changes.added_runs, [vec![(1, "b".to_owned())], vec![(1, "d".to_owned())]]);
+        assert_eq!(changes.removed_runs, [vec!["a".to_owned()], vec!["c".to_owned()]]);
     }
 
     #[test]

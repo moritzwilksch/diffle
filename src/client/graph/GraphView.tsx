@@ -21,7 +21,7 @@ export function GraphView() {
             {changed} changed · {graph.nodes.length - changed} using them · {graph.edges.length} links
           </span>
         )}
-        {full?.truncated && <span className="text-warn">truncated to the first changes</span>}
+        {full?.cutSymbols ? <span className="text-warn">+{full.cutSymbols} changed symbols not drawn</span> : null}
         {full?.inconclusive && (
           <span className="text-warn" title={full.inconclusive}>
             may be incomplete

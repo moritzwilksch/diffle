@@ -670,9 +670,11 @@
             "$ref": "#/$defs/GraphEdge"
           }
         },
-        "truncated": {
-          "type": "boolean",
-          "description": "More changed symbols than the server lays out; the first ones by path and line are kept."
+        "cutSymbols": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Changed symbols left out past the server's cap; the first ones by path and line are kept."
         },
         "inconclusive": {
           "type": "string",
@@ -682,7 +684,7 @@
       "required": [
         "nodes",
         "edges",
-        "truncated"
+        "cutSymbols"
       ],
       "description": "`GET /api/lsp/graph`: the snapshot's changed symbols and the code using them, from the language servers."
     },

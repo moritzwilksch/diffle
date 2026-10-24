@@ -874,8 +874,8 @@ export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
 export const GraphResponseSchema = z.object({
   nodes: GraphNodeSchema.array(),
   edges: GraphEdgeSchema.array(),
-  /** More changed symbols than the server lays out; the first ones by path and line are kept. */
-  truncated: z.boolean(),
+  /** Changed symbols left out past the server's cap; the first ones by path and line are kept. */
+  cutSymbols: z.number().int(),
   /** Why the graph may lack nodes or edges: a server was busy or unavailable while answering. */
   inconclusive: z.string().optional(),
 });
