@@ -11,3 +11,8 @@ rust-version = "1.89"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# cargo-mutants builds every mutant; debug info would only slow the rebuilds.
+[profile.mutants]
+inherits = "test"
+debug = "none"

@@ -245,6 +245,7 @@ pixi run test-node && pixi run test-rust  # the client's and the server's suites
 pixi run lefthook-run                     # the pre-commit hook over every file, as CI runs it
 pixi run build-release                    # the release binary
 pixi run diffle lsp                       # the language servers the environment resolves
+pixi run mutants --file <path>            # mutation-test a server module (cargo-mutants)
 ```
 
 The environment puts real language servers on PATH, so `pixi run diffle working` reviews with them.
