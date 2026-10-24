@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, Crosshair, FileCode2, Link2, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Crosshair, Eye, FileCode2, Link2, type LucideIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { FilePath } from '@/client/FilePath.js';
@@ -11,6 +11,8 @@ import { bySource } from '@/client/graph/layout/order.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph } from '@/client/graph/state.js';
 import { useStore } from '@/client/store.js';
+import { Button } from '@/client/ui/Button.js';
+import type { PeekEntry } from './peekLinks.js';
 import { type Signature, signatureOf, type Signatures } from './useSignatures.js';
 
 // The panel's type scale: titles, then names and prose, then everything around them.
@@ -35,10 +37,13 @@ export function StatusWord({ status }: { status: GraphNode['status'] }) {
 export function SectionHeading({
   icon: Icon,
   count,
+  action,
   children,
 }: {
   icon: LucideIcon;
   count?: number;
+  /** A control at the heading's end, acting on the whole section. */
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -48,6 +53,7 @@ export function SectionHeading({
       <Icon size="0.875rem" className="text-muted" />
       {children}
       {count != null && <span className="font-normal text-muted">{count}</span>}
+      {action && <span className="ml-auto">{action}</span>}
     </h3>
   );
 }
@@ -75,6 +81,7 @@ export function Links({
   site,
   used,
   signatures,
+  onPeek,
 }: {
   icon: LucideIcon;
   title: string;
@@ -85,6 +92,8 @@ export function Links({
   /** File view only: the symbols each reference line uses. */
   used?: (e: GraphEdge) => UsedAt;
   signatures: Signatures;
+  /** Lists every entry's lines in the references overlay. */
+  onPeek: (entries: PeekEntry[]) => void;
 }) {
   const rows = edges
     .map((e) => ({ e, n: other(e) }))
@@ -93,7 +102,20 @@ export function Links({
   if (!rows.length) return null;
   return (
     <section className="flex flex-col gap-3">
-      <SectionHeading icon={icon} count={rows.length}>
+      <SectionHeading
+        icon={icon}
+        count={rows.length}
+        action={
+          <Button
+            variant="ghost"
+            className="-my-1 text-[0.75rem] font-normal text-muted hover:text-foreground"
+            onClick={() => onPeek(rows.map(({ e, n }) => ({ node: n, path: site(n), lines: e.lines })))}
+            title="Step through every line of these links in the references list, without leaving the graph"
+          >
+            <Eye size="0.8125rem" /> Peek
+          </Button>
+        }
+      >
         {title}
       </SectionHeading>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
@@ -180,7 +202,7 @@ export type UsedAt = Map<number, GraphNode[]>;
 /**
  * Where to jump, one labelled row each: the file, then a chip per line that opens the diff there.
  * Every jump in the panel looks like this, so it is plain which clicks leave the graph. With `used`,
- * the chips stack, each beside the symbols its line uses.
+ * the chips stack under the row, each beside the symbols its line uses.
  */
 export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: number[]; used?: UsedAt }[] }) {
   return (
@@ -195,11 +217,9 @@ export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: num
                 <Icon size="0.75rem" className="shrink-0 self-center" />
                 {label}
               </span>
-              <span className="flex min-w-0 flex-col gap-1">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <FileCode2 size="0.75rem" className="shrink-0" />
-                  <ShortPath path={path} />
-                </span>
+              <ShortPath path={path} />
+              {/* The lines run under the label row, the card's full width, rather than indented past the label. */}
+              <span className="col-span-2 flex min-w-0 flex-col gap-1">
                 {lines.map((line) => (
                   <span key={line} className="flex min-w-0 items-center gap-2">
                     {/* A column as wide as a four-digit chip, so the names line up. */}
@@ -223,8 +243,7 @@ export function Jumps({ rows }: { rows: { to: JumpKind; path: string; lines: num
               {label}
             </span>
             <span className="flex min-w-0 items-start gap-1.5">
-              <span className="flex min-w-[4rem] items-center gap-1.5">
-                <FileCode2 size="0.75rem" className="shrink-0" />
+              <span className="flex min-w-[4rem]">
                 <ShortPath path={path} />
               </span>
               {/* The chips keep beside the path, which gives way first; many of them wrap among themselves. */}

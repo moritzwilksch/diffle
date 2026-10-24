@@ -19,6 +19,7 @@ import {
   type UsedAt,
 } from './GraphDetailParts.js';
 import { NotShown } from './NotShown.js';
+import { peekLinks } from './peekLinks.js';
 import { useSignatures } from './useSignatures.js';
 
 const NONE: GraphNode[] = [];
@@ -80,6 +81,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         site={(n) => n.path}
         used={used}
         signatures={signatures}
+        onPeek={(entries) => void peekLinks('references', node, entries)}
       />
       <Links
         icon={LayerArrowDown}
@@ -89,6 +91,7 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         site={() => node.path}
         used={used}
         signatures={signatures}
+        onPeek={(entries) => void peekLinks('uses', node, entries)}
       />
       {node.moreConsumers ? (
         <p className={META}>and {node.moreConsumers} more unchanged dependents, not drawn</p>

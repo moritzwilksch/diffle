@@ -54,4 +54,40 @@ test.describe('the change graph', () => {
     await page.keyboard.press('M');
     await expect(view).toBeHidden();
   });
+
+  test("Peek lists a node's links in the references overlay; Esc returns to the graph, Enter leaves it", async ({
+    page,
+    diffle,
+  }) => {
+    await waitForLsp(diffle.url);
+    await page.keyboard.press('M');
+    const graph = page.getByRole('img', { name: 'Change graph' });
+    await expect(graph.locator('[data-node]').first()).toBeVisible({ timeout: 15000 });
+    const view = page.getByRole('region', { name: 'Change graph view' });
+    await page.keyboard.press('j');
+    const selected = await graph.locator('[data-node][data-selected]').getAttribute('data-node');
+
+    // The entries the panel lists, each line with its text, grouped under the symbol at the other end.
+    await page.getByRole('complementary').last().getByRole('button', { name: 'Peek' }).first().click();
+    const list = page.getByRole('dialog', { name: 'References' });
+    await expect(list).toBeVisible();
+    await expect(list).toMatchAriaSnapshot({ name: 'graph-peek.aria.yml' });
+    await expect(page).toHaveScreenshot('graph-peek.png');
+    await page.keyboard.press('Space');
+    await expect(list.getByRole('region', { name: 'Peek' })).toBeVisible();
+
+    // Esc leaves the peek, then the list, and the graph stays as it was.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(list).toBeHidden();
+    await expect(view).toBeVisible();
+    await expect(graph.locator(`[data-node="${selected}"][data-selected]`)).toBeVisible();
+
+    // Enter jumps to the diff; Ctrl+o comes back to the graph.
+    await page.getByRole('complementary').last().getByRole('button', { name: 'Peek' }).first().click();
+    await page.keyboard.press('Enter');
+    await expect(view).toBeHidden();
+    await page.keyboard.press('Control+o');
+    await expect(view).toBeVisible();
+  });
 });

@@ -199,14 +199,22 @@ export interface OccurrencesState {
   items: LspOccurrence[];
 }
 
-/** A line a result list jumps to: a search hit, or a language-server location that may be external. */
-export type Match = SearchMatch & Pick<LspLocation, 'external'> & Partial<Pick<LspLocation, 'col'>>;
+/**
+ * A line a result list jumps to: a search hit, or a language-server location that may be external.
+ * `under` names the symbol a references list groups it under, past its file.
+ */
+export type Match = SearchMatch &
+  Pick<LspLocation, 'external'> &
+  Partial<Pick<LspLocation, 'col'>> & { under?: { name: string; kind: number } };
 
 /** Full-screen list of a symbol's references; Enter jumps to the highlighted one. */
 export interface ReferencesState {
   open: boolean;
-  /** References of `symbol`, or the candidate types a type-definition query returned for it. */
-  kind: 'references' | 'types';
+  /**
+   * References of `symbol`, the lines where `symbol` uses others, or the candidate types a
+   * type-definition query returned for it.
+   */
+  kind: 'references' | 'uses' | 'types';
   symbol: string;
   items: Match[];
   index: number;
@@ -383,6 +391,8 @@ export interface ReviewState {
   /** List the references of `target` in the references overlay. */
   findReferences(target?: TokenTarget | null): Promise<void>;
   references: ReferencesState;
+  /** Opens the references overlay on `list`, at `index`. */
+  showReferences(list: Pick<ReferencesState, 'kind' | 'symbol' | 'items'>, index?: number): void;
   moveReference(delta: 1 | -1): void;
   togglePeek(): void;
   /**
@@ -1394,17 +1404,7 @@ export const useStore = create<ReviewState>((set, get) => {
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
-        set((s) => ({
-          references: {
-            ...s.references,
-            open: true,
-            kind: 'types',
-            symbol: target!.text,
-            items: res.locations,
-            index: 0,
-          },
-        }));
-        return;
+        return get().showReferences({ kind: 'types', symbol: target!.text, items: res.locations });
       }
       await jumpToLine(loc.path, loc.line, loc.external, loc.col);
     } catch (e) {
@@ -1968,14 +1968,15 @@ export const useStore = create<ReviewState>((set, get) => {
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
         const index = origin === -1 ? 0 : (origin + 1) % items.length;
-        set((s) => ({
-          references: { ...s.references, open: true, kind: 'references', symbol: target!.text, items, index },
-        }));
+        get().showReferences({ kind: 'references', symbol: target!.text, items }, index);
       } catch (e) {
         if (current(g)) report('Find references', e);
       }
     },
     references: { open: false, kind: 'references', symbol: '', items: [], index: -1, peek: false },
+    showReferences(list, index = 0) {
+      set((s) => ({ references: { ...s.references, ...list, open: true, index } }));
+    },
     moveReference(delta) {
       const r = get().references;
       const n = r.items.length;
@@ -2006,8 +2007,11 @@ export const useStore = create<ReviewState>((set, get) => {
           },
         }));
       }
-      // A picked line other than the reference's own has no column to aim at.
-      void jumpToLine(m.path, line ?? m.line, m.external, line == null || line === m.line ? m.col : undefined);
+      // A picked line other than the reference's own has no column to aim at. A view over the diff,
+      // the graph listing a symbol's links, gives way once the jump list has recorded it.
+      void jumpToLine(m.path, line ?? m.line, m.external, line == null || line === m.line ? m.col : undefined).then(
+        () => outside?.leave(),
+      );
     },
     closeReferences() {
       set((s) => ({ references: { ...s.references, open: false } }));

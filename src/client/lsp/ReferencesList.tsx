@@ -7,7 +7,9 @@ import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { overflow } from '@/client/review/geometry.js';
 import { type Match, useStore } from '@/client/store.js';
 import type { ThemeChoice } from '@/client/theme.js';
+import { useGraph } from '@/client/graph/state.js';
 import { CodeLine, type HlToken, highlightLines, useHighlighted } from './highlight.js';
+import { kindColor, KindIcon } from './symbolKind.js';
 
 interface Row {
   i: number;
@@ -34,11 +36,11 @@ export function ReferencesList() {
   const highlighted = useHighlighted(items, theme, refs.index);
   // Built per result set, not per selected index: moving with j/k must not rebuild every row's props.
   const groups = useMemo(() => {
-    const out: { path: string; rows: Row[] }[] = [];
+    const out: { path: string; under: Match['under']; rows: Row[] }[] = [];
     items.forEach((m, i) => {
       const g = out[out.length - 1];
-      if (g && g.path === m.path) g.rows.push({ i, line: m.line, text: m.text });
-      else out.push({ path: m.path, rows: [{ i, line: m.line, text: m.text }] });
+      if (g && g.path === m.path && g.under?.name === m.under?.name) g.rows.push({ i, line: m.line, text: m.text });
+      else out.push({ path: m.path, under: m.under, rows: [{ i, line: m.line, text: m.text }] });
     });
     return out;
   }, [items]);
@@ -77,7 +79,9 @@ export function ReferencesList() {
       <DialogContent
         aria-label="References"
         // The review pane is not tabbable, so Base UI would hand focus to a file header's button instead.
+        // Over the graph, focus returns to the button that opened the list.
         finalFocus={() => {
+          if (useGraph.getState().open) return true;
           focusReview();
           return false;
         }}
@@ -94,6 +98,13 @@ export function ReferencesList() {
                   {refs.symbol}
                 </code>{' '}
                 has {items.length} types in its signature; pick one
+              </>
+            ) : refs.kind === 'uses' ? (
+              <>
+                {items.length} reference{items.length === 1 ? '' : 's'} from{' '}
+                <code className="rounded-[0.3125rem] bg-hover px-1.5 py-[1px] font-mono text-foreground">
+                  {refs.symbol}
+                </code>
               </>
             ) : (
               <>
@@ -124,8 +135,14 @@ export function ReferencesList() {
             ref={listRef}
           >
             {groups.map((g) => (
-              <section className="[&+section]:mt-2.5" key={g.path}>
+              <section className="[&+section]:mt-2.5" key={`${g.under?.name}\0${g.path}`}>
                 <header className="sticky top-0 z-1 mb-[2px] flex items-center gap-2 rounded-lg border border-border bg-hover px-2.5 py-1.5 font-mono text-[0.75rem] leading-[normal] [&>svg]:flex-none [&>svg]:text-muted">
+                  {g.under && g.under.name !== g.path && (
+                    <span className="flex min-w-0 shrink-0 items-center gap-1.5 font-semibold">
+                      <KindIcon kind={g.under.kind} size="0.875rem" className="shrink-0" />
+                      <span style={{ color: kindColor(g.under.kind) }}>{g.under.name}</span>
+                    </span>
+                  )}
                   <FileCode2 size="0.875rem" />
                   <FilePath path={g.path} nowrap className="flex-1" />
                   <span className="ml-auto rounded-[0.625rem] border border-border bg-canvas px-1.75 py-0 text-[0.6875rem] text-muted">

@@ -178,13 +178,20 @@ export function useKeymap(): void {
           return;
         }
         // An open find in the graph closes first, even from its own field.
-        if (useGraph.getState().open && useGraph.getState().find != null && !s.helpOpen && !s.modeMenuOpen) {
+        if (
+          useGraph.getState().open &&
+          useGraph.getState().find != null &&
+          !s.helpOpen &&
+          !s.modeMenuOpen &&
+          !s.references.open
+        ) {
           useGraph.getState().closeFind();
           clearPending();
           return;
         }
-        // Escape in the graph clears its selection, unless a field or an open menu claims it first; M leaves it.
-        if (useGraph.getState().open && !s.helpOpen && !s.modeMenuOpen && !isEditable(target)) {
+        // Escape in the graph clears its selection, unless a field, an open menu or the references list
+        // claims it first; M leaves it.
+        if (useGraph.getState().open && !s.helpOpen && !s.modeMenuOpen && !s.references.open && !isEditable(target)) {
           useGraph.getState().deselect();
           clearPending();
           return;

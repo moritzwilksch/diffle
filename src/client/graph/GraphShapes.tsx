@@ -56,7 +56,7 @@ export function Cluster({
           focused ? 'var(--accent)' : unchanged ? 'var(--border)' : 'color-mix(in srgb, var(--border) 70%, transparent)'
         }
         strokeWidth={focused ? 1.5 : 1}
-        strokeDasharray={unchanged && !focused ? '5 4' : undefined}
+        strokeDasharray={unchanged ? '5 4' : undefined}
       />
       <FileCode2 x={cluster.x + 9} y={cluster.y + 7} size={13} color="var(--fg-2)" />
       <text x={cluster.x + 27} y={cluster.y + CLUSTER_HEADER / 2 + 4} className="font-mono text-[11.5px]">
@@ -148,7 +148,8 @@ export function Node({
               : STATUS_STROKE[node.status]
         }
         strokeWidth={focus ? FOCUS[focus].width : quiet ? 1 : 1.5}
-        strokeDasharray={node.status === 'consumer' && !clustered && (!focus || focus === 'linked') ? '4 3' : undefined}
+        // An unchanged file stays dashed under focus too, its dashes stretched to the wider stroke.
+        strokeDasharray={node.status === 'consumer' && !clustered ? (focus === 'selected' ? '7 4' : '4 3') : undefined}
       />
       <KindIcon kind={node.kind} x={x + 7} y={y + 7} size={14} opacity={quiet ? 0.6 : 1} />
       {hits.map((b) => (
