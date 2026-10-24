@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowDownToLine, ArrowUpFromLine, Link2 } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Link2, MoveDown } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL, kindGroup } from '@/client/lsp/symbolKind.js';
 import { bySource } from '@/client/graph/layout/order.js';
@@ -86,7 +86,9 @@ function NodeDetails({ view, node }: { view: View; node: GraphNode }) {
         used={used}
         signatures={signatures}
       />
-      {node.moreConsumers ? <p className={META}>and {node.moreConsumers} more unchanged users, not drawn</p> : null}
+      {node.moreConsumers ? (
+        <p className={META}>and {node.moreConsumers} more unchanged dependents, not drawn</p>
+      ) : null}
     </aside>
   );
 }
@@ -162,7 +164,7 @@ function Pair({ user, used, className = '' }: { user: GraphNode; used: GraphNode
     <div className={`flex flex-col items-start gap-1 ${className}`}>
       <Name node={user} />
       <span className={`inline-flex items-center gap-1 ${META}`}>
-        <ArrowDown size="0.8125rem" /> {kindGroup(used.kind) === 'callable' ? 'calls' : 'uses'}
+        <MoveDown size="0.8125rem" /> {kindGroup(used.kind) === 'callable' ? 'calls' : 'uses'}
       </span>
       <Name node={used} />
     </div>

@@ -46,10 +46,10 @@ export function graphKeys(e: KeyboardEvent): boolean {
       if (node) graph.pick({ path: node.path, line: node.line });
       return true;
     }
-    case 'f':
-      graph.setFilter('files', !graph.filters.files);
+    case 's':
+      graph.setFilter('symbols', !graph.filters.symbols);
       return true;
-    case 'u':
+    case 'd':
       graph.setFilter('consumers', !graph.filters.consumers);
       return true;
     case 'T':

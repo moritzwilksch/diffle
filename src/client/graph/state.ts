@@ -9,7 +9,7 @@ import { type Stacked, stack } from '@/client/graph/layout/components.js';
 import type { PlacedNode } from '@/client/graph/layout/layout.js';
 import { byFile, edgeKey } from '@/client/graph/layout/rank.js';
 
-export type Filter = 'files' | 'consumers' | 'tests';
+export type Filter = 'symbols' | 'consumers' | 'tests';
 export type Direction = 'left' | 'right' | 'up' | 'down';
 
 type Load =
@@ -67,7 +67,7 @@ export const useGraph = create<GraphState>((set, get) => ({
   mounted: false,
   load: { state: 'idle' },
   snapshot: null,
-  filters: { files: false, consumers: true, tests: false },
+  filters: { symbols: false, consumers: false, tests: false },
   view: null,
   selected: null,
   selectedEdge: null,
@@ -243,14 +243,14 @@ function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: st
     graph,
     (n) => (filters.consumers || n.status !== 'consumer') && (filters.tests || !isTest(n)),
   );
-  const { graph: shown, via } = filters.files
-    ? byFile(symbols)
-    : { graph: symbols, via: new Map(symbols.edges.map((e) => [edgeKey(e), [e]])) };
+  const { graph: shown, via } = filters.symbols
+    ? { graph: symbols, via: new Map(symbols.edges.map((e) => [edgeKey(e), [e]])) }
+    : byFile(symbols);
   return {
     graph: shown,
     symbols,
     via,
-    stacked: stack(shown, (n) => nodeSize(n, !filters.files), !filters.files, only),
+    stacked: stack(shown, (n) => nodeSize(n, filters.symbols), filters.symbols, only),
   };
 }
 

@@ -1,4 +1,4 @@
-import { FileCode2, FlaskConical, LoaderCircle, RefreshCw, Users } from 'lucide-react';
+import { Braces, FlaskConical, LoaderCircle, RefreshCw, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
 import { GraphCanvas } from './GraphCanvas.js';
@@ -29,11 +29,11 @@ export function GraphView() {
         )}
         <span className="flex-1" />
         <div className="flex items-center gap-1" role="group" aria-label="Show in the graph">
-          <FilterChip filter="files" title="One box per file instead of per symbol (f)">
-            <FileCode2 size="0.8125rem" /> Files
+          <FilterChip filter="symbols" title="One box per symbol instead of per file (s)">
+            <Braces size="0.8125rem" /> Symbols
           </FilterChip>
-          <FilterChip filter="consumers" title="Unchanged code using the change (u)">
-            <Users size="0.8125rem" /> Users
+          <FilterChip filter="consumers" title="Unchanged code using the change (d)">
+            <Users size="0.8125rem" /> Dependents
           </FilterChip>
           <FilterChip filter="tests" title="Tests (T)">
             <FlaskConical size="0.8125rem" /> Tests
@@ -64,7 +64,7 @@ export function GraphView() {
         {view && graph!.nodes.length === 0 && (
           <p className="p-4 text-muted">No changed functions, classes or types in this diff.</p>
         )}
-        {view && graph!.nodes.length > 0 && <GraphCanvas view={view} clustered={!filters.files} />}
+        {view && graph!.nodes.length > 0 && <GraphCanvas view={view} clustered={filters.symbols} />}
       </div>
     </section>
   );
