@@ -34,7 +34,8 @@ pub fn is_shown(ranges: &[(i64, i64)], start: i64, end: i64) -> bool {
 pub struct NewSideChanges {
     /// Added lines as ranges (1-based, inclusive), ascending.
     pub added: Vec<(i64, i64)>,
-    /// For each run of removed lines, the new-side line that now stands where they were.
+    /// For each run of removed lines, the new-side line it belongs to: the one now standing where
+    /// they were, or the one above when they sat deeper than it, a block's trailing statements.
     pub removed_at: Vec<i64>,
     /// Each run of added lines with its new-side line numbers and text, for matching moved code.
     pub added_runs: Vec<Vec<(i64, String)>>,
@@ -62,19 +63,34 @@ pub fn new_side_changes(patch: &str) -> NewSideChanges {
     let mut next: Option<i64> = None;
     // What the previous line did, so a run continues or a new one starts.
     let mut last = b' ';
+    // The last removed run awaiting the next non-blank new-side line, by index, with its indent.
+    let mut pending: Option<(usize, Option<usize>)> = None;
     for line in patch.lines() {
         if let Some(m) = HUNK.captures(line) {
+            settle(&mut changes, pending.take(), 0);
             next = m.get(3).and_then(|s| s.as_str().parse().ok());
             last = b' ';
             continue;
         }
         // A patch of several files: the next file's header is no line of this hunk.
         if line.starts_with("diff --git ") {
+            settle(&mut changes, pending.take(), 0);
             next = None;
             continue;
         }
         let Some(n) = next.as_mut() else { continue };
         let text = line.get(1..).unwrap_or_default().to_owned();
+        let depth = indent(&text);
+        match line.as_bytes().first() {
+            // A run's depth is its first non-blank line's.
+            Some(b'-') if last == b'-' => {
+                if let Some((_, run @ None)) = pending.as_mut() {
+                    *run = depth;
+                }
+            }
+            Some(b'+' | b' ') if depth.is_some() => settle(&mut changes, pending.take(), depth.unwrap()),
+            _ => {}
+        }
         match line.as_bytes().first() {
             Some(b'+') => {
                 match changes.added.last_mut() {
@@ -90,6 +106,8 @@ pub fn new_side_changes(patch: &str) -> NewSideChanges {
             }
             Some(b'-') => {
                 if last != b'-' {
+                    settle(&mut changes, pending.take(), 0);
+                    pending = Some((changes.removed_at.len(), depth));
                     changes.removed_at.push((*n).max(1));
                     changes.removed_runs.push(Vec::new());
                 }
@@ -104,7 +122,24 @@ pub fn new_side_changes(patch: &str) -> NewSideChanges {
             }
         }
     }
+    settle(&mut changes, pending, 0);
     changes
+}
+
+/// Moves a removed run onto the line above it when it sat deeper than `below`, the indent of the
+/// next line standing after it (0 past the hunk): it ended the block above, as a trailing statement does.
+fn settle(changes: &mut NewSideChanges, run: Option<(usize, Option<usize>)>, below: usize) {
+    if let Some((i, Some(depth))) = run
+        && depth > below
+    {
+        changes.removed_at[i] = (changes.removed_at[i] - 1).max(1);
+    }
+}
+
+/// A line's leading whitespace, or None for a blank line.
+fn indent(text: &str) -> Option<usize> {
+    let body = text.trim_start();
+    (!body.is_empty()).then(|| text.len() - body.len())
 }
 
 #[cfg(test)]
@@ -134,6 +169,16 @@ mod tests {
         assert!(!is_shown(&r, 5, 6));
         assert!(!is_shown(&r, 10, 10));
         assert!(is_shown(&r, 22, 22));
+    }
+
+    #[test]
+    fn puts_a_block_s_removed_trailing_lines_on_the_line_above_and_a_removed_block_below() {
+        let tail = "@@ -1,4 +1,3 @@\n def f():\n     a()\n-    b()\n \n";
+        assert_eq!(new_side_changes(tail).removed_at, [2]);
+        let at_eof = "@@ -1,3 +1,2 @@\n def f():\n     a()\n-    b()\n";
+        assert_eq!(new_side_changes(at_eof).removed_at, [2]);
+        let block = "@@ -1,5 +1,2 @@\n x = 1\n-\n-def g():\n-    pass\n def h():\n";
+        assert_eq!(new_side_changes(block).removed_at, [2]);
     }
 
     #[test]
