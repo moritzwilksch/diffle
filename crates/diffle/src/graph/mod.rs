@@ -20,7 +20,7 @@ use crate::snapshotter::Snapshotter;
 
 /// Changed symbols one graph holds unless asked for all; past it the least telling files are cut
 /// whole (`select`).
-pub const MAX_NODES: usize = 80;
+pub const MAX_NODES: usize = 120;
 /// Language server requests in flight at once.
 const PARALLEL: usize = 8;
 /// How long a graph may take. A cold server can take minutes to index; past this the graph is
