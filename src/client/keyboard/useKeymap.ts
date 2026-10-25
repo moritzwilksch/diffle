@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '@/client/clipboard.js';
 import { api } from '@/client/api.js';
+import { GRAPH_PASSES, graphKeys, isGraphFind, openFind } from '@/client/graph/keys.js';
+import { useGraph } from '@/client/graph/state.js';
 import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '@/client/lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
 import { escapeRegex } from '@/client/search/highlight.js';
+import { copyCursorPermalink } from '@/client/review/permalink.js';
 import { useStore, type ReviewState } from '@/client/store.js';
 import { nextTheme } from '@/client/theme.js';
 
@@ -70,6 +73,7 @@ const KEYMAP: Record<string, Action> = {
   yy: () => void copyComments(),
   Y: () => void copyComments(),
   yp: (s) => void copyPath(s),
+  yl: () => void copyCursorPermalink(),
   '/': (s) => s.openSearch('file', selectedQuery(s)),
   'g/': (s) => s.openSearch('diff', selectedQuery(s)),
   gf: () => focusFileSearch(),
@@ -96,6 +100,7 @@ const KEYMAP: Record<string, Action> = {
   ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`i${n}`, (s: ReviewState) => s.pickIteration(n)])),
   r: (s) => s.reloadIfMoved(),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
+  M: () => useGraph.getState().toggle(),
 };
 
 /** The page's text selection, else the focused word (`w`), as a search query: one line only, escaped when regex search is on. */
@@ -172,6 +177,25 @@ export function useKeymap(): void {
           clearPending();
           return;
         }
+        // An open find in the graph closes first, even from its own field.
+        if (
+          useGraph.getState().open &&
+          useGraph.getState().find != null &&
+          !s.helpOpen &&
+          !s.modeMenuOpen &&
+          !s.references.open
+        ) {
+          useGraph.getState().closeFind();
+          clearPending();
+          return;
+        }
+        // Escape in the graph clears its selection, unless a field, an open menu or the references list
+        // claims it first; M leaves it.
+        if (useGraph.getState().open && !s.helpOpen && !s.modeMenuOpen && !s.references.open && !isEditable(target)) {
+          useGraph.getState().deselect();
+          clearPending();
+          return;
+        }
         if (isEditable(target)) {
           target!.blur();
           if (s.treeModel?.isSearchOpen()) s.treeModel.closeSearch();
@@ -198,6 +222,12 @@ export function useKeymap(): void {
         clearPending();
         if ([...e.key].length === 1 || e.key === 'Backspace') s.typeSearchInput(e.key);
         else if (e.key === 'Enter') void s.runSearch(s.search.input);
+        return;
+      }
+      if (!s.modeMenuOpen && !s.helpOpen && isGraphFind(e)) {
+        e.preventDefault();
+        clearPending();
+        openFind();
         return;
       }
       if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
@@ -265,6 +295,15 @@ export function useKeymap(): void {
         return; // the tree owns every other key while focused
       }
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
+      // The graph owns the keys while it covers the diff, but for a few that act on the whole review.
+      if (useGraph.getState().open && !s.modeMenuOpen && !s.helpOpen) {
+        if (graphKeys(e)) {
+          e.preventDefault();
+          clearPending();
+          return;
+        }
+        if (!GRAPH_PASSES.has(e.key)) return;
+      }
       // The open compare menu owns its navigation keys wherever focus sits. A focused button and the
       // configuration pane keep native Enter, so Enter and Space activate the same control.
       if (s.modeMenuOpen && !s.helpOpen) {

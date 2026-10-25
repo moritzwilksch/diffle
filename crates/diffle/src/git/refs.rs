@@ -113,6 +113,21 @@ impl GitRepo {
         Ok(remotes)
     }
 
+    /// Whether commit `sha` is reachable from a ref under one of `prefixes`, from local refs alone.
+    /// Anything but a commit (the worktree, a tree) is not.
+    pub async fn reachable_from(&self, sha: &str, prefixes: &[String]) -> Result<bool, GitError> {
+        if sha == WORKTREE {
+            return Ok(false);
+        }
+        let Some(commit) = self.try_resolve(sha).await? else { return Ok(false) };
+        let globs: Vec<String> = prefixes.iter().map(|p| format!("--glob={p}")).collect();
+        let mut args = vec!["rev-list", "--max-count=1", "--not"];
+        args.extend(globs.iter().map(String::as_str));
+        // Lists the commit itself unless one of the refs reaches it.
+        args.extend(["--not", "--end-of-options", &commit, "--"]);
+        Ok(self.text(&args).await?.trim().is_empty())
+    }
+
     /// Fetches explicit refspecs from `remote` (a name or a URL). The refspecs must stay inside
     /// `refs/diffle/`, so no ref the user owns moves, and FETCH_HEAD is left alone. Terminal prompts
     /// are off: a repository that needs credentials fails instead of hanging.

@@ -36,8 +36,8 @@ describe.skipIf(process.platform === 'win32')('npm packages', () => {
   afterEach(() => rmTmp(dir));
 
   it('writes one package per archive present and a launcher that wants them all optionally', () => {
-    archive(dir, 'linux-x64');
-    archive(dir, 'darwin-arm64');
+    archive(dir, 'x86_64-unknown-linux-gnu');
+    archive(dir, 'aarch64-apple-darwin');
     const out = join(dir, 'out');
     expect(assemble(dir, out)).toEqual({ version, built: ['diffle-linux-x64', 'diffle-darwin-arm64'] });
     const manifest = (name: string) => JSON.parse(readFileSync(join(out, name, 'package.json'), 'utf8'));

@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { connectWs } from './api.js';
 import { CommentPanel } from './comments/CommentPanel.js';
+import { GraphDetails } from './graph/details/GraphDetails.js';
+import { useGraph } from './graph/state.js';
+import { GraphView } from './graph/GraphView.js';
 import { Header } from './header/Header.js';
 import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
@@ -23,6 +26,8 @@ export function App() {
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
   const title = useStore((s) => (s.snapshot ? documentTitle(s.snapshot, s.github.data) : 'diffle'));
+  const graphOpen = useGraph((s) => s.open);
+  const graphMounted = useGraph((s) => s.mounted);
   const [lost, setLost] = useState(false);
   useKeymap();
 
@@ -118,7 +123,11 @@ export function App() {
           />
         </>
       )}
-      <ReviewPane />
+      {/* The graph covers the diff and the comments instead of replacing them: the diff stays
+          mounted, so switching back keeps its scroll, and a jump scrolls it before it shows. */}
+      <Covered cover={graphMounted && <GraphView />} shown={graphOpen}>
+        <ReviewPane />
+      </Covered>
       {layout.panelVisible && (
         <>
           <div
@@ -126,7 +135,9 @@ export function App() {
             onPointerDown={startResize('panel')}
             title="Drag to resize"
           />
-          <CommentPanel />
+          <Covered cover={graphMounted && <GraphDetails />} shown={graphOpen}>
+            <CommentPanel />
+          </Covered>
         </>
       )}
       <HelpOverlay />
@@ -137,6 +148,17 @@ export function App() {
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+/** A grid cell whose content `cover` hides while `shown`, without unmounting it. */
+function Covered({ children, cover, shown }: { children: ReactNode; cover: ReactNode; shown: boolean }) {
+  return (
+    <div className="relative grid min-h-0 min-w-0 grid-cols-1 grid-rows-1">
+      {/* Laid out but not painted while covered, so it cannot show through as the cover repaints. */}
+      <div className={cover && shown ? 'invisible contents' : 'contents'}>{children}</div>
+      {cover && <div className={shown ? 'absolute inset-0 z-10 flex min-h-0 flex-col' : 'hidden'}>{cover}</div>}
     </div>
   );
 }

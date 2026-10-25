@@ -9,15 +9,17 @@
 export const TREE_CSS = `
 [data-file-tree-virtualized-scroll] { padding-right: 0; }
 [data-type="item"] { --lane-edge: 0.375rem; padding-right: calc(var(--lane-edge) - var(--trees-item-margin-x)); }
-/* A row short of room gives up its counts before its name, and the viewed mark never: the parts lay out
- * from the right, and those that no longer fit wrap onto a hidden second line, leftmost first. */
-[data-item-section="decoration"] { flex: 1 1000 auto; min-width: min-content; overflow: visible; }
+/* A row short of room gives up its counts before its name, and the viewed mark never. The mark, the
+ * first part, floats right; the counts beside it are one word (no line break opportunity between
+ * digits and signs), which moves below the float, onto a hidden second line, once it no longer fits
+ * whole: both counts show, or neither. Under \`nowrap\` Chromium would overflow the float instead. */
+[data-item-section="decoration"] { flex: 1 1000 auto; min-width: calc(1ch + 0.375rem); overflow: visible; }
 [data-item-section="decoration"] > span {
-  flex-flow: row-reverse wrap; height: 1lh; gap: 0.375rem; overflow: hidden; font-variant-numeric: tabular-nums;
+  display: block; height: 1lh; overflow: hidden; white-space: normal; text-align: end;
+  font-variant-numeric: tabular-nums;
 }
-[data-item-section="decoration"] > span > span:last-child { order: 1; min-width: 1ch; text-align: center; }
-[data-item-section="decoration"] > span > span:nth-last-child(2) { order: 2; }
-[data-item-section="decoration"] > span > span:nth-last-child(3) { order: 3; }
+[data-item-section="decoration"] > span > span { margin-inline-end: 0.375rem; }
+[data-item-section="decoration"] > span > span:first-child { float: inline-end; min-width: 1ch; margin: 0; text-align: center; }
 /* An unchanged row has nothing to show in its lanes; dropped, they leave the name the whole row, and
  * while scrolling sideways no opaque lane is pinned over its tail. */
 [data-type="item"]:has(> [data-item-section="decoration"]:empty) > :is([data-item-section="decoration"], [data-item-section="git"]) { display: none; }

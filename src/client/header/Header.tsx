@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { repoName } from '@/client/model.js';
+import { useGraph } from '@/client/graph/state.js';
+import { ViewSwitch } from '@/client/graph/ViewSwitch.js';
 import { useStore } from '@/client/store.js';
 import { nextTheme, type ThemeChoice } from '@/client/theme.js';
 import { CommitStepper } from './CommitStepper.js';
@@ -34,6 +36,7 @@ export function Header() {
   const setLayout = useStore((s) => s.setLayout);
   const diffStyle = useStore((s) => s.diffStyle);
   const setDiffStyle = useStore((s) => s.setDiffStyle);
+  const graphOpen = useGraph((s) => s.open);
   const changed = snapshot?.changed.length ?? 0;
   const adds = snapshot?.changed.reduce((n, f) => n + f.additions, 0) ?? 0;
   const dels = snapshot?.changed.reduce((n, f) => n + f.deletions, 0) ?? 0;
@@ -73,14 +76,17 @@ export function Header() {
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
-      <SegmentedControl title="Diff layout (s)">
-        <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')} aria-label="Split">
-          <Columns2 size="0.875rem" /> <span className="max-xl:hidden">Split</span>
-        </ToggleButton>
-        <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')} aria-label="Unified">
-          <Rows3 size="0.875rem" /> <span className="max-xl:hidden">Unified</span>
-        </ToggleButton>
-      </SegmentedControl>
+      <ViewSwitch />
+      {!graphOpen && (
+        <SegmentedControl title="Diff layout (s)">
+          <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')} aria-label="Split">
+            <Columns2 size="0.875rem" /> <span className="max-xl:hidden">Split</span>
+          </ToggleButton>
+          <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')} aria-label="Unified">
+            <Rows3 size="0.875rem" /> <span className="max-xl:hidden">Unified</span>
+          </ToggleButton>
+        </SegmentedControl>
+      )}
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
       </Button>

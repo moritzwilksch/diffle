@@ -1,7 +1,7 @@
 ## Fonts
 
-The client bundles these fonts in `dist/client/assets`. Each is licensed under the SIL Open Font
-License, Version 1.1, reproduced below.
+The client bundles these fonts in `crates/diffle/client/assets`. Each is licensed under the SIL
+Open Font License, Version 1.1, reproduced below.
 
 - Inter: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
 - JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)

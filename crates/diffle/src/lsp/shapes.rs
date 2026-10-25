@@ -110,8 +110,10 @@ pub fn flatten_symbols(answer: DocumentSymbolResponse, path: &str) -> Vec<LspSym
 
 fn walk(symbols: &[DocumentSymbol], container: Option<&str>, path: &str, out: &mut Vec<LspSymbol>) {
     for s in symbols {
+        // The name's line, but the declaration, decorators included, from where its range starts.
         let at = Range::new(s.selection_range.start, s.range.end);
-        out.push(symbol(&s.name, s.kind, container, Some(at), path));
+        let declared = s.range.start.line.min(at.start.line);
+        out.push(symbol(&s.name, s.kind, container, at, declared, path));
         if let Some(children) = &s.children {
             walk(children, Some(&s.name), path, out);
         }
@@ -120,7 +122,8 @@ fn walk(symbols: &[DocumentSymbol], container: Option<&str>, path: &str, out: &m
 
 /// A `SymbolInformation` at `path`.
 pub fn symbol_information(s: &SymbolInformation, path: &str) -> LspSymbol {
-    symbol(&s.name, s.kind, s.container_name.as_deref(), Some(s.location.range), path)
+    let at = s.location.range;
+    symbol(&s.name, s.kind, s.container_name.as_deref(), at, at.start.line, path)
 }
 
 /// A `workspace/symbol` answer as each symbol's file and the symbol at a path; a symbol whose
@@ -145,16 +148,16 @@ pub fn workspace_symbols(answer: Option<WorkspaceSymbolResponse>) -> Vec<(Url, i
     found
         .into_iter()
         .map(|(name, kind, container, location, ranged)| {
-            let range = ranged.then_some(location.range);
-            (location.uri, move |path: &str| symbol(&name, kind, container.as_deref(), range, path))
+            let at = if ranged { location.range } else { Range::default() };
+            (location.uri, move |path: &str| symbol(&name, kind, container.as_deref(), at, at.start.line, path))
         })
         .collect()
 }
 
-/// One symbol as diffle lists it: from where its range starts to the line it ends on.
-fn symbol(name: &str, kind: SymbolKind, container: Option<&str>, range: Option<Range>, path: &str) -> LspSymbol {
-    let range = range.unwrap_or_default();
-    let (line, col, end_line, _) = from_lsp(&range);
+/// One symbol as diffle lists it: at the start of `at`, declared from the 0-based line `declared`,
+/// to the line `at` ends on.
+fn symbol(name: &str, kind: SymbolKind, container: Option<&str>, at: Range, declared: u32, path: &str) -> LspSymbol {
+    let (line, col, end_line, _) = from_lsp(&at);
     LspSymbol {
         name: name.to_owned(),
         // The wire carries the kind's number; lsp-types keeps it private.
@@ -162,6 +165,7 @@ fn symbol(name: &str, kind: SymbolKind, container: Option<&str>, range: Option<R
         container: container.filter(|c| !c.is_empty()).map(str::to_owned),
         path: path.to_owned(),
         line,
+        start_line: i64::from(declared) + 1,
         end_line: end_line.max(line),
         col,
     }
@@ -198,13 +202,24 @@ mod tests {
             { "name": "Foo", "kind": 5, "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 3, "character": 0 } },
               "selectionRange": r(0, 6),
               "children": [{ "name": "bar", "kind": 6, "range": r(1, 0), "selectionRange": r(1, 8) }] },
+            // A decorated function: its range takes in the decorator above its name.
+            { "name": "baz", "kind": 12, "range": { "start": { "line": 5, "character": 0 }, "end": { "line": 8, "character": 0 } },
+              "selectionRange": r(6, 4) },
         ]))
         .unwrap();
         let flat: Vec<_> = flatten_symbols(tree, "a.py")
             .into_iter()
-            .map(|s| (s.name, s.kind, s.container, s.line, s.end_line, s.col))
+            .map(|s| (s.name, s.kind, s.container, s.start_line, s.line, s.end_line, s.col))
             .collect();
-        assert_eq!(flat, [("Foo".into(), 5, None, 1, 4, 6), ("bar".into(), 6, Some("Foo".into()), 2, 2, 8)]);
+        let foo = Some("Foo".into());
+        assert_eq!(
+            flat,
+            [
+                ("Foo".into(), 5, None, 1, 1, 4, 6),
+                ("bar".into(), 6, foo, 2, 2, 2, 8),
+                ("baz".into(), 12, None, 6, 7, 9, 4)
+            ]
+        );
         let info: WorkspaceSymbolResponse = serde_json::from_value(json!([
             { "name": "x", "kind": 13, "containerName": "", "location": { "uri": "file:///a" } }
         ]))

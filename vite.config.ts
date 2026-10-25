@@ -8,7 +8,7 @@ import pkg from './package.json' with { type: 'json' };
 const clientRoot = fileURLToPath(new URL('./src/client', import.meta.url));
 // Mirrors `paths` in the tsconfigs: vite's own tsconfig lookup skips files a config excludes.
 const srcRoot = fileURLToPath(new URL('./src', import.meta.url));
-const outDir = fileURLToPath(new URL('./dist/client', import.meta.url));
+const outDir = fileURLToPath(new URL('./crates/diffle/client', import.meta.url));
 
 // Lists every package a bundle pulled in, for scripts/licenses.ts; the worker is its own bundle
 // with its own plugins, so each writes its own list. A package under another licence fails the

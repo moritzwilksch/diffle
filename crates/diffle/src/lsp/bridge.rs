@@ -1,7 +1,6 @@
 //! One language server as diffle asks it: requests against synced documents, answers in snapshot paths.
 use std::collections::HashSet;
 use std::num::NonZeroU64;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,7 +13,7 @@ use async_lsp::{ErrorCode, LanguageServer, ServerSocket};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 
-use super::documents::{Documents, ReadFn};
+use super::documents::{Documents, Origin, ReadFn};
 use super::hover::{hover_markdown, localize_file_links};
 use super::locator::{HasFn, Locator};
 use super::process::{LspProcess, ProcessOptions, SettingsFuture};
@@ -51,7 +50,6 @@ pub struct LspBridge {
     process: Arc<LspProcess>,
     documents: Documents,
     locator: Locator,
-    root: PathBuf,
 }
 
 impl LspBridge {
@@ -61,8 +59,8 @@ impl LspBridge {
         let uri_root = root.clone();
         let uri = Arc::new(move |path: &str| file_uri(&uri_root, path));
         let documents = Documents::new(process.clone(), opts.read.clone(), uri, opts.max_open);
-        let locator = Locator::new(root.clone(), opts.read, opts.has);
-        Self { process, documents, locator, root }
+        let locator = Locator::new(root, opts.read, opts.has);
+        Self { process, documents, locator }
     }
 
     /// The server process, for what goes to it beside the queries: diagnostics and tests.
@@ -83,18 +81,22 @@ impl LspBridge {
     }
 
     pub async fn definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
-        let params = self.goto(pos);
-        self.locations(pos, LspFeature::Definition, Box::new(move |s| s.definition(params.clone()))).await
+        let origin = self.document(&pos.path)?;
+        let params = self.goto(&origin, pos);
+        self.locations(&origin, LspFeature::Definition, Box::new(move |s| s.definition(params.clone()))).await
     }
 
     pub async fn type_definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
-        let params = self.goto(pos);
-        self.locations(pos, LspFeature::TypeDefinition, Box::new(move |s| s.type_definition(params.clone()))).await
+        let origin = self.document(&pos.path)?;
+        let params = self.goto(&origin, pos);
+        let ask = Box::new(move |s: &mut ServerSocket| s.type_definition(params.clone()));
+        self.locations(&origin, LspFeature::TypeDefinition, ask).await
     }
 
     pub async fn references(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
+        let origin = self.document(&pos.path)?;
         let params = ReferenceParams {
-            text_document_position: self.at(pos),
+            text_document_position: self.at(&origin, pos),
             context: ReferenceContext { include_declaration: true },
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
@@ -102,14 +104,17 @@ impl LspBridge {
         let ask = move |s: &mut ServerSocket| {
             s.references(params.clone()).map(|a| a.map(|list| list.map(GotoDefinitionResponse::Array))).boxed()
         };
-        self.locations(pos, LspFeature::References, Box::new(ask)).await
+        self.locations(&origin, LspFeature::References, Box::new(ask)).await
     }
 
     pub async fn hover(&self, pos: &LspPosition) -> Result<LspHoverResponse> {
-        let params =
-            HoverParams { text_document_position_params: self.at(pos), work_done_progress_params: Default::default() };
+        let origin = self.document(&pos.path)?;
+        let params = HoverParams {
+            text_document_position_params: self.at(&origin, pos),
+            work_done_progress_params: Default::default(),
+        };
         let ask = Box::new(move |s: &mut ServerSocket| s.hover(params.clone()));
-        let (answer, busy) = self.query(Some(&pos.path), LspFeature::Hover, ask).await?;
+        let (answer, busy) = self.query(Some(&origin), LspFeature::Hover, ask).await?;
         let Some((md, range)) = answer.and_then(|h| Some((hover_markdown(&h.contents)?, h.range))) else {
             return Ok(LspHoverResponse { contents: None, range: None, inconclusive: inconclusive(true, busy) });
         };
@@ -125,13 +130,14 @@ impl LspBridge {
     /// scope and shadowing are the server's call. A server not offering it, or a position holding
     /// no symbol, yields none: the answer is advisory.
     pub async fn occurrences(&self, pos: &LspPosition) -> Result<LspOccurrencesResponse> {
+        let origin = self.document(&pos.path)?;
         let params = DocumentHighlightParams {
-            text_document_position_params: self.at(pos),
+            text_document_position_params: self.at(&origin, pos),
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         };
         let ask = Box::new(move |s: &mut ServerSocket| s.document_highlight(params.clone()));
-        let highlights = match self.query(Some(&pos.path), LspFeature::DocumentHighlight, ask).await {
+        let highlights = match self.query(Some(&origin), LspFeature::DocumentHighlight, ask).await {
             Ok((answer, _)) => answer.unwrap_or_default(),
             Err(Error::LspUnsupported(_)) => Vec::new(),
             Err(e) => return Err(e),
@@ -163,13 +169,14 @@ impl LspBridge {
     }
 
     pub async fn document_symbols(&self, path: &str) -> Result<LspSymbolsResponse> {
+        let origin = self.document(path)?;
         let params = DocumentSymbolParams {
-            text_document: TextDocumentIdentifier { uri: file_uri(&self.root, path) },
+            text_document: TextDocumentIdentifier { uri: self.documents.uri(&origin) },
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         };
         let ask = Box::new(move |s: &mut ServerSocket| s.document_symbol(params.clone()));
-        let (answer, busy) = self.query(Some(path), LspFeature::DocumentSymbol, ask).await?;
+        let (answer, busy) = self.query(Some(&origin), LspFeature::DocumentSymbol, ask).await?;
         let symbols = answer.map_or_else(Vec::new, |a| flatten_symbols(a, path));
         Ok(LspSymbolsResponse { inconclusive: inconclusive(symbols.is_empty(), busy), symbols })
     }
@@ -206,6 +213,12 @@ impl LspBridge {
         self.locator.read_external(path).await
     }
 
+    /// The document this server would be asked about for `path`: a repository path, or an outside
+    /// file one of its own results named; none for any other path (see `Locator::origin`).
+    pub fn origin(&self, path: &str) -> Option<Origin> {
+        self.locator.origin(path)
+    }
+
     /// Replaces the server's settings (see `LspProcess::reconfigure`).
     pub fn reconfigure(&self, settings: SettingsFuture) {
         self.process.reconfigure(settings);
@@ -215,16 +228,24 @@ impl LspBridge {
         self.process.close().await;
     }
 
-    fn at(&self, pos: &LspPosition) -> TextDocumentPositionParams {
+    /// The document a query asks about, promoted in the locator's memory: the one place a query counts.
+    fn document(&self, path: &str) -> Result<Origin> {
+        let origin =
+            self.locator.origin(path).ok_or_else(|| Error::Invalid(format!("{path} is not in the snapshot")))?;
+        self.locator.promote(&origin);
+        Ok(origin)
+    }
+
+    fn at(&self, origin: &Origin, pos: &LspPosition) -> TextDocumentPositionParams {
         TextDocumentPositionParams {
-            text_document: TextDocumentIdentifier { uri: file_uri(&self.root, &pos.path) },
+            text_document: TextDocumentIdentifier { uri: self.documents.uri(origin) },
             position: to_lsp(pos.line.get() as i64, pos.col),
         }
     }
 
-    fn goto(&self, pos: &LspPosition) -> GotoDefinitionParams {
+    fn goto(&self, origin: &Origin, pos: &LspPosition) -> GotoDefinitionParams {
         GotoDefinitionParams {
-            text_document_position_params: self.at(pos),
+            text_document_position_params: self.at(origin, pos),
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         }
@@ -232,11 +253,11 @@ impl LspBridge {
 
     async fn locations(
         &self,
-        pos: &LspPosition,
+        origin: &Origin,
         feature: LspFeature,
         ask: Ask<Option<GotoDefinitionResponse>>,
     ) -> Result<LspLocationsResponse> {
-        let (answer, busy) = self.query(Some(&pos.path), feature, ask).await?;
+        let (answer, busy) = self.query(Some(origin), feature, ask).await?;
         let text_of = |path: &str| self.documents.text_of(path);
         let locations = self.locator.locations(&locations(answer), &text_of).await;
         Ok(LspLocationsResponse { inconclusive: inconclusive(locations.is_empty(), busy), locations })
@@ -247,10 +268,10 @@ impl LspBridge {
     /// it no longer holds. Re-syncing and asking again is what an editor does; giving up reads as
     /// an outage. A feature the server never advertised is not asked for. The second value is why
     /// an empty answer may be incomplete: background work the server reported.
-    async fn query<T>(&self, path: Option<&str>, feature: LspFeature, ask: Ask<T>) -> Result<(T, Option<String>)> {
+    async fn query<T>(&self, origin: Option<&Origin>, feature: LspFeature, ask: Ask<T>) -> Result<(T, Option<String>)> {
         for attempt in 0.. {
-            if let Some(path) = path {
-                self.documents.sync(path).await?;
+            if let Some(origin) = origin {
+                self.documents.sync(origin).await?;
             }
             let rpc = self.process.connection().await?;
             if !self.process.supports(feature) {
@@ -262,7 +283,7 @@ impl LspBridge {
                 Ok(answer) => return Ok((answer, self.process.busy().or(pending))),
                 Err(RequestError::Rpc(e)) if e.code == ErrorCode::CONTENT_MODIFIED => {
                     let Some(backoff) = CONTENT_MODIFIED_BACKOFF.get(attempt) else {
-                        let what = path.unwrap_or("the repository");
+                        let what = origin.map_or_else(|| "the repository".to_owned(), Origin::to_string);
                         let name = self.process.name();
                         return Err(Error::LspUnavailable(format!(
                             "{name} could not answer while {what} kept changing; try again"

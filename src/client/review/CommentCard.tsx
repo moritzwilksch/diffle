@@ -16,7 +16,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
-import { copyText } from '@/client/clipboard.js';
+import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
 import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
@@ -225,9 +225,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
 function CopyMessageButton({ threadId, messageId, size }: { threadId: string; messageId: string; size: string }) {
   const flash = useStore((s) => s.flash);
   const report = useStore((s) => s.report);
-  const [done, setDone] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const { done, copy } = useCopied();
   return (
     <Button
       variant="ghost"
@@ -243,10 +241,7 @@ function CopyMessageButton({ threadId, messageId, size }: { threadId: string; me
           report('Copying comment', e);
           return;
         }
-        if (!(await copyText(text))) return flash('The browser blocked clipboard access');
-        setDone(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), 1400);
+        if (!(await copy(text))) flash('The browser blocked clipboard access');
       }}
     >
       <CopyIcon done={done} size={size}>

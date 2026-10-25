@@ -1,8 +1,11 @@
 import { Button } from '@/client/ui/Button.js';
-import { FileDiff, MessageSquare } from 'lucide-react';
+import { CopyIcon } from '@/client/ui/CopyIcon.js';
+import { FileDiff, Link, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCopied } from '@/client/clipboard.js';
 import { composerKey } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
+import { draftPermalink } from './permalink.js';
 
 /**
  * Inline comment editor rendered as an annotation at the selection's last line. Its header names the
@@ -71,6 +74,7 @@ export function CommentComposer({ label }: { label: string }) {
       <div className="flex items-center gap-2 border-b border-b-border bg-hover px-2.5 py-1 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
         <span className="font-mono font-semibold text-foreground">{label}</span>
+        <CopyLinkButton />
       </div>
       <div className="p-2">
         <textarea
@@ -105,5 +109,44 @@ export function CommentComposer({ label }: { label: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Copies a GitHub permalink to the draft's lines, an icon at the header's end so the actions stay
+ * uncrowded; absent when GitHub could not show them. Each draft and snapshot asks afresh, so lines
+ * pushed since show the button.
+ */
+function CopyLinkButton() {
+  const flash = useStore((s) => s.flash);
+  const draft = useStore((s) => s.draft);
+  const snapshot = useStore((s) => s.snapshot);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setUrl(null);
+    void draftPermalink(useStore.getState()).then((u) => live && setUrl(u));
+    return () => {
+      live = false;
+    };
+  }, [draft, snapshot]);
+  const { done, copy } = useCopied();
+  if (!url) return null;
+  return (
+    <Button
+      variant="ghost"
+      icon
+      // The header row stays as tall as its label.
+      className="-my-0.5 ml-auto py-0.5 text-muted hover:text-foreground"
+      title="Copy a GitHub permalink to these lines (yl)"
+      aria-label="Copy link"
+      onClick={async () => {
+        if (!(await copy(url))) flash('The browser blocked clipboard access');
+      }}
+    >
+      <CopyIcon done={done} size="0.8125rem">
+        <Link size="0.8125rem" />
+      </CopyIcon>
+    </Button>
   );
 }

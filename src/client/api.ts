@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ConfigUpdateSchema,
   GithubExportRequestSchema,
+  LspHoverRequestSchema,
   LspPositionSchema,
   MessagePatchSchema,
   EnterRequestSchema,
@@ -16,6 +17,7 @@ import {
   FileResponseSchema,
   GithubExportResponseSchema,
   GithubMetadataSchema,
+  GraphResponseSchema,
   LastCommitsPreviewSchema,
   LspHoverResponseSchema,
   LspLocationsResponseSchema,
@@ -24,6 +26,8 @@ import {
   LspLogResponseSchema,
   LspSymbolsResponseSchema,
   MovedSchema,
+  PermalinkRequestSchema,
+  PermalinkSchema,
   RefsResponseSchema,
   SearchResponseSchema,
   ServerMessageSchema,
@@ -32,9 +36,12 @@ import {
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import type {
+  GraphQuery,
   GithubExportRequest,
+  LspHoverRequest,
   LspPosition,
   EnterRequest,
+  PermalinkRequest,
   RangeView,
   ReplyCreate,
   SearchScope,
@@ -92,6 +99,9 @@ const q = (params: Record<string, string | undefined>) =>
 
 export const api = {
   github: () => json(GithubMetadataSchema, 'api/github'),
+  /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
+  permalink: (req: PermalinkRequest) =>
+    json(PermalinkSchema, 'api/permalink', { method: 'POST', body: encode(PermalinkRequestSchema, req) }),
   snapshot: () => json(SnapshotSchema, 'api/snapshot'),
   moved: () => json(MovedSchema.nullable(), 'api/moved'),
   /** Recompute the snapshot where the refs point now. */
@@ -204,11 +214,13 @@ export const api = {
       body: encode(LspPositionSchema, pos),
     }),
   /** What the server knows about the symbol at `pos`, as markdown. */
-  lspHover: (pos: LspPosition) =>
-    json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  lspHover: (req: LspHoverRequest) =>
+    json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspHoverRequestSchema, req) }),
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  /** The snapshot's changed symbols and the code using them. */
+  lspGraph: (query: GraphQuery) => json(GraphResponseSchema, `api/lsp/graph?${q(query)}`),
   lspOccurrences: (pos: LspPosition) =>
     json(LspOccurrencesResponseSchema, 'api/lsp/occurrences', { method: 'POST', body: encode(LspPositionSchema, pos) }),
 

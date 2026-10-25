@@ -20,6 +20,8 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 ```bash
 pixi global install diffle               # conda-forge
 npm install -g @moritzwilksch/diffle     # npm
+cargo binstall diffle                    # crates.io, the release binary
+cargo install diffle                     # crates.io, compiled from source
 ```
 
 Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon macOS:
@@ -28,7 +30,7 @@ Or grab the standalone binary. On Linux (x64, arm64, glibc) and Apple silicon ma
 curl -fsSL https://diffle.app/install.sh | sh
 ```
 
-It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.1.9`
+It installs to `~/.local/bin`. Set `DIFFLE_INSTALL_DIR` to change that, or `DIFFLE_VERSION=v0.4.0`
 to pin a release. On Windows (x64, arm64), from PowerShell:
 
 ```powershell
@@ -96,6 +98,7 @@ to keep it running.
 - `F`: open the full file
 - `Ctrl+o`: go back
 - `yy`: copy all comments
+- `yl`: copy a GitHub permalink to the current line or selection, once its commit is pushed
 
 Press `?` for the full list.
 
@@ -178,6 +181,53 @@ Or persistently, in the config file (`diffle config` prints its path and content
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
+## See the change as a graph
+
+Press `M` to swap the diff for a graph of what changed: one box per file, or per symbol with
+`s`, and an arrow wherever one uses another. `d` adds the unchanged code that uses the change,
+`T` the tests.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/graph-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/graph-light.gif">
+  <img alt="The change graph in diffle: files, then symbols, a function's links in the side panel, a peek at the lines behind them, then a pan to two linked symbols" src=".github/assets/videos/graph-light.gif">
+</picture>
+
+Click a box to list what it uses and what uses it in the side panel; **Peek** steps through the
+lines behind those links without leaving the graph. A card in the panel, or a double-click on a
+box, frames that box with its neighbours. `Enter` opens the selection in the diff, and `M`
+returns to the graph as you left it.
+
+The graph needs the language servers, the same ones [Jump to definitions](#jump-to-definitions)
+uses.
+
+## Open from lazygit
+
+[lazygit](https://github.com/jesseduffield/lazygit) custom commands open diffle on what is
+selected. Add them to its `config.yml` (`lazygit --print-config-dir` prints the folder):
+
+```yaml
+customCommands:
+  - key: '<c-d>'
+    context: 'files'
+    command: 'diffle working'
+    output: terminal
+    description: 'Review uncommitted changes in diffle'
+  - key: '<c-d>'
+    context: 'commits'
+    command: 'diffle {{.SelectedCommitRange.From}}^..{{.SelectedCommitRange.To}}'
+    output: terminal
+    description: 'Review the selected commits in diffle'
+  - key: '<c-d>'
+    context: 'localBranches'
+    command: 'diffle main...{{.SelectedLocalBranch.Name}}'
+    output: terminal
+    description: 'Review the branch against main in diffle'
+```
+
+lazygit waits while you review; closing the tab returns to it with the open comments printed as
+a prompt. Append `| pbcopy` (or your clipboard tool) to a command to copy them instead.
+
 ## Shell completions
 
 ```bash
@@ -220,7 +270,7 @@ pixi run diffle lsp                       # the language servers the environment
 
 The environment puts real language servers on PATH, so `pixi run diffle working` reviews with them.
 `pixi run lefthook-install` wires up the pre-commit hook (`.lefthook.yml`): it formats and lints the staged files, typechecks, and checks file-size and folder limits across the whole tree. `pixi run lefthook-run` runs the same hook over every file, as CI does.
-A debug build reads `dist/client` from disk: after a client change, run `npm run build`
+A debug build reads `crates/diffle/client` from disk: after a client change, run `npm run build`
 and reload the page. A release build (`cargo build --release`) embeds the client.
 `npm run fixture -- <dir>` builds the repository the tests review, covering renames, binaries,
 CRLF, and more. The browser suite drives Playwright's Linux Chromium in a Docker container

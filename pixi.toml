@@ -3,6 +3,7 @@ name = "diffle"
 channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64", "win-arm64"]
 preview = ["pixi-build"]
+exclude-newer = "7d"
 
 [package]
 name = "diffle"
@@ -54,6 +55,7 @@ licenses = { cmd = "node scripts/licenses.ts", depends-on = ["build-client"] }
 smoke = { cmd = "node scripts/smoke-binary.ts target/release/diffle", depends-on = ["build-release"] }
 package = { cmd = "node scripts/package-binary.ts", depends-on = ["smoke"] }
 npm-packages = "node scripts/npm-packages.ts archives npm-packages --smoke"
+package-crate = { cmd = "node scripts/package-crate.ts", depends-on = ["build-client"] }
 
 [feature.lsp-web.dependencies]
 typescript-language-server = "*"
@@ -64,6 +66,8 @@ yaml-language-server = "*"
 
 [feature.lsp-rust.dependencies]
 rust-analyzer = "*"
+# The standard library's source; without it rust-analyzer resolves no method that needs core.
+rust-src = "1.99.*"
 
 [feature.lsp-python.dependencies]
 pyrefly = "*"

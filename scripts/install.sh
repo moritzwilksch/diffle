@@ -15,25 +15,25 @@ fail() {
 }
 
 case $(uname -s) in
-  Linux) os=linux ;;
-  Darwin) os=darwin ;;
+  Linux) os=unknown-linux-gnu ;;
+  Darwin) os=apple-darwin ;;
   MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://diffle.app/install.ps1 | iex" ;;
   *) fail "no binary for $(uname -s); install with npm or pixi instead" ;;
 esac
 
 case $(uname -m) in
-  x86_64 | amd64) arch=x64 ;;
-  aarch64 | arm64) arch=arm64 ;;
+  x86_64 | amd64) arch=x86_64 ;;
+  aarch64 | arm64) arch=aarch64 ;;
   *) fail "no binary for $(uname -m); install with npm or pixi instead" ;;
 esac
 
 # A shell under Rosetta reports x86_64 on Apple silicon.
-if [ "$os" = darwin ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = 1 ]; then
-  arch=arm64
+if [ "$os" = apple-darwin ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = 1 ]; then
+  arch=aarch64
 fi
-[ "$os-$arch" = darwin-x64 ] && fail "no binary for Intel Macs; install with npm or pixi instead"
+[ "$arch-$os" = x86_64-apple-darwin ] && fail "no binary for Intel Macs; install with npm or pixi instead"
 # The binary embeds Node's glibc build.
-if [ "$os" = linux ] && ldd --version 2>&1 | grep -qi musl; then
+if [ "$os" = unknown-linux-gnu ] && ldd --version 2>&1 | grep -qi musl; then
   fail "no binary for musl libc; install with npm or pixi instead"
 fi
 
@@ -44,7 +44,7 @@ elif [ "$version" = latest ]; then
 else
   base=https://github.com/$repo/releases/download/$version
 fi
-asset=diffle-$os-$arch.tar.gz
+asset=diffle-$arch-$os.tar.gz
 
 if command -v curl > /dev/null; then
   fetch() { curl -fsSL -o "$2" "$1"; }

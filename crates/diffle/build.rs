@@ -3,7 +3,7 @@ use std::{env, fs, path::Path};
 
 fn main() {
     // A release build embeds the client; a rebuild of it renames its hashed assets.
-    println!("cargo:rerun-if-changed=../../dist/client");
+    println!("cargo:rerun-if-changed=client");
 
     let schema_path = "protocol.generated.json";
     println!("cargo:rerun-if-changed={schema_path}");

@@ -12,7 +12,8 @@ use axum::routing::{get, post};
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::lsp::pool::LspPool;
 use crate::protocol::{
-    LspFeature, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery, lsp_blocker, readable_by_servers,
+    GraphQuery, LspFeature, LspHoverRequest, LspLogQuery, LspPosition, LspQuery, LspStatus, Side, SymbolsQuery,
+    lsp_blocker, readable_by_servers,
 };
 
 /// The largest integer a JavaScript client can send exactly; zod's `.int()` refuses anything past it.
@@ -28,6 +29,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/lsp/references", post(references))
         .route("/api/lsp/occurrences", post(occurrences))
         .route("/api/lsp/symbols", get(symbols))
+        .route("/api/lsp/graph", get(graph))
 }
 
 pub fn lsp_status(d: &ApiDeps) -> LspStatus {
@@ -60,7 +62,8 @@ async fn pool_for(d: &ApiDeps, path: Option<&str>, feature: Option<LspFeature>) 
         return Err(refuse(blocked));
     }
     let Some(pool) = d.lsp.clone() else { return Err(refuse("language servers are off".into())) };
-    if let Some(path) = path.filter(|p| !d.session.has_side(&snap, p, Side::New)) {
+    // Beyond the snapshot, only a file a running server named may be asked about (see `Locator::origin`).
+    if let Some(path) = path.filter(|p| !d.session.has_side(&snap, p, Side::New) && !pool.named(p)) {
         return Err(refuse(format!("{path} is not in the snapshot")));
     }
     Ok(pool)
@@ -88,8 +91,9 @@ async fn type_definition(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult
 
 async fn hover(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let pos = position(&raw)?;
+    let req: LspHoverRequest = body(&raw)?;
     let pool = pool_for(&d, Some(&pos.path), Some(LspFeature::Hover)).await?;
-    Ok(Json(pool.hover(&pos).await?).into_response())
+    Ok(Json(pool.hover(&pos, req.owner_only.unwrap_or(false)).await?).into_response())
 }
 
 async fn references(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
@@ -117,4 +121,14 @@ async fn symbols(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiR
         None => pool.workspace_symbols(q.q.as_deref().unwrap_or_default()).await?,
     };
     Ok(Json(answer).into_response())
+}
+
+async fn graph(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
+    let q: GraphQuery = query(raw.as_deref())?;
+    let cap = q.all.is_none().then_some(crate::graph::MAX_NODES);
+    let pool = pool_for(&d, None, Some(LspFeature::References)).await?;
+    let snapshotter = d.session.snapshotter()?;
+    let snap = snapshotter.current().await?;
+    Ok(Json(crate::graph::build(&pool, &snapshotter, &snap, cap, q.scope.as_deref().map(String::as_str)).await?)
+        .into_response())
 }

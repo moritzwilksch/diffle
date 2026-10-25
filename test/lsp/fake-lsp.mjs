@@ -1,7 +1,9 @@
 // Minimal stdio language server for tests: answers initialize, definition, references,
-// documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. Definitions point
+// documentSymbol, workspace/symbol, hover, documentHighlight, shutdown. FAKE_LSP_GRAPH=1 makes
+// outlines and references real enough for the change graph (see `graphOutline`). Definitions point
 // at line 2 (FAKE_LSP_DEFINITION_LINE) of the queried file plus one location outside the root; references echo the open document's text length.
-import { pathToFileURL } from 'node:url';
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 let buf = Buffer.alloc(0);
 const docs = new Map();
@@ -26,6 +28,8 @@ function send(msg) {
 const log = (line) => process.stderr.write(line + '\n');
 // FAKE_LSP_EXTERNAL: the file outside the root definitions also point at; tests set it to a real file.
 const EXTERNAL = process.env.FAKE_LSP_EXTERNAL ?? '/usr/lib/python3/site.py';
+// FAKE_LSP_EXTERNAL_NEXT: where a definition asked from inside EXTERNAL points instead, one hop further out.
+const EXTERNAL_NEXT = process.env.FAKE_LSP_EXTERNAL_NEXT;
 const base = (uri) => uri.replace(/^.*\//, '');
 const reply = (id, result) => send({ jsonrpc: '2.0', id, result });
 const range = (line, ch = 0) => ({ start: { line, character: ch }, end: { line, character: ch + 1 } });
@@ -127,12 +131,14 @@ function handle(msg) {
             pathToFileURL(process.env.FAKE_LSP_REAL_ROOT).href,
           )
         : msg.params.textDocument.uri;
+      const fromExternal = EXTERNAL_NEXT && msg.params.textDocument.uri === pathToFileURL(EXTERNAL).href;
       return reply(msg.id, [
         { uri, range: range(DEFINITION_LINE - 1, 4) },
-        { uri: pathToFileURL(EXTERNAL).href, range: range(0) },
+        { uri: pathToFileURL(fromExternal ? EXTERNAL_NEXT : EXTERNAL).href, range: range(0) },
       ]);
     }
     case 'textDocument/references': {
+      if (GRAPH) return reply(msg.id, graphReferences(msg.params.textDocument.uri, msg.params.position));
       const text = docs.get(msg.params.textDocument.uri) ?? '';
       return reply(msg.id, [
         { uri: msg.params.textDocument.uri, range: range(0, text.length) },
@@ -179,6 +185,7 @@ function handle(msg) {
       return reply(msg.id, out);
     }
     case 'textDocument/documentSymbol':
+      if (GRAPH) return reply(msg.id, graphOutline(textOf(msg.params.textDocument.uri)));
       return reply(msg.id, [
         {
           name: 'Foo',
@@ -209,4 +216,61 @@ function handle(msg) {
     default:
       if (msg.id != null) reply(msg.id, null);
   }
+}
+
+const GRAPH = process.env.FAKE_LSP_GRAPH === '1';
+const textOf = (uri) => docs.get(uri) ?? readFileSync(fileURLToPath(uri), 'utf8');
+
+/**
+ * A Python outline from indentation: each `class`/`def` spans until the next line indented no
+ * deeper; a `def` inside another symbol is a method (6), else a function (12); classes are 5.
+ */
+function graphOutline(text) {
+  const lines = text.split('\n');
+  const indent = (l) => (/\S/.test(l) ? /^\s*/.exec(l)[0].length : Infinity);
+  const out = [];
+  lines.forEach((l, line) => {
+    const m = /^(\s*)(class|def) (\w+)/.exec(l);
+    if (!m) return;
+    let end = line;
+    while (end + 1 < lines.length && indent(lines[end + 1]) > m[1].length) end++;
+    const kind = m[2] === 'class' ? 5 : m[1] ? 6 : 12;
+    const ch = m[1].length + m[2].length + 1;
+    out.push({
+      name: m[3],
+      kind,
+      range: span(line, end, m[1].length),
+      selectionRange: { start: { line, character: ch }, end: { line, character: ch + m[3].length } },
+    });
+  });
+  return out;
+}
+
+/** The `.py` files under the root, depth first; the server's working directory is the root. */
+function pyFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((e) =>
+      e.isDirectory() ? pyFiles(`${dir}/${e.name}`) : e.name.endsWith('.py') ? [`${dir}/${e.name}`] : [],
+    );
+}
+
+/** Every whole-word occurrence, in every `.py` file under the root, of the word at the position. */
+function graphReferences(uri, { line, character }) {
+  const word = [...(textOf(uri).split('\n')[line] ?? '').matchAll(/\w+/g)].find(
+    (m) => character >= m.index && character <= m.index + m[0].length,
+  )?.[0];
+  if (!word) return [];
+  const out = [];
+  for (const path of pyFiles(process.env.FAKE_LSP_ROOT ?? process.cwd())) {
+    const file = pathToFileURL(path).href;
+    textOf(file)
+      .split('\n')
+      .forEach((l, at) => {
+        for (const m of l.matchAll(new RegExp(`(?<!\\w)${word}(?!\\w)`, 'g')))
+          out.push({ uri: file, range: range(at, m.index) });
+      });
+  }
+  return out;
 }

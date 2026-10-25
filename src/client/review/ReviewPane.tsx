@@ -1,5 +1,6 @@
 import { Button } from '@/client/ui/Button.js';
 import type {
+  CodeViewDiffItem,
   CodeViewItem,
   CodeViewLineSelection,
   DiffLineAnnotation,
@@ -10,6 +11,7 @@ import type {
   LineAnnotation,
   OnDiffLineClickProps,
   OnLineClickProps,
+  PostRenderPhase,
   TokenEventBase,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewAnnotationArgs, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
@@ -27,10 +29,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { twMerge } from 'tailwind-merge';
 import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '@/shared/protocol.js';
 import { hoverOnly, serversFor } from '@/shared/lsp.js';
-import { copyText } from '@/client/clipboard.js';
+import { useCopied } from '@/client/clipboard.js';
 import { FilePath } from '@/client/FilePath.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { lineBounds, sideOf } from '@/client/comments/anchor.js';
+import { renderedContext } from '@/client/keyboard/nav.js';
 import { SearchBar } from '@/client/keyboard/SearchBar.js';
 import { HoverTooltip, hoverControl } from '@/client/lsp/HoverTooltip.js';
 import { ReferencesList } from '@/client/lsp/ReferencesList.js';
@@ -98,6 +101,14 @@ async function loadDiffFiles(fileDiff: FileDiffMetadata): Promise<FileDiffLoaded
   const newFile = { name: newPath, contents: newRes.contents, cacheKey: `${newPath}@new@${Date.now()}` };
   if (!oldRes) return { oldFile: null, newFile };
   return { oldFile: { name: oldPath, contents: oldRes.contents, cacheKey: `${oldPath}@old@${Date.now()}` }, newFile };
+}
+
+/** Tell the cursor model which context lines item `id`'s renderer shows, so j / k walk them. */
+function reportRevealed(id: string, fileDiff: FileDiffMetadata, renderer: { isLineRenderable(line: number): boolean }) {
+  useStore.getState().setRevealed(
+    id,
+    renderedContext(fileDiff, (line) => renderer.isLineRenderable(line)),
+  );
 }
 
 /** Injected into the diff viewer's shadow DOM: make the file header a distinct band. */
@@ -536,12 +547,8 @@ export function ReviewPane() {
           useStore.setState({ reveal: null });
           return;
         }
-        // Tell the cursor model which lines are now on screen, so j / k walk them instead of skipping to the next hunk.
-        let lo = reveal.line;
-        let hi = reveal.line;
-        while (lo > 1 && reveal.line - lo < 10_000 && inst.isLineRenderable(lo - 1)) lo--;
-        while (hi - lo < 10_000 && inst.isLineRenderable(hi + 1)) hi++;
-        useStore.getState().addRevealed(reveal.id, lo, hi);
+        // The cursor lands before the expansion renders and reports itself.
+        reportRevealed(reveal.id, rendered.item.fileDiff, inst);
         // Let the expansion render, then center the line.
         setTimeout(() => {
           if (cancelled) return;
@@ -830,6 +837,17 @@ export function ReviewPane() {
       themeType: theme,
       diffStyle,
       overflow: lineWrap ? ('wrap' as const) : ('scroll' as const),
+      // A separator click expands context inside the viewer; the render after it is the only sign.
+      onPostRender: (
+        _node: HTMLElement,
+        _instance: unknown,
+        phase: PostRenderPhase,
+        ctx:
+          | { type: 'file' }
+          | { type: 'diff'; item: CodeViewDiffItem<Annot>; instance: { isLineRenderable(line: number): boolean } },
+      ) => {
+        if (phase !== 'unmount' && ctx.type === 'diff') reportRevealed(ctx.item.id, ctx.item.fileDiff, ctx.instance);
+      },
       onLineSelectionEnd: () => {
         const sel = viewerRef.current?.getSelectedLines();
         if (sel) void openDraft(sel);
@@ -1190,9 +1208,7 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
 /** Copies the path for quoting it in a comment; shown only while the header is hovered or the button focused. */
 function CopyPathButton({ path }: { path: string }) {
   const flash = useStore((s) => s.flash);
-  const [done, setDone] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const { done, copy } = useCopied();
   return (
     <Button
       variant="ghost"
@@ -1201,10 +1217,7 @@ function CopyPathButton({ path }: { path: string }) {
       title="Copy path (yp)"
       aria-label="Copy path"
       onClick={async () => {
-        if (!(await copyText(path))) return flash('The browser blocked clipboard access');
-        setDone(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), 1400);
+        if (!(await copy(path))) flash('The browser blocked clipboard access');
       }}
     >
       <CopyIcon done={done}>
