@@ -18,6 +18,7 @@ comments to an agent as a prompt, or to GitHub as a pending review.
 ## Install
 
 ```bash
+brew install diffle                      # Homebrew
 pixi global install diffle               # conda-forge
 npm install -g @moritzwilksch/diffle     # npm
 cargo binstall diffle                    # crates.io, the release binary
