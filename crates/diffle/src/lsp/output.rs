@@ -1,8 +1,8 @@
 //! What one server reports while it runs: its output channel, the notice it shows, its progress.
 use std::num::NonZeroU64;
 
-use async_lsp::lsp_types::{MessageType, NumberOrString, ProgressParams, ProgressParamsValue, WorkDoneProgress};
 use indexmap::IndexMap;
+use lsp_types::{MessageType, NumberOrString, ProgressParams, ProgressParamsValue, WorkDoneProgress};
 
 use crate::iterations::now_ms;
 use crate::protocol::{LspLogCounts, LspLogEntry, LspLogLevel, LspLogSource, LspNotice, LspNoticeSeverity};

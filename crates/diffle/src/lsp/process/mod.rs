@@ -5,16 +5,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 
-use capabilities::{advertised, router};
+use capabilities::{advertised, listen};
 use child::{command, signal, spawn_settled};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use async_lsp::LanguageServer;
-use async_lsp::lsp_types::{
-    ClientInfo, DidChangeConfigurationParams, InitializeParams, InitializedParams, Url, WorkspaceFolder,
-};
 use futures::future::{BoxFuture, Shared};
+use lsp_types::notification::{DidChangeConfiguration, Exit, Initialized};
+use lsp_types::request::{Initialize, Shutdown};
+use lsp_types::{ClientInfo, DidChangeConfigurationParams, InitializeParams, InitializedParams, Url, WorkspaceFolder};
 use serde_json::Value;
 use tokio::sync::watch;
 
@@ -165,7 +164,7 @@ impl LspProcess {
                 return;
             }
             if let Some(rpc) = &state.rpc {
-                rpc.notify(|s| s.did_change_configuration(DidChangeConfigurationParams { settings: next }));
+                rpc.notify::<DidChangeConfiguration>(DidChangeConfigurationParams { settings: next });
             }
         });
     }
@@ -196,9 +195,9 @@ impl LspProcess {
         };
         let mut exited = self.exited.subscribe();
         if let Some(rpc) = rpc.filter(|_| !*exited.borrow())
-            && rpc.ask(|s| s.shutdown(()), Some(SHUTDOWN_RPC)).await.is_ok()
+            && rpc.request::<Shutdown>((), Some(SHUTDOWN_RPC)).await.is_ok()
         {
-            rpc.notify(|s| s.exit(()));
+            rpc.notify::<Exit>(());
         }
         let Some(pid) = pid.filter(|_| !*exited.borrow()) else { return };
         signal(pid, false);
@@ -230,14 +229,18 @@ impl LspProcess {
         let root = Url::from_file_path(&opts.root).expect("the repository root is absolute");
         let folder = WorkspaceFolder { uri: root.clone(), name: "workspace".into() };
         let me = Arc::downgrade(self);
-        let rpc = Connection::new(stdout, stdin, router(me.clone(), folder.clone()), move |ended| {
-            let Some(me) = me.upgrade() else { return };
-            if !ended.hung_up {
-                let _ = me.fail(ended.reason);
-                return;
+        let rpc = Connection::new(stdout, stdin, {
+            let me = me.clone();
+            move |ended| {
+                let Some(me) = me.upgrade() else { return };
+                if !ended.hung_up {
+                    let _ = me.fail(ended.reason);
+                    return;
+                }
+                tokio::spawn(async move { me.fail_after_exit(ended.reason).await });
             }
-            tokio::spawn(async move { me.fail_after_exit(ended.reason).await });
         });
+        listen(&me, &rpc, folder.clone());
         {
             let mut state = self.state.lock().unwrap();
             state.rpc = Some(rpc.clone());
@@ -255,18 +258,18 @@ impl LspProcess {
             initialization_options: opts.initialization_options,
             ..Default::default()
         };
-        let init = match rpc.ask(|s| s.initialize(params), Some(INIT_TIMEOUT)).await {
+        let init = match rpc.request::<Initialize>(params, Some(INIT_TIMEOUT)).await {
             Ok(init) => init,
             Err(e @ RequestError::Closed(_)) => return self.fail_after_exit(format!("initialize failed: {e}")).await,
             Err(e) => return self.fail(format!("initialize failed: {e}")),
         };
         self.state.lock().unwrap().advertised.extend(advertised(&init.capabilities));
-        rpc.notify(|s| s.initialized(InitializedParams {}));
+        rpc.notify::<Initialized>(InitializedParams {});
         let settings = self.state.lock().unwrap().settings.clone();
         if let Some(settings) = settings {
             let settings = settings.await;
             if !self.state.lock().unwrap().closing {
-                rpc.notify(|s| s.did_change_configuration(DidChangeConfigurationParams { settings }));
+                rpc.notify::<DidChangeConfiguration>(DidChangeConfigurationParams { settings });
             }
         }
         let status = {

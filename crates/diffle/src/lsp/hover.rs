@@ -2,7 +2,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
-use async_lsp::lsp_types::{HoverContents, MarkedString, MarkupKind};
+use lsp_types::{HoverContents, MarkedString, MarkupKind};
 use regex::{Captures, Regex};
 
 /// An inline markdown link whose target is a `file:` URI, as pyright and pyrefly write "Go to X".

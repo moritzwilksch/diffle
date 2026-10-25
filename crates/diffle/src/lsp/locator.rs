@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
-use async_lsp::lsp_types::{Location, Url};
 use futures::future::BoxFuture;
 use indexmap::IndexSet;
+use lsp_types::{Location, Url};
 use regex::Regex;
 
 use super::documents::{Origin, ReadFn};

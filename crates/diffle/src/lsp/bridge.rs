@@ -4,20 +4,20 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_lsp::lsp_types::{
-    DocumentHighlightKind, DocumentHighlightParams, DocumentSymbolParams, GotoDefinitionParams, GotoDefinitionResponse,
-    HoverParams, ReferenceContext, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Url,
-    WorkspaceSymbolParams,
+use lsp_types::request::{
+    DocumentHighlightRequest, DocumentSymbolRequest, GotoDefinition, GotoTypeDefinition, HoverRequest, References,
+    Request, WorkspaceSymbolRequest,
 };
-use async_lsp::{ErrorCode, LanguageServer, ServerSocket};
-use futures::FutureExt;
-use futures::future::BoxFuture;
+use lsp_types::{
+    DocumentHighlightKind, DocumentHighlightParams, DocumentSymbolParams, GotoDefinitionParams, HoverParams, Location,
+    ReferenceContext, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkspaceSymbolParams,
+};
 
 use super::documents::{Documents, Origin, ReadFn};
 use super::hover::{hover_markdown, localize_file_links};
 use super::locator::{HasFn, Locator};
 use super::process::{LspProcess, ProcessOptions, SettingsFuture};
-use super::rpc::RequestError;
+use super::rpc::{CONTENT_MODIFIED, RequestError};
 use super::shapes::{flatten_symbols, from_lsp, locations, to_lsp, workspace_symbols};
 use crate::error::{Error, Result};
 use crate::protocol::{
@@ -27,9 +27,6 @@ use crate::protocol::{
 
 /// Waits before re-asking a request the server refused as stale, one per attempt.
 const CONTENT_MODIFIED_BACKOFF: [Duration; 2] = [Duration::from_millis(40), Duration::from_millis(120)];
-
-/// A request through the `LanguageServer` calls, asked again as `query` needs.
-type Ask<T> = Box<dyn Fn(&mut ServerSocket) -> BoxFuture<'static, async_lsp::Result<T>> + Send + Sync>;
 
 pub struct BridgeOptions {
     pub process: ProcessOptions,
@@ -82,15 +79,17 @@ impl LspBridge {
 
     pub async fn definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
         let origin = self.document(&pos.path)?;
-        let params = self.goto(&origin, pos);
-        self.locations(&origin, LspFeature::Definition, Box::new(move |s| s.definition(params.clone()))).await
+        let (answer, busy) =
+            self.query::<GotoDefinition>(Some(&origin), LspFeature::Definition, self.goto(&origin, pos)).await?;
+        Ok(self.located(locations(answer), busy).await)
     }
 
     pub async fn type_definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
         let origin = self.document(&pos.path)?;
         let params = self.goto(&origin, pos);
-        let ask = Box::new(move |s: &mut ServerSocket| s.type_definition(params.clone()));
-        self.locations(&origin, LspFeature::TypeDefinition, ask).await
+        let (answer, busy) =
+            self.query::<GotoTypeDefinition>(Some(&origin), LspFeature::TypeDefinition, params).await?;
+        Ok(self.located(locations(answer), busy).await)
     }
 
     pub async fn references(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
@@ -101,10 +100,8 @@ impl LspBridge {
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         };
-        let ask = move |s: &mut ServerSocket| {
-            s.references(params.clone()).map(|a| a.map(|list| list.map(GotoDefinitionResponse::Array))).boxed()
-        };
-        self.locations(&origin, LspFeature::References, Box::new(ask)).await
+        let (answer, busy) = self.query::<References>(Some(&origin), LspFeature::References, params).await?;
+        Ok(self.located(answer.unwrap_or_default(), busy).await)
     }
 
     pub async fn hover(&self, pos: &LspPosition) -> Result<LspHoverResponse> {
@@ -113,8 +110,7 @@ impl LspBridge {
             text_document_position_params: self.at(&origin, pos),
             work_done_progress_params: Default::default(),
         };
-        let ask = Box::new(move |s: &mut ServerSocket| s.hover(params.clone()));
-        let (answer, busy) = self.query(Some(&origin), LspFeature::Hover, ask).await?;
+        let (answer, busy) = self.query::<HoverRequest>(Some(&origin), LspFeature::Hover, params).await?;
         let Some((md, range)) = answer.and_then(|h| Some((hover_markdown(&h.contents)?, h.range))) else {
             return Ok(LspHoverResponse { contents: None, range: None, inconclusive: inconclusive(true, busy) });
         };
@@ -136,8 +132,8 @@ impl LspBridge {
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         };
-        let ask = Box::new(move |s: &mut ServerSocket| s.document_highlight(params.clone()));
-        let highlights = match self.query(Some(&origin), LspFeature::DocumentHighlight, ask).await {
+        let asked = self.query::<DocumentHighlightRequest>(Some(&origin), LspFeature::DocumentHighlight, params);
+        let highlights = match asked.await {
             Ok((answer, _)) => answer.unwrap_or_default(),
             Err(Error::LspUnsupported(_)) => Vec::new(),
             Err(e) => return Err(e),
@@ -175,8 +171,8 @@ impl LspBridge {
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         };
-        let ask = Box::new(move |s: &mut ServerSocket| s.document_symbol(params.clone()));
-        let (answer, busy) = self.query(Some(&origin), LspFeature::DocumentSymbol, ask).await?;
+        let (answer, busy) =
+            self.query::<DocumentSymbolRequest>(Some(&origin), LspFeature::DocumentSymbol, params).await?;
         let symbols = answer.map_or_else(Vec::new, |a| flatten_symbols(a, path));
         Ok(LspSymbolsResponse { inconclusive: inconclusive(symbols.is_empty(), busy), symbols })
     }
@@ -186,8 +182,7 @@ impl LspBridge {
     /// per-keystroke search must not read every hit's text.
     pub async fn workspace_symbols(&self, query: &str) -> Result<LspSymbolsResponse> {
         let params = WorkspaceSymbolParams { query: query.to_owned(), ..Default::default() };
-        let ask = Box::new(move |s: &mut ServerSocket| s.symbol(params.clone()));
-        let (answer, busy) = self.query(None, LspFeature::WorkspaceSymbol, ask).await?;
+        let (answer, busy) = self.query::<WorkspaceSymbolRequest>(None, LspFeature::WorkspaceSymbol, params).await?;
         let found = workspace_symbols(answer);
         let mut paths = Vec::with_capacity(found.len());
         for (uri, _) in &found {
@@ -251,16 +246,11 @@ impl LspBridge {
         }
     }
 
-    async fn locations(
-        &self,
-        origin: &Origin,
-        feature: LspFeature,
-        ask: Ask<Option<GotoDefinitionResponse>>,
-    ) -> Result<LspLocationsResponse> {
-        let (answer, busy) = self.query(Some(origin), feature, ask).await?;
+    /// A location answer in snapshot paths, with each line's text.
+    async fn located(&self, answer: Vec<Location>, busy: Option<String>) -> LspLocationsResponse {
         let text_of = |path: &str| self.documents.text_of(path);
-        let locations = self.locator.locations(&locations(answer), &text_of).await;
-        Ok(LspLocationsResponse { inconclusive: inconclusive(locations.is_empty(), busy), locations })
+        let locations = self.locator.locations(&answer, &text_of).await;
+        LspLocationsResponse { inconclusive: inconclusive(locations.is_empty(), busy), locations }
     }
 
     /// One request against a synced document, asked again while the server answers
@@ -268,7 +258,15 @@ impl LspBridge {
     /// it no longer holds. Re-syncing and asking again is what an editor does; giving up reads as
     /// an outage. A feature the server never advertised is not asked for. The second value is why
     /// an empty answer may be incomplete: background work the server reported.
-    async fn query<T>(&self, origin: Option<&Origin>, feature: LspFeature, ask: Ask<T>) -> Result<(T, Option<String>)> {
+    async fn query<R: Request>(
+        &self,
+        origin: Option<&Origin>,
+        feature: LspFeature,
+        params: R::Params,
+    ) -> Result<(R::Result, Option<String>)>
+    where
+        R::Params: Clone,
+    {
         for attempt in 0.. {
             if let Some(origin) = origin {
                 self.documents.sync(origin).await?;
@@ -279,9 +277,9 @@ impl LspBridge {
                 return Err(Error::LspUnsupported(format!("{name} offers no {}", feature_label(feature))));
             }
             let pending = self.process.busy();
-            match rpc.ask(&ask, None).await {
+            match rpc.request::<R>(params.clone(), None).await {
                 Ok(answer) => return Ok((answer, self.process.busy().or(pending))),
-                Err(RequestError::Rpc(e)) if e.code == ErrorCode::CONTENT_MODIFIED => {
+                Err(RequestError::Rpc(e)) if e.code == CONTENT_MODIFIED => {
                     let Some(backoff) = CONTENT_MODIFIED_BACKOFF.get(attempt) else {
                         let what = origin.map_or_else(|| "the repository".to_owned(), Origin::to_string);
                         let name = self.process.name();

@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use async_lsp::LanguageServer;
-use async_lsp::lsp_types::{HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams, Url};
 use futures::FutureExt;
+use lsp_types::request::HoverRequest;
+use lsp_types::{HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams, Url};
 use serde_json::{Value, json};
 
 mod common;
@@ -83,7 +83,7 @@ async fn initializes_and_reads_the_advertised_features() {
         },
         work_done_progress_params: Default::default(),
     };
-    assert_eq!(rpc.ask(|s| s.hover(params), None).await.unwrap(), None);
+    assert_eq!(rpc.request::<HoverRequest>(params, None).await.unwrap(), None);
     s.process.close().await;
 }
 
@@ -93,7 +93,7 @@ async fn takes_a_registered_feature_until_it_is_unregistered() {
     let rpc = s.process.connection().await.unwrap();
     eventually("the registration", || s.process.supports(LspFeature::References)).await;
     let params = json!({ "unregisterations": [{ "id": "reg-references", "method": "textDocument/references" }] });
-    rpc.notify(|s| s.notify::<Ask>(json!({ "method": "client/unregisterCapability", "params": params })));
+    rpc.notify::<Ask>(json!({ "method": "client/unregisterCapability", "params": params }));
     eventually("the unregistration", || !s.process.supports(LspFeature::References)).await;
     assert!(s.process.supports(LspFeature::Definition));
     s.process.close().await;
@@ -109,7 +109,7 @@ async fn sends_settings_once_initialized_and_again_only_when_they_change() {
     eventually("the new settings", || logged(&s.process).contains(&r#"config {"yaml":{"hover":false}}"#.to_owned()))
         .await;
     // The repeat of the first settings was superseded before it was sent, and nothing went twice.
-    rpc.notify(|s| s.notify::<Mark>(json!({ "mark": "settled" })));
+    rpc.notify::<Mark>(json!({ "mark": "settled" }));
     eventually("the mark", || logged(&s.process).contains(&"settled".to_owned())).await;
     assert_eq!(logged(&s.process).iter().filter(|l| l.starts_with("config ")).count(), 2);
     s.process.close().await;
@@ -132,8 +132,7 @@ async fn reports_unavailable_when_the_server_dies_during_initialize() {
 async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the_notice() {
     let Some(s) = start("", None, None) else { return };
     let rpc = s.process.connection().await.unwrap();
-    let tell =
-        |method: &str, params: Value| rpc.notify(|s| s.notify::<Tell>(json!({ "method": method, "params": params })));
+    let tell = |method: &str, params: Value| rpc.notify::<Tell>(json!({ "method": method, "params": params }));
     tell("window/logMessage", json!({ "type": 2, "message": "languageId not found" }));
     tell("window/logMessage", json!({ "type": 2, "message": "languageId not found" }));
     tell("window/showMessage", json!({ "type": 3, "message": "Indexing done" }));
@@ -142,7 +141,7 @@ async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the
     eventually("the notice", || s.process.status().notice.is_some_and(|n| n.message == "Could not find Astro")).await;
     eventually("the activity", || !s.process.status().activity.is_empty()).await;
     assert_eq!(s.process.busy().as_deref(), Some("server is busy: Loading workspace; try again when it finishes"));
-    rpc.notify(|s| s.notify::<Mark>(json!({ "mark": "a line on stderr" })));
+    rpc.notify::<Mark>(json!({ "mark": "a line on stderr" }));
     eventually("the stderr line", || logged(&s.process).contains(&"a line on stderr".to_owned())).await;
     let entries = s.process.entries();
     let repeated = entries.iter().find(|e| e.message == "languageId not found").unwrap();
@@ -158,10 +157,10 @@ async fn files_messages_stderr_and_progress_and_lets_shown_problems_stand_as_the
 async fn takes_a_server_that_breaks_the_protocol_out_of_service() {
     let Some(s) = start("", None, None) else { return };
     let rpc = s.process.connection().await.unwrap();
-    rpc.notify(|s| s.notify::<Tell>(json!({ "method": "$/progress", "params": { "token": 2, "value": [1, 2, 3] } })));
+    rpc.notify::<Tell>(json!({ "method": "$/progress", "params": { "token": 2, "value": [1, 2, 3] } }));
     eventually("the outage", || s.process.status().state == LspState::Unavailable).await;
     let message = s.process.status().message.unwrap();
-    assert!(message.starts_with("the language server broke the protocol: deserialization failed"), "{message}");
+    assert!(message.starts_with("the language server broke the protocol: $/progress: "), "{message}");
     assert!(matches!(s.process.connection().await, Err(diffle::error::Error::LspUnavailable(_))));
     s.process.close().await;
 }

@@ -3,14 +3,14 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use async_lsp::LanguageServer;
-use async_lsp::lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, TextDocumentContentChangeEvent,
-    TextDocumentIdentifier, TextDocumentItem, Url, VersionedTextDocumentIdentifier,
-};
 use futures::FutureExt;
 use futures::future::{BoxFuture, Shared};
 use indexmap::IndexMap;
+use lsp_types::notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument};
+use lsp_types::{
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, TextDocumentContentChangeEvent,
+    TextDocumentIdentifier, TextDocumentItem, Url, VersionedTextDocumentIdentifier,
+};
 
 use super::process::LspProcess;
 use super::rpc::Connection;
@@ -140,7 +140,9 @@ impl Documents {
                 .collect()
         };
         for uri in closed {
-            rpc.notify(|s| s.did_close(DidCloseTextDocumentParams { text_document: TextDocumentIdentifier { uri } }));
+            rpc.notify::<DidCloseTextDocument>(DidCloseTextDocumentParams {
+                text_document: TextDocumentIdentifier { uri },
+            });
         }
         for path in paths {
             match self.sync(&Origin::Snapshot(path.clone())).await {
@@ -190,7 +192,7 @@ async fn sync_now(
             let language_id = language_of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
             let text_document = TextDocumentItem { uri: uri.clone(), language_id, version: 1, text: text.clone() };
             state.open.insert(uri.clone(), Doc { version: 1, text, snapshot });
-            rpc.notify(|s| s.did_open(DidOpenTextDocumentParams { text_document }));
+            rpc.notify::<DidOpenTextDocument>(DidOpenTextDocumentParams { text_document });
         }
         // Re-inserted at the end: the most recently used.
         Some(mut doc) => {
@@ -205,7 +207,7 @@ async fn sync_now(
                     }],
                 };
                 doc.text = text;
-                rpc.notify(|s| s.did_change(change));
+                rpc.notify::<DidChangeTextDocument>(change);
             }
             doc.snapshot = snapshot;
             state.open.insert(uri.clone(), doc);
@@ -227,6 +229,8 @@ fn evict(state: &mut State, rpc: &Connection, max_open: usize) {
         .collect();
     for uri in victims {
         state.open.shift_remove(&uri);
-        rpc.notify(|s| s.did_close(DidCloseTextDocumentParams { text_document: TextDocumentIdentifier { uri } }));
+        rpc.notify::<DidCloseTextDocument>(DidCloseTextDocumentParams {
+            text_document: TextDocumentIdentifier { uri },
+        });
     }
 }

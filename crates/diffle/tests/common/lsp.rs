@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use async_lsp::lsp_types::notification::Notification;
+use lsp_types::notification::Notification;
 use serde_json::{Value, json};
 
 use diffle::lsp::process::LspProcess;
@@ -81,20 +81,20 @@ pub async fn flush(process: &LspProcess) {
     static MARKS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let Ok(rpc) = process.connection().await else { return };
     let mark = format!("mark {}", MARKS.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-    rpc.notify(|s| s.notify::<Mark>(json!({ "mark": mark })));
+    rpc.notify::<Mark>(json!({ "mark": mark }));
     eventually(&mark, || process.entries().iter().any(|e| e.message == mark)).await;
 }
 
 /// Sends the fake a notification to pass on to the client as if it were its own.
 pub async fn tell(process: &LspProcess, method: &str, params: Value) {
     let rpc = process.connection().await.unwrap();
-    rpc.notify(|s| s.notify::<Tell>(json!({ "method": method, "params": params })));
+    rpc.notify::<Tell>(json!({ "method": method, "params": params }));
 }
 
 /// Has the fake send the client a request of its own.
 pub async fn ask(process: &LspProcess, method: &str, params: Value) {
     let rpc = process.connection().await.unwrap();
-    rpc.notify(|s| s.notify::<Ask>(json!({ "method": method, "params": params })));
+    rpc.notify::<Ask>(json!({ "method": method, "params": params }));
 }
 
 pub async fn eventually(what: &str, check: impl Fn() -> bool) {

@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-use async_lsp::lsp_types::ConfigurationItem;
+use lsp_types::ConfigurationItem;
 use serde_json::Value;
 
 use crate::persist::write_file_atomic;

@@ -1,5 +1,5 @@
 //! LSP wire shapes: what diffle tells servers, and how their answers become diffle's.
-use async_lsp::lsp_types::{
+use lsp_types::{
     ClientCapabilities, DocumentHighlightClientCapabilities, DocumentSymbol, DocumentSymbolClientCapabilities,
     DocumentSymbolResponse, DynamicRegistrationClientCapabilities, GotoCapability, GotoDefinitionResponse,
     HoverClientCapabilities, Location, MarkupKind, OneOf, Position, Range, SymbolInformation, SymbolKind,
