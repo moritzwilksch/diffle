@@ -4,7 +4,8 @@ import { graphView } from '@/client/graph/view.js';
 import { DiffStyleSwitch } from '@/client/header/DiffStyleSwitch.js';
 import { DIFF_HELP } from '@/client/keyboard/HelpOverlay.js';
 import { ReviewPane } from '@/client/review/ReviewPane.js';
-import { defineViews, type ViewDef } from './state.js';
+import { useStore } from '@/client/store.js';
+import { activeView, defineViews, showView, type ViewDef } from './state.js';
 
 /** The diff and its comments: the base view, laid out under any other so it keeps its scroll. */
 const diffView: ViewDef = {
@@ -21,3 +22,7 @@ const diffView: ViewDef = {
 };
 
 defineViews([diffView, graphView]);
+useStore.getState().registerView({
+  here: () => activeView().place?.() ?? null,
+  leave: () => showView('diff'),
+});

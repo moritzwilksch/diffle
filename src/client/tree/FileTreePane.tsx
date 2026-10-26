@@ -166,7 +166,7 @@ export function FileTreePane() {
         // over the diff may still act on it (the graph frames the file's boxes again).
         if (path === s.activePath) {
           void openRef.current(path);
-          activeView()?.pickFile?.(path);
+          activeView().pickFile?.(path);
         }
         return;
       }

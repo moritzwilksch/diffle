@@ -17,6 +17,8 @@ vi.mock('@/client/api.js', () => ({ api }));
 
 const { useStore } = await import('@/client/store.js');
 const { hasModifier, useKeymap } = await import('@/client/keyboard/useKeymap.js');
+const { defineDiffStub } = await import('./views.js');
+defineDiffStub();
 
 function Keys() {
   useKeymap();

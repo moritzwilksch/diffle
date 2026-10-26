@@ -8,6 +8,8 @@ vi.mock('@/client/api.js', () => ({ api: { github: () => new Promise(() => {}) }
 const { useStore } = await import('@/client/store.js');
 const { GithubMenu } = await import('@/client/header/GithubMenu.js');
 const { useKeymap } = await import('@/client/keyboard/useKeymap.js');
+const { defineDiffStub } = await import('./views.js');
+defineDiffStub();
 function App() {
   useKeymap();
   return createElement(GithubMenu);

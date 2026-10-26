@@ -181,7 +181,7 @@ export function useKeymap(): void {
           return;
         }
         // A view's own Escape comes before the review's, unless an open menu or the references list claims it.
-        if (!s.helpOpen && !s.modeMenuOpen && !s.references.open && activeView()?.escape?.(isEditable(target))) {
+        if (!s.helpOpen && !s.modeMenuOpen && !s.references.open && activeView().escape?.(isEditable(target))) {
           clearPending();
           return;
         }
@@ -214,7 +214,7 @@ export function useKeymap(): void {
         return;
       }
       // Ctrl/⌘+F opens a view's own find in place of the browser's.
-      const find = activeView()?.find;
+      const find = activeView().find;
       if (find && !s.modeMenuOpen && !s.helpOpen && isFind(e)) {
         e.preventDefault();
         clearPending();
@@ -289,7 +289,7 @@ export function useKeymap(): void {
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
       // A view covering the diff owns the keys, but for a few that act on the whole review.
       const view = activeView();
-      if (view?.keys && !s.modeMenuOpen && !s.helpOpen) {
+      if (view.keys && !s.modeMenuOpen && !s.helpOpen) {
         if (view.keys(e)) {
           e.preventDefault();
           clearPending();

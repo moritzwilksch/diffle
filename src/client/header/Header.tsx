@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { repoName } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { nextTheme, type ThemeChoice } from '@/client/theme.js';
-import { listViews, panelOf, useViews } from '@/client/views/state.js';
+import { panelOf, useActiveView } from '@/client/views/state.js';
 import { ViewSwitch } from '@/client/views/ViewSwitch.js';
 import { CommitStepper } from './CommitStepper.js';
 import { GithubMenu } from './GithubMenu.js';
@@ -22,9 +22,8 @@ export function Header() {
   const setTheme = useStore((s) => s.setTheme);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
-  const active = useViews((s) => s.active);
-  const view = listViews().find((v) => v.id === active);
-  const panel = panelOf(layout, active);
+  const view = useActiveView();
+  const panel = panelOf(layout, view.id);
   const changed = snapshot?.changed.length ?? 0;
   const adds = snapshot?.changed.reduce((n, f) => n + f.additions, 0) ?? 0;
   const dels = snapshot?.changed.reduce((n, f) => n + f.deletions, 0) ?? 0;
@@ -65,7 +64,7 @@ export function Header() {
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
       {/* The switch shows in every view, so it holds its place; a view's own controls come and go beside it. */}
-      {view?.Controls && <view.Controls />}
+      {view.Controls && <view.Controls />}
       <ViewSwitch />
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
@@ -80,8 +79,8 @@ export function Header() {
         variant="ghost"
         icon
         className={panel.visible ? '' : 'opacity-45'}
-        onClick={() => useStore.getState().setPanel(active, { visible: !panel.visible })}
-        title={`Toggle ${view?.panelLabel ?? 'side panel'} (⌘/Ctrl+Shift+b)`}
+        onClick={() => useStore.getState().setPanel(view.id, { visible: !panel.visible })}
+        title={`Toggle ${view.panelLabel} (⌘/Ctrl+Shift+b)`}
       >
         <PanelRight size="1rem" />
       </Button>

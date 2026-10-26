@@ -62,29 +62,35 @@ export const useViews = create<ViewsState>(() => ({
 
 const defs = new Map<ViewId, ViewDef>();
 
-/** Registers the views, in the switch's order, and the active one with the jump list. */
+/** Registers the views, in the switch's order. The app does once, at startup, before anything renders. */
 export function defineViews(views: ViewDef[]): void {
   for (const view of views) defs.set(view.id, view);
-  useStore.getState().registerView({
-    here: () => activeView()?.place?.() ?? null,
-    leave: () => showView('diff'),
-  });
 }
 
 export function listViews(): ViewDef[] {
   return [...defs.values()];
 }
 
-/** The shown view; none until `defineViews` ran, as in a test of the keymap alone. */
-export function activeView(): ViewDef | undefined {
-  return defs.get(useViews.getState().active);
+function viewOf(id: ViewId): ViewDef {
+  const view = defs.get(id);
+  if (!view) throw new Error(`view ${id} is not defined`);
+  return view;
+}
+
+export function activeView(): ViewDef {
+  return viewOf(useViews.getState().active);
+}
+
+/** The shown view, re-rendering when another shows. */
+export function useActiveView(): ViewDef {
+  return useViews((s) => viewOf(s.active));
 }
 
 /** Shows `id`, or says why it cannot be shown. */
 export function showView(id: ViewId): void {
   const { active, mounted } = useViews.getState();
   if (id === active) return;
-  const next = defs.get(id)!;
+  const next = viewOf(id);
   const review = useStore.getState();
   const blocked = next.blocked?.(review);
   if (blocked) return review.flash(blocked);

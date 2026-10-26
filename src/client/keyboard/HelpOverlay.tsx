@@ -2,7 +2,7 @@ import { BookOpen } from 'lucide-react';
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { Button } from '@/client/ui/Button.js';
 import { useStore } from '@/client/store.js';
-import { type HelpSection, listViews, useViews } from '@/client/views/state.js';
+import { type HelpSection, useActiveView } from '@/client/views/state.js';
 
 /**
  * The diff's shortcuts, one array per column. Columns are explicit because CSS multi-column overflows
@@ -130,8 +130,7 @@ const LINK =
 export function HelpOverlay() {
   const open = useStore((s) => s.helpOpen);
   const setOpen = useStore((s) => s.setHelpOpen);
-  const active = useViews((s) => s.active);
-  const view = listViews().find((v) => v.id === active);
+  const view = useActiveView();
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {/* Nothing here takes input, and the first tabbable (the Docs link) would open ringed. */}
@@ -142,7 +141,7 @@ export function HelpOverlay() {
       >
         <div className="flex items-center justify-between border-b border-b-border px-4.5 pt-3 pb-2.5">
           <h3 className="m-0 text-[0.9375rem]">
-            Keyboard shortcuts{view && <span className="font-normal text-muted"> · {view.label}</span>}
+            Keyboard shortcuts<span className="font-normal text-muted"> · {view.label}</span>
           </h3>
           <div className="flex items-center">
             <a
@@ -171,7 +170,7 @@ export function HelpOverlay() {
           </div>
         </div>
         <div className="grid grid-cols-[auto_auto] items-start gap-x-10 overflow-auto px-4.5 pt-2.5 pb-3.5 text-[0.75rem] whitespace-nowrap">
-          {(view?.help ?? DIFF_HELP).map((sections, col) => (
+          {view.help.map((sections, col) => (
             <div key={col} className="grid grid-cols-[max-content_1fr] content-start gap-x-3">
               {sections.map((section) => (
                 <section className="col-span-full mb-2.5 grid grid-cols-subgrid last:mb-0" key={section.title}>

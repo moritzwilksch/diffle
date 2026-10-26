@@ -27,6 +27,9 @@ vi.mock('@/client/header/SettingsDialog.js', () => ({ SettingsDialog: () => null
 vi.mock('@/client/clipboard.js', () => ({ copyText: vi.fn() }));
 import { copyText } from '@/client/clipboard.js';
 import { Header } from '@/client/header/Header.js';
+import { defineDiffStub } from './views.js';
+
+defineDiffStub();
 
 function render(...statuses: Partial<LspServerStatus>[]) {
   state.lsp.servers = statuses.map((status, i) => ({
