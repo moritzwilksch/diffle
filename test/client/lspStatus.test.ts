@@ -13,7 +13,7 @@ const { state } = vi.hoisted(() => ({
     lspLogs: {} as Record<string, { seq: number; entries: LspLogEntry[] }>,
     watchLspLog: () => {},
     config: { lineWrap: true },
-    layout: { treeVisible: true, panelVisible: true },
+    layout: { treeVisible: true, panels: {} },
     theme: 'dark',
     diffStyle: 'split',
     jumps: [],

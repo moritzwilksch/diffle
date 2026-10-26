@@ -112,4 +112,53 @@ test.describe('the change graph', () => {
     await expect(graph.locator(`[data-node="${selected}"][data-selected]`)).toBeVisible();
     await expect(graph.locator('[data-focus="hinted"]')).toHaveCount(0);
   });
+
+  test('the graph keeps a side panel of its own: width and visibility apart from the comments', async ({
+    page,
+    diffle,
+  }) => {
+    await waitForLsp(diffle.url);
+    // The panel's left edge is its resizer's.
+    const edge = async () => (await page.getByTitle('Drag to resize').last().boundingBox())!.x;
+    const drag = async (by: number) => {
+      const from = await edge();
+      await page.mouse.move(from + 2, 300);
+      await page.mouse.down();
+      await page.mouse.move(from + 2 + by, 300, { steps: 6 });
+      await page.mouse.up();
+      // A hovered title becomes the tooltip's, so the resizer would drop out of `edge`.
+      await page.mouse.move(0, 0);
+    };
+    const view = page.getByRole('region', { name: 'Change graph view' });
+    const standard = await edge();
+
+    // Widening the comments leaves the graph's details at their default, and narrowing those leaves the comments.
+    await drag(-120);
+    const comments = await edge();
+    expect(comments).toBeLessThan(standard - 100);
+    await page.keyboard.press('M');
+    await expect(view).toBeVisible();
+    await expect.poll(edge).toBe(standard);
+    await drag(60);
+    const details = await edge();
+    expect(details).toBeGreaterThan(standard + 40);
+    await page.keyboard.press('M');
+    await expect(view).toBeHidden();
+    await expect.poll(edge).toBe(comments);
+
+    // Hiding the details keeps the comments, and both widths survive a reload.
+    await page.keyboard.press('M');
+    await page.keyboard.press('ControlOrMeta+Shift+b');
+    await expect(page.getByTitle('Drag to resize')).toHaveCount(1);
+    await page.keyboard.press('M');
+    await expect.poll(edge).toBe(comments);
+    await page.reload();
+    await expect.poll(edge).toBe(comments);
+    await expect(page.getByRole('button', { name: 'Graph' })).toBeEnabled();
+    await page.keyboard.press('M');
+    await expect(view).toBeVisible();
+    await expect(page.getByTitle('Drag to resize')).toHaveCount(1);
+    await page.keyboard.press('ControlOrMeta+Shift+b');
+    await expect.poll(edge).toBe(details);
+  });
 });

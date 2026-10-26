@@ -70,6 +70,7 @@ import {
   iterationStep,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
+import type { ViewId } from './views/state.js';
 
 export type Loaded =
   | { kind: 'diff'; fileDiff: FileDiffMetadata }
@@ -142,26 +143,27 @@ export interface SearchState {
   truncated: boolean;
 }
 
+export interface PanelLayout {
+  /** In px once the user has dragged its resizer; null leaves the view's default in charge. */
+  width: number | null;
+  visible: boolean;
+}
+
 export interface LayoutState {
-  /** Pane widths in px once the user has dragged a resizer; null leaves the stylesheet's rem default in charge. */
+  /** In px once the user has dragged the resizer; null leaves the stylesheet's rem default in charge. */
   treeWidth: number | null;
-  panelWidth: number | null;
   treeVisible: boolean;
-  panelVisible: boolean;
+  /** Each view's side panel: comments beside the diff read differently from the details beside the graph. */
+  panels: Partial<Record<ViewId, PanelLayout>>;
 }
 const LAYOUT_KEY = 'diffle:layout';
-const DEFAULT_LAYOUT: LayoutState = {
-  treeWidth: null,
-  panelWidth: null,
-  treeVisible: true,
-  panelVisible: true,
-};
 function readLayout(): LayoutState {
   try {
     const raw = localStorage.getItem(LAYOUT_KEY);
-    return raw ? { ...DEFAULT_LAYOUT, ...(JSON.parse(raw) as Partial<LayoutState>) } : DEFAULT_LAYOUT;
+    const saved = raw ? (JSON.parse(raw) as Partial<LayoutState>) : {};
+    return { treeWidth: saved.treeWidth ?? null, treeVisible: saved.treeVisible ?? true, panels: saved.panels ?? {} };
   } catch {
-    return DEFAULT_LAYOUT;
+    return { treeWidth: null, treeVisible: true, panels: {} };
   }
 }
 
@@ -285,6 +287,7 @@ export type GithubState =
 export interface ReviewState {
   layout: LayoutState;
   setLayout(patch: Partial<LayoutState>): void;
+  setPanel(view: ViewId, patch: Partial<PanelLayout>): void;
   diffStyle: DiffStyle;
   setDiffStyle(style: DiffStyle): void;
   imageCompare: ImageCompare;
@@ -1505,6 +1508,11 @@ export const useStore = create<ReviewState>((set, get) => {
         /* ignore */
       }
       set({ layout });
+    },
+    setPanel(view, patch) {
+      const { panels } = get().layout;
+      const panel = { width: null, visible: true, ...panels[view], ...patch };
+      get().setLayout({ panels: { ...panels, [view]: panel } });
     },
     theme: readTheme(),
     setTheme(theme) {

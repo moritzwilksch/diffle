@@ -59,6 +59,7 @@ import {
 import { remPx } from '@/client/scale.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
+import { gridColumns, useViews } from '@/client/views/state.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
@@ -491,38 +492,53 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified, wrap, the pane widening as the tree or panel
-  // hides) or remounts the viewer (theme). Neither is navigation, so the viewport holds: the row under the
-  // pane's top edge is measured here, before React renders the change, and the request to land it at the
-  // same pixel goes out in the same update, so the jump effect below places it before anything paints.
-  // No row on screen means nothing to hold.
-  useEffect(
-    () =>
-      useStore.subscribe((s, prev) => {
-        if (
-          s.theme === prev.theme &&
-          s.diffStyle === prev.diffStyle &&
-          s.config.lineWrap === prev.config.lineWrap &&
-          s.layout.treeVisible === prev.layout.treeVisible &&
-          s.layout.panelVisible === prev.layout.panelVisible
-        )
-          return;
-        const scroller = containerRef.current;
-        const items = viewerRef.current?.getInstance()?.getRenderedItems();
-        if (!scroller || !items) return;
-        const box = scroller.getBoundingClientRect();
-        const held = topRow(
-          items.map((r) => ({ id: r.id, root: r.element.shadowRoot ?? r.element })),
-          box.top + geometry.itemMetrics.diffHeaderHeight,
-          box.bottom,
-        );
-        if (held)
-          useStore.setState((s) => ({
-            scrollTarget: { ...held, align: 'keep', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
-          }));
-      }),
-    [geometry],
-  );
+  // A display toggle re-lays the rows out (split / unified, wrap, the pane resizing as the tree or the
+  // side panel hides, or as a view with another panel shows) or remounts the viewer (theme). Neither is
+  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
+  // renders the change, and the request to land it at the same pixel goes out in the same update, so the
+  // jump effect below places it before anything paints. No row on screen means nothing to hold. A drag
+  // moves the panes' edge every frame and is left alone.
+  useEffect(() => {
+    const hold = () => {
+      const scroller = containerRef.current;
+      const items = viewerRef.current?.getInstance()?.getRenderedItems();
+      if (!scroller || !items) return;
+      const box = scroller.getBoundingClientRect();
+      const held = topRow(
+        items.map((r) => ({ id: r.id, root: r.element.shadowRoot ?? r.element })),
+        box.top + geometry.itemMetrics.diffHeaderHeight,
+        box.bottom,
+      );
+      if (held)
+        useStore.setState((s) => ({
+          scrollTarget: { ...held, align: 'keep', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+        }));
+    };
+    const columnsNow = () => gridColumns(useStore.getState().layout, useViews.getState().active);
+    let columns = columnsNow();
+    const resized = () => {
+      const next = columnsNow();
+      const moved = next !== columns && document.body.dataset.resizing == null;
+      columns = next;
+      return moved;
+    };
+    const offViews = useViews.subscribe(() => {
+      if (resized()) hold();
+    });
+    const offStore = useStore.subscribe((s, prev) => {
+      if (
+        resized() ||
+        s.theme !== prev.theme ||
+        s.diffStyle !== prev.diffStyle ||
+        s.config.lineWrap !== prev.config.lineWrap
+      )
+        hold();
+    });
+    return () => {
+      offViews();
+      offStore();
+    };
+  }, [geometry]);
 
   // Reveal a line hidden in collapsed context: bring the item into the virtual window,
   // ask its instance to expand around the line, then center it.

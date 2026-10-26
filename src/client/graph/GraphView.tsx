@@ -94,8 +94,7 @@ export function GraphView() {
 /** Shows the side panel's list of what the graph left out: it stands where a selection's details do. */
 function revealCut() {
   useGraph.getState().deselect();
-  const review = useStore.getState();
-  if (!review.layout.panelVisible) review.setLayout({ panelVisible: true });
+  useStore.getState().setPanel('graph', { visible: true });
 }
 
 /**

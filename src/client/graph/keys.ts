@@ -20,14 +20,10 @@ let zAt = -Infinity;
 /** Keys the graph leaves to the review: help, theme, the mode picker, and `M` back to the diff. */
 export const GRAPH_PASSES = new Set(['?', 't', 'm', 'M', 'o']);
 
-/** Ctrl/⌘+F over the graph: the browser's find cannot see boxes panned out of view, so it opens the graph's. */
-export function isGraphFind(e: KeyboardEvent): boolean {
-  return (
-    useGraph.getState().open && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f'
-  );
-}
-
-/** Opens the graph's find, or takes the reader back to its field, its text selected to type over. */
+/**
+ * Opens the graph's find, or takes the reader back to its field, its text selected to type over. Ctrl/⌘+F
+ * opens it too: the browser's find cannot see boxes panned out of view.
+ */
 export function openFind(): void {
   useGraph.getState().openFind();
   requestAnimationFrame(() =>
@@ -35,7 +31,7 @@ export function openFind(): void {
   );
 }
 
-/** The graph view's own keys; true when `e` was one. The keymap calls it only while the graph is open. */
+/** The graph view's own keys; true when `e` was one. The keymap calls it only while the graph shows. */
 export function graphKeys(e: KeyboardEvent): boolean {
   const graph = useGraph.getState();
   const step = STEPS[e.key];

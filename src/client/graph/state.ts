@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from '@/client/api.js';
 import { useStore, type ViewPlace } from '@/client/store.js';
-import { lspBlocker } from '@/shared/lsp.js';
+import { showView, useViews } from '@/client/views/state.js';
 import type { GraphEdge, GraphResponse, Snapshot } from '@/shared/protocol.js';
 import { isTest, keepNodes } from './filters.js';
 import { hiddenReason } from './focus.js';
@@ -20,10 +20,6 @@ type Load =
   | { state: 'ready'; graph: GraphResponse };
 
 export interface GraphState {
-  /** The graph covers the diff. */
-  open: boolean;
-  /** Opened at least once: the view stays mounted under the diff, so its pan and zoom survive a switch. */
-  mounted: boolean;
   load: Load;
   /** The snapshot `load` answers for; another current snapshot makes it stale. */
   snapshot: Snapshot | null;
@@ -47,8 +43,6 @@ export interface GraphState {
   scope: string | null;
   /** The find field's text while it is open; its matches are `findMatches(view, find)`. */
   find: string | null;
-  toggle(): void;
-  close(): void;
   reload(): Promise<void>;
   /** Selects a node, or clears the selection with null. */
   select(id: string | null): void;
@@ -78,8 +72,6 @@ export interface GraphState {
 
 /** The change graph view. It reads the review store and never the other way round. */
 export const useGraph = create<GraphState>((set, get) => ({
-  open: false,
-  mounted: false,
   load: { state: 'idle' },
   snapshot: null,
   filters: { symbols: false, consumers: false, tests: false },
@@ -93,18 +85,6 @@ export const useGraph = create<GraphState>((set, get) => ({
   only: null,
   all: false,
   scope: null,
-
-  toggle() {
-    if (get().open) return get().close();
-    const review = useStore.getState();
-    const blocked = lspBlocker(review.lsp, review.snapshot);
-    if (blocked) return review.flash(blocked);
-    show();
-  },
-
-  close() {
-    set({ open: false, focusPath: null, hoveredEdge: null, find: null });
-  },
 
   async reload() {
     const snapshot = useStore.getState().snapshot;
@@ -149,14 +129,14 @@ export const useGraph = create<GraphState>((set, get) => ({
 
   async pick({ path, line }) {
     // Closed only once the jump is made: the jump list records the graph as the place left.
-    // The jump moves the active file while the graph is still open; that is no tree pick to focus.
+    // The jump moves the active file while the graph still shows; that is no tree pick to focus.
     picking = true;
     try {
       await useStore.getState().goToLink(path, line);
     } finally {
       picking = false;
     }
-    get().close();
+    showView('diff');
   },
 
   setFilter(filter, on) {
@@ -190,8 +170,8 @@ export const useGraph = create<GraphState>((set, get) => ({
   showScope(scope) {
     // A cleared snapshot makes opening the graph load it afresh, once.
     set({ scope, all: false, selected: null, selectedEdge: null, focusPath: null, snapshot: null });
-    if (get().open) void get().reload();
-    else get().toggle();
+    if (shown()) void get().reload();
+    else showView('graph');
   },
 
   openFind() {
@@ -236,19 +216,25 @@ let loads = 0;
 /** Set while `pick` jumps into the diff, so the file it lands on does not clear the graph's selection. */
 let picking = false;
 
-/** Shows the graph over the diff, refetching it when the review moved on since it was loaded. */
-function show(): void {
+const shown = () => useViews.getState().active === 'graph';
+
+/** The graph is shown: it refetches when the review moved on since it was loaded. */
+export function enterGraph(): void {
   followReview();
-  useGraph.setState({ open: true, mounted: true, focusPath: null });
+  useGraph.setState({ focusPath: null });
   const graph = useGraph.getState();
   if (graph.snapshot !== useStore.getState().snapshot || graph.load.state === 'idle') void graph.reload();
+}
+
+export function leaveGraph(): void {
+  useGraph.setState({ focusPath: null, hoveredEdge: null, find: null });
 }
 
 /**
  * The graph as it stands, for the jump list: Ctrl+o after a jump into the diff restores it, and
  * one selection to another within the graph steps between them.
  */
-function place(): ViewPlace {
+export function graphPlace(): ViewPlace {
   const { selected, selectedEdge, filters, only } = useGraph.getState();
   return {
     view: `graph:${selected ?? selectedEdge ?? ''}`,
@@ -258,27 +244,23 @@ function place(): ViewPlace {
       const changed = filters !== graph.filters || only !== graph.only;
       const view = changed && load.state === 'ready' ? derive(load.graph, filters, only) : graph.view;
       useGraph.setState({ filters, only, view, selected, selectedEdge });
-      show();
+      showView('graph');
     },
   };
 }
 
 /**
- * Starts following the review, once, when the graph first opens: a new snapshot refreshes an open
- * graph (a closed one is refetched when it next opens), a file picked in the tree while the graph
- * is open becomes its focus, and the graph takes part in the jump list.
+ * Starts following the review, once, when the graph is first shown: a new snapshot refreshes a shown
+ * graph (a hidden one is refetched when it next shows), and a file picked in the tree while the graph
+ * shows becomes its focus.
  */
 function followReview(): void {
   if (watching) return;
   watching = true;
-  useStore.getState().registerView({
-    here: () => (useGraph.getState().open ? place() : null),
-    leave: () => useGraph.getState().close(),
-  });
   useStore.subscribe((s, prev) => {
     const graph = useGraph.getState();
-    if (s.snapshot !== prev.snapshot && graph.open) void graph.reload();
-    if (s.activePath !== prev.activePath && s.activePath && graph.open && !picking) graph.focusFile(s.activePath);
+    if (s.snapshot !== prev.snapshot && shown()) void graph.reload();
+    if (s.activePath !== prev.activePath && s.activePath && shown() && !picking) graph.focusFile(s.activePath);
   });
 }
 

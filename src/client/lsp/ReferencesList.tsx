@@ -6,7 +6,7 @@ import { FilePath } from '@/client/FilePath.js';
 import { focusReview } from '@/client/keyboard/useKeymap.js';
 import { overflow } from '@/client/review/geometry.js';
 import { type Match, useStore } from '@/client/store.js';
-import { useGraph } from '@/client/graph/state.js';
+import { useViews } from '@/client/views/state.js';
 import { CodeLine, type HlToken, useHighlighted } from './highlight.js';
 import { ReferencePeek } from './ReferencePeek.js';
 import { kindColor, KindIcon } from './symbolKind.js';
@@ -76,9 +76,9 @@ export function ReferencesList() {
       <DialogContent
         aria-label="References"
         // The review pane is not tabbable, so Base UI would hand focus to a file header's button instead.
-        // Over the graph, focus returns to the button that opened the list.
+        // Over another view, focus returns to the button that opened the list.
         finalFocus={() => {
-          if (useGraph.getState().open) return true;
+          if (useViews.getState().active !== 'diff') return true;
           focusReview();
           return false;
         }}

@@ -1,23 +1,11 @@
-import { SegmentedControl, ToggleButton } from '@/client/ui/ToggleButton.js';
 import { Button } from '@/client/ui/Button.js';
-import {
-  Columns2,
-  GitCompareArrows,
-  Keyboard,
-  Monitor,
-  Moon,
-  PanelLeft,
-  PanelRight,
-  Rows3,
-  Settings,
-  Sun,
-} from 'lucide-react';
+import { GitCompareArrows, Keyboard, Monitor, Moon, PanelLeft, PanelRight, Settings, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { repoName } from '@/client/model.js';
-import { useGraph } from '@/client/graph/state.js';
-import { ViewSwitch } from '@/client/graph/ViewSwitch.js';
 import { useStore } from '@/client/store.js';
 import { nextTheme, type ThemeChoice } from '@/client/theme.js';
+import { listViews, panelOf, useViews } from '@/client/views/state.js';
+import { ViewSwitch } from '@/client/views/ViewSwitch.js';
 import { CommitStepper } from './CommitStepper.js';
 import { GithubMenu } from './GithubMenu.js';
 import { HistoryNav } from './HistoryNav.js';
@@ -34,9 +22,9 @@ export function Header() {
   const setTheme = useStore((s) => s.setTheme);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
-  const diffStyle = useStore((s) => s.diffStyle);
-  const setDiffStyle = useStore((s) => s.setDiffStyle);
-  const graphOpen = useGraph((s) => s.open);
+  const active = useViews((s) => s.active);
+  const view = listViews().find((v) => v.id === active);
+  const panel = panelOf(layout, active);
   const changed = snapshot?.changed.length ?? 0;
   const adds = snapshot?.changed.reduce((n, f) => n + f.additions, 0) ?? 0;
   const dels = snapshot?.changed.reduce((n, f) => n + f.deletions, 0) ?? 0;
@@ -77,16 +65,7 @@ export function Header() {
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
       <ViewSwitch />
-      {!graphOpen && (
-        <SegmentedControl title="Diff layout (s)">
-          <ToggleButton selected={diffStyle === 'split'} onClick={() => setDiffStyle('split')} aria-label="Split">
-            <Columns2 size="0.875rem" /> <span className="max-xl:hidden">Split</span>
-          </ToggleButton>
-          <ToggleButton selected={diffStyle === 'unified'} onClick={() => setDiffStyle('unified')} aria-label="Unified">
-            <Rows3 size="0.875rem" /> <span className="max-xl:hidden">Unified</span>
-          </ToggleButton>
-        </SegmentedControl>
-      )}
+      {view?.Controls && <view.Controls />}
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
       </Button>
@@ -99,9 +78,9 @@ export function Header() {
       <Button
         variant="ghost"
         icon
-        className={layout.panelVisible ? '' : 'opacity-45'}
-        onClick={() => setLayout({ panelVisible: !layout.panelVisible })}
-        title="Toggle comments panel (⌘/Ctrl+Shift+b)"
+        className={panel.visible ? '' : 'opacity-45'}
+        onClick={() => useStore.getState().setPanel(active, { visible: !panel.visible })}
+        title={`Toggle ${view?.panelLabel ?? 'side panel'} (⌘/Ctrl+Shift+b)`}
       >
         <PanelRight size="1rem" />
       </Button>
