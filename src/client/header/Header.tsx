@@ -64,8 +64,9 @@ export function Header() {
       </span>
       <span className="flex-1" />
       {lsp.enabled && <LspIndicator lsp={lsp} />}
-      <ViewSwitch />
+      {/* The switch shows in every view, so it holds its place; a view's own controls come and go beside it. */}
       {view?.Controls && <view.Controls />}
+      <ViewSwitch />
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
       </Button>
