@@ -2,6 +2,7 @@ import { Network } from 'lucide-react';
 import type { ViewDef } from '@/client/views/state.js';
 import { lspBlocker } from '@/shared/lsp.js';
 import { GraphDetails } from './details/GraphDetails.js';
+import { GRAPH_HELP } from './help.js';
 import { GRAPH_PASSES, graphKeys, openFind } from './keys.js';
 import { enterGraph, graphPlace, leaveGraph, useGraph } from './state.js';
 import { GraphView } from './GraphView.js';
@@ -14,6 +15,7 @@ export const graphView: ViewDef = {
   title: 'Changed symbols and the code using them (M)',
   Main: GraphView,
   Side: GraphDetails,
+  help: GRAPH_HELP,
   panelLabel: 'details panel',
   panelWidth: '21.25rem',
   blocked: (s) => lspBlocker(s.lsp, s.snapshot),

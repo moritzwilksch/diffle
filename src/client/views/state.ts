@@ -5,6 +5,9 @@ import { type LayoutState, type ReviewState, useStore, type ViewPlace } from '@/
 
 export type ViewId = 'diff' | 'graph';
 
+type HelpRow = [keys: string, action: string];
+export type HelpSection = { title: string; rows: HelpRow[] };
+
 /**
  * A view of the review: what it shows in the main pane and in the side panel, and how it takes part
  * in the keys, the tree and the jump list while it is shown. The diff is the base the others cover:
@@ -22,6 +25,11 @@ export interface ViewDef {
   Controls?: ComponentType;
   /** Names the side panel, for its toggle. */
   panelLabel: string;
+  /**
+   * The shortcuts that work while the view shows, one array of sections per help column. Every key
+   * appears once; each row renders on one line, so descriptions stay short.
+   */
+  help: HelpSection[][];
   /** The side panel's width until the reader drags it, as a CSS length. */
   panelWidth: string;
   /** Why the view cannot be shown now, or null. */

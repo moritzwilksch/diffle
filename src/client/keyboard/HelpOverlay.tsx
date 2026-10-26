@@ -2,16 +2,13 @@ import { BookOpen } from 'lucide-react';
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { Button } from '@/client/ui/Button.js';
 import { useStore } from '@/client/store.js';
-
-type Row = [keys: string, action: string];
-export type HelpSection = { title: string; rows: Row[] };
+import { type HelpSection, listViews, useViews } from '@/client/views/state.js';
 
 /**
- * Shortcut groups rendered by the help overlay, one array per column. Every bound key appears exactly once.
- * Columns are explicit because CSS multi-column overflows into a clipped third column once the dialog height is capped.
- * Every row renders on one line, so descriptions stay short.
+ * The diff's shortcuts, one array per column. Columns are explicit because CSS multi-column overflows
+ * into a clipped third column once the dialog height is capped.
  */
-export const COLUMNS: HelpSection[][] = [
+export const DIFF_HELP: HelpSection[][] = [
   [
     {
       title: 'Move',
@@ -93,15 +90,8 @@ export const COLUMNS: HelpSection[][] = [
     {
       title: 'Change graph (language server)',
       rows: [
-        ['M', 'graph of changed symbols and dependents; again: the diff'],
+        ['M', 'graph of changed symbols; ? there lists its keys'],
         ['right-click a folder', 'Show in graph: only the changes under it'],
-        ['h / j / k / l', 'select the next symbol left / down / up / right'],
-        ['Enter', 'open the selected symbol in the diff'],
-        ['zz  double-click', 'frame the selection and its links, or fit the graph'],
-        ['/  Ctrl+F', 'find a box by name; Enter, then n / N between matches'],
-        ['s / d / T', 'toggle symbol nodes / dependents / tests'],
-        ['0  + / -', 'fit the graph / zoom in / out'],
-        ['scroll / pinch', 'pan / zoom the graph'],
       ],
     },
     {
@@ -140,6 +130,8 @@ const LINK =
 export function HelpOverlay() {
   const open = useStore((s) => s.helpOpen);
   const setOpen = useStore((s) => s.setHelpOpen);
+  const active = useViews((s) => s.active);
+  const view = listViews().find((v) => v.id === active);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {/* Nothing here takes input, and the first tabbable (the Docs link) would open ringed. */}
@@ -149,7 +141,9 @@ export function HelpOverlay() {
         className="flex max-h-[calc(100vh_-_2rem)] w-max max-w-[96vw] flex-col overflow-hidden p-0"
       >
         <div className="flex items-center justify-between border-b border-b-border px-4.5 pt-3 pb-2.5">
-          <h3 className="m-0 text-[0.9375rem]">Keyboard shortcuts</h3>
+          <h3 className="m-0 text-[0.9375rem]">
+            Keyboard shortcuts{view && <span className="font-normal text-muted"> · {view.label}</span>}
+          </h3>
           <div className="flex items-center">
             <a
               className={LINK}
@@ -177,7 +171,7 @@ export function HelpOverlay() {
           </div>
         </div>
         <div className="grid grid-cols-[auto_auto] items-start gap-x-10 overflow-auto px-4.5 pt-2.5 pb-3.5 text-[0.75rem] whitespace-nowrap">
-          {COLUMNS.map((sections, col) => (
+          {(view?.help ?? DIFF_HELP).map((sections, col) => (
             <div key={col} className="grid grid-cols-[max-content_1fr] content-start gap-x-3">
               {sections.map((section) => (
                 <section className="col-span-full mb-2.5 grid grid-cols-subgrid last:mb-0" key={section.title}>

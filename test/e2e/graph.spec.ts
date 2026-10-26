@@ -161,4 +161,14 @@ test.describe('the change graph', () => {
     await page.keyboard.press('ControlOrMeta+Shift+b');
     await expect.poll(edge).toBe(details);
   });
+
+  test('? over the graph lists the keys that work there', async ({ page, diffle }) => {
+    await waitForLsp(diffle.url);
+    await page.keyboard.press('M');
+    await page.getByRole('img', { name: 'Change graph' }).locator('[data-node]').first().waitFor({ timeout: 15000 });
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toMatchAriaSnapshot({
+      name: 'graph-help.aria.yml',
+    });
+  });
 });

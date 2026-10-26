@@ -1,5 +1,5 @@
 - dialog "Keyboard shortcuts":
-  - heading "Keyboard shortcuts" [level=3]
+  - heading "Keyboard shortcuts · Diff" [level=3]
   - link "Docs":
     - /url: https://diffle.app
   - link "GitHub repository":
@@ -18,7 +18,7 @@
   - heading "Code intelligence (language server)" [level=4]
   - text: "hover a symbol or gh signature and docs tooltip (gh: focused word); Esc closes click a symbol definition / type definition / references popover gd or ⌘/Ctrl+click go to the definition, or its references from there gy go to the definition of the hovered symbol’s type gA list references; j / k, Enter to jump, n / N to step gs / gS symbols in the current file / across the repository"
   - heading "Change graph (language server)" [level=4]
-  - text: "M graph of changed symbols and dependents; again: the diff right-click a folder Show in graph: only the changes under it h / j / k / l select the next symbol left / down / up / right Enter open the selected symbol in the diff zz double-click frame the selection and its links, or fit the graph / Ctrl+F find a box by name; Enter, then n / N between matches s / d / T toggle symbol nodes / dependents / tests 0 + / - fit the graph / zoom in / out scroll / pinch pan / zoom the graph"
+  - text: "M graph of changed symbols; ? there lists its keys right-click a folder Show in graph: only the changes under it"
   - heading "Iterations" [level=4]
   - text: "r reload once the compared refs moved ii latest iteration vs. the one before; again: the range ij / ik span’s lower end one iteration older / newer iJ / iK span’s higher end one iteration older / newer i, then 1–9 compare that iteration with the latest"
   - heading "General" [level=4]

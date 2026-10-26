@@ -2,6 +2,7 @@ import { FileDiff } from 'lucide-react';
 import { CommentPanel } from '@/client/comments/CommentPanel.js';
 import { graphView } from '@/client/graph/view.js';
 import { DiffStyleSwitch } from '@/client/header/DiffStyleSwitch.js';
+import { DIFF_HELP } from '@/client/keyboard/HelpOverlay.js';
 import { ReviewPane } from '@/client/review/ReviewPane.js';
 import { defineViews, type ViewDef } from './state.js';
 
@@ -14,6 +15,7 @@ const diffView: ViewDef = {
   Main: ReviewPane,
   Side: CommentPanel,
   Controls: DiffStyleSwitch,
+  help: DIFF_HELP,
   panelLabel: 'comments panel',
   panelWidth: '21.25rem',
 };
