@@ -1,0 +1,28 @@
+#!/bin/sh
+# A diffle report generator for pixi.lock: the lock file's diff as pixi-diff-to-markdown writes it.
+#
+# diffle's built-in `pixi` plugin runs `pixi-diff | pixi-diff-to-markdown` straight from PATH when
+# both are installed (`pixi global install pixi-diff pixi-diff-to-markdown`). This script is the
+# same thing as a program of its own, for a repository that wants other flags, pixi's extension
+# dispatch (`pixi diff`), or a report with a heading per lock file. Point the config at it:
+#   { "plugins": { "pixi": { "command": "/path/to/example/plugins/diffle-pixi $DIFFLE_FILE" } } }
+#
+# The contract: DIFFLE_OLD and DIFFLE_NEW hold copies of the sides, DIFFLE_FILE the matched path
+# (the command names $DIFFLE_FILE, so diffle runs the script once per changed lock file), and the
+# review arrives as JSON on stdin. Whatever is printed becomes one markdown block anchored at the
+# file; a nonzero exit shows the last line of stderr as the report's error.
+set -eu
+
+file="${1:-${DIFFLE_FILE:-pixi.lock}}"
+before="$DIFFLE_OLD/$file"
+after="$DIFFLE_NEW/$file"
+# A lock file added or removed in this diff has one side only: nothing to diff, say so and succeed.
+if [ ! -f "$before" ]; then
+  echo "\`$file\` is new in this diff: no earlier lock file to compare with."
+  exit 0
+fi
+if [ ! -f "$after" ]; then
+  echo "\`$file\` is removed in this diff."
+  exit 0
+fi
+pixi diff --before "$before" --after "$after" | pixi diff-to-markdown
