@@ -24,6 +24,7 @@ const BODY_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/lsp/hover"),
     ("POST", "/api/lsp/references"),
     ("POST", "/api/lsp/occurrences"),
+    ("PUT", "/api/reports/notes"),
 ];
 
 type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;

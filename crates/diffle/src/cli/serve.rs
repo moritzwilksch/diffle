@@ -17,6 +17,7 @@ use crate::github::client::token_variables;
 use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
 use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
+use crate::reports::Reports;
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Server, ServerOptions};
 use crate::session::{Session, SessionOptions};
@@ -56,6 +57,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         overrides.extend(opts.lsp.iter().map(|o| (o.language, o.command.clone())));
         super::lsp::start(&session, &hub, overrides, opts.lsp.iter().map(|o| o.language).collect())
     });
+    let reports = Reports::new(session.clone(), hub.clone(), &repo.git_dir, super::plugins::resolved(&config).plugins);
     let server: Arc<Mutex<Option<Server>>> = Arc::default();
 
     let stop = Arc::new(Notify::new());
@@ -81,6 +83,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         &server,
         &repo,
         lsp.clone(),
+        &reports,
         (&github, token_source.as_deref()),
         &mut timing,
     );
@@ -90,15 +93,18 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
     };
     match started {
         Some(Err(e)) => {
+            reports.close();
             dispose(&session, &server, &repo, lsp.as_deref()).await;
             Err(e)
         }
         Some(Ok(())) => {
             stop.notified().await;
+            reports.close();
             shutdown(&session, &server, &repo, lsp.as_deref()).await;
             Ok(())
         }
         None => {
+            reports.close();
             shutdown(&session, &server, &repo, lsp.as_deref()).await;
             Ok(())
         }
@@ -115,6 +121,7 @@ async fn start(
     server: &Mutex<Option<Server>>,
     repo: &GitRepo,
     lsp: Option<Arc<LspPool>>,
+    reports: &Arc<Reports>,
     (github, token_source): (&Github, Option<&str>),
     timing: &mut Timing,
 ) -> anyhow::Result<()> {
@@ -127,6 +134,7 @@ async fn start(
         extra_auto_viewed: opts.auto_viewed.clone(),
         hub: hub.clone(),
         lsp: lsp.clone(),
+        reports: reports.clone(),
     };
     let server_opts = ServerOptions {
         port: opts.port.unwrap_or(DEFAULT_PORT),
@@ -136,6 +144,7 @@ async fn start(
     };
     let (bound, url) = Server::listen(deps, server_opts).await?;
     *server.lock().unwrap() = Some(bound);
+    super::report::announce(&repo.git_dir, &url).await;
     timing.mark("listen");
     if !opts.no_open {
         let browser = if opts.host() == "0.0.0.0" || opts.host() == "::" { localhost(&url) } else { url.clone() };
@@ -162,6 +171,7 @@ async fn start(
     if let Some(lsp) = &lsp {
         super::lsp::report(lsp, &snap);
     }
+    super::plugins::report(reports.plugins());
     timing.report();
     Ok(())
 }
@@ -231,7 +241,7 @@ async fn dispose(session: &Arc<Session>, server: &Mutex<Option<Server>>, repo: &
         };
         let _ = tokio::time::timeout(CLOSE_BOUND, async { tokio::join!(sockets, servers) }).await;
     };
-    tokio::join!(session.close(), close_server);
+    tokio::join!(session.close(), close_server, super::report::withdraw(&repo.git_dir));
     if let Err(e) = repo.clean_review_refs().await {
         crate::status!("{} {e}", red("✖"));
     }

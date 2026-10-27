@@ -75,6 +75,9 @@ pub enum Error {
     /// A request body that is not valid JSON or not the shape the route takes.
     #[error("{0}")]
     Invalid(String),
+    /// A request that the current state refuses, such as replacing a generator's report: the API answers 409.
+    #[error("{0}")]
+    Conflict(String),
     #[error(transparent)]
     Other(Arc<anyhow::Error>),
 }

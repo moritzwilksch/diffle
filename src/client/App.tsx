@@ -9,6 +9,7 @@ import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
 import { TooltipHost } from './ui/TitleTooltips.js';
 import './views/registry.js';
+import { useReports } from './reports/state.js';
 import { gridColumns, listViews, panelOf, useViews } from './views/state.js';
 
 export function App() {
@@ -70,6 +71,7 @@ export function App() {
     const resync = () => {
       setLost(false);
       void boot().then(() => performance.mark('diffle:snapshot'));
+      void useReports.getState().refresh();
     };
     return connectWs(
       (msg) => {
@@ -91,6 +93,9 @@ export function App() {
             break;
           case 'lsp':
             setLspStatus(msg.payload);
+            break;
+          case 'reports':
+            void useReports.getState().refresh();
             break;
           default:
             break;

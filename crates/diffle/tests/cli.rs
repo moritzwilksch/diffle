@@ -221,3 +221,43 @@ fn reports_the_review_and_hands_off_the_open_comments_on_stdout_when_stopped() {
     }
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
 }
+
+// Stopped with SIGTERM, which Windows has no way to send.
+#[cfg(unix)]
+#[test]
+fn pushes_a_report_into_the_running_review_and_withdraws_the_announcement() {
+    let t = one_file_repo();
+    t.write("app.py", "x = 1\ny = 2\n");
+    let config = tempfile::tempdir().unwrap();
+    let repo = t.path.to_str().unwrap();
+    let notes = config.path().join("Review Notes.md");
+    std::fs::write(&notes, "# Watch y\n\nIt is unused.\n").unwrap();
+
+    let out = run(config.path(), &["report", "put", notes.to_str().unwrap(), "-C", repo]);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(stderr(&out).contains("no diffle is running"), "{}", stderr(&out));
+
+    let (mut child, url, mut lines) = serve(config.path(), &t.path);
+    let announced = std::fs::read_to_string(t.path.join(".git/diffle/server.json")).unwrap();
+    assert!(announced.contains(&url), "{announced}");
+    let out = run(config.path(), &["report", "put", notes.to_str().unwrap(), "--anchor", "app.py:2", "-C", repo]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stderr(&out).contains("report Watch y added (review-notes, "), "{}", stderr(&out));
+    let (status, body) = http(&url, "GET", "/api/reports/review-notes", "");
+    assert!(status.contains("200"), "{status}");
+    let report: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(report["blocks"][0]["anchor"], serde_json::json!({ "path": "app.py", "line": 2 }));
+    assert_eq!(report["summary"], "Watch y");
+    let out = run(config.path(), &["report", "put", notes.to_str().unwrap(), "--id", "Nope", "-C", repo]);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    let out = run(config.path(), &["report", "delete", "review-notes", "-C", repo]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let (status, _) = http(&url, "GET", "/api/reports/review-notes", "");
+    assert!(status.contains("404"), "{status}");
+
+    Command::new("kill").args(["-TERM", &child.id().to_string()]).status().unwrap();
+    let mut rest = String::new();
+    lines.read_to_string(&mut rest).unwrap();
+    assert!(child.wait().unwrap().success(), "{rest}");
+    assert!(!t.path.join(".git/diffle/server.json").exists());
+}

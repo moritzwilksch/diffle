@@ -1,0 +1,10 @@
+- region "Reports view":
+  - text: Review notes just now
+  - button "Log"
+  - article:
+    - button "tests/test_refunds.py:1"
+    - button "Comment"
+    - heading "Watch the refund path" [level=1]
+    - paragraph: The new test only covers the happy path.
+  - article:
+    - paragraph: A general remark, pointing nowhere.

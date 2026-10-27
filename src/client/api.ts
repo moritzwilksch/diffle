@@ -29,6 +29,8 @@ import {
   PermalinkRequestSchema,
   PermalinkSchema,
   RefsResponseSchema,
+  ReportLogResponseSchema,
+  ReportsResponseSchema,
   SearchResponseSchema,
   ServerMessageSchema,
   SnapshotSchema,
@@ -226,6 +228,13 @@ export const api = {
 
   /** Document symbols for a path, or workspace symbols matching a query. */
   lspSymbols: (query: SymbolsQuery) => json(LspSymbolsResponseSchema, `api/lsp/symbols?${q(query)}`),
+  /** Every report of the review, and the target a pushed one should name. */
+  reports: () => json(ReportsResponseSchema, 'api/reports'),
+  /** What a report's maker wrote to stderr, or what validation dropped. */
+  reportLog: (id: string) => json(ReportLogResponseSchema, `api/reports/${encodeURIComponent(id)}/log`),
+  /** Where an `<img>` loads a file a report names; `key` is the file's `ReportFile.key`. */
+  reportFileUrl: (id: string, key: string) =>
+    new URL(`api/reports/${encodeURIComponent(id)}/file?${q({ key })}`, location.href).href,
   config: () => json(UserConfigSchema, 'api/config'),
   /** lspCommands and githubHosts are CLI-only; the server ignores them. */
   saveConfig: (config: ConfigUpdate) =>

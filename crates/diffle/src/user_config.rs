@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde_json::{Map, Value};
 
 use crate::persist::{user_config_dir, write_file_atomic};
-use crate::protocol::{FollowRefs, LanguageId, UserConfig, language_ids};
+use crate::protocol::{FollowRefs, LanguageId, PluginConfig, UserConfig, language_ids};
 
 /// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/githubHosts).
 #[derive(Default, Clone, Debug)]
@@ -26,6 +26,7 @@ impl Default for UserConfig {
             line_wrap: true,
             lsp_commands: HashMap::new(),
             github_hosts: HashMap::new(),
+            plugins: HashMap::new(),
         }
     }
 }
@@ -117,6 +118,7 @@ fn normalize(value: &Value) -> UserConfig {
         line_wrap,
         lsp_commands: lsp_commands(c.get("lspCommands")),
         github_hosts: github_hosts(c.get("githubHosts")),
+        plugins: plugins(c.get("plugins")),
     }
 }
 
@@ -133,6 +135,22 @@ fn lsp_commands(value: Option<&Value>) -> HashMap<LanguageId, String> {
                 out.insert(id, command.trim().to_owned());
             }
             _ => crate::status!("[diffle] ignoring config lspCommands.{language}: not a language diffle knows"),
+        }
+    }
+    out
+}
+
+/// Report generators by name. An entry that is not an object with a `command` string is dropped
+/// with a warning: a malformed one would otherwise sit there looking effective.
+fn plugins(value: Option<&Value>) -> HashMap<String, PluginConfig> {
+    let mut out = HashMap::new();
+    for (name, entry) in value.and_then(Value::as_object).into_iter().flatten() {
+        let name = name.trim();
+        match serde_json::from_value::<PluginConfig>(entry.clone()) {
+            Ok(plugin) if !name.is_empty() => {
+                out.insert(name.to_owned(), plugin);
+            }
+            _ => crate::status!("[diffle] ignoring config plugins.{name}: expected an object with a command"),
         }
     }
     out

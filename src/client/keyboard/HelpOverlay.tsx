@@ -91,6 +91,7 @@ export const DIFF_HELP: HelpSection[][] = [
       title: 'Change graph (language server)',
       rows: [
         ['M', 'graph of changed symbols; ? there lists its keys'],
+        ['gr', 'reports from plugins and agents; ? there lists its keys'],
         ['right-click a folder', 'Show in graph: only the changes under it'],
       ],
     },

@@ -85,13 +85,17 @@ export function ImageDiff({ path, sides }: { path: string; sides: ImageSides }) 
   };
   return (
     <div ref={ref} className="flex flex-col gap-2 bg-hover px-4 py-3 font-sans text-[0.8125rem]" data-image-diff>
-      {sides === 'both' ? (
-        <Compare path={path} url={{ old: urlOf('old'), new: urlOf('new') }} />
-      ) : (
-        <Single path={path} side={sides} url={urlOf(sides)} />
-      )}
+      <Pictures path={path} sides={sides} url={{ old: urlOf('old'), new: urlOf('new') }} />
     </div>
   );
+}
+
+/**
+ * The pictures of `path` by URL: one side alone, or both with the comparison modes. A report's rendered
+ * pages use it too, with the page's label as `path`.
+ */
+export function Pictures({ path, sides, url }: { path: string; sides: ImageSides; url: Record<Side, string | null> }) {
+  return sides === 'both' ? <Compare path={path} url={url} /> : <Single path={path} side={sides} url={url[sides]} />;
 }
 
 function Single({ path, side, url }: { path: string; side: Side; url: string | null }) {

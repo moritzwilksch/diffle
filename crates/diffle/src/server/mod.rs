@@ -32,6 +32,8 @@ pub const DEFAULT_PORT: u16 = 4966;
 const PROBE_PORTS: u16 = 100;
 /// JSON bodies are small (comments, viewed marks, config); anything bigger is not a client.
 const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// Reports carry rendered pages: their routes take a file's worth.
+const MAX_REPORT_BYTES: usize = crate::reports::store::MAX_FILE_BYTES;
 
 pub struct ServerOptions {
     pub port: u16,
@@ -49,6 +51,7 @@ pub struct ApiDeps {
     pub hub: Arc<Hub>,
     /// The language servers, unless the run disabled them with `--no-lsp`.
     pub lsp: Option<Arc<crate::lsp::pool::LspPool>>,
+    pub reports: Arc<crate::reports::Reports>,
 }
 
 struct App {
@@ -145,6 +148,7 @@ async fn check_guard(State(app): State<Arc<App>>, req: Request, next: Next) -> R
 /// Reads the body under the cap. An oversized upload is drained before the reply: closing
 /// mid-write gives clients EPIPE, not 413.
 async fn limit_body(req: Request, next: Next) -> Response {
+    let cap = if req.uri().path().starts_with("/api/reports/") { MAX_REPORT_BYTES } else { MAX_BODY_BYTES };
     let (parts, mut body) = req.into_parts();
     let mut kept = Vec::new();
     let mut size = 0;
@@ -152,12 +156,12 @@ async fn limit_body(req: Request, next: Next) -> Response {
         let Ok(frame) = frame else { return ApiError::bad_request("unreadable request body").into_response() };
         if let Some(data) = frame.data_ref() {
             size += data.len();
-            if size <= MAX_BODY_BYTES {
+            if size <= cap {
                 kept.extend_from_slice(data);
             }
         }
     }
-    if size > MAX_BODY_BYTES {
+    if size > cap {
         return ApiError(StatusCode::PAYLOAD_TOO_LARGE, "request body too large".into()).into_response();
     }
     next.run(Request::from_parts(parts, Body::from(Bytes::from(kept)))).await

@@ -7,6 +7,8 @@ mod lsp;
 mod open;
 mod paint;
 mod parse;
+mod plugins;
+mod report;
 pub mod repository;
 mod serve;
 mod timing;
@@ -47,6 +49,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     let (req, later) = match cli.command {
         Some(Command::Config) => return config::run().await,
         Some(Command::Lsp) => return lsp::list().await,
+        Some(Command::Plugins) => return plugins::list().await,
+        Some(Command::Report { action }) => return report::run(action).await,
         Some(Command::Completion { shell }) => {
             completion::print(shell);
             return Ok(());

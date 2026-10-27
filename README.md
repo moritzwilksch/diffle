@@ -202,6 +202,49 @@ returns to the graph as you left it.
 The graph needs the language servers, the same ones [Jump to definitions](#jump-to-definitions)
 uses.
 
+## Add reports from plugins and agents
+
+Press `gr` for the **Reports** view: documents attached to the diff, beside it rather than in it.
+They come from two places.
+
+A **plugin** is a program diffle runs whenever a changed file matches its globs, with copies of
+both sides to read and the review as JSON on stdin. Two are built in and start on their own when
+their programs are on `PATH`: `pixi` runs [`pixi-diff`](https://github.com/pavelzw/pixi-diff) and
+[`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown) on a changed
+`pixi.lock`, and `typst` runs a `diffle-typst` on changed `.typ` files to compare the rendered
+pages. `diffle plugins` lists what a review would run and what is missing. Add your own, or
+replace a built-in, in the config file (`diffle config` prints its path):
+
+```json
+{
+  "plugins": {
+    "lockfile": { "command": "my-lock-report $DIFFLE_OLD/$DIFFLE_FILE $DIFFLE_NEW/$DIFFLE_FILE", "when": ["*.lock"] },
+    "typst": { "command": "" }
+  }
+}
+```
+
+The command runs without a shell: a `|` pipes one program into the next, and `$DIFFLE_OLD`,
+`$DIFFLE_NEW`, `$DIFFLE_OUT`, `$DIFFLE_ROOT` and `$DIFFLE_FILE` are substituted. A program that
+writes `report.json` into `$DIFFLE_OUT` makes the whole report, rendered pages included; one that
+only prints gets its stdout shown as markdown. `diffle report put --help` shows the JSON, and
+`example/plugins/` holds two generators to start from: `diffle-pixi`, a shell script around
+`pixi diff | pixi diff-to-markdown`, and `diffle-typst`, which compiles each side's pages.
+Plugins come from your config alone, never from the reviewed tree, so a pull request cannot
+bring its own.
+
+An **agent**, or you, pushes a report while diffle runs:
+
+```bash
+diffle report put notes.md --anchor src/app.py:42   # one markdown block, pointing at a line
+diffle report put review.json                        # a whole report, pages and all
+```
+
+Over HTTP it is `PUT <url>api/reports/<id>` with the same JSON; `<git-dir>/diffle/server.json`
+names the url while diffle runs. Reports persist with the review and go stale, not away, when
+the diff moves on. A block that points at a line opens the diff there with `Enter`, and `c`
+comments on it, so a report's findings become ordinary comments, in the prompt and on GitHub.
+
 ## Open from lazygit
 
 [lazygit](https://github.com/jesseduffield/lazygit) custom commands open diffle on what is

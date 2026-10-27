@@ -1,7 +1,7 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { rmTmp } from '../tmp.js';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -19,6 +19,8 @@ export interface DiffleOptions {
   /** Further CLI flags. */
   args?: string[];
   env?: NodeJS.ProcessEnv;
+  /** The user config this server starts with, as the file holds it; none by default. */
+  config?: object;
   /** The diffle checkout to run, server and client; this one by default. See `baseCheckout`. */
   root?: string;
   timeoutMs?: number;
@@ -39,10 +41,15 @@ export async function startDiffle({
   revs = [],
   args = [],
   env = {},
+  config,
   root = REPO_ROOT,
   timeoutMs = 30000,
 }: DiffleOptions): Promise<RunningDiffle> {
   const configDir = await mkdtemp(join(tmpdir(), 'diffle-e2e-config-'));
+  if (config) {
+    await mkdir(join(configDir, 'diffle'), { recursive: true });
+    await writeFile(join(configDir, 'diffle', 'config.json'), JSON.stringify(config));
+  }
   const [program, ...launcher] = diffleCommand(root);
   const proc = spawn(
     program!,
