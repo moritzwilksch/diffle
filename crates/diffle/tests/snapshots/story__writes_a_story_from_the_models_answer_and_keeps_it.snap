@@ -1,0 +1,37 @@
+---
+source: crates/diffle/tests/story.rs
+expression: "story[\"parts\"]"
+---
+[
+  {
+    "files": [
+      {
+        "note": "The line.",
+        "path": "a.txt"
+      }
+    ],
+    "id": "p1",
+    "narrative": "a.txt gains a line.",
+    "title": "Grow a"
+  },
+  {
+    "files": [
+      {
+        "path": "b.txt"
+      }
+    ],
+    "id": "p2",
+    "narrative": "Files the story did not place; read them on their own.",
+    "title": "Other changes"
+  },
+  {
+    "files": [
+      {
+        "path": "lock.json"
+      }
+    ],
+    "id": "p3",
+    "narrative": "Automatically generated files, hidden by default.",
+    "title": "Generated files"
+  }
+]

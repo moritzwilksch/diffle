@@ -100,6 +100,7 @@ const KEYMAP: Record<string, Action> = {
   r: (s) => s.reloadIfMoved(),
   '?': (s) => s.setHelpOpen(!s.helpOpen),
   M: () => toggleView('graph'),
+  S: () => toggleView('story'),
 };
 
 /** The page's text selection, else the focused word (`w`), as a search query: one line only, escaped when regex search is on. */

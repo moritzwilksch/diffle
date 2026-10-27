@@ -7,6 +7,8 @@ use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
 use diffle::server::hub::Hub;
 use diffle::server::{ApiDeps, Server, ServerOptions};
 use diffle::session::{Session, SessionOptions};
+use diffle::story::StoryService;
+use diffle::story::client::{StoryModel, no_key};
 use diffle::user_config::UserConfigStore;
 use futures::FutureExt;
 
@@ -91,12 +93,26 @@ impl TestServer {
         Self::with_lsp(repo, req, None).await
     }
 
+    /// A server over `repo` whose stories `model` writes.
+    pub async fn with_story(repo: TestRepo, req: EnterRequest, model: Arc<dyn StoryModel>) -> Self {
+        Self::build(repo, req, None, Some(model)).await
+    }
+
     /// A server over `repo` with language servers for `overrides` (language → command), started
     /// and kept in step with the session's snapshots as a run does it.
     pub async fn with_lsp(
         repo: TestRepo,
         req: EnterRequest,
         overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+    ) -> Self {
+        Self::build(repo, req, overrides, None).await
+    }
+
+    async fn build(
+        repo: TestRepo,
+        req: EnterRequest,
+        overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+        model: Option<Arc<dyn StoryModel>>,
     ) -> Self {
         let git = Arc::new(repo.open().await);
         let hub = Hub::new();
@@ -105,12 +121,14 @@ impl TestServer {
             SessionOptions { watch: false, github: Github::tokenless(), context: 3, follow_refs: FollowRefs::Off };
         let session = Session::new(git, hub.clone(), opts);
         let lsp = overrides.map(|overrides| start_lsp(&session, overrides));
+        let story = StoryService::new(session.clone(), hub.clone(), model.ok_or_else(no_key));
         let deps = ApiDeps {
             session: session.clone(),
             config: config.clone(),
             extra_auto_viewed: Vec::new(),
             hub: hub.clone(),
             lsp: lsp.clone(),
+            story,
         };
         let opts = ServerOptions {
             port: 0,
@@ -158,7 +176,12 @@ impl TestServer {
         self.send(method, path, &[], Some(body.to_string())).await
     }
 
-    pub async fn close(mut self) {
+    pub async fn close(self) {
+        self.close_keeping_repo().await;
+    }
+
+    /// Closes everything but the repository, for a second server over it.
+    pub async fn close_keeping_repo(mut self) -> TestRepo {
         if let Some(server) = self.server.take() {
             server.close().await;
         }
@@ -166,5 +189,6 @@ impl TestServer {
             lsp.close().await;
         }
         self.session.close().await;
+        self.repo
     }
 }

@@ -895,6 +895,58 @@ export type GraphResponse = z.infer<typeof GraphResponseSchema>;
 export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
 export type ViewedState = z.infer<typeof ViewedStateSchema>;
 
+/** One changed file inside a story part, in the order the story tells it. */
+export const StoryFileSchema = z.object({
+  path: z.string(),
+  /** One sentence on what this file contributes to the part; absent when the title says it all. */
+  note: z.string().optional(),
+});
+export type StoryFile = z.infer<typeof StoryFileSchema>;
+
+/** A step of the story: the files that belong together and the couple of sentences that explain them. */
+export const StoryPartSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  narrative: z.string(),
+  files: StoryFileSchema.array(),
+});
+export type StoryPart = z.infer<typeof StoryPartSchema>;
+
+/**
+ * The review told as a story: an overall summary and ordered parts that together hold every changed
+ * file once. The generated files always form the last part, added by the server, not the model.
+ */
+export const StorySchema = z.object({
+  /** The content it describes: a hash of the endpoints and the changed blobs. Another fingerprint makes it stale. */
+  fingerprint: z.string(),
+  summary: z.string(),
+  parts: StoryPartSchema.array(),
+  /** The model that wrote it. */
+  model: z.string(),
+  /** When it was written, epoch milliseconds. */
+  createdAt: z.number().int(),
+});
+export type Story = z.infer<typeof StorySchema>;
+
+export const StoryStatusSchema = z.enum(['absent', 'generating', 'ready', 'failed']);
+export type StoryStatus = z.infer<typeof StoryStatusSchema>;
+
+/** `GET /api/story`: the story of the current snapshot, if any, and whether one can be generated. */
+export const StoryStateSchema = z.object({
+  /** Snapshot.version this answers for; the client discards an answer for another version. */
+  version: z.number().int(),
+  status: StoryStatusSchema,
+  /** Why no story can be generated now (no API key, no changes), or null. */
+  blocker: z.string().nullable(),
+  /** The last failure's message while `status` is `failed`. */
+  error: z.string().nullable(),
+  /** The story on record for this content, or the latest one when `stale`. */
+  story: StorySchema.nullable(),
+  /** `story` describes an earlier state of the comparison. */
+  stale: z.boolean(),
+});
+export type StoryState = z.infer<typeof StoryStateSchema>;
+
 export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('snapshot'),
@@ -917,6 +969,10 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('lsp'),
     payload: LspStatusSchema,
+  }),
+  /** The story started, finished or failed; `GET /api/story` says which. */
+  z.object({
+    type: z.literal('story'),
   }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
