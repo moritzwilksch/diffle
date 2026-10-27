@@ -227,7 +227,9 @@ replace a built-in, in the config file (`diffle config` prints its path):
 The command runs without a shell: a `|` pipes one program into the next, and `$DIFFLE_OLD`,
 `$DIFFLE_NEW`, `$DIFFLE_OUT`, `$DIFFLE_ROOT` and `$DIFFLE_FILE` are substituted. A program that
 writes `report.json` into `$DIFFLE_OUT` makes the whole report, rendered pages included; one that
-only prints gets its stdout shown as markdown. `diffle report put --help` shows the JSON.
+only prints gets its stdout shown as markdown. `diffle report put --help` shows the JSON, and
+`example/plugins/` holds two generators to start from: `diffle-pixi`, a shell script around
+`pixi diff | pixi diff-to-markdown`, and `diffle-typst`, which compiles each side's pages.
 Plugins come from your config alone, never from the reviewed tree, so a pull request cannot
 bring its own.
 
