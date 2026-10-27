@@ -4,6 +4,8 @@ use std::sync::Arc;
 use diffle::github::hosts::Github;
 use diffle::lsp::pool::{LspPool, PoolOptions};
 use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
+use diffle::reports::Reports;
+use diffle::reports::catalog::Plugin;
 use diffle::server::hub::Hub;
 use diffle::server::{ApiDeps, Server, ServerOptions};
 use diffle::session::{Session, SessionOptions};
@@ -63,6 +65,7 @@ pub struct TestServer {
     pub base: String,
     server: Option<Server>,
     pub lsp: Option<Arc<LspPool>>,
+    pub reports: Arc<Reports>,
     client: reqwest::Client,
 }
 
@@ -98,19 +101,35 @@ impl TestServer {
         req: EnterRequest,
         overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
     ) -> Self {
+        Self::with_lsp_and_plugins(repo, req, overrides, Vec::new()).await
+    }
+
+    /// A server over `repo` whose reports come from `plugins`, run as a run would.
+    pub async fn with_plugins(repo: TestRepo, req: EnterRequest, plugins: Vec<Plugin>) -> Self {
+        Self::with_lsp_and_plugins(repo, req, None, plugins).await
+    }
+
+    async fn with_lsp_and_plugins(
+        repo: TestRepo,
+        req: EnterRequest,
+        overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+        plugins: Vec<Plugin>,
+    ) -> Self {
         let git = Arc::new(repo.open().await);
         let hub = Hub::new();
         let config = Arc::new(UserConfigStore::open(repo.path.join("cfg").join("config.json")).await);
         let opts =
             SessionOptions { watch: false, github: Github::tokenless(), context: 3, follow_refs: FollowRefs::Off };
-        let session = Session::new(git, hub.clone(), opts);
+        let session = Session::new(git.clone(), hub.clone(), opts);
         let lsp = overrides.map(|overrides| start_lsp(&session, overrides));
+        let reports = Reports::new(session.clone(), hub.clone(), &git.git_dir, plugins);
         let deps = ApiDeps {
             session: session.clone(),
             config: config.clone(),
             extra_auto_viewed: Vec::new(),
             hub: hub.clone(),
             lsp: lsp.clone(),
+            reports: reports.clone(),
         };
         let opts = ServerOptions {
             port: 0,
@@ -120,7 +139,7 @@ impl TestServer {
         };
         let (server, base) = Server::listen(deps, opts).await.unwrap();
         session.start(session.resolve(req).await.unwrap()).await.unwrap();
-        Self { repo, session, config, hub, base, server: Some(server), lsp, client: reqwest::Client::new() }
+        Self { repo, session, config, hub, base, server: Some(server), lsp, reports, client: reqwest::Client::new() }
     }
 
     /// `127.0.0.1:<port>`
@@ -145,6 +164,13 @@ impl TestServer {
         Res { status: res.status().as_u16(), body: res.text().await.unwrap() }
     }
 
+    /// A PUT of raw bytes, as a file upload: the status and the body text.
+    pub async fn client_put_bytes(&self, path: &str, bytes: Vec<u8>) -> (u16, String) {
+        let url = format!("{}{}", self.base.trim_end_matches('/'), path);
+        let res = self.client.put(url).body(bytes).send().await.unwrap();
+        (res.status().as_u16(), res.text().await.unwrap())
+    }
+
     /// A GET whose response the caller reads itself: headers and bytes.
     pub async fn fetch(&self, path: &str) -> reqwest::Response {
         self.client.get(format!("{}{}", self.base.trim_end_matches('/'), path)).send().await.unwrap()
@@ -158,7 +184,13 @@ impl TestServer {
         self.send(method, path, &[], Some(body.to_string())).await
     }
 
-    pub async fn close(mut self) {
+    pub async fn close(self) {
+        self.stop().await;
+    }
+
+    /// Closes the server and hands back its repository, for a second server over the same one.
+    pub async fn stop(mut self) -> TestRepo {
+        self.reports.close();
         if let Some(server) = self.server.take() {
             server.close().await;
         }
@@ -166,5 +198,6 @@ impl TestServer {
             lsp.close().await;
         }
         self.session.close().await;
+        self.repo
     }
 }

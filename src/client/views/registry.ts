@@ -1,6 +1,7 @@
 import { FileDiff } from 'lucide-react';
 import { CommentPanel } from '@/client/comments/CommentPanel.js';
 import { graphView } from '@/client/graph/view.js';
+import { reportsView } from '@/client/reports/view.js';
 import { DiffStyleSwitch } from '@/client/header/DiffStyleSwitch.js';
 import { DIFF_HELP } from '@/client/keyboard/HelpOverlay.js';
 import { ReviewPane } from '@/client/review/ReviewPane.js';
@@ -21,7 +22,7 @@ const diffView: ViewDef = {
   panelWidth: '21.25rem',
 };
 
-defineViews([diffView, graphView]);
+defineViews([diffView, graphView, reportsView]);
 useStore.getState().registerView({
   here: () => activeView().place?.() ?? null,
   leave: () => showView('diff'),

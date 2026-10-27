@@ -9,6 +9,8 @@ Usage: diffle [OPTIONS] [revs]... [COMMAND]
 Commands:
   config      print the config file path and contents
   lsp         show the language server each language would get, and what is missing from PATH
+  plugins     show the report generators a review would run, and what is missing from PATH
+  report      push a report into the diffle running for this repository, or remove one
   completion  print a shell completion script
 
 Arguments:

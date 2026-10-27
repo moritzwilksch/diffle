@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""A reference diffle report generator: the rendered pages of changed Typst documents.
+
+diffle's built-in `typst` plugin runs a `diffle-typst` on PATH whenever a `.typ` file changed, with
+copies of both sides of the review. This one compiles each changed document on each side with
+`typst compile --format png` and reports the pages as pairs, so diffle shows them side by side,
+swiped, or as a pixel difference, each page pointing at the document's first line. A document that
+does not compile on its own (a chapter the main file includes) is skipped with a note on stderr.
+
+Install it on PATH, or point the config at it:
+  { "plugins": { "typst": { "command": "python3 /path/to/example/plugins/diffle-typst" } } }
+
+The contract this follows, for writing your own generator in any language:
+  - stdin: JSON with `review`, `target`, `root`, `old`, `new`, `out`, `file`, `files`, `scope`
+  - DIFFLE_OLD, DIFFLE_NEW: folders holding the sides (every file of the snapshot for `tree` scope)
+  - DIFFLE_OUT: where to write `report.json` and the files it names, relative to it
+  - a program that writes no report.json has its stdout shown as one markdown block
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+PPI = "96"
+
+
+def compile_pages(side_dir: Path, document: str, out: Path, tag: str) -> list[str]:
+    """The PNG pages of `document` under `side_dir`, as paths relative to `out`; empty when it does not compile."""
+    source = side_dir / document
+    if not source.is_file():
+        return []
+    pattern = out / tag / f"{{p}}.png"
+    (out / tag).mkdir(parents=True, exist_ok=True)
+    run = subprocess.run(
+        ["typst", "compile", "--root", str(side_dir), "--format", "png", "--ppi", PPI, str(source), str(pattern)],
+        capture_output=True,
+        text=True,
+    )
+    if run.returncode != 0:
+        sys.stderr.write(f"{document} ({tag}): {run.stderr.strip().splitlines()[-1] if run.stderr.strip() else 'did not compile'}\n")
+        return []
+    pages = sorted((out / tag).glob("*.png"), key=lambda p: int(p.stem))
+    return [str(p.relative_to(out)) for p in pages]
+
+
+def main() -> int:
+    spec = json.load(sys.stdin)
+    old, new, out = Path(spec["old"]), Path(spec["new"]), Path(spec["out"])
+    blocks = []
+    for entry in spec["files"]:
+        document = entry["path"]
+        tag = document.replace("/", "_").removesuffix(".typ")
+        before = compile_pages(old, entry.get("oldPath") or document, out, f"{tag}-old")
+        after = compile_pages(new, document, out, f"{tag}-new")
+        if not before and not after:
+            continue
+        pages = []
+        for n in range(max(len(before), len(after))):
+            pages.append(
+                {
+                    "label": f"{document} · p. {n + 1}",
+                    "old": before[n] if n < len(before) else None,
+                    "new": after[n] if n < len(after) else None,
+                    "anchor": {"path": document, "line": 1} if entry["status"] != "D" else None,
+                }
+            )
+        blocks.append({"kind": "pages", "label": f"{document}: {len(before)} → {len(after)} pages", "pages": pages})
+    if not blocks:
+        sys.stderr.write("no changed document compiled on its own\n")
+        return 1
+    (out / "report.json").write_text(json.dumps({"title": "Rendered Typst", "blocks": blocks}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

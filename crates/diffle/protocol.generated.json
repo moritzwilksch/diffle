@@ -1681,6 +1681,34 @@
       ],
       "description": "Lines of one side of a snapshot to link to on the forge origin points at."
     },
+    "PluginConfig": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The program and its arguments, split as a shell would, without a shell: a `|` between words\npipes one program's stdout into the next, and `$DIFFLE_OLD`, `$DIFFLE_NEW`, `$DIFFLE_OUT`,\n`$DIFFLE_ROOT` and `$DIFFLE_FILE` are substituted in arguments. Empty turns a built-in plugin off."
+        },
+        "when": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Globs (picomatch syntax) of changed files that start it; a built-in plugin keeps its own when absent."
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "changed",
+            "tree"
+          ],
+          "description": "What the program gets copies of: the matched changed files, or every file the snapshot shows. Default changed."
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "description": "A program that makes a report from a snapshot. It runs whenever a changed file matches `when`,\nwith copies of the files in DIFFLE_OLD and DIFFLE_NEW, a JSON description of the review on\nstdin, and DIFFLE_ROOT, DIFFLE_OUT in its environment. A `report.json` it writes into DIFFLE_OUT\nis the report, its files named relative to that directory; otherwise its stdout is one markdown\nblock. A command naming $DIFFLE_FILE runs once per matched file, with that path in the variable."
+    },
     "PullRef": {
       "type": "object",
       "properties": {
@@ -2014,6 +2042,400 @@
         "body"
       ]
     },
+    "Report": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Lowercase letters, digits and dashes; a generator's is its plugin name."
+        },
+        "source": {
+          "$ref": "#/$defs/ReportSource"
+        },
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/ReportTarget"
+        },
+        "status": {
+          "$ref": "#/$defs/ReportStatus"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The failure in one line: a program not on PATH, a nonzero exit, a report that did not validate."
+        },
+        "stale": {
+          "type": "boolean",
+          "description": "The snapshot moved away from `target`: the blocks describe an older diff."
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Milliseconds since the epoch."
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportBlock"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "title",
+        "summary",
+        "target",
+        "status",
+        "error",
+        "stale",
+        "updatedAt",
+        "blocks"
+      ]
+    },
+    "ReportAnchor": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Default 'new'."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "1-based."
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Default `line`."
+        }
+      },
+      "required": [
+        "path",
+        "line"
+      ],
+      "description": "A place in the diff a report block points at: `c` on the block comments there. The new side\nunless `side` says old. A path the snapshot does not show is dropped when the report is served."
+    },
+    "ReportBlock": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "markdown"
+            },
+            "text": {
+              "type": "string"
+            },
+            "anchor": {
+              "$ref": "#/$defs/ReportAnchor"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "GitHub-flavored markdown, rendered as a comment body is: raw HTML stays literal and images are dropped."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pages"
+            },
+            "label": {
+              "type": "string"
+            },
+            "pages": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ReportPage"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "pages"
+          ]
+        }
+      ],
+      "description": "A report's blocks as the client gets them: every file resolved to a key."
+    },
+    "ReportBlockInput": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "markdown"
+            },
+            "text": {
+              "type": "string"
+            },
+            "anchor": {
+              "$ref": "#/$defs/ReportAnchor"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "description": "GitHub-flavored markdown, rendered as a comment body is: raw HTML stays literal and images are dropped."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pages"
+            },
+            "label": {
+              "type": "string",
+              "description": "What the pages are, e.g. \"Rendered, removals struck through\"."
+            },
+            "pages": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ReportPageInput"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "pages"
+          ]
+        }
+      ],
+      "description": "A report's blocks as a generator or an agent writes them."
+    },
+    "ReportFile": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "The media type its bytes were sniffed as; only raster images are ever served."
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "description": "A file a report refers to, as the client fetches it: `GET /api/reports/{id}/file?key=<key>`.\nThe key names fixed bytes, so what it serves may be cached for good."
+    },
+    "ReportFileQuery": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ]
+    },
+    "ReportInput": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string",
+          "description": "One line for the list; the first line of the first markdown block otherwise."
+        },
+        "target": {
+          "$ref": "#/$defs/ReportTarget"
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportBlockInput"
+          }
+        }
+      },
+      "required": [
+        "title",
+        "blocks"
+      ],
+      "description": "`PUT /api/reports/{id}`: a report as authored. Files it names must be uploaded first, with\n`PUT /api/reports/{id}/files/<path>`. A `target` other than the current snapshot's is refused\nwith 409 and the current target, so an agent that fell behind can refetch; absent means current."
+    },
+    "ReportLogResponse": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "lines"
+      ],
+      "description": "`GET /api/reports/{id}/log`: what the generator wrote to stderr, most recent run only."
+    },
+    "ReportMarkdownBlock": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "markdown"
+        },
+        "text": {
+          "type": "string"
+        },
+        "anchor": {
+          "$ref": "#/$defs/ReportAnchor"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "description": "GitHub-flavored markdown, rendered as a comment body is: raw HTML stays literal and images are dropped."
+    },
+    "ReportPage": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "old": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportFile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportFile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "anchor": {
+          "$ref": "#/$defs/ReportAnchor"
+        }
+      },
+      "required": [
+        "label",
+        "old",
+        "new"
+      ],
+      "description": "One rendered page or figure, as served: a side with a file is shown; both are compared."
+    },
+    "ReportPageInput": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "old": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "new": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anchor": {
+          "$ref": "#/$defs/ReportAnchor"
+        }
+      },
+      "required": [
+        "label",
+        "old",
+        "new"
+      ],
+      "description": "One rendered page or figure, as authored: each side names a file next to the report, relative, or none."
+    },
+    "ReportSource": {
+      "type": "string",
+      "enum": [
+        "generator",
+        "pushed"
+      ],
+      "description": "A generator diffle ran for the snapshot, or something outside pushed it over the API."
+    },
+    "ReportsResponse": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "$ref": "#/$defs/ReportTarget"
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Report"
+          }
+        }
+      },
+      "required": [
+        "current",
+        "reports"
+      ],
+      "description": "`GET /api/reports`: every report, generated ones first, and the target a pushed one should name."
+    },
+    "ReportStatus": {
+      "type": "string",
+      "enum": [
+        "running",
+        "ready",
+        "failed"
+      ],
+      "description": "`running` keeps the previous blocks until the new ones land, as a snapshot refresh does."
+    },
+    "ReportTarget": {
+      "type": "object",
+      "properties": {
+        "oldSha": {
+          "type": "string"
+        },
+        "newSha": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "oldSha",
+        "newSha",
+        "digest"
+      ],
+      "description": "The snapshot a report was made for. Two shas do not pin a worktree side, so `digest` hashes the\nchanged files' blobs too; `GET /api/reports` says the current one."
+    },
     "ResolvedRequest": {
       "type": "object",
       "properties": {
@@ -2309,6 +2731,18 @@
             "type",
             "payload"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "reports"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
       ]
     },
@@ -2525,6 +2959,16 @@
             "type": "string"
           },
           "description": "GitHub Enterprise hosts: the host in remote urls → the host serving the web UI and API, the\nsame one for most. github.com needs no entry. Read-only over HTTP; set by editing the\nconfig file."
+        },
+        "plugins": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/PluginConfig"
+          },
+          "description": "Report generators by name: a built-in plugin (`typst`, `pixi`) is replaced or turned off by\nits name, any other name adds one. Read-only over HTTP; set by editing the config file."
         }
       },
       "required": [
@@ -2533,7 +2977,8 @@
         "followRefs",
         "lineWrap",
         "lspCommands",
-        "githubHosts"
+        "githubHosts",
+        "plugins"
       ]
     },
     "ViewedBulkRequest": {

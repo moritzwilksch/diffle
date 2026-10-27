@@ -169,6 +169,13 @@ pub enum Command {
     Config,
     /// show the language server each language would get, and what is missing from PATH
     Lsp,
+    /// show the report generators a review would run, and what is missing from PATH
+    Plugins,
+    /// push a report into the diffle running for this repository, or remove one
+    Report {
+        #[command(subcommand)]
+        action: super::report::ReportAction,
+    },
     /// print a shell completion script
     #[command(after_help = COMPLETION_HELP)]
     Completion {

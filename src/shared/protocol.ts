@@ -599,6 +599,27 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 export const FollowRefsSchema = z.enum(['on', 'auto', 'off']);
 export type FollowRefs = z.infer<typeof FollowRefsSchema>;
 
+/**
+ * A program that makes a report from a snapshot. It runs whenever a changed file matches `when`,
+ * with copies of the files in DIFFLE_OLD and DIFFLE_NEW, a JSON description of the review on
+ * stdin, and DIFFLE_ROOT, DIFFLE_OUT in its environment. A `report.json` it writes into DIFFLE_OUT
+ * is the report, its files named relative to that directory; otherwise its stdout is one markdown
+ * block. A command naming $DIFFLE_FILE runs once per matched file, with that path in the variable.
+ */
+export const PluginConfigSchema = z.object({
+  /**
+   * The program and its arguments, split as a shell would, without a shell: a `|` between words
+   * pipes one program's stdout into the next, and `$DIFFLE_OLD`, `$DIFFLE_NEW`, `$DIFFLE_OUT`,
+   * `$DIFFLE_ROOT` and `$DIFFLE_FILE` are substituted in arguments. Empty turns a built-in plugin off.
+   */
+  command: z.string(),
+  /** Globs (picomatch syntax) of changed files that start it; a built-in plugin keeps its own when absent. */
+  when: z.string().array().optional(),
+  /** What the program gets copies of: the matched changed files, or every file the snapshot shows. Default changed. */
+  scope: z.enum(['changed', 'tree']).optional(),
+});
+export type PluginConfig = z.infer<typeof PluginConfigSchema>;
+
 export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),
@@ -619,6 +640,11 @@ export const UserConfigSchema = z.object({
    * config file.
    */
   githubHosts: z.record(z.string(), z.string()),
+  /**
+   * Report generators by name: a built-in plugin (`typst`, `pixi`) is replaced or turned off by
+   * its name, any other name adds one. Read-only over HTTP; set by editing the config file.
+   */
+  plugins: z.record(z.string(), PluginConfigSchema),
 });
 export type UserConfig = z.infer<typeof UserConfigSchema>;
 
@@ -629,6 +655,7 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   lineWrap: true,
   lspCommands: {},
   githubHosts: {},
+  plugins: {},
 };
 
 /** A point in a new-side file. LSP semantics: the column counts UTF-16 units, like a JS string index. */
@@ -891,6 +918,144 @@ export const GraphResponseSchema = z.object({
 });
 export type GraphResponse = z.infer<typeof GraphResponseSchema>;
 
+/**
+ * A place in the diff a report block points at: `c` on the block comments there. The new side
+ * unless `side` says old. A path the snapshot does not show is dropped when the report is served.
+ */
+export const ReportAnchorSchema = z.object({
+  path: z.string(),
+  /** Default 'new'. */
+  side: SideSchema.optional(),
+  /** 1-based. */
+  line: z.number().int(),
+  /** Default `line`. */
+  endLine: z.number().int().optional(),
+});
+export type ReportAnchor = z.infer<typeof ReportAnchorSchema>;
+
+/**
+ * A file a report refers to, as the client fetches it: `GET /api/reports/{id}/file?key=<key>`.
+ * The key names fixed bytes, so what it serves may be cached for good.
+ */
+export const ReportFileSchema = z.object({
+  key: z.string(),
+  /** The media type its bytes were sniffed as; only raster images are ever served. */
+  type: z.string(),
+});
+export type ReportFile = z.infer<typeof ReportFileSchema>;
+
+/** One rendered page or figure, as authored: each side names a file next to the report, relative, or none. */
+export const ReportPageInputSchema = z.object({
+  label: z.string(),
+  old: z.string().nullable(),
+  new: z.string().nullable(),
+  anchor: ReportAnchorSchema.optional(),
+});
+export type ReportPageInput = z.infer<typeof ReportPageInputSchema>;
+
+/** One rendered page or figure, as served: a side with a file is shown; both are compared. */
+export const ReportPageSchema = z.object({
+  label: z.string(),
+  old: ReportFileSchema.nullable(),
+  new: ReportFileSchema.nullable(),
+  anchor: ReportAnchorSchema.optional(),
+});
+export type ReportPage = z.infer<typeof ReportPageSchema>;
+
+/** GitHub-flavored markdown, rendered as a comment body is: raw HTML stays literal and images are dropped. */
+export const ReportMarkdownBlockSchema = z.object({
+  kind: z.literal('markdown'),
+  text: z.string(),
+  anchor: ReportAnchorSchema.optional(),
+});
+
+/** A report's blocks as a generator or an agent writes them. */
+export const ReportBlockInputSchema = z.discriminatedUnion('kind', [
+  ReportMarkdownBlockSchema,
+  z.object({
+    kind: z.literal('pages'),
+    /** What the pages are, e.g. "Rendered, removals struck through". */
+    label: z.string().optional(),
+    pages: ReportPageInputSchema.array(),
+  }),
+]);
+export type ReportBlockInput = z.infer<typeof ReportBlockInputSchema>;
+
+/** A report's blocks as the client gets them: every file resolved to a key. */
+export const ReportBlockSchema = z.discriminatedUnion('kind', [
+  ReportMarkdownBlockSchema,
+  z.object({
+    kind: z.literal('pages'),
+    label: z.string().optional(),
+    pages: ReportPageSchema.array(),
+  }),
+]);
+export type ReportBlock = z.infer<typeof ReportBlockSchema>;
+
+/**
+ * The snapshot a report was made for. Two shas do not pin a worktree side, so `digest` hashes the
+ * changed files' blobs too; `GET /api/reports` says the current one.
+ */
+export const ReportTargetSchema = z.object({
+  oldSha: z.string(),
+  newSha: z.string(),
+  digest: z.string(),
+});
+export type ReportTarget = z.infer<typeof ReportTargetSchema>;
+
+/**
+ * `PUT /api/reports/{id}`: a report as authored. Files it names must be uploaded first, with
+ * `PUT /api/reports/{id}/files/<path>`. A `target` other than the current snapshot's is refused
+ * with 409 and the current target, so an agent that fell behind can refetch; absent means current.
+ */
+export const ReportInputSchema = z.object({
+  title: z.string(),
+  /** One line for the list; the first line of the first markdown block otherwise. */
+  summary: z.string().optional(),
+  target: ReportTargetSchema.optional(),
+  blocks: ReportBlockInputSchema.array(),
+});
+export type ReportInput = z.infer<typeof ReportInputSchema>;
+
+/** A generator diffle ran for the snapshot, or something outside pushed it over the API. */
+export const ReportSourceSchema = z.enum(['generator', 'pushed']);
+export type ReportSource = z.infer<typeof ReportSourceSchema>;
+
+/** `running` keeps the previous blocks until the new ones land, as a snapshot refresh does. */
+export const ReportStatusSchema = z.enum(['running', 'ready', 'failed']);
+export type ReportStatus = z.infer<typeof ReportStatusSchema>;
+
+export const ReportSchema = z.object({
+  /** Lowercase letters, digits and dashes; a generator's is its plugin name. */
+  id: z.string(),
+  source: ReportSourceSchema,
+  title: z.string(),
+  summary: z.string(),
+  target: ReportTargetSchema,
+  status: ReportStatusSchema,
+  /** The failure in one line: a program not on PATH, a nonzero exit, a report that did not validate. */
+  error: z.string().nullable(),
+  /** The snapshot moved away from `target`: the blocks describe an older diff. */
+  stale: z.boolean(),
+  /** Milliseconds since the epoch. */
+  updatedAt: z.number().int(),
+  blocks: ReportBlockSchema.array(),
+});
+export type Report = z.infer<typeof ReportSchema>;
+
+/** `GET /api/reports`: every report, generated ones first, and the target a pushed one should name. */
+export const ReportsResponseSchema = z.object({
+  current: ReportTargetSchema,
+  reports: ReportSchema.array(),
+});
+export type ReportsResponse = z.infer<typeof ReportsResponseSchema>;
+
+/** `GET /api/reports/{id}/log`: what the generator wrote to stderr, most recent run only. */
+export const ReportLogResponseSchema = z.object({ lines: z.string().array() });
+export type ReportLogResponse = z.infer<typeof ReportLogResponseSchema>;
+
+export const ReportFileQuerySchema = z.object({ key: z.string() });
+
 /** Derived per changed file: 'restale' means viewed at an older blob. */
 export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
 export type ViewedState = z.infer<typeof ViewedStateSchema>;
@@ -917,6 +1082,10 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('lsp'),
     payload: LspStatusSchema,
+  }),
+  /** A report was added, replaced, removed, or changed status; `GET /api/reports` has the list. */
+  z.object({
+    type: z.literal('reports'),
   }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
