@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use common::lsp::{ask, events, eventually, fake_env, fake_servers, flush, root, tell};
 use diffle::error::Error;
+use diffle::git::Touched;
 use diffle::lsp::bridge::{BridgeOptions, LspBridge};
 use diffle::lsp::process::ProcessOptions;
 use diffle::protocol::{LspFeature, LspPosition, LspProcessStatus, LspState};
@@ -642,5 +643,16 @@ async fn reports_unavailable_when_the_server_dies_during_initialize() {
     let last = s.statuses.lock().unwrap().last().cloned().unwrap();
     let message = last.message.unwrap();
     assert!(message.contains("exited") || message.contains("initialize failed"), "{message}");
+    s.bridge.close().await;
+}
+
+#[tokio::test]
+async fn tells_the_server_which_files_a_checkout_touched() {
+    let Some(s) = start(&[]) else { return };
+    let touched = [("new.py", Touched::Created), ("a.py", Touched::Changed), ("gone.py", Touched::Deleted)];
+    s.bridge.files_changed(&touched.map(|(p, t)| (p.to_owned(), t))).await;
+    flush(s.bridge.process()).await;
+    let watched: Vec<String> = s.events().into_iter().filter(|e| e.starts_with("watched ")).collect();
+    assert_eq!(watched, ["watched 1 new.py, 2 a.py, 3 gone.py"]);
     s.bridge.close().await;
 }

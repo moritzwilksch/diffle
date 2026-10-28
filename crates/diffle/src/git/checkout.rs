@@ -3,6 +3,14 @@ use super::exec::split_z;
 use super::{GitRepo, native};
 use crate::error::GitError;
 
+/// How a checkout changed one file on disk.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Touched {
+    Created,
+    Changed,
+    Deleted,
+}
+
 /// Where to move HEAD: onto a local branch, or detached at a commit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckoutTarget {
@@ -62,5 +70,24 @@ impl GitRepo {
             }
         }
         Ok(false)
+    }
+
+    /// The files that differ between two commits, as moving the checkout from `old` to `new` touches them.
+    pub async fn touched_between(&self, old: &str, new: &str) -> Result<Vec<(String, Touched)>, GitError> {
+        let args = ["diff", "--name-status", "-z", "--no-renames", "--no-ext-diff", old, new, "--"];
+        let fields = split_z(&self.exec(&args, Default::default()).await?);
+        Ok(fields
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[status, path]| {
+                let touched = match status.as_str() {
+                    "A" => Touched::Created,
+                    "D" => Touched::Deleted,
+                    _ => Touched::Changed,
+                };
+                (path.clone(), touched)
+            })
+            .collect())
     }
 }

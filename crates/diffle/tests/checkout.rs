@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common::pr::Fixture;
 use common::{Recorder, TestRepo, revspec};
-use diffle::git::GitRepo;
+use diffle::git::{GitRepo, Touched};
 use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
 use diffle::protocol::{EnterRequest, FollowRefs, follows_checkout};
@@ -215,6 +215,23 @@ async fn puts_a_detached_head_back() {
     s.close().await;
     assert_eq!(head(&t), "HEAD");
     assert_eq!(t.git(&["rev-parse", "HEAD"]), main);
+}
+
+#[tokio::test]
+async fn lists_what_moving_between_two_commits_touches() {
+    let t = branches();
+    t.git(&["checkout", "-q", "feat"]);
+    t.write("new.txt", "x\n");
+    t.write("dir/nested.txt", "y\n");
+    t.commit("add");
+    t.rm("new.txt");
+    t.commit("remove");
+    let repo = t.open().await;
+    let touched = repo.touched_between("main", "feat~1").await.unwrap();
+    let created = |p: &str| (p.to_owned(), Touched::Created);
+    assert_eq!(touched, [("a.txt".to_owned(), Touched::Changed), created("dir/nested.txt"), created("new.txt")]);
+    let back = repo.touched_between("feat~1", "feat").await.unwrap();
+    assert_eq!(back, [("new.txt".to_owned(), Touched::Deleted)]);
 }
 
 #[tokio::test]
