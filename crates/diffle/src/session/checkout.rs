@@ -65,6 +65,15 @@ impl Session {
         Ok(Some(Outcome::Switched))
     }
 
+    /// Keeps a checkout this run made on the new side once its refs moved, unless the reviewer
+    /// moved HEAD since: the review is theirs to read, the checkout theirs to take back.
+    pub(super) async fn follow_checkout(&self, review: &Review) {
+        let Some(to) = self.moved_checkout.lock().unwrap().as_ref().map(|m| m.to.clone()) else { return };
+        if matches!(self.repo.checked_out(&to).await, Ok(true)) {
+            self.check_out(review).await;
+        }
+    }
+
     /// Puts HEAD back where it was before this run's first checkout, unless the reviewer moved it
     /// since or left uncommitted changes, which a switch would carry onto the other branch.
     pub(super) async fn restore_checkout(&self) {

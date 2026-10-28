@@ -146,6 +146,29 @@ async fn leaves_the_checkout_alone_when_git_refuses() {
 }
 
 #[tokio::test]
+async fn follows_moved_refs_on_reload_unless_the_reviewer_moved_head() {
+    let t = branches();
+    let remote = |t: &TestRepo| t.git(&["update-ref", "refs/remotes/origin/feat", "feat"]);
+    remote(&t);
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["main...origin/feat"])).await.unwrap()).await.unwrap();
+    // A push arrives: the remote branch moves past the detached HEAD.
+    t.git(&["checkout", "-q", "feat"]);
+    t.write("a.txt", "one\ntwo\nthree\n");
+    t.commit("more");
+    remote(&t);
+    t.git(&["checkout", "-q", "--detach", "feat~1"]);
+    let snap = s.reload().await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), t.git(&["rev-parse", "feat"]));
+    assert!(follows_checkout(&snap));
+    // Back on main by hand: a later reload leaves it there.
+    t.git(&["checkout", "-q", "main"]);
+    t.git(&["update-ref", "refs/remotes/origin/feat", "feat~1"]);
+    s.reload().await.unwrap();
+    assert_eq!(head(&t), "main");
+}
+
+#[tokio::test]
 async fn puts_the_checkout_back_on_close() {
     let t = branches();
     t.git(&["checkout", "-q", "-b", "other", "main"]);

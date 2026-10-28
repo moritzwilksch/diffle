@@ -162,9 +162,9 @@ take a while to index.
 Servers read the files on disk, so they only answer when the new side is the worktree or the
 checked-out commit. Entering a review checks its new side out when the worktree has no uncommitted
 changes: a local branch is switched to; anything else (a pull request, a remote branch, a tag, a
-commit) is checked out detached. A range named after `HEAD` (`HEAD..feat`) and focusing one
-commit of a range do not move the checkout. On exit diffle switches back, unless you moved `HEAD`
-yourself or left uncommitted changes. `--no-checkout` leaves the checkout alone.
+commit) is checked out detached, and a reload after the refs moved follows them. A range named
+after `HEAD` (`HEAD..feat`) and focusing one commit of a range do not move the checkout. On exit diffle switches back, unless you moved
+`HEAD` yourself or left uncommitted changes. `--no-checkout` leaves the checkout alone.
 
 `diffle lsp` shows which server each language gets and what to install for the rest:
 
