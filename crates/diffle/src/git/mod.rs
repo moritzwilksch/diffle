@@ -1,6 +1,7 @@
 //! All Git execution. Calls run with cwd = the repository root, except reading a submodule's HEAD.
 mod catfile;
 mod changes;
+mod checkout;
 mod commits;
 pub mod exec;
 mod files;
@@ -13,6 +14,7 @@ use std::path::{Path, PathBuf};
 use catfile::CatFileBatch;
 pub use catfile::CatFileObject;
 pub use changes::is_binary;
+pub use checkout::CheckoutTarget;
 pub use grep::{GrepMatch, GrepOptions, GrepResult};
 pub use refs::{Remote, Upstream};
 

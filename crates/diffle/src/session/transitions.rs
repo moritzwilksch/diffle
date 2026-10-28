@@ -24,7 +24,12 @@ impl Session {
     /// First review, from `resolve`. Fails `ready` too, so early requests error out.
     pub async fn start(self: &Arc<Self>, review: Review) -> Result<Arc<Snapshot>> {
         let this = self.clone();
-        let result = self.run(async move { this.activate(review).await }).await;
+        let result = self
+            .run(async move {
+                this.check_out(&review).await;
+                this.activate(review).await
+            })
+            .await;
         self.ready.send_replace(Some(result.as_ref().map(|_| ()).map_err(Clone::clone)));
         result
     }
@@ -35,6 +40,7 @@ impl Session {
         let snap = self
             .run(async move {
                 let review = resolve_review(&req, &this.repo, &this.github).await?;
+                this.check_out(&review).await;
                 this.activate(review).await
             })
             .await?;
