@@ -232,11 +232,15 @@ export const api = {
     json(UserConfigSchema, 'api/config', { method: 'PUT', body: encode(ConfigUpdateSchema, config) }),
 };
 
+/** A local server answers the upgrade in milliseconds; one that has not after this is hung. */
+const CONNECT_TIMEOUT_MS = 2000;
+
 /**
  * Auto-reconnecting WebSocket for server pushes. `onOpen` fires on every connection, the first
  * included: pushes are not replayed, so the caller resyncs there, and fetching only once the
  * socket is subscribed is what makes the resync authoritative. `onLost` fires once per dropped
- * connection, before the retries begin; the next `onOpen` ends the outage.
+ * connection, before the retries begin; the next `onOpen` ends the outage. An attempt that has
+ * not opened after `CONNECT_TIMEOUT_MS` is abandoned and retried.
  */
 export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () => void, onLost: () => void): () => void {
   let ws: WebSocket | null = null;
@@ -247,8 +251,13 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
     if (closed) return;
     const url = new URL('ws', location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(url.href);
+    const socket = new WebSocket(url.href);
+    ws = socket;
+    // Firefox holds back every other socket to this host while one connects, for up to 20 s if the
+    // server hangs (a frozen diffle): other diffle tabs and localhost apps must not wait that long.
+    const abandon = setTimeout(() => socket.close(), CONNECT_TIMEOUT_MS);
     ws.onopen = () => {
+      clearTimeout(abandon);
       delay = 500;
       connected = true;
       onOpen();
@@ -261,6 +270,7 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
       }
     };
     ws.onclose = () => {
+      clearTimeout(abandon);
       if (closed) return;
       if (connected) {
         connected = false;
