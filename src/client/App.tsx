@@ -65,11 +65,14 @@ export function App() {
   const columns = gridColumns(layout, active);
 
   useEffect(() => {
-    // Every (re)connection resyncs the whole state: pushes missed while the socket was down are
-    // not replayed, and the first open is the boot itself.
+    // Boot without waiting for the socket: Firefox holds a new socket back while another one to the
+    // same host hangs connecting, such as another tab's reconnect to a frozen server, for up to 20 s.
+    void boot().then(() => performance.mark('diffle:snapshot'));
+    // Every connection, the first included, resyncs the whole state: pushes sent before it
+    // subscribed are not replayed.
     const resync = () => {
       setLost(false);
-      void boot().then(() => performance.mark('diffle:snapshot'));
+      void boot();
     };
     return connectWs(
       (msg) => {
