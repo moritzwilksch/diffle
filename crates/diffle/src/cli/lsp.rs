@@ -73,10 +73,10 @@ pub fn start(
         max_open: None,
     });
     let tracking = Arc::downgrade(&pool);
+    // Synchronous within `Session::start`, so the startup report sees the servers it starts.
     session.on_snapshot(move |snap: &Arc<Snapshot>| {
-        let (pool, snap) = (tracking.upgrade(), snap.clone());
-        if let Some(pool) = pool {
-            tokio::spawn(async move { pool.track(&snap).await });
+        if let Some(pool) = tracking.upgrade() {
+            tokio::spawn(pool.track(snap));
         }
     });
     pool

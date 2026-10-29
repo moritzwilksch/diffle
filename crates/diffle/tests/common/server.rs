@@ -46,9 +46,8 @@ fn start_lsp(session: &Arc<Session>, overrides: std::collections::HashMap<Langua
     });
     let tracking = Arc::downgrade(&pool);
     session.on_snapshot(move |snap| {
-        let (pool, snap) = (tracking.upgrade(), snap.clone());
-        if let Some(pool) = pool {
-            tokio::spawn(async move { pool.track(&snap).await });
+        if let Some(pool) = tracking.upgrade() {
+            tokio::spawn(pool.track(snap));
         }
     });
     pool
