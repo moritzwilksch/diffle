@@ -161,3 +161,7 @@ snapshot-report.html
 /crates/diffle/client/
 /crates/diffle/LICENSE
 /crates/diffle/THIRD_PARTY_NOTICES.md
+
+# cargo-mutants
+mutants.out/
+mutants.out.old/

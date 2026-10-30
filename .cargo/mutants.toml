@@ -1,0 +1,10 @@
+# cargo-mutants: `pixi run mutants` (every mutant), `pixi run mutants --file <path>` or
+# `pixi run mutants --in-diff <diff>` (a few). Results land in mutants.out/.
+
+# The build script only generates the wire types and reads the version; a mutant there breaks the build.
+exclude_globs = ["crates/diffle/build.rs"]
+# The Cargo.toml profile without debug info: mutants rebuild often and never need a debugger.
+profile = "mutants"
+# The server tests spawn git, node and HTTP servers; give a slow mutant room before calling it a hang.
+minimum_test_timeout = 60
+additional_cargo_args = ["--locked"]
