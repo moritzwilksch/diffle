@@ -97,6 +97,8 @@ function handle(msg) {
       });
     case 'workspace/didChangeConfiguration':
       return log('config ' + JSON.stringify(msg.params.settings));
+    case 'workspace/didChangeWatchedFiles':
+      return log('watched ' + msg.params.changes.map((c) => `${c.type} ${base(c.uri)}`).join(', '));
     case 'test/request':
       return send({ jsonrpc: '2.0', id: nextId++, method: msg.params.method, params: msg.params.params });
     case 'test/notification':

@@ -140,6 +140,7 @@ impl Session {
             self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
             return Ok(snap);
         }
+        self.follow_checkout(&a.review).await;
         a.snapshotter.invalidate(self.next_version());
         self.publish(&a).await
     }

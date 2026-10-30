@@ -32,6 +32,7 @@ Options:
                                  (repeatable); by default the diff's languages are served by
                                  whatever is on PATH
       --no-lsp                   do not start any language server
+      --no-checkout              do not check out the new side of the review
       --timing                   print startup phase timings to stderr
 
 Shorthands (in place of <revs>):

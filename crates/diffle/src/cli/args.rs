@@ -112,6 +112,9 @@ pub struct GlobalOpts {
     /// do not start any language server
     #[arg(long = "no-lsp")]
     pub no_lsp: bool,
+    /// do not check out the new side of the review
+    #[arg(long = "no-checkout")]
+    pub no_checkout: bool,
     /// print startup phase timings to stderr
     #[arg(long)]
     pub timing: bool,
@@ -193,6 +196,7 @@ impl GlobalOpts {
             context: later.context.or(self.context),
             lsp: [self.lsp, later.lsp].concat(),
             no_lsp: self.no_lsp || later.no_lsp,
+            no_checkout: self.no_checkout || later.no_checkout,
             timing: self.timing || later.timing,
         }
     }

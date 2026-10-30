@@ -100,8 +100,13 @@ impl TestServer {
         let git = Arc::new(repo.open().await);
         let hub = Hub::new();
         let config = Arc::new(UserConfigStore::open(repo.path.join("cfg").join("config.json")).await);
-        let opts =
-            SessionOptions { watch: false, github: Github::tokenless(), context: 3, follow_refs: FollowRefs::Off };
+        let opts = SessionOptions {
+            watch: false,
+            github: Github::tokenless(),
+            context: 3,
+            follow_refs: FollowRefs::Off,
+            checkout: false,
+        };
         let session = Session::new(git, hub.clone(), opts);
         let lsp = overrides.map(|overrides| start_lsp(&session, overrides));
         let deps = ApiDeps {

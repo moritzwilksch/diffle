@@ -13,6 +13,7 @@ use super::process::{LspProcess, ProcessOptions, SettingsFuture};
 use super::rpc::RequestError;
 use super::shapes::{Range, flatten_symbols, from_lsp, normalize_locations, symbol_information, to_lsp};
 use crate::error::{Error, Result};
+use crate::git::Touched;
 use crate::protocol::{
     LspFeature, LspHoverResponse, LspHoverResponseRange, LspLocationsResponse, LspLogEntry, LspOccurrence,
     LspOccurrenceKind, LspOccurrencesResponse, LspPosition, LspProcessStatus, LspSymbolsResponse, feature_label,
@@ -193,6 +194,24 @@ impl LspBridge {
     /// file one of its own results named; none for any other path (see `Locator::origin`).
     pub fn origin(&self, path: &str) -> Option<Origin> {
         self.locator.origin(path)
+    }
+
+    /// Tells the server files changed on disk outside any open document, as a checkout changes
+    /// them. Sent whether or not it registered watchers: a server watching for itself ignores it.
+    pub async fn files_changed(&self, changes: &[(String, Touched)]) {
+        let Ok(rpc) = self.process.connection().await else { return };
+        let changes: Vec<Value> = changes
+            .iter()
+            .map(|(path, touched)| {
+                let kind = match touched {
+                    Touched::Created => 1,
+                    Touched::Changed => 2,
+                    Touched::Deleted => 3,
+                };
+                json!({ "uri": self.documents.uri(&Origin::Snapshot(path.clone())), "type": kind })
+            })
+            .collect();
+        rpc.notify("workspace/didChangeWatchedFiles", json!({ "changes": changes }));
     }
 
     /// Replaces the server's settings (see `LspProcess::reconfigure`).

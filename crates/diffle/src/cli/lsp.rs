@@ -73,11 +73,21 @@ pub fn start(
         max_open: None,
     });
     let tracking = Arc::downgrade(&pool);
+    let (repo, head) = (session.repo.clone(), Mutex::new(String::new()));
     // Synchronous within `Session::start`, so the startup report sees the servers it starts.
     session.on_snapshot(move |snap: &Arc<Snapshot>| {
-        if let Some(pool) = tracking.upgrade() {
-            tokio::spawn(pool.track(snap));
+        let Some(pool) = tracking.upgrade() else { return };
+        // HEAD moved, by diffle's checkout or the reader's: the files between the two changed on disk.
+        let moved = std::mem::replace(&mut *head.lock().unwrap(), snap.head_sha.clone());
+        if !moved.is_empty() && !snap.head_sha.is_empty() && moved != snap.head_sha {
+            let (pool, repo, new) = (pool.clone(), repo.clone(), snap.head_sha.clone());
+            tokio::spawn(async move {
+                let Ok(touched) = repo.touched_between(&moved, &new).await else { return };
+                let servers = pool.servers();
+                futures::future::join_all(servers.iter().map(|s| s.bridge.files_changed(&touched))).await;
+            });
         }
+        tokio::spawn(pool.track(snap));
     });
     pool
 }
