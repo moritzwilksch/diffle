@@ -50,6 +50,26 @@ impl GithubError {
     }
 }
 
+/// A story that cannot be written now, something to fix first (409: no API key, nothing to tell,
+/// a comparison that changed), or a model that did not answer (502).
+#[derive(Debug, Error, Clone)]
+#[error("{message}")]
+pub struct StoryError {
+    pub message: String,
+    pub status: u16,
+}
+
+impl StoryError {
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self { message: message.into(), status: 409 }
+    }
+
+    /// The model's side failed: the request was refused, timed out, or came back unusable.
+    pub fn upstream(message: impl Into<String>) -> Self {
+        Self { message: message.into(), status: 502 }
+    }
+}
+
 /// Cloneable, so one failed computation can answer every caller sharing it.
 #[derive(Debug, Error, Clone)]
 pub enum Error {
@@ -60,6 +80,8 @@ pub enum Error {
     Revspec(String),
     #[error(transparent)]
     Github(#[from] GithubError),
+    #[error(transparent)]
+    Story(#[from] StoryError),
     /// A thread or message id that names nothing.
     #[error("not found: {0}")]
     NotFound(String),

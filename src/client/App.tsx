@@ -6,6 +6,7 @@ import { useKeymap } from './keyboard/useKeymap.js';
 import { documentTitle } from './model.js';
 import { ServerLost } from './ServerLost.js';
 import { useStore } from './store.js';
+import { useStory } from './story/state.js';
 import { FileTreePane } from './tree/FileTreePane.js';
 import { TooltipHost } from './ui/TitleTooltips.js';
 import './views/registry.js';
@@ -94,6 +95,9 @@ export function App() {
             break;
           case 'lsp':
             setLspStatus(msg.payload);
+            break;
+          case 'story':
+            void useStory.getState().refresh();
             break;
           default:
             break;

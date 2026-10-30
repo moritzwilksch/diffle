@@ -18,7 +18,7 @@ const CHORD_MS = 800;
 let zAt = -Infinity;
 
 /** Keys the graph leaves to the review: help, theme, the mode picker, and `M` back to the diff. */
-export const GRAPH_PASSES = new Set(['?', 't', 'm', 'M', 'o']);
+export const GRAPH_PASSES = new Set(['?', 't', 'm', 'M', 'S', 'o']);
 
 /**
  * Opens the graph's find, or takes the reader back to its field, its text selected to type over. Ctrl/⌘+F

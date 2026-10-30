@@ -32,6 +32,7 @@ import {
   SearchResponseSchema,
   ServerMessageSchema,
   SnapshotSchema,
+  StoryStateSchema,
   UserConfigSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
@@ -99,6 +100,10 @@ const q = (params: Record<string, string | undefined>) =>
 
 export const api = {
   github: () => json(GithubMetadataSchema, 'api/github'),
+  /** The story of the current snapshot, if one is on record or in the writing. */
+  story: () => json(StoryStateSchema, 'api/story'),
+  /** Asks the model for the story; the `story` server message says when it is there. */
+  generateStory: () => json(StoryStateSchema, 'api/story', { method: 'POST' }),
   /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
   permalink: (req: PermalinkRequest) =>
     json(PermalinkSchema, 'api/permalink', { method: 'POST', body: encode(PermalinkRequestSchema, req) }),

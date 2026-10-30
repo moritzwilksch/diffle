@@ -3,6 +3,7 @@ mod api;
 mod comments;
 mod files;
 mod lsp;
+mod story;
 
 use std::sync::Arc;
 
@@ -16,7 +17,12 @@ use super::ApiDeps;
 use crate::error::Error;
 
 pub fn router() -> Router<Arc<ApiDeps>> {
-    Router::new().merge(api::routes()).merge(files::routes()).merge(comments::routes()).merge(lsp::routes())
+    Router::new()
+        .merge(api::routes())
+        .merge(files::routes())
+        .merge(comments::routes())
+        .merge(lsp::routes())
+        .merge(story::routes())
 }
 
 /// An error as the API answers it: a status and `{ "error": message }`.
@@ -42,6 +48,7 @@ impl From<Error> for ApiError {
             Error::Git(e) => Self::bad_request(e.message),
             Error::LspUnavailable(m) | Error::LspUnsupported(m) => Self(StatusCode::CONFLICT, m),
             Error::Github(e) => Self(StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY), e.message),
+            Error::Story(e) => Self(StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY), e.message),
             Error::Other(e) => {
                 crate::status!("[diffle] {e:#}");
                 Self(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())

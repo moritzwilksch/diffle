@@ -2309,6 +2309,18 @@
             "type",
             "payload"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "story"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
       ]
     },
@@ -2413,6 +2425,146 @@
         "commit",
         "commits",
         "iterations"
+      ]
+    },
+    "Story": {
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "type": "string",
+          "description": "The content it describes: a hash of the endpoints and the changed blobs. Another fingerprint makes it stale."
+        },
+        "summary": {
+          "type": "string"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoryPart"
+          }
+        },
+        "model": {
+          "type": "string",
+          "description": "The model that wrote it."
+        },
+        "createdAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "When it was written, epoch milliseconds."
+        }
+      },
+      "required": [
+        "fingerprint",
+        "summary",
+        "parts",
+        "model",
+        "createdAt"
+      ],
+      "description": "The review told as a story: an overall summary and ordered parts that together hold every changed\nfile once. The generated files always form the last part, added by the server, not the model."
+    },
+    "StoryFile": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string",
+          "description": "One sentence on what this file contributes to the part; absent when the title says it all."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "description": "One changed file inside a story part, in the order the story tells it."
+    },
+    "StoryPart": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "narrative": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoryFile"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "narrative",
+        "files"
+      ],
+      "description": "A step of the story: the files that belong together and the couple of sentences that explain them."
+    },
+    "StoryState": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Snapshot.version this answers for; the client discards an answer for another version."
+        },
+        "status": {
+          "$ref": "#/$defs/StoryStatus"
+        },
+        "blocker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why no story can be generated now (no API key, no changes), or null."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The last failure's message while `status` is `failed`."
+        },
+        "story": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Story"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The story on record for this content, or the latest one when `stale`."
+        },
+        "stale": {
+          "type": "boolean",
+          "description": "`story` describes an earlier state of the comparison."
+        }
+      },
+      "required": [
+        "version",
+        "status",
+        "blocker",
+        "error",
+        "story",
+        "stale"
+      ],
+      "description": "`GET /api/story`: the story of the current snapshot, if any, and whether one can be generated."
+    },
+    "StoryStatus": {
+      "type": "string",
+      "enum": [
+        "absent",
+        "generating",
+        "ready",
+        "failed"
       ]
     },
     "SymbolsQuery": {

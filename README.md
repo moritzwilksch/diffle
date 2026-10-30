@@ -182,6 +182,21 @@ Or persistently, in the config file (`diffle config` prints its path and content
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
+## Read the change as a story
+
+Press `S` to swap the diff for the story of the change: a model groups the changed files into
+parts a reader follows in order, with a summary up front and a couple of sentences on each part.
+Each part lists its files with their diffs beside them, and a **Reviewed** box marks the whole part
+viewed. `j` / `k` walk the files, `n` / `p` the parts, `v` marks the file viewed, `Enter` opens
+it in the diff for comments, and `S` returns to the diff.
+
+The story needs an Anthropic API key in `ANTHROPIC_API_KEY`; without one the view says so.
+It is written on request with **Write the story** (or `r`), by `claude-opus-5-5` unless
+`DIFFLE_STORY_MODEL` names another model, and kept under the repository's `.git/diffle/stories/`
+by the content it describes: reopening the same comparison finds it again, and an edit or a push
+marks it stale until you ask for a new one. Generated files always form the last part; the patches
+sent to the model are cut to a size budget, and binary and generated files are listed by name only.
+
 ## See the change as a graph
 
 Press `M` to swap the diff for a graph of what changed: one box per file, or per symbol with

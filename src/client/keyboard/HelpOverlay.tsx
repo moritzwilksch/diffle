@@ -88,8 +88,9 @@ export const DIFF_HELP: HelpSection[][] = [
       ],
     },
     {
-      title: 'Change graph (language server)',
+      title: 'Other views',
       rows: [
+        ['S', 'the change as a story; ? there lists its keys'],
         ['M', 'graph of changed symbols; ? there lists its keys'],
         ['right-click a folder', 'Show in graph: only the changes under it'],
       ],

@@ -26,5 +26,6 @@ pub mod protocol;
 pub mod server;
 pub mod session;
 pub mod snapshotter;
+pub mod story;
 pub mod user_config;
 pub mod watcher;

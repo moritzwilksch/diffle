@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import { create } from 'zustand';
 import { type LayoutState, type ReviewState, useStore, type ViewPlace } from '@/client/store.js';
 
-export type ViewId = 'diff' | 'graph';
+export type ViewId = 'diff' | 'graph' | 'story';
 
 type HelpRow = [keys: string, action: string];
 export type HelpSection = { title: string; rows: HelpRow[] };
