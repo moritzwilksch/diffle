@@ -6,7 +6,11 @@ use std::sync::{Arc, Mutex};
 use futures::FutureExt;
 use futures::future::{BoxFuture, Shared};
 use indexmap::IndexMap;
-use serde_json::json;
+use lsp_types::notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument};
+use lsp_types::{
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, TextDocumentContentChangeEvent,
+    TextDocumentIdentifier, TextDocumentItem, Url, VersionedTextDocumentIdentifier,
+};
 
 use super::process::LspProcess;
 use super::rpc::Connection;
@@ -38,8 +42,11 @@ impl std::fmt::Display for Origin {
     }
 }
 
+/// The URI a server knows a snapshot path by.
+pub type UriFn = Arc<dyn Fn(&str) -> Url + Send + Sync>;
+
 struct Doc {
-    version: i64,
+    version: i32,
     text: String,
     /// Whether `text` is the snapshot's rather than the disk's.
     snapshot: bool,
@@ -49,11 +56,11 @@ struct Doc {
 #[derive(Default)]
 struct State {
     /// Open documents, least recently synced first.
-    open: IndexMap<String, Doc>,
+    open: IndexMap<Url, Doc>,
     /// Syncs in flight, so a track pass and a query racing on one file send one didOpen.
-    syncing: HashMap<String, Shared<BoxFuture<'static, Result<()>>>>,
+    syncing: HashMap<Url, Shared<BoxFuture<'static, Result<()>>>>,
     /// Documents `track` opened on the snapshot's behalf; closed again when they leave the snapshot.
-    tracked: HashSet<String>,
+    tracked: HashSet<Url>,
 }
 
 /// The diff's own files stay open for as long as they are in it, and the files queries land in
@@ -62,7 +69,7 @@ pub struct Documents {
     process: Arc<LspProcess>,
     read: ReadFn,
     /// The URI of a snapshot path.
-    uri: Arc<dyn Fn(&str) -> String + Send + Sync>,
+    uri: UriFn,
     max_open: usize,
     state: Arc<Mutex<State>>,
     /// Track passes run one at a time; the last set wins.
@@ -70,18 +77,13 @@ pub struct Documents {
 }
 
 impl Documents {
-    pub fn new(
-        process: Arc<LspProcess>,
-        read: ReadFn,
-        uri: Arc<dyn Fn(&str) -> String + Send + Sync>,
-        max_open: Option<usize>,
-    ) -> Self {
+    pub fn new(process: Arc<LspProcess>, read: ReadFn, uri: UriFn, max_open: Option<usize>) -> Self {
         let max_open = max_open.unwrap_or(MAX_UNTRACKED_OPEN);
         Self { process, read, uri, max_open, state: Arc::default(), tracking: tokio::sync::Mutex::new(()) }
     }
 
     /// The URI the server knows `origin` by.
-    pub fn uri(&self, origin: &Origin) -> String {
+    pub fn uri(&self, origin: &Origin) -> Url {
         uri_of(&*self.uri, origin)
     }
 
@@ -126,10 +128,10 @@ impl Documents {
     pub async fn track(&self, paths: &[String]) {
         let _turn = self.tracking.lock().await;
         let Ok(rpc) = self.process.connection().await else { return };
-        let next: HashSet<String> = paths.iter().map(|p| (self.uri)(p)).collect();
-        let closed: Vec<String> = {
+        let next: HashSet<Url> = paths.iter().map(|p| (self.uri)(p)).collect();
+        let closed: Vec<Url> = {
             let mut state = self.state.lock().unwrap();
-            let gone: Vec<String> = state.tracked.iter().filter(|u| !next.contains(*u)).cloned().collect();
+            let gone: Vec<Url> = state.tracked.iter().filter(|u| !next.contains(*u)).cloned().collect();
             gone.into_iter()
                 .filter(|uri| {
                     state.tracked.remove(uri);
@@ -138,7 +140,9 @@ impl Documents {
                 .collect()
         };
         for uri in closed {
-            rpc.notify("textDocument/didClose", json!({ "textDocument": { "uri": uri } }));
+            rpc.notify::<DidCloseTextDocument>(DidCloseTextDocumentParams {
+                text_document: TextDocumentIdentifier { uri },
+            });
         }
         for path in paths {
             match self.sync(&Origin::Snapshot(path.clone())).await {
@@ -151,12 +155,10 @@ impl Documents {
     }
 }
 
-fn uri_of(snapshot_uri: &(dyn Fn(&str) -> String + Send + Sync), origin: &Origin) -> String {
+fn uri_of(snapshot_uri: &(dyn Fn(&str) -> Url + Send + Sync), origin: &Origin) -> Url {
     match origin {
         Origin::Snapshot(path) => snapshot_uri(path),
-        Origin::External { abs, .. } => {
-            url::Url::from_file_path(abs).map_or_else(|()| format!("file://{}", abs.display()), |u| u.to_string())
-        }
+        Origin::External { abs, .. } => Url::from_file_path(abs).expect("a file a server named is absolute"),
     }
 }
 
@@ -166,7 +168,7 @@ async fn sync_now(
     max_open: usize,
     state: &Mutex<State>,
     origin: &Origin,
-    uri: &str,
+    uri: &Url,
 ) -> Result<()> {
     let rpc = process.connection().await?;
     // A hidden file that joined the snapshot shares its URI with the snapshot path: the snapshot's
@@ -187,21 +189,28 @@ async fn sync_now(
     let mut state = state.lock().unwrap();
     match state.open.shift_remove(uri) {
         None => {
-            let language = language_of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
-            let open = json!({ "textDocument": { "uri": uri, "languageId": language, "version": 1, "text": text } });
-            state.open.insert(uri.to_owned(), Doc { version: 1, text, snapshot });
-            rpc.notify("textDocument/didOpen", open);
+            let language_id = language_of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
+            let text_document = TextDocumentItem { uri: uri.clone(), language_id, version: 1, text: text.clone() };
+            state.open.insert(uri.clone(), Doc { version: 1, text, snapshot });
+            rpc.notify::<DidOpenTextDocument>(DidOpenTextDocumentParams { text_document });
         }
         // Re-inserted at the end: the most recently used.
         Some(mut doc) => {
             if doc.text != text {
                 doc.version += 1;
-                let change = json!({ "textDocument": { "uri": uri, "version": doc.version }, "contentChanges": [{ "text": text }] });
+                let change = DidChangeTextDocumentParams {
+                    text_document: VersionedTextDocumentIdentifier { uri: uri.clone(), version: doc.version },
+                    content_changes: vec![TextDocumentContentChangeEvent {
+                        range: None,
+                        range_length: None,
+                        text: text.clone(),
+                    }],
+                };
                 doc.text = text;
-                rpc.notify("textDocument/didChange", change);
+                rpc.notify::<DidChangeTextDocument>(change);
             }
             doc.snapshot = snapshot;
-            state.open.insert(uri.to_owned(), doc);
+            state.open.insert(uri.clone(), doc);
         }
     }
     evict(&mut state, &rpc, max_open);
@@ -211,7 +220,7 @@ async fn sync_now(
 /// Closes the least recently used untracked documents until at most `max_open` remain.
 fn evict(state: &mut State, rpc: &Connection, max_open: usize) {
     let untracked = state.open.keys().filter(|u| !state.tracked.contains(*u)).count();
-    let victims: Vec<String> = state
+    let victims: Vec<Url> = state
         .open
         .keys()
         .filter(|u| !state.tracked.contains(*u) && !state.syncing.contains_key(*u))
@@ -220,6 +229,8 @@ fn evict(state: &mut State, rpc: &Connection, max_open: usize) {
         .collect();
     for uri in victims {
         state.open.shift_remove(&uri);
-        rpc.notify("textDocument/didClose", json!({ "textDocument": { "uri": uri } }));
+        rpc.notify::<DidCloseTextDocument>(DidCloseTextDocumentParams {
+            text_document: TextDocumentIdentifier { uri },
+        });
     }
 }

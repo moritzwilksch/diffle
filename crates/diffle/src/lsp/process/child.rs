@@ -3,6 +3,7 @@
 #[cfg(windows)]
 use std::process::Stdio;
 use std::sync::Weak;
+use std::time::Duration;
 
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, ChildStderr};
@@ -32,6 +33,16 @@ pub(super) async fn watch(me: Weak<LspProcess>, mut stderr: ChildStderr, mut chi
         let _ = me.fail(format!("\"{}\" exited ({how})", me.command));
     }
     me.exited.send_replace(true);
+}
+
+impl LspProcess {
+    /// `fail`, once the process had a moment to exit: a server that died says why through its exit,
+    /// which lands a moment after its output closes.
+    pub(super) async fn fail_after_exit(&self, message: String) -> Result<(), ()> {
+        let mut exited = self.exited.subscribe();
+        let _ = tokio::time::timeout(Duration::from_millis(500), exited.wait_for(|e| *e)).await;
+        self.fail(message)
+    }
 }
 
 /// `line` as a process: split as a POSIX shell reads it, no shell in between. On unix the server
