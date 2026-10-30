@@ -29,9 +29,3 @@ No UI change: show the CLI output, prompt, or payload instead, or write "No visi
 ## Breaking changes
 
 <!-- `💥 Breaking: <explanation>` per break, or delete this section. -->
-
-## Verification
-
-<!-- What you ran and what you looked at: tests added, e2e snapshots re-accepted, manual checks. -->
-
--
