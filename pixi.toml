@@ -41,7 +41,10 @@ build-release = { cmd = "cargo build --release --locked", depends-on = ["build-c
 build-debug = { cmd = "cargo build --locked", depends-on = ["build-client"] }
 # test
 test-node = { cmd = "npm test", depends-on = ["install-node"] }
-test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["build-client"] }
+# The environment ships the language servers tests/lsp_real.rs drives; one missing fails rather than skips.
+test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = [
+  "build-client",
+], env = { DIFFLE_REQUIRE_LSPS = "1" } }
 e2e = { cmd = "npm run test:e2e --", depends-on = ["build-release"] }
 e2e-report = { cmd = "npm run test:e2e:report", depends-on = ["install-node"] }
 # lefthook
