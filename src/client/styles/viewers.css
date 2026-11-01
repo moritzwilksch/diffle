@@ -21,6 +21,7 @@
   --trees-padding-inline-override: 1rem;
   --trees-icon-width-override: 1rem;
   --trees-git-lane-width-override: 0.75rem;
+  --trees-level-gap-override: 0px;
   /* The tree ships its own grey-on-grey palette; route every colour through our tokens so it reads like the rest of the UI. */
   --trees-bg-override: var(--bg-2);
   --trees-border-color-override: var(--border);
