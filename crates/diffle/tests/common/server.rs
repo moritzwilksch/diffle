@@ -97,6 +97,17 @@ impl TestServer {
         req: EnterRequest,
         overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
     ) -> Self {
+        let s = Self::listening(repo, overrides).await;
+        s.session.start(s.session.resolve(req).await.unwrap()).await.unwrap();
+        s
+    }
+
+    /// A server over `repo` whose session has not entered a review yet: the API waits until
+    /// `session.start` resolves one.
+    pub async fn listening(
+        repo: TestRepo,
+        overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+    ) -> Self {
         let git = Arc::new(repo.open().await);
         let hub = Hub::new();
         let config = Arc::new(UserConfigStore::open(repo.path.join("cfg").join("config.json")).await);
@@ -116,7 +127,6 @@ impl TestServer {
             allowed_origin: Some("https://proxy.example".into()),
         };
         let (server, base) = Server::listen(deps, opts).await.unwrap();
-        session.start(session.resolve(req).await.unwrap()).await.unwrap();
         Self { repo, session, config, hub, base, server: Some(server), lsp, client: reqwest::Client::new() }
     }
 

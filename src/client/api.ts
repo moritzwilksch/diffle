@@ -33,6 +33,7 @@ import {
   ServerMessageSchema,
   SnapshotSchema,
   UserConfigSchema,
+  VersionResponseSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import type {
@@ -98,6 +99,8 @@ const q = (params: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
+  /** The server's release; answers before the first review resolves. */
+  version: () => json(VersionResponseSchema, 'api/version'),
   github: () => json(GithubMetadataSchema, 'api/github'),
   /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
   permalink: (req: PermalinkRequest) =>

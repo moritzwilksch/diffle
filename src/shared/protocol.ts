@@ -1046,4 +1046,14 @@ export const GraphQuerySchema = z.object({ all: z.literal('1').optional(), scope
 export type GraphQuery = z.infer<typeof GraphQuerySchema>;
 export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
 export const PatchQuerySchema = z.object({ path: z.string().optional() });
+/**
+ * What `GET /api/version` answers before anything else is ready: the server's release, so a
+ * client can tell whether it speaks this server's contract.
+ */
+export const VersionResponseSchema = z.object({
+  /** The server's semantic version, as `diffle --version` prints it. */
+  version: z.string(),
+});
+export type VersionResponse = z.infer<typeof VersionResponseSchema>;
+
 export const ApiErrorSchema = z.object({ error: z.string() });

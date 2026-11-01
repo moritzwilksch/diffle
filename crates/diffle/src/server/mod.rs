@@ -184,9 +184,13 @@ async fn limit_body(req: Request, next: Next) -> Response {
     next.run(Request::from_parts(parts, Body::from(Bytes::from(kept)))).await
 }
 
-/// Every request but the config waits for the first mode to resolve.
+/// Paths that answer before the first mode resolves: a client probes the version and loads the
+/// config while the review is still being computed.
+const EARLY_PATHS: [&str; 2] = ["/api/version", "/api/config"];
+
+/// Every request but the early paths waits for the first mode to resolve.
 async fn wait_ready(State(deps): State<Arc<ApiDeps>>, req: Request, next: Next) -> Response {
-    if req.uri().path() != "/api/config"
+    if !EARLY_PATHS.contains(&req.uri().path())
         && let Err(e) = deps.session.ready().await
     {
         return ApiError::from(e).into_response();
