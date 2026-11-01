@@ -5,7 +5,7 @@ use diffle::github::hosts::Github;
 use diffle::lsp::pool::{LspPool, PoolOptions};
 use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
 use diffle::server::hub::Hub;
-use diffle::server::{ApiDeps, Server, ServerOptions};
+use diffle::server::{ApiDeps, Endpoint, Server, ServerOptions};
 use diffle::session::{Session, SessionOptions};
 use diffle::user_config::UserConfigStore;
 use futures::FutureExt;
@@ -112,9 +112,7 @@ impl TestServer {
             lsp: lsp.clone(),
         };
         let opts = ServerOptions {
-            port: 0,
-            probe: false,
-            host: "127.0.0.1".into(),
+            endpoint: Endpoint::Tcp { host: "127.0.0.1".into(), port: 0, probe: false },
             allowed_origin: Some("https://proxy.example".into()),
         };
         let (server, base) = Server::listen(deps, opts).await.unwrap();
