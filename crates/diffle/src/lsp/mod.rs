@@ -3,6 +3,7 @@
 pub mod bridge;
 pub mod configuration;
 pub mod documents;
+pub mod framing;
 pub mod hover;
 pub mod locator;
 pub mod merge;

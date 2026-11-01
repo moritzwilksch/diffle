@@ -4,22 +4,27 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use lsp_types::request::{
+    DocumentHighlightRequest, DocumentSymbolRequest, GotoDefinition, GotoTypeDefinition, HoverRequest, References,
+    Request, WorkspaceSymbolRequest,
+};
+use lsp_types::{
+    DocumentHighlightKind, DocumentHighlightParams, DocumentSymbolParams, GotoDefinitionParams, HoverParams, Location,
+    ReferenceContext, ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkspaceSymbolParams,
+};
 
 use super::documents::{Documents, Origin, ReadFn};
 use super::hover::{hover_markdown, localize_file_links};
 use super::locator::{HasFn, Locator};
 use super::process::{LspProcess, ProcessOptions, SettingsFuture};
-use super::rpc::RequestError;
-use super::shapes::{Range, flatten_symbols, from_lsp, normalize_locations, symbol_information, to_lsp};
+use super::rpc::{CONTENT_MODIFIED, RequestError};
+use super::shapes::{flatten_symbols, from_lsp, locations, to_lsp, workspace_symbols};
 use crate::error::{Error, Result};
 use crate::protocol::{
     LspFeature, LspHoverResponse, LspHoverResponseRange, LspLocationsResponse, LspLogEntry, LspOccurrence,
     LspOccurrenceKind, LspOccurrencesResponse, LspPosition, LspProcessStatus, LspSymbolsResponse, feature_label,
 };
 
-/// LSP `ContentModified`: the document moved under the request, so the answer would be stale.
-const CONTENT_MODIFIED: i64 = -32801;
 /// Waits before re-asking a request the server refused as stale, one per attempt.
 const CONTENT_MODIFIED_BACKOFF: [Duration; 2] = [Duration::from_millis(40), Duration::from_millis(120)];
 
@@ -37,7 +42,7 @@ fn inconclusive(empty: bool, busy: Option<String>) -> Option<String> {
 }
 
 /// One server: the process, its open documents and the path mapping are `LspProcess`, `Documents`
-/// and `Locator`; this is where the requests and their result shapes live.
+/// and `Locator`; this is where the requests and their answers live.
 pub struct LspBridge {
     process: Arc<LspProcess>,
     documents: Documents,
@@ -73,27 +78,44 @@ impl LspBridge {
     }
 
     pub async fn definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
-        self.locations(LspFeature::Definition, "textDocument/definition", pos, json!({})).await
+        let origin = self.document(&pos.path)?;
+        let (answer, busy) =
+            self.query::<GotoDefinition>(Some(&origin), LspFeature::Definition, self.goto(&origin, pos)).await?;
+        Ok(self.located(locations(answer), busy).await)
     }
 
     pub async fn type_definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
-        self.locations(LspFeature::TypeDefinition, "textDocument/typeDefinition", pos, json!({})).await
+        let origin = self.document(&pos.path)?;
+        let params = self.goto(&origin, pos);
+        let (answer, busy) =
+            self.query::<GotoTypeDefinition>(Some(&origin), LspFeature::TypeDefinition, params).await?;
+        Ok(self.located(locations(answer), busy).await)
     }
 
     pub async fn references(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
-        let extra = json!({ "context": { "includeDeclaration": true } });
-        self.locations(LspFeature::References, "textDocument/references", pos, extra).await
+        let origin = self.document(&pos.path)?;
+        let params = ReferenceParams {
+            text_document_position: self.at(&origin, pos),
+            context: ReferenceContext { include_declaration: true },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        };
+        let (answer, busy) = self.query::<References>(Some(&origin), LspFeature::References, params).await?;
+        Ok(self.located(answer.unwrap_or_default(), busy).await)
     }
 
     pub async fn hover(&self, pos: &LspPosition) -> Result<LspHoverResponse> {
         let origin = self.document(&pos.path)?;
-        let params = self.at(&origin, pos, json!({}));
-        let (result, busy) = self.query("textDocument/hover", params, Some(&origin), Some(LspFeature::Hover)).await?;
-        let Some(md) = result.get("contents").and_then(hover_markdown) else {
+        let params = HoverParams {
+            text_document_position_params: self.at(&origin, pos),
+            work_done_progress_params: Default::default(),
+        };
+        let (answer, busy) = self.query::<HoverRequest>(Some(&origin), LspFeature::Hover, params).await?;
+        let Some((md, range)) = answer.and_then(|h| Some((hover_markdown(&h.contents)?, h.range))) else {
             return Ok(LspHoverResponse { contents: None, range: None, inconclusive: inconclusive(true, busy) });
         };
         let contents = localize_file_links(&md, &self.locator.links(&md).await);
-        let range = result.get("range").and_then(|r| serde_json::from_value::<Range>(r.clone()).ok()).map(|r| {
+        let range = range.map(|r| {
             let (line, col, end_line, end_col) = from_lsp(&r);
             LspHoverResponseRange { line, col, end_line, end_col }
         });
@@ -105,25 +127,24 @@ impl LspBridge {
     /// no symbol, yields none: the answer is advisory.
     pub async fn occurrences(&self, pos: &LspPosition) -> Result<LspOccurrencesResponse> {
         let origin = self.document(&pos.path)?;
-        let params = self.at(&origin, pos, json!({}));
-        let result = match self
-            .query("textDocument/documentHighlight", params, Some(&origin), Some(LspFeature::DocumentHighlight))
-            .await
-        {
-            Ok((result, _)) => result,
-            Err(Error::LspUnsupported(_)) => Value::Null,
+        let params = DocumentHighlightParams {
+            text_document_position_params: self.at(&origin, pos),
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        };
+        let asked = self.query::<DocumentHighlightRequest>(Some(&origin), LspFeature::DocumentHighlight, params);
+        let highlights = match asked.await {
+            Ok((answer, _)) => answer.unwrap_or_default(),
+            Err(Error::LspUnsupported(_)) => Vec::new(),
             Err(e) => return Err(e),
         };
-        let occurrences = result
-            .as_array()
+        let occurrences = highlights
             .into_iter()
-            .flatten()
             .filter_map(|h| {
-                let range: Range = serde_json::from_value(h.get("range")?.clone()).ok()?;
-                let (line, col, end_line, end_col) = from_lsp(&range);
-                let kind = match h.get("kind").and_then(Value::as_i64) {
-                    Some(3) => LspOccurrenceKind::Write,
-                    Some(2) => LspOccurrenceKind::Read,
+                let (line, col, end_line, end_col) = from_lsp(&h.range);
+                let kind = match h.kind {
+                    Some(DocumentHighlightKind::WRITE) => LspOccurrenceKind::Write,
+                    Some(DocumentHighlightKind::READ) => LspOccurrenceKind::Read,
                     _ => LspOccurrenceKind::Text,
                 };
                 Some(LspOccurrence {
@@ -145,10 +166,14 @@ impl LspBridge {
 
     pub async fn document_symbols(&self, path: &str) -> Result<LspSymbolsResponse> {
         let origin = self.document(path)?;
-        let params = json!({ "textDocument": { "uri": self.documents.uri(&origin) } });
-        let (result, busy) =
-            self.query("textDocument/documentSymbol", params, Some(&origin), Some(LspFeature::DocumentSymbol)).await?;
-        let symbols = if result.is_null() { Vec::new() } else { flatten_symbols(&result, path) };
+        let params = DocumentSymbolParams {
+            text_document: TextDocumentIdentifier { uri: self.documents.uri(&origin) },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        };
+        let (answer, busy) =
+            self.query::<DocumentSymbolRequest>(Some(&origin), LspFeature::DocumentSymbol, params).await?;
+        let symbols = answer.map_or_else(Vec::new, |a| flatten_symbols(a, path));
         Ok(LspSymbolsResponse { inconclusive: inconclusive(symbols.is_empty(), busy), symbols })
     }
 
@@ -156,27 +181,21 @@ impl LspBridge {
     /// order: the pool ranks the union. Membership comes from `has`, never from reading the file: a
     /// per-keystroke search must not read every hit's text.
     pub async fn workspace_symbols(&self, query: &str) -> Result<LspSymbolsResponse> {
-        let (result, busy) =
-            self.query("workspace/symbol", json!({ "query": query }), None, Some(LspFeature::WorkspaceSymbol)).await?;
-        let Some(list) = result.as_array() else {
-            return Ok(LspSymbolsResponse { symbols: Vec::new(), inconclusive: inconclusive(true, busy) });
-        };
-        let mut paths = Vec::with_capacity(list.len());
-        for s in list {
-            let uri = s.pointer("/location/uri").and_then(Value::as_str);
-            paths.push(match uri {
-                Some(uri) => self.locator.path_of(uri).await,
-                None => None,
-            });
+        let params = WorkspaceSymbolParams { query: query.to_owned(), ..Default::default() };
+        let (answer, busy) = self.query::<WorkspaceSymbolRequest>(None, LspFeature::WorkspaceSymbol, params).await?;
+        let found = workspace_symbols(answer);
+        let mut paths = Vec::with_capacity(found.len());
+        for (uri, _) in &found {
+            paths.push(self.locator.path_of(uri).await);
         }
         let inside = self.locator.membership(&paths).await;
         let mut seen = HashSet::new();
-        let symbols: Vec<_> = list
+        let symbols: Vec<_> = found
             .iter()
             .zip(&paths)
-            .filter_map(|(s, path)| {
+            .filter_map(|((_, symbol), path)| {
                 let path = path.as_ref().filter(|p| inside.get(*p).copied().unwrap_or(false))?;
-                let symbol = symbol_information(s, path)?;
+                let symbol = symbol(path);
                 // pyrefly reports one entry per import site; one per definition is enough here.
                 seen.insert(format!("{path}:{}:{}:{}", symbol.line, symbol.col, symbol.name)).then_some(symbol)
             })
@@ -212,58 +231,54 @@ impl LspBridge {
         Ok(origin)
     }
 
-    fn at(&self, origin: &Origin, pos: &LspPosition, extra: Value) -> Value {
-        let mut params = json!({
-            "textDocument": { "uri": self.documents.uri(origin) },
-            "position": to_lsp(pos.line.get() as i64, pos.col),
-        });
-        if let (Some(params), Some(extra)) = (params.as_object_mut(), extra.as_object()) {
-            params.extend(extra.clone());
+    fn at(&self, origin: &Origin, pos: &LspPosition) -> TextDocumentPositionParams {
+        TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: self.documents.uri(origin) },
+            position: to_lsp(pos.line.get() as i64, pos.col),
         }
-        params
     }
 
-    async fn locations(
-        &self,
-        feature: LspFeature,
-        method: &str,
-        pos: &LspPosition,
-        extra: Value,
-    ) -> Result<LspLocationsResponse> {
-        let origin = self.document(&pos.path)?;
-        let (result, busy) = self.query(method, self.at(&origin, pos, extra), Some(&origin), Some(feature)).await?;
+    fn goto(&self, origin: &Origin, pos: &LspPosition) -> GotoDefinitionParams {
+        GotoDefinitionParams {
+            text_document_position_params: self.at(origin, pos),
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        }
+    }
+
+    /// A location answer in snapshot paths, with each line's text.
+    async fn located(&self, answer: Vec<Location>, busy: Option<String>) -> LspLocationsResponse {
         let text_of = |path: &str| self.documents.text_of(path);
-        let locations = self.locator.locations(&normalize_locations(&result), &text_of).await;
-        Ok(LspLocationsResponse { inconclusive: inconclusive(locations.is_empty(), busy), locations })
+        let locations = self.locator.locations(&answer, &text_of).await;
+        LspLocationsResponse { inconclusive: inconclusive(locations.is_empty(), busy), locations }
     }
 
     /// One request against a synced document, asked again while the server answers
     /// `ContentModified`: something moved the document under it, so it refuses to answer from text
     /// it no longer holds. Re-syncing and asking again is what an editor does; giving up reads as
     /// an outage. A feature the server never advertised is not asked for. The second value is why
-    /// an empty result may be incomplete: background work the server reported.
-    async fn query(
+    /// an empty answer may be incomplete: background work the server reported.
+    async fn query<R: Request>(
         &self,
-        method: &str,
-        params: Value,
         origin: Option<&Origin>,
-        feature: Option<LspFeature>,
-    ) -> Result<(Value, Option<String>)> {
+        feature: LspFeature,
+        params: R::Params,
+    ) -> Result<(R::Result, Option<String>)>
+    where
+        R::Params: Clone,
+    {
         for attempt in 0.. {
             if let Some(origin) = origin {
                 self.documents.sync(origin).await?;
             }
             let rpc = self.process.connection().await?;
-            if let Some(feature) = feature.filter(|f| !self.process.supports(*f)) {
-                return Err(Error::LspUnsupported(format!(
-                    "{} offers no {}",
-                    self.process.name(),
-                    feature_label(feature)
-                )));
+            if !self.process.supports(feature) {
+                let name = self.process.name();
+                return Err(Error::LspUnsupported(format!("{name} offers no {}", feature_label(feature))));
             }
             let pending = self.process.busy();
-            match rpc.request(method, params.clone(), None).await {
-                Ok(result) => return Ok((result, self.process.busy().or(pending))),
+            match rpc.request::<R>(params.clone(), None).await {
+                Ok(answer) => return Ok((answer, self.process.busy().or(pending))),
                 Err(RequestError::Rpc(e)) if e.code == CONTENT_MODIFIED => {
                     let Some(backoff) = CONTENT_MODIFIED_BACKOFF.get(attempt) else {
                         let what = origin.map_or_else(|| "the repository".to_owned(), Origin::to_string);
@@ -283,7 +298,6 @@ impl LspBridge {
 }
 
 /// The document URI a server knows a snapshot path by.
-pub fn file_uri(root: &std::path::Path, path: &str) -> String {
-    url::Url::from_file_path(root.join(path))
-        .map_or_else(|()| format!("file://{}/{path}", root.display()), |u| u.to_string())
+pub fn file_uri(root: &std::path::Path, path: &str) -> Url {
+    Url::from_file_path(root.join(path)).expect("the repository root is absolute")
 }

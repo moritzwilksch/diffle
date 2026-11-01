@@ -38,6 +38,7 @@ gethostname = "1"
 hex = "0.4"
 indexmap = "2"
 http-body-util = "0.1"
+lsp-types = "0.95"
 notify = "8"
 octocrab = { version = "0.54", default-features = false, features = ["reqwest"] }
 mime_guess = "2"
