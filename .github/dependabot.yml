@@ -31,7 +31,8 @@ updates:
         patterns:
           - "*"
     ignore:
-      # build.rs hands typify a schemars RootSchema; move with typify's schemars.
+      # build.rs hands typify a schemars 0.8 RootSchema, and typify does not re-export it;
+      # move with typify: https://github.com/oxidecomputer/typify/issues/886
       - dependency-name: schemars
         update-types: ["version-update:semver-major"]
     cooldown:
