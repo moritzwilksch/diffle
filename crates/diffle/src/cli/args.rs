@@ -28,8 +28,8 @@ Revisions follow git diff, except that a lone one compares from the merge base:
 Without revisions, diffle compares HEAD..worktree.
 
 Status goes to stderr, so stdout carries only the review: unless --keep-alive is set,
-closing the last auto-opened browser tab stops diffle and prints the open comments
-as a prompt for an agent.
+closing the last auto-opened browser tab (with --socket, the last tab connected) stops
+diffle and prints the open comments as a prompt for an agent.
 Ctrl+C always stops it.
 
 Docs: https://diffle.app
@@ -90,6 +90,10 @@ pub struct GlobalOpts {
     /// trusted public HTTP(S) origin behind a reverse proxy (without a path)
     #[arg(long, value_name = "origin", value_parser = parse::allowed_origin)]
     pub allowed_origin: Option<String>,
+    /// listen on a Unix socket at <path> that only you can connect to, in place of a port, e.g.
+    /// to forward with ssh -L; opens no browser
+    #[arg(long, value_name = "path", value_hint = ValueHint::FilePath)]
+    pub socket: Option<PathBuf>,
     /// do not open a browser
     #[arg(long = "no-open")]
     pub no_open: bool,
@@ -186,6 +190,7 @@ impl GlobalOpts {
             port: later.port.or(self.port),
             host: later.host.or(self.host),
             allowed_origin: later.allowed_origin.or(self.allowed_origin),
+            socket: later.socket.or(self.socket),
             no_open: self.no_open || later.no_open,
             keep_alive: self.keep_alive || later.keep_alive,
             no_watch: self.no_watch || later.no_watch,

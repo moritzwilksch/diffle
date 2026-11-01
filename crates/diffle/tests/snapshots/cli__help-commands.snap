@@ -16,6 +16,8 @@ Options:
                                  127.0.0.1)
       --allowed-origin <origin>  trusted public HTTP(S) origin behind a reverse proxy (without a
                                  path)
+      --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
+                                 place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes
@@ -44,6 +46,8 @@ Options:
                                  127.0.0.1)
       --allowed-origin <origin>  trusted public HTTP(S) origin behind a reverse proxy (without a
                                  path)
+      --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
+                                 place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes
@@ -73,6 +77,8 @@ Options:
                                  127.0.0.1)
       --allowed-origin <origin>  trusted public HTTP(S) origin behind a reverse proxy (without a
                                  path)
+      --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
+                                 place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes

@@ -252,6 +252,19 @@ diffle working -H 0.0.0.0 --no-open --allowed-origin https://proxy.example
 If the proxy rewrites Host and Origin to its upstream address, such as a Kubernetes service
 name, trust that address instead. A rejected request gets a 403 naming the header that failed.
 
+## On a remote machine
+
+Serve on a Unix socket that only you can connect to, and forward it over SSH:
+
+```bash
+diffle working --socket /home/me/diffle.sock          # on the remote machine
+ssh -N -L 4966:/home/me/diffle.sock remote            # here, then open http://localhost:4966
+```
+
+No browser opens on the remote machine. Closing the last tab connected through the socket stops
+diffle there and prints your open comments, as on your own machine. `--socket` needs macOS or
+Linux, and the forward needs OpenSSH 6.7 or later.
+
 ## Development
 
 The server is Rust (`crates/diffle`), the client TypeScript; you need a Rust toolchain
