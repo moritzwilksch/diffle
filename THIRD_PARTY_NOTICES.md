@@ -2828,7 +2828,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### zustand 5.0.15 (git+https://github.com/pmndrs/zustand.git)
+#### zustand 5.0.16 (git+https://github.com/pmndrs/zustand.git)
 
 ```
 MIT License
@@ -4089,7 +4089,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### lucide-react 1.57.0 (https://github.com/lucide-icons/lucide.git)
+#### lucide-react 1.61.0 (https://github.com/lucide-icons/lucide.git)
 
 ```
 ISC License
