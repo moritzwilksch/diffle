@@ -30,6 +30,10 @@ updates:
       cargo:
         patterns:
           - "*"
+    ignore:
+      # build.rs hands typify a schemars RootSchema; move with typify's schemars.
+      - dependency-name: schemars
+        update-types: ["version-update:semver-major"]
     cooldown:
       default-days: 7
     commit-message:
