@@ -1,6 +1,7 @@
 import { FileDiff } from 'lucide-react';
 import { CommentPanel } from '@/client/comments/CommentPanel.js';
 import { graphView } from '@/client/graph/view.js';
+import { storyView } from '@/client/story/view.js';
 import { DiffStyleSwitch } from '@/client/header/DiffStyleSwitch.js';
 import { DIFF_HELP } from '@/client/keyboard/HelpOverlay.js';
 import { ReviewPane } from '@/client/review/ReviewPane.js';
@@ -12,7 +13,7 @@ const diffView: ViewDef = {
   id: 'diff',
   label: 'Diff',
   icon: FileDiff,
-  title: 'The diff (M)',
+  title: 'The diff (S or M)',
   Main: ReviewPane,
   Side: CommentPanel,
   Controls: DiffStyleSwitch,
@@ -21,7 +22,7 @@ const diffView: ViewDef = {
   panelWidth: '21.25rem',
 };
 
-defineViews([diffView, graphView]);
+defineViews([diffView, storyView, graphView]);
 useStore.getState().registerView({
   here: () => activeView().place?.() ?? null,
   leave: () => showView('diff'),

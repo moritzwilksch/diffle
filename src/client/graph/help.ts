@@ -23,6 +23,7 @@ export const GRAPH_HELP: HelpSection[][] = [
       title: 'Review',
       rows: [
         ['M', 'back to the diff'],
+        ['S', 'the changes as a story'],
         ['Ctrl+o / Ctrl+i', 'jump back / forward in history'],
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: details panel)'],
         ['⌘/Ctrl+Shift+e', 'focus the file tree'],

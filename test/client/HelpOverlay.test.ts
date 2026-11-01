@@ -5,7 +5,8 @@ vi.mock('@/client/api.js', () => ({ api: {} }));
 
 const { DIFF_HELP } = await import('@/client/keyboard/HelpOverlay.js');
 const { GRAPH_HELP } = await import('@/client/graph/help.js');
-const VIEWS = { diff: DIFF_HELP, graph: GRAPH_HELP };
+const { STORY_HELP } = await import('@/client/story/help.js');
+const VIEWS = { diff: DIFF_HELP, graph: GRAPH_HELP, story: STORY_HELP };
 
 describe('HelpOverlay', () => {
   it.each(Object.entries(VIEWS))('lists every %s shortcut once across two columns of titled sections', (_, columns) => {

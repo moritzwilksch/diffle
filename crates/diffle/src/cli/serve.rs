@@ -20,6 +20,8 @@ use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, co
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Server, ServerOptions};
 use crate::session::{Session, SessionOptions};
+use crate::story::StoryService;
+use crate::story::client::{AnthropicClient, StoryModel};
 use crate::user_config::UserConfigStore;
 
 /// How long the HTTP server may take to close once the session has settled.
@@ -56,6 +58,13 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         overrides.extend(opts.lsp.iter().map(|o| (o.language, o.command.clone())));
         super::lsp::start(&session, &hub, overrides, opts.lsp.iter().map(|o| o.language).collect())
     });
+    // Stories need a key; without one the view says so instead of the run failing.
+    let model = AnthropicClient::from_env(|name| std::env::var(name).ok());
+    let story_status = match &model {
+        Ok(client) => dim(&client.model),
+        Err(why) => dim(&format!("off: {why}")),
+    };
+    let story = StoryService::new(session.clone(), hub.clone(), model.map(|c| Arc::new(c) as Arc<dyn StoryModel>));
     let server: Arc<Mutex<Option<Server>>> = Arc::default();
 
     let stop = Arc::new(Notify::new());
@@ -81,7 +90,9 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         &server,
         &repo,
         lsp.clone(),
+        story,
         (&github, token_source.as_deref()),
+        &story_status,
         &mut timing,
     );
     let started = tokio::select! {
@@ -115,7 +126,9 @@ async fn start(
     server: &Mutex<Option<Server>>,
     repo: &GitRepo,
     lsp: Option<Arc<LspPool>>,
+    story: Arc<StoryService>,
     (github, token_source): (&Github, Option<&str>),
+    story_status: &str,
     timing: &mut Timing,
 ) -> anyhow::Result<()> {
     // Resolve the revision before binding, so invalid input never opens a browser.
@@ -127,6 +140,7 @@ async fn start(
         extra_auto_viewed: opts.auto_viewed.clone(),
         hub: hub.clone(),
         lsp: lsp.clone(),
+        story,
     };
     let server_opts = ServerOptions {
         port: opts.port.unwrap_or(DEFAULT_PORT),
@@ -155,6 +169,8 @@ async fn start(
             );
         }
     }
+
+    crate::status!("📖 {} {story_status}", dim("story"));
 
     let snap = session.start(review).await?;
     timing.mark("snapshot");

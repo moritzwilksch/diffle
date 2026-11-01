@@ -49,6 +49,7 @@ pub struct ApiDeps {
     pub hub: Arc<Hub>,
     /// The language servers, unless the run disabled them with `--no-lsp`.
     pub lsp: Option<Arc<crate::lsp::pool::LspPool>>,
+    pub story: Arc<crate::story::StoryService>,
 }
 
 struct App {
