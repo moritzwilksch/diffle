@@ -166,15 +166,11 @@ impl LspPool {
         union(asked, merge, |r: &LspSymbolsResponse| r.symbols.is_empty(), |r| &mut r.inconclusive).await
     }
 
-    /// Keeps the diff's files open in every server for their language, starting one for each
-    /// language the diff has newly grown. A server whose language left the diff stays up with
-    /// nothing tracked, so its index is warm if the reader switches back. Nothing is tracked when
-    /// the new side is not the checkout: a server would see text contradicting the disk it indexes.
-    pub async fn track(self: &Arc<Self>, snap: &Snapshot) {
-        // A snapshot can land while the run is ending; a shutting-down server takes no documents.
-        if self.closing.load(Ordering::SeqCst) {
-            return;
-        }
+    /// Keeps the diff's files open in every server for their language. Servers for languages the diff
+    /// newly grew start before this returns; the future syncs the documents. A server whose language
+    /// left the diff stays up with nothing tracked, so its index is warm if the reader switches back.
+    /// Nothing is tracked when the new side is not the checkout: a server would see text contradicting its disk.
+    pub fn track(self: &Arc<Self>, snap: &Snapshot) -> impl Future<Output = ()> + use<> {
         let mut by_language = PathsByLanguage::new();
         if follows_checkout(snap) {
             for f in snap.changed.iter().filter(|f| f.status != ChangeStatus::D && !f.binary) {
@@ -183,14 +179,18 @@ impl LspPool {
                 }
             }
         }
-        self.ensure(&by_language);
-        let servers = self.servers();
-        let passes = servers.iter().map(|s| {
+        // A snapshot can land while the run is ending; a shutting-down server takes no documents.
+        let closing = self.closing.load(Ordering::SeqCst);
+        if !closing {
+            self.ensure(&by_language);
+        }
+        let servers = if closing { Vec::new() } else { self.servers() };
+        let passes = servers.into_iter().map(|s| {
             let tracked = paths_of(&s.routes(), &by_language);
             s.follow(&tracked);
             async move { s.bridge.track(&tracked).await }
         });
-        futures::future::join_all(passes).await;
+        futures::future::join_all(passes).map(drop)
     }
 
     /// Idempotent: the CLI's dispose can run beside a signal handler's.

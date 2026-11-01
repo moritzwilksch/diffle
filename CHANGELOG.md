@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.5](https://github.com/moritzwilksch/diffle/compare/v0.3.4...v0.3.5) - 2026-10-29
+
+### Bug fixes
+
+- _(client)_ Load the review before the websocket opens ([#419](https://github.com/moritzwilksch/diffle/pull/419))
+
+### Refactors
+
+- _(view)_ Move diff and graph views behind interface ([#411](https://github.com/moritzwilksch/diffle/pull/411))
+
+### Documentation
+
+- _(readme)_ Add Homebrew install ([#409](https://github.com/moritzwilksch/diffle/pull/409))
+
 ## [0.3.4](https://github.com/moritzwilksch/diffle/compare/v0.3.3...v0.3.4) - 2026-10-24
 
 ### Features
