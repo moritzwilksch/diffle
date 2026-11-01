@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.6](https://github.com/moritzwilksch/diffle/compare/v0.3.5...v0.3.6) - 2026-11-01
+
+### Features
+
+- _(cli)_ Serve on a Unix socket with --socket ([#430](https://github.com/moritzwilksch/diffle/pull/430))
+
+### Bug fixes
+
+- _(tree)_ Denser file tree ([#424](https://github.com/moritzwilksch/diffle/pull/424))
+
+### Other
+
+- _(deps)_ Update pixi lock file ([#426](https://github.com/moritzwilksch/diffle/pull/426))
+- _(deps)_ Bump actions/upload-artifact from 7.0.1 to 7.0.2 in the gh-actions group ([#427](https://github.com/moritzwilksch/diffle/pull/427))
+- _(deps)_ Bump the npm group with 8 updates ([#429](https://github.com/moritzwilksch/diffle/pull/429))
+- _(deps)_ Bump the cargo group with 3 updates ([#428](https://github.com/moritzwilksch/diffle/pull/428))
+
 ## [0.3.5](https://github.com/moritzwilksch/diffle/compare/v0.3.4...v0.3.5) - 2026-10-29
 
 ### Bug fixes
