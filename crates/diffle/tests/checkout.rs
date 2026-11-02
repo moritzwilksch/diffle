@@ -9,7 +9,7 @@ use common::{Recorder, TestRepo, revspec};
 use diffle::git::GitRepo;
 use diffle::github::client::GithubClient;
 use diffle::github::hosts::{Github, GithubInstance};
-use diffle::protocol::{EnterRequest, FollowRefs, comparison_label, follows_checkout};
+use diffle::protocol::{EnterRequest, FollowRefs, RangeView, comparison_label, follows_checkout};
 use diffle::session::{Session, SessionOptions};
 
 fn session(repo: GitRepo, github: Github, checkout: bool) -> Arc<Session> {
@@ -227,6 +227,48 @@ async fn keeps_a_range_named_after_head_on_where_the_reviewer_left_it() {
     assert_eq!(comparison_label(&snap.review), "HEAD..feat");
     s.close().await;
     assert_eq!(head(&t), "main");
+}
+
+/// `branches`, with HEAD on feat and feat two commits ahead of main.
+fn on_feat() -> (TestRepo, String) {
+    let t = branches();
+    t.git(&["checkout", "-q", "feat"]);
+    t.write("a.txt", "one\ntwo\nthree\n");
+    t.commit("more");
+    let first = t.git(&["rev-parse", "feat~1"]);
+    (t, first)
+}
+
+#[tokio::test]
+async fn checks_out_a_focused_commit_and_the_range_again() {
+    let (t, first) = on_feat();
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["main...HEAD"])).await.unwrap()).await.unwrap();
+    let snap = s.show(RangeView::Commit { sha: first.clone() }).await.unwrap();
+    assert_eq!((head(&t), t.git(&["rev-parse", "HEAD"])), ("HEAD".to_owned(), first));
+    assert!(follows_checkout(&snap));
+    assert_eq!(snap.commits.list.len(), 2, "HEAD still names feat: the range keeps both commits");
+    let snap = s.show(RangeView::Whole).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert!(follows_checkout(&snap));
+}
+
+#[tokio::test]
+async fn follows_the_reviewer_rewriting_a_focused_commit() {
+    let (t, first) = on_feat();
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["main...HEAD"])).await.unwrap()).await.unwrap();
+    s.show(RangeView::Commit { sha: first }).await.unwrap();
+    // Amended in place: HEAD is the reviewer's again, and the range ends at it.
+    t.write("a.txt", "one\n2\n");
+    t.git(&["commit", "-q", "-a", "--amend", "-m", "feat, amended"]);
+    let amended = t.git(&["rev-parse", "HEAD"]);
+    let snap = s.reload().await.unwrap();
+    assert_eq!(snap.commits.new_sha, amended);
+    s.show(RangeView::Whole).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), amended, "nothing moves the reviewer's HEAD");
+    s.close().await;
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), amended);
 }
 
 #[tokio::test]

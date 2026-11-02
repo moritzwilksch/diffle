@@ -108,13 +108,16 @@ impl Session {
 
     /// A local branch, switched to; any other commit on the new side (a pull request's head, a
     /// remote branch, a branch another worktree holds, a tag, a hash, an expression, a lone
-    /// commit), detached at. A range with the worktree on either side, a slice of a range and a
-    /// range-diff are left alone.
+    /// commit, one commit focused within a range), detached at. A range with the worktree on
+    /// either side, its uncommitted changes and an interdiff are left alone.
     async fn checkout_target(&self, review: &Review) -> Result<Option<CheckoutTarget>> {
         let new = match &self.head.apply(review) {
             Review::Commit { sha } => return Ok(Some(CheckoutTarget::Detached(self.repo.resolve(sha).await?))),
             // The worktree on either side is what a switch would rewrite.
             Review::Range { old, new, .. } if old == WORKTREE || new == WORKTREE => return Ok(None),
+            Review::Range { view: RangeView::Commit { sha }, .. } => {
+                return Ok(Some(CheckoutTarget::Detached(sha.clone())));
+            }
             Review::Range { new, view: RangeView::Whole, .. } => new.clone(),
             Review::Range { .. } => return Ok(None),
         };

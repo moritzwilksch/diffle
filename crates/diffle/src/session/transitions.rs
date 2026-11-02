@@ -55,6 +55,7 @@ impl Session {
         let snap = self
             .run(async move {
                 let review = this.view(view).await?;
+                this.check_out(&review).await;
                 this.activate(review).await
             })
             .await?;
