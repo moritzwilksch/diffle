@@ -5,7 +5,7 @@ mod config;
 mod lifetime;
 mod lsp;
 mod open;
-mod paint;
+pub mod paint;
 mod parse;
 pub mod repository;
 mod serve;

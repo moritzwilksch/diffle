@@ -1,4 +1,5 @@
 //! Parsing revspecs, resolving a request to a review and a review to Git endpoints, and keying its comments.
+pub mod head;
 pub mod keys;
 pub mod pr;
 pub mod rangediff;

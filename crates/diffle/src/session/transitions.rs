@@ -24,7 +24,12 @@ impl Session {
     /// First review, from `resolve`. Fails `ready` too, so early requests error out.
     pub async fn start(self: &Arc<Self>, review: Review) -> Result<Arc<Snapshot>> {
         let this = self.clone();
-        let result = self.run(async move { this.activate(review).await }).await;
+        let result = self
+            .run(async move {
+                this.check_out(&review).await;
+                this.activate(review).await
+            })
+            .await;
         self.ready.send_replace(Some(result.as_ref().map(|_| ()).map_err(Clone::clone)));
         result
     }
@@ -35,6 +40,7 @@ impl Session {
         let snap = self
             .run(async move {
                 let review = resolve_review(&req, &this.repo, &this.github).await?;
+                this.check_out(&review).await;
                 this.activate(review).await
             })
             .await?;
@@ -60,7 +66,7 @@ impl Session {
         let version = self.next_version();
         // A range that can move again gets its iterations recorded: one between refs, or a PR's,
         // fetched anew each run. Its key is the range's, whatever slice is shown.
-        let (range_key, followed, branches) = match &review {
+        let (range_key, followed, branches) = match &self.head.apply(&review) {
             Review::Commit { .. } => (None, false, false),
             Review::Range { old, new, base, pr, .. } => {
                 let ends = resolve_range(&self.repo, old, new, *base).await?;
@@ -78,8 +84,15 @@ impl Session {
             }
         };
         let iterations = followed.then(|| IterationStore::new(self.repo.clone(), range_key.clone().expect("a range")));
-        let snapshotter =
-            Snapshotter::new(self.repo.clone(), review.clone(), range_key.clone(), version, self.context(), iterations);
+        let snapshotter = Snapshotter::new(
+            self.repo.clone(),
+            review.clone(),
+            range_key.clone(),
+            version,
+            self.context(),
+            iterations,
+            self.head.clone(),
+        );
         let snap = snapshotter.current().await?;
         let comments = Arc::new(CommentStore::open(&self.repo.git_dir, &snap.comment_key).await?);
         let next = Arc::new(Active {

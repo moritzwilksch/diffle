@@ -163,7 +163,7 @@ fn with(client: &FakeGithub) -> Github {
 async fn pr_sides(repo: &Arc<GitRepo>, f: &Fixture) -> (bool, bool) {
     let review = resolve_review(&EnterRequest::Pr { pr: Some("7".into()) }, repo, &with(&f.github())).await.unwrap();
     let key = common::range_key(repo, &review).await;
-    let snap = Snapshotter::new(repo.clone(), review, key, 1, 3, None).current().await.unwrap();
+    let snap = Snapshotter::new(repo.clone(), review, key, 1, 3, None, Default::default()).current().await.unwrap();
     let sides = published(repo, &snap).await;
     repo.clean_review_refs().await.unwrap();
     sides

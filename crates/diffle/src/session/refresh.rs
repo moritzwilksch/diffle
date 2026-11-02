@@ -140,6 +140,8 @@ impl Session {
             self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
             return Ok(snap);
         }
+        // HEAD the reviewer moved is theirs again, and names the range as they left it.
+        self.holds_checkout().await;
         a.snapshotter.invalidate(self.next_version());
         self.publish(&a).await
     }
@@ -165,8 +167,10 @@ impl Session {
             if !this.is_active(&a) {
                 return Ok(());
             }
+            // HEAD the reviewer moved is theirs again, and names the range as they left it.
+            this.holds_checkout().await;
             let snap = a.snapshotter.current().await?;
-            let Review::Range { old, new, base, .. } = &a.review else { return Ok(()) };
+            let Review::Range { old, new, base, .. } = &this.head.apply(&a.review) else { return Ok(()) };
             let ends = resolve_range(&this.repo, old, new, *base).await?;
             let moved = (ends.old_sha != snap.commits.old_sha || ends.new_sha != snap.commits.new_sha).then(|| Moved {
                 version: snap.version,
