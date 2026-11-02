@@ -140,8 +140,7 @@ impl Session {
             self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
             return Ok(snap);
         }
-        // HEAD the reviewer moved is theirs again, and names the range as they left it.
-        self.holds_checkout().await;
+        self.follow_checkout(&a.review).await;
         a.snapshotter.invalidate(self.next_version());
         self.publish(&a).await
     }

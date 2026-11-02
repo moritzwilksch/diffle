@@ -62,6 +62,14 @@ impl Session {
         Ok(Some(Outcome::Switched))
     }
 
+    /// Keeps a checkout this run made on the new side once its refs moved, unless the reviewer
+    /// moved HEAD since: the review is theirs to read, the checkout theirs to take back.
+    pub(super) async fn follow_checkout(&self, review: &Review) {
+        if self.holds_checkout().await {
+            self.check_out(review).await;
+        }
+    }
+
     /// Whether HEAD is still where this run's last checkout left it. Once the reviewer moved it,
     /// it is theirs: nothing to put back on exit, and HEAD in a review names HEAD again.
     pub(super) async fn holds_checkout(&self) -> bool {
