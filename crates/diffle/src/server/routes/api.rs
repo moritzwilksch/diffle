@@ -11,13 +11,14 @@ use serde::Deserialize;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::protocol::{
-    EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerMessage, UserConfig,
+    EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerMessage, UserConfig, VersionResponse,
 };
 use crate::session::Broadcaster;
 use crate::user_config::UserConfigPatch;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
+        .route("/api/version", get(version))
         .route("/api/snapshot", get(snapshot))
         .route("/api/moved", get(moved))
         .route("/api/reload", post(reload))
@@ -30,6 +31,11 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/refs", get(refs))
         .route("/api/last-commits-preview", get(last_commits_preview))
         .route("/api/config", get(config).put(set_config))
+}
+
+/// The server's release, for a client to check before it relies on the rest of the API.
+async fn version() -> Response {
+    Json(VersionResponse { version: env!("CARGO_PKG_VERSION").to_owned() }).into_response()
 }
 
 async fn snapshot(State(d): State<Arc<ApiDeps>>) -> ApiResult {
