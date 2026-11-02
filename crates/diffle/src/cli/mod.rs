@@ -3,7 +3,7 @@ mod args;
 mod completion;
 mod config;
 mod lifetime;
-mod lsp;
+pub mod lsp;
 mod open;
 pub mod paint;
 mod parse;
