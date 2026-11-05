@@ -4,6 +4,7 @@ import { Header } from './header/Header.js';
 import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
 import { documentTitle } from './model.js';
+import { useRemPx } from './scale.js';
 import { ServerLost } from './ServerLost.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
@@ -26,6 +27,7 @@ export function App() {
   const active = useViews((s) => s.active);
   const panel = panelOf(layout, active);
   const [lost, setLost] = useState(false);
+  const rem = useRemPx();
   useKeymap();
 
   useEffect(() => {
@@ -109,7 +111,8 @@ export function App() {
       <Header />
       {layout.treeVisible && (
         <>
-          <FileTreePane />
+          {/* The tree fixes its row height when it is created, so a new text size needs a new tree. */}
+          <FileTreePane key={rem} />
           <div
             className="cursor-col-resize bg-border opacity-60 [transition:opacity_120ms_ease,_background_120ms_ease] hover:bg-accent hover:opacity-100 data-resizing:bg-accent data-resizing:opacity-100"
             onPointerDown={startResize('tree')}

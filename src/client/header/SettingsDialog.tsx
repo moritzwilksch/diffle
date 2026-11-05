@@ -1,6 +1,7 @@
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { Button } from '@/client/ui/Button.js';
 import { useEffect, useRef, useState } from 'react';
+import { applyTextSize, readTextSize, storeTextSize, TEXT_SIZES, type TextSize } from '@/client/scale.js';
 import { useStore } from '@/client/store.js';
 import type { FollowRefs } from '@/shared/protocol.js';
 
@@ -17,11 +18,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [context, setContext] = useState(String(config.contextLines));
   const [followRefs, setFollowRefs] = useState(config.followRefs);
   const [lineWrap, setLineWrap] = useState(config.lineWrap);
+  const [textSize, setTextSize] = useState(readTextSize);
   const [saving, setSaving] = useState(false);
   const overrides = Object.entries(config.lspCommands).sort(([a], [b]) => a.localeCompare(b));
 
   const save = async () => {
     setSaving(true);
+    storeTextSize(textSize);
+    applyTextSize(textSize);
     await saveConfig({
       autoViewed: text
         .split('\n')
@@ -95,6 +99,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             (toggle with <code>zw</code>)
           </span>
         </label>
+        <h3 className="m-0 mt-[14px] mb-2">Text size</h3>
+        <p className="m-0 mb-2 text-muted">Scales the whole app. Kept in this browser.</p>
+        <select
+          aria-label="Text size"
+          value={textSize}
+          onChange={(e) => setTextSize(Number(e.target.value) as TextSize)}
+        >
+          {TEXT_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size === 100 ? '100% (default)' : `${size}%`}
+            </option>
+          ))}
+        </select>
         <h3 className="m-0 mt-[14px] mb-2">Reload behavior</h3>
         <p className="m-0 mb-2 text-muted">Reload when a compared ref moves.</p>
         <div role="radiogroup" aria-label="Reload behavior" className="flex flex-col gap-1">
