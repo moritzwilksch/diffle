@@ -4,12 +4,17 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     crane.url = "github:ipetkov/crane";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       nixpkgs,
       crane,
+      rust-overlay,
       self,
     }:
     let
@@ -23,7 +28,11 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          craneLib = crane.mkLib pkgs;
+          # The official toolchain rust-toolchain.toml names, as rustup and pixi build with; nixpkgs
+          # builds rustc from source, older and slower.
+          craneLib = (crane.mkLib pkgs).overrideToolchain (
+            p: (rust-overlay.lib.mkRustBin { } p).fromRustupToolchainFile ./rust-toolchain.toml
+          );
           # The browser client, which the binary embeds.
           client = pkgs.buildNpmPackage {
             pname = "diffle-client";
@@ -62,8 +71,15 @@
             inherit src;
             strictDeps = true;
           };
-          # Dependencies alone, cached across source changes.
-          cargoArtifacts = craneLib.buildDepsOnly common;
+          # Dependencies alone, cached across source changes. Only the release build: other CI jobs
+          # check and test, and crane's default check and test passes would compile them twice more.
+          cargoArtifacts = craneLib.buildDepsOnly (
+            common
+            // {
+              cargoCheckCommand = "true";
+              doCheck = false;
+            }
+          );
           unwrapped = craneLib.buildPackage (
             common
             // {
