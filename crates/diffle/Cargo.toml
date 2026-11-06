@@ -35,6 +35,20 @@ dunce = "1"
 form_urlencoded = "1"
 futures = "0.3"
 gethostname = "1"
+gix = { version = "0.89", default-features = false, features = [
+  "sha1",
+  "max-performance-safe",
+  "revision",
+  "revparse-regex",
+  "attributes",
+  "index",
+  "dirwalk",
+  "blob-diff",
+  "merge",
+  "worktree-mutation",
+  "blocking-network-client",
+  "blocking-http-transport-reqwest-rust-tls",
+] }
 hex = "0.4"
 indexmap = "2"
 http-body-util = "0.1"

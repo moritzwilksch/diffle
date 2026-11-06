@@ -344,3 +344,67 @@ async fn keeps_a_previous_branch_naming_the_reviewers() {
     s.close().await;
     assert_eq!(head(&t), "main");
 }
+
+#[tokio::test]
+async fn logs_each_switch_in_heads_reflog_as_git_does() {
+    let t = branches();
+    let (main, feat) = (t.git(&["rev-parse", "main"]), t.git(&["rev-parse", "feat"]));
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
+    repo.switch(&diffle::git::CheckoutTarget::Detached(main.clone())).await.unwrap();
+    let log = t.git(&["reflog", "-n", "2", "--format=%H %gs", "HEAD"]);
+    assert_eq!(log, format!("{main} checkout: moving from feat to {main}\n{feat} checkout: moving from main to feat"));
+    assert_eq!(t.git(&["rev-parse", "--symbolic-full-name", "@{-1}"]), "refs/heads/feat");
+    assert_eq!(t.git(&["status", "--porcelain"]), "");
+}
+
+#[tokio::test]
+async fn switches_files_modes_links_and_directories_as_git_checks_them_out() {
+    let t = TestRepo::new();
+    t.write(".gitattributes", "*.crlf text eol=crlf\n");
+    t.write("keep.txt", "same\n");
+    t.write("gone/deep/x.txt", "x\n");
+    t.write("becomes", "a file, then a directory\n");
+    t.write("text.crlf", "one\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.rm("gone");
+    t.rm("becomes");
+    t.write("becomes/inner.txt", "inside\n");
+    t.write("text.crlf", "one\ntwo\n");
+    t.write("tool.sh", "echo hi\n");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(t.path.join("tool.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("keep.txt", t.path.join("link")).unwrap();
+    }
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "");
+    assert!(!t.path.join("gone").exists(), "an emptied directory goes");
+    // What git itself checks out for the same commit, byte for byte.
+    let fresh = tempfile::tempdir().unwrap();
+    common::git_in(fresh.path(), &["clone", "-q", "-b", "feat", &t.path.to_string_lossy(), "."]);
+    for path in ["becomes/inner.txt", "text.crlf", "tool.sh", "keep.txt"] {
+        assert_eq!(
+            std::fs::read(t.path.join(path)).unwrap(),
+            std::fs::read(fresh.path().join(path)).unwrap(),
+            "{path}"
+        );
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_ne!(std::fs::metadata(t.path.join("tool.sh")).unwrap().permissions().mode() & 0o111, 0);
+        assert_eq!(std::fs::read_link(t.path.join("link")).unwrap(), std::path::Path::new("keep.txt"));
+    }
+    // And back: the directory turns into the file again.
+    repo.switch(&diffle::git::CheckoutTarget::Branch("main".into())).await.unwrap();
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "");
+    assert_eq!(std::fs::read_to_string(t.path.join("becomes")).unwrap(), "a file, then a directory\n");
+    assert!(repo.is_clean().await.unwrap());
+}

@@ -1,42 +1,19 @@
-//! Revisions, commit metadata, and the plumbing range-diffs are built from.
-use std::collections::HashMap;
-use std::sync::LazyLock;
+//! Revisions, commit metadata, merge bases, and the refs that pin iterations.
+use gix::bstr::ByteSlice;
+use gix::objs::Kind;
 
-use regex::Regex;
-
-use super::GitRepo;
-use super::exec::ExecOptions;
+use super::{GitRepo, refs};
 use crate::error::{GitError, Result};
-use crate::protocol::{CommitInfo, LastCommitsPreview, RangeCommit};
-
-/// `git range-diff` pairs two commits while the diff between their patches costs less than this
-/// percentage of a patch's size. Git's default of 60 leaves a reworded three-line commit unpaired,
-/// since the message change alone outweighs it; at 100 the message may change as much as the patch.
-const CREATION_FACTOR: &str = "--creation-factor=100";
-
-/// Numbers are right-aligned, so rows of a range with ten or more commits start with spaces.
-static RANGE_DIFF_ROW: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s+([=!<>])\s+(?:\d+:\s+([0-9a-f]+)|-:\s+-+)\s").unwrap()
-});
-
-/// One row of `git range-diff -s`: abbreviated hashes, none on the side a commit has no counterpart.
-pub struct RangeDiffRow {
-    pub old: Option<String>,
-    pub new: Option<String>,
-    /// `=` identical, `!` changed, `<` only in the first range, `>` only in the second.
-    pub marker: char,
-}
-
-pub struct RangeList {
-    pub list: Vec<RangeCommit>,
-    pub total: i64,
-}
+use crate::protocol::{CommitInfo, LastCommitsPreview};
+use gix::ObjectId;
+use gix::merge::blob::builtin_driver::text::Labels;
+use gix::merge::tree::TreatAsUnresolved;
+use gix::merge::tree::apply_index_entries::RemovalMode;
 
 impl GitRepo {
-    /// Commit sha for a user-supplied revision. `--end-of-options` keeps an option-shaped name a name.
+    /// Commit sha for a user-supplied revision; a revision that names no commit is missing.
     pub async fn resolve(&self, rev: &str) -> Result<String, GitError> {
-        let commit = format!("{rev}^{{commit}}");
-        Ok(self.text(&["rev-parse", "--verify", "--quiet", "--end-of-options", &commit]).await?.trim().to_owned())
+        self.peeled(rev, Kind::Commit).await
     }
 
     /// `resolve`, with none for a revision that names nothing.
@@ -50,8 +27,22 @@ impl GitRepo {
 
     /// The tree a commit points at.
     pub async fn tree(&self, rev: &str) -> Result<String, GitError> {
-        let tree = format!("{rev}^{{tree}}");
-        Ok(self.text(&["rev-parse", "--verify", "--quiet", "--end-of-options", &tree]).await?.trim().to_owned())
+        self.peeled(rev, Kind::Tree).await
+    }
+
+    /// `rev` peeled to an object of `kind`, as `rev-parse --verify --quiet rev^{kind}`: any failure is missing.
+    async fn peeled(&self, rev: &str, kind: Kind) -> Result<String, GitError> {
+        let owned = rev.to_owned();
+        let found = self
+            .gix("rev-parse", move |repo| {
+                let Ok(id) = repo.rev_parse_single(owned.as_str()) else { return Ok(None) };
+                Ok(id.object()?.peel_to_kind(kind).ok().map(|o| o.id.to_string()))
+            })
+            .await?;
+        found.ok_or_else(|| GitError {
+            code: Some(1),
+            ..GitError::refused(format!("unknown revision: {rev}"), &["rev-parse", "--verify", rev])
+        })
     }
 
     /// Commit messages for two ancestor offsets, pinned to one HEAD.
@@ -74,125 +65,77 @@ impl GitRepo {
         let Some(sha) = self.try_resolve(rev).await? else {
             return Ok(None);
         };
-        let out = self.text(&["log", "-1", "--no-show-signature", "--format=%h%x00%B", &sha, "--"]).await?;
-        let (short, message) = out.split_once('\0').unwrap_or((&out, ""));
-        Ok(Some(CommitInfo { short: short.to_owned(), message: message.trim_end().to_owned(), sha }))
-    }
-
-    /// `sha`'s first parent, and the commit toward HEAD whose first parent it is. The child is none
-    /// at HEAD, on an unborn branch, or when `sha` is off HEAD's first-parent line.
-    pub async fn commit_neighbours(&self, sha: &str) -> Result<(Option<String>, Option<String>), GitError> {
-        let (range, parent) = (format!("{sha}..HEAD"), format!("{sha}^"));
-        let descendants = ["rev-list", "--first-parent", "--ancestry-path", "--parents", &range, "--"];
-        let (parent, list) = tokio::join!(self.try_resolve(&parent), self.text(&descendants));
-        let list = list.unwrap_or_default();
-        // Newest first, so the oldest descendant comes last; it is the child only if it sits on sha directly.
-        let mut last = list.trim().lines().last().unwrap_or_default().split(' ');
-        let child = match (last.next(), last.next()) {
-            (Some(child), Some(first_parent)) if !child.is_empty() && first_parent == sha => Some(child.to_owned()),
-            _ => None,
-        };
-        Ok((parent?, child))
-    }
-
-    /// The commits a revision range such as `a..b` or `c^!` selects, oldest first: the newest `limit`, and the total.
-    pub async fn range_commits(&self, range: &str, limit: usize) -> Result<RangeList, GitError> {
-        let max = format!("--max-count={limit}");
-        let format = "--format=%H%x00%h%x00%an%x00%ae%x00%at%x00%B";
-        let count = ["rev-list", "--count", "--end-of-options", range, "--"];
-        let log = ["log", "-z", "--no-show-signature", "--reverse", &max, format, "--end-of-options", range, "--"];
-        let (count, log) = tokio::try_join!(self.text(&count), self.text(&log))?;
-        // Fields cannot contain NUL, and `-z` ends each record with one, so every commit is six fields.
-        let fields: Vec<&str> = log.split('\0').collect();
-        let list = fields
-            .as_chunks::<6>()
-            .0
-            .iter()
-            .map(|f| RangeCommit {
-                sha: f[0].to_owned(),
-                short: f[1].to_owned(),
-                author: f[2].to_owned(),
-                email: f[3].to_owned(),
-                date: f[4].parse::<i64>().unwrap_or(0) * 1000,
-                message: f[5].trim_end().to_owned(),
-            })
-            .collect();
-        Ok(RangeList { list, total: count.trim().parse().unwrap_or(0) })
+        self.gix("reading a commit", move |repo| {
+            let commit = repo.find_commit(gix::ObjectId::from_hex(sha.as_bytes())?)?;
+            let message = commit.message_raw_sloppy().to_str_lossy().trim_end().to_owned();
+            Ok(Some(CommitInfo { short: commit.id().shorten_or_id().to_string(), message, sha }))
+        })
+        .await
     }
 
     /// The empty tree under the repository's hash algorithm: the old side of an unborn branch.
     pub async fn empty_tree(&self) -> Result<String, GitError> {
-        let opts = ExecOptions { input: Some(b""), ..Default::default() };
-        Ok(self.text_with(&["hash-object", "-t", "tree", "--stdin"], opts).await?.trim().to_owned())
+        self.gix("hashing the empty tree", |repo| Ok(gix::ObjectId::empty_tree(repo.object_hash()).to_string())).await
     }
 
     pub async fn merge_base(&self, a: &str, b: &str) -> Result<String, GitError> {
-        Ok(self.text(&["merge-base", "--end-of-options", a, b]).await?.trim().to_owned())
+        let (a, b) = (a.to_owned(), b.to_owned());
+        self.gix("merge-base", move |repo| {
+            let (a, b) = (repo.rev_parse_single(a.as_str())?, repo.rev_parse_single(b.as_str())?);
+            let base = repo.merge_base(a, b)?.ok_or_else(|| anyhow::anyhow!("no merge base between {a} and {b}"))?;
+            Ok(base.to_string())
+        })
+        .await
     }
 
-    /// Replays what `head` changed since `base` onto `onto`, in memory: the resulting tree, and the
-    /// paths the merge could not settle, which the tree holds with conflict markers. Needs git 2.38.
+    /// Replays what `head` changed since `base` onto `onto`, as `git merge-tree` would: the
+    /// resulting tree, written to the object database, and the paths the merge could not settle,
+    /// which the tree holds with conflict markers labelled with `onto` and `head`.
     pub async fn replay(&self, base: &str, onto: &str, head: &str) -> Result<(String, Vec<String>), GitError> {
-        let merge_base = format!("--merge-base={base}");
-        let args = ["merge-tree", "--write-tree", "-z", "--name-only", &merge_base, "--end-of-options", onto, head];
-        let out = self.text_with(&args, ExecOptions { ok_codes: &[1], ..Default::default() }).await?;
-        // With -z, the tree, each conflicted path and the sections end in NUL.
-        let mut parts = out.split('\0');
-        let tree = parts.next().unwrap_or_default().to_owned();
-        let conflicts = parts.take_while(|p| !p.is_empty()).map(str::to_owned).collect();
-        Ok((tree, conflicts))
-    }
-
-    /// How `git range-diff` pairs the commits of two ranges, in its output order. Summary only, no
-    /// patches. Ranges are given as hashes: range-diff learnt `--end-of-options` only in git 2.44.
-    pub async fn range_diff(&self, old_range: &str, new_range: &str) -> Result<Vec<RangeDiffRow>, GitError> {
-        let out = self.text(&["range-diff", "-s", "--no-color", CREATION_FACTOR, old_range, new_range]).await?;
-        Ok(out
-            .lines()
-            .filter_map(|line| RANGE_DIFF_ROW.captures(line))
-            .map(|m| RangeDiffRow {
-                old: m.get(1).map(|s| s.as_str().to_owned()),
-                new: m.get(3).map(|s| s.as_str().to_owned()),
-                marker: m[2].chars().next().unwrap_or('!'),
-            })
-            .collect())
-    }
-
-    /// Each commit's stable patch id, so two commits with the same change under different messages compare equal.
-    pub async fn patch_ids(&self, shas: &[String]) -> Result<HashMap<String, String>, GitError> {
-        let mut ids = HashMap::new();
-        if shas.is_empty() {
-            return Ok(ids);
-        }
-        let mut args = vec!["log", "-p", "--no-walk", "--no-show-signature", "--format=%H", "--end-of-options"];
-        args.extend(shas.iter().map(String::as_str));
-        let patches = self.exec(&args, ExecOptions::default()).await?;
-        let opts = ExecOptions { input: Some(&patches), ..Default::default() };
-        for line in self.text_with(&["patch-id", "--stable"], opts).await?.lines() {
-            if let Some((id, sha)) = line.split_once(' ') {
-                ids.insert(sha.to_owned(), id.to_owned());
-            }
-        }
-        Ok(ids)
+        let (base, onto, head) = (base.to_owned(), onto.to_owned(), head.to_owned());
+        self.gix("merge-tree", move |repo| {
+            let tree = |rev: &str| -> anyhow::Result<ObjectId> {
+                Ok(repo.rev_parse_single(rev)?.object()?.peel_to_tree()?.id)
+            };
+            let labels = Labels {
+                ancestor: Some(base.as_str().into()),
+                current: Some(onto.as_str().into()),
+                other: Some(head.as_str().into()),
+            };
+            let mut merged =
+                repo.merge_trees(tree(&base)?, tree(&onto)?, tree(&head)?, labels, repo.tree_merge_options()?)?;
+            let id = merged.tree.write()?.detach();
+            // The conflicted paths are those the merge leaves at a stage, as git's index would hold them.
+            let mut index = repo.index_from_tree(&id)?;
+            merged.index_changed_after_applying_conflicts(&mut index, TreatAsUnresolved::git(), RemovalMode::Prune);
+            let mut conflicts: Vec<String> =
+                index.entries().iter().filter(|e| e.stage_raw() != 0).map(|e| e.path(&index).to_string()).collect();
+            conflicts.dedup();
+            Ok((id.to_string(), conflicts))
+        })
+        .await
     }
 
     /// Points refs at objects so they survive `gc` and a force-push, or with none deletes them.
     /// Refs must stay inside `refs/diffle/iterations/`: nothing the user owns moves.
     pub async fn pin(&self, refs: &[(String, Option<String>)]) -> Result<(), GitError> {
-        let mut lines = String::new();
-        for (name, sha) in refs {
-            if !name.starts_with("refs/diffle/iterations/") {
-                return Err(GitError::refused(format!("refusing to update {name}"), &["update-ref"]));
+        if let Some((name, _)) = refs.iter().find(|(name, _)| !name.starts_with("refs/diffle/iterations/")) {
+            return Err(GitError::refused(format!("refusing to update {name}"), &["update-ref"]));
+        }
+        let refs = refs.to_vec();
+        self.gix("update-ref", move |repo| {
+            let edits = refs
+                .into_iter()
+                .map(|(name, sha)| match sha {
+                    Some(sha) => refs::update(&name, gix::ObjectId::from_hex(sha.as_bytes())?),
+                    None => refs::delete(&name),
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            if !edits.is_empty() {
+                repo.edit_references(edits)?;
             }
-            lines += &match sha {
-                Some(sha) => format!("update {name} {sha}\n"),
-                None => format!("delete {name}\n"),
-            };
-        }
-        if !lines.is_empty() {
-            let opts = ExecOptions { input: Some(lines.as_bytes()), ..Default::default() };
-            self.exec(&["update-ref", "--stdin"], opts).await?;
-        }
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 }

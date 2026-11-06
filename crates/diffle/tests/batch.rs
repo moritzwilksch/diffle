@@ -29,7 +29,7 @@ fn generated(snap: &Snapshot) -> BTreeMap<&str, bool> {
 }
 
 #[tokio::test]
-async fn answers_a_list_of_blob_shas_from_one_process_keeping_only_a_prefix_of_each() {
+async fn answers_a_list_of_blob_shas_keeping_only_a_prefix_of_each() {
     let t = batch_repo();
     let repo = Arc::new(t.open().await);
     let shas = [
@@ -39,12 +39,11 @@ async fn answers_a_list_of_blob_shas_from_one_process_keeping_only_a_prefix_of_e
         t.git(&["rev-parse", "HEAD:dir"]),
     ];
     let heads = repo.blob_heads(&shas, 16).await.unwrap();
-    assert_eq!(repo.cat_file_spawns(), 1);
     assert_eq!(heads[&shas[0]], b"one\ntwo\nthree\n");
     assert_eq!(heads[&shas[1]].len(), 16);
     // Missing objects and non-blobs (a tree) are left out rather than failing the batch.
     assert!(!heads.contains_key(&shas[2]) && !heads.contains_key(&shas[3]));
-    // Concurrent readers share the process; answers stay matched to their names.
+    // Concurrent readers get the answers to their own names.
     let reads = (0..40).map(|i| {
         let repo = repo.clone();
         async move { repo.head("HEAD", if i % 2 == 1 { "small.txt" } else { "big.txt" }, 4).await.unwrap().unwrap() }
@@ -53,11 +52,10 @@ async fn answers_a_list_of_blob_shas_from_one_process_keeping_only_a_prefix_of_e
     for (i, body) in many.iter().enumerate() {
         assert_eq!(body, if i % 2 == 1 { b"one\n" } else { b"xxxx" });
     }
-    assert_eq!(repo.cat_file_spawns(), 1);
 }
 
 #[tokio::test]
-async fn show_reads_whole_blobs_through_one_process_and_reports_non_blobs_absent() {
+async fn show_reads_whole_blobs_and_reports_non_blobs_absent() {
     let t = batch_repo();
     let repo = Arc::new(t.open().await);
     let files = ["small.txt", "big.txt", "dir/in.txt"];
@@ -69,7 +67,6 @@ async fn show_reads_whole_blobs_through_one_process_and_reports_non_blobs_absent
     for (i, size) in sizes.into_iter().enumerate() {
         assert_eq!(size, Some([14, 200_001, 3][i % 3]));
     }
-    assert_eq!(repo.cat_file_spawns(), 1);
     assert!(repo.show("HEAD", "dir").await.unwrap().is_none());
     assert!(repo.show("HEAD", "nope.txt").await.unwrap().is_none());
     assert!(repo.show(&"0".repeat(40), "small.txt").await.unwrap().is_none());
@@ -79,28 +76,17 @@ async fn show_reads_whole_blobs_through_one_process_and_reports_non_blobs_absent
 }
 
 #[tokio::test]
-async fn reports_missing_names_with_spaces_without_stalling_the_batch() {
+async fn reads_and_reports_missing_names_with_spaces_and_newlines() {
     let t = batch_repo();
     let repo = t.open().await;
     assert_eq!(repo.show("HEAD", "has space.txt").await.unwrap().unwrap(), b"sp\n");
     assert!(repo.show("HEAD", "no such.txt").await.unwrap().is_none());
     assert!(repo.head("HEAD", "also missing.txt", 4).await.unwrap().is_none());
     assert_eq!(repo.show("main", "small.txt").await.unwrap().unwrap(), b"one\ntwo\n");
-    // A name with a newline cannot ride the batch, so both reads fall back to a plain cat-file.
     if cfg!(unix) {
         assert_eq!(repo.show("HEAD", "odd\nname.txt").await.unwrap().unwrap(), b"odd\n");
         assert_eq!(repo.head("HEAD", "odd\nname.txt", 100).await.unwrap().unwrap(), b"odd\n");
     }
-}
-
-#[tokio::test]
-async fn reaps_an_idle_batch_and_respawns_on_the_next_request() {
-    let t = batch_repo();
-    let repo = t.open().await;
-    assert!(repo.show("HEAD", "small.txt").await.unwrap().is_some());
-    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
-    assert!(repo.show("HEAD", "small.txt").await.unwrap().is_some());
-    assert_eq!(repo.cat_file_spawns(), 2);
 }
 
 #[tokio::test]

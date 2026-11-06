@@ -1,6 +1,7 @@
-//! Reading either side: blobs through the shared batch, worktree files from disk.
+//! Reading either side: blobs from the object database, worktree files from disk.
 use std::collections::HashMap;
 
+use gix::objs::Kind;
 use tokio::io::AsyncReadExt;
 
 use super::{GitRepo, WORKTREE, inside};
@@ -9,8 +10,26 @@ use crate::error::GitError;
 impl GitRepo {
     /// Blob contents at `rev`, or none if absent or not a blob (a directory, a gitlink).
     pub async fn show(&self, rev: &str, path: &str) -> Result<Option<Vec<u8>>, GitError> {
-        let object = self.cat_file.request(&format!("{rev}:{path}"), usize::MAX).await?;
-        Ok(object.filter(|o| o.kind == "blob").map(|o| o.body))
+        self.blob_at(rev, path, usize::MAX).await
+    }
+
+    /// The first `keep` bytes of the blob at `rev:path`. A revision or path that names nothing is
+    /// none, as `cat-file` reports it missing.
+    async fn blob_at(&self, rev: &str, path: &str, keep: usize) -> Result<Option<Vec<u8>>, GitError> {
+        let (rev, path) = (rev.to_owned(), path.to_owned());
+        self.gix("reading a blob", move |repo| {
+            let Ok(id) = repo.rev_parse_single(rev.as_str()) else {
+                return Ok(None);
+            };
+            let Ok(tree) = id.object()?.peel_to_tree() else {
+                return Ok(None);
+            };
+            let Some(entry) = tree.lookup_entry_by_path(&path)? else {
+                return Ok(None);
+            };
+            Ok(blob_head(repo, entry.object_id(), keep)?)
+        })
+        .await
     }
 
     /// Worktree file at a repo-relative path, or none if absent or not a file. A symlink yields its
@@ -37,20 +56,25 @@ impl GitRepo {
     /// First `bytes` of each blob, keyed by sha; one batch answers the whole list. A sha that is
     /// not a blob (missing, a gitlink) is absent from the result.
     pub async fn blob_heads(&self, shas: &[String], bytes: usize) -> Result<HashMap<String, Vec<u8>>, GitError> {
-        let objects = futures::future::try_join_all(shas.iter().map(|sha| self.cat_file.request(sha, bytes))).await?;
-        Ok(shas
-            .iter()
-            .zip(objects)
-            .filter_map(|(sha, o)| o.filter(|o| o.kind == "blob").map(|o| (sha.clone(), o.body)))
-            .collect())
+        let shas = shas.to_vec();
+        self.gix("reading blobs", move |repo| {
+            let mut heads = HashMap::new();
+            for sha in shas {
+                let Ok(id) = gix::ObjectId::from_hex(sha.as_bytes()) else { continue };
+                if let Some(head) = blob_head(repo, id, bytes)? {
+                    heads.insert(sha, head);
+                }
+            }
+            Ok(heads)
+        })
+        .await
     }
 
     /// First `bytes` of a file on the new side, or none if absent. The worktree read is bounded at
-    /// the file; a blob streams through the batch reader, which keeps only the prefix.
+    /// the file.
     pub async fn head(&self, rev: &str, path: &str, bytes: usize) -> anyhow::Result<Option<Vec<u8>>> {
         if rev != WORKTREE {
-            let object = self.cat_file.request(&format!("{rev}:{path}"), bytes).await?;
-            return Ok(object.filter(|o| o.kind == "blob").map(|o| o.body));
+            return Ok(self.blob_at(rev, path, bytes).await?);
         }
         let Some(abs) = inside(&self.root, path) else {
             return Ok(None);
@@ -65,4 +89,17 @@ impl GitRepo {
         tokio::fs::File::open(&abs).await?.take(bytes as u64).read_to_end(&mut buf).await?;
         Ok(Some(buf))
     }
+}
+
+/// The first `keep` bytes of a blob, or none when `id` is missing or not a blob.
+fn blob_head(repo: &gix::Repository, id: gix::ObjectId, keep: usize) -> gix::Result<Option<Vec<u8>>> {
+    let Some(object) = repo.try_find_object(id)? else {
+        return Ok(None);
+    };
+    if object.kind != Kind::Blob {
+        return Ok(None);
+    }
+    let mut body = object.detach().data;
+    body.truncate(keep);
+    Ok(Some(body))
 }

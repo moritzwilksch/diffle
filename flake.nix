@@ -82,8 +82,8 @@
               };
             }
           );
-          # The binary with `runtime` on its PATH: git always, gh for pull requests, and the
-          # language servers `withLsps` adds. Each result can take more.
+          # The binary with `runtime` on its PATH: gh for pull requests, and the language servers
+          # `withLsps` adds. Each result can take more. Git itself runs in-process.
           wrap =
             runtime:
             pkgs.symlinkJoin {
@@ -99,7 +99,7 @@
               };
               inherit (unwrapped) meta;
             };
-          base = [ pkgs.git ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.xdg-utils;
+          base = lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.xdg-utils;
           default = wrap (base ++ [ pkgs.gh ]);
         in
         {
