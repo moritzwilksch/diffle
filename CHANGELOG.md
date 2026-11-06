@@ -2,6 +2,70 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0](https://github.com/moritzwilksch/diffle/compare/v0.3.6...v0.4.0) - 2026-11-06
+
+### Features
+
+- _(server)_ Add a version endpoint for other clients ([#431](https://github.com/moritzwilksch/diffle/pull/431))
+- _(client)_ Add a text size setting ([#433](https://github.com/moritzwilksch/diffle/pull/433))
+- [**breaking**] Check out the reviewed revision so language servers see it ([#421](https://github.com/moritzwilksch/diffle/pull/421))
+- _(cli)_ [**breaking**] Compare a lone revision against the worktree, as git diff does ([#435](https://github.com/moritzwilksch/diffle/pull/435))
+
+### Other
+
+- _(dev)_ Add git-cliff for all platforms ([#423](https://github.com/moritzwilksch/diffle/pull/423))
+
+## [0.3.6](https://github.com/moritzwilksch/diffle/compare/v0.3.5...v0.3.6) - 2026-11-01
+
+### Features
+
+- _(cli)_ Serve on a Unix socket with --socket ([#430](https://github.com/moritzwilksch/diffle/pull/430))
+
+### Bug fixes
+
+- _(tree)_ Denser file tree ([#424](https://github.com/moritzwilksch/diffle/pull/424))
+
+### Other
+
+- _(deps)_ Update pixi lock file ([#426](https://github.com/moritzwilksch/diffle/pull/426))
+- _(deps)_ Bump actions/upload-artifact from 7.0.1 to 7.0.2 in the gh-actions group ([#427](https://github.com/moritzwilksch/diffle/pull/427))
+- _(deps)_ Bump the npm group with 8 updates ([#429](https://github.com/moritzwilksch/diffle/pull/429))
+- _(deps)_ Bump the cargo group with 3 updates ([#428](https://github.com/moritzwilksch/diffle/pull/428))
+
+## [0.3.5](https://github.com/moritzwilksch/diffle/compare/v0.3.4...v0.3.5) - 2026-10-29
+
+### Bug fixes
+
+- _(client)_ Load the review before the websocket opens ([#419](https://github.com/moritzwilksch/diffle/pull/419))
+
+### Refactors
+
+- _(view)_ Move diff and graph views behind interface ([#411](https://github.com/moritzwilksch/diffle/pull/411))
+
+### Documentation
+
+- _(readme)_ Add Homebrew install ([#409](https://github.com/moritzwilksch/diffle/pull/409))
+
+## [0.3.4](https://github.com/moritzwilksch/diffle/compare/v0.3.3...v0.3.4) - 2026-10-24
+
+### Features
+
+- _(lsp)_ Navigate on from files outside the repository ([#396](https://github.com/moritzwilksch/diffle/pull/396))
+- Copy a GitHub permalink to the selected lines ([#395](https://github.com/moritzwilksch/diffle/pull/395))
+- Show the diff as a graph of changed symbols from the language servers ([#402](https://github.com/moritzwilksch/diffle/pull/402))
+
+### Bug fixes
+
+- _(client)_ Keep tree viewed marks in one column, hide counts together ([#397](https://github.com/moritzwilksch/diffle/pull/397))
+
+### Documentation
+
+- Open diffle from lazygit ([#398](https://github.com/moritzwilksch/diffle/pull/398))
+
+### Other
+
+- _(dev)_ Install rust-src so lsp works better on rust files ([#400](https://github.com/moritzwilksch/diffle/pull/400))
+
 ## [0.3.3](https://github.com/moritzwilksch/diffle/compare/v0.3.2...v0.3.3) - 2026-10-23
 
 ### Bug fixes

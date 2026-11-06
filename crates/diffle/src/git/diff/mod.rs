@@ -74,6 +74,32 @@ fn tree_id(repo: &gix::Repository, rev: &str) -> anyhow::Result<ObjectId> {
     Ok(repo.rev_parse_single(rev)?.object()?.peel_to_tree()?.id)
 }
 
+/// A path whose entry differs between two sides: either side absent where the path is.
+pub(in crate::git) type PathChange = (Option<Item>, Option<Item>);
+
+/// What differs between two trees, path by path, as a checkout from one to the other sees it:
+/// no renames.
+pub(in crate::git) fn tree_changes(
+    repo: &gix::Repository,
+    old: ObjectId,
+    new: ObjectId,
+) -> anyhow::Result<Vec<PathChange>> {
+    let changes = compare(sides::tree_items(repo, old)?, sides::tree_items(repo, new)?, &[]);
+    Ok(changes.into_iter().map(|c| (c.old, c.new)).collect())
+}
+
+/// What tracked paths differ between `base` and the worktree, staged or not, and whether the index
+/// holds unresolved conflicts. Untracked files are not looked at.
+pub(in crate::git) fn worktree_changes(
+    repo: &gix::Repository,
+    root: &std::path::Path,
+    base: ObjectId,
+) -> anyhow::Result<(Vec<PathChange>, bool)> {
+    let (items, conflicts) = worktree::worktree_items(repo, root)?;
+    let changes = compare(sides::tree_items(repo, base)?, items, &conflicts);
+    Ok((changes.into_iter().map(|c| (c.old, c.new)).collect(), !conflicts.is_empty()))
+}
+
 /// Pairs both sorted lists by path into the changes between them.
 fn compare(old: Vec<Item>, new: Vec<Item>, conflicts: &[BString]) -> Vec<Change> {
     let mut changes = Vec::new();

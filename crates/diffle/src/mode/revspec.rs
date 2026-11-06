@@ -26,7 +26,7 @@ fn or_head(rev: &str) -> &str {
 }
 
 /// git-diff style revision arguments:
-///   "a"      → merge-base(a, HEAD) vs HEAD, i.e. "a...HEAD"
+///   "a"      → merge-base(a, HEAD) vs the worktree, i.e. "a...worktree"
 ///   "a..b"   → a vs b
 ///   "a...b"  → merge-base(a, b) vs b
 ///   "a" "b"  → a vs b
@@ -61,11 +61,12 @@ pub fn parse_revspec(args: &[String]) -> Result<ParsedRevspec> {
             if let Some((a, b)) = arg.split_once("..") {
                 return Ok(spec(or_head(a), or_head(b), ComparisonBase::Direct));
             }
-            // A lone revision reviews what it and HEAD diverged into: the everyday "my branch" diff.
+            // A lone revision reviews the worktree, as git diff does, but from where it and HEAD
+            // diverged: the everyday "my branch" diff, uncommitted work included.
             if arg == WORKTREE {
                 return Ok(spec("HEAD", WORKTREE, ComparisonBase::Direct));
             }
-            Ok(spec(arg, "HEAD", ComparisonBase::MergeBase))
+            Ok(spec(arg, WORKTREE, ComparisonBase::MergeBase))
         }
         _ => Err(Error::revspec("expected one or two revisions")),
     }
@@ -146,7 +147,7 @@ mod tests {
     #[test]
     fn reads_revspecs_as_git_diff_does() {
         let t = |old: &str, new: &str, base| ParsedRevspec::Range { old: old.to_owned(), new: new.to_owned(), base };
-        assert_eq!(parsed(&["main"]), t("main", "HEAD", MergeBase));
+        assert_eq!(parsed(&["main"]), t("main", "worktree", MergeBase));
         assert_eq!(parsed(&["main..feat"]), t("main", "feat", Direct));
         assert_eq!(parsed(&["main..."]), t("main", "HEAD", MergeBase));
         assert_eq!(parsed(&["..feat"]), t("HEAD", "feat", Direct));

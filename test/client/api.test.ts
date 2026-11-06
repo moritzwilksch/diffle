@@ -36,7 +36,7 @@ describe('connectWs', () => {
     const stop = connectWs(onMessage, onOpen, onLost);
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0]!.url).toBe('ws://localhost:1/ws');
-    // Nothing is fetched before the socket is subscribed: the first open is the boot.
+    // The resync waits until the socket is subscribed.
     expect(onOpen).not.toHaveBeenCalled();
     FakeWebSocket.instances[0]!.onopen?.();
     expect(onOpen).toHaveBeenCalledTimes(1);
@@ -62,6 +62,22 @@ describe('connectWs', () => {
     vi.advanceTimersByTime(20_000);
     expect(FakeWebSocket.instances).toHaveLength(3);
     expect(onLost).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons an attempt that hangs, so it holds no browser connection slot for long', () => {
+    const onLost = vi.fn();
+    const stop = connectWs(vi.fn(), vi.fn(), onLost);
+    vi.advanceTimersByTime(1999);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    // Closed at 2 s, retried after the first backoff step; it never connected, so nothing was lost.
+    vi.advanceTimersByTime(1 + 500);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(onLost).not.toHaveBeenCalled();
+    // An attempt that opens in time stays open.
+    FakeWebSocket.instances[1]!.onopen?.();
+    vi.advanceTimersByTime(10_000);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    stop();
   });
 });
 

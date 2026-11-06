@@ -7,7 +7,7 @@ use futures::future::BoxFuture;
 use indexmap::IndexSet;
 use regex::Regex;
 
-use super::documents::ReadFn;
+use super::documents::{Origin, ReadFn};
 use super::hover::file_link_uris;
 use super::shapes::Range;
 use crate::concurrency::map_limit;
@@ -116,24 +116,47 @@ impl Locator {
     /// Contents of a file outside the snapshot that a recent result named; none for every other
     /// path. The only read done on a client's behalf beyond the snapshot allowlist.
     pub async fn read_external(&self, path: &str) -> Option<Vec<u8>> {
-        let path = PathBuf::from(path);
-        if !self.external.lock().unwrap().contains(&path) {
-            return None;
+        let stored = self.external.lock().unwrap().get(Path::new(path)).cloned()?;
+        tokio::fs::read(stored).await.ok()
+    }
+
+    /// The document a query names: an outside file a recent result named, spelled as the result
+    /// named it, or else a repository path for the snapshot to vouch for. Any other absolute path
+    /// is none. A lookup only; `promote` marks one as asked about.
+    pub fn origin(&self, path: &str) -> Option<Origin> {
+        if let Some(stored) = self.external.lock().unwrap().get(Path::new(path)) {
+            return Some(Origin::External { abs: stored.clone(), rel: relative_inside(&self.root, stored) });
         }
-        tokio::fs::read(&path).await.ok()
+        (!Path::new(path).has_root()).then(|| Origin::Snapshot(path.to_owned()))
+    }
+
+    /// Counts a query from an outside file as naming it again, so a file being read is the last
+    /// to be forgotten. One forgotten meanwhile stays forgotten.
+    pub fn promote(&self, origin: &Origin) {
+        let Origin::External { abs, .. } = origin else { return };
+        let mut external = self.external.lock().unwrap();
+        if external.shift_remove(abs) {
+            external.insert(abs.clone());
+        }
     }
 
     async fn locate(&self, uri: &str, text_of: &(dyn Fn(&str) -> Option<String> + Sync)) -> Option<Found> {
-        if let Some(path) = self.path_of(uri).await {
-            let text = match text_of(&path) {
+        let inside = self.path_of(uri).await;
+        if let Some(path) = &inside {
+            let text = match text_of(path) {
                 Some(text) => Some(text),
                 None => (self.read)(path.clone()).await,
             };
             if let Some(text) = text {
-                return Some(Found { path, text, external: false });
+                return Some(Found { path: path.clone(), text, external: false });
             }
         }
-        let abs = file_path(uri)?;
+        // A file inside the root the snapshot hides is spelled through the root, however the server
+        // spelled it: should it join the snapshot, its URI stays the one document's.
+        let abs = match inside {
+            Some(rel) => self.root.join(rel),
+            None => file_path(uri)?,
+        };
         let text = tokio::fs::read_to_string(&abs).await.ok()?;
         self.remember(abs.clone());
         Some(Found { path: abs.to_string_lossy().into_owned(), text, external: true })

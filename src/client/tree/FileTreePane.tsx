@@ -10,12 +10,13 @@ import { remPx } from '@/client/scale.js';
 import { useStore } from '@/client/store.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
+import { activeView } from '@/client/views/state.js';
 import { useCutNameTitles } from './cutNames.js';
 import { directoryDecoration, rowDecoration } from './decoration.js';
 import type { SyncKeys } from './sync.js';
 import { decorationKey, directoriesOf, expandedAfterReset, statusKey, syncStep, toGitStatus } from './sync.js';
 import { pinLanes, TREE_CSS } from './treeCss.js';
-import { toggleDirectoryViewed, TreeMenu } from './TreeMenu.js';
+import { toggleDirectoryViewed, trackMenuPointer, TreeMenu } from './TreeMenu.js';
 
 type Scope = 'changed' | 'all';
 
@@ -161,8 +162,12 @@ export function FileTreePane() {
         requestAnimationFrame(focusReview);
         const s = useStore.getState();
         if (isCollapsed(s, path)) s.toggleCollapsed(path);
-        // Re-clicking the active file changes no selection, so `onSelectionChange` stays silent.
-        if (path === s.activePath) void openRef.current(path);
+        // Re-clicking the active file changes no selection, so `onSelectionChange` stays silent; a view
+        // over the diff may still act on it (the graph frames the file's boxes again).
+        if (path === s.activePath) {
+          void openRef.current(path);
+          activeView().pickFile?.(path);
+        }
         return;
       }
       e.preventDefault();
@@ -181,6 +186,7 @@ export function FileTreePane() {
   }, []);
 
   useCutNameTitles(bodyRef);
+  useEffect(() => trackMenuPointer(bodyRef.current), []);
 
   useEffect(() => {
     const input = bodyRef.current?.firstElementChild?.shadowRoot?.querySelector<HTMLInputElement>(
@@ -285,7 +291,9 @@ export function FileTreePane() {
         <FileTree
           model={model}
           className="h-full"
-          renderContextMenu={(item, ctx) => <TreeMenu path={item.path} kind={item.kind} close={ctx.close} />}
+          renderContextMenu={(item, ctx) => (
+            <TreeMenu path={item.path} kind={item.kind} anchor={ctx.anchorRect} close={ctx.close} />
+          )}
         />
         {searchEmpty && (
           <div role="status" className="absolute inset-x-0 top-14 pr-2.5 pl-[calc(1.5rem+1px)] text-muted">

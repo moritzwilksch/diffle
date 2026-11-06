@@ -1,4 +1,5 @@
 //! All Git access, in-process through gix: no git executable is spawned.
+mod checkout;
 mod commits;
 mod diff;
 mod files;
@@ -6,10 +7,12 @@ mod grep;
 mod index;
 mod refs;
 mod remote;
+mod switch;
 mod walk;
 
 use std::path::{Path, PathBuf};
 
+pub use checkout::{CheckoutTarget, Touched};
 pub use diff::is_binary;
 pub use grep::{GrepMatch, GrepOptions, GrepResult};
 pub use refs::{Remote, Upstream};

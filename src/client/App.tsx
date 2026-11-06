@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { connectWs } from './api.js';
-import { CommentPanel } from './comments/CommentPanel.js';
 import { Header } from './header/Header.js';
 import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
 import { documentTitle } from './model.js';
-import { ReviewPane } from './review/ReviewPane.js';
+import { useRemPx } from './scale.js';
 import { ServerLost } from './ServerLost.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
 import { TooltipHost } from './ui/TitleTooltips.js';
+import './views/registry.js';
+import { gridColumns, listViews, panelOf, useViews } from './views/state.js';
 
 export function App() {
   const boot = useStore((s) => s.boot);
@@ -23,7 +24,10 @@ export function App() {
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
   const title = useStore((s) => (s.snapshot ? documentTitle(s.snapshot, s.github.data) : 'diffle'));
+  const active = useViews((s) => s.active);
+  const panel = panelOf(layout, active);
   const [lost, setLost] = useState(false);
+  const rem = useRemPx();
   useKeymap();
 
   useEffect(() => {
@@ -37,12 +41,12 @@ export function App() {
       const startX = e.clientX;
       // Until the first drag the width is the stylesheet's; measure it so the pane does not jump.
       const pane = side === 'tree' ? e.currentTarget.previousElementSibling : e.currentTarget.nextElementSibling;
-      const start =
-        (side === 'tree' ? layout.treeWidth : layout.panelWidth) ?? pane?.getBoundingClientRect().width ?? 0;
+      const start = (side === 'tree' ? layout.treeWidth : panel.width) ?? pane?.getBoundingClientRect().width ?? 0;
       const onMove = (ev: PointerEvent) => {
         const delta = side === 'tree' ? ev.clientX - startX : startX - ev.clientX;
         const width = Math.max(180, Math.min(800, start + delta));
-        setLayout(side === 'tree' ? { treeWidth: width } : { panelWidth: width });
+        if (side === 'tree') setLayout({ treeWidth: width });
+        else useStore.getState().setPanel(active, { width });
       };
       const onUp = () => {
         document.removeEventListener('pointermove', onMove);
@@ -57,23 +61,20 @@ export function App() {
       document.addEventListener('pointerup', onUp);
       document.addEventListener('pointercancel', onUp);
     },
-    [layout.treeWidth, layout.panelWidth, setLayout],
+    [layout.treeWidth, panel.width, active, setLayout],
   );
 
-  const columns = [
-    layout.treeVisible ? `${layout.treeWidth == null ? '17.5rem' : `${layout.treeWidth}px`} 4px` : '',
-    'minmax(0, 1fr)',
-    layout.panelVisible ? `4px ${layout.panelWidth == null ? '21.25rem' : `${layout.panelWidth}px`}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const columns = gridColumns(layout, active);
 
   useEffect(() => {
-    // Every (re)connection resyncs the whole state: pushes missed while the socket was down are
-    // not replayed, and the first open is the boot itself.
+    // Boot without waiting for the socket: Firefox holds a new socket back while another one to the
+    // same host hangs connecting, such as another tab's reconnect to a frozen server, for up to 20 s.
+    void boot().then(() => performance.mark('diffle:snapshot'));
+    // Every connection, the first included, resyncs the whole state: pushes sent before it
+    // subscribed are not replayed.
     const resync = () => {
       setLost(false);
-      void boot().then(() => performance.mark('diffle:snapshot'));
+      void boot();
     };
     return connectWs(
       (msg) => {
@@ -110,7 +111,8 @@ export function App() {
       <Header />
       {layout.treeVisible && (
         <>
-          <FileTreePane />
+          {/* The tree fixes its row height when it is created, so a new text size needs a new tree. */}
+          <FileTreePane key={rem} />
           <div
             className="cursor-col-resize bg-border opacity-60 [transition:opacity_120ms_ease,_background_120ms_ease] hover:bg-accent hover:opacity-100 data-resizing:bg-accent data-resizing:opacity-100"
             onPointerDown={startResize('tree')}
@@ -118,15 +120,15 @@ export function App() {
           />
         </>
       )}
-      <ReviewPane />
-      {layout.panelVisible && (
+      <ViewLayers part="Main" />
+      {panel.visible && (
         <>
           <div
             className="cursor-col-resize bg-border opacity-60 [transition:opacity_120ms_ease,_background_120ms_ease] hover:bg-accent hover:opacity-100 data-resizing:bg-accent data-resizing:opacity-100"
             onPointerDown={startResize('panel')}
             title="Drag to resize"
           />
-          <CommentPanel />
+          <ViewLayers part="Side" />
         </>
       )}
       <HelpOverlay />
@@ -137,6 +139,39 @@ export function App() {
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * One grid cell of every view shown so far. Another view covers the diff instead of replacing it: the
+ * diff stays laid out, so switching back keeps its scroll, and a jump scrolls it before it shows.
+ */
+function ViewLayers({ part }: { part: 'Main' | 'Side' }) {
+  const active = useViews((s) => s.active);
+  const mounted = useViews((s) => s.mounted);
+  return (
+    <div className="relative grid min-h-0 min-w-0 grid-cols-1 grid-rows-1">
+      {listViews()
+        .filter((view) => mounted.includes(view.id))
+        .map((view) => {
+          const Part = view[part];
+          // Laid out but not painted while covered, so the diff cannot show through as a cover repaints.
+          if (view.id === 'diff')
+            return (
+              <div key={view.id} className={active === 'diff' ? 'contents' : 'invisible contents'}>
+                <Part />
+              </div>
+            );
+          return (
+            <div
+              key={view.id}
+              className={view.id === active ? 'absolute inset-0 z-10 flex min-h-0 flex-col' : 'hidden'}
+            >
+              <Part />
+            </div>
+          );
+        })}
     </div>
   );
 }

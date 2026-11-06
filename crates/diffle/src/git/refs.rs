@@ -78,8 +78,18 @@ impl GitRepo {
                 if rev == "HEAD" {
                     return Ok(repo.head_name()?.map(|name| name.as_bstr().to_string()));
                 }
-                // A name that is not a valid ref (`main~1`) names no branch.
-                Ok(repo.try_find_reference(rev.as_str()).ok().flatten().map(|r| r.name().as_bstr().to_string()))
+                if let Some(found) = repo.try_find_reference(rev.as_str()).ok().flatten() {
+                    return Ok(Some(found.name().as_bstr().to_string()));
+                }
+                // `@{-1}` or `main@{upstream}` name a branch through the reflog or config, as git's
+                // `--symbolic-full-name` follows them; any other expression (`main~0`) names none.
+                if !names_a_ref(&rev) {
+                    return Ok(None);
+                }
+                let Ok(spec) = repo.rev_parse(rev.as_str()) else { return Ok(None) };
+                let (Some(id), Some(named)) = (spec.single(), spec.first_reference()) else { return Ok(None) };
+                let mut named = repo.find_reference(named.name.as_ref())?;
+                Ok((named.peel_to_id()? == id).then(|| named.name().as_bstr().to_string()))
             })
             .await?;
         Ok(name.filter(|name| name.starts_with("refs/heads/") || name.starts_with("refs/remotes/")))
@@ -140,6 +150,40 @@ impl GitRepo {
         .await
     }
 
+    /// Whether commit `sha` is reachable from a ref under one of `prefixes`, from local refs alone.
+    /// Anything but a commit (the worktree, a tree) is not.
+    pub async fn reachable_from(&self, sha: &str, prefixes: &[String]) -> Result<bool, GitError> {
+        if sha == WORKTREE {
+            return Ok(false);
+        }
+        let Some(commit) = self.try_resolve(sha).await? else { return Ok(false) };
+        let prefixes = prefixes.to_vec();
+        self.gix("reachability", move |repo| {
+            let commit = ObjectId::from_hex(commit.as_bytes())?;
+            let graph_cache = repo.commit_graph_if_enabled()?;
+            let mut graph = repo.revision_graph(graph_cache.as_ref());
+            for prefix in prefixes {
+                // As `--glob=<prefix>` reads it: every ref below the prefix.
+                let names: Vec<String> = repo
+                    .references()?
+                    .prefixed(format!("{}/", prefix.trim_end_matches('/')).as_str())?
+                    .filter_map(Result::ok)
+                    .map(|r| r.name().as_bstr().to_string())
+                    .collect();
+                for name in names {
+                    let Ok(tip) = repo.find_reference(name.as_str())?.peel_to_commit().map(|c| c.id) else { continue };
+                    if tip == commit
+                        || repo.merge_base_with_graph(commit, tip, &mut graph)?.is_some_and(|base| base == commit)
+                    {
+                        return Ok(true);
+                    }
+                }
+            }
+            Ok(false)
+        })
+        .await
+    }
+
     /// Branches, tags, and recent commits for the mode picker.
     pub async fn refs(&self) -> Result<RefsResponse> {
         let listed = self.gix("listing refs", |repo| {
@@ -158,6 +202,18 @@ impl GitRepo {
         let (branches, remote_branches, tags, current, recent) = listed?;
         Ok(RefsResponse { default_branch: default_branch.ok(), current, branches, remote_branches, tags, recent })
     }
+}
+
+/// Whether `rev` is one of the forms that stand for a ref: `@{-N}`, or `<branch>@{upstream}`
+/// (`@{u}`) and `@{push}`.
+fn names_a_ref(rev: &str) -> bool {
+    let Some(at) = rev.find("@{") else { return false };
+    let Some(inner) = rev[at + 2..].strip_suffix('}') else { return false };
+    if at == 0 && inner.strip_prefix('-').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+        return true;
+    }
+    !rev[..at].contains(['~', '^', ':', '@'])
+        && ["u", "upstream", "push"].contains(&inner.to_ascii_lowercase().as_str())
 }
 
 /// Config as it is on disk now: the shared handle keeps what was read when the repository opened.

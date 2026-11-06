@@ -1,4 +1,5 @@
 //! The active review and everything derived from it, behind one serialized transition queue.
+mod checkout;
 mod files;
 mod github;
 mod refresh;
@@ -6,7 +7,7 @@ mod transitions;
 mod watch;
 
 use std::future::Future;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
@@ -17,6 +18,7 @@ use crate::comments::CommentStore;
 use crate::error::{Error, Result};
 use crate::git::GitRepo;
 use crate::github::hosts::Github;
+use crate::mode::head::HeadPin;
 use crate::protocol::{FollowRefs, Live, Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations};
 use crate::snapshotter::Snapshotter;
 use crate::watcher::Watcher;
@@ -37,6 +39,9 @@ pub struct SessionOptions {
     pub context: u32,
     /// What a review between refs does when one moves. The user config; `set_follow_refs` changes it.
     pub follow_refs: FollowRefs,
+    /// Whether entering a branch or a pull request checks it out, when the worktree is clean, so
+    /// language servers see the new side.
+    pub checkout: bool,
 }
 
 struct Active {
@@ -92,6 +97,12 @@ pub struct Session {
     pub repo: Arc<GitRepo>,
     hub: Arc<dyn Broadcaster>,
     watch: bool,
+    /// Off once `close` put the checkout back, so a late request cannot move it again.
+    checkout: AtomicBool,
+    /// Where HEAD was before this run first checked something out, and what it checked out last.
+    moved_checkout: Mutex<Option<checkout::MovedCheckout>>,
+    /// What HEAD names in a review while `moved_checkout` holds it elsewhere.
+    head: HeadPin,
     github: Github,
     /// The latest pull request discovery: its snapshot, when it goes stale, and the shared lookup.
     discovered: Mutex<Option<Discovery>>,
@@ -122,6 +133,9 @@ impl Session {
             repo,
             hub,
             watch: opts.watch,
+            checkout: AtomicBool::new(opts.checkout),
+            moved_checkout: Mutex::new(None),
+            head: HeadPin::default(),
             github: opts.github,
             discovered: Mutex::new(None),
             exporter: crate::github::review::GithubExporter::default(),
@@ -238,7 +252,7 @@ impl Session {
         self.version.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    /// Waits for every queued transition, then stops watching.
+    /// Waits for every queued transition, stops watching, then puts back the checkout this run moved.
     pub async fn close(self: &Arc<Self>) {
         let _ = self.run(async { Ok(()) }).await;
         let active = self.active.lock().unwrap().clone();
@@ -247,5 +261,12 @@ impl Session {
         {
             watcher.close().await;
         }
+        let this = self.clone();
+        let _ = self
+            .run(async move {
+                this.restore_checkout().await;
+                Ok(())
+            })
+            .await;
     }
 }

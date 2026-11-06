@@ -8,7 +8,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use indexmap::IndexMap;
 
-use super::documents::ReadFn;
+use super::documents::{Origin, ReadFn};
 use super::locator::HasFn;
 use super::merge::{merge_hovers, merge_locations, union};
 use super::pool_server::{PathsByLanguage, PoolServer, ServerOptions, paths_of};
@@ -89,7 +89,7 @@ impl LspPool {
         LspStatus { enabled: true, servers, missing: self.missing.lock().unwrap().clone() }
     }
 
-    fn servers(&self) -> Vec<Arc<PoolServer>> {
+    pub fn servers(&self) -> Vec<Arc<PoolServer>> {
         self.entries.lock().unwrap().values().cloned().collect()
     }
 
@@ -113,6 +113,12 @@ impl LspPool {
         None
     }
 
+    /// Whether a running server may be asked about `path`, a file outside the snapshot: one of its
+    /// results named it.
+    pub fn named(&self, path: &str) -> bool {
+        self.servers().iter().any(|s| matches!(s.bridge.origin(path), Some(Origin::External { .. })))
+    }
+
     pub async fn definition(&self, pos: &LspPosition) -> Result<LspLocationsResponse> {
         self.locations(pos, Locate::Definition).await
     }
@@ -125,10 +131,11 @@ impl LspPool {
         self.locations(pos, Locate::References).await
     }
 
-    pub async fn hover(&self, pos: &LspPosition) -> Result<LspHoverResponse> {
+    /// Every server's hover for `pos`, owner first; with `owner_only`, the owner's alone.
+    pub async fn hover(&self, pos: &LspPosition, owner_only: bool) -> Result<LspHoverResponse> {
         let servers = self.servers_for(&pos.path)?;
-        let asked = servers.iter().map(|s| s.bridge.hover(pos).boxed()).collect();
-        union(asked, merge_hovers, |r: &LspHoverResponse| r.contents.is_none(), |r| &mut r.inconclusive).await
+        let asked = servers.iter().take(if owner_only { 1 } else { usize::MAX }).map(|s| s.bridge.hover(pos).boxed());
+        union(asked.collect(), merge_hovers, |r: &LspHoverResponse| r.contents.is_none(), |r| &mut r.inconclusive).await
     }
 
     pub async fn occurrences(&self, pos: &LspPosition) -> Result<LspOccurrencesResponse> {
@@ -159,15 +166,11 @@ impl LspPool {
         union(asked, merge, |r: &LspSymbolsResponse| r.symbols.is_empty(), |r| &mut r.inconclusive).await
     }
 
-    /// Keeps the diff's files open in every server for their language, starting one for each
-    /// language the diff has newly grown. A server whose language left the diff stays up with
-    /// nothing tracked, so its index is warm if the reader switches back. Nothing is tracked when
-    /// the new side is not the checkout: a server would see text contradicting the disk it indexes.
-    pub async fn track(self: &Arc<Self>, snap: &Snapshot) {
-        // A snapshot can land while the run is ending; a shutting-down server takes no documents.
-        if self.closing.load(Ordering::SeqCst) {
-            return;
-        }
+    /// Keeps the diff's files open in every server for their language. Servers for languages the diff
+    /// newly grew start before this returns; the future syncs the documents. A server whose language
+    /// left the diff stays up with nothing tracked, so its index is warm if the reader switches back.
+    /// Nothing is tracked when the new side is not the checkout: a server would see text contradicting its disk.
+    pub fn track(self: &Arc<Self>, snap: &Snapshot) -> impl Future<Output = ()> + use<> {
         let mut by_language = PathsByLanguage::new();
         if follows_checkout(snap) {
             for f in snap.changed.iter().filter(|f| f.status != ChangeStatus::D && !f.binary) {
@@ -176,14 +179,18 @@ impl LspPool {
                 }
             }
         }
-        self.ensure(&by_language);
-        let servers = self.servers();
-        let passes = servers.iter().map(|s| {
+        // A snapshot can land while the run is ending; a shutting-down server takes no documents.
+        let closing = self.closing.load(Ordering::SeqCst);
+        if !closing {
+            self.ensure(&by_language);
+        }
+        let servers = if closing { Vec::new() } else { self.servers() };
+        let passes = servers.into_iter().map(|s| {
             let tracked = paths_of(&s.routes(), &by_language);
             s.follow(&tracked);
             async move { s.bridge.track(&tracked).await }
         });
-        futures::future::join_all(passes).await;
+        futures::future::join_all(passes).map(drop)
     }
 
     /// Idempotent: the CLI's dispose can run beside a signal handler's.
@@ -193,7 +200,10 @@ impl LspPool {
     }
 
     /// Every server for `path`, owner first; a language nothing owns is still served by the servers
-    /// joining it. The route has asked `lsp_blocker` already, so none here is a race.
+    /// joining it. A file outside the snapshot goes only to the servers that named it: another
+    /// server for its language may resolve it in a different environment, or not index it at all.
+    /// This decides routing, not access: each bridge refuses what its own results never named.
+    /// The route has asked `lsp_blocker` already, so none here is a race.
     fn servers_for(&self, path: &str) -> Result<Vec<Arc<PoolServer>>> {
         if self.closing.load(Ordering::SeqCst) {
             return Err(Error::LspUnavailable("the language servers are shutting down".into()));
@@ -202,7 +212,8 @@ impl LspPool {
         let found: Vec<Arc<PoolServer>> = match language_of(path) {
             Some(language) => {
                 let owners = all.iter().filter(|s| s.routes().languages.contains(&language));
-                owners.chain(all.iter().filter(|s| s.routes().joins.contains(&language))).cloned().collect()
+                let joiners = all.iter().filter(|s| s.routes().joins.contains(&language));
+                owners.chain(joiners).filter(|s| s.bridge.origin(path).is_some()).cloned().collect()
             }
             None => Vec::new(),
         };

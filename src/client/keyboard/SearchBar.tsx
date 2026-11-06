@@ -1,5 +1,5 @@
 import { twMerge } from 'tailwind-merge';
-import { Button } from '@/client/ui/Button.js';
+import { Button, TOGGLE_ON } from '@/client/ui/Button.js';
 import { FileDiff, FileSearch, Link2, Search, WholeWord, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useStore } from '@/client/store.js';
@@ -83,7 +83,7 @@ function SearchForm() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.ignoreCase ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.ignoreCase ? '' : TOGGLE_ON}`,
         )}
         aria-pressed={!search.ignoreCase}
         onClick={() => setSearchOptions({ ignoreCase: !search.ignoreCase })}
@@ -95,7 +95,7 @@ function SearchForm() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.regex ? 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent' : ''}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${search.regex ? TOGGLE_ON : ''}`,
         )}
         aria-pressed={search.regex}
         onClick={() => setSearchOptions({ regex: !search.regex })}
@@ -107,7 +107,7 @@ function SearchForm() {
         type="button"
         variant="ghost"
         className={twMerge(
-          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${!fullFile ? '' : 'border-accent bg-[color-mix(in_srgb,_var(--accent)_12%,_transparent)] text-accent'}`,
+          `rounded-sm border border-transparent px-1.5 py-[2px] font-mono text-[0.6875rem] leading-[normal] text-muted ${!fullFile ? '' : TOGGLE_ON}`,
         )}
         aria-label="Search full file"
         aria-pressed={fullFile}

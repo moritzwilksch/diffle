@@ -3,6 +3,7 @@ import type {
   GithubMetadata,
   ChangedFile,
   CommentThread,
+  GraphResponse,
   LspLogResponse,
   LspServerStatus,
   LspStatus,
@@ -72,6 +73,7 @@ const api = {
   lspReferences: vi.fn(),
   lspHover: vi.fn(),
   lspSymbols: vi.fn(),
+  lspGraph: vi.fn(),
   enter: vi.fn(),
   file: vi.fn(),
   patch: vi.fn(),
@@ -590,6 +592,52 @@ describe('client transitions', () => {
     void useStore.getState().loadFile('b.txt', 'new');
     expect(api.file).toHaveBeenCalledTimes(4);
     api.file.mockReset();
+  });
+
+  it('a view over the diff joins the jump list: a jump from it records it, Ctrl+o restores it, Ctrl+i leaves it', async () => {
+    const changed = [file({ path: 'a.txt', blob: 'b1' })];
+    api.patch.mockResolvedValue('diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,1 @@\n-x\n+y\n');
+    api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working', ['a.txt']), changed });
+    await useStore.getState().refreshSnapshot();
+    useStore.getState().moveFile('first');
+    // A stand-in for the change graph: shown over the diff until a jump leaves it.
+    let shown = true;
+    const events: string[] = [];
+    useStore.getState().registerView({
+      here: () =>
+        shown
+          ? {
+              view: 'graph',
+              restore: () => {
+                shown = true;
+                events.push('restore');
+              },
+            }
+          : null,
+      leave: () => {
+        shown = false;
+        events.push('leave');
+      },
+    });
+    try {
+      // The view jumps into the diff, then hides: the place left is the view, not the hidden cursor.
+      useStore.getState().jumpTo('a.txt', 1);
+      shown = false;
+      expect(useStore.getState().jumps).toEqual([expect.objectContaining({ view: 'graph' })]);
+      useStore.getState().jumpBack();
+      expect(events).toEqual(['restore']);
+      useStore.getState().jumpForward();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(events).toEqual(['restore', 'leave']);
+      expect(useStore.getState().selection).toEqual(
+        expect.objectContaining({
+          id: expect.stringMatching(/^diff:a\.txt@/),
+          range: expect.objectContaining({ end: 1 }),
+        }),
+      );
+    } finally {
+      useStore.getState().registerView({ here: () => null, leave: () => {} });
+    }
   });
 
   it('the file view shows one file in place of the diff list, survives a refresh of that file, and Ctrl+o returns', async () => {
@@ -1305,19 +1353,16 @@ describe('symbol navigation', () => {
     expect(s.fileView).toMatchObject({ path: site, external: true, item: { kind: 'file' } });
     expect(s.activePath).toBe(site);
     expect(s.selection?.range.end).toBe(2);
-    // No comments on it, and no navigation from it: the server knows only snapshot files.
+    // No comments on it, but navigation goes on from it: the server that named it is asked by its absolute path.
     await useStore.getState().openDraft(s.selection!);
     expect(useStore.getState().draft).toBeNull();
     expect(useStore.getState().toast).toMatch(/repository files only/);
     api.lspDefinition.mockClear();
     await useStore.getState().goToDefinition({ ...target, path: site });
-    expect(api.lspDefinition).not.toHaveBeenCalled();
-    expect(useStore.getState().toast).toMatch(/starts from a repository file/);
-    useStore.setState({ toast: null });
+    expect(api.lspDefinition).toHaveBeenCalledWith({ path: site, line: 3, col: 4 });
+    api.lspSymbols.mockResolvedValue({ symbols: [] });
     await useStore.getState().openSymbols('document');
-    expect(api.lspSymbols).not.toHaveBeenCalled();
-    expect(useStore.getState().symbols.open).toBe(false);
-    expect(useStore.getState().toast).toMatch(/starts from a repository file/);
+    expect(api.lspSymbols).toHaveBeenCalledWith({ path: site });
     // Jumps inside the view (G, 123gg) reopen the same path; that must not read as the file vanishing.
     useStore.setState({ toast: null });
     await useStore.getState().goToLine(1);
@@ -2260,4 +2305,29 @@ it('discards metadata for a newer server snapshot without changing the displayed
   await vi.waitFor(() => expect(useStore.getState().github.status).toBe('idle'));
   expect(useStore.getState().snapshot?.version).toBe(1);
   expect(useStore.getState().github.data).toBeUndefined();
+});
+
+describe('change graph', () => {
+  const graphOf = (path: string): GraphResponse => ({
+    nodes: [{ id: path, name: 'f', kind: 12, path, line: 1, startLine: 1, endLine: 1, col: 0, status: 'modified' }],
+    edges: [],
+    cut: [],
+  });
+
+  it('commits only the latest reload, so a folder picked while the graph loads keeps its graph', async () => {
+    const { useGraph } = await import('@/client/graph/state.js');
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']) });
+    const everything = deferred<GraphResponse>();
+    const folder = deferred<GraphResponse>();
+    api.lspGraph.mockReturnValueOnce(everything.promise).mockReturnValueOnce(folder.promise);
+    const first = useGraph.getState().reload();
+    useGraph.setState({ scope: 'pkg' });
+    const second = useGraph.getState().reload();
+    folder.resolve(graphOf('pkg/a.py'));
+    await second;
+    everything.resolve(graphOf('a.py'));
+    await first;
+    const load = useGraph.getState().load;
+    expect(load.state === 'ready' && load.graph.nodes.map((n) => n.path)).toEqual(['pkg/a.py']);
+  });
 });

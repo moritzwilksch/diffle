@@ -3,9 +3,11 @@ mod assets;
 pub mod guard;
 pub mod hub;
 pub mod image;
+mod listen;
 mod routes;
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
@@ -16,7 +18,6 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use http_body_util::BodyExt;
-use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tower_http::compression::CompressionLayer;
 
@@ -28,17 +29,20 @@ use routes::ApiError;
 
 /// Default port, chosen to be unassigned and memorable; `--port` overrides it.
 pub const DEFAULT_PORT: u16 = 4966;
-/// Ports tried after a taken default before giving up.
-const PROBE_PORTS: u16 = 100;
 /// JSON bodies are small (comments, viewed marks, config); anything bigger is not a client.
 const MAX_BODY_BYTES: usize = 1024 * 1024;
 
 pub struct ServerOptions {
-    pub port: u16,
-    /// When the port is taken, try the following ones instead of failing.
-    pub probe: bool,
-    pub host: String,
+    pub endpoint: Endpoint,
     pub allowed_origin: Option<String>,
+}
+
+pub enum Endpoint {
+    /// A port on `host`; with `probe`, the first free one at or above `port` instead of failing.
+    Tcp { host: String, port: u16, probe: bool },
+    /// A Unix socket at this path that only this user may connect to, removed when the server closes.
+    #[cfg(unix)]
+    Unix(PathBuf),
 }
 
 pub struct ApiDeps {
@@ -60,27 +64,37 @@ pub struct Server {
     hub: Arc<Hub>,
     stop: watch::Sender<bool>,
     serving: tokio::task::JoinHandle<()>,
+    socket: Option<PathBuf>,
 }
 
 impl Server {
-    /// Binds (with `probe`, the first free port at or above `port`), serves, and returns the URL.
+    /// Binds the endpoint, serves, and returns where: the URL, or `unix:<path>` for a socket.
     pub async fn listen(deps: ApiDeps, opts: ServerOptions) -> anyhow::Result<(Server, String)> {
         let hub = deps.hub.clone();
-        let guard = RequestGuard::for_host(&opts.host, opts.allowed_origin.as_deref());
-        let app = Arc::new(App { deps: Arc::new(deps), guard });
-        let listener = bind(&opts).await?;
-        let addr = listener.local_addr()?;
-        let (stop, mut stopped) = watch::channel(false);
-        let router = router(app);
-        let serving = tokio::spawn(async move {
-            let shutdown = async move {
-                let _ = stopped.wait_for(|stop| *stop).await;
-            };
-            if let Err(e) = axum::serve(listener, router).with_graceful_shutdown(shutdown).await {
-                crate::status!("[diffle] server failed: {e}");
+        // A socket's clients arrive through a local forward, so they name a loopback host.
+        let host = match &opts.endpoint {
+            Endpoint::Tcp { host, .. } => host.as_str(),
+            #[cfg(unix)]
+            Endpoint::Unix(_) => "127.0.0.1",
+        };
+        let guard = RequestGuard::for_host(host, opts.allowed_origin.as_deref());
+        let router = router(Arc::new(App { deps: Arc::new(deps), guard }));
+        let (stop, stopped) = watch::channel(false);
+        let (serving, at, socket) = match opts.endpoint {
+            Endpoint::Tcp { host, port, probe } => {
+                let listener = listen::tcp(&host, port, probe).await?;
+                let at = url(&host, listener.local_addr()?);
+                (spawn(listener, router, stopped), at, None)
             }
-        });
-        Ok((Server { hub, stop, serving }, url(&opts.host, addr)))
+            #[cfg(unix)]
+            Endpoint::Unix(path) => {
+                use anyhow::Context as _;
+                let listener =
+                    listen::unix(&path).await.with_context(|| format!("cannot listen on {}", path.display()))?;
+                (spawn(listener, router, stopped), format!("unix:{}", path.display()), Some(path))
+            }
+        };
+        Ok((Server { hub, stop, serving, socket }, at))
     }
 
     /// Stops accepting, ends every WebSocket, and waits for requests in flight.
@@ -88,18 +102,25 @@ impl Server {
         self.hub.close();
         self.stop.send_replace(true);
         let _ = self.serving.await;
+        if let Some(socket) = self.socket {
+            let _ = std::fs::remove_file(socket);
+        }
     }
 }
 
-async fn bind(opts: &ServerOptions) -> std::io::Result<TcpListener> {
-    let last = if opts.probe { opts.port.saturating_add(PROBE_PORTS) } else { opts.port };
-    let mut port = opts.port;
-    loop {
-        match TcpListener::bind((opts.host.as_str(), port)).await {
-            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse && port < last => port += 1,
-            result => return result,
+fn spawn<L>(listener: L, router: Router, mut stopped: watch::Receiver<bool>) -> tokio::task::JoinHandle<()>
+where
+    L: axum::serve::Listener,
+    L::Addr: std::fmt::Debug,
+{
+    tokio::spawn(async move {
+        let shutdown = async move {
+            let _ = stopped.wait_for(|stop| *stop).await;
+        };
+        if let Err(e) = axum::serve(listener, router).with_graceful_shutdown(shutdown).await {
+            crate::status!("[diffle] server failed: {e}");
         }
-    }
+    })
 }
 
 fn url(host: &str, addr: SocketAddr) -> String {
@@ -163,9 +184,13 @@ async fn limit_body(req: Request, next: Next) -> Response {
     next.run(Request::from_parts(parts, Body::from(Bytes::from(kept)))).await
 }
 
-/// Every request but the config waits for the first mode to resolve.
+/// Paths that answer before the first mode resolves: a client probes the version and loads the
+/// config while the review is still being computed.
+const EARLY_PATHS: [&str; 2] = ["/api/version", "/api/config"];
+
+/// Every request but the early paths waits for the first mode to resolve.
 async fn wait_ready(State(deps): State<Arc<ApiDeps>>, req: Request, next: Next) -> Response {
-    if req.uri().path() != "/api/config"
+    if !EARLY_PATHS.contains(&req.uri().path())
         && let Err(e) = deps.session.ready().await
     {
         return ApiError::from(e).into_response();

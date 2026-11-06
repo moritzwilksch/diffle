@@ -10,12 +10,15 @@ use axum::routing::{delete, get, post, put};
 use serde::Deserialize;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
-use crate::protocol::{EnterRequest, FollowRefs, LastCommitsQuery, RangeView, ServerMessage, UserConfig};
+use crate::protocol::{
+    EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerMessage, UserConfig, VersionResponse,
+};
 use crate::session::Broadcaster;
 use crate::user_config::UserConfigPatch;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
+        .route("/api/version", get(version))
         .route("/api/snapshot", get(snapshot))
         .route("/api/moved", get(moved))
         .route("/api/reload", post(reload))
@@ -24,9 +27,15 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/review", post(enter))
         .route("/api/view", put(show))
         .route("/api/github", get(github))
+        .route("/api/permalink", post(permalink))
         .route("/api/refs", get(refs))
         .route("/api/last-commits-preview", get(last_commits_preview))
         .route("/api/config", get(config).put(set_config))
+}
+
+/// The server's release, for a client to check before it relies on the rest of the API.
+async fn version() -> Response {
+    Json(VersionResponse { version: env!("CARGO_PKG_VERSION").to_owned() }).into_response()
 }
 
 async fn snapshot(State(d): State<Arc<ApiDeps>>) -> ApiResult {
@@ -67,6 +76,12 @@ async fn show(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
 async fn github(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     let snap = d.session.snapshotter()?.current().await?;
     Ok(Json(d.session.github_metadata(&snap).await?).into_response())
+}
+
+/// A link to lines of the current snapshot on origin's forge; local refs only, never the network.
+async fn permalink(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    let req: PermalinkRequest = body(&raw)?;
+    Ok(Json(d.session.permalink(&req).await?).into_response())
 }
 
 async fn refs(State(d): State<Arc<ApiDeps>>) -> ApiResult {

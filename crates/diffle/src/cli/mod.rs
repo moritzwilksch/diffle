@@ -3,9 +3,9 @@ mod args;
 mod completion;
 mod config;
 mod lifetime;
-mod lsp;
+pub mod lsp;
 mod open;
-mod paint;
+pub mod paint;
 mod parse;
 pub mod repository;
 mod serve;
@@ -59,7 +59,19 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         None if cli.revs.is_empty() => (EnterRequest::Working, Default::default()),
         None => (EnterRequest::Revspec { args: cli.revs }, Default::default()),
     };
-    serve::run(req, cli.global.merge(later)).await
+    let opts = cli.global.merge(later);
+    // Checked after the merge: the options may come before a shorthand, after it, or both.
+    if opts.socket.is_some() {
+        let conflict = if opts.port.is_some() || opts.host.is_some() {
+            Some("--socket replaces --port and --host")
+        } else {
+            cfg!(not(unix)).then_some("--socket needs a Unix system")
+        };
+        if let Some(message) = conflict {
+            Cli::command().error(clap::error::ErrorKind::ArgumentConflict, message).exit();
+        }
+    }
+    serve::run(req, opts).await
 }
 
 /// Whether the reviewer's input caused `e`: a revision, a Git or a GitHub error.

@@ -209,7 +209,10 @@ async fn fetches_the_pull_request_into_fixed_refs_retaining_both_branch_names() 
     // Branch identities share review state with ordinary branch comparisons; the fetched refs stay put.
     let key = common::range_key(&repo, &review).await;
     assert_eq!(key.as_deref(), Some("range:o/r:main...o/r:feat"));
-    let snap = Snapshotter::new(repo.clone(), review.clone(), key.clone(), 1, 3, None).current().await.unwrap();
+    let snap = Snapshotter::new(repo.clone(), review.clone(), key.clone(), 1, 3, None, Default::default())
+        .current()
+        .await
+        .unwrap();
     assert_eq!((snap.follows, Some(snap.comment_key.clone())), (Live::None, key));
     assert_eq!(git_in(&f.local, &["rev-parse", new]), f.head);
     assert_eq!(git_in(&f.local, &["rev-parse", old]), f.merge_base);

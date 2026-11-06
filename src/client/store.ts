@@ -70,6 +70,7 @@ import {
   iterationStep,
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
+import type { ViewId } from './views/state.js';
 
 export type Loaded =
   | { kind: 'diff'; fileDiff: FileDiffMetadata }
@@ -142,26 +143,27 @@ export interface SearchState {
   truncated: boolean;
 }
 
+export interface PanelLayout {
+  /** In px once the user has dragged its resizer; null leaves the view's default in charge. */
+  width: number | null;
+  visible: boolean;
+}
+
 export interface LayoutState {
-  /** Pane widths in px once the user has dragged a resizer; null leaves the stylesheet's rem default in charge. */
+  /** In px once the user has dragged the resizer; null leaves the stylesheet's rem default in charge. */
   treeWidth: number | null;
-  panelWidth: number | null;
   treeVisible: boolean;
-  panelVisible: boolean;
+  /** Each view's side panel: comments beside the diff read differently from the details beside the graph. */
+  panels: Partial<Record<ViewId, PanelLayout>>;
 }
 const LAYOUT_KEY = 'diffle:layout';
-const DEFAULT_LAYOUT: LayoutState = {
-  treeWidth: null,
-  panelWidth: null,
-  treeVisible: true,
-  panelVisible: true,
-};
 function readLayout(): LayoutState {
   try {
     const raw = localStorage.getItem(LAYOUT_KEY);
-    return raw ? { ...DEFAULT_LAYOUT, ...(JSON.parse(raw) as Partial<LayoutState>) } : DEFAULT_LAYOUT;
+    const saved = raw ? (JSON.parse(raw) as Partial<LayoutState>) : {};
+    return { treeWidth: saved.treeWidth ?? null, treeVisible: saved.treeVisible ?? true, panels: saved.panels ?? {} };
   } catch {
-    return DEFAULT_LAYOUT;
+    return { treeWidth: null, treeVisible: true, panels: {} };
   }
 }
 
@@ -199,14 +201,22 @@ export interface OccurrencesState {
   items: LspOccurrence[];
 }
 
-/** A line a result list jumps to: a search hit, or a language-server location that may be external. */
-export type Match = SearchMatch & Pick<LspLocation, 'external'> & Partial<Pick<LspLocation, 'col'>>;
+/**
+ * A line a result list jumps to: a search hit, or a language-server location that may be external.
+ * `under` names the symbol a references list groups it under, past its file.
+ */
+export type Match = SearchMatch &
+  Pick<LspLocation, 'external'> &
+  Partial<Pick<LspLocation, 'col'>> & { under?: { name: string; kind: number } };
 
 /** Full-screen list of a symbol's references; Enter jumps to the highlighted one. */
 export interface ReferencesState {
   open: boolean;
-  /** References of `symbol`, or the candidate types a type-definition query returned for it. */
-  kind: 'references' | 'types';
+  /**
+   * References of `symbol`, the lines where `symbol` uses others, or the candidate types a
+   * type-definition query returned for it.
+   */
+  kind: 'references' | 'uses' | 'types';
   symbol: string;
   items: Match[];
   index: number;
@@ -238,6 +248,26 @@ export interface JumpPosition {
 }
 
 /**
+ * A place outside the diff list that the jump list can return to, such as the change graph. The
+ * view that made it restores it; the store keeps it opaque.
+ */
+export interface ViewPlace {
+  /** Names the place, within its view too: two places with one name are one jump list entry. */
+  view: string;
+  restore(): void;
+}
+
+export type JumpPlace = JumpPosition | ViewPlace;
+
+const isView = (place: JumpPlace): place is ViewPlace => 'restore' in place;
+
+/** The same line of the same view, or the same outside view: one jump list entry, not two. */
+function samePlace(a: JumpPlace, b: JumpPlace): boolean {
+  if (isView(a) || isView(b)) return isView(a) && isView(b) && a.view === b.view;
+  return a.path === b.path && a.line === b.line && a.side === b.side && !!a.full === !!b.full;
+}
+
+/**
  * The dedicated whole-file view: one path's new side in place of the diff list. `item` is
  * null while it loads. `from` is where the diff list was left, so leaving the view restores it.
  */
@@ -257,6 +287,7 @@ export type GithubState =
 export interface ReviewState {
   layout: LayoutState;
   setLayout(patch: Partial<LayoutState>): void;
+  setPanel(view: ViewId, patch: Partial<PanelLayout>): void;
   diffStyle: DiffStyle;
   setDiffStyle(style: DiffStyle): void;
   imageCompare: ImageCompare;
@@ -363,6 +394,8 @@ export interface ReviewState {
   /** List the references of `target` in the references overlay. */
   findReferences(target?: TokenTarget | null): Promise<void>;
   references: ReferencesState;
+  /** Opens the references overlay on `list`, at `index`. */
+  showReferences(list: Pick<ReferencesState, 'kind' | 'symbol' | 'items'>, index?: number): void;
   moveReference(delta: 1 | -1): void;
   togglePeek(): void;
   /**
@@ -378,11 +411,18 @@ export interface ReviewState {
   moveSymbol(delta: 1 | -1): void;
   pickSymbol(): void;
   closeSymbols(): void;
-  /** Vim-style jump list: positions left behind by hunk/file/search/panel jumps. */
-  jumps: JumpPosition[];
+  /** Vim-style jump list: positions left behind by hunk/file/search/panel jumps, and views left for the diff. */
+  jumps: JumpPlace[];
   jumpIndex: number;
   jumpBack(): void;
   jumpForward(): void;
+  /**
+   * Lets a view shown in the diff's place join the jump list: `here` names the place while the
+   * view is shown, else null; `leave` hides the view when a jump lands in the diff.
+   */
+  registerView(view: { here(): ViewPlace | null; leave(): void }): void;
+  /** Leaves the current place in the jump list before a registered view moves within itself. */
+  recordJump(): void;
   moveCursor(delta: 1 | -1): void;
   /** Move by many rows (Ctrl+d / Ctrl+u), keeping the cursor at eye level. */
   moveCursorBy(rows: number): void;
@@ -1107,26 +1147,29 @@ export const useStore = create<ReviewState>((set, get) => {
     return { path, side: sideOf(sel), line: sel.range.end, full: true, ...(view.external ? { external: true } : {}) };
   };
 
+  /** The view shown in the diff's place that takes part in the jump list (see `registerView`). */
+  let outside: { here(): ViewPlace | null; leave(): void } | null = null;
+  /** Where the reader is: a view shown over the diff, else the diff's cursor. */
+  const currentPlace = (): JumpPlace | null => outside?.here() ?? currentPosition();
+
   /** Remember where we are before a jump (vim jumplist semantics). */
   const recordJump = () => {
     if (silent) return;
-    const pos = currentPosition();
+    const pos = currentPlace();
     if (!pos) return;
     const { jumps, jumpIndex } = get();
     const kept = jumps.slice(0, jumpIndex);
     const last = kept[kept.length - 1];
-    if (
-      last &&
-      last.path === pos.path &&
-      last.line === pos.line &&
-      last.side === pos.side &&
-      !!last.full === !!pos.full
-    ) {
-      set({ jumps: kept, jumpIndex: kept.length });
-      return;
-    }
+    if (last && samePlace(last, pos)) kept.pop();
     const next = [...kept, pos].slice(-100);
     set({ jumps: next, jumpIndex: next.length });
+  };
+
+  /** Goes to a jump list entry without recording a jump: a view restores itself, a position closes it. */
+  const goToPlace = (place: JumpPlace) => {
+    if (isView(place)) return place.restore();
+    outside?.leave();
+    void goToPositionSilently(place);
   };
 
   /** Expand a collapsed file so a jump into it has something to land on. */
@@ -1318,14 +1361,12 @@ export const useStore = create<ReviewState>((set, get) => {
   const blocker = (path?: string, feature?: LspFeature): string | null =>
     lspBlocker(get().lsp, get().snapshot, { path, feature });
 
-  /** Why the server cannot be asked about `target`, or null. Only snapshot files on the new side are open in it. */
+  /**
+   * Why the server cannot be asked about `target`, or null. It reads the new side only: a snapshot file, or a
+   * file outside the repository that a result named.
+   */
   const targetBlocker = (target: Pick<TokenTarget, 'path' | 'side'>, feature?: LspFeature): string | null =>
-    blocker(target.path, feature) ??
-    (target.side === 'old'
-      ? 'Symbol navigation works on the new side only'
-      : get().fileView?.external
-        ? 'Symbol navigation starts from a repository file'
-        : null);
+    blocker(target.path, feature) ?? (target.side === 'old' ? 'Symbol navigation works on the new side only' : null);
 
   /** The LSP position for a hovered token, or null after flashing why not. */
   const lspPosition = (target: TokenTarget | null | undefined, feature: LspFeature): LspPosition | null => {
@@ -1366,17 +1407,7 @@ export const useStore = create<ReviewState>((set, get) => {
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
-        set((s) => ({
-          references: {
-            ...s.references,
-            open: true,
-            kind: 'types',
-            symbol: target!.text,
-            items: res.locations,
-            index: 0,
-          },
-        }));
-        return;
+        return get().showReferences({ kind: 'types', symbol: target!.text, items: res.locations });
       }
       await jumpToLine(loc.path, loc.line, loc.external, loc.col);
     } catch (e) {
@@ -1477,6 +1508,11 @@ export const useStore = create<ReviewState>((set, get) => {
         /* ignore */
       }
       set({ layout });
+    },
+    setPanel(view, patch) {
+      const { panels } = get().layout;
+      const panel = { width: null, visible: true, ...panels[view], ...patch };
+      get().setLayout({ panels: { ...panels, [view]: panel } });
     },
     theme: readTheme(),
     setTheme(theme) {
@@ -1940,14 +1976,15 @@ export const useStore = create<ReviewState>((set, get) => {
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
         const index = origin === -1 ? 0 : (origin + 1) % items.length;
-        set((s) => ({
-          references: { ...s.references, open: true, kind: 'references', symbol: target!.text, items, index },
-        }));
+        get().showReferences({ kind: 'references', symbol: target!.text, items }, index);
       } catch (e) {
         if (current(g)) report('Find references', e);
       }
     },
     references: { open: false, kind: 'references', symbol: '', items: [], index: -1, peek: false },
+    showReferences(list, index = 0) {
+      set((s) => ({ references: { ...s.references, ...list, open: true, index } }));
+    },
     moveReference(delta) {
       const r = get().references;
       const n = r.items.length;
@@ -1978,8 +2015,11 @@ export const useStore = create<ReviewState>((set, get) => {
           },
         }));
       }
-      // A picked line other than the reference's own has no column to aim at.
-      void jumpToLine(m.path, line ?? m.line, m.external, line == null || line === m.line ? m.col : undefined);
+      // A picked line other than the reference's own has no column to aim at. A view over the diff,
+      // the graph listing a symbol's links, gives way once the jump list has recorded it.
+      void jumpToLine(m.path, line ?? m.line, m.external, line == null || line === m.line ? m.col : undefined).then(
+        () => outside?.leave(),
+      );
     },
     closeReferences() {
       set((s) => ({ references: { ...s.references, open: false } }));
@@ -2083,13 +2123,13 @@ export const useStore = create<ReviewState>((set, get) => {
       let index = jumpIndex;
       if (index === list.length) {
         // Leaving the newest position: save it so Ctrl+i can return.
-        const pos = currentPosition();
+        const pos = currentPlace();
         if (pos) list = [...list, pos];
       }
       index -= 1;
       set({ jumps: list, jumpIndex: index });
       const target = list[index];
-      if (target) void goToPositionSilently(target);
+      if (target) goToPlace(target);
     },
     jumpForward() {
       if (!canJumpForward(get())) return;
@@ -2097,8 +2137,12 @@ export const useStore = create<ReviewState>((set, get) => {
       const index = jumpIndex + 1;
       set({ jumpIndex: index });
       const target = jumps[index];
-      if (target) void goToPositionSilently(target);
+      if (target) goToPlace(target);
     },
+    registerView(view) {
+      outside = view;
+    },
+    recordJump,
     scrollCursorTo(edge) {
       if (!get().selection) return get().flash('No line under the cursor');
       set((s) => ({ scrollTarget: cursorTarget(s, edge) }));
@@ -2502,11 +2546,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const { position, activePath } = view.from;
       // Point the jumplist at the position we return to, so Ctrl+i re-enters the view.
       const jumps = get().jumps;
-      const at = position
-        ? jumps.findLastIndex(
-            (j) => j.path === position.path && j.line === position.line && j.side === position.side && !j.full,
-          )
-        : -1;
+      const at = position ? jumps.findLastIndex((j) => !isView(j) && samePlace(j, position)) : -1;
       set({
         fileView: null,
         selection: null,

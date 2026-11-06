@@ -11,7 +11,7 @@ import {
   type RangePair,
   type Snapshot,
 } from '@/shared/protocol.js';
-import { copyText } from '@/client/clipboard.js';
+import { useCopied } from '@/client/clipboard.js';
 import { commitBody, listsWorktree, rangeStep } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
@@ -22,7 +22,6 @@ const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeSt
 /** Hover this long before a commit's card shows, so sweeping the pointer across the list stays quiet. */
 const HOVER_DELAY_MS = 250;
 /** How long a copied hash shows its check mark. */
-const COPIED_MS = 1400;
 
 /**
  * The compared range's commits, newest first, under an entry for the range itself and, when the range
@@ -443,21 +442,14 @@ function CommitRow({
 
 /** The short hash; a click copies the full one and swaps the hash for a check mark, as `yy` does its button. */
 export function CopyHash({ commit }: { commit: Pick<RangeCommit, 'sha' | 'short'> }) {
-  const [done, setDone] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const { done, copy } = useCopied();
   const transition = '[transition:opacity_160ms_ease,transform_200ms_cubic-bezier(0.2,0.8,0.2,1)]';
   return (
     <Button
       variant="ghost"
       className="relative mt-0.5 flex-none px-1 py-px font-mono text-[0.75rem] text-muted hover:text-foreground"
       aria-label={done ? `Copied ${commit.short}` : `Copy hash ${commit.short}`}
-      onClick={async () => {
-        if (!(await copyText(commit.sha))) return;
-        setDone(true);
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), COPIED_MS);
-      }}
+      onClick={() => void copy(commit.sha)}
     >
       <span className={twMerge(transition, done && '[transform:scale(0.6)] opacity-0')}>{commit.short}</span>
       <span

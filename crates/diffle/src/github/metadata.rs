@@ -21,7 +21,7 @@ pub async fn discover_github(
 ) -> Result<GithubMetadata> {
     let instance = &github.instance;
     let repository = origin_repository(repo, instance).await?;
-    let repository_url = repository.as_ref().map(|r| format!("https://{}/{r}", instance.host));
+    let repository_url = repository.as_deref().map(|r| instance.repository_url(r));
     let metadata = |pull_request: Option<GithubPullRequest>, reason: Option<String>| GithubMetadata {
         version: snap.version,
         repository: repository.clone(),

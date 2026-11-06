@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use common::lsp::{eventually, fake_env, fake_servers, root};
+use common::lsp::{events, eventually, fake_env, fake_servers, flush, root};
 use common::server::TestServer;
 use common::{TestRepo, revspec};
 use diffle::protocol::{EnterRequest, LanguageId};
@@ -98,6 +98,58 @@ async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language
 }
 
 #[tokio::test]
+async fn navigates_on_from_files_outside_the_snapshot_that_the_language_server_named_and_from_no_others() {
+    let (outside, dir) = root();
+    let (site, next, secret) = (dir.join("site.py"), dir.join("next.py"), dir.join("secret.py"));
+    std::fs::write(&site, "import sys\ndef g():\n    pass\n").unwrap();
+    std::fs::write(&next, "def h():\n    pass\n").unwrap();
+    std::fs::write(&secret, "token = 1\n").unwrap();
+    let [site_s, next_s, secret_s] = [&site, &next, &secret].map(|p| p.to_string_lossy().into_owned());
+    let env = [("FAKE_LSP_EXTERNAL", site_s.as_str()), ("FAKE_LSP_EXTERNAL_NEXT", next_s.as_str())];
+    let overrides = [(LanguageId::Python, "fake")];
+    let Some(s) = serve(python_repo(), EnterRequest::Working, &env, &overrides).await else { return };
+    ready(&s).await;
+    let at = |path: &str| json!({ "path": path, "line": 2, "col": 4 });
+    let refused = s.json("POST", "/api/lsp/definition", at(&site_s)).await;
+    assert_eq!(
+        (refused.status, refused.json()["error"].clone()),
+        (409, json!(format!("{site_s} is not in the snapshot")))
+    );
+    // Hop one, from the repository: the server names site.py.
+    assert_eq!(s.json("POST", "/api/lsp/definition", at("source.py")).await.status, 200);
+    // Hop two, from site.py: it names next.py, which becomes readable and a further origin.
+    let def = s.json("POST", "/api/lsp/definition", at(&site_s)).await;
+    assert_eq!(
+        (def.status, def.json()["locations"].clone()),
+        (
+            200,
+            json!([
+                { "path": site_s, "line": 2, "col": 4, "text": "def g():", "external": true },
+                { "path": next_s, "line": 1, "col": 0, "text": "def h():", "external": true },
+            ])
+        )
+    );
+    assert_eq!(s.get(&file_query(&next_s, "new")).await.status, 200);
+    for route in ["definition", "type-definition", "hover", "references", "occurrences"] {
+        let res = s.json("POST", &format!("/api/lsp/{route}"), at(&next_s)).await;
+        assert_eq!(res.status, 200, "{route}: {}", res.body);
+    }
+    let encoded: String = form_urlencoded::byte_serialize(next_s.as_bytes()).collect();
+    assert_eq!(s.get(&format!("/api/lsp/symbols?path={encoded}")).await.status, 200);
+    // Nothing named the secret or the detour to site.py through `sub/..`, and a repository path
+    // stays bound to the snapshot.
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    let detour = dir.join("sub/../site.py").to_string_lossy().into_owned();
+    for unnamed in [&secret_s, &detour] {
+        assert_eq!(s.json("POST", "/api/lsp/hover", at(unnamed)).await.status, 409, "{unnamed}");
+        assert_eq!(s.get(&file_query(unnamed, "new")).await.status, 404, "{unnamed}");
+    }
+    assert_eq!(s.json("POST", "/api/lsp/hover", at("missing.py")).await.status, 409);
+    s.close().await;
+    drop(outside);
+}
+
+#[tokio::test]
 async fn answers_definition_hover_references_occurrences_and_symbols() {
     let overrides = [(LanguageId::Python, "fake")];
     let Some(s) = serve(python_repo(), EnterRequest::Working, &[], &overrides).await else { return };
@@ -132,7 +184,7 @@ async fn answers_definition_hover_references_occurrences_and_symbols() {
     let workspace = s.get("/api/lsp/symbols?q=q").await.json();
     assert_eq!(
         workspace,
-        json!({ "symbols": [{ "name": "q_sym", "kind": 12, "container": "mod", "path": "other.py", "line": 5, "endLine": 5, "col": 2 }] })
+        json!({ "symbols": [{ "name": "q_sym", "kind": 12, "container": "mod", "path": "other.py", "line": 5, "startLine": 5, "endLine": 5, "col": 2 }] })
     );
     s.close().await;
 }
@@ -177,5 +229,35 @@ async fn refuses_symbol_navigation_when_the_new_side_is_not_the_checkout() {
     );
     // Nothing tracked, so nothing started: the run's servers start for files they would read.
     assert!(s.lsp.as_ref().unwrap().status().servers.is_empty());
+    s.close().await;
+}
+
+#[tokio::test]
+async fn tells_the_servers_which_files_a_checkout_rewrote() {
+    let Some(_) = fake_servers() else { return };
+    let t = TestRepo::new();
+    std::fs::write(t.path.join(".git/info/exclude"), ".fake-env*\n").unwrap();
+    t.write("source.py", "def f():\n    pass\n");
+    t.write("other.py", "x = 1\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.write("other.py", "x = 2\n");
+    t.write("new.py", "y = 1\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    fake_env(&t.path, Some("fake"), &[("FAKE_LSP_EXTERNAL", "/nonexistent/site.py")]);
+    let overrides = HashMap::from([(LanguageId::Python, "fake".to_owned())]);
+    let s = TestServer::checking_out(t, revspec(&["main..feat"]), overrides).await;
+    let process = || s.lsp.as_ref().unwrap().servers()[0].bridge.process().clone();
+    let watched = || events(&process()).into_iter().filter(|e| e.starts_with("watched ")).collect::<Vec<_>>();
+    ready(&s).await;
+    // Entering checked out feat before the first snapshot: the servers start on it, with nothing to hear.
+    flush(&process()).await;
+    assert_eq!(watched(), Vec::<String>::new());
+    s.session.enter(revspec(&["feat..main"])).await.unwrap();
+    eventually("the checkout's files", || !watched().is_empty()).await;
+    s.session.reload().await.unwrap();
+    flush(&process()).await;
+    assert_eq!(watched(), ["watched 3 new.py, 2 other.py"], "a reload that left HEAD alone adds nothing");
     s.close().await;
 }

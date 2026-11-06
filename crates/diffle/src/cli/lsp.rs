@@ -72,14 +72,32 @@ pub fn start(
         lookup: default_lookup(),
         max_open: None,
     });
-    let tracking = Arc::downgrade(&pool);
-    session.on_snapshot(move |snap: &Arc<Snapshot>| {
-        let (pool, snap) = (tracking.upgrade(), snap.clone());
-        if let Some(pool) = pool {
-            tokio::spawn(async move { pool.track(&snap).await });
-        }
-    });
+    follow(session, &pool);
     pool
+}
+
+/// Keeps `pool` in step with each snapshot `session` announces: the servers its diff needs, and the
+/// files on disk a moved HEAD rewrote.
+pub fn follow(session: &Session, pool: &Arc<LspPool>) {
+    let tracking = Arc::downgrade(pool);
+    let (repo, head) = (session.repo.clone(), Mutex::new(String::new()));
+    // Synchronous within `Session::start`, so the startup report sees the servers it starts.
+    session.on_snapshot(move |snap: &Arc<Snapshot>| {
+        let Some(pool) = tracking.upgrade() else { return };
+        // HEAD moved, by diffle's checkout or the reader's: the files between the two changed on disk.
+        // Only the diff's files are open documents, so a server that does not watch the disk itself
+        // would otherwise keep a stale index of every other file the checkout rewrote.
+        let moved = std::mem::replace(&mut *head.lock().unwrap(), snap.head_sha.clone());
+        if !moved.is_empty() && !snap.head_sha.is_empty() && moved != snap.head_sha {
+            let (pool, repo, new) = (pool.clone(), repo.clone(), snap.head_sha.clone());
+            tokio::spawn(async move {
+                let Ok(touched) = repo.touched_between(&moved, &new).await else { return };
+                let servers = pool.servers();
+                futures::future::join_all(servers.iter().map(|s| s.bridge.files_changed(&touched))).await;
+            });
+        }
+        tokio::spawn(pool.track(snap));
+    });
 }
 
 /// The startup lines: what serves the diff, or why nothing can.

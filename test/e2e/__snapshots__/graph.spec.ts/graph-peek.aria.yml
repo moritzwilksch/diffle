@@ -1,0 +1,5 @@
+- dialog "References":
+  - heading "3 references from openapi.py" [level=3]:
+    - text: ""
+    - code: openapi.py
+  - text: "/j k move · Space peek · Enter jump · Esc close tally\\/ledger\\.py 3 \\d+ total: str \\d+ total=data\\[\"total\"\\], \\d+ \"total\": self\\.total,/"

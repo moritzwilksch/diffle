@@ -18,7 +18,7 @@ use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
 use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
 use crate::server::hub::Hub;
-use crate::server::{ApiDeps, DEFAULT_PORT, Server, ServerOptions};
+use crate::server::{ApiDeps, DEFAULT_PORT, Endpoint, Server, ServerOptions};
 use crate::session::{Session, SessionOptions};
 use crate::user_config::UserConfigStore;
 
@@ -48,6 +48,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         github: github.clone(),
         context,
         follow_refs: config.get().follow_refs,
+        checkout: !opts.no_checkout && !opts.no_lsp,
     };
     let session = Session::new(repo.clone(), hub.clone(), session_opts);
     // A `--lsp` override outranks the config and starts its server whatever the diff holds.
@@ -64,7 +65,8 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         signal().await;
         trigger.notify_one();
     });
-    if !opts.no_open && !opts.keep_alive {
+    // A socket opens no browser, but the tab connected through it is the run's all the same.
+    if (!opts.no_open || opts.socket.is_some()) && !opts.keep_alive {
         let (clients, trigger) = (hub.clients(), stop.clone());
         tokio::spawn(async move {
             last_tab_closed(clients, GRACE).await;
@@ -128,16 +130,21 @@ async fn start(
         hub: hub.clone(),
         lsp: lsp.clone(),
     };
-    let server_opts = ServerOptions {
-        port: opts.port.unwrap_or(DEFAULT_PORT),
-        probe: opts.port.is_none(),
-        host: opts.host().to_owned(),
-        allowed_origin: opts.allowed_origin.clone(),
+    // Elsewhere the command line refused --socket already.
+    let endpoint = match &opts.socket {
+        #[cfg(unix)]
+        Some(path) => Endpoint::Unix(path.clone()),
+        _ => Endpoint::Tcp {
+            host: opts.host().to_owned(),
+            port: opts.port.unwrap_or(DEFAULT_PORT),
+            probe: opts.port.is_none(),
+        },
     };
+    let server_opts = ServerOptions { endpoint, allowed_origin: opts.allowed_origin.clone() };
     let (bound, url) = Server::listen(deps, server_opts).await?;
     *server.lock().unwrap() = Some(bound);
     timing.mark("listen");
-    if !opts.no_open {
+    if !opts.no_open && opts.socket.is_none() {
         let browser = if opts.host() == "0.0.0.0" || opts.host() == "::" { localhost(&url) } else { url.clone() };
         open_browser(&browser);
     }

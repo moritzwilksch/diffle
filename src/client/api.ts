@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ConfigUpdateSchema,
   GithubExportRequestSchema,
+  LspHoverRequestSchema,
   LspPositionSchema,
   MessagePatchSchema,
   EnterRequestSchema,
@@ -16,6 +17,7 @@ import {
   FileResponseSchema,
   GithubExportResponseSchema,
   GithubMetadataSchema,
+  GraphResponseSchema,
   LastCommitsPreviewSchema,
   LspHoverResponseSchema,
   LspLocationsResponseSchema,
@@ -24,17 +26,23 @@ import {
   LspLogResponseSchema,
   LspSymbolsResponseSchema,
   MovedSchema,
+  PermalinkRequestSchema,
+  PermalinkSchema,
   RefsResponseSchema,
   SearchResponseSchema,
   ServerMessageSchema,
   SnapshotSchema,
   UserConfigSchema,
+  VersionResponseSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import type {
+  GraphQuery,
   GithubExportRequest,
+  LspHoverRequest,
   LspPosition,
   EnterRequest,
+  PermalinkRequest,
   RangeView,
   ReplyCreate,
   SearchScope,
@@ -91,7 +99,12 @@ const q = (params: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
+  /** The server's release; answers before the first review resolves. */
+  version: () => json(VersionResponseSchema, 'api/version'),
   github: () => json(GithubMetadataSchema, 'api/github'),
+  /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
+  permalink: (req: PermalinkRequest) =>
+    json(PermalinkSchema, 'api/permalink', { method: 'POST', body: encode(PermalinkRequestSchema, req) }),
   snapshot: () => json(SnapshotSchema, 'api/snapshot'),
   moved: () => json(MovedSchema.nullable(), 'api/moved'),
   /** Recompute the snapshot where the refs point now. */
@@ -204,11 +217,13 @@ export const api = {
       body: encode(LspPositionSchema, pos),
     }),
   /** What the server knows about the symbol at `pos`, as markdown. */
-  lspHover: (pos: LspPosition) =>
-    json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  lspHover: (req: LspHoverRequest) =>
+    json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspHoverRequestSchema, req) }),
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  /** The snapshot's changed symbols and the code using them. */
+  lspGraph: (query: GraphQuery) => json(GraphResponseSchema, `api/lsp/graph?${q(query)}`),
   lspOccurrences: (pos: LspPosition) =>
     json(LspOccurrencesResponseSchema, 'api/lsp/occurrences', { method: 'POST', body: encode(LspPositionSchema, pos) }),
 
@@ -220,11 +235,15 @@ export const api = {
     json(UserConfigSchema, 'api/config', { method: 'PUT', body: encode(ConfigUpdateSchema, config) }),
 };
 
+/** A local server answers the upgrade in milliseconds; one that has not after this is hung. */
+const CONNECT_TIMEOUT_MS = 2000;
+
 /**
  * Auto-reconnecting WebSocket for server pushes. `onOpen` fires on every connection, the first
  * included: pushes are not replayed, so the caller resyncs there, and fetching only once the
  * socket is subscribed is what makes the resync authoritative. `onLost` fires once per dropped
- * connection, before the retries begin; the next `onOpen` ends the outage.
+ * connection, before the retries begin; the next `onOpen` ends the outage. An attempt that has
+ * not opened after `CONNECT_TIMEOUT_MS` is abandoned and retried.
  */
 export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () => void, onLost: () => void): () => void {
   let ws: WebSocket | null = null;
@@ -235,8 +254,13 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
     if (closed) return;
     const url = new URL('ws', location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(url.href);
+    const socket = new WebSocket(url.href);
+    ws = socket;
+    // Firefox holds back every other socket to this host while one connects, for up to 20 s if the
+    // server hangs (a frozen diffle): other diffle tabs and localhost apps must not wait that long.
+    const abandon = setTimeout(() => socket.close(), CONNECT_TIMEOUT_MS);
     ws.onopen = () => {
+      clearTimeout(abandon);
       delay = 500;
       connected = true;
       onOpen();
@@ -249,6 +273,7 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
       }
     };
     ws.onclose = () => {
+      clearTimeout(abandon);
       if (closed) return;
       if (connected) {
         connected = false;

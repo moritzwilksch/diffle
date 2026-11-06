@@ -16,9 +16,10 @@
   --warn: #744500;
   --add: #055d20;
   --del: #a0111f;
-  --kind-type: #023b95;
+  /* The code theme's colors for a declared type, function and constant, so names read as in the diff. */
+  --kind-type: #702c00;
   --kind-callable: #622cbc;
-  --kind-value: #702c00;
+  --kind-value: #023b95;
   --search-match: #f0ce5380;
   --search-current: #e09b13;
   --search-current-fg: #0e1116;
@@ -44,9 +45,9 @@
     --warn: #f0ce53;
     --add: #26cd4d;
     --del: #ff6a69;
-    --kind-type: #91cbff;
+    --kind-type: #ffb757;
     --kind-callable: #dbb7ff;
-    --kind-value: #ffb757;
+    --kind-value: #91cbff;
     --search-match: #fbd66940;
     --search-current: #e09b13;
     --search-current-fg: #0a0c10;
@@ -69,9 +70,9 @@
   --warn: #f0ce53;
   --add: #26cd4d;
   --del: #ff6a69;
-  --kind-type: #91cbff;
+  --kind-type: #ffb757;
   --kind-callable: #dbb7ff;
-  --kind-value: #ffb757;
+  --kind-value: #91cbff;
   --search-match: #fbd66940;
   --search-current: #e09b13;
   --search-current-fg: #0a0c10;

@@ -19,6 +19,8 @@ vi.mock('@/client/api.js', () => ({
 const { useStore } = await import('@/client/store.js');
 const { ModePicker } = await import('@/client/header/ModePicker.js');
 const { useKeymap } = await import('@/client/keyboard/useKeymap.js');
+const { defineDiffStub } = await import('./views.js');
+defineDiffStub();
 type Result = Awaited<ReturnType<typeof originalEnter>>;
 let root: Root;
 let host: HTMLDivElement;

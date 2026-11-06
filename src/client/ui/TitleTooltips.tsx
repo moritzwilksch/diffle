@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { TipSurface, type TipAnchor } from './TipSurface.js';
 
+/** A title repeating the element's own text, shown whole, says nothing; it is there for when the text is cut short. */
+const repeatsShownText = (el: HTMLElement, text: string) =>
+  text === el.textContent?.trim() && el.scrollWidth <= el.clientWidth;
+
 /** Pointer rest before a control's tooltip appears; the browser's own `title` tip waits about a second. */
 const SHOW_MS = 250;
 /** A tip that opens within this long of the last one closing skips the pointer-rest delay, so sweeping across rows reads as one tip following the pointer. */
@@ -62,6 +66,7 @@ export function TooltipHost() {
       active = el;
       stashed = text;
       el.removeAttribute('title');
+      if (repeatsShownText(el, text)) return;
       show(el, text, performance.now() - closedAt < WARM_MS ? 0 : delay);
     };
     // `e.target` is retargeted to the shadow host for a node inside a shadow root; the composed path keeps the node.
@@ -116,7 +121,7 @@ export function TooltipHost() {
       // A re-render put the title back while the tip was up: drop the native one and refresh ours.
       stashed = text;
       active.removeAttribute('title');
-      show(active, text, 0);
+      if (!repeatsShownText(active, text)) show(active, text, 0);
     };
     const onDown = () => deactivate();
     const onScroll = () => deactivate();

@@ -8,8 +8,11 @@ use super::{Session, pr_url};
 use crate::error::{GithubError, Result};
 use crate::github::client::no_token;
 use crate::github::metadata::discover_github;
+use crate::github::permalink::permalink;
 use crate::github::review::ExportInput;
-use crate::protocol::{GithubExportResponse, GithubMetadata, Snapshot, ThreadQuery, ThreadState, same_review};
+use crate::protocol::{
+    GithubExportResponse, GithubMetadata, Permalink, PermalinkRequest, Snapshot, ThreadQuery, ThreadState, same_review,
+};
 
 /// How long one discovery answers for its snapshot before GitHub is asked again.
 const DISCOVERY_TTL: Duration = Duration::from_secs(30);
@@ -49,6 +52,12 @@ impl Session {
             }
         }
         result
+    }
+
+    /// The link to lines of the current snapshot, read afresh from local refs on every call.
+    pub async fn permalink(&self, req: &PermalinkRequest) -> Result<Permalink> {
+        let snap = self.snapshotter()?.current().await?;
+        permalink(&self.repo, &snap, &self.github.instance, req).await
     }
 
     /// Adds threads to a pending review on the matching pull request, with fresh pull request data

@@ -29,7 +29,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { twMerge } from 'tailwind-merge';
 import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '@/shared/protocol.js';
 import { hoverOnly, serversFor } from '@/shared/lsp.js';
-import { copyText } from '@/client/clipboard.js';
+import { useCopied } from '@/client/clipboard.js';
 import { FilePath } from '@/client/FilePath.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { lineBounds, sideOf } from '@/client/comments/anchor.js';
@@ -56,9 +56,10 @@ import {
   type ItemVersion,
   commentsOff,
 } from '@/client/model.js';
-import { remPx } from '@/client/scale.js';
+import { onTextSizeChange, useRemPx } from '@/client/scale.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
+import { gridColumns, useViews } from '@/client/views/state.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
@@ -285,7 +286,7 @@ function drainHighlightLookahead(state: HighlightLookahead): void {
 }
 
 export function ReviewPane() {
-  const rem = remPx();
+  const rem = useRemPx();
   const geometry = useMemo(() => reviewGeometry(rem), [rem]);
   const snapshot = useStore((s) => s.snapshot);
   const error = useStore((s) => s.error);
@@ -491,38 +492,55 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified, wrap, the pane widening as the tree or panel
-  // hides) or remounts the viewer (theme). Neither is navigation, so the viewport holds: the row under the
-  // pane's top edge is measured here, before React renders the change, and the request to land it at the
-  // same pixel goes out in the same update, so the jump effect below places it before anything paints.
-  // No row on screen means nothing to hold.
-  useEffect(
-    () =>
-      useStore.subscribe((s, prev) => {
-        if (
-          s.theme === prev.theme &&
-          s.diffStyle === prev.diffStyle &&
-          s.config.lineWrap === prev.config.lineWrap &&
-          s.layout.treeVisible === prev.layout.treeVisible &&
-          s.layout.panelVisible === prev.layout.panelVisible
-        )
-          return;
-        const scroller = containerRef.current;
-        const items = viewerRef.current?.getInstance()?.getRenderedItems();
-        if (!scroller || !items) return;
-        const box = scroller.getBoundingClientRect();
-        const held = topRow(
-          items.map((r) => ({ id: r.id, root: r.element.shadowRoot ?? r.element })),
-          box.top + geometry.itemMetrics.diffHeaderHeight,
-          box.bottom,
-        );
-        if (held)
-          useStore.setState((s) => ({
-            scrollTarget: { ...held, align: 'keep', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
-          }));
-      }),
-    [geometry],
-  );
+  // A display toggle re-lays the rows out (split / unified, wrap, text size, the pane resizing as the tree or
+  // the side panel hides, or as a view with another panel shows) or remounts the viewer (theme). Neither is
+  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
+  // renders the change, and the request to land it at the same pixel goes out in the same update, so the
+  // jump effect below places it before anything paints. No row on screen means nothing to hold. A drag
+  // moves the panes' edge every frame and is left alone.
+  useEffect(() => {
+    const hold = () => {
+      const scroller = containerRef.current;
+      const items = viewerRef.current?.getInstance()?.getRenderedItems();
+      if (!scroller || !items) return;
+      const box = scroller.getBoundingClientRect();
+      const held = topRow(
+        items.map((r) => ({ id: r.id, root: r.element.shadowRoot ?? r.element })),
+        box.top + geometry.itemMetrics.diffHeaderHeight,
+        box.bottom,
+      );
+      if (held)
+        useStore.setState((s) => ({
+          scrollTarget: { ...held, align: 'keep', nonce: (s.scrollTarget?.nonce ?? 0) + 1 },
+        }));
+    };
+    const columnsNow = () => gridColumns(useStore.getState().layout, useViews.getState().active);
+    let columns = columnsNow();
+    const resized = () => {
+      const next = columnsNow();
+      const moved = next !== columns && document.body.dataset.resizing == null;
+      columns = next;
+      return moved;
+    };
+    const offViews = useViews.subscribe(() => {
+      if (resized()) hold();
+    });
+    const offStore = useStore.subscribe((s, prev) => {
+      if (
+        resized() ||
+        s.theme !== prev.theme ||
+        s.diffStyle !== prev.diffStyle ||
+        s.config.lineWrap !== prev.config.lineWrap
+      )
+        hold();
+    });
+    const offTextSize = onTextSizeChange(hold);
+    return () => {
+      offViews();
+      offStore();
+      offTextSize();
+    };
+  }, [geometry]);
 
   // Reveal a line hidden in collapsed context: bring the item into the virtual window,
   // ask its instance to expand around the line, then center it.
@@ -1208,9 +1226,7 @@ function FileHeader({ id, resizeHeader }: { id: string; resizeHeader: (id: strin
 /** Copies the path for quoting it in a comment; shown only while the header is hovered or the button focused. */
 function CopyPathButton({ path }: { path: string }) {
   const flash = useStore((s) => s.flash);
-  const [done, setDone] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const { done, copy } = useCopied();
   return (
     <Button
       variant="ghost"
@@ -1219,10 +1235,7 @@ function CopyPathButton({ path }: { path: string }) {
       title="Copy path (yp)"
       aria-label="Copy path"
       onClick={async () => {
-        if (!(await copyText(path))) return flash('The browser blocked clipboard access');
-        setDone(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), 1400);
+        if (!(await copy(path))) flash('The browser blocked clipboard access');
       }}
     >
       <CopyIcon done={done}>

@@ -135,12 +135,14 @@ fn walk(symbols: &[Value], container: Option<&str>, path: &str, out: &mut Vec<Ls
         let (selection, whole) = (range(s.get("selectionRange")), range(s.get("range")));
         let Some(start) = selection.or(whole).map(|r| r.start) else { continue };
         let end = whole.or(selection).map_or(start.line, |r| r.end.line);
+        let first = whole.map_or(start.line, |r| r.start.line).min(start.line);
         out.push(LspSymbol {
             name: name.to_owned(),
             kind,
             container: container.map(str::to_owned),
             path: path.to_owned(),
             line: start.line + 1,
+            start_line: first + 1,
             end_line: start.line.max(end) + 1,
             col: start.character,
         });
@@ -164,6 +166,7 @@ pub fn symbol_information(s: &Value, path: &str) -> Option<LspSymbol> {
         container: container.map(str::to_owned),
         path: path.to_owned(),
         line: start.line + 1,
+        start_line: start.line + 1,
         end_line: start.line.max(end.line) + 1,
         col: start.character,
     })

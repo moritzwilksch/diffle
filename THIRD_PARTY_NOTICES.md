@@ -2828,7 +2828,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### zustand 5.0.15 (git+https://github.com/pmndrs/zustand.git)
+#### zustand 5.0.16 (git+https://github.com/pmndrs/zustand.git)
 
 ```
 MIT License
@@ -4089,7 +4089,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### lucide-react 1.57.0 (https://github.com/lucide-icons/lucide.git)
+#### lucide-react 1.61.0 (https://github.com/lucide-icons/lucide.git)
 
 ```
 ISC License
@@ -4178,7 +4178,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The binary links the crates below, grouped by licence. Each licence's text follows the crates
 that use it.
 
-- MIT License: 335
+- MIT License: 326
 - Unicode License v3: 20
 - Apache License 2.0: 8
 - ISC License: 6
@@ -4192,7 +4192,7 @@ that use it.
 
 Used by:
 - gethostname 1.1.0 (https://codeberg.org/swsnr/gethostname.rs.git)
-- gix-imara-diff 0.3.2 (https://github.com/GitoxideLabs/gitoxide)
+- gix-imara-diff 0.3.3 (https://github.com/GitoxideLabs/gitoxide)
 
 ```
                               Apache License
@@ -4612,7 +4612,7 @@ Apache License
 ### Apache License 2.0
 
 Used by:
-- diffle 0.3.3 (https://github.com/moritzwilksch/diffle)
+- diffle 0.4.0 (https://github.com/moritzwilksch/diffle)
 - aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
 - dunce 1.0.5 (https://gitlab.com/kornelski/dunce)
 - ryu 1.0.23 (https://github.com/dtolnay/ryu)
@@ -4892,7 +4892,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### Creative Commons Zero v1.0 Universal
 
 Used by:
-- notify 8.2.0 (https://github.com/notify-rs/notify.git)
+- notify 8.2.1 (https://github.com/notify-rs/notify.git)
 
 ```
 Creative Commons CC0 1.0 Universal
@@ -5522,7 +5522,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- uuid 1.28.0 (https://github.com/uuid-rs/uuid)
+- uuid 1.29.0 (https://github.com/uuid-rs/uuid)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -8553,6 +8553,8 @@ Used by:
 - jni-macros 0.22.4 (https://github.com/jni-rs/jni-rs)
 - jni-sys-macros 0.4.1 (https://github.com/jni-rs/jni-sys)
 - jni 0.22.4 (https://github.com/jni-rs/jni-rs)
+- objc2-core-foundation 0.3.2 (https://github.com/madsmtm/objc2)
+- objc2-core-services 0.3.2 (https://github.com/madsmtm/objc2)
 - r-efi 5.3.0 (https://github.com/r-efi/r-efi)
 - r-efi 6.0.0 (https://github.com/r-efi/r-efi)
 - rustls-platform-verifier-android 0.2.0 (https://github.com/rustls/rustls-platform-verifier)
@@ -8565,17 +8567,7 @@ Used by:
 - windows-registry 0.6.1 (https://github.com/microsoft/windows-rs)
 - windows-result 0.4.1 (https://github.com/microsoft/windows-rs)
 - windows-strings 0.5.1 (https://github.com/microsoft/windows-rs)
-- windows-sys 0.60.2 (https://github.com/microsoft/windows-rs)
 - windows-sys 0.61.2 (https://github.com/microsoft/windows-rs)
-- windows-targets 0.53.5 (https://github.com/microsoft/windows-rs)
-- windows_aarch64_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_aarch64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_i686_gnu 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_i686_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_i686_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_gnu 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
 
 ```
 MIT License
@@ -8603,7 +8595,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
 - tokio-util 0.7.20 (https://github.com/tokio-rs/tokio)
-- tokio 1.54.0 (https://github.com/tokio-rs/tokio)
+- tokio 1.54.1 (https://github.com/tokio-rs/tokio)
 
 ```
 MIT License
@@ -8923,7 +8915,7 @@ Used by:
 - gix-command 0.12.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-commitgraph 0.41.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-config-value 0.21.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-config 0.62.1 (https://github.com/GitoxideLabs/gitoxide)
+- gix-config 0.62.2 (https://github.com/GitoxideLabs/gitoxide)
 - gix-credentials 0.42.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-date 0.18.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-diff 0.69.0 (https://github.com/GitoxideLabs/gitoxide)
@@ -8934,18 +8926,18 @@ Used by:
 - gix-fs 0.24.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-glob 0.29.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-hash 0.28.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-hashtable 0.18.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-ignore 0.24.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-hashtable 0.18.1 (https://github.com/GitoxideLabs/gitoxide)
+- gix-ignore 0.24.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-index 0.57.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-lock 26.0.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-macros 0.2.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-macros 0.2.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-merge 0.22.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-negotiate 0.37.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-object 0.66.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-odb 0.86.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-pack 0.76.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-packetline 0.24.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-parallel 0.50.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-parallel 0.50.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-path 0.14.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-pathspec 0.22.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-prompt 0.19.1 (https://github.com/GitoxideLabs/gitoxide)
@@ -8955,7 +8947,7 @@ Used by:
 - gix-refspec 0.47.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-revision 0.51.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-revwalk 0.37.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-sec 0.16.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-sec 0.16.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-shallow 0.15.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-status 0.36.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-submodule 0.36.1 (https://github.com/GitoxideLabs/gitoxide)
@@ -8964,7 +8956,7 @@ Used by:
 - gix-transport 0.61.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-traverse 0.63.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-url 0.40.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-utils 0.5.1 (https://github.com/GitoxideLabs/gitoxide)
+- gix-utils 0.5.2 (https://github.com/GitoxideLabs/gitoxide)
 - gix-validate 0.13.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-worktree-state 0.36.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-worktree 0.58.0 (https://github.com/GitoxideLabs/gitoxide)
@@ -9130,10 +9122,10 @@ THE SOFTWARE.
 Used by:
 - aho-corasick 1.1.5 (https://github.com/BurntSushi/aho-corasick)
 - byteorder 1.5.0 (https://github.com/BurntSushi/byteorder)
-- jiff-core 0.1.1 (https://github.com/BurntSushi/jiff)
+- jiff-core 0.1.2 (https://github.com/BurntSushi/jiff)
 - jiff-tzdb-platform 0.1.3 (https://github.com/BurntSushi/jiff)
 - jiff-tzdb 0.1.9 (https://github.com/BurntSushi/jiff)
-- jiff 0.2.38 (https://github.com/BurntSushi/jiff)
+- jiff 0.2.39 (https://github.com/BurntSushi/jiff)
 - memchr 2.8.3 (https://github.com/BurntSushi/memchr)
 - walkdir 2.5.0 (https://github.com/BurntSushi/walkdir)
 
@@ -9252,37 +9244,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-```
-
-### MIT License
-
-Used by:
-- fsevent-sys 4.1.0 (https://github.com/octplane/fsevent-rust/tree/master/fsevent-sys)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2015 Pierre Baillet
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
 
 ```
 
