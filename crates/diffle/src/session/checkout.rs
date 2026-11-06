@@ -57,7 +57,10 @@ impl Session {
         let mut moved = self.moved_checkout.lock().unwrap();
         // An unborn HEAD has nothing to go back to.
         let from = moved.take().map(|m| m.from).or(head).filter(|from| from != target);
-        self.head.set(from.as_ref().map(pin));
+        match &from {
+            Some(from) => self.head.hold(pin(from)),
+            None => self.head.release(),
+        }
         *moved = from.map(|from| MovedCheckout { from, to: target.clone() });
         Ok(Some(Outcome::Switched))
     }
@@ -76,7 +79,7 @@ impl Session {
         let Some(to) = self.moved_checkout.lock().unwrap().as_ref().map(|m| m.to.clone()) else { return false };
         if matches!(self.repo.checked_out(&to).await, Ok(false)) {
             *self.moved_checkout.lock().unwrap() = None;
-            self.head.set(None);
+            self.head.release();
             return false;
         }
         true
@@ -87,7 +90,7 @@ impl Session {
     pub(super) async fn restore_checkout(&self) {
         self.checkout.store(false, Ordering::SeqCst);
         let Some(MovedCheckout { from, to }) = self.moved_checkout.lock().unwrap().take() else { return };
-        self.head.set(None);
+        self.head.release();
         let target = label(&from);
         let outcome = async {
             if !self.repo.checked_out(&to).await? || self.repo.checked_out(&from).await? {

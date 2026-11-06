@@ -20,9 +20,11 @@ pub enum CheckoutTarget {
 
 impl GitRepo {
     /// Whether no tracked file differs from HEAD, staged or not. Untracked files do not count:
-    /// a switch keeps them, and refuses when one would be overwritten.
+    /// a switch keeps them, and refuses when one would be overwritten. Submodules do not either:
+    /// a switch leaves them alone, so one whose recorded commit it changed reads as modified.
     pub async fn is_clean(&self) -> Result<bool, GitError> {
-        let out = self.exec(&["status", "--porcelain=v1", "-z", "--untracked-files=no"], Default::default()).await?;
+        let args = ["status", "--porcelain=v1", "-z", "--untracked-files=no", "--ignore-submodules=all"];
+        let out = self.exec(&args, Default::default()).await?;
         Ok(out.is_empty())
     }
 

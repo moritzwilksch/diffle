@@ -296,3 +296,51 @@ async fn leaves_the_checkout_alone_when_the_worktree_is_the_old_side() {
     assert_eq!(head(&t), "main");
     assert_eq!(snap.changed.len(), 1, "still the worktree against feat");
 }
+
+#[tokio::test]
+async fn puts_the_checkout_back_past_a_submodule_the_switch_left_behind() {
+    let sub = TestRepo::new();
+    sub.write("lib.txt", "one\n");
+    sub.commit("one");
+    let first = sub.git(&["rev-parse", "HEAD"]);
+    sub.write("lib.txt", "two\n");
+    sub.commit("two");
+    let t = TestRepo::new();
+    t.write("a.txt", "one\n");
+    let url = sub.path.to_str().unwrap();
+    t.git(&["-c", "protocol.file.allow=always", "submodule", "add", "-q", url, "sub"]);
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.git(&["-C", "sub", "checkout", "-q", &first]);
+    t.write("a.txt", "one\ntwo\n");
+    t.commit("feat, on the older submodule");
+    t.git(&["checkout", "-q", "main"]);
+    t.git(&["submodule", "update", "-q"]);
+
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["main...feat"])).await.unwrap()).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    // The switch kept the submodule on main's commit, which feat's recorded commit is not.
+    assert!(!t.git(&["status", "--porcelain"]).is_empty());
+    s.close().await;
+    assert_eq!(head(&t), "main", "the submodule is no change of the reviewer's to keep it on feat");
+}
+
+#[tokio::test]
+async fn keeps_a_previous_branch_naming_the_reviewers() {
+    let t = branches();
+    t.git(&["checkout", "-q", "-b", "old"]);
+    t.write("b.txt", "old\n");
+    t.commit("old");
+    t.git(&["checkout", "-q", "main"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    let snap = s.start(s.resolve(revspec(&["feat..@{-1}"])).await.unwrap()).await.unwrap();
+    assert_eq!(head(&t), "old");
+    assert_eq!(comparison_label(&snap.review), "feat..@{-1}");
+    // After the switch git's @{-1} is main, where feat..main changes nothing.
+    assert_eq!(common::paths(&snap), ["a.txt", "b.txt"], "still feat..old");
+    let snap = s.reload().await.unwrap();
+    assert_eq!(common::paths(&snap), ["a.txt", "b.txt"]);
+    s.close().await;
+    assert_eq!(head(&t), "main");
+}
