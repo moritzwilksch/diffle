@@ -68,7 +68,7 @@ pixi global install --git https://github.com/moritzwilksch/diffle diffle
 ```bash
 diffle                  # HEAD vs worktree, like a bare `git diff`
 diffle working          # HEAD vs worktree: staged, unstaged, untracked
-diffle develop          # what this branch added since it left develop
+diffle develop          # what this branch adds since it left develop, uncommitted included
 diffle pr 27            # GitHub PR 27, or its URL; without a number, this branch's PR
 diffle show a1b2c3d     # one commit, like `git show`
 diffle main..feat       # any git-diff revspec: <rev> | a..b | a...b | a b

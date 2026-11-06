@@ -48,8 +48,9 @@ Shorthands (in place of <revs>):
                            <a>..<b> <c>..<d> | <base> <b> <d> | <b>...<d>
 
 Revisions follow git diff, except that a lone one compares from the merge base:
-  diffle main              same as main...HEAD: what this branch added since it left main
-  diffle HEAD~3            the last three commits
+  diffle main              same as main...worktree: what this branch adds since it left main,
+                           uncommitted changes included
+  diffle HEAD~3            the last three commits and the uncommitted changes
   diffle main..feat        main vs feat
   diffle main...feat       what feat added since it left main
   diffle main..worktree    main vs the uncommitted tree ("worktree" works on either side)
