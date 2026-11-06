@@ -56,7 +56,7 @@ import {
   type ItemVersion,
   commentsOff,
 } from '@/client/model.js';
-import { remPx } from '@/client/scale.js';
+import { onTextSizeChange, useRemPx } from '@/client/scale.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
 import { gridColumns, useViews } from '@/client/views/state.js';
@@ -286,7 +286,7 @@ function drainHighlightLookahead(state: HighlightLookahead): void {
 }
 
 export function ReviewPane() {
-  const rem = remPx();
+  const rem = useRemPx();
   const geometry = useMemo(() => reviewGeometry(rem), [rem]);
   const snapshot = useStore((s) => s.snapshot);
   const error = useStore((s) => s.error);
@@ -492,8 +492,8 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified, wrap, the pane resizing as the tree or the
-  // side panel hides, or as a view with another panel shows) or remounts the viewer (theme). Neither is
+  // A display toggle re-lays the rows out (split / unified, wrap, text size, the pane resizing as the tree or
+  // the side panel hides, or as a view with another panel shows) or remounts the viewer (theme). Neither is
   // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
   // renders the change, and the request to land it at the same pixel goes out in the same update, so the
   // jump effect below places it before anything paints. No row on screen means nothing to hold. A drag
@@ -534,9 +534,11 @@ export function ReviewPane() {
       )
         hold();
     });
+    const offTextSize = onTextSizeChange(hold);
     return () => {
       offViews();
       offStore();
+      offTextSize();
     };
   }, [geometry]);
 
