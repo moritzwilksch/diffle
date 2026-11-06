@@ -308,7 +308,7 @@ async fn serializes_concurrent_mode_switches_so_the_last_request_wins() {
     let (a, b) = tokio::join!(s.enter(EnterRequest::Working), s.enter(revspec(&["main"])));
     assert!(b.unwrap().version > a.unwrap().version);
     let review = json(&s.review().unwrap());
-    assert_eq!((review["old"].as_str(), review["new"].as_str()), (Some("main"), Some("HEAD")));
+    assert_eq!((review["old"].as_str(), review["new"].as_str()), (Some("main"), Some("worktree")));
     let current = s.snapshotter().unwrap().current().await.unwrap();
     assert_eq!(s.comments().unwrap().key(), current.comment_key);
     s.close().await;

@@ -28,16 +28,17 @@ fn feature_repo() -> TestRepo {
 }
 
 #[tokio::test]
-async fn a_lone_revision_diffs_its_merge_base_with_head_against_head() {
+async fn a_lone_revision_diffs_its_merge_base_with_head_against_the_worktree() {
     let t = feature_repo();
     let repo = Arc::new(t.open().await);
     let m = mode(&repo, revspec(&["main"])).await;
-    assert_eq!(json(&m), json(&range("main", "HEAD", ComparisonBase::MergeBase)));
+    assert_eq!(json(&m), json(&range("main", "worktree", ComparisonBase::MergeBase)));
     let (_, snap) = snapshot(&repo, revspec(&["main"])).await;
-    assert_eq!((snap.follows, snap.comment_key.as_str()), (Live::Refs, "range:refs/heads/main...refs/heads/feat"));
+    assert_eq!((snap.follows, snap.comment_key.as_str()), (Live::Worktree, "range:refs/heads/main...refs/heads/feat"));
     assert_eq!(snap.old_sha, repo.merge_base("main", "feat").await.unwrap());
-    assert_eq!(paths(&snap), ["a.txt", "new.txt"]);
-    assert_eq!(snap.tree, ["a.txt", "keep.txt", "new.txt"]);
+    assert_eq!(paths(&snap), [".gitignore", "a.txt", "new.txt", "untracked.txt"]);
+    let (_, committed) = snapshot(&repo, revspec(&["main...feat"])).await;
+    assert_eq!(committed.comment_key, snap.comment_key);
 }
 
 #[tokio::test]
@@ -67,7 +68,7 @@ async fn pinned_shas_are_static_and_symbolic_refs_live() {
     let follows = async |args: &[&str]| snapshot(&repo, revspec(args)).await.1.follows;
     assert_eq!(follows(&[&format!("{sha}..{sha}")]).await, Live::None);
     assert_eq!(follows(&["main..feat"]).await, Live::Refs);
-    assert_eq!(follows(&["main"]).await, Live::Refs);
+    assert_eq!(follows(&["main"]).await, Live::Worktree);
     assert_eq!(follows(&["main..worktree"]).await, Live::Worktree);
 }
 

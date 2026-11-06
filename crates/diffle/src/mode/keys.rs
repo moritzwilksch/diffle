@@ -38,7 +38,8 @@ pub fn range_key(old: &str, new: &str, merge_base: bool) -> String {
 ///   origin/main...HEAD → range:o/r:main...o/r:feat
 /// If feat tracks a fork, its identity becomes e.g. "contributor/r:feat", keeping forks distinct.
 /// Without a GitHub upstream, branches use full refs (range:refs/heads/main...refs/heads/feat);
-/// other endpoints their resolved hash or literal "worktree". A pull request is keyed by its
+/// other endpoints their resolved hash or literal "worktree". A merge base against the worktree is
+/// keyed by HEAD, so `main` and `main...feat` share their comments. A pull request is keyed by its
 /// repositories and branches, so a fetched pull request and the same branches checked out share
 /// their comments. `HEAD..worktree` is `working`, from wherever it is reached.
 pub async fn range_comment_key(
@@ -73,6 +74,7 @@ pub async fn range_comment_key(
             repo.branch_ref(&rev).await
         }
     };
+    let new = if new == WORKTREE && base == ComparisonBase::MergeBase { "HEAD" } else { new };
     let (old_id, new_id) = tokio::try_join!(identity(old), identity(new))?;
     Ok(range_key(
         old_id.as_deref().unwrap_or(old_sha),
