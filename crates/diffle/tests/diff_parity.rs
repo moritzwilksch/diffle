@@ -113,7 +113,6 @@ fn varied(t: &TestRepo) {
     t.write("bin.dat", b"\x00\x01\x02binary\n");
     t.write("empty-gone", "");
     t.write("with space.txt", "s\n");
-    t.write("quote\"d.txt", "q\n");
     t.write("ünï.txt", "u\n");
     t.write("crlf.txt", "a\r\nb\r\n");
     t.write("typed", "a file\n");
@@ -136,7 +135,6 @@ fn varied(t: &TestRepo) {
     t.rm("empty-gone");
     t.write("empty-new", "");
     t.write("with space.txt", "s2\n");
-    t.write("quote\"d.txt", "q2\n");
     t.write("ünï.txt", "u2\n");
     t.write("crlf.txt", "a\r\nB\r\n");
     t.write("deps.lock", "v2\n");
@@ -149,6 +147,8 @@ fn varied(t: &TestRepo) {
         t.rm("typed");
         std::os::unix::fs::symlink("code.rs", t.path.join("typed")).unwrap();
         t.write("odd\nname.txt", "n\n");
+        // Windows allows neither a newline nor a `"` in a filename.
+        t.write("quote\"d.txt", "q2\n");
     }
 }
 

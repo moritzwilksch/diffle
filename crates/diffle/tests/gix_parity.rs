@@ -268,7 +268,8 @@ async fn replays_as_git_merge_tree_does_conflicts_included() {
     t.write("bin.dat", b"\x00base");
     t.write("same.txt", lines("same"));
     t.commit("base");
-    t.git(&["checkout", "-q", "-b", "head"]);
+    // Not `head`: on a case-insensitive filesystem git would read it as HEAD.
+    t.git(&["checkout", "-q", "-b", "topic"]);
     t.write(
         "edit.txt",
         lines("edit").replace("edit line 5\n", "head five\n").replace("edit line 30\n", "head thirty\n"),
@@ -278,7 +279,7 @@ async fn replays_as_git_merge_tree_does_conflicts_included() {
     t.write("bin.dat", b"\x00head");
     t.write("both.txt", "head adds\n");
     t.write("clean.txt", "only head\n");
-    t.commit("head");
+    t.commit("topic");
     t.git(&["checkout", "-q", "main"]);
     t.write("edit.txt", lines("edit").replace("edit line 5\n", "onto five\n").replace("edit line 35\n", "onto 35\n"));
     t.git(&["mv", "moved.txt", "renamed.txt"]);
@@ -289,13 +290,13 @@ async fn replays_as_git_merge_tree_does_conflicts_included() {
     t.commit("onto");
     let repo = t.open().await;
     let base = t.git(&["rev-parse", "main~1"]);
-    for (onto, head) in [("main", "head"), ("head", "main")] {
+    for (onto, head) in [("main", "topic"), ("topic", "main")] {
         let ours = repo.replay(&base, onto, head).await.unwrap();
         assert_eq!(ours, git_merge_tree(&t, &base, onto, head), "{onto} <- {head}");
         assert_eq!(ours.1, ["bin.dat", "both.txt", "edit.txt", "gone.txt"]);
     }
-    let clean = repo.replay(&base, "main~1", "head").await.unwrap();
-    assert_eq!(clean, git_merge_tree(&t, &base, "main~1", "head"));
+    let clean = repo.replay(&base, "main~1", "topic").await.unwrap();
+    assert_eq!(clean, git_merge_tree(&t, &base, "main~1", "topic"));
     assert!(clean.1.is_empty());
 }
 

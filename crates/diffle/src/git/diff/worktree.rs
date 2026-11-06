@@ -6,7 +6,7 @@ use gix::ObjectId;
 use gix::bstr::{BString, ByteSlice};
 use gix::index::entry::{Flags, Mode, Stage, Stat};
 
-use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, empty_blob, hash_path, kind, native, submodule_head};
+use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, hash_path, kind, native, submodule_head};
 
 /// Paths to stat before the stat pass is split across threads.
 const PARALLEL_FROM: usize = 2048;
@@ -50,10 +50,11 @@ pub fn worktree_items(repo: &gix::Repository, root: &Path) -> anyhow::Result<(Ve
                     Some(hashing) => hashing,
                     None => hashing.insert(repo.filter_pipeline(None)?),
                 };
-                if let Some(id) = hash_path(repo, pipeline, filter_index, &item.path, &abs, item.mode) {
-                    item.id = id;
-                    items.push(item);
-                }
+                // Unreadable (permissions) gets the null id, an empty blob to callers: one bad path
+                // must not fail the snapshot, nor read as deleted.
+                item.id = hash_path(repo, pipeline, filter_index, &item.path, &abs, item.mode)
+                    .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
+                items.push(item);
             }
         }
     }
@@ -158,7 +159,8 @@ pub fn untracked_items(repo: &gix::Repository, root: &Path, paths: &[String]) ->
             };
             let path = BString::from(path.as_str());
             // Unreadable (permissions) counts as empty: one bad path must not fail the snapshot.
-            let id = hash_path(repo, &mut pipeline, &index, &path, &abs, mode).unwrap_or_else(|| empty_blob(repo));
+            let id = hash_path(repo, &mut pipeline, &index, &path, &abs, mode)
+                .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
             Some(Item { path, mode, id, worktree: true, size: Some(meta.len()), untracked: true })
         })
         .collect())

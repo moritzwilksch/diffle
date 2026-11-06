@@ -174,10 +174,6 @@ pub fn blob_id(repo: &gix::Repository, content: &[u8]) -> gix::Result<ObjectId> 
     gix::objs::compute_hash(repo.object_hash(), gix::objs::Kind::Blob, content)
 }
 
-pub(super) fn empty_blob(repo: &gix::Repository) -> ObjectId {
-    ObjectId::empty_blob(repo.object_hash())
-}
-
 /// A repository path as the platform spells it.
 pub(super) fn native(path: &gix::bstr::BStr) -> Option<PathBuf> {
     gix::path::from_bstr(path).ok().map(std::borrow::Cow::into_owned)

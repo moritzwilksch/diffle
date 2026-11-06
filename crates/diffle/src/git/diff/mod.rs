@@ -158,6 +158,11 @@ fn detect_renames(changes: &mut Vec<Change>, reader: &mut Reader<'_>) {
     }
 }
 
+/// A side's blob as the snapshot names it: empty where the side is absent or could not be read.
+fn blob(item: Option<&Item>) -> String {
+    item.filter(|i| !i.id.is_null()).map_or_else(String::new, |i| i.id.to_string())
+}
+
 /// Paths whose `diff` attribute is unset (`-diff`, `binary`): git diffs them as binary unread.
 pub(in crate::git) struct NoDiff<'repo> {
     stack: gix::AttributeStack<'repo>,
@@ -210,8 +215,8 @@ fn changed_file(change: &Change, reader: &mut Reader<'_>, no_diff: &mut NoDiff<'
         additions,
         deletions,
         binary,
-        blob: new.map_or_else(String::new, |n| n.id.to_string()),
-        old_blob: old.map_or_else(String::new, |o| o.id.to_string()),
+        blob: blob(new),
+        old_blob: blob(old),
         generated: false,
         submodule: gitlink.then_some(true),
     })
