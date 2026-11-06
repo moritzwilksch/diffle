@@ -48,6 +48,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         github: github.clone(),
         context,
         follow_refs: config.get().follow_refs,
+        checkout: !opts.no_checkout && !opts.no_lsp,
     };
     let session = Session::new(repo.clone(), hub.clone(), session_opts);
     // A `--lsp` override outranks the config and starts its server whatever the diff holds.

@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 use crate::generated::GeneratedFlags;
 use crate::git::{GitRepo, WORKTREE};
 use crate::iterations::IterationStore;
+use crate::mode::head::HeadPin;
 use crate::mode::view::{Shown, resolve_shown};
 use crate::protocol::{
     ChangeStatus, ChangedFile, Iteration, MAX_RANGE_COMMITS, RangeCommits, RangeEnds, Review, ReviewedCommit, Snapshot,
@@ -36,6 +37,8 @@ pub struct Snapshotter {
     range_key: Option<String>,
     /// Records the range's endpoints as taken; absent for reviews that are not followed.
     iterations: Option<IterationStore>,
+    /// What HEAD names while the session holds the checkout elsewhere.
+    head: HeadPin,
     state: Mutex<State>,
     generated: GeneratedFlags,
 }
@@ -48,12 +51,14 @@ impl Snapshotter {
         version: i64,
         context: u32,
         iterations: Option<IterationStore>,
+        head: HeadPin,
     ) -> Arc<Self> {
         Arc::new(Self {
             repo,
             review,
             range_key,
             iterations,
+            head,
             state: Mutex::new(State { version, context, snapshot: None, patches: HashMap::new(), all: None }),
             generated: GeneratedFlags::default(),
         })
@@ -194,7 +199,8 @@ impl Snapshotter {
 
     async fn compute(self: Arc<Self>, version: i64) -> Result<Arc<Snapshot>> {
         let repo = &self.repo;
-        let shown = resolve_shown(repo, &self.review, self.iterations.as_ref(), self.range_key.as_deref());
+        let named = self.head.apply(&self.review);
+        let shown = resolve_shown(repo, &named, self.iterations.as_ref(), self.range_key.as_deref());
         let (shown, head_sha) = tokio::join!(shown, repo.resolve("HEAD"));
         let (shown, head_sha) = (shown?, head_sha.unwrap_or_default());
         let Shown { old_sha, new_sha, follows, range, interdiff, commit, comment_key } = shown;
