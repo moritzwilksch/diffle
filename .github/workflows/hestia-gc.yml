@@ -1,0 +1,38 @@
+name: Cache GC
+# Deletes the Nix paths in hestia's cache that no branch or open pull request still uses; without it,
+# the default branch's entries only grow. It must run there: a pull request's scope dies with it.
+on:
+  schedule:
+    - cron: 23 3 * * *
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Plan only; repack, touch and delete nothing.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# A second GC's repack would race the first's pack deletes.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    permissions:
+      # Deleting cache entries through the REST API.
+      actions: write
+      contents: read
+    steps:
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      # Installs the binary and exports the cache tokens GC needs; the daemon it also starts stays idle.
+      - uses: Mic92/hestia@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
+        with:
+          version: v3.1.0
+      - run: |
+          "$HESTIA_BIN" gc ${{ inputs.dry-run && '--dry-run' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
