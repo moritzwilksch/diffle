@@ -6,8 +6,9 @@
   font-variant-ligatures: none;
 }
 
+/* --diffle-text-scale is the Settings text size (scale.ts). */
 html {
-  font-size: 90%;
+  font-size: calc(90% * var(--diffle-text-scale, 1));
 }
 
 html,

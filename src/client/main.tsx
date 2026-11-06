@@ -4,10 +4,12 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import './styles.css';
+import { applyTextSize, readTextSize } from './scale.js';
 import { applyTheme, CODE_THEMES, HIGHLIGHTER, readTheme } from './theme.js';
 
-// Apply the saved theme before first paint.
+// Apply the saved theme and text size before first paint.
 applyTheme(readTheme());
+applyTextSize(readTextSize());
 
 performance.mark('diffle:boot');
 

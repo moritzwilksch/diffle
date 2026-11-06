@@ -2828,7 +2828,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### zustand 5.0.15 (git+https://github.com/pmndrs/zustand.git)
+#### zustand 5.0.16 (git+https://github.com/pmndrs/zustand.git)
 
 ```
 MIT License
@@ -4089,7 +4089,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### lucide-react 1.57.0 (https://github.com/lucide-icons/lucide.git)
+#### lucide-react 1.61.0 (https://github.com/lucide-icons/lucide.git)
 
 ```
 ISC License
@@ -4178,7 +4178,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The binary links the crates below, grouped by licence. Each licence's text follows the crates
 that use it.
 
-- MIT License: 245
+- MIT License: 236
 - Unicode License v3: 19
 - Apache License 2.0: 6
 - ISC License: 6
@@ -4400,7 +4400,7 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- diffle 0.3.5 (https://github.com/moritzwilksch/diffle)
+- diffle 0.3.6 (https://github.com/moritzwilksch/diffle)
 - aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
 - dunce 1.0.5 (https://gitlab.com/kornelski/dunce)
 - ryu 1.0.23 (https://github.com/dtolnay/ryu)
@@ -4680,7 +4680,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### Creative Commons Zero v1.0 Universal
 
 Used by:
-- notify 8.2.0 (https://github.com/notify-rs/notify.git)
+- notify 8.2.1 (https://github.com/notify-rs/notify.git)
 
 ```
 Creative Commons CC0 1.0 Universal
@@ -5309,7 +5309,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- uuid 1.28.0 (https://github.com/uuid-rs/uuid)
+- uuid 1.29.0 (https://github.com/uuid-rs/uuid)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -8018,6 +8018,8 @@ Used by:
 - jni-macros 0.22.4 (https://github.com/jni-rs/jni-rs)
 - jni-sys-macros 0.4.1 (https://github.com/jni-rs/jni-sys)
 - jni 0.22.4 (https://github.com/jni-rs/jni-rs)
+- objc2-core-foundation 0.3.2 (https://github.com/madsmtm/objc2)
+- objc2-core-services 0.3.2 (https://github.com/madsmtm/objc2)
 - r-efi 5.3.0 (https://github.com/r-efi/r-efi)
 - r-efi 6.0.0 (https://github.com/r-efi/r-efi)
 - rustls-platform-verifier-android 0.2.0 (https://github.com/rustls/rustls-platform-verifier)
@@ -8028,17 +8030,7 @@ Used by:
 - windows-registry 0.6.1 (https://github.com/microsoft/windows-rs)
 - windows-result 0.4.1 (https://github.com/microsoft/windows-rs)
 - windows-strings 0.5.1 (https://github.com/microsoft/windows-rs)
-- windows-sys 0.60.2 (https://github.com/microsoft/windows-rs)
 - windows-sys 0.61.2 (https://github.com/microsoft/windows-rs)
-- windows-targets 0.53.5 (https://github.com/microsoft/windows-rs)
-- windows_aarch64_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_aarch64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_i686_gnu 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_i686_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_i686_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_gnu 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
 
 ```
 MIT License
@@ -8066,7 +8058,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
 - tokio-util 0.7.20 (https://github.com/tokio-rs/tokio)
-- tokio 1.54.0 (https://github.com/tokio-rs/tokio)
+- tokio 1.54.1 (https://github.com/tokio-rs/tokio)
 
 ```
 MIT License
@@ -8549,37 +8541,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-```
-
-### MIT License
-
-Used by:
-- fsevent-sys 4.1.0 (https://github.com/octplane/fsevent-rust/tree/master/fsevent-sys)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2015 Pierre Baillet
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
 
 ```
 

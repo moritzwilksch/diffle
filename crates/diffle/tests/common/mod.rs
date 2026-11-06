@@ -27,6 +27,9 @@ impl TestRepo {
         // Git's detached background maintenance writes refs after a commit, a watcher signal no test expects.
         repo.git(&["config", "maintenance.auto", "false"]);
         repo.git(&["config", "gc.auto", "0"]);
+        // Diffle's own git reads the system config the helper skips; a Windows `core.autocrlf`
+        // there would check out CRLF files this helper's git then sees as modified.
+        repo.git(&["config", "core.autocrlf", "false"]);
         repo
     }
 
@@ -101,7 +104,7 @@ pub async fn range_key(repo: &GitRepo, review: &Review) -> Option<String> {
 pub async fn snapshot(repo: &Arc<GitRepo>, req: EnterRequest) -> (Arc<Snapshotter>, Arc<Snapshot>) {
     let review = mode(repo, req).await;
     let key = range_key(repo, &review).await;
-    let snapshotter = Snapshotter::new(repo.clone(), review, key, 1, 3, None);
+    let snapshotter = Snapshotter::new(repo.clone(), review, key, 1, 3, None, Default::default());
     let snap = snapshotter.current().await.unwrap();
     (snapshotter, snap)
 }
@@ -140,7 +143,7 @@ pub fn session(
     follow_refs: FollowRefs,
 ) -> (Arc<Session>, Arc<Recorder>) {
     let hub = Arc::new(Recorder::default());
-    let opts = SessionOptions { watch, github: Github::tokenless(), context, follow_refs };
+    let opts = SessionOptions { watch, github: Github::tokenless(), context, follow_refs, checkout: false };
     (Session::new(repo.clone(), hub.clone(), opts), hub)
 }
 

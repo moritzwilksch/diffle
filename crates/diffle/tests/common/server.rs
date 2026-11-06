@@ -5,15 +5,15 @@ use diffle::github::hosts::Github;
 use diffle::lsp::pool::{LspPool, PoolOptions};
 use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
 use diffle::server::hub::Hub;
-use diffle::server::{ApiDeps, Server, ServerOptions};
+use diffle::server::{ApiDeps, Endpoint, Server, ServerOptions};
 use diffle::session::{Session, SessionOptions};
 use diffle::user_config::UserConfigStore;
 use futures::FutureExt;
 
 use super::TestRepo;
 
-/// A pool reading new-side text through the session, so the snapshot allowlist applies, and tracking
-/// every snapshot. Overrides are never probed; the rest of PATH is not consulted.
+/// A pool reading new-side text through the session, so the snapshot allowlist applies, and following
+/// every snapshot as a run does. Overrides are never probed; the rest of PATH is not consulted.
 fn start_lsp(session: &Arc<Session>, overrides: std::collections::HashMap<LanguageId, String>) -> Arc<LspPool> {
     let (reader, checker) = (Arc::downgrade(session), Arc::downgrade(session));
     let pool = LspPool::new(PoolOptions {
@@ -44,12 +44,7 @@ fn start_lsp(session: &Arc<Session>, overrides: std::collections::HashMap<Langua
         lookup: Arc::new(|_| None),
         max_open: None,
     });
-    let tracking = Arc::downgrade(&pool);
-    session.on_snapshot(move |snap| {
-        if let Some(pool) = tracking.upgrade() {
-            tokio::spawn(pool.track(snap));
-        }
-    });
+    diffle::cli::lsp::follow(session, &pool);
     pool
 }
 
@@ -97,11 +92,46 @@ impl TestServer {
         req: EnterRequest,
         overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
     ) -> Self {
+        let s = Self::listening(repo, overrides).await;
+        s.session.start(s.session.resolve(req).await.unwrap()).await.unwrap();
+        s
+    }
+
+    /// As `with_lsp`, with the session checking out the new side of each review it enters.
+    pub async fn checking_out(
+        repo: TestRepo,
+        req: EnterRequest,
+        overrides: std::collections::HashMap<diffle::protocol::LanguageId, String>,
+    ) -> Self {
+        let s = Self::build(repo, Some(overrides), true).await;
+        s.session.start(s.session.resolve(req).await.unwrap()).await.unwrap();
+        s
+    }
+
+    /// A server over `repo` whose session has not entered a review yet: the API waits until
+    /// `session.start` resolves one.
+    pub async fn listening(
+        repo: TestRepo,
+        overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+    ) -> Self {
+        Self::build(repo, overrides, false).await
+    }
+
+    async fn build(
+        repo: TestRepo,
+        overrides: Option<std::collections::HashMap<diffle::protocol::LanguageId, String>>,
+        checkout: bool,
+    ) -> Self {
         let git = Arc::new(repo.open().await);
         let hub = Hub::new();
         let config = Arc::new(UserConfigStore::open(repo.path.join("cfg").join("config.json")).await);
-        let opts =
-            SessionOptions { watch: false, github: Github::tokenless(), context: 3, follow_refs: FollowRefs::Off };
+        let opts = SessionOptions {
+            watch: false,
+            github: Github::tokenless(),
+            context: 3,
+            follow_refs: FollowRefs::Off,
+            checkout,
+        };
         let session = Session::new(git, hub.clone(), opts);
         let lsp = overrides.map(|overrides| start_lsp(&session, overrides));
         let deps = ApiDeps {
@@ -112,13 +142,10 @@ impl TestServer {
             lsp: lsp.clone(),
         };
         let opts = ServerOptions {
-            port: 0,
-            probe: false,
-            host: "127.0.0.1".into(),
+            endpoint: Endpoint::Tcp { host: "127.0.0.1".into(), port: 0, probe: false },
             allowed_origin: Some("https://proxy.example".into()),
         };
         let (server, base) = Server::listen(deps, opts).await.unwrap();
-        session.start(session.resolve(req).await.unwrap()).await.unwrap();
         Self { repo, session, config, hub, base, server: Some(server), lsp, client: reqwest::Client::new() }
     }
 

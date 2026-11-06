@@ -89,7 +89,7 @@ impl LspPool {
         LspStatus { enabled: true, servers, missing: self.missing.lock().unwrap().clone() }
     }
 
-    fn servers(&self) -> Vec<Arc<PoolServer>> {
+    pub fn servers(&self) -> Vec<Arc<PoolServer>> {
         self.entries.lock().unwrap().values().cloned().collect()
     }
 

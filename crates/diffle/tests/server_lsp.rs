@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use common::lsp::{eventually, fake_env, fake_servers, root};
+use common::lsp::{events, eventually, fake_env, fake_servers, flush, root};
 use common::server::TestServer;
 use common::{TestRepo, revspec};
 use diffle::protocol::{EnterRequest, LanguageId};
@@ -229,5 +229,35 @@ async fn refuses_symbol_navigation_when_the_new_side_is_not_the_checkout() {
     );
     // Nothing tracked, so nothing started: the run's servers start for files they would read.
     assert!(s.lsp.as_ref().unwrap().status().servers.is_empty());
+    s.close().await;
+}
+
+#[tokio::test]
+async fn tells_the_servers_which_files_a_checkout_rewrote() {
+    let Some(_) = fake_servers() else { return };
+    let t = TestRepo::new();
+    std::fs::write(t.path.join(".git/info/exclude"), ".fake-env*\n").unwrap();
+    t.write("source.py", "def f():\n    pass\n");
+    t.write("other.py", "x = 1\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.write("other.py", "x = 2\n");
+    t.write("new.py", "y = 1\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    fake_env(&t.path, Some("fake"), &[("FAKE_LSP_EXTERNAL", "/nonexistent/site.py")]);
+    let overrides = HashMap::from([(LanguageId::Python, "fake".to_owned())]);
+    let s = TestServer::checking_out(t, revspec(&["main..feat"]), overrides).await;
+    let process = || s.lsp.as_ref().unwrap().servers()[0].bridge.process().clone();
+    let watched = || events(&process()).into_iter().filter(|e| e.starts_with("watched ")).collect::<Vec<_>>();
+    ready(&s).await;
+    // Entering checked out feat before the first snapshot: the servers start on it, with nothing to hear.
+    flush(&process()).await;
+    assert_eq!(watched(), Vec::<String>::new());
+    s.session.enter(revspec(&["feat..main"])).await.unwrap();
+    eventually("the checkout's files", || !watched().is_empty()).await;
+    s.session.reload().await.unwrap();
+    flush(&process()).await;
+    assert_eq!(watched(), ["watched 3 new.py, 2 other.py"], "a reload that left HEAD alone adds nothing");
     s.close().await;
 }
