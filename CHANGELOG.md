@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0](https://github.com/moritzwilksch/diffle/compare/v0.3.6...v0.4.0) - 2026-11-06
+
+### Features
+
+- _(server)_ Add a version endpoint for other clients ([#431](https://github.com/moritzwilksch/diffle/pull/431))
+- _(client)_ Add a text size setting ([#433](https://github.com/moritzwilksch/diffle/pull/433))
+- [**breaking**] Check out the reviewed revision so language servers see it ([#421](https://github.com/moritzwilksch/diffle/pull/421))
+- _(cli)_ [**breaking**] Compare a lone revision against the worktree, as git diff does ([#435](https://github.com/moritzwilksch/diffle/pull/435))
+
+### Other
+
+- _(dev)_ Add git-cliff for all platforms ([#423](https://github.com/moritzwilksch/diffle/pull/423))
+
 ## [0.3.6](https://github.com/moritzwilksch/diffle/compare/v0.3.5...v0.3.6) - 2026-11-01
 
 ### Features
