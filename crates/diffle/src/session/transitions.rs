@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use super::{Active, Session};
 use crate::comments::CommentStore;
+use crate::comments::activity::Change;
 use crate::error::{Error, Result};
 use crate::iterations::IterationStore;
 use crate::mode::keys::range_comment_key;
@@ -112,6 +113,9 @@ impl Session {
             *next.watcher.lock().await = Some(self.start_watcher(&next).await?);
         }
         let prev = self.active.lock().unwrap().replace(next);
+        if prev.as_ref().is_some_and(|p| p.comments.key() != snap.comment_key) {
+            self.record([(None, Change::Key)]);
+        }
         if let Some(prev) = prev
             && let Some(watcher) = prev.watcher.lock().await.take()
         {

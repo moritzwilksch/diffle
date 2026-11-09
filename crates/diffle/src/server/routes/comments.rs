@@ -1,5 +1,8 @@
-//! Comment threads and viewed marks. Each write broadcasts its invalidation.
+//! Comment threads and viewed marks. A thread write is logged as activity, which tells clients; a
+//! viewed mark broadcasts its own invalidation.
+use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Json;
 use axum::Router;
@@ -9,18 +12,25 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post, put};
 use serde::Deserialize;
+use tokio::sync::broadcast::error::RecvError;
+use tokio::time::Instant;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
+use crate::comments::activity::{Change, Cursor, Since};
 use crate::comments::format::format_prompt;
 use crate::comments::import::parse_imports;
 use crate::error::Error;
-use crate::protocol::{ClearThreadsQuery, ReplyCreate, ServerMessage, ThreadQuery, ThreadState, ViewedEntry};
+use crate::protocol::{
+    Activity, ActivityQuery, AuthorQuery, ClearThreadsQuery, CommentAuthor, MessagePatch, ReplyCreate, ResolvedRequest,
+    ServerMessage, ThreadQuery, ThreadState, ViewedEntry,
+};
 use crate::session::Broadcaster;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
         .route("/api/threads", get(threads).post(import).delete(clear))
         .route("/api/threads/export", get(export))
+        .route("/api/threads/activity", get(activity))
         .route("/api/threads/{id}", delete(remove_thread))
         .route("/api/threads/{id}/replies", post(reply))
         .route("/api/threads/{id}/resolved", put(resolve))
@@ -33,6 +43,11 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
 
 fn text(body: String) -> Response {
     ([(header::CONTENT_TYPE, "text/plain; charset=UTF-8")], body).into_response()
+}
+
+/// Logs a change to each thread, by its author (absent: the reviewer).
+fn changed(d: &ApiDeps, threads: impl IntoIterator<Item = (Option<CommentAuthor>, String)>) {
+    d.session.record(threads.into_iter().map(|(author, id)| (author, Change::Thread(id))));
 }
 
 fn thread_query(raw: Option<&str>, default: ThreadState) -> ApiResult<ThreadQuery> {
@@ -68,14 +83,9 @@ async fn import(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let source = d.session.anchor_source()?;
     let (added, _) = d.session.comments()?.import_threads(imports, &source).await?;
     if !added.is_empty() {
-        d.hub.broadcast(ServerMessage::Threads);
+        changed(&d, added.iter().map(|t| (t.messages[0].author, t.id.clone())));
     }
     Ok((StatusCode::CREATED, Json(added)).into_response())
-}
-
-#[derive(Deserialize)]
-struct Body {
-    body: String,
 }
 
 async fn reply(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, raw: Bytes) -> ApiResult {
@@ -84,51 +94,119 @@ async fn reply(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, raw: Bytes
         return Err(ApiError::bad_request("body: body required"));
     }
     let thread = d.session.comments()?.reply(&id, req.body, req.author).await?;
-    d.hub.broadcast(ServerMessage::Threads);
+    changed(&d, [(req.author, id)]);
     Ok((StatusCode::CREATED, Json(thread)).into_response())
 }
 
 async fn edit_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(String, String)>, raw: Bytes) -> ApiResult {
-    let req: Body = body(&raw)?;
+    let req: MessagePatch = body(&raw)?;
     let thread = d.session.comments()?.edit_message(&id, &mid, req.body).await?;
-    d.hub.broadcast(ServerMessage::Threads);
+    changed(&d, [(req.author, id)]);
     Ok(Json(thread).into_response())
 }
 
-async fn remove_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(String, String)>) -> ApiResult {
+async fn remove_message(
+    State(d): State<Arc<ApiDeps>>,
+    Path((id, mid)): Path<(String, String)>,
+    RawQuery(raw): RawQuery,
+) -> ApiResult {
+    let q: AuthorQuery = query(raw.as_deref())?;
     let thread = d.session.comments()?.remove_message(&id, &mid).await?;
-    d.hub.broadcast(ServerMessage::Threads);
+    changed(&d, [(q.author, id)]);
     Ok(thread.map_or_else(|| StatusCode::NO_CONTENT.into_response(), |t| Json(t).into_response()))
 }
 
-#[derive(Deserialize)]
-struct Resolved {
-    resolved: bool,
-}
-
 async fn resolve(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, raw: Bytes) -> ApiResult {
-    let req: Resolved = body(&raw)?;
+    let req: ResolvedRequest = body(&raw)?;
     let thread = d.session.comments()?.set_resolved(&id, req.resolved).await?;
-    d.hub.broadcast(ServerMessage::Threads);
+    changed(&d, [(req.author, id)]);
     Ok(Json(thread).into_response())
 }
 
-async fn remove_thread(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>) -> ApiResult {
+async fn remove_thread(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, RawQuery(raw): RawQuery) -> ApiResult {
+    let q: AuthorQuery = query(raw.as_deref())?;
     d.session.comments()?.remove_thread(&id).await?;
-    d.hub.broadcast(ServerMessage::Threads);
+    changed(&d, [(q.author, id)]);
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 /// `?stale=1` deletes only stale threads; without it, every thread of this mode.
 async fn clear(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
     let q: ClearThreadsQuery = query(raw.as_deref())?;
-    match q.stale.as_deref() {
-        Some("1") => drop(d.session.comments()?.remove_stale().await?),
+    let gone = match q.stale.as_deref() {
+        Some("1") => d.session.comments()?.remove_stale().await?,
         None => d.session.comments()?.clear().await?,
         Some(other) => return Err(ApiError::bad_request(format!("stale: expected \"1\", got \"{other}\""))),
-    }
-    d.hub.broadcast(ServerMessage::Threads);
+    };
+    changed(&d, gone.into_iter().map(|id| (q.author, id)));
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+/// Waits for the next change after `since` not by `ignore`, then answers what changed; see `Activity`.
+async fn activity(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
+    let q: ActivityQuery = query(raw.as_deref())?;
+    let timeout = match q.timeout.as_deref() {
+        None => None,
+        Some(secs) => Some(Duration::from_secs(
+            secs.parse().map_err(|_| ApiError::bad_request(format!("timeout: not a number of seconds: {secs}")))?,
+        )),
+    };
+    let Some(since) = q.since else { return Ok(Json(everything(&d, false).await?).into_response()) };
+    let cursor = Cursor::parse(&since).ok_or_else(|| ApiError::bad_request(format!("since: not a cursor: {since}")))?;
+    // Subscribed before the first look, so a change between a look and the wait still wakes it.
+    let mut messages = d.hub.messages();
+    // A deadline past what the clock can name is no deadline.
+    let deadline = timeout.and_then(|t| Instant::now().checked_add(t));
+    let found = loop {
+        match d.session.activity().since(&cursor, q.ignore) {
+            Since::Lost => break everything(&d, true).await?,
+            // After a key switch, the threads named belong to the set left behind.
+            Since::Changed { through, threads, key } => {
+                break shown(&d, through, (!key).then_some(threads), false).await?;
+            }
+            Since::Quiet => {}
+        }
+        tokio::select! {
+            () = d.hub.closed() => break idle(&d, since, true)?,
+            () = until(deadline) => break idle(&d, since, false)?,
+            received = messages.recv() => if let Err(RecvError::Closed) = received {
+                break idle(&d, since, true)?;
+            },
+        }
+    };
+    Ok(Json(found).into_response())
+}
+
+async fn until(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// Every thread of the shown set, through the log's latest change.
+async fn everything(d: &ApiDeps, resync: bool) -> ApiResult<Activity> {
+    shown(d, d.session.activity().cursor(), None, resync).await
+}
+
+/// The shown set as it is now, read after the log reached `through`, so a change in between is
+/// reported again rather than missed: every thread, or only those `only` names, the gone ones as `removed`.
+async fn shown(d: &ApiDeps, through: Cursor, only: Option<BTreeSet<String>>, resync: bool) -> ApiResult<Activity> {
+    let store = d.session.comments()?;
+    let mut threads = store.threads(&thread_query(None, ThreadState::All)?).await?;
+    let mut removed = Vec::new();
+    if let Some(mut ids) = only {
+        threads.retain(|t| ids.remove(&t.id));
+        removed = ids.into_iter().collect();
+    }
+    let cursor = through.to_string();
+    Ok(Activity { cursor, comment_key: store.key().to_owned(), threads, removed, resync, closed: false })
+}
+
+/// Nothing to report: the cursor stands.
+fn idle(d: &ApiDeps, cursor: String, closed: bool) -> ApiResult<Activity> {
+    let comment_key = d.session.comments()?.key().to_owned();
+    Ok(Activity { cursor, comment_key, threads: Vec::new(), removed: Vec::new(), resync: false, closed })
 }
 
 /// `threadIds` absent means every open thread, which the generated type cannot tell from none.

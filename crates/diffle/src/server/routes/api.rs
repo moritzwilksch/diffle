@@ -43,7 +43,7 @@ async fn version() -> Response {
 /// Which run answers, for which repository: what a client checks an announcement against.
 async fn server(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     Ok(Json(ServerInfo {
-        instance: d.instance.clone(),
+        instance: d.session.activity().instance().to_owned(),
         pid: std::process::id().into(),
         git_dir: d.session.repo.git_dir.to_string_lossy().into_owned(),
         version: env!("CARGO_PKG_VERSION").to_owned(),

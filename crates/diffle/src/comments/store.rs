@@ -144,21 +144,22 @@ impl CommentStore {
         .await
     }
 
-    pub async fn clear(&self) -> Result<()> {
+    /// Drops every thread and returns their ids.
+    pub async fn clear(&self) -> Result<Vec<String>> {
         self.mutate(|set| {
-            set.threads.clear();
-            Ok(((), true))
+            let gone: Vec<String> = set.threads.drain(..).map(|t| t.id).collect();
+            Ok((gone, true))
         })
         .await
     }
 
-    /// Drops every stale thread and returns how many went.
-    pub async fn remove_stale(&self) -> Result<usize> {
+    /// Drops every stale thread and returns their ids.
+    pub async fn remove_stale(&self) -> Result<Vec<String>> {
         self.mutate(|set| {
-            let before = set.threads.len();
+            let gone: Vec<String> = set.threads.iter().filter(|t| t.stale).map(|t| t.id.clone()).collect();
             set.threads.retain(|t| !t.stale);
-            let gone = before - set.threads.len();
-            Ok((gone, gone > 0))
+            let changed = !gone.is_empty();
+            Ok((gone, changed))
         })
         .await
     }

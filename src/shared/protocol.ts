@@ -543,6 +543,8 @@ export type ThreadQuery = z.infer<typeof ThreadQuerySchema>;
 
 export const MessagePatchSchema = z.object({
   body: z.string(),
+  /** Absent: the reviewer edits. */
+  author: CommentAuthorSchema.optional(),
 });
 export type MessagePatch = z.infer<typeof MessagePatchSchema>;
 
@@ -917,6 +919,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('threads'),
+    /** After the change this announces; `GET /api/threads/activity` takes it as `since`. */
+    cursor: z.string(),
   }),
   z.object({
     type: z.literal('viewed'),
@@ -1002,7 +1006,11 @@ export const ConfigUpdateSchema = z.object({
   lineWrap: z.boolean().optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
-export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });
+export const ResolvedRequestSchema = z.object({
+  resolved: z.boolean(),
+  /** Absent: the reviewer resolves or reopens. */
+  author: CommentAuthorSchema.optional(),
+});
 export const ViewedBulkRequestSchema = z.object({ entries: ViewedEntrySchema.array() });
 export const FileQuerySchema = z.object({ path: z.string().min(1), rev: SideSchema });
 /**
@@ -1054,7 +1062,10 @@ export type SymbolsQuery = z.infer<typeof SymbolsQuerySchema>;
  */
 export const GraphQuerySchema = z.object({ all: z.literal('1').optional(), scope: z.string().min(1).optional() });
 export type GraphQuery = z.infer<typeof GraphQuerySchema>;
-export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
+/** Who deletes, on `DELETE` of a thread or a message. Absent: the reviewer. */
+export const AuthorQuerySchema = z.object({ author: CommentAuthorSchema.optional() });
+export type AuthorQuery = z.infer<typeof AuthorQuerySchema>;
+export const ClearThreadsQuerySchema = AuthorQuerySchema.extend({ stale: z.literal('1').optional() });
 export const PatchQuerySchema = z.object({ path: z.string().optional() });
 /**
  * What `GET /api/version` answers before anything else is ready: the server's release, so a
@@ -1081,5 +1092,40 @@ export const ServerInfoSchema = z.object({
   label: z.string(),
 });
 export type ServerInfo = z.infer<typeof ServerInfoSchema>;
+
+/**
+ * `GET /api/threads/activity`. Without `since`, answers the current state and a fresh cursor at once;
+ * with it, waits until a thread or the comment key changed after the cursor, by anyone but `ignore`.
+ * Without `timeout`, waits until then or until the server closes.
+ */
+export const ActivityQuerySchema = z.object({
+  /** A `cursor` this server answered earlier. */
+  since: z.string().optional(),
+  /** An author whose changes do not end the wait; they are still reported once something else does. */
+  ignore: CommentAuthorSchema.optional(),
+  /** Seconds to wait at most. */
+  timeout: z
+    .string()
+    .regex(/^[0-9]+$/)
+    .optional(),
+});
+export type ActivityQuery = z.infer<typeof ActivityQuerySchema>;
+
+/** What changed in the shown comment set since a cursor. */
+export const ActivitySchema = z.object({
+  /** `<instance>:<seq>`; the next wait's `since`. */
+  cursor: z.string(),
+  /** The set `threads` belong to; it switches when the reviewer focuses another slice. */
+  commentKey: z.string(),
+  /** Threads changed since the cursor, as they are now; after a key switch or a resync, every thread of the set. */
+  threads: CommentThreadSchema.array(),
+  /** Ids of threads changed since the cursor that no longer exist. */
+  removed: z.string().array(),
+  /** The cursor came from another run or fell out of the log's window: `threads` is the full set. */
+  resync: z.boolean(),
+  /** The server is closing; nothing more will come. */
+  closed: z.boolean(),
+});
+export type Activity = z.infer<typeof ActivitySchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });

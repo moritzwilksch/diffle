@@ -50,6 +50,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         context,
         follow_refs: config.get().follow_refs,
         checkout: !opts.no_checkout && !opts.no_lsp,
+        instance: uuid::Uuid::new_v4().to_string(),
     };
     let session = Session::new(repo.clone(), hub.clone(), session_opts);
     // A `--lsp` override outranks the config and starts its server whatever the diff holds.
@@ -124,9 +125,8 @@ async fn start(
     // Resolve the revision before binding, so invalid input never opens a browser.
     let review = session.resolve(req).await?;
     timing.mark("resolve");
-    let instance = uuid::Uuid::new_v4().to_string();
+    let instance = session.activity().instance().to_owned();
     let deps = ApiDeps {
-        instance: instance.clone(),
         session: session.clone(),
         config: config.clone(),
         extra_auto_viewed: opts.auto_viewed.clone(),

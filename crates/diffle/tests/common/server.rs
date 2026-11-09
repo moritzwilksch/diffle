@@ -131,11 +131,11 @@ impl TestServer {
             context: 3,
             follow_refs: FollowRefs::Off,
             checkout,
+            instance: "test".into(),
         };
         let session = Session::new(git, hub.clone(), opts);
         let lsp = overrides.map(|overrides| start_lsp(&session, overrides));
         let deps = ApiDeps {
-            instance: "test".into(),
             session: session.clone(),
             config: config.clone(),
             extra_auto_viewed: Vec::new(),
