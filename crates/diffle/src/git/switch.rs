@@ -1,16 +1,23 @@
 //! `git switch`, in-process: the refusals git makes, decided before anything on disk changes, then
 //! the paths the two trees disagree on, the index and HEAD.
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, bail};
+use anyhow::Context;
 use gix::ObjectId;
-use gix::bstr::{BString, ByteSlice};
-use gix::index::entry::Stat;
+use gix::bstr::{BStr, BString, ByteSlice};
+use gix::index::entry::{Flags, Mode, Stat};
 use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
 
 use super::checkout::{CheckoutTarget, branch, head_tree, holder, is_submodule};
 use super::diff::sides::{EXECUTABLE, GITLINK, Item, SYMLINK, kind};
-use super::diff::{PathChange, tree_changes, worktree_changes};
+use super::diff::{PathChange, index_changes, tree_changes, worktree_changes};
+use crate::error::GitError;
+
+/// A refusal, worded as git words it; nothing has changed yet.
+macro_rules! refuse {
+    ($($arg:tt)*) => { return Err(GitError::new(format!($($arg)*)).into()) };
+}
 
 /// `git switch`: refuses what git refuses, then writes the paths the two trees disagree on, the
 /// index to match the target, and HEAD.
@@ -18,7 +25,7 @@ pub(super) fn switch(repo: &gix::Repository, root: &Path, target: &CheckoutTarge
     let id = match target {
         CheckoutTarget::Branch(name) => {
             if let Some(path) = holder(repo, root, name)? {
-                bail!("'{name}' is already used by worktree at '{}'", path.display());
+                refuse!("'{name}' is already used by worktree at '{}'", path.display());
             }
             let mut branch = repo
                 .find_reference(format!("refs/heads/{name}").as_str())
@@ -27,30 +34,79 @@ pub(super) fn switch(repo: &gix::Repository, root: &Path, target: &CheckoutTarge
         }
         CheckoutTarget::Detached(sha) => repo.rev_parse_single(sha.as_str())?.object()?.peel_to_commit()?.id,
     };
+    let index = repo.index_or_empty()?;
+    if index.is_sparse() {
+        refuse!("a sparse index is not supported; switch by hand");
+    }
     let target_tree = repo.find_commit(id)?.tree_id()?.detach();
     let changes = tree_changes(repo, head_tree(repo)?, target_tree)?;
-    refuse_losses(repo, root, &changes)?;
-    write_worktree(repo, root, &changes)?;
-    write_index(repo, root, target_tree, &changes)?;
+    let skipped = skipped(&index, &changes);
+    refuse_losses(repo, root, &index, &changes, &skipped)?;
+    write_worktree(repo, root, &changes, &skipped)?;
+    write_index(root, &index, &changes, &skipped)?;
     move_head(repo, target, id)
 }
 
+/// The changed paths sparse checkout leaves off disk: those the index marks skip-worktree, and a
+/// new one where every tracked path in its nearest tracked directory is, as a cone leaves them.
+fn skipped(index: &gix::index::File, changes: &[PathChange]) -> HashSet<BString> {
+    let entries = index.entries();
+    if !entries.iter().any(|e| e.flags.contains(Flags::SKIP_WORKTREE)) {
+        return HashSet::new();
+    }
+    let skip = |path: &BStr| -> bool {
+        if let Some(entry) = index.entry_by_path(path) {
+            return entry.flags.contains(Flags::SKIP_WORKTREE);
+        }
+        let mut dir = path;
+        while let Some(slash) = dir.rfind_byte(b'/') {
+            dir = &dir[..slash];
+            let prefix = [dir.as_bytes(), b"/"].concat();
+            let start = entries.partition_point(|e| e.path(index).as_bytes() < prefix.as_slice());
+            let mut under = entries[start..].iter().take_while(|e| e.path(index).starts_with(&prefix)).peekable();
+            if under.peek().is_some() {
+                return under.all(|e| e.flags.contains(Flags::SKIP_WORKTREE));
+            }
+        }
+        false
+    };
+    changes
+        .iter()
+        .filter_map(|(o, n)| n.as_ref().or(o.as_ref()))
+        .map(|i| &i.path)
+        .filter(|p| skip(p.as_bstr()))
+        .cloned()
+        .collect()
+}
+
 /// Git's refusals, checked for every path the switch would write before any is written: a local
-/// change to a path it rewrites, or an untracked file, not ignored, where it puts one.
-fn refuse_losses(repo: &gix::Repository, root: &Path, changes: &[PathChange]) -> anyhow::Result<()> {
-    let (dirty, _) = worktree_changes(repo, root, head_tree(repo)?)?;
-    let dirty: std::collections::HashSet<BString> =
-        dirty.into_iter().filter(|c| !is_submodule(c)).filter_map(|(o, n)| o.or(n)).map(|i| i.path).collect();
+/// change, staged or not, to a path it rewrites, or an untracked file, not ignored, where it puts one.
+fn refuse_losses(
+    repo: &gix::Repository,
+    root: &Path,
+    index: &gix::index::File,
+    changes: &[PathChange],
+    skipped: &HashSet<BString>,
+) -> anyhow::Result<()> {
+    let head = head_tree(repo)?;
+    let (unstaged, _) = worktree_changes(repo, root, head)?;
+    let dirty: HashSet<BString> = unstaged
+        .into_iter()
+        .chain(index_changes(repo, head)?)
+        .filter(|c| !is_submodule(c))
+        .filter_map(|(o, n)| o.or(n))
+        .map(|i| i.path)
+        .collect();
     let local: Vec<_> =
         changes.iter().filter_map(|(o, n)| o.as_ref().or(n.as_ref())).filter(|i| dirty.contains(&i.path)).collect();
     if let Some(item) = local.first() {
-        bail!("Your local changes to the following files would be overwritten by checkout: {}", item.path);
+        refuse!("Your local changes to the following files would be overwritten by checkout: {}", item.path);
     }
-    let index = repo.index_or_empty()?;
     let mut excludes =
-        repo.excludes(&index, None, gix::worktree::stack::state::ignore::Source::WorktreeThenIdMappingIfNotSkipped)?;
+        repo.excludes(index, None, gix::worktree::stack::state::ignore::Source::WorktreeThenIdMappingIfNotSkipped)?;
     let tracked = |path: &[u8]| index.entry_by_path(path.as_bstr()).is_some();
-    for new in changes.iter().filter_map(|(_, n)| n.as_ref()).filter(|n| kind(n.mode) != GITLINK) {
+    let written = changes.iter().filter_map(|(_, n)| n.as_ref()).filter(|n| !skipped.contains(&n.path));
+    for new in written.filter(|n| kind(n.mode) != GITLINK) {
         // The path itself, then each directory above it, must be free or git's to replace.
         let (mut path, mut own): (&[u8], bool) = (&new.path, true);
         loop {
@@ -63,7 +119,7 @@ fn refuse_losses(repo: &gix::Repository, root: &Path, changes: &[PathChange]) ->
                     (false, dir) => !dir && !tracked(path),
                 };
                 if in_way {
-                    bail!(
+                    refuse!(
                         "The following untracked working tree files would be overwritten by checkout: {}",
                         path.as_bstr()
                     );
@@ -95,8 +151,16 @@ fn holds_untracked(abs: &Path, rel: &[u8], tracked: &dyn Fn(&[u8]) -> bool) -> a
     Ok(false)
 }
 
-/// Removes what the target lacks, then writes what it adds or changes, through the smudge filters.
-fn write_worktree(repo: &gix::Repository, root: &Path, changes: &[PathChange]) -> anyhow::Result<()> {
+/// Removes what the target lacks, then writes what it adds or changes, through the smudge filters;
+/// paths sparse checkout skips stay off disk.
+fn write_worktree(
+    repo: &gix::Repository,
+    root: &Path,
+    changes: &[PathChange],
+    skipped: &HashSet<BString>,
+) -> anyhow::Result<()> {
+    let changes: Vec<_> =
+        changes.iter().filter(|(o, n)| !skipped.contains(&n.as_ref().or(o.as_ref()).expect("a side").path)).collect();
     for old in changes
         .iter()
         .filter(|(o, n)| o.is_some() && n.as_ref().is_none_or(|n| kind(n.mode) != kind(o.as_ref().unwrap().mode)))
@@ -108,6 +172,7 @@ fn write_worktree(repo: &gix::Repository, root: &Path, changes: &[PathChange]) -
         prune_empty_parents(root, &abs);
     }
     let (mut pipeline, _) = repo.filter_pipeline(None)?;
+    let symlinks = repo.filesystem_options()?.symlink;
     for new in changes.iter().filter_map(|(_, n)| n.as_ref()) {
         let abs = root.join(native(&new.path)?);
         if let Some(parent) = abs.parent() {
@@ -120,7 +185,7 @@ fn write_worktree(repo: &gix::Repository, root: &Path, changes: &[PathChange]) -
         if let Ok(meta) = std::fs::symlink_metadata(&abs) {
             if meta.is_dir() { std::fs::remove_dir(&abs)? } else { std::fs::remove_file(&abs)? }
         }
-        write_file(repo, &mut pipeline, new, &abs)?;
+        write_file(repo, &mut pipeline, new, &abs, symlinks)?;
     }
     Ok(())
 }
@@ -130,11 +195,13 @@ fn write_file(
     pipeline: &mut gix::filter::Pipeline<'_>,
     item: &Item,
     abs: &Path,
+    symlinks: bool,
 ) -> anyhow::Result<()> {
     use gix::filter::plumbing::driver::apply::MaybeDelayed;
     use gix::filter::plumbing::pipeline::convert::ToWorktreeOutcome;
     let blob = repo.find_object(item.id)?.detach().data;
-    if item.mode == SYMLINK {
+    // Without symlinks (`core.symlinks=false`) a link is a plain file holding its target, as git writes it.
+    if item.mode == SYMLINK && symlinks {
         #[cfg(unix)]
         return Ok(std::os::unix::fs::symlink(gix::path::from_bstr(blob.as_bstr())?, abs)?);
     }
@@ -145,7 +212,9 @@ fn write_file(
             std::io::Read::read_to_end(&mut read, &mut buf)?;
             buf
         }
-        ToWorktreeOutcome::Process(MaybeDelayed::Delayed(_)) => bail!("a delayed filter cannot write {}", item.path),
+        ToWorktreeOutcome::Process(MaybeDelayed::Delayed(_)) => {
+            anyhow::bail!("a delayed filter cannot write {}", item.path)
+        }
     };
     std::fs::write(abs, content)?;
     #[cfg(unix)]
@@ -158,23 +227,35 @@ fn write_file(
     Ok(())
 }
 
-/// The index of the target tree, keeping the stat data of paths the switch did not touch so the
-/// next status need not re-read them.
-fn write_index(repo: &gix::Repository, root: &Path, tree: ObjectId, changes: &[PathChange]) -> anyhow::Result<()> {
-    let old = repo.index_or_empty()?;
-    let mut index = repo.index_from_tree(&tree)?;
-    let written: std::collections::HashSet<&[u8]> =
-        changes.iter().filter_map(|(_, n)| n.as_ref()).map(|n| n.path.as_slice()).collect();
-    for (entry, path) in index.entries_mut_with_paths() {
-        if written.contains(path.as_bytes()) {
-            let abs = root.join(native(path)?);
-            if let Ok(meta) = gix::index::fs::Metadata::from_path_no_follow(&abs) {
-                entry.stat = Stat::from_fs(&meta)?;
-            }
-        } else if let Some(previous) = old.entry_by_path(path).filter(|e| e.id == entry.id && e.mode == entry.mode) {
-            entry.stat = previous.stat;
-        }
+/// The index moved to the target: the paths the switch changed get the target's entries, and
+/// every other entry stays as it was, its flags (skip-worktree, intent-to-add), stat data and
+/// staged content included, as git's two-way merge keeps them.
+fn write_index(
+    root: &Path,
+    index: &gix::index::File,
+    changes: &[PathChange],
+    skipped: &HashSet<BString>,
+) -> anyhow::Result<()> {
+    let mut index = index.clone();
+    let changed: HashSet<&[u8]> =
+        changes.iter().filter_map(|(o, n)| n.as_ref().or(o.as_ref())).map(|i| i.path.as_slice()).collect();
+    index.remove_entries(|_, path, _| changed.contains(path.as_bytes()));
+    for new in changes.iter().filter_map(|(_, n)| n.as_ref()) {
+        let skip = skipped.contains(&new.path);
+        let meta = if skip {
+            None
+        } else {
+            gix::index::fs::Metadata::from_path_no_follow(&root.join(native(&new.path)?)).ok()
+        };
+        let stat = meta.map_or(Ok(Stat::default()), |meta| Stat::from_fs(&meta))?;
+        // An extended flag is written only with `EXTENDED` set, which also makes the index version 3.
+        let flags = if skip { Flags::SKIP_WORKTREE | Flags::EXTENDED } else { Flags::empty() };
+        let mode = Mode::from_bits(new.mode).context("a tree entry's mode")?;
+        index.dangerously_push_entry(stat, new.id, flags, mode, new.path.as_bstr());
     }
+    index.sort_entries();
+    // The cache-tree describes the old entries; git rebuilds it on the next write-tree.
+    index.remove_tree();
     index.write(Default::default())?;
     Ok(())
 }

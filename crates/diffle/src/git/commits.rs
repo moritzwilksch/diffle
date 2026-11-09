@@ -39,10 +39,7 @@ impl GitRepo {
                 Ok(id.object()?.peel_to_kind(kind).ok().map(|o| o.id.to_string()))
             })
             .await?;
-        found.ok_or_else(|| GitError {
-            code: Some(1),
-            ..GitError::refused(format!("unknown revision: {rev}"), &["rev-parse", "--verify", rev])
-        })
+        found.ok_or_else(|| GitError::missing(format!("unknown revision: {rev}")))
     }
 
     /// Commit messages for two ancestor offsets, pinned to one HEAD.
@@ -120,7 +117,7 @@ impl GitRepo {
     /// Refs must stay inside `refs/diffle/iterations/`: nothing the user owns moves.
     pub async fn pin(&self, refs: &[(String, Option<String>)]) -> Result<(), GitError> {
         if let Some((name, _)) = refs.iter().find(|(name, _)| !name.starts_with("refs/diffle/iterations/")) {
-            return Err(GitError::refused(format!("refusing to update {name}"), &["update-ref"]));
+            return Err(GitError::new(format!("refusing to update {name}")));
         }
         let refs = refs.to_vec();
         self.gix("update-ref", move |repo| {

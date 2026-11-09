@@ -51,10 +51,15 @@ impl GitRepo {
                     items.sort_by(|a, b| a.path.cmp(&b.path));
                     Ok((items, conflicts))
                 };
-                let ((old, old_conflicts), (new, new_conflicts)) = (side(&old)?, side(&new)?);
-                let conflicts = if old_conflicts.is_empty() { new_conflicts } else { old_conflicts };
+                let mut changes = if live {
+                    let ((old, old_conflicts), (new, new_conflicts)) = (side(&old)?, side(&new)?);
+                    let conflicts = if old_conflicts.is_empty() { new_conflicts } else { old_conflicts };
+                    compare(old, new, &conflicts)
+                } else {
+                    // Two commits: a tree diff, which skips the subtrees they share.
+                    pair(sides::tree_diff(repo, tree_id(repo, &old)?, tree_id(repo, &new)?)?)
+                };
                 let mut reader = Reader::new(repo, &root)?;
-                let mut changes = compare(old, new, &conflicts);
                 detect_renames(&mut changes, &mut reader);
                 let mut no_diff = NoDiff::new(repo)?;
                 let mut files: Vec<ChangedFile> = changes
@@ -84,8 +89,25 @@ pub(in crate::git) fn tree_changes(
     old: ObjectId,
     new: ObjectId,
 ) -> anyhow::Result<Vec<PathChange>> {
-    let changes = compare(sides::tree_items(repo, old)?, sides::tree_items(repo, new)?, &[]);
+    sides::tree_diff(repo, old, new)
+}
+
+/// What the index stages differently from `base`, path by path; conflicted paths aside, which
+/// `worktree_changes` reports.
+pub(in crate::git) fn index_changes(repo: &gix::Repository, base: ObjectId) -> anyhow::Result<Vec<PathChange>> {
+    let index = repo.index_or_empty()?;
+    let staged = index
+        .entries()
+        .iter()
+        .filter(|e| e.stage() == gix::index::entry::Stage::Unconflicted)
+        .map(|e| sides::item(e.path(&index), e.mode.bits(), e.id))
+        .collect();
+    let changes = compare(sides::tree_items(repo, base)?, staged, &[]);
     Ok(changes.into_iter().map(|c| (c.old, c.new)).collect())
+}
+
+fn pair(changes: Vec<PathChange>) -> Vec<Change> {
+    changes.into_iter().map(|(old, new)| Change { old, new, rename: None, unmerged: false }).collect()
 }
 
 /// What tracked paths differ between `base` and the worktree, staged or not, and whether the index

@@ -69,7 +69,7 @@ impl GitRepo {
             .case_insensitive(opts.ignore_case)
             .multi_line(true)
             .build()
-            .map_err(|e| GitError::refused(format!("invalid search pattern: {e}"), &["grep"]))?;
+            .map_err(|e| GitError::new(format!("invalid search pattern: {e}")))?;
         let untracked = if rev == WORKTREE { self.untracked().await? } else { Vec::new() };
         let (rev, root, word) = (rev.to_owned(), self.root.clone(), opts.word);
         let paths = opts.paths.map(<[String]>::to_vec);

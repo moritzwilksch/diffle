@@ -64,7 +64,7 @@ impl GitRepo {
                 return Ok(candidate.to_owned());
             }
         }
-        Err(GitError::refused("cannot determine default branch; pass a base explicitly", &[]).into())
+        Err(GitError::new("cannot determine default branch; pass a base explicitly").into())
     }
 
     /// Full ref for an exact branch; expressions, worktree, and detached HEAD have none.
@@ -160,26 +160,21 @@ impl GitRepo {
         let prefixes = prefixes.to_vec();
         self.gix("reachability", move |repo| {
             let commit = ObjectId::from_hex(commit.as_bytes())?;
-            let graph_cache = repo.commit_graph_if_enabled()?;
-            let mut graph = repo.revision_graph(graph_cache.as_ref());
-            for prefix in prefixes {
-                // As `--glob=<prefix>` reads it: every ref below the prefix.
-                let names: Vec<String> = repo
-                    .references()?
-                    .prefixed(format!("{}/", prefix.trim_end_matches('/')).as_str())?
-                    .filter_map(Result::ok)
-                    .map(|r| r.name().as_bstr().to_string())
-                    .collect();
-                for name in names {
-                    let Ok(tip) = repo.find_reference(name.as_str())?.peel_to_commit().map(|c| c.id) else { continue };
-                    if tip == commit
-                        || repo.merge_base_with_graph(commit, tip, &mut graph)?.is_some_and(|base| base == commit)
-                    {
-                        return Ok(true);
-                    }
-                }
+            // As `--glob=<prefix>` reads it: every ref below the prefix.
+            let mut names = Vec::new();
+            for prefix in &prefixes {
+                let prefix = format!("{}/", prefix.trim_end_matches('/'));
+                names.extend(repo.references()?.prefixed(prefix.as_str())?.filter_map(|r| Some(r.ok()?.detach().name)));
             }
-            Ok(false)
+            let tips: Vec<ObjectId> = names
+                .into_iter()
+                .filter_map(|name| repo.find_reference(name.as_ref()).ok()?.peel_to_commit().ok().map(|c| c.id))
+                .collect();
+            if tips.contains(&commit) {
+                return Ok(true);
+            }
+            // One walk, as `rev-list <sha> --not --glob=…`: reachable when every commit it would list is hidden.
+            Ok(repo.rev_walk([commit]).with_hidden(tips).all()?.next().transpose()?.is_none())
         })
         .await
     }

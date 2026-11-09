@@ -10,7 +10,7 @@ use super::hunks;
 use super::patch::write_pair;
 use super::patch_id::patch_id;
 use super::sides::{self, Item, Reader};
-use super::{NoDiff, compare, detect_renames, is_binary, unified};
+use super::{NoDiff, detect_renames, is_binary, pair, unified};
 use crate::error::GitError;
 use crate::git::GitRepo;
 use crate::git::walk::commits_in;
@@ -102,9 +102,7 @@ fn pairs(
         Some(parent) => repo.find_commit(parent)?.tree_id()?.detach(),
         None => ObjectId::empty_tree(repo.object_hash()),
     };
-    let old = sides::tree_items(repo, parent)?;
-    let new = sides::tree_items(repo, commit.tree_id()?.detach())?;
-    let mut changes = compare(old, new, &[]);
+    let mut changes = pair(sides::tree_diff(repo, parent, commit.tree_id()?.detach())?);
     detect_renames(&mut changes, reader);
     let mut out = Vec::new();
     for change in changes {

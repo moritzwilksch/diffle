@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use gix::objs::Kind;
 use tokio::io::AsyncReadExt;
 
-use super::{GitRepo, WORKTREE, inside};
+use super::{BIG_FILE_THRESHOLD, GitRepo, WORKTREE, inside};
 use crate::error::GitError;
 
 impl GitRepo {
@@ -91,14 +91,18 @@ impl GitRepo {
     }
 }
 
-/// The first `keep` bytes of a blob, or none when `id` is missing or not a blob.
+/// The first `keep` bytes of a blob, or none when `id` is missing or not a blob. A prefix of a blob
+/// past the big-file threshold is none too: gix can only inflate it whole, which its header spares.
 fn blob_head(repo: &gix::Repository, id: gix::ObjectId, keep: usize) -> gix::Result<Option<Vec<u8>>> {
+    let Some(header) = repo.try_find_header(id)? else {
+        return Ok(None);
+    };
+    if header.kind() != Kind::Blob || (keep as u64) < header.size() && header.size() >= BIG_FILE_THRESHOLD {
+        return Ok(None);
+    }
     let Some(object) = repo.try_find_object(id)? else {
         return Ok(None);
     };
-    if object.kind != Kind::Blob {
-        return Ok(None);
-    }
     let mut body = object.detach().data;
     body.truncate(keep);
     Ok(Some(body))

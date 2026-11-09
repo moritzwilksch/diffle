@@ -43,10 +43,7 @@ impl GitRepo {
     pub async fn open(dir: &Path) -> Result<Self> {
         let dir = dir.to_owned();
         let opened = tokio::task::spawn_blocking(move || {
-            let not_repo = || GitError {
-                code: Some(128),
-                ..GitError::refused(format!("not a git repository: {}", dir.display()), &[])
-            };
+            let not_repo = || GitError::not_repository(format!("not a git repository: {}", dir.display()));
             let repo = gix::ThreadSafeRepository::discover_with_environment_overrides(&dir).map_err(|_| not_repo())?;
             let local = repo.to_thread_local();
             // Paths as git prints them: absolute, links resolved, `.`/`..` folded.
@@ -56,20 +53,20 @@ impl GitRepo {
             Ok::<_, GitError>((repo, root, git_dir, common_dir))
         })
         .await
-        .map_err(|e| GitError::refused(format!("opening the repository failed: {e}"), &[]))?;
+        .map_err(|e| GitError::new(format!("opening the repository failed: {e}")))?;
         let (repo, root, git_dir, common_dir) = opened?;
         Ok(Self { review_refs: format!("refs/diffle/{}", uuid::Uuid::new_v4()), root, git_dir, common_dir, repo })
     }
 
     /// Runs `f` on a thread-local gix handle off the async runtime, as gix blocks. `op` names the
-    /// failure in the error.
+    /// failure in the error, unless `f` fails with a `GitError` of its own, which is kept as worded.
     async fn gix<T, F>(&self, op: &str, f: F) -> Result<T, GitError>
     where
         T: Send + 'static,
         F: FnOnce(&gix::Repository) -> anyhow::Result<T> + Send + 'static,
     {
         let repo = self.repo.clone();
-        let failed = |e: &dyn std::fmt::Display| GitError::refused(format!("{op} failed: {e:#}"), &[]);
+        let failed = |e: &dyn std::fmt::Display| GitError::new(format!("{op} failed: {e:#}"));
         tokio::task::spawn_blocking(move || {
             let mut repo = repo.to_thread_local();
             repo.object_cache_size_if_unset(OBJECT_CACHE);
@@ -77,7 +74,7 @@ impl GitRepo {
         })
         .await
         .map_err(|e| failed(&e))?
-        .map_err(|e| failed(&e))
+        .map_err(|e| e.downcast::<GitError>().unwrap_or_else(|e| failed(&e)))
     }
 }
 

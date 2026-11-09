@@ -47,25 +47,58 @@ pub fn tree_items(repo: &gix::Repository, tree: ObjectId) -> anyhow::Result<Vec<
     from_tree(repo, tree)
 }
 
-fn item(path: &gix::bstr::BStr, mode: u32, id: ObjectId) -> Item {
+pub(super) fn item(path: &gix::bstr::BStr, mode: u32, id: ObjectId) -> Item {
     Item { path: path.to_owned(), mode, id, worktree: false, size: None, untracked: false }
 }
 
 /// Every entry of `tree`, sorted by path.
 fn from_tree(repo: &gix::Repository, tree: ObjectId) -> anyhow::Result<Vec<Item>> {
     let index = repo.index_from_tree(&tree)?;
-    Ok(index
-        .entries()
-        .iter()
-        .map(|e| Item {
-            path: e.path(&index).to_owned(),
-            mode: e.mode.bits(),
-            id: e.id,
-            worktree: false,
-            size: None,
-            untracked: false,
+    Ok(index.entries().iter().map(|e| item(e.path(&index), e.mode.bits(), e.id)).collect())
+}
+
+/// The paths whose entries differ between two trees, sorted, each with its side in either tree.
+/// Subtrees the two share are skipped unread, as git's tree diff skips them.
+pub fn tree_diff(
+    repo: &gix::Repository,
+    old: ObjectId,
+    new: ObjectId,
+) -> anyhow::Result<Vec<(Option<Item>, Option<Item>)>> {
+    use gix::diff::tree::recorder::Change;
+    let (old, new) = (repo.find_tree(old)?, repo.find_tree(new)?);
+    let hash = repo.object_hash();
+    let mut recorder = gix::diff::tree::Recorder::default();
+    gix::diff::tree(
+        gix::objs::TreeRefIter::from_bytes(&old.data, hash),
+        gix::objs::TreeRefIter::from_bytes(&new.data, hash),
+        &mut gix::diff::tree::State::default(),
+        &repo.objects,
+        &mut recorder,
+    )?;
+    // Trees themselves are not paths a diff lists; a file that became a directory is two changes.
+    let side = |path: &BString, mode: gix::objs::tree::EntryMode, id| {
+        (!mode.is_tree()).then(|| item(path.as_bstr(), u32::from(mode.value()), id))
+    };
+    let mut changes: Vec<_> = recorder
+        .records
+        .into_iter()
+        .flat_map(|change| match change {
+            Change::Addition { entry_mode, oid, path, .. } => vec![(None, side(&path, entry_mode, oid))],
+            Change::Deletion { entry_mode, oid, path, .. } => vec![(side(&path, entry_mode, oid), None)],
+            Change::Modification { previous_entry_mode, previous_oid, entry_mode, oid, path } => {
+                match (side(&path, previous_entry_mode, previous_oid), side(&path, entry_mode, oid)) {
+                    (Some(o), Some(n)) => vec![(Some(o), Some(n))],
+                    (o, n) => vec![(o, None), (None, n)],
+                }
+            }
         })
-        .collect())
+        .filter(|(o, n)| o.is_some() || n.is_some())
+        .collect();
+    changes.sort_by(|(ao, an), (bo, bn)| {
+        let path = |o: &Option<Item>, n: &Option<Item>| n.as_ref().or(o.as_ref()).map(|i| i.path.clone());
+        path(ao, an).cmp(&path(bo, bn))
+    });
+    Ok(changes)
 }
 
 /// Reads sides' contents: blobs from the object database, worktree files through their clean filters.
@@ -88,18 +121,19 @@ impl<'repo> Reader<'repo> {
         if kind(item.mode) == GITLINK {
             return Some(format!("Subproject commit {}\n", item.id).into_bytes());
         }
-        // Bytes git already stores (a staged, unchanged file) come from the object database.
-        if let Ok(Some(object)) = self.repo.try_find_object(item.id) {
-            if object.data.len() as u64 >= BIG_FILE_THRESHOLD {
+        // Bytes git already stores (a staged, unchanged file) come from the object database, sized
+        // by their header first so a big blob is never inflated.
+        if let Ok(Some(header)) = self.repo.try_find_header(item.id) {
+            if header.size() >= BIG_FILE_THRESHOLD {
                 return None;
             }
-            return Some(object.detach().data);
+            return self.repo.find_object(item.id).ok().map(|object| object.detach().data);
         }
         if !item.worktree || item.size.is_some_and(|size| size >= BIG_FILE_THRESHOLD) {
             return None;
         }
         let abs = self.root.join(native(item.path.as_bstr())?);
-        if kind(item.mode) == SYMLINK {
+        if std::fs::symlink_metadata(&abs).ok()?.is_symlink() {
             let target = std::fs::read_link(&abs).ok()?;
             return Some(gix::path::into_bstr(target).ok()?.into_owned().into());
         }
@@ -108,16 +142,16 @@ impl<'repo> Reader<'repo> {
     }
 }
 
-/// The blob git would store for the worktree file at `abs`; none when it cannot be read.
+/// The blob git would store for the worktree file at `abs`; none when it cannot be read. A
+/// symlink's blob is its target; a link checked out as a plain file (`core.symlinks=false`) holds it.
 pub(super) fn hash_path(
     repo: &gix::Repository,
     pipeline: &mut gix::filter::Pipeline<'_>,
     index: &gix::index::State,
     path: &BString,
     abs: &Path,
-    mode: u32,
 ) -> Option<ObjectId> {
-    if mode == SYMLINK {
+    if std::fs::symlink_metadata(abs).ok()?.is_symlink() {
         let target = std::fs::read_link(abs).ok()?;
         return blob_id(repo, &gix::path::into_bstr(target).ok()?).ok();
     }

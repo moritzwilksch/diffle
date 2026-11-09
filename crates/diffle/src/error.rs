@@ -3,29 +3,39 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-/// A failed git invocation: the arguments it ran with, its exit code (none when killed), and stderr.
+/// A Git operation that failed or was refused, in words for the user.
 #[derive(Debug, Error, Clone)]
 #[error("{message}")]
 pub struct GitError {
     pub message: String,
-    pub args: Vec<String>,
-    pub code: Option<i32>,
-    pub stderr: String,
+    pub kind: GitErrorKind,
+}
+
+/// What a caller may want to tell apart from a plain failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitErrorKind {
+    Failed,
+    /// A revision that names nothing.
+    Missing,
+    /// No repository at the path.
+    NotRepository,
 }
 
 impl GitError {
-    pub fn refused(message: impl Into<String>, args: &[&str]) -> Self {
-        Self {
-            message: message.into(),
-            args: args.iter().map(|a| (*a).to_owned()).collect(),
-            code: None,
-            stderr: String::new(),
-        }
+    pub fn new(message: impl Into<String>) -> Self {
+        Self { message: message.into(), kind: GitErrorKind::Failed }
     }
 
-    /// Exit code 1 from `rev-parse --verify --quiet`: the revision names nothing.
+    pub fn missing(message: impl Into<String>) -> Self {
+        Self { message: message.into(), kind: GitErrorKind::Missing }
+    }
+
+    pub fn not_repository(message: impl Into<String>) -> Self {
+        Self { message: message.into(), kind: GitErrorKind::NotRepository }
+    }
+
     pub fn is_missing(&self) -> bool {
-        self.code == Some(1)
+        self.kind == GitErrorKind::Missing
     }
 }
 

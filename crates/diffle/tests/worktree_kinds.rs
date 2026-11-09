@@ -81,15 +81,36 @@ async fn an_unreadable_file_keeps_an_empty_blob_without_failing_the_batch() {
     let (_lib, sup) = super_repo();
     sup.write("locked.txt", "x\n");
     let locked = sup.path.join("locked.txt");
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let tracked = sup.path.join("a.txt");
+    for path in [&locked, &tracked] {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    }
     if std::fs::read(&locked).is_ok() {
         return; // running as root
     }
-    let files = sup.open().await.numstat("HEAD", "worktree").await.unwrap();
+    let repo = sup.open().await;
+    let files = repo.numstat("HEAD", "worktree").await.unwrap();
     let by: HashMap<&str, _> = files.iter().map(|f| (f.path.as_str(), f)).collect();
     assert_eq!((by["locked.txt"].status, by["locked.txt"].blob.as_str()), (A, ""));
-    assert_eq!(by["a.txt"].blob, sup.git(&["hash-object", "--", "a.txt"]));
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!((by["a.txt"].status, by["a.txt"].blob.as_str()), (M, ""));
+    // Their patches show them as they are, added and modified, with contents unknown.
+    let patch = |file| {
+        let repo = &repo;
+        async move { repo.patch("HEAD", "worktree", file, 3).await.unwrap() }
+    };
+    let added = patch(by["locked.txt"]).await;
+    assert!(
+        added.contains("new file mode 100644") && added.contains("Binary files /dev/null and b/locked.txt differ"),
+        "{added}"
+    );
+    let modified = patch(by["a.txt"]).await;
+    assert!(
+        !modified.contains("deleted file") && modified.contains("Binary files a/a.txt and b/a.txt differ"),
+        "{modified}"
+    );
+    for path in [&locked, &tracked] {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
 }
 
 const ODD: &str = "completions/odd\nname.bash";

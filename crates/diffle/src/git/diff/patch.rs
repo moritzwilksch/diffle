@@ -8,7 +8,7 @@ use super::unified::{self, Body, Side};
 use super::{is_binary, rename, tree_id};
 use crate::error::GitError;
 use crate::git::{GitRepo, WORKTREE};
-use crate::protocol::ChangedFile;
+use crate::protocol::{ChangeStatus, ChangedFile};
 
 impl GitRepo {
     /// One file's patch.
@@ -57,25 +57,33 @@ impl GitRepo {
             };
             let (old_tree, new_tree) = (lookup(&old)?, lookup(&new)?);
             let caps = repo.filesystem_options()?;
-            let side = |tree: &Option<gix::Tree<'_>>, path: &str, id: &str| -> anyhow::Result<Option<Item>> {
-                if id.is_empty() {
+            // The status says which sides exist; an empty blob on one that does is a worktree file
+            // that could not be read, the null id here, which reads as binary.
+            let side = |tree: &Option<gix::Tree<'_>>,
+                        path: &str,
+                        id: &str,
+                        present: bool|
+             -> anyhow::Result<Option<Item>> {
+                if !present {
                     return Ok(None);
                 }
-                let id = ObjectId::from_hex(id.as_bytes())?;
+                let id =
+                    if id.is_empty() { ObjectId::null(repo.object_hash()) } else { ObjectId::from_hex(id.as_bytes())? };
                 Ok(Some(match tree {
                     Some(tree) => {
                         let mode =
                             tree.lookup_entry_by_path(path)?.map_or(sides::FILE, |e| u32::from(e.mode().value()));
                         Item { path: path.into(), mode, id, worktree: false, size: None, untracked: false }
                     }
-                    None => super::worktree::worktree_item(&root, path, id, &index, caps.executable_bit),
+                    None => super::worktree::worktree_item(&root, path, id, &index, caps),
                 }))
             };
             let mut reader = Reader::new(repo, &root)?;
             let mut out = Vec::new();
             for file in &files {
                 let old_path = file.old_path.as_deref().unwrap_or(&file.path);
-                let (a, b) = (side(&old_tree, old_path, &file.old_blob)?, side(&new_tree, &file.path, &file.blob)?);
+                let a = side(&old_tree, old_path, &file.old_blob, file.status != ChangeStatus::A)?;
+                let b = side(&new_tree, &file.path, &file.blob, file.status != ChangeStatus::D)?;
                 let worktree_only = a.as_ref().is_none_or(|a| a.worktree) && b.as_ref().is_none_or(|b| b.worktree);
                 let path = BString::from(file.path.as_str());
                 if skip_untracked_binary

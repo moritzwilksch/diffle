@@ -150,14 +150,9 @@ fn report((done, skipped): (&str, &str), target: &str, outcome: Outcome) {
     crate::status!("🔀 {} {target} {}", dim(skipped), dim(&format!("({why})")));
 }
 
-/// Git's own words for a refusal: the first line of its stderr, without the `fatal:` or `error:`.
+/// A refusal in a status line: its first line.
 fn reason(e: &Error) -> String {
-    let text = match e {
-        Error::Git(git) if !git.stderr.trim().is_empty() => git.stderr.clone(),
-        e => e.to_string(),
-    };
-    let line = text.trim().lines().next().unwrap_or_default();
-    line.strip_prefix("fatal: ").or_else(|| line.strip_prefix("error: ")).unwrap_or(line).to_owned()
+    e.to_string().trim().lines().next().unwrap_or_default().to_owned()
 }
 
 /// What HEAD named before this run moved it: the branch it was on, or its commit.

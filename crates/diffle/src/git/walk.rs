@@ -54,21 +54,31 @@ impl GitRepo {
             let Ok(target) = repo.rev_parse_single(sha.as_str()).map(gix::Id::detach) else {
                 return Ok((None, None));
             };
-            let first_parent = |id: ObjectId| -> anyhow::Result<Option<ObjectId>> {
-                Ok(repo.find_commit(id)?.parent_ids().next().map(gix::Id::detach))
+            let Ok(target_commit) = repo.find_object(target)?.peel_to_commit() else {
+                return Ok((None, None));
             };
-            let parent = repo.find_object(target)?.peel_to_commit().ok().and_then(|c| c.parent_ids().next());
-            let parent = parent.map(|p| p.to_string());
+            let parent = target_commit.parent_ids().next().map(|p| p.to_string());
             let Ok(head) = repo.head_id() else {
                 return Ok((parent, None));
             };
+            // Only commits that reach `sha` can lead to it, as `rev-list --ancestry-path sha..HEAD`
+            // bounds it: the walk stops at the first one that does not, short of the root.
+            let between = repo
+                .rev_walk([head.detach()])
+                .with_hidden([target_commit.id])
+                .all()?
+                .map(|info| info.map(|info| info.id))
+                .collect::<Result<HashSet<_>, _>>()?;
             let (mut at, mut child) = (Some(head.detach()), None);
             while let Some(id) = at {
-                if id == target {
+                if id == target_commit.id {
                     return Ok((parent, child.map(|c: ObjectId| c.to_string())));
                 }
+                if !between.contains(&id) {
+                    break;
+                }
                 child = Some(id);
-                at = first_parent(id)?;
+                at = repo.find_commit(id)?.parent_ids().next().map(gix::Id::detach);
             }
             Ok((parent, None))
         })

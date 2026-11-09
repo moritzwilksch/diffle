@@ -2,7 +2,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::error::{Error, GithubError, Result};
+use crate::error::{Error, GitErrorKind, GithubError, Result};
 use crate::git::GitRepo;
 use crate::github::client::{HttpClient, no_token, resolve_token};
 use crate::github::hosts::{Github, choose_instance};
@@ -54,7 +54,7 @@ pub async fn open_review_repository_with(
     let local = match GitRepo::open(cwd).await {
         Ok(repo) => Some(repo),
         // Outside a repository only a pull request url can say what to review.
-        Err(Error::Git(e)) if e.code == Some(128) && selector.as_deref().is_some_and(is_url) => None,
+        Err(Error::Git(e)) if e.kind == GitErrorKind::NotRepository && selector.as_deref().is_some_and(is_url) => None,
         Err(e) => return Err(e),
     };
     let (github, token_source) = connect(local.as_ref()).await?;

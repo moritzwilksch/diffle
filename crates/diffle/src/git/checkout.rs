@@ -6,7 +6,7 @@ use gix::ObjectId;
 use gix::bstr::ByteSlice;
 
 use super::diff::sides::{GITLINK, kind};
-use super::diff::{PathChange, tree_changes, worktree_changes};
+use super::diff::{PathChange, index_changes, tree_changes, worktree_changes};
 use super::{GitRepo, native_path};
 use crate::error::GitError;
 
@@ -32,8 +32,10 @@ impl GitRepo {
     pub async fn is_clean(&self) -> Result<bool, GitError> {
         let root = self.root.clone();
         self.gix("status", move |repo| {
-            let (changes, conflicted) = worktree_changes(repo, &root, head_tree(repo)?)?;
-            Ok(!conflicted && changes.iter().all(is_submodule))
+            let head = head_tree(repo)?;
+            let (unstaged, conflicted) = worktree_changes(repo, &root, head)?;
+            // Staged changes count even where the worktree matches HEAD again.
+            Ok(!conflicted && unstaged.iter().chain(&index_changes(repo, head)?).all(is_submodule))
         })
         .await
     }

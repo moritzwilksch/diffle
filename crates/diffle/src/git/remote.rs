@@ -26,7 +26,7 @@ impl GitRepo {
         for spec in refspecs {
             let dst = spec.split_once(':').map_or(spec.as_str(), |(_, dst)| dst);
             if !dst.starts_with("refs/diffle/") {
-                return Err(GitError::refused(format!("refusing to fetch into {dst}"), &["fetch"]));
+                return Err(GitError::new(format!("refusing to fetch into {dst}")));
             }
         }
         let (remote, refspecs) = (remote.to_owned(), refspecs.to_vec());
@@ -43,7 +43,7 @@ impl GitRepo {
     /// out its default branch. No tags come along.
     pub async fn clone_into(url: &str, dir: &Path) -> Result<Self> {
         let (owned, path) = (url.to_owned(), dir.to_owned());
-        let failed = |e: &dyn std::fmt::Display| GitError::refused(format!("cloning {url} failed: {e:#}"), &["clone"]);
+        let failed = |e: &dyn std::fmt::Display| GitError::new(format!("cloning {url} failed: {e:#}"));
         tokio::task::spawn_blocking(move || clone(&owned, &path))
             .await
             .map_err(|e| failed(&e))?

@@ -31,12 +31,7 @@ pub fn worktree_items(repo: &gix::Repository, root: &Path) -> anyhow::Result<(Ve
         }
         i = next;
     }
-    let probe = Probe {
-        index: &index,
-        root,
-        executable_bit: repo.filesystem_options()?.executable_bit,
-        stat_options: repo.stat_options()?,
-    };
+    let probe = Probe { index: &index, root, caps: repo.filesystem_options()?, stat_options: repo.stat_options()? };
     let probed = parallel_map(&slots, |&(i, staged)| probe.entry(&entries[i], staged));
     // Only files the stat cache could not clear are read and hashed.
     let mut hashing: Option<(gix::filter::Pipeline<'_>, gix::worktree::IndexPersistedOrInMemory)> = None;
@@ -52,7 +47,7 @@ pub fn worktree_items(repo: &gix::Repository, root: &Path) -> anyhow::Result<(Ve
                 };
                 // Unreadable (permissions) gets the null id, an empty blob to callers: one bad path
                 // must not fail the snapshot, nor read as deleted.
-                item.id = hash_path(repo, pipeline, filter_index, &item.path, &abs, item.mode)
+                item.id = hash_path(repo, pipeline, filter_index, &item.path, &abs)
                     .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
                 items.push(item);
             }
@@ -74,7 +69,7 @@ enum State {
 struct Probe<'a> {
     index: &'a gix::index::State,
     root: &'a Path,
-    executable_bit: bool,
+    caps: gix::fs::Capabilities,
     stat_options: gix::index::entry::stat::Options,
 }
 
@@ -104,15 +99,7 @@ impl Probe<'_> {
         if meta.is_dir() {
             return State::Gone;
         }
-        item.mode = if meta.is_symlink() {
-            SYMLINK
-        } else if !self.executable_bit {
-            if entry.mode == Mode::FILE_EXECUTABLE { EXECUTABLE } else { FILE }
-        } else if meta.is_executable() {
-            EXECUTABLE
-        } else {
-            FILE
-        };
+        item.mode = mode_on_disk(meta.is_symlink(), meta.is_executable(), Some(entry.mode), self.caps);
         item.size = Some(meta.len());
         let clean = staged
             && kind(item.mode) == kind(entry.mode.bits())
@@ -150,38 +137,49 @@ pub fn untracked_items(repo: &gix::Repository, root: &Path, paths: &[String]) ->
         .filter_map(|path| {
             let abs = root.join(path);
             let meta = std::fs::symlink_metadata(&abs).ok()?;
-            let mode = if meta.is_symlink() {
-                SYMLINK
-            } else if caps.executable_bit && is_executable(&meta) {
-                EXECUTABLE
-            } else {
-                FILE
-            };
+            let mode = mode_on_disk(meta.is_symlink(), is_executable(&meta), None, caps);
             let path = BString::from(path.as_str());
             // Unreadable (permissions) counts as empty: one bad path must not fail the snapshot.
-            let id = hash_path(repo, &mut pipeline, &index, &path, &abs, mode)
+            let id = hash_path(repo, &mut pipeline, &index, &path, &abs)
                 .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
             Some(Item { path, mode, id, worktree: true, size: Some(meta.len()), untracked: true })
         })
         .collect())
 }
 
-/// The worktree's side of one path whose blob `id` is already known: its mode as git would record it.
-pub fn worktree_item(root: &Path, path: &str, id: ObjectId, index: &gix::index::State, executable_bit: bool) -> Item {
-    let staged = index.entry_by_path(path.as_bytes().as_bstr()).map(|e| e.mode);
-    let meta = std::fs::symlink_metadata(root.join(path)).ok();
-    let mode = match (&meta, staged) {
-        (_, Some(mode)) if mode.is_submodule() => GITLINK,
-        (Some(meta), _) if meta.is_symlink() => SYMLINK,
-        (Some(meta), _) if executable_bit => {
-            if is_executable(meta) {
+/// The mode git records for a worktree file, given what it is on disk and its staged mode. Where
+/// the filesystem cannot say (`core.fileMode=false`, `core.symlinks=false`), the staged mode stands.
+fn mode_on_disk(symlink: bool, executable: bool, staged: Option<Mode>, caps: gix::fs::Capabilities) -> u32 {
+    match staged {
+        _ if symlink => SYMLINK,
+        Some(Mode::SYMLINK) if !caps.symlink => SYMLINK,
+        _ if caps.executable_bit => {
+            if executable {
                 EXECUTABLE
             } else {
                 FILE
             }
         }
-        (_, Some(Mode::FILE_EXECUTABLE)) => EXECUTABLE,
+        Some(Mode::FILE_EXECUTABLE) => EXECUTABLE,
         _ => FILE,
+    }
+}
+
+/// The worktree's side of one path whose blob `id` is already known: its mode as git would record it.
+pub fn worktree_item(
+    root: &Path,
+    path: &str,
+    id: ObjectId,
+    index: &gix::index::State,
+    caps: gix::fs::Capabilities,
+) -> Item {
+    let staged = index.entry_by_path(path.as_bytes().as_bstr()).map(|e| e.mode);
+    let meta = std::fs::symlink_metadata(root.join(path)).ok();
+    let mode = match (&meta, staged) {
+        (_, Some(mode)) if mode.is_submodule() => GITLINK,
+        (Some(meta), _) => mode_on_disk(meta.is_symlink(), is_executable(meta), staged, caps),
+        (None, Some(mode)) => mode.bits(),
+        (None, None) => FILE,
     };
     let size = meta.as_ref().map(std::fs::Metadata::len);
     Item { path: path.into(), mode, id, worktree: true, size, untracked: staged.is_none() }
