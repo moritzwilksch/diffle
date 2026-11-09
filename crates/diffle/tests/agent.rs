@@ -85,12 +85,15 @@ fn deletes_a_crashed_runs_announcement_and_finds_no_diffle() {
     let url = format!("http://{}/", closed.local_addr().unwrap());
     drop(closed);
     let crashed = announce(&t.path, "0a6c3a0e-5b7e-4a39-9a61-1d1f3e0d9c11", &url);
+    // Where no connection completes in time: how Windows reports a closed loopback port.
+    let unreachable = announce(&t.path, "7d3e2b1a-0c9f-4e8d-a7b6-5c4d3e2f1a0b", "http://10.255.255.1:9/");
     // A run still writing its announcement stages it beside the real ones.
     let staging = servers_dir(&t.path).join("other.json.123.tmp");
     std::fs::write(&staging, "{").unwrap();
 
     assert_none_running(&comments(&t.path, &["list"]));
     assert!(!crashed.exists());
+    assert!(!unreachable.exists());
     assert!(staging.exists());
 }
 

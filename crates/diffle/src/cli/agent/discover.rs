@@ -12,8 +12,10 @@ use crate::error::{Error, Result};
 use crate::protocol::{ApiError, ServerInfo};
 use crate::server::announce::Announcement;
 
-/// How long a server may take to accept a connection, and to confirm its announcement.
-const CONFIRM_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long a connection may take: a local one completes at once, even to a busy server.
+const TIMEOUT_CONNECT: Duration = Duration::from_secs(1);
+/// How long a connected server may take to confirm its announcement.
+const TIMEOUT_CONFIRM: Duration = Duration::from_secs(2);
 
 /// A running diffle that confirmed it serves the repository.
 pub struct Diffle {
@@ -48,7 +50,8 @@ enum Check {
     Live(Box<Diffle>),
     /// Nothing listens there, or something that is not this run for this repository.
     Dead,
-    /// Its server did not answer in time: maybe busy, so the entry stays and only this call skips it.
+    /// Its server accepted the connection but did not answer in time: maybe busy, so the entry stays
+    /// and only this call skips it.
     Silent,
 }
 
@@ -76,7 +79,9 @@ async fn check(file: &Path, git_dir: &Path) -> Check {
     let Some((http, base)) = connect(&announcement.url) else { return Check::Dead };
     let info = match server_info(&http, &base).await {
         Ok(info) => info,
-        Err(e) if e.is_timeout() => return Check::Silent,
+        // A busy server still accepts the connection (the kernel's backlog does), so only a timeout
+        // after connecting means busy; a connect timeout is how Windows reports a closed loopback port.
+        Err(e) if e.is_timeout() && !e.is_connect() => return Check::Silent,
         Err(_) => return Check::Dead,
     };
     if info.instance != announcement.instance || Path::new(&info.git_dir) != git_dir {
@@ -87,13 +92,13 @@ async fn check(file: &Path, git_dir: &Path) -> Check {
 
 async fn server_info(http: &reqwest::Client, base: &url::Url) -> reqwest::Result<ServerInfo> {
     let url = base.join("api/server").expect("a relative path joins any base");
-    http.get(url).timeout(CONFIRM_TIMEOUT).send().await?.error_for_status()?.json().await
+    http.get(url).timeout(TIMEOUT_CONNECT + TIMEOUT_CONFIRM).send().await?.error_for_status()?.json().await
 }
 
 /// A client for `url` and the base its requests resolve against; a socket's requests name `localhost`.
 fn connect(url: &str) -> Option<(reqwest::Client, url::Url)> {
     // A proxy from the environment must not stand between the CLI and a local server.
-    let builder = reqwest::Client::builder().no_proxy().connect_timeout(CONFIRM_TIMEOUT);
+    let builder = reqwest::Client::builder().no_proxy().connect_timeout(TIMEOUT_CONNECT);
     let Some(socket) = url.strip_prefix("unix:") else {
         return Some((builder.build().ok()?, url::Url::parse(url).ok()?));
     };
