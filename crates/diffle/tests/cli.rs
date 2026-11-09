@@ -226,23 +226,20 @@ fn reports_the_review_and_hands_off_the_open_comments_on_stdout_when_stopped() {
         assert!(rest.contains(part), "{part} missing from:\n{rest}");
     }
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
-    assert_eq!(announcements(&t.path), Vec::<std::path::PathBuf>::new());
+    assert!(!announcement_file(&t.path).exists());
 }
 
-/// The announcements under `repo`'s git dir.
-fn announcements(repo: &Path) -> Vec<std::path::PathBuf> {
-    let dir = repo.join(".git").join("diffle").join("servers");
-    std::fs::read_dir(dir).unwrap().map(|entry| entry.unwrap().path()).collect()
+/// Where a run serving `repo` announces itself.
+fn announcement_file(repo: &Path) -> std::path::PathBuf {
+    repo.join(".git").join("diffle").join("server.json")
 }
 
-/// `child` announced itself as listening at `at`, alone, and `GET /api/server` answered `info` to match.
+/// `child` announced itself as listening at `at`, and `GET /api/server` answered `info` to match.
 fn assert_announced(repo: &Path, child: &Child, at: &str, info: &str) {
-    let files = announcements(repo);
-    let [file] = files.as_slice() else { panic!("expected one announcement: {files:?}") };
-    let announced: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+    let text = std::fs::read_to_string(announcement_file(repo)).unwrap();
+    let announced: serde_json::Value = serde_json::from_str(&text).unwrap();
     let instance = announced["instance"].as_str().unwrap();
     assert!(uuid::Uuid::parse_str(instance).is_ok(), "{instance}");
-    assert_eq!(file.file_name().unwrap().to_str().unwrap(), format!("{instance}.json"));
     let expected = serde_json::json!({ "instance": instance, "pid": child.id(), "url": at, "version": version() });
     assert_eq!(announced, expected);
     let expected = serde_json::json!({
@@ -253,6 +250,43 @@ fn assert_announced(repo: &Path, child: &Child, at: &str, info: &str) {
         "label": "HEAD..worktree",
     });
     assert_eq!(serde_json::from_str::<serde_json::Value>(info).unwrap(), expected);
+}
+
+#[test]
+fn refuses_a_second_run_on_the_same_git_dir_while_the_first_serves() {
+    let t = one_file_repo();
+    let config = tempfile::tempdir().unwrap();
+    let (mut first, url, _lines) = serve(config.path(), &t.path, &["--port", "0"]);
+    let (_, before) = http(&url, "GET", "/api/server", "");
+
+    let second = run(config.path(), &["working", "--no-open", "--no-watch", "-C", t.path.to_str().unwrap(), "-p", "0"]);
+    assert_eq!(second.status.code(), Some(2), "{}", stderr(&second));
+    assert!(stderr(&second).contains(&format!("diffle is already running at {url}")), "{}", stderr(&second));
+    assert!(!stderr(&second).contains("🚀"), "{}", stderr(&second));
+
+    let (status, after) = http(&url, "GET", "/api/server", "");
+    assert!(status.contains("200"), "{status}");
+    assert_eq!(after, before);
+    assert_announced(&t.path, &first, &url, &after);
+    first.kill().unwrap();
+    first.wait().unwrap();
+}
+
+#[test]
+fn starts_over_a_crashed_runs_announcement() {
+    let t = one_file_repo();
+    let config = tempfile::tempdir().unwrap();
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let crashed =
+        format!(r#"{{"instance":"crashed","pid":1,"url":"http://127.0.0.1:{closed}/","version":"{}"}}"#, version());
+    std::fs::create_dir_all(announcement_file(&t.path).parent().unwrap()).unwrap();
+    std::fs::write(announcement_file(&t.path), crashed).unwrap();
+
+    let (mut child, url, _lines) = serve(config.path(), &t.path, &["--port", "0"]);
+    let (_, info) = http(&url, "GET", "/api/server", "");
+    assert_announced(&t.path, &child, &url, &info);
+    child.kill().unwrap();
+    child.wait().unwrap();
 }
 
 /// Waits for `child` to exit on its own, killing it after `limit`.
@@ -295,7 +329,9 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     let (status, _) = exchange(UnixStream::connect(&socket).unwrap(), "evil.example", "GET", "/api/config", "");
     assert!(status.contains("403"), "{status}");
 
-    let repo = t.path.to_str().unwrap();
+    // Another repository: this one's run would be refused before it reached the socket.
+    let other = one_file_repo();
+    let repo = other.path.to_str().unwrap();
     let taken =
         run(config.path(), &["--no-open", "--no-watch", "--no-lsp", "-C", repo, "--socket", socket.to_str().unwrap()]);
     assert_eq!(taken.status.code(), Some(1), "{}", stderr(&taken));
@@ -315,7 +351,7 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
     assert!(!socket.exists());
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "staging left behind");
-    assert_eq!(announcements(&t.path), Vec::<std::path::PathBuf>::new());
+    assert!(!announcement_file(&t.path).exists());
 }
 
 #[cfg(unix)]

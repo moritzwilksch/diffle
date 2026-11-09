@@ -75,6 +75,9 @@ pub enum Error {
     /// A request body that is not valid JSON or not the shape the route takes.
     #[error("{0}")]
     Invalid(String),
+    /// Another run already serves the repository's git dir, at this URL.
+    #[error("diffle is already running at {0}")]
+    AlreadyRunning(String),
     #[error(transparent)]
     Other(Arc<anyhow::Error>),
 }
