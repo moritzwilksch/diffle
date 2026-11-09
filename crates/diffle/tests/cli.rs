@@ -206,6 +206,8 @@ fn reports_the_review_and_hands_off_the_open_comments_on_stdout_when_stopped() {
     t.write("app.py", "x = 1\ny = 2\n");
     let config = tempfile::tempdir().unwrap();
     let (mut child, url, mut lines) = serve(config.path(), &t.path, &["--port", "0"]);
+    let (_, info) = http(&url, "GET", "/api/server", "");
+    assert_announced(&t.path, &child, &url, &info);
     let thread = r#"{"path":"app.py","startLine":2,"body":"rename y"}"#;
     let (status, _) = http(&url, "POST", "/api/threads", thread);
     assert!(status.contains("201"), "{status}");
@@ -224,6 +226,33 @@ fn reports_the_review_and_hands_off_the_open_comments_on_stdout_when_stopped() {
         assert!(rest.contains(part), "{part} missing from:\n{rest}");
     }
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
+    assert_eq!(announcements(&t.path), Vec::<std::path::PathBuf>::new());
+}
+
+/// The announcements under `repo`'s git dir.
+fn announcements(repo: &Path) -> Vec<std::path::PathBuf> {
+    let dir = repo.join(".git").join("diffle").join("servers");
+    std::fs::read_dir(dir).unwrap().map(|entry| entry.unwrap().path()).collect()
+}
+
+/// `child` announced itself as listening at `at`, alone, and `GET /api/server` answered `info` to match.
+fn assert_announced(repo: &Path, child: &Child, at: &str, info: &str) {
+    let files = announcements(repo);
+    let [file] = files.as_slice() else { panic!("expected one announcement: {files:?}") };
+    let announced: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+    let instance = announced["instance"].as_str().unwrap();
+    assert!(uuid::Uuid::parse_str(instance).is_ok(), "{instance}");
+    assert_eq!(file.file_name().unwrap().to_str().unwrap(), format!("{instance}.json"));
+    let expected = serde_json::json!({ "instance": instance, "pid": child.id(), "url": at, "version": version() });
+    assert_eq!(announced, expected);
+    let expected = serde_json::json!({
+        "instance": instance,
+        "pid": child.id(),
+        "gitDir": repo.join(".git").to_str().unwrap(),
+        "version": version(),
+        "label": "HEAD..worktree",
+    });
+    assert_eq!(serde_json::from_str::<serde_json::Value>(info).unwrap(), expected);
 }
 
 /// Waits for `child` to exit on its own, killing it after `limit`.
@@ -256,6 +285,8 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     let (mut child, at, mut lines) = serve(config.path(), &t.path, &["--socket", socket.to_str().unwrap()]);
     assert_eq!(at, format!("unix:{}", socket.display()));
     assert_eq!(std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777, 0o600);
+    let (_, info) = exchange(UnixStream::connect(&socket).unwrap(), "localhost", "GET", "/api/server", "");
+    assert_announced(&t.path, &child, &at, &info);
 
     // A forward (ssh -L) names its own local port in Host.
     let thread = r#"{"path":"app.py","startLine":2,"body":"rename y"}"#;
@@ -284,6 +315,7 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
     assert!(!socket.exists());
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "staging left behind");
+    assert_eq!(announcements(&t.path), Vec::<std::path::PathBuf>::new());
 }
 
 #[cfg(unix)]

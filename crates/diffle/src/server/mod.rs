@@ -1,4 +1,5 @@
 //! The HTTP server: the API, the WebSocket hub, and the embedded client.
+pub mod announce;
 mod assets;
 pub mod guard;
 pub mod hub;
@@ -46,6 +47,8 @@ pub enum Endpoint {
 }
 
 pub struct ApiDeps {
+    /// This run's id, minted once: what `GET /api/server` and its announcement name.
+    pub instance: String,
     pub session: Arc<Session>,
     pub config: Arc<UserConfigStore>,
     /// Session-only additions from `--auto-viewed`.

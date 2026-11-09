@@ -2215,6 +2215,40 @@
       ],
       "description": "Where `/api/search` looks: one file (`path`), the diff's changed files (default), or the whole new-side tree."
     },
+    "ServerInfo": {
+      "type": "object",
+      "properties": {
+        "instance": {
+          "type": "string",
+          "description": "Minted once per run; names the run's announcement file."
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "gitDir": {
+          "type": "string",
+          "description": "The repository's git directory, as the server resolved it."
+        },
+        "version": {
+          "type": "string",
+          "description": "The server's semantic version, as `diffle --version` prints it."
+        },
+        "label": {
+          "type": "string",
+          "description": "The active review's comparison label, as the run's status line names it."
+        }
+      },
+      "required": [
+        "instance",
+        "pid",
+        "gitDir",
+        "version",
+        "label"
+      ],
+      "description": "What `GET /api/server` answers: which run is listening, for which repository. A client trusts an\nannouncement under `<git-dir>/diffle/servers/` only when `instance` and `gitDir` match it."
+    },
     "ServerMessage": {
       "oneOf": [
         {

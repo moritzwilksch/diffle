@@ -1055,5 +1055,21 @@ export const VersionResponseSchema = z.object({
   version: z.string(),
 });
 export type VersionResponse = z.infer<typeof VersionResponseSchema>;
+/**
+ * What `GET /api/server` answers: which run is listening, for which repository. A client trusts an
+ * announcement under `<git-dir>/diffle/servers/` only when `instance` and `gitDir` match it.
+ */
+export const ServerInfoSchema = z.object({
+  /** Minted once per run; names the run's announcement file. */
+  instance: z.string(),
+  pid: z.number().int(),
+  /** The repository's git directory, as the server resolved it. */
+  gitDir: z.string(),
+  /** The server's semantic version, as `diffle --version` prints it. */
+  version: z.string(),
+  /** The active review's comparison label, as the run's status line names it. */
+  label: z.string(),
+});
+export type ServerInfo = z.infer<typeof ServerInfoSchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });
