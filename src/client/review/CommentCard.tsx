@@ -1,22 +1,11 @@
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
-import {
-  AlertTriangle,
-  Check,
-  Copy,
-  GitPullRequestArrow,
-  MessageSquare,
-  Pencil,
-  Reply,
-  RotateCcw,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, Check, Copy, GitPullRequestArrow, Pencil, Reply, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
-import { AgentMark } from '@/client/comments/AgentMark.js';
+import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
 import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
 import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
@@ -63,7 +52,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
       )}
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
-        <MessageSquare size="0.8125rem" />
+        <ThreadIcon thread={thread} />
         <span className="font-mono font-semibold text-foreground">{anchorLabel(a)}</span>
         {thread.stale && (
           <span
@@ -167,11 +156,44 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
     setEditingId(null);
   };
   return (
-    <div className="px-2.5 py-2 data-[first=false]:border-t data-[first=false]:border-border" data-first={first}>
+    // The actions sit beside the body, not on a row of their own above it, so a reply opens with its text.
+    <div
+      className="flex items-start gap-1.5 px-2.5 py-2 data-[first=false]:border-t data-[first=false]:border-border"
+      data-first={first}
+    >
+      <div className="min-w-0 flex-1">
+        {threaded && message.author === 'agent' && (
+          <div className="mb-[2px]">
+            <AgentMark size="0.6875rem" />
+          </div>
+        )}
+        {editing ? (
+          <div className="rounded-md border-0 bg-surface p-0">
+            <textarea
+              className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+              }}
+              autoFocus
+            />
+            <div className="mt-1.5 flex items-center justify-end gap-1.5">
+              <Button variant="primary" onClick={save}>
+                Save
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Markdown
+            text={message.body}
+            path={thread.anchor.path}
+            quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
+          />
+        )}
+      </div>
       {threaded && (
-        <div className="mb-[2px] flex items-center gap-1.5 text-[0.6875rem] text-muted">
-          {message.author === 'agent' && <AgentMark size="0.6875rem" />}
-          <span className="flex-1" />
+        <div className="flex flex-none items-center gap-1.5 text-[0.6875rem] text-muted">
           <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
           <Button
             variant="ghost"
@@ -195,30 +217,6 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
             </Button>
           )}
         </div>
-      )}
-      {editing ? (
-        <div className="rounded-md border-0 bg-surface p-0">
-          <textarea
-            className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
-            }}
-            autoFocus
-          />
-          <div className="mt-1.5 flex items-center justify-end gap-1.5">
-            <Button variant="primary" onClick={save}>
-              Save
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Markdown
-          text={message.body}
-          path={thread.anchor.path}
-          quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
-        />
       )}
     </div>
   );

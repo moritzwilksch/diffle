@@ -1,9 +1,9 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
-import { AlertTriangle, Check, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import type { CommentThread, Side } from '@/shared/protocol.js';
-import { AgentMark } from '@/client/comments/AgentMark.js';
+import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
 import { anchorLabel } from '@/client/model.js';
 import { Markdown } from '@/client/Markdown.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
@@ -51,7 +51,7 @@ export const ThreadRow = memo(function ThreadRow({
       }}
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
-        <MessageSquare size="0.8125rem" />
+        <ThreadIcon thread={t} />
         <span className="font-mono font-semibold text-foreground">{anchorLabel(t.anchor)}</span>
         {t.messages.length > 1 && (
           <span className="text-muted">
