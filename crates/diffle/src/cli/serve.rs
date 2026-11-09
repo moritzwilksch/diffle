@@ -12,12 +12,13 @@ use super::paint::{bold, cyan, dim, green, red, yellow};
 use super::repository::open_review_repository;
 use super::timing::Timing;
 use crate::comments::format::format_prompt;
+use crate::error::Error;
 use crate::git::GitRepo;
 use crate::github::client::token_variables;
 use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
 use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
-use crate::server::announce::{Announced, announce};
+use crate::server::announce::{Announced, Lookup, announce, lookup};
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Endpoint, Server, ServerOptions};
 use crate::session::{Session, SessionOptions};
@@ -122,6 +123,11 @@ async fn start(
     (github, token_source): (&Github, Option<&str>),
     timing: &mut Timing,
 ) -> anyhow::Result<()> {
+    // One run per git dir. A silent run is busy, not gone: it still holds the git dir.
+    match lookup(&repo.git_dir).await {
+        Lookup::Live { url, .. } | Lookup::Silent { url } => return Err(Error::AlreadyRunning(url).into()),
+        Lookup::Absent => {}
+    }
     // Resolve the revision before binding, so invalid input never opens a browser.
     let review = session.resolve(req).await?;
     timing.mark("resolve");
