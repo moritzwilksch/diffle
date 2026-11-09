@@ -1,14 +1,26 @@
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
-import { AlertTriangle, Check, Copy, GitPullRequestArrow, Pencil, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  Check,
+  Copy,
+  GitPullRequestArrow,
+  Pencil,
+  Reply,
+  RotateCcw,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
-import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
+import { ThreadIcon } from '@/client/comments/AgentMark.js';
 import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
-import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
+import { anchorLabel, composerKey, exportLabel, relativeTime, type ExportOutcome } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
@@ -20,8 +32,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const replying = useStore((s) => s.replyTo === thread.id);
   const openReply = useStore((s) => s.openReply);
   const closeReply = useStore((s) => s.closeReply);
-  const editingId = useStore((s) => s.editingId);
-  const setEditingId = useStore((s) => s.setEditingId);
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
@@ -39,10 +49,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     const t = setTimeout(() => setPosted(null), 2000);
     return () => clearTimeout(t);
   }, [posted]);
-  // A lone message has no `who` row of its own, so its edit control sits with the thread actions.
-  const solo = thread.messages.length === 1 ? thread.messages[0]! : null;
-  const editingSolo = solo != null && editingId === solo.id;
-
   const a = thread.anchor;
 
   return (
@@ -66,24 +72,12 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             <AlertTriangle size="0.75rem" /> stale
           </span>
         )}
-        {solo?.author === 'agent' && <AgentMark size="0.75rem" />}
         {thread.resolved && (
           <span className="inline-flex items-center gap-0.75 text-add">
             <Check size="0.75rem" /> resolved
           </span>
         )}
         <span className="flex-1" />
-        {solo && <CopyMessageButton threadId={thread.id} messageId={solo.id} size="0.875rem" />}
-        {solo && (
-          <Button
-            variant="ghost"
-            icon
-            onClick={() => setEditingId(editingSolo ? null : solo.id)}
-            title={editingSolo ? 'Cancel' : 'Edit (e)'}
-          >
-            {editingSolo ? <X size="0.875rem" /> : <Pencil size="0.875rem" />}
-          </Button>
-        )}
         {canExport && (
           <Button
             variant="ghost"
@@ -150,23 +144,55 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
   const setUnsent = useStore((s) => s.setUnsent);
   const setText = (t: string) => key && setUnsent(key, t === message.body ? '' : t);
   const del = useConfirm(() => void deleteMessage(thread.id, message.id));
-  const threaded = thread.messages.length > 1;
   const save = () => {
     void editMessage(thread.id, message.id, text);
     setEditingId(null);
   };
+  const agent = message.author === 'agent';
   return (
-    // The actions sit beside the body, not on a row of their own above it, so a reply opens with its text.
-    <div
-      className="flex items-start gap-1.5 px-2.5 py-2 data-[first=false]:border-t data-[first=false]:border-border"
-      data-first={first}
-    >
-      <div className="min-w-0 flex-1">
-        {threaded && message.author === 'agent' && (
-          <div className="mb-[2px]">
-            <AgentMark size="0.6875rem" />
-          </div>
-        )}
+    <div className="group/message px-2.5 pt-2 pb-1 last:pb-2.5">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex size-5 flex-none items-center justify-center rounded-full ${agent ? 'bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-accent' : 'bg-hover text-muted'}`}
+        >
+          {agent ? <Bot size="0.75rem" /> : <User size="0.75rem" />}
+        </span>
+        <span className="text-[0.75rem] font-semibold text-foreground">{agent ? 'Agent' : 'You'}</span>
+        <span className="text-[0.75rem] text-muted" title={new Date(message.createdAt).toLocaleString()}>
+          {relativeTime(message.createdAt)}
+          {message.updatedAt > message.createdAt && ' · edited'}
+        </span>
+        <span className="flex-1" />
+        {/* Hidden until the message is hovered or focused, unless an edit or a delete is in flight. */}
+        <div
+          className={`flex items-center gap-0.5 group-focus-within/message:opacity-100 group-hover/message:opacity-100 ${editing || del.armed ? '' : 'opacity-0'}`}
+        >
+          <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
+          <Button
+            variant="ghost"
+            icon
+            onClick={() => setEditingId(editing ? null : message.id)}
+            title={editing ? 'Cancel' : 'Edit (e)'}
+          >
+            {editing ? <X size="0.75rem" /> : <Pencil size="0.75rem" />}
+          </Button>
+          {!first && (
+            <Button
+              variant="ghost"
+              danger
+              icon={!del.armed}
+              feedback={del.armed ? 'confirm' : undefined}
+              onClick={del.fire}
+              title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}
+            >
+              <Trash2 size="0.75rem" />
+              <ButtonLabel text={del.armed && 'Delete?'} />
+            </Button>
+          )}
+        </div>
+      </div>
+      {/* Indented past the avatar, under the name. */}
+      <div className="pl-7">
         {editing ? (
           <div className="rounded-md border-0 bg-surface p-0">
             <textarea
@@ -192,32 +218,6 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
           />
         )}
       </div>
-      {threaded && (
-        <div className="flex flex-none items-center gap-1.5 text-[0.6875rem] text-muted">
-          <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
-          <Button
-            variant="ghost"
-            icon
-            onClick={() => setEditingId(editing ? null : message.id)}
-            title={editing ? 'Cancel' : 'Edit (e)'}
-          >
-            {editing ? <X size="0.75rem" /> : <Pencil size="0.75rem" />}
-          </Button>
-          {!first && (
-            <Button
-              variant="ghost"
-              danger
-              icon={!del.armed}
-              feedback={del.armed ? 'confirm' : undefined}
-              onClick={del.fire}
-              title={del.armed ? 'Click again to delete this reply' : 'Delete this reply'}
-            >
-              <Trash2 size="0.75rem" />
-              <ButtonLabel text={del.armed && 'Delete?'} />
-            </Button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
