@@ -60,41 +60,35 @@ fn json_out(out: &Output) -> Value {
     serde_json::from_str(&stdout(out)).unwrap()
 }
 
-fn servers_dir(repo: &Path) -> PathBuf {
-    repo.join(".git").join("diffle").join("servers")
+fn announcement_file(repo: &Path) -> PathBuf {
+    repo.join(".git").join("diffle").join("server.json")
 }
 
+/// Announces a run `instance` at `url` for `repo`, as a run that is gone now may have.
 fn announce(repo: &Path, instance: &str, url: &str) -> PathBuf {
-    let file = servers_dir(repo).join(format!("{instance}.json"));
+    let file = announcement_file(repo);
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     let announcement = json!({ "instance": instance, "pid": 1, "url": url, "version": "0.0.0" });
     std::fs::write(&file, announcement.to_string()).unwrap();
     file
 }
 
-fn assert_none_running(out: &Output) {
+fn assert_user_error(out: &Output, message: &str) {
     assert_eq!(out.status.code(), Some(2), "{}", stderr(out));
-    assert!(stderr(out).contains("no diffle is running for this repository"), "{}", stderr(out));
+    assert!(stderr(out).contains(message), "{message} missing from:\n{}", stderr(out));
     assert_eq!(stdout(out), "");
 }
 
+const NOT_RUNNING: &str = "no diffle is running for this repository";
+
 #[test]
-fn deletes_a_crashed_runs_announcement_and_finds_no_diffle() {
+fn deletes_an_announcement_no_connection_reaches() {
     let t = repo();
-    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}/", closed.local_addr().unwrap());
-    drop(closed);
-    let crashed = announce(&t.path, "0a6c3a0e-5b7e-4a39-9a61-1d1f3e0d9c11", &url);
     // Where no connection completes in time: how Windows reports a closed loopback port.
     let unreachable = announce(&t.path, "7d3e2b1a-0c9f-4e8d-a7b6-5c4d3e2f1a0b", "http://10.255.255.1:9/");
-    // A run still writing its announcement stages it beside the real ones.
-    let staging = servers_dir(&t.path).join("other.json.123.tmp");
-    std::fs::write(&staging, "{").unwrap();
 
-    assert_none_running(&comments(&t.path, &["list"]));
-    assert!(!crashed.exists());
+    assert_user_error(&comments(&t.path, &["list"]), NOT_RUNNING);
     assert!(!unreachable.exists());
-    assert!(staging.exists());
 }
 
 #[test]
@@ -105,49 +99,21 @@ fn deletes_an_announcement_whose_port_another_server_answers() {
     // The port now belongs to a run for another repository, under the same instance even.
     let reused = announce(&t.path, &foreign.instance(), &foreign.url);
 
-    assert_none_running(&comments(&t.path, &["list"]));
+    assert_user_error(&comments(&t.path, &["list"]), NOT_RUNNING);
     assert!(!reused.exists());
-    assert_eq!(std::fs::read_dir(servers_dir(&other.path)).unwrap().count(), 1);
+    assert!(announcement_file(&other.path).exists());
 }
 
 #[test]
-fn skips_but_keeps_an_announcement_whose_server_does_not_answer() {
+fn keeps_the_announcement_of_a_run_that_does_not_answer() {
     let t = repo();
     // Accepts connections (the kernel's backlog does) but never answers: a stalled run.
     let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/", stalled.local_addr().unwrap());
     let kept = announce(&t.path, "5e0f1d2c-3b4a-4c5d-8e6f-7a8b9c0d1e2f", &url);
 
-    assert_none_running(&comments(&t.path, &["list"]));
+    assert_user_error(&comments(&t.path, &["list"]), &format!("diffle at {url} is not answering"));
     assert!(kept.exists());
-}
-
-#[test]
-fn asks_which_run_when_two_serve_the_repository() {
-    let t = repo();
-    let working = Served::start(&t.path, &["--port", "0"]);
-    let commit = Served::start(&t.path, &["--port", "0", "show", "HEAD"]);
-
-    let out = comments(&t.path, &["list"]);
-    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
-    let message = stderr(&out);
-    assert!(message.contains("--server <instance>"), "{message}");
-    assert_eq!(working.get("/api/server")["label"], "HEAD..worktree");
-    for run in [&working, &commit] {
-        let line = format!("  {}  {}  {}", run.instance(), run.url, run.get("/api/server")["label"].as_str().unwrap());
-        assert!(message.lines().any(|l| l == line), "{line} in:\n{message}");
-    }
-
-    // The runs show different sets, so each key names the run that answered.
-    let key = |run: &Served| run.get("/api/snapshot")["commentKey"].clone();
-    assert_ne!(key(&working), key(&commit));
-    for run in [&working, &commit] {
-        let listed = json_out(&comments(&t.path, &["list", "--server", &run.instance()]));
-        assert_eq!(listed["commentKey"], key(run));
-    }
-    let unknown = comments(&t.path, &["list", "--server", "nope"]);
-    assert_eq!(unknown.status.code(), Some(2));
-    assert!(stderr(&unknown).contains("no diffle nope is running for this repository"), "{}", stderr(&unknown));
 }
 
 #[test]

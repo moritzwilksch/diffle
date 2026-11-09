@@ -202,19 +202,16 @@ pub enum CommentsCommand {
         #[arg(long, value_name = "path")]
         path: Option<String>,
         #[command(flatten)]
-        server: ServerOpts,
+        repo: RepoOpts,
     },
 }
 
-/// Which running diffle a `diffle comments` call talks to.
+/// The repository whose running diffle a `diffle comments` call talks to.
 #[derive(Args, Debug, Clone, Default)]
-pub struct ServerOpts {
+pub struct RepoOpts {
     /// run as if started in <path> (any directory inside a git worktree)
     #[arg(short = 'C', value_name = "path", value_hint = ValueHint::DirPath)]
     pub dir: Option<PathBuf>,
-    /// the run to talk to when several serve this repository, by the instance the error lists
-    #[arg(long, value_name = "instance")]
-    pub server: Option<String>,
 }
 
 impl GlobalOpts {

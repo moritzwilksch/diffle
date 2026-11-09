@@ -1,5 +1,5 @@
 //! The comment threads an agent reads, always of the set the reviewer is shown.
-use super::discover::Diffle;
+use super::server::Diffle;
 use crate::protocol::ThreadList;
 
 /// The shown set's threads in `state` (all by default), on `path` alone when given.
