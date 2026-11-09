@@ -108,6 +108,18 @@ fn deletes_an_announcement_whose_port_another_server_answers() {
 }
 
 #[test]
+fn skips_but_keeps_an_announcement_whose_server_does_not_answer() {
+    let t = repo();
+    // Accepts connections (the kernel's backlog does) but never answers: a stalled run.
+    let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/", stalled.local_addr().unwrap());
+    let kept = announce(&t.path, "5e0f1d2c-3b4a-4c5d-8e6f-7a8b9c0d1e2f", &url);
+
+    assert_none_running(&comments(&t.path, &["list"]));
+    assert!(kept.exists());
+}
+
+#[test]
 fn asks_which_run_when_two_serve_the_repository() {
     let t = repo();
     let working = Served::start(&t.path, &["--port", "0"]);

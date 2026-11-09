@@ -1,6 +1,7 @@
 //! Finds the diffle serving a repository through its announcements under `<git-dir>/diffle/servers/`.
 //! An entry counts only once the server it names confirms it; the first client to find an entry
-//! dead deletes it, so no client ever acts on a crashed run's file or a reused port.
+//! dead deletes it, so no client ever acts on a crashed run's file or a reused port. An entry whose
+//! server does not answer in time is skipped but kept: a busy run must not lose it.
 use std::path::Path;
 use std::time::Duration;
 
@@ -27,15 +28,28 @@ pub struct Diffle {
 /// server does not confirm it.
 pub async fn discover(git_dir: &Path, instance: Option<&str>) -> Result<Diffle> {
     let checks = announcements(git_dir).await?.into_iter().map(|file| async move {
-        let confirmed = confirm(&file, git_dir).await;
-        if confirmed.is_none() {
-            // Another client may have deleted it first.
-            let _ = tokio::fs::remove_file(&file).await;
+        match check(&file, git_dir).await {
+            Check::Live(diffle) => Some(*diffle),
+            Check::Dead => {
+                // Another client may have deleted it first.
+                let _ = tokio::fs::remove_file(&file).await;
+                None
+            }
+            Check::Silent => None,
         }
-        confirmed
     });
     let live = futures::future::join_all(checks).await.into_iter().flatten().collect();
     pick(live, instance)
+}
+
+/// What checking an announcement found.
+enum Check {
+    /// Its server confirmed it.
+    Live(Box<Diffle>),
+    /// Nothing listens there, or something that is not this run for this repository.
+    Dead,
+    /// Its server did not answer in time: maybe busy, so the entry stays and only this call skips it.
+    Silent,
 }
 
 /// The announcement files under `git_dir`, without `write_file_atomic`'s staging files.
@@ -55,14 +69,25 @@ async fn announcements(git_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     Ok(files)
 }
 
-/// The server `file` announces, if it answers as that run for `git_dir`.
-async fn confirm(file: &Path, git_dir: &Path) -> Option<Diffle> {
-    let announcement: Announcement = serde_json::from_str(&tokio::fs::read_to_string(file).await.ok()?).ok()?;
-    let (http, base) = connect(&announcement.url)?;
-    let response = http.get(base.join("api/server").ok()?).timeout(CONFIRM_TIMEOUT).send().await.ok()?;
-    let info: ServerInfo = response.error_for_status().ok()?.json().await.ok()?;
-    let confirmed = info.instance == announcement.instance && Path::new(&info.git_dir) == git_dir;
-    confirmed.then_some(Diffle { info, url: announcement.url, http, base })
+/// Whether `file` announces a server that answers as that run for `git_dir`.
+async fn check(file: &Path, git_dir: &Path) -> Check {
+    let Ok(text) = tokio::fs::read_to_string(file).await else { return Check::Dead };
+    let Ok(announcement) = serde_json::from_str::<Announcement>(&text) else { return Check::Dead };
+    let Some((http, base)) = connect(&announcement.url) else { return Check::Dead };
+    let info = match server_info(&http, &base).await {
+        Ok(info) => info,
+        Err(e) if e.is_timeout() => return Check::Silent,
+        Err(_) => return Check::Dead,
+    };
+    if info.instance != announcement.instance || Path::new(&info.git_dir) != git_dir {
+        return Check::Dead;
+    }
+    Check::Live(Box::new(Diffle { info, url: announcement.url, http, base }))
+}
+
+async fn server_info(http: &reqwest::Client, base: &url::Url) -> reqwest::Result<ServerInfo> {
+    let url = base.join("api/server").expect("a relative path joins any base");
+    http.get(url).timeout(CONFIRM_TIMEOUT).send().await?.error_for_status()?.json().await
 }
 
 /// A client for `url` and the base its requests resolve against; a socket's requests name `localhost`.
