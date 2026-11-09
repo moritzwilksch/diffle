@@ -3,6 +3,7 @@ import { Button } from '@/client/ui/Button.js';
 import { AlertTriangle, Check, MessageSquare, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import type { CommentThread, Side } from '@/shared/protocol.js';
+import { AgentMark } from '@/client/comments/AgentMark.js';
 import { anchorLabel } from '@/client/model.js';
 import { Markdown } from '@/client/Markdown.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
@@ -57,6 +58,8 @@ export const ThreadRow = memo(function ThreadRow({
             {t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}
           </span>
         )}
+        {/* The row shows the opening message, so the mark says who wrote that one. */}
+        {first?.author === 'agent' && <AgentMark size="0.6875rem" />}
         {t.stale && (
           <span className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-warn">
             <AlertTriangle size="0.6875rem" /> stale

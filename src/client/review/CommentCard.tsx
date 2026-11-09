@@ -3,7 +3,6 @@ import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
 import {
   AlertTriangle,
-  Bot,
   Check,
   Copy,
   GitPullRequestArrow,
@@ -17,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
+import { AgentMark } from '@/client/comments/AgentMark.js';
 import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
 import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
@@ -77,7 +77,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
             <AlertTriangle size="0.75rem" /> stale
           </span>
         )}
-        {solo?.author === 'agent' && <AgentMark />}
+        {solo?.author === 'agent' && <AgentMark size="0.75rem" />}
         {thread.resolved && (
           <span className="inline-flex items-center gap-0.75 text-add">
             <Check size="0.75rem" /> resolved
@@ -170,7 +170,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
     <div className="px-2.5 py-2 data-[first=false]:border-t data-[first=false]:border-border" data-first={first}>
       {threaded && (
         <div className="mb-[2px] flex items-center gap-1.5 text-[0.6875rem] text-muted">
-          {message.author === 'agent' && <AgentMark />}
+          {message.author === 'agent' && <AgentMark size="0.6875rem" />}
           <span className="flex-1" />
           <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
           <Button
@@ -221,15 +221,6 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
         />
       )}
     </div>
-  );
-}
-
-/** Marks a message the reviewer's agent wrote; a lone message carries it in the thread header. */
-function AgentMark() {
-  return (
-    <span className="inline-flex items-center gap-0.75 text-accent">
-      <Bot size="0.75rem" /> agent
-    </span>
   );
 }
 
