@@ -150,6 +150,13 @@
         }
       ]
     },
+    "CommentAuthor": {
+      "type": "string",
+      "enum": [
+        "agent"
+      ],
+      "description": "Who wrote a message that the reviewer did not: only `diffle comments` sends it, never the browser."
+    },
     "CommentMessage": {
       "type": "object",
       "properties": {
@@ -168,6 +175,10 @@
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
+        },
+        "author": {
+          "$ref": "#/$defs/CommentAuthor",
+          "description": "Absent: the reviewer wrote it."
         }
       },
       "required": [
@@ -2008,6 +2019,10 @@
       "properties": {
         "body": {
           "type": "string"
+        },
+        "author": {
+          "$ref": "#/$defs/CommentAuthor",
+          "description": "Absent: the reviewer replies."
         }
       },
       "required": [
@@ -2454,6 +2469,10 @@
         },
         "quoted": {
           "type": "string"
+        },
+        "author": {
+          "$ref": "#/$defs/CommentAuthor",
+          "description": "Absent: the reviewer opens the thread."
         }
       },
       "required": [

@@ -8,7 +8,7 @@ use super::anchor::anchor_path;
 use super::store::{CommentStore, new_thread, read_store_file, write_store_file};
 use crate::error::{Error, Result};
 use crate::persist::with_file_lock;
-use crate::protocol::{CommentAnchor, CommentThread, Side, ThreadCreate, ThreadCreatePath};
+use crate::protocol::{CommentAnchor, CommentAuthor, CommentThread, Side, ThreadCreate, ThreadCreatePath};
 
 /// Everything `POST /api/threads` accepts: 1 MiB, like the HTTP body limit.
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
@@ -69,6 +69,14 @@ fn to_thread_create(entry: &Value) -> Result<ThreadCreate, Vec<String>> {
         issues.push("body: body required".into());
     }
     let quoted = optional_string(fields, "quoted", &mut issues);
+    let author = match fields.get("author") {
+        None => None,
+        Some(Value::String(s)) if s == "agent" => Some(CommentAuthor::Agent),
+        Some(_) => {
+            issues.push(r#"author: Invalid option: expected one of "agent""#.into());
+            None
+        }
+    };
     if !issues.is_empty() {
         return Err(issues);
     }
@@ -93,6 +101,7 @@ fn to_thread_create(entry: &Value) -> Result<ThreadCreate, Vec<String>> {
         end_line: end,
         body: body.unwrap_or_default(),
         quoted,
+        author,
     })
 }
 
@@ -198,7 +207,7 @@ impl CommentStore {
                     Ok(anchor) => anchor,
                     Err(e) => return Ok(Err(e)),
                 };
-                let thread = new_thread(anchor, t.body);
+                let thread = new_thread(anchor, t.body, t.author);
                 // Later imports in the same batch may duplicate this one.
                 existing.push(thread.clone());
                 added.push(thread);
@@ -257,7 +266,7 @@ mod tests {
         let parsed = parse_imports(&two).unwrap();
         assert_eq!(
             summary(&parsed[1]),
-            json!({ "path": "b.py", "side": "old", "startLine": 1, "endLine": 2, "body": "y", "quoted": "q" })
+            json!({ "path": "b.py", "side": "old", "startLine": 1, "endLine": 2, "body": "y", "author": "agent", "quoted": "q" })
         );
     }
 
@@ -282,6 +291,7 @@ mod tests {
         assert!(err(json!({ "path": "a.py", "startLine": 2, "endLine": 1, "body": "x" })).contains("endLine"));
         assert!(err(json!({ "path": "a.py", "startLine": 1, "body": "  " })).contains("body"));
         assert!(err(json!({ "path": "a.py", "startLine": 1, "body": "x", "side": "left" })).contains("side"));
+        assert!(err(json!({ "path": "a.py", "body": "x", "author": "reviewer" })).contains("author"));
         assert!(err(json!("a string")).contains("object"));
         assert!(err(json!({ "path": "", "body": "x" })).contains("path"));
         assert!(
@@ -293,7 +303,13 @@ mod tests {
         CommentThread {
             id: id.into(),
             anchor,
-            messages: vec![CommentMessage { id: "m".into(), body: body.into(), created_at: 0, updated_at: 0 }],
+            messages: vec![CommentMessage {
+                id: "m".into(),
+                body: body.into(),
+                created_at: 0,
+                updated_at: 0,
+                author: None,
+            }],
             resolved,
             resolved_at: None,
             stale: false,
