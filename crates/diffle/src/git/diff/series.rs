@@ -11,7 +11,7 @@ use super::patch::write_pair;
 use super::patch_id::patch_id;
 use super::sides::{self, Item, Reader};
 use super::{NoDiff, detect_renames, is_binary, pair, unified};
-use crate::error::GitError;
+use crate::error::Result;
 use crate::git::GitRepo;
 use crate::git::walk::commits_in;
 
@@ -41,7 +41,7 @@ struct Pair {
 
 impl GitRepo {
     /// How `git range-diff` pairs the commits of two ranges, in its output order.
-    pub async fn range_diff(&self, old_range: &str, new_range: &str) -> Result<Vec<RangeDiffRow>, GitError> {
+    pub async fn range_diff(&self, old_range: &str, new_range: &str) -> Result<Vec<RangeDiffRow>> {
         let (old_range, new_range, root) = (old_range.to_owned(), new_range.to_owned(), self.root.clone());
         self.gix("range-diff", move |repo| {
             let mut reader = Reader::new(repo, &root)?;
@@ -66,7 +66,7 @@ impl GitRepo {
 
     /// Each commit's stable patch id, as `git patch-id --stable` gives it, so two commits with the
     /// same change under different messages compare equal. Merges and empty commits have none.
-    pub async fn patch_ids(&self, shas: &[String]) -> Result<HashMap<String, String>, GitError> {
+    pub async fn patch_ids(&self, shas: &[String]) -> Result<HashMap<String, String>> {
         let (shas, root) = (shas.to_vec(), self.root.clone());
         self.gix("patch-id", move |repo| {
             let mut reader = Reader::new(repo, &root)?;

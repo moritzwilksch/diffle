@@ -9,7 +9,7 @@ use gix::revision::walk::Sorting;
 use gix::traverse::commit::simple::CommitTimeOrder;
 
 use super::GitRepo;
-use crate::error::GitError;
+use crate::error::Result;
 use crate::protocol::RangeCommit;
 
 pub struct RangeList {
@@ -19,7 +19,7 @@ pub struct RangeList {
 
 impl GitRepo {
     /// The commits a revision range such as `a..b` or `c^!` selects, oldest first: the newest `limit`, and the total.
-    pub async fn range_commits(&self, range: &str, limit: usize) -> Result<RangeList, GitError> {
+    pub async fn range_commits(&self, range: &str, limit: usize) -> Result<RangeList> {
         let range = range.to_owned();
         self.gix("listing commits", move |repo| {
             let order = commits_in(repo, &range)?;
@@ -48,7 +48,7 @@ impl GitRepo {
 
     /// `sha`'s first parent, and the commit toward HEAD whose first parent it is. The child is none
     /// at HEAD, on an unborn branch, or when `sha` is off HEAD's first-parent line.
-    pub async fn commit_neighbours(&self, sha: &str) -> Result<(Option<String>, Option<String>), GitError> {
+    pub async fn commit_neighbours(&self, sha: &str) -> Result<(Option<String>, Option<String>)> {
         let sha = sha.to_owned();
         self.gix("walking HEAD's first parents", move |repo| {
             let Ok(target) = repo.rev_parse_single(sha.as_str()).map(gix::Id::detach) else {

@@ -10,7 +10,7 @@ pub async fn replay_range(repo: &GitRepo, older: &RangeEnds, newer: &RangeEnds) 
     if older.old_sha == newer.old_sha {
         return Ok((repo.tree(&older.new_sha).await?, Vec::new()));
     }
-    Ok(repo.replay(&older.old_sha, &newer.old_sha, &older.new_sha).await?)
+    repo.replay(&older.old_sha, &newer.old_sha, &older.new_sha).await
 }
 
 /// Pairs the two ranges' commits as `git range-diff` does and tells a pair whose patch is the same

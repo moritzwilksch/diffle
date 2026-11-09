@@ -17,7 +17,7 @@ pub use diff::is_binary;
 pub use grep::{GrepMatch, GrepOptions, GrepResult};
 pub use refs::{Remote, Upstream};
 
-use crate::error::{GitError, Result};
+use crate::error::{Error, GitError, Result};
 
 /// Objects a thread-local handle keeps decoded, so walks and repeated lookups skip re-inflating.
 const OBJECT_CACHE: usize = 16 * 1024 * 1024;
@@ -53,28 +53,29 @@ impl GitRepo {
             Ok::<_, GitError>((repo, root, git_dir, common_dir))
         })
         .await
-        .map_err(|e| GitError::new(format!("opening the repository failed: {e}")))?;
+        .map_err(anyhow::Error::from)?;
         let (repo, root, git_dir, common_dir) = opened?;
         Ok(Self { review_refs: format!("refs/diffle/{}", uuid::Uuid::new_v4()), root, git_dir, common_dir, repo })
     }
 
-    /// Runs `f` on a thread-local gix handle off the async runtime, as gix blocks. `op` names the
-    /// failure in the error, unless `f` fails with a `GitError` of its own, which is kept as worded.
-    async fn gix<T, F>(&self, op: &str, f: F) -> Result<T, GitError>
+    /// Runs `f` on a thread-local gix handle off the async runtime, as gix blocks. A `GitError`
+    /// `f` raises is the user's to fix and keeps its wording; any other failure is unexpected
+    /// (`Error::Other`), named by `op`.
+    async fn gix<T, F>(&self, op: &str, f: F) -> Result<T>
     where
         T: Send + 'static,
         F: FnOnce(&gix::Repository) -> anyhow::Result<T> + Send + 'static,
     {
         let repo = self.repo.clone();
-        let failed = |e: &dyn std::fmt::Display| GitError::new(format!("{op} failed: {e:#}"));
+        let failed = |e: anyhow::Error| Error::from(e.context(format!("{op} failed")));
         tokio::task::spawn_blocking(move || {
             let mut repo = repo.to_thread_local();
             repo.object_cache_size_if_unset(OBJECT_CACHE);
             f(&repo)
         })
         .await
-        .map_err(|e| failed(&e))?
-        .map_err(|e| e.downcast::<GitError>().unwrap_or_else(|e| failed(&e)))
+        .map_err(|e| failed(e.into()))?
+        .map_err(|e| e.downcast::<GitError>().map_or_else(failed, Error::Git))
     }
 }
 

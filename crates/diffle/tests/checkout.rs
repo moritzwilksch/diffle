@@ -433,6 +433,46 @@ async fn a_change_only_the_index_holds_is_not_clean() {
 }
 
 #[tokio::test]
+async fn writes_files_through_the_targets_attributes() {
+    let t = TestRepo::new();
+    t.write("sub/a.txt", "one\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.write(".gitattributes", "*.txt text eol=crlf\n");
+    t.write("sub/a.txt", "one\ntwo\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
+    assert_eq!(std::fs::read(t.path.join("sub/a.txt")).unwrap(), b"one\r\ntwo\r\n");
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "");
+}
+
+#[tokio::test]
+async fn refuses_before_writing_when_a_kept_file_holds_a_directory_in_place() {
+    let t = branches();
+    // Staged only, so the switch keeps it, and `feat` puts a file where its directory is.
+    t.write("dir/x.txt", "staged\n");
+    t.git(&["add", "dir/x.txt"]);
+    t.git(&["stash", "-q"]);
+    t.git(&["checkout", "-q", "feat"]);
+    t.write("dir", "a file\n");
+    t.commit("dir becomes a file");
+    t.git(&["checkout", "-q", "main"]);
+    t.git(&["stash", "pop", "-q", "--index"]);
+    let repo = t.open().await;
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "Your local changes to the following files would be overwritten by checkout: dir/x.txt"
+    );
+    // Nothing moved: `a.txt`, which `feat` changes, still holds main's content.
+    assert_eq!(head(&t), "main");
+    assert_eq!(std::fs::read_to_string(t.path.join("a.txt")).unwrap(), "one\n");
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "A  dir/x.txt");
+}
+
+#[tokio::test]
 async fn keeps_a_sparse_checkout_sparse_across_a_switch() {
     let t = TestRepo::new();
     t.write("top.txt", "top\n");

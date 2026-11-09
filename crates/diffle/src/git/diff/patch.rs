@@ -6,35 +6,23 @@ use gix::prelude::ObjectIdExt;
 use super::sides::{self, Item, Reader};
 use super::unified::{self, Body, Side};
 use super::{is_binary, rename, tree_id};
-use crate::error::GitError;
+use crate::error::Result;
 use crate::git::{GitRepo, WORKTREE};
 use crate::protocol::{ChangeStatus, ChangedFile};
 
 impl GitRepo {
     /// One file's patch.
-    pub async fn patch(&self, old: &str, new: &str, file: &ChangedFile, context: u32) -> Result<String, GitError> {
+    pub async fn patch(&self, old: &str, new: &str, file: &ChangedFile, context: u32) -> Result<String> {
         self.patches(old, new, std::slice::from_ref(file), context, false).await
     }
 
     /// Every changed file's patch, concatenated in order; an untracked binary file has none.
-    pub async fn patch_all(
-        &self,
-        old: &str,
-        new: &str,
-        files: &[ChangedFile],
-        context: u32,
-    ) -> Result<String, GitError> {
+    pub async fn patch_all(&self, old: &str, new: &str, files: &[ChangedFile], context: u32) -> Result<String> {
         self.patches(old, new, files, context, true).await
     }
 
     /// Patches for `files` only, concatenated in order.
-    pub async fn patch_many(
-        &self,
-        old: &str,
-        new: &str,
-        files: &[ChangedFile],
-        context: u32,
-    ) -> Result<String, GitError> {
+    pub async fn patch_many(&self, old: &str, new: &str, files: &[ChangedFile], context: u32) -> Result<String> {
         self.patches(old, new, files, context, false).await
     }
 
@@ -45,7 +33,7 @@ impl GitRepo {
         files: &[ChangedFile],
         context: u32,
         skip_untracked_binary: bool,
-    ) -> Result<String, GitError> {
+    ) -> Result<String> {
         if (old == WORKTREE && new == WORKTREE) || files.is_empty() {
             return Ok(String::new());
         }

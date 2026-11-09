@@ -12,12 +12,12 @@ use gix::worktree::stack::state::attributes::Source;
 
 use super::diff::sides::hash_to_git;
 use super::{GitRepo, WORKTREE};
-use crate::error::GitError;
+use crate::error::Result;
 
 impl GitRepo {
     /// Untracked files git does not ignore, sorted; a nested repository is `dir/`, as git has no
     /// diff for it.
-    pub async fn untracked(&self) -> Result<Vec<String>, GitError> {
+    pub async fn untracked(&self) -> Result<Vec<String>> {
         self.gix("listing untracked files", |repo| {
             let options = repo.dirwalk_options()?.emit_untracked(EmissionMode::Matching).emit_ignored(None);
             walk(repo, options, |status| status == Status::Untracked)
@@ -26,7 +26,7 @@ impl GitRepo {
     }
 
     /// Ignored files and directories (directories end with '/'), sorted. Feeds the watcher.
-    pub async fn ignored_paths(&self) -> Result<Vec<String>, GitError> {
+    pub async fn ignored_paths(&self) -> Result<Vec<String>> {
         self.gix("listing ignored files", |repo| {
             let options = repo
                 .dirwalk_options()?
@@ -38,7 +38,7 @@ impl GitRepo {
     }
 
     /// Every path in the index, once.
-    pub async fn ls_files(&self) -> Result<Vec<String>, GitError> {
+    pub async fn ls_files(&self) -> Result<Vec<String>> {
         self.gix("ls-files", |repo| {
             let index = repo.index_or_empty()?;
             let mut paths: Vec<String> = index.entries().iter().map(|e| e.path(&index).to_string()).collect();
@@ -50,7 +50,7 @@ impl GitRepo {
     }
 
     /// Every path in a commit's tree, in git's order.
-    pub async fn ls_tree(&self, rev: &str) -> Result<Vec<String>, GitError> {
+    pub async fn ls_tree(&self, rev: &str) -> Result<Vec<String>> {
         let rev = rev.to_owned();
         self.gix("ls-tree", move |repo| {
             let tree = repo.rev_parse_single(rev.as_str())?.object()?.peel_to_tree()?;
@@ -71,7 +71,7 @@ impl GitRepo {
     /// Boolean value of a gitattribute per path: `attr` or `attr=true` reads true, `-attr` or
     /// `attr=false` false; unspecified paths are absent. A revision reads `.gitattributes` from
     /// that tree, the worktree from the checkout.
-    pub async fn attr(&self, name: &str, paths: &[String], rev: &str) -> Result<HashMap<String, bool>, GitError> {
+    pub async fn attr(&self, name: &str, paths: &[String], rev: &str) -> Result<HashMap<String, bool>> {
         if paths.is_empty() {
             return Ok(HashMap::new());
         }
@@ -110,7 +110,7 @@ impl GitRepo {
 
     /// What git would store for `content` at worktree `path`, its clean filters applied: equals the
     /// snapshot's blob for a worktree file whose bytes are still the snapshot's.
-    pub async fn hash_object(&self, content: &[u8], path: &str) -> Result<String, GitError> {
+    pub async fn hash_object(&self, content: &[u8], path: &str) -> Result<String> {
         let (content, path) = (content.to_vec(), path.to_owned());
         self.gix("hash-object", move |repo| {
             let (mut pipeline, index) = repo.filter_pipeline(None)?;

@@ -12,7 +12,7 @@ use regex::bytes::{Regex, RegexBuilder};
 
 use super::diff::{NoDiff, is_binary};
 use super::{GitRepo, WORKTREE};
-use crate::error::GitError;
+use crate::error::{GitError, Result};
 
 /// A search that runs this long is a runaway regex, not a slow repository.
 const GREP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -50,13 +50,7 @@ impl GitRepo {
     /// Search the new side, case-sensitive unless asked otherwise. Worktree searches cover tracked
     /// and untracked files. The search stops at `limit + 1` matches, so a common query in a large
     /// repository cannot flood the process; binary files and symlinks are skipped, as git skips them.
-    pub async fn grep(
-        &self,
-        query: &str,
-        rev: &str,
-        limit: usize,
-        opts: GrepOptions<'_>,
-    ) -> Result<GrepResult, GitError> {
+    pub async fn grep(&self, query: &str, rev: &str, limit: usize, opts: GrepOptions<'_>) -> Result<GrepResult> {
         // An explicit empty path list means "search nothing", not everything.
         if query.is_empty()
             || opts.paths.is_some_and(<[String]>::is_empty)
@@ -131,7 +125,7 @@ impl Search<'_> {
                         let i = next.fetch_add(1, Ordering::Relaxed);
                         let Some((path, blob)) = files.get(i) else { break };
                         let found = if Instant::now() > deadline {
-                            Err(anyhow::anyhow!("timed out after {}ms", GREP_TIMEOUT.as_millis()))
+                            Err(GitError::new(format!("search timed out after {}ms", GREP_TIMEOUT.as_millis())).into())
                         } else {
                             self.file(&repo, &mut no_diff, path, *blob)
                         };

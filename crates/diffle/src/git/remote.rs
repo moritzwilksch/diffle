@@ -22,18 +22,20 @@ impl GitRepo {
     /// `refs/diffle/`, so no ref the user owns moves; no tags come along and FETCH_HEAD is left
     /// alone. Credentials come from the configured helpers, never a prompt: a repository that
     /// needs one fails instead of hanging.
-    pub async fn fetch(&self, remote: &str, refspecs: &[String]) -> Result<(), GitError> {
+    pub async fn fetch(&self, remote: &str, refspecs: &[String]) -> Result<()> {
         for spec in refspecs {
             let dst = spec.split_once(':').map_or(spec.as_str(), |(_, dst)| dst);
             if !dst.starts_with("refs/diffle/") {
-                return Err(GitError::new(format!("refusing to fetch into {dst}")));
+                return Err(GitError::new(format!("refusing to fetch into {dst}")).into());
             }
         }
         let (remote, refspecs) = (remote.to_owned(), refspecs.to_vec());
         self.gix("fetch", move |repo| {
             // Remotes and `insteadOf` rewrites as configured now, not when the repository opened.
             let mut repo = refs::current_config(repo)?;
-            fetch_into(&mut repo, &remote, &refspecs, false)?;
+            // A remote that is gone, refuses, or lacks the ref is the user's to fix.
+            fetch_into(&mut repo, &remote, &refspecs, false)
+                .map_err(|e| GitError::new(format!("fetching from {remote} failed: {e:#}")))?;
             Ok(())
         })
         .await
@@ -43,11 +45,10 @@ impl GitRepo {
     /// out its default branch. No tags come along.
     pub async fn clone_into(url: &str, dir: &Path) -> Result<Self> {
         let (owned, path) = (url.to_owned(), dir.to_owned());
-        let failed = |e: &dyn std::fmt::Display| GitError::new(format!("cloning {url} failed: {e:#}"));
         tokio::task::spawn_blocking(move || clone(&owned, &path))
             .await
-            .map_err(|e| failed(&e))?
-            .map_err(|e| failed(&e))?;
+            .map_err(anyhow::Error::from)?
+            .map_err(|e| GitError::new(format!("cloning {url} failed: {e:#}")))?;
         Self::open(dir).await
     }
 }

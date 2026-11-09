@@ -142,8 +142,7 @@ async fn search(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiRe
         paths: paths.as_deref(),
         ranges: ranges.as_ref(),
     };
-    let found =
-        d.session.repo.grep(&q.q, &snap.new_sha, SEARCH_LIMIT, opts).await.map_err(crate::error::Error::from)?;
+    let found = d.session.repo.grep(&q.q, &snap.new_sha, SEARCH_LIMIT, opts).await?;
     let matches = found.matches.into_iter().map(|m| SearchMatch { path: m.path, line: m.line, text: m.text }).collect();
     Ok(Json(SearchResponse { query: q.q, matches, truncated: found.truncated }).into_response())
 }

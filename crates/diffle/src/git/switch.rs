@@ -7,9 +7,9 @@ use anyhow::Context;
 use gix::ObjectId;
 use gix::bstr::{BStr, BString, ByteSlice};
 use gix::index::entry::{Flags, Mode, Stat};
-use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
+use gix::worktree::stack::state::attributes::Source as AttributeSource;
 
-use super::checkout::{CheckoutTarget, branch, head_tree, holder, is_submodule};
+use super::checkout::{CheckoutTarget, head_tree, holder, is_submodule, move_head};
 use super::diff::sides::{EXECUTABLE, GITLINK, Item, SYMLINK, kind};
 use super::diff::{PathChange, index_changes, tree_changes, worktree_changes};
 use crate::error::GitError;
@@ -42,7 +42,7 @@ pub(super) fn switch(repo: &gix::Repository, root: &Path, target: &CheckoutTarge
     let changes = tree_changes(repo, head_tree(repo)?, target_tree)?;
     let skipped = skipped(&index, &changes);
     refuse_losses(repo, root, &index, &changes, &skipped)?;
-    write_worktree(repo, root, &changes, &skipped)?;
+    write_worktree(repo, root, target_tree, &changes, &skipped)?;
     write_index(root, &index, &changes, &skipped)?;
     move_head(repo, target, id)
 }
@@ -105,6 +105,15 @@ fn refuse_losses(
     let mut excludes =
         repo.excludes(index, None, gix::worktree::stack::state::ignore::Source::WorktreeThenIdMappingIfNotSkipped)?;
     let tracked = |path: &[u8]| index.entry_by_path(path.as_bstr()).is_some();
+    // Only what the switch deletes is out of the way by the time a path changes kind; a staged
+    // file it keeps would stop it halfway, the worktree rewritten but the index and HEAD not.
+    let removed: HashSet<&[u8]> = deleted(changes.iter()).map(|old| old.path.as_slice()).collect();
+    let refuse_kept = |path: &[u8]| -> anyhow::Result<()> {
+        if tracked(path) {
+            refuse!("Your local changes to the following files would be overwritten by checkout: {}", path.as_bstr());
+        }
+        refuse!("The following untracked working tree files would be overwritten by checkout: {}", path.as_bstr())
+    };
     let written = changes.iter().filter_map(|(_, n)| n.as_ref()).filter(|n| !skipped.contains(&n.path));
     for new in written.filter(|n| kind(n.mode) != GITLINK) {
         // The path itself, then each directory above it, must be free or git's to replace.
@@ -112,17 +121,18 @@ fn refuse_losses(
         loop {
             let abs = root.join(native(path)?);
             if let Ok(meta) = std::fs::symlink_metadata(&abs) {
-                let in_way = match (own, meta.is_dir()) {
-                    // A directory where the file goes is git's to remove once the files it tracks there are gone.
-                    (true, true) => holds_untracked(&abs, path, &tracked)?,
-                    (true, false) => !tracked(path) && !excludes.at_entry(path.as_bstr(), None)?.is_excluded(),
-                    (false, dir) => !dir && !tracked(path),
-                };
-                if in_way {
-                    refuse!(
-                        "The following untracked working tree files would be overwritten by checkout: {}",
-                        path.as_bstr()
-                    );
+                match (own, meta.is_dir()) {
+                    // A directory where the file goes is git's to remove once the files it deletes there are gone.
+                    (true, true) => {
+                        if let Some(kept) = kept_file(&abs, path, &removed)? {
+                            refuse_kept(&kept)?;
+                        }
+                    }
+                    (true, false) if !tracked(path) && !excludes.at_entry(path.as_bstr(), None)?.is_excluded() => {
+                        refuse_kept(path)?;
+                    }
+                    (false, false) if !removed.contains(path) => refuse_kept(path)?,
+                    _ => {}
                 }
             }
             let Some(slash) = path.rfind_byte(b'/') else { break };
@@ -132,46 +142,51 @@ fn refuse_losses(
     Ok(())
 }
 
-/// Whether the directory at `rel` holds a file the index does not track.
-fn holds_untracked(abs: &Path, rel: &[u8], tracked: &dyn Fn(&[u8]) -> bool) -> anyhow::Result<bool> {
+/// What the switch deletes from disk: a path the target lacks, or holds as another kind.
+fn deleted<'a>(changes: impl Iterator<Item = &'a PathChange>) -> impl Iterator<Item = &'a Item> {
+    changes.filter_map(|(o, n)| o.as_ref().filter(|o| n.as_ref().is_none_or(|n| kind(n.mode) != kind(o.mode))))
+}
+
+/// A file under the directory at `rel` that the switch does not delete, which would keep it in place.
+fn kept_file(abs: &Path, rel: &[u8], removed: &HashSet<&[u8]>) -> anyhow::Result<Option<Vec<u8>>> {
     for entry in std::fs::read_dir(abs)? {
         let entry = entry?;
         let mut child = rel.to_vec();
         child.push(b'/');
         child.extend_from_slice(&gix::path::into_bstr(PathBuf::from(entry.file_name()))?);
         let found = if entry.file_type()?.is_dir() {
-            holds_untracked(&entry.path(), &child, tracked)?
+            kept_file(&entry.path(), &child, removed)?
         } else {
-            !tracked(&child)
+            (!removed.contains(child.as_slice())).then_some(child)
         };
-        if found {
-            return Ok(true);
+        if found.is_some() {
+            return Ok(found);
         }
     }
-    Ok(false)
+    Ok(None)
 }
 
-/// Removes what the target lacks, then writes what it adds or changes, through the smudge filters;
-/// paths sparse checkout skips stay off disk.
+/// Removes what the target lacks, then writes what it adds or changes, through the smudge filters
+/// the target's `.gitattributes` name, as git reads them from the index it checks out; paths
+/// sparse checkout skips stay off disk.
 fn write_worktree(
     repo: &gix::Repository,
     root: &Path,
+    target_tree: ObjectId,
     changes: &[PathChange],
     skipped: &HashSet<BString>,
 ) -> anyhow::Result<()> {
     let changes: Vec<_> =
         changes.iter().filter(|(o, n)| !skipped.contains(&n.as_ref().or(o.as_ref()).expect("a side").path)).collect();
-    for old in changes
-        .iter()
-        .filter(|(o, n)| o.is_some() && n.as_ref().is_none_or(|n| kind(n.mode) != kind(o.as_ref().unwrap().mode)))
-    {
-        let old = old.0.as_ref().expect("filtered");
+    for old in deleted(changes.iter().copied()) {
         let abs = root.join(native(&old.path)?);
         // A submodule's checkout is left in place, as git leaves it; an emptied one goes.
         let _ = if kind(old.mode) == GITLINK { std::fs::remove_dir(&abs) } else { std::fs::remove_file(&abs) };
         prune_empty_parents(root, &abs);
     }
-    let (mut pipeline, _) = repo.filter_pipeline(None)?;
+    let target_index = repo.index_from_tree(&target_tree)?;
+    let attributes = repo.attributes_only(&target_index, AttributeSource::IdMapping)?;
+    let mut pipeline = gix::filter::Pipeline::new(repo, attributes.detach())?;
     let symlinks = repo.filesystem_options()?.symlink;
     for new in changes.iter().filter_map(|(_, n)| n.as_ref()) {
         let abs = root.join(native(&new.path)?);
@@ -183,7 +198,7 @@ fn write_worktree(
             continue;
         }
         if let Ok(meta) = std::fs::symlink_metadata(&abs) {
-            if meta.is_dir() { std::fs::remove_dir(&abs)? } else { std::fs::remove_file(&abs)? }
+            if meta.is_dir() { remove_empty_dirs(&abs)? } else { std::fs::remove_file(&abs)? }
         }
         write_file(repo, &mut pipeline, new, &abs, symlinks)?;
     }
@@ -260,42 +275,12 @@ fn write_index(
     Ok(())
 }
 
-/// Points HEAD at the branch, or detaches it at the commit, and logs the move in HEAD's reflog as
-/// git does, where `@{-N}` finds the branches checked out before.
-fn move_head(repo: &gix::Repository, target: &CheckoutTarget, id: ObjectId) -> anyhow::Result<()> {
-    let mut repo = repo.clone();
-    repo.committer_or_set_fallback("diffle", "diffle@localhost")?;
-    let previous = repo.head_id().ok().map(gix::Id::detach);
-    let from = branch(&repo)?.or_else(|| previous.map(|id| id.to_string())).unwrap_or_default();
-    let (to, new) = match target {
-        CheckoutTarget::Branch(name) => {
-            (name.clone(), gix::refs::Target::Symbolic(format!("refs/heads/{name}").try_into()?))
-        }
-        CheckoutTarget::Detached(_) => (id.to_string(), gix::refs::Target::Object(id)),
-    };
-    let message = format!("checkout: moving from {from} to {to}");
-    let log_path = repo.git_dir().join("logs").join("HEAD");
-    let logged = std::fs::metadata(&log_path).map_or(0, |m| m.len());
-    let log = LogChange { mode: RefLog::AndReference, force_create_reflog: false, message: message.clone().into() };
-    let edit = RefEdit {
-        change: Change::Update { log, expected: PreviousValue::Any, new },
-        name: "HEAD".try_into()?,
-        deref: false,
-    };
-    repo.edit_reference(edit)?;
-    // gix logs a move to a commit but not one onto a branch.
-    if std::fs::metadata(&log_path).map_or(0, |m| m.len()) == logged {
-        let old = previous.unwrap_or_else(|| ObjectId::null(repo.object_hash()));
-        let mut who = Vec::new();
-        repo.committer().transpose()?.context("a committer")?.write_to(&mut who)?;
-        let line = format!("{old} {id} {}\t{message}\n", who.as_bstr());
-        std::fs::create_dir_all(log_path.parent().expect("a logs directory"))?;
-        std::io::Write::write_all(
-            &mut std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?,
-            line.as_bytes(),
-        )?;
+/// Removes a directory holding no files, only directories, as `refuse_losses` saw to.
+fn remove_empty_dirs(dir: &Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        remove_empty_dirs(&entry?.path())?;
     }
-    Ok(())
+    std::fs::remove_dir(dir)
 }
 
 fn prune_empty_parents(root: &Path, file: &Path) {

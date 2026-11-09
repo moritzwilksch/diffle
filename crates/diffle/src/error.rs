@@ -94,6 +94,11 @@ impl Error {
         Self::Revspec(message.into())
     }
 
+    /// A revision that names nothing.
+    pub fn is_missing(&self) -> bool {
+        matches!(self, Self::Git(e) if e.is_missing())
+    }
+
     /// Whether the user caused it, so the CLI exits 2 and the API answers 4xx.
     pub fn is_user_error(&self) -> bool {
         !matches!(self, Self::Other(_))

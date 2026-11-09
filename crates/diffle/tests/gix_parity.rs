@@ -89,6 +89,25 @@ async fn finds_neighbours_on_heads_first_parent_line_only() {
 }
 
 #[tokio::test]
+async fn a_corrupt_repository_is_not_the_users_error() {
+    let t = TestRepo::new();
+    t.write("a.txt", "one\n");
+    t.commit("base");
+    let tree = t.git(&["rev-parse", "HEAD^{tree}"]);
+    let loose = t.path.join(".git/objects").join(&tree[..2]).join(&tree[2..]);
+    let mut perms = std::fs::metadata(&loose).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    std::fs::set_permissions(&loose, perms).unwrap();
+    std::fs::write(&loose, b"not zlib").unwrap();
+    let repo = t.open().await;
+    let e = repo.ls_tree("HEAD").await.unwrap_err();
+    assert!(!e.is_user_error(), "{e:#}");
+    // A revision that names nothing stays the user's.
+    assert!(repo.resolve("nope").await.unwrap_err().is_user_error());
+}
+
+#[tokio::test]
 async fn resolves_revisions_and_commit_metadata_as_rev_parse_does() {
     let t = merged_repo();
     let repo = t.open().await;

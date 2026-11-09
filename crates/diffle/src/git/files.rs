@@ -5,17 +5,17 @@ use gix::objs::Kind;
 use tokio::io::AsyncReadExt;
 
 use super::{BIG_FILE_THRESHOLD, GitRepo, WORKTREE, inside};
-use crate::error::GitError;
+use crate::error::Result;
 
 impl GitRepo {
     /// Blob contents at `rev`, or none if absent or not a blob (a directory, a gitlink).
-    pub async fn show(&self, rev: &str, path: &str) -> Result<Option<Vec<u8>>, GitError> {
+    pub async fn show(&self, rev: &str, path: &str) -> Result<Option<Vec<u8>>> {
         self.blob_at(rev, path, usize::MAX).await
     }
 
     /// The first `keep` bytes of the blob at `rev:path`. A revision or path that names nothing is
     /// none, as `cat-file` reports it missing.
-    async fn blob_at(&self, rev: &str, path: &str, keep: usize) -> Result<Option<Vec<u8>>, GitError> {
+    async fn blob_at(&self, rev: &str, path: &str, keep: usize) -> Result<Option<Vec<u8>>> {
         let (rev, path) = (rev.to_owned(), path.to_owned());
         self.gix("reading a blob", move |repo| {
             let Ok(id) = repo.rev_parse_single(rev.as_str()) else {
@@ -55,7 +55,7 @@ impl GitRepo {
 
     /// First `bytes` of each blob, keyed by sha; one batch answers the whole list. A sha that is
     /// not a blob (missing, a gitlink) is absent from the result.
-    pub async fn blob_heads(&self, shas: &[String], bytes: usize) -> Result<HashMap<String, Vec<u8>>, GitError> {
+    pub async fn blob_heads(&self, shas: &[String], bytes: usize) -> Result<HashMap<String, Vec<u8>>> {
         let shas = shas.to_vec();
         self.gix("reading blobs", move |repo| {
             let mut heads = HashMap::new();

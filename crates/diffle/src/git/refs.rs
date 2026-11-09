@@ -29,7 +29,7 @@ pub struct Upstream {
 
 impl GitRepo {
     /// Remove only refs owned by this review, never another running instance's.
-    pub async fn clean_review_refs(&self) -> Result<(), GitError> {
+    pub async fn clean_review_refs(&self) -> Result<()> {
         let prefix = format!("{}/", self.review_refs);
         self.gix("deleting review refs", move |repo| {
             let names: Vec<String> = repo
@@ -129,7 +129,7 @@ impl GitRepo {
 
     /// Configured remotes, in git's order, with their fetch URLs as configured: before `insteadOf`
     /// rewriting, which can hide the repository's identity.
-    pub async fn remotes(&self) -> Result<Vec<Remote>, GitError> {
+    pub async fn remotes(&self) -> Result<Vec<Remote>> {
         self.gix("reading remotes", |repo| {
             let config = current_config(repo)?;
             let mut seen = HashSet::new();
@@ -152,7 +152,7 @@ impl GitRepo {
 
     /// Whether commit `sha` is reachable from a ref under one of `prefixes`, from local refs alone.
     /// Anything but a commit (the worktree, a tree) is not.
-    pub async fn reachable_from(&self, sha: &str, prefixes: &[String]) -> Result<bool, GitError> {
+    pub async fn reachable_from(&self, sha: &str, prefixes: &[String]) -> Result<bool> {
         if sha == WORKTREE {
             return Ok(false);
         }

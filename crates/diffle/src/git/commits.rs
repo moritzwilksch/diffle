@@ -12,12 +12,12 @@ use gix::merge::tree::apply_index_entries::RemovalMode;
 
 impl GitRepo {
     /// Commit sha for a user-supplied revision; a revision that names no commit is missing.
-    pub async fn resolve(&self, rev: &str) -> Result<String, GitError> {
+    pub async fn resolve(&self, rev: &str) -> Result<String> {
         self.peeled(rev, Kind::Commit).await
     }
 
     /// `resolve`, with none for a revision that names nothing.
-    pub async fn try_resolve(&self, rev: &str) -> Result<Option<String>, GitError> {
+    pub async fn try_resolve(&self, rev: &str) -> Result<Option<String>> {
         match self.resolve(rev).await {
             Ok(sha) => Ok(Some(sha)),
             Err(e) if e.is_missing() => Ok(None),
@@ -26,12 +26,12 @@ impl GitRepo {
     }
 
     /// The tree a commit points at.
-    pub async fn tree(&self, rev: &str) -> Result<String, GitError> {
+    pub async fn tree(&self, rev: &str) -> Result<String> {
         self.peeled(rev, Kind::Tree).await
     }
 
     /// `rev` peeled to an object of `kind`, as `rev-parse --verify --quiet rev^{kind}`: any failure is missing.
-    async fn peeled(&self, rev: &str, kind: Kind) -> Result<String, GitError> {
+    async fn peeled(&self, rev: &str, kind: Kind) -> Result<String> {
         let owned = rev.to_owned();
         let found = self
             .gix("rev-parse", move |repo| {
@@ -39,7 +39,7 @@ impl GitRepo {
                 Ok(id.object()?.peel_to_kind(kind).ok().map(|o| o.id.to_string()))
             })
             .await?;
-        found.ok_or_else(|| GitError::missing(format!("unknown revision: {rev}")))
+        Ok(found.ok_or_else(|| GitError::missing(format!("unknown revision: {rev}")))?)
     }
 
     /// Commit messages for two ancestor offsets, pinned to one HEAD.
@@ -58,7 +58,7 @@ impl GitRepo {
     }
 
     /// A commit's hash, abbreviation and full message; none when `rev` names no commit.
-    pub async fn commit_info(&self, rev: &str) -> Result<Option<CommitInfo>, GitError> {
+    pub async fn commit_info(&self, rev: &str) -> Result<Option<CommitInfo>> {
         let Some(sha) = self.try_resolve(rev).await? else {
             return Ok(None);
         };
@@ -71,15 +71,17 @@ impl GitRepo {
     }
 
     /// The empty tree under the repository's hash algorithm: the old side of an unborn branch.
-    pub async fn empty_tree(&self) -> Result<String, GitError> {
+    pub async fn empty_tree(&self) -> Result<String> {
         self.gix("hashing the empty tree", |repo| Ok(gix::ObjectId::empty_tree(repo.object_hash()).to_string())).await
     }
 
-    pub async fn merge_base(&self, a: &str, b: &str) -> Result<String, GitError> {
+    pub async fn merge_base(&self, a: &str, b: &str) -> Result<String> {
         let (a, b) = (a.to_owned(), b.to_owned());
         self.gix("merge-base", move |repo| {
             let (a, b) = (repo.rev_parse_single(a.as_str())?, repo.rev_parse_single(b.as_str())?);
-            let base = repo.merge_base(a, b)?.ok_or_else(|| anyhow::anyhow!("no merge base between {a} and {b}"))?;
+            let base = repo
+                .merge_base(a, b)?
+                .ok_or_else(|| GitError::missing(format!("no merge base between {a} and {b}")))?;
             Ok(base.to_string())
         })
         .await
@@ -88,7 +90,7 @@ impl GitRepo {
     /// Replays what `head` changed since `base` onto `onto`, as `git merge-tree` would: the
     /// resulting tree, written to the object database, and the paths the merge could not settle,
     /// which the tree holds with conflict markers labelled with `onto` and `head`.
-    pub async fn replay(&self, base: &str, onto: &str, head: &str) -> Result<(String, Vec<String>), GitError> {
+    pub async fn replay(&self, base: &str, onto: &str, head: &str) -> Result<(String, Vec<String>)> {
         let (base, onto, head) = (base.to_owned(), onto.to_owned(), head.to_owned());
         self.gix("merge-tree", move |repo| {
             let tree = |rev: &str| -> anyhow::Result<ObjectId> {
@@ -115,9 +117,9 @@ impl GitRepo {
 
     /// Points refs at objects so they survive `gc` and a force-push, or with none deletes them.
     /// Refs must stay inside `refs/diffle/iterations/`: nothing the user owns moves.
-    pub async fn pin(&self, refs: &[(String, Option<String>)]) -> Result<(), GitError> {
+    pub async fn pin(&self, refs: &[(String, Option<String>)]) -> Result<()> {
         if let Some((name, _)) = refs.iter().find(|(name, _)| !name.starts_with("refs/diffle/iterations/")) {
-            return Err(GitError::new(format!("refusing to update {name}")));
+            return Err(GitError::new(format!("refusing to update {name}")).into());
         }
         let refs = refs.to_vec();
         self.gix("update-ref", move |repo| {

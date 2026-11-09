@@ -64,7 +64,7 @@ async fn matching_pr(repo: &GitRepo, snap: &Snapshot, github: &Github) -> Result
         return Ok(Err("A single commit belongs to no pull request".into()));
     };
     let (old, new, remotes) =
-        tokio::try_join!(repo.upstream_branch(old), repo.upstream_branch(new), async { Ok(repo.remotes().await?) })?;
+        tokio::try_join!(repo.upstream_branch(old), repo.upstream_branch(new), async { repo.remotes().await })?;
     let (Some(old), Some(new)) = (old, new) else {
         return Ok(Err("No branch with an upstream available for both endpoints".into()));
     };
