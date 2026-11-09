@@ -34,6 +34,8 @@ tally/ledger.py:3-4
 
 Say what counts as a refund here, not only in the parser.
 
+(agent) Done: the docstring now names the `refund` kind.
+
 Also link the release notes once they mention `kind`.
 
 ---
@@ -54,6 +56,8 @@ Is the archive really converted? The cron job still calls this.
 
 (file) tally/refunds.py
 
-Consider folding this into `ledger.py`; it only has two callers.
+(agent) Consider folding this into `ledger.py`; it only has two callers.
+
+Agreed, but in a follow-up.
 
 ---

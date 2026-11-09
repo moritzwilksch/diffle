@@ -14,7 +14,7 @@ use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::comments::format::format_prompt;
 use crate::comments::import::parse_imports;
 use crate::error::Error;
-use crate::protocol::{ClearThreadsQuery, ServerMessage, ThreadQuery, ThreadState, ViewedEntry};
+use crate::protocol::{ClearThreadsQuery, ReplyCreate, ServerMessage, ThreadQuery, ThreadState, ViewedEntry};
 use crate::session::Broadcaster;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
@@ -79,11 +79,11 @@ struct Body {
 }
 
 async fn reply(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, raw: Bytes) -> ApiResult {
-    let req: Body = body(&raw)?;
+    let req: ReplyCreate = body(&raw)?;
     if req.body.trim().is_empty() {
         return Err(ApiError::bad_request("body: body required"));
     }
-    let thread = d.session.comments()?.reply(&id, req.body).await?;
+    let thread = d.session.comments()?.reply(&id, req.body, req.author).await?;
     d.hub.broadcast(ServerMessage::Threads);
     Ok((StatusCode::CREATED, Json(thread)).into_response())
 }
