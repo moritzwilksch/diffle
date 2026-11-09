@@ -1,4 +1,4 @@
-//! The command line: options, the shorthand commands, and `config` / `completion`.
+//! The command line: options, the shorthand commands, and `config` / `completion` / `comments`.
 use std::path::PathBuf;
 
 use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
@@ -173,6 +173,11 @@ pub enum Command {
         #[command(flatten)]
         opts: GlobalOpts,
     },
+    /// read the comments of the review diffle is running for this repository, as an agent
+    Comments {
+        #[command(subcommand)]
+        command: CommentsCommand,
+    },
     /// print the config file path and contents
     Config,
     /// show the language server each language would get, and what is missing from PATH
@@ -184,6 +189,32 @@ pub enum Command {
         #[arg(short, long, value_name = "shell", value_enum)]
         shell: Shell,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CommentsCommand {
+    /// print the threads the reviewer is shown, with the key of their set, as JSON
+    List {
+        /// which threads to print (default: all)
+        #[arg(long, value_name = "state", value_parser = ["open", "resolved", "all"])]
+        state: Option<String>,
+        /// only the threads on this file, relative to the repository root
+        #[arg(long, value_name = "path")]
+        path: Option<String>,
+        #[command(flatten)]
+        server: ServerOpts,
+    },
+}
+
+/// Which running diffle a `diffle comments` call talks to.
+#[derive(Args, Debug, Clone, Default)]
+pub struct ServerOpts {
+    /// run as if started in <path> (any directory inside a git worktree)
+    #[arg(short = 'C', value_name = "path", value_hint = ValueHint::DirPath)]
+    pub dir: Option<PathBuf>,
+    /// the run to talk to when several serve this repository, by the instance the error lists
+    #[arg(long, value_name = "instance")]
+    pub server: Option<String>,
 }
 
 impl GlobalOpts {

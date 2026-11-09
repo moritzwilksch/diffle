@@ -39,6 +39,8 @@ impl From<Error> for ApiError {
         match e {
             Error::NotFound(_) => Self::not_found("not found"),
             Error::Revspec(m) | Error::Invalid(m) | Error::Unquotable(m) => Self::bad_request(m),
+            // The CLI's alone; no route discovers servers.
+            Error::Discovery(m) => Self(StatusCode::CONFLICT, m),
             Error::Git(e) => Self::bad_request(e.message),
             Error::LspUnavailable(m) | Error::LspUnsupported(m) => Self(StatusCode::CONFLICT, m),
             Error::Github(e) => Self(StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY), e.message),

@@ -75,6 +75,10 @@ pub enum Error {
     /// A request body that is not valid JSON or not the shape the route takes.
     #[error("{0}")]
     Invalid(String),
+    /// No diffle serves the repository a `diffle comments` call names, or several do and it named
+    /// none of them.
+    #[error("{0}")]
+    Discovery(String),
     #[error(transparent)]
     Other(Arc<anyhow::Error>),
 }

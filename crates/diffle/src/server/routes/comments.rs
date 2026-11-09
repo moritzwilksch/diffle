@@ -14,7 +14,7 @@ use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::comments::format::format_prompt;
 use crate::comments::import::parse_imports;
 use crate::error::Error;
-use crate::protocol::{ClearThreadsQuery, ServerMessage, ThreadQuery, ThreadState, ViewedEntry};
+use crate::protocol::{ClearThreadsQuery, ServerMessage, ThreadList, ThreadQuery, ThreadState, ViewedEntry};
 use crate::session::Broadcaster;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
@@ -43,7 +43,9 @@ fn thread_query(raw: Option<&str>, default: ThreadState) -> ApiResult<ThreadQuer
 
 async fn threads(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
     let q = thread_query(raw.as_deref(), ThreadState::All)?;
-    Ok(Json(d.session.comments()?.threads(&q).await?).into_response())
+    let comments = d.session.comments()?;
+    let threads = comments.threads(&q).await?;
+    Ok(Json(ThreadList { comment_key: comments.key().to_owned(), threads }).into_response())
 }
 
 async fn export(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {

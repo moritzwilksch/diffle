@@ -1,4 +1,5 @@
 //! The `diffle` command line: parses arguments, then serves a review or edits the config.
+mod agent;
 mod args;
 mod completion;
 mod config;
@@ -47,6 +48,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     let (req, later) = match cli.command {
         Some(Command::Config) => return config::run().await,
         Some(Command::Lsp) => return lsp::list().await,
+        // `diffle -C <path> comments ...` names the repository as well as `comments ... -C <path>`.
+        Some(Command::Comments { command }) => return agent::run(command, cli.global.dir).await,
         Some(Command::Completion { shell }) => {
             completion::print(shell);
             return Ok(());

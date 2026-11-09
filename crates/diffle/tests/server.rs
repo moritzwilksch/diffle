@@ -131,7 +131,7 @@ async fn does_not_clear_threads_for_an_invalid_stale_filter() {
     let created = s.json("POST", "/api/threads", json!({ "path": "a.txt", "body": "keep" })).await;
     assert_eq!(created.status, 201);
     assert_eq!(s.send("DELETE", "/api/threads?stale=0", &[], None).await.status, 400);
-    assert_eq!(s.get("/api/threads").await.json().as_array().unwrap().len(), 1);
+    assert_eq!(s.get("/api/threads").await.json()["threads"].as_array().unwrap().len(), 1);
     s.close().await;
 }
 
