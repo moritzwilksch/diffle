@@ -25,7 +25,10 @@
     // Four effects reset local state when an external signal flips (edit mode opens,
     // the symbol picker opens, a mode is requested, a highlight job restarts). Each
     // also does non-state work in the same effect, so the rule's fixes do not apply.
-    "react/set-state-in-effect": "off"
+    "react/set-state-in-effect": "off",
+    // Effects keep cancel flags and last-seen values in locals their own listeners reassign;
+    // the rule mistakes those effect-scoped closures for reassignment after render.
+    "react/immutability": "off"
   },
   "overrides": [
     {

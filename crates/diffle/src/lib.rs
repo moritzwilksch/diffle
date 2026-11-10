@@ -10,6 +10,9 @@ macro_rules! status {
         let _ = writeln!(::anstream::stderr(), $($arg)*);
     }};
 }
+/// How diffle names itself to the servers it calls over HTTP.
+pub const USER_AGENT: &str = concat!("diffle/", env!("CARGO_PKG_VERSION"));
+
 pub mod cli;
 pub mod comments;
 pub mod concurrency;

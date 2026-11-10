@@ -60,7 +60,8 @@ async fn load_from(cache_file: PathBuf, url: &str) -> Vec<Value> {
 }
 
 async fn download(url: &str) -> Option<Vec<Value>> {
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build().ok()?;
+    let client =
+        reqwest::Client::builder().user_agent(crate::USER_AGENT).timeout(Duration::from_secs(5)).build().ok()?;
     let response = client.get(url).send().await.ok()?;
     if !response.status().is_success() {
         return None;

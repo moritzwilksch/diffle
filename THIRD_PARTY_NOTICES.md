@@ -105,7 +105,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 The browser client bundles the npm packages below, grouped by licence. Each package is followed
 by its own licence file, and its notice file where it ships one.
 
-- MIT: 106
+- MIT: 107
 - Apache-2.0: 5
 - ISC: 2
 - BSD-3-Clause: 1
@@ -264,7 +264,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### @shikijs/core 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/core 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -291,7 +291,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/engine-javascript 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/engine-javascript 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -318,7 +318,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/engine-oniguruma 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/engine-oniguruma 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -345,7 +345,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/langs 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/langs 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -372,7 +372,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/primitive 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/primitive 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -399,7 +399,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/themes 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/themes 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -426,7 +426,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/types 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### @shikijs/types 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -453,7 +453,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### @shikijs/vscode-textmate 10.0.2 (https://github.com/shikijs/vscode-textmate)
+#### @shikijs/vscode-textmate 10.1.0 (https://github.com/shikijs/vscode-textmate)
 
 ```
 The MIT License (MIT)
@@ -763,7 +763,34 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### hast-util-to-jsx-runtime 2.3.6 (syntax-tree/hast-util-to-jsx-runtime)
+#### hast-util-to-html 9.0.6 (syntax-tree/hast-util-to-html)
+
+```
+(The MIT License)
+
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+#### hast-util-to-jsx-runtime 2.3.7 (syntax-tree/hast-util-to-jsx-runtime)
 
 ```
 (The MIT License)
@@ -870,7 +897,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### inline-style-parser 0.2.7 (git+https://github.com/remarkablemark/inline-style-parser.git)
+#### inline-style-parser 0.2.9 (git+https://github.com/remarkablemark/inline-style-parser.git)
 
 ```
 (The MIT License)
@@ -929,7 +956,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Ships no licence file; its package.json declares MIT.
 
-#### markdown-table 3.0.4 (wooorm/markdown-table)
+#### markdown-table 3.1.0 (wooorm/markdown-table)
 
 ```
 (The MIT License)
@@ -956,7 +983,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-find-and-replace 3.0.2 (syntax-tree/mdast-util-find-and-replace)
+#### mdast-util-find-and-replace 3.0.4 (syntax-tree/mdast-util-find-and-replace)
 
 ```
 (The MIT License)
@@ -983,7 +1010,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-from-markdown 2.0.3 (syntax-tree/mdast-util-from-markdown)
+#### mdast-util-from-markdown 2.1.0 (syntax-tree/mdast-util-from-markdown)
 
 ```
 (The MIT License)
@@ -1091,12 +1118,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-gfm-strikethrough 2.0.0 (syntax-tree/mdast-util-gfm-strikethrough)
+#### mdast-util-gfm-strikethrough 2.0.1 (syntax-tree/mdast-util-gfm-strikethrough)
 
 ```
 (The MIT License)
 
-Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -1118,12 +1145,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-gfm-table 2.0.0 (syntax-tree/mdast-util-gfm-table)
+#### mdast-util-gfm-table 2.0.1 (syntax-tree/mdast-util-gfm-table)
 
 ```
 (The MIT License)
 
-Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -1227,7 +1254,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-to-markdown 2.1.2 (syntax-tree/mdast-util-to-markdown)
+#### mdast-util-to-markdown 2.2.2 (syntax-tree/mdast-util-to-markdown)
 
 ```
 (The MIT License)
@@ -1281,7 +1308,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### micromark 4.0.2 (https://github.com/micromark/micromark/tree/main/packages/micromark)
+#### micromark 4.0.3 (https://github.com/micromark/micromark/tree/main/packages/micromark)
 
 ```
 (The MIT License)
@@ -1308,7 +1335,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### micromark-core-commonmark 2.0.3 (https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark)
+#### micromark-core-commonmark 2.0.4 (https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark)
 
 ```
 (The MIT License)
@@ -1443,7 +1470,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### micromark-extension-gfm-table 2.1.1 (micromark/micromark-extension-gfm-table)
+#### micromark-extension-gfm-table 2.1.2 (micromark/micromark-extension-gfm-table)
 
 ```
 (The MIT License)
@@ -1551,7 +1578,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### micromark-factory-space 2.0.1 (https://github.com/micromark/micromark/tree/main/packages/micromark-factory-space)
+#### micromark-factory-space 2.1.0 (https://github.com/micromark/micromark/tree/main/packages/micromark-factory-space)
 
 ```
 (The MIT License)
@@ -1768,6 +1795,33 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 #### micromark-util-decode-string 2.0.1 (https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-string)
+
+```
+(The MIT License)
+
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+#### micromark-util-edit-map 1.0.0 (https://github.com/micromark/micromark/tree/main/packages/micromark-util-edit-map)
 
 ```
 (The MIT License)
@@ -2348,7 +2402,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### shiki 4.5.0 (git+https://github.com/shikijs/shiki.git)
+#### shiki 4.6.0 (git+https://github.com/shikijs/shiki.git)
 
 ```
 MIT License
@@ -2429,34 +2483,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### style-to-js 1.1.21 (git+https://github.com/remarkablemark/style-to-js.git)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2020 Menglin "Mark" Xu <mark@remarkablemark.org>
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
-#### style-to-object 1.0.14 (git+https://github.com/remarkablemark/style-to-object.git)
+#### style-to-object 2.0.2 (git+https://github.com/remarkablemark/style-to-object.git)
 
 ```
 The MIT License (MIT)
@@ -2669,12 +2696,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### unist-util-visit 5.1.0 (syntax-tree/unist-util-visit)
+#### unist-util-visit 5.2.0 (syntax-tree/unist-util-visit)
 
 ```
 (The MIT License)
 
-Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -2696,12 +2723,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### unist-util-visit-parents 6.0.2 (syntax-tree/unist-util-visit-parents)
+#### unist-util-visit-parents 6.1.0 (syntax-tree/unist-util-visit-parents)
 
 ```
 (The MIT License)
 
-Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -2883,7 +2910,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### Apache-2.0
 
-#### @pierre/diffs 1.6.1
+#### @pierre/diffs 1.6.2
 
 ```
 Apache License
@@ -3077,7 +3104,7 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 ```
 
-#### @pierre/highlights 0.2.0
+#### @pierre/highlights 0.3.0
 
 ```
 Apache License
@@ -4089,7 +4116,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### lucide-react 1.61.0 (https://github.com/lucide-icons/lucide.git)
+#### lucide-react 1.67.0 (https://github.com/lucide-icons/lucide.git)
 
 ```
 ISC License
@@ -4178,7 +4205,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The binary links the crates below, grouped by licence. Each licence's text follows the crates
 that use it.
 
-- MIT License: 337
+- MIT License: 338
 - Unicode License v3: 20
 - Apache License 2.0: 8
 - ISC License: 6
@@ -4613,7 +4640,7 @@ Apache License
 
 Used by:
 - diffle 0.4.0 (https://github.com/moritzwilksch/diffle)
-- aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
+- aws-lc-sys 0.47.0 (https://github.com/aws/aws-lc-rs)
 - dunce 1.0.5 (https://gitlab.com/kornelski/dunce)
 - ryu 1.0.23 (https://github.com/dtolnay/ryu)
 - sync_wrapper 1.0.2 (https://github.com/Actyx/sync_wrapper)
@@ -4698,7 +4725,7 @@ limitations under the License.
 ### BSD 3-Clause "New" or "Revised" License
 
 Used by:
-- encoding_rs 0.8.42 (https://github.com/hsivonen/encoding_rs)
+- encoding_rs 0.8.44 (https://github.com/hsivonen/encoding_rs)
 
 ```
 // Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -4837,7 +4864,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### BSD 3-Clause "New" or "Revised" License
 
 Used by:
-- aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
+- aws-lc-sys 0.47.0 (https://github.com/aws/aws-lc-rs)
 
 ```
 Copyright (c) <year> <owner>. 
@@ -4857,7 +4884,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 ### BSD 3-Clause "New" or "Revised" License
 
 Used by:
-- encoding_rs 0.8.42 (https://github.com/hsivonen/encoding_rs)
+- encoding_rs 0.8.44 (https://github.com/hsivonen/encoding_rs)
 
 ```
 Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -4892,7 +4919,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### Creative Commons Zero v1.0 Universal
 
 Used by:
-- notify 8.2.1 (https://github.com/notify-rs/notify.git)
+- notify 8.2.2 (https://github.com/notify-rs/notify.git)
 
 ```
 Creative Commons CC0 1.0 Universal
@@ -4941,7 +4968,7 @@ For these and/or other purposes and motivations, and without any expectation of 
 ### Community Data License Agreement Permissive 2.0
 
 Used by:
-- webpki-root-certs 1.0.10 (https://github.com/rustls/webpki-roots)
+- webpki-root-certs 1.0.12 (https://github.com/rustls/webpki-roots)
 
 ```
 # Community Data License Agreement - Permissive - Version 2.0
@@ -5104,8 +5131,8 @@ third-party/chromium/LICENSE.
 ### ISC License
 
 Used by:
-- aws-lc-rs 1.18.2 (https://github.com/aws/aws-lc-rs)
-- aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
+- aws-lc-rs 1.19.0 (https://github.com/aws/aws-lc-rs)
+- aws-lc-sys 0.47.0 (https://github.com/aws/aws-lc-rs)
 
 ```
 ISC License:
@@ -5350,15 +5377,15 @@ DEALINGS IN THE SOFTWARE.
 Used by:
 - cfg-if 1.0.5 (https://github.com/rust-lang/cfg-if)
 - filetime 0.2.29 (https://github.com/alexcrichton/filetime)
-- js-sys 0.3.106 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
-- openssl-probe 0.2.1 (https://github.com/rustls/openssl-probe)
+- js-sys 0.3.107 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
+- openssl-probe 0.2.2 (https://github.com/rustls/openssl-probe)
 - socket2 0.6.5 (https://github.com/rust-lang/socket2)
-- wasm-bindgen-futures 0.4.79 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
-- wasm-bindgen-macro-support 0.2.129 (https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support)
-- wasm-bindgen-macro 0.2.129 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
-- wasm-bindgen-shared 0.2.129 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
-- wasm-bindgen 0.2.129 (https://github.com/wasm-bindgen/wasm-bindgen)
-- web-sys 0.3.106 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
+- wasm-bindgen-futures 0.4.80 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
+- wasm-bindgen-macro-support 0.2.130 (https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support)
+- wasm-bindgen-macro 0.2.130 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
+- wasm-bindgen-shared 0.2.130 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
+- wasm-bindgen 0.2.130 (https://github.com/wasm-bindgen/wasm-bindgen)
+- web-sys 0.3.107 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -5454,7 +5481,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- mime 0.3.17 (https://github.com/hyperium/mime)
+- mime 0.3.18 (https://github.com/hyperium/mime)
 
 ```
 Copyright (c) 2014 Sean McArthur
@@ -5484,7 +5511,7 @@ THE SOFTWARE.
 
 Used by:
 - bitflags 2.13.2 (https://github.com/bitflags/bitflags)
-- log 0.4.34 (https://github.com/rust-lang/log)
+- log 0.4.35 (https://github.com/rust-lang/log)
 - num-traits 0.2.19 (https://github.com/rust-num/num-traits)
 - regex-automata 0.4.18 (https://github.com/rust-lang/regex)
 - regex-syntax 0.8.11 (https://github.com/rust-lang/regex)
@@ -5522,7 +5549,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- uuid 1.29.0 (https://github.com/uuid-rs/uuid)
+- uuid 1.29.2 (https://github.com/uuid-rs/uuid)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -5557,7 +5584,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- flate2 1.1.10 (https://github.com/rust-lang/flate2-rs)
+- flate2 1.1.11 (https://github.com/rust-lang/flate2-rs)
 
 ```
 Copyright (c) 2014-2026 Alex Crichton
@@ -6553,7 +6580,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- arc-swap 1.9.3 (https://github.com/vorner/arc-swap)
+- arc-swap 1.9.5 (https://github.com/vorner/arc-swap)
 
 ```
 Copyright (c) 2017 arc-swap developers
@@ -6860,7 +6887,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- smallvec 1.16.3 (https://github.com/servo/rust-smallvec)
+- smallvec 1.16.5 (https://github.com/servo/rust-smallvec)
 
 ```
 Copyright (c) 2018 The Servo Project Developers
@@ -7661,7 +7688,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- const-oid 0.10.2 (https://github.com/RustCrypto/formats)
+- const-oid 0.10.3 (https://github.com/RustCrypto/formats)
 - cpufeatures 0.3.1 (https://github.com/RustCrypto/utils)
 
 ```
@@ -7798,7 +7825,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- rustls-pki-types 1.15.1 (https://github.com/rustls/pki-types)
+- rustls-pki-types 1.16.0 (https://github.com/rustls/pki-types)
 
 ```
 Copyright (c) 2023 Dirkjan Ochtman <dirkjan@ochtman.nl>
@@ -7832,7 +7859,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- notify-types 2.1.0 (https://github.com/notify-rs/notify.git)
+- notify-types 2.2.0 (https://github.com/notify-rs/notify.git)
 
 ```
 Copyright (c) 2023 Notify Contributors
@@ -8210,9 +8237,10 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- encoding_rs 0.8.42 (https://github.com/hsivonen/encoding_rs)
+- encoding_rs 0.8.44 (https://github.com/hsivonen/encoding_rs)
 - multiversion_no_op 1.0.0 (https://github.com/hsivonen/multiversion_no_op)
-- utf8_iter 1.0.4 (https://github.com/hsivonen/utf8_iter)
+- utf8_iter 1.1.0 (https://github.com/hsivonen/utf8_iter)
+- utf_types 1.0.0 (https://github.com/hsivonen/utf_types)
 
 ```
 Copyright Mozilla Foundation
@@ -8306,7 +8334,7 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- crc32fast 1.5.3 (https://github.com/srijs/rust-crc32fast)
+- crc32fast 1.5.5 (https://github.com/srijs/rust-crc32fast)
 
 ```
 MIT License
@@ -8881,7 +8909,7 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- octocrab 0.54.5 (https://github.com/XAMPPRocky/octocrab.git)
+- octocrab 0.54.9 (https://github.com/XAMPPRocky/octocrab.git)
 
 ```
 MIT License (MIT)
@@ -8947,7 +8975,7 @@ Used by:
 - atomic-waker 1.1.2 (https://github.com/smol-rs/atomic-waker)
 - displaydoc 0.2.7 (https://github.com/yaahc/displaydoc)
 - fastrand 2.5.0 (https://github.com/smol-rs/fastrand)
-- itoa 1.0.18 (https://github.com/dtolnay/itoa)
+- itoa 1.0.19 (https://github.com/dtolnay/itoa)
 - linux-raw-sys 0.12.1 (https://github.com/sunfishcode/linux-raw-sys)
 - once_cell 1.21.4 (https://github.com/matklad/once_cell)
 - pin-project-internal 1.1.13 (https://github.com/taiki-e/pin-project)
@@ -8957,7 +8985,7 @@ Used by:
 - portable-atomic 1.15.0 (https://github.com/taiki-e/portable-atomic)
 - proc-macro2 1.0.107 (https://github.com/dtolnay/proc-macro2)
 - quote 1.0.47 (https://github.com/dtolnay/quote)
-- rustix 1.1.5 (https://github.com/bytecodealliance/rustix)
+- rustix 1.1.6 (https://github.com/bytecodealliance/rustix)
 - rustversion 1.0.23 (https://github.com/dtolnay/rustversion)
 - semver 1.0.28 (https://github.com/dtolnay/semver)
 - serde 1.0.229 (https://github.com/serde-rs/serde)
@@ -8967,7 +8995,7 @@ Used by:
 - serde_path_to_error 0.1.20 (https://github.com/dtolnay/path-to-error)
 - simd_cesu8 1.2.0 (https://github.com/seancroach/simd_cesu8)
 - syn 2.0.119 (https://github.com/dtolnay/syn)
-- syn 3.0.9 (https://github.com/dtolnay/syn)
+- syn 3.0.10 (https://github.com/dtolnay/syn)
 - thiserror-impl 2.0.21 (https://github.com/dtolnay/thiserror)
 - thiserror 2.0.21 (https://github.com/dtolnay/thiserror)
 - unicode-ident 1.0.27 (https://github.com/dtolnay/unicode-ident)
@@ -9043,13 +9071,13 @@ Used by:
 - gix-bitmap 0.6.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-chunk 0.10.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-command 0.12.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-commitgraph 0.41.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-commitgraph 0.42.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-config-value 0.21.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-config 0.62.2 (https://github.com/GitoxideLabs/gitoxide)
 - gix-credentials 0.42.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-date 0.18.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-diff 0.69.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-dir 0.31.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-diff 0.70.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-dir 0.32.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-discover 0.57.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-error 0.5.2 (https://github.com/GitoxideLabs/gitoxide)
 - gix-filter 0.36.1 (https://github.com/GitoxideLabs/gitoxide)
@@ -9058,40 +9086,40 @@ Used by:
 - gix-hash 0.28.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-hashtable 0.18.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-ignore 0.24.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-index 0.57.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-index 0.58.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-lock 26.0.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-macros 0.2.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-merge 0.22.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-negotiate 0.37.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-merge 0.23.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-negotiate 0.38.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-object 0.66.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-odb 0.86.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-pack 0.76.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-odb 0.87.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-pack 0.77.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-packetline 0.24.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-parallel 0.50.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-path 0.14.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-pathspec 0.22.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-prompt 0.19.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-protocol 0.67.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-protocol 0.68.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-quote 0.10.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-ref 0.69.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-refspec 0.47.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-revision 0.51.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-revwalk 0.37.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-revision 0.52.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-revwalk 0.38.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-sec 0.16.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-shallow 0.15.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-status 0.36.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-status 0.37.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-submodule 0.36.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-tempfile 26.0.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-trace 0.3.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-transport 0.61.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-traverse 0.63.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-transport 0.62.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-traverse 0.64.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-url 0.40.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-utils 0.5.2 (https://github.com/GitoxideLabs/gitoxide)
 - gix-validate 0.13.1 (https://github.com/GitoxideLabs/gitoxide)
-- gix-worktree-state 0.36.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-worktree 0.58.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix-zlib 0.3.0 (https://github.com/GitoxideLabs/gitoxide)
-- gix 0.89.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-worktree-state 0.37.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-worktree 0.59.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix-zlib 0.4.0 (https://github.com/GitoxideLabs/gitoxide)
+- gix 0.90.0 (https://github.com/GitoxideLabs/gitoxide)
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -9282,10 +9310,10 @@ THE SOFTWARE.
 Used by:
 - aho-corasick 1.1.5 (https://github.com/BurntSushi/aho-corasick)
 - byteorder 1.5.0 (https://github.com/BurntSushi/byteorder)
-- jiff-core 0.1.2 (https://github.com/BurntSushi/jiff)
+- jiff-core 0.1.4 (https://github.com/BurntSushi/jiff)
 - jiff-tzdb-platform 0.1.3 (https://github.com/BurntSushi/jiff)
 - jiff-tzdb 0.1.9 (https://github.com/BurntSushi/jiff)
-- jiff 0.2.39 (https://github.com/BurntSushi/jiff)
+- jiff 0.2.42 (https://github.com/BurntSushi/jiff)
 - memchr 2.8.3 (https://github.com/BurntSushi/memchr)
 - walkdir 2.5.0 (https://github.com/BurntSushi/walkdir)
 
@@ -9471,7 +9499,7 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- aws-lc-sys 0.46.0 (https://github.com/aws/aws-lc-rs)
+- aws-lc-sys 0.47.0 (https://github.com/aws/aws-lc-rs)
 
 ```
 The MIT License (MIT)
@@ -9627,8 +9655,8 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- async-compression 0.4.51 (https://github.com/Nullus157/async-compression)
-- compression-codecs 0.4.46 (https://github.com/Nullus157/async-compression)
+- async-compression 0.4.52 (https://github.com/Nullus157/async-compression)
+- compression-codecs 0.4.47 (https://github.com/Nullus157/async-compression)
 - compression-core 0.4.34 (https://github.com/Nullus157/async-compression)
 
 ```
@@ -10729,24 +10757,24 @@ authorization of the copyright holder.
 ### Unicode License v3
 
 Used by:
-- icu_collections 2.3.0 (https://github.com/unicode-org/icu4x)
-- icu_locale_core 2.3.0 (https://github.com/unicode-org/icu4x)
-- icu_normalizer 2.3.0 (https://github.com/unicode-org/icu4x)
-- icu_normalizer_data 2.3.0 (https://github.com/unicode-org/icu4x)
-- icu_properties 2.3.0 (https://github.com/unicode-org/icu4x)
-- icu_properties_data 2.3.0 (https://github.com/unicode-org/icu4x)
-- icu_provider 2.3.1 (https://github.com/unicode-org/icu4x)
+- icu_collections 2.4.0 (https://github.com/unicode-org/icu4x)
+- icu_locale_core 2.4.0 (https://github.com/unicode-org/icu4x)
+- icu_normalizer 2.4.0 (https://github.com/unicode-org/icu4x)
+- icu_normalizer_data 2.4.0 (https://github.com/unicode-org/icu4x)
+- icu_properties 2.4.0 (https://github.com/unicode-org/icu4x)
+- icu_properties_data 2.4.0 (https://github.com/unicode-org/icu4x)
+- icu_provider 2.4.0 (https://github.com/unicode-org/icu4x)
 - litemap 0.8.3 (https://github.com/unicode-org/icu4x)
 - potential_utf 0.1.6 (https://github.com/unicode-org/icu4x)
-- tinystr 0.8.4 (https://github.com/unicode-org/icu4x)
+- tinystr 0.8.5 (https://github.com/unicode-org/icu4x)
 - writeable 0.6.4 (https://github.com/unicode-org/icu4x)
 - yoke-derive 0.8.4 (https://github.com/unicode-org/icu4x)
-- yoke 0.8.3 (https://github.com/unicode-org/icu4x)
+- yoke 0.8.4 (https://github.com/unicode-org/icu4x)
 - zerofrom-derive 0.1.8 (https://github.com/unicode-org/icu4x)
 - zerofrom 0.1.8 (https://github.com/unicode-org/icu4x)
 - zerotrie 0.2.5 (https://github.com/unicode-org/icu4x)
-- zerovec-derive 0.11.6 (https://github.com/unicode-org/icu4x)
-- zerovec 0.11.8 (https://github.com/unicode-org/icu4x)
+- zerovec-derive 0.11.7 (https://github.com/unicode-org/icu4x)
+- zerovec 0.11.9 (https://github.com/unicode-org/icu4x)
 
 ```
 UNICODE LICENSE V3

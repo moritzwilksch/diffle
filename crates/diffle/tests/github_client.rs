@@ -92,8 +92,16 @@ async fn server(status: u16, body: Value, delay: Duration) -> (String, Arc<Mutex
     let app = Router::new().fallback(any(move |uri: Uri, headers: HeaderMap, raw: Bytes| {
         let (record, body) = (record.clone(), body.clone());
         async move {
-            let headers =
-                headers.iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_owned())).collect();
+            // A repeated header reads as its values joined, as a proxy would fold them.
+            let mut folded: HashMap<String, String> = HashMap::new();
+            for (k, v) in &headers {
+                let v = v.to_str().unwrap_or_default();
+                folded
+                    .entry(k.to_string())
+                    .and_modify(|all| *all = format!("{all}, {v}"))
+                    .or_insert_with(|| v.to_owned());
+            }
+            let headers = folded;
             let sent = serde_json::from_slice(&raw).unwrap_or(Value::Null);
             record.lock().unwrap().push(Seen { path: uri.path().to_owned(), headers, body: sent });
             tokio::time::sleep(delay).await;
@@ -121,6 +129,7 @@ async fn posts_the_document_and_variables_with_the_token_to_the_graphql_endpoint
     // GitHub Enterprise Server keeps GraphQL beside, not under, the REST root.
     assert_eq!(seen[0].path, "/api/graphql");
     assert_eq!(seen[0].headers["authorization"], "Bearer tok");
+    assert_eq!(seen[0].headers["user-agent"], concat!("diffle/", env!("CARGO_PKG_VERSION")));
     assert_eq!(seen[0].body, json!({ "query": "query{viewer{login}}", "variables": { "n": 1 } }));
 }
 
