@@ -17,8 +17,8 @@ use crate::concurrency::map_limit;
 use crate::git::GrepOptions;
 use crate::git::is_binary;
 use crate::protocol::{
-    ChangeStatus, FileQuery, FileResponse, ImageQuery, PatchQuery, SearchContent, SearchMatch, SearchQuery,
-    SearchResponse, SearchScope, Side,
+    ChangeStatus, FileQuery, FileResponse, HighlightResponse, ImageQuery, PatchQuery, SearchContent, SearchMatch,
+    SearchQuery, SearchResponse, SearchScope, Side,
 };
 use crate::server::image::image_type;
 
@@ -31,6 +31,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
         .route("/api/patch", get(patch).post(patch_many))
         .route("/api/file", get(file))
+        .route("/api/highlight", get(highlight))
         .route("/api/image", get(image))
         .route("/api/search", get(search))
 }
@@ -65,21 +66,37 @@ async fn patch_many(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
 async fn file(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
     let q: FileQuery = query(raw.as_deref())?;
     let path = q.path.to_string();
-    let snap = d.session.snapshotter()?.current().await?;
-    // Outside the snapshot only a file the language server named is readable (see `Locator::read_external`).
-    let mut found = d.session.read_side(&snap, &path, q.rev).await?;
-    if found.is_none()
-        && q.rev == Side::New
-        && let Some(pool) = &d.lsp
-    {
-        found = pool.read_external(&path).await;
-    }
-    let Some(buf) = found else {
-        return Err(ApiError::not_found("absent on that side"));
-    };
+    let buf = read_file(&d, &path, q.rev).await?;
     let binary = is_binary(&buf);
     let contents = if binary { String::new() } else { String::from_utf8_lossy(&buf).into_owned() };
     Ok(Json(FileResponse { path, contents, binary }).into_response())
+}
+
+/// The file `file` serves, as syntax tokens; highlighting runs off the async workers.
+async fn highlight(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
+    let q: FileQuery = query(raw.as_deref())?;
+    let path = q.path.to_string();
+    let buf = read_file(&d, &path, q.rev).await?;
+    let name = path.clone();
+    let found = tokio::task::spawn_blocking(move || crate::highlight::highlight(&name, &buf))
+        .await
+        .map_err(anyhow::Error::from)?;
+    let (language, lines) = found.map_or((None, Vec::new()), |(language, lines)| (Some(language), lines));
+    Ok(Json(HighlightResponse { path, language, lines }).into_response())
+}
+
+/// One side of `path` from the snapshot. Outside it only a file a language server named is
+/// readable, on the new side (see `Locator::read_external`).
+async fn read_file(d: &ApiDeps, path: &str, rev: Side) -> Result<Vec<u8>, ApiError> {
+    let snap = d.session.snapshotter()?.current().await?;
+    let mut found = d.session.read_side(&snap, path, rev).await?;
+    if found.is_none()
+        && rev == Side::New
+        && let Some(pool) = &d.lsp
+    {
+        found = pool.read_external(path).await;
+    }
+    found.ok_or_else(|| ApiError::not_found("absent on that side"))
 }
 
 /// Snapshot files only, under the key `image_key` gives their side.

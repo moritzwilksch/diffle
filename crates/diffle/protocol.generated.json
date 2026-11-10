@@ -797,6 +797,37 @@
       ],
       "description": "`GET /api/lsp/graph`: the snapshot's changed symbols and the code using them, from the language servers."
     },
+    "HighlightResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The grammar's name, e.g. `Rust`. Null when none matched or the side is binary or too large to highlight; `lines` is empty then."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Token"
+            }
+          },
+          "description": "Tokens per line, first line first. Highlighting stops at a time limit, so a long side may have fewer entries than lines: the rest are plain."
+        }
+      },
+      "required": [
+        "path",
+        "language",
+        "lines"
+      ],
+      "description": "`GET /api/highlight` (a `FileQuery`): one side of a file as syntax tokens, read as `/api/file` reads it.\nHighlighting the whole side keeps multi-line strings and comments right in a hunk."
+    },
     "ImageQuery": {
       "type": "object",
       "properties": {
@@ -2641,6 +2672,50 @@
         "resolved",
         "all"
       ]
+    },
+    "Token": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "end": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "$ref": "#/$defs/TokenKind"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "kind"
+      ],
+      "description": "A token on one line. Columns count UTF-16 units, like a JS string index; `end` is exclusive. Text outside every token is plain."
+    },
+    "TokenKind": {
+      "type": "string",
+      "enum": [
+        "comment",
+        "string",
+        "number",
+        "constant",
+        "keyword",
+        "operator",
+        "type",
+        "function",
+        "variable",
+        "property",
+        "tag",
+        "attribute",
+        "heading",
+        "link"
+      ],
+      "description": "What a highlighted token is, from its grammar's scopes; each client picks the colors."
     },
     "UserConfig": {
       "type": "object",

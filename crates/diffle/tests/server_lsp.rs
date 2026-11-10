@@ -57,8 +57,12 @@ fn file_query(path: &str, rev: &str) -> String {
     format!("/api/file?path={encoded}&rev={rev}")
 }
 
+fn highlight_query(path: &str, rev: &str) -> String {
+    file_query(path, rev).replacen("/api/file", "/api/highlight", 1)
+}
+
 #[tokio::test]
-async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language_server_named_it() {
+async fn get_api_file_and_highlight_serve_a_file_outside_the_snapshot_only_after_the_language_server_named_it() {
     let (outside, dir) = root();
     let (site, secret) = (dir.join("site.py"), dir.join("secret.py"));
     std::fs::write(&site, "import sys\n").unwrap();
@@ -70,6 +74,7 @@ async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language
     let Some(s) = serve(t, EnterRequest::Working, &[("FAKE_LSP_EXTERNAL", &site_s)], &overrides).await else { return };
     ready(&s).await;
     assert_eq!(s.get(&file_query(&site_s, "new")).await.status, 404);
+    assert_eq!(s.get(&highlight_query(&site_s, "new")).await.status, 404);
     let def = s.json("POST", "/api/lsp/definition", json!({ "path": "source.py", "line": 1, "col": 0 })).await;
     assert_eq!(def.status, 200, "{}", def.body);
     let external = json!({ "path": site_s, "line": 1, "col": 0, "text": "import sys", "external": true });
@@ -79,9 +84,15 @@ async fn get_api_file_serves_a_file_outside_the_snapshot_only_after_the_language
         (served.status, served.json()),
         (200, json!({ "path": site_s, "contents": "import sys\n", "binary": false }))
     );
+    let highlighted = s.get(&highlight_query(&site_s, "new")).await;
+    assert_eq!(highlighted.status, 200, "{}", highlighted.body);
+    assert_eq!(highlighted.json()["language"], "Python", "{}", highlighted.body);
+    assert_eq!(highlighted.json()["lines"][0][0]["kind"], "keyword", "{}", highlighted.body);
     // Only the new side, and only paths the server returned: a neighbour file stays unreadable.
     assert_eq!(s.get(&file_query(&site_s, "old")).await.status, 404);
     assert_eq!(s.get(&file_query(&secret.to_string_lossy(), "new")).await.status, 404);
+    assert_eq!(s.get(&highlight_query(&site_s, "old")).await.status, 404);
+    assert_eq!(s.get(&highlight_query(&secret.to_string_lossy(), "new")).await.status, 404);
     // The log is listed by command; the fake writes each document it opens to stderr.
     let opened = json!({ "source": "stderr", "level": "log", "message": "open source.py v1", "count": 1 });
     let has_open = |log: &Value| {
