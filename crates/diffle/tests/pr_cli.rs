@@ -1,4 +1,6 @@
 //! A pull request review run end to end, against a GitHub API on localhost.
+// POSIX-only: the assertion is on a graceful SIGTERM shutdown, which Windows cannot deliver.
+#![cfg(unix)]
 mod common;
 
 use std::path::Path;
@@ -7,8 +9,6 @@ use common::pr::{Fixture, as_git_url};
 use serde_json::json;
 
 /// The whole run: a foreign pull request named by url, served from a clone that goes with SIGTERM.
-// POSIX-only: the assertion is on a graceful SIGTERM shutdown, which Windows cannot deliver.
-#[cfg(unix)]
 // Worker threads keep the stand-in API answering while this test blocks on the child's output.
 #[tokio::test(flavor = "multi_thread")]
 async fn removes_foreign_clones_when_the_cli_receives_sigterm() {
