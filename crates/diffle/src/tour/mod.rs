@@ -15,6 +15,11 @@ use crate::error::Result;
 use crate::protocol::{Side, Snapshot, TourError};
 use crate::session::Session;
 
+/// The reasons to refuse `html` that need no file of the review.
+pub fn outline_errors(html: &str) -> Vec<TourError> {
+    validate::outline(html).errors.into_iter().map(|(_, e)| e).collect()
+}
+
 /// Every reason to refuse `html` as a tour of `snap`, in document order; none when it is fine.
 pub async fn refusals(session: &Session, snap: &Arc<Snapshot>, html: &str) -> Result<Vec<TourError>> {
     let outline = validate::outline(html);

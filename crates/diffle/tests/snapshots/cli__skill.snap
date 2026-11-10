@@ -1,0 +1,145 @@
+---
+source: crates/diffle/tests/cli.rs
+expression: stdout(&out)
+---
+# diffle
+
+diffle is the reviewer's diff viewer, running in the browser beside you. The commands below talk
+to the diffle serving the repository you are in, or the one `-C <path>` names: a run announces
+itself in `<git-dir>/diffle/server.json`. Without a run they exit 2 with "no diffle is running for
+this repository"; ask the reviewer to start one (`diffle` in the repository).
+
+## Read the review's comments
+
+`diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
+is shown as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its
+anchor (a path and a line range on the `old` or `new` side, or a whole file) and its messages.
+
+## Give the reviewer a tour
+
+A tour is one HTML document that walks the reviewer through the change. diffle lays its cards out
+on a canvas, connected by the arrows you declare, and the reviewer steps through the numbered ones
+with `n` and `p`. Each review has one tour.
+
+- `diffle tour push [<file>|-]` checks the document (stdin without a file) and shows it in place
+  of the review's tour, and prints the stored tour as JSON. A refused document exits 2 and lists
+  every reason as `<element>: <reason>`; fix them all and push again.
+- `diffle tour clear` removes the review's tour.
+- The reviewer answers in this chat. Revise the document and push it again; the open tour updates
+  in place. Cards whose lines left the review since are marked stale.
+
+### Rules
+
+- The order is part of the explanation. Number the cards the reviewer should read, `step="1"`
+  on, in the order that explains the change best; leave context cards without a step.
+- Keep cards short: a title, a sentence or two, and one diff of a few lines. Split a long story
+  into more steps.
+- Cards sit at the top level or in a `diffle-group`; groups and edges sit at the top level; every
+  other element sits inside a card.
+- Close every `diffle-*` element with its end tag: HTML ignores `/>` on them.
+- Paths are relative to the repository root and must be files of the review. Line numbers count on
+  the side you name: `new`, the file after the change, by default.
+- diffle styles the tour: no `style`, `class`, scripts or images.
+
+### Elements
+
+#### `diffle-card`
+
+A box of prose and primitives, and a node on the canvas. It sits at the top level or in a `diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `id` | yes | Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter. |
+| `title` | yes | The heading the card and the step outline show. |
+| `step` | no | Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context. |
+
+#### `diffle-group`
+
+A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `title` | yes | What the cards in it have in common. |
+
+#### `diffle-edge`
+
+An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `from` | yes | The card the arrow leaves. |
+| `to` | yes | The card the arrow points at. |
+| `label` | no | A few words on the arrow: what flows along it. |
+
+#### `diffle-diff`
+
+Lines of the review's diff, highlighted, with a jump to them. It holds nothing.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `path` | yes | A file of the review, relative to the repository root; a renamed file by its new path. |
+| `lines` | yes | The line range on that side, `40-58`, or one line, `40`. |
+| `side` | no | Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default). |
+
+#### `diffle-tree`
+
+A directory tree of some files; changed ones show their status. It holds nothing.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `paths` | yes | Files of the review, one per line, relative to the repository root. |
+| `root` | no | The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root. |
+
+#### `diffle-jump`
+
+A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `path` | yes | A file of the review, relative to the repository root. |
+| `line` | no | The line to land on; without it, the file's first change. |
+| `side` | no | Which side `line` counts on: `old` or `new` (the default). |
+
+#### `diffle-symbol`
+
+A chip for a symbol on a line; it opens the language server's references to it. It holds nothing.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `path` | yes | A file of the review, relative to the repository root. |
+| `line` | yes | The line `name` is on. |
+| `name` | yes | The symbol, exactly as it appears on that line. |
+| `side` | no | Which side `line` counts on: `old` or `new` (the default). |
+
+#### `diffle-callout`
+
+A highlighted aside inside a card. It holds what a card holds, except another callout.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `note` for context, `warning` for a risk the reviewer should check. |
+
+### Plain tags
+
+The plain tags a tour may use inside cards, for prose and structure. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`
+
+### Example
+
+```html
+<diffle-card id="token" step="1" title="Tokens expire">
+  <p>A token now carries its expiry, and <diffle-symbol path="src/auth.rs" line="12" name="validate"></diffle-symbol> rejects old ones.</p>
+  <diffle-diff path="src/auth.rs" lines="10-18"></diffle-diff>
+</diffle-card>
+<diffle-group title="Callers">
+  <diffle-card id="login" step="2" title="Login sets the expiry">
+    <diffle-diff path="src/login.rs" lines="40-44"></diffle-diff>
+    <diffle-callout kind="warning"><p>Sessions issued before the deploy expire at once.</p></diffle-callout>
+  </diffle-card>
+  <diffle-card id="layout" title="Where the auth code lives">
+    <diffle-tree root="src" paths="src/auth.rs
+src/login.rs"></diffle-tree>
+    <p>The old check is gone: <diffle-jump path="src/auth.rs" line="30" side="old">see what it did</diffle-jump>.</p>
+  </diffle-card>
+</diffle-group>
+<diffle-edge from="token" to="login" label="checked by"></diffle-edge>
+```

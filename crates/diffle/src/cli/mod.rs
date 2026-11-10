@@ -10,6 +10,7 @@ pub mod paint;
 mod parse;
 pub mod repository;
 mod serve;
+mod skill;
 mod timing;
 
 use std::process::ExitCode;
@@ -32,6 +33,14 @@ pub fn main() -> ExitCode {
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     if cli.version {
         println!("{}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+    if cli.skill {
+        // `exclusive` refuses any other argument, but not a subcommand.
+        if cli.command.is_some() {
+            Cli::command().error(clap::error::ErrorKind::ArgumentConflict, "--skill takes no command").exit();
+        }
+        print!("{}", skill::render());
         return ExitCode::SUCCESS;
     }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");

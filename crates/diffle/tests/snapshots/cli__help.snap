@@ -19,6 +19,8 @@ Arguments:
 Options:
   -v, --version                  print the version and exit
   -h, --help                     display help for command
+      --skill                    print what diffle offers a coding agent, as Markdown to install as
+                                 a skill
   -C <path>                      run as if started in <path> (any directory inside a git worktree)
   -p, --port <port>              port to listen on (default: 4966, or the next free one; 0 = random)
   -H, --host <host>              address to bind; use 0.0.0.0 to expose on the network (default:

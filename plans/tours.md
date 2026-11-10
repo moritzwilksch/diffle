@@ -118,7 +118,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 13. `diffle --skill` prints the agent interface as Markdown, with no frontmatter
 
-- **Chosen:** A top-level `--skill` flag, declared `exclusive = true` in `crates/diffle/src/cli/args.rs` so clap refuses it alongside a revision or any review option. It prints the whole agent interface to stdout: how to reach the run, `diffle comments`, `diffle tour push` and `clear`, and the catalog (decision 11). The output has no frontmatter. The user wraps it in their own and installs it under the name and description they choose.
+- **Chosen:** A top-level `--skill` flag, declared `exclusive = true` in `crates/diffle/src/cli/args.rs` so clap refuses it alongside a revision or any review option; `exclusive` does not cover subcommands, so `cli/mod.rs` refuses `--skill` with one as a usage error. It prints the whole agent interface to stdout: how to reach the run, `diffle comments`, `diffle tour push` and `clear`, and the catalog (decision 11). The output has no frontmatter. The user wraps it in their own and installs it under the name and description they choose.
 - **Rejected:**
   - A `diffle skill` subcommand. It sits next to `comments`, `config` and `lsp`, but the user prefers the flag. `exclusive` removes the one concern: `diffle main --skill` would otherwise parse.
   - Output with `name`/`description` frontmatter. It would fix a skill name and description that users want to pick themselves.
