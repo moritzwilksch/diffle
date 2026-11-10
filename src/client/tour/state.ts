@@ -79,6 +79,8 @@ export async function rangePatch(range: LineRange): Promise<string | null> {
 }
 
 let generation = 0;
+/** Counts stale checks apart from loads: a newer snapshot's check supersedes an older one without cancelling a load. */
+let checks = 0;
 let following = false;
 
 /**
@@ -95,8 +97,9 @@ export async function refreshTour(): Promise<void> {
     if (!tour) return set({ state: 'none' });
     const doc = readTour(tour.html);
     set({ state: 'ready', tour, doc });
+    const c = ++checks;
     const stale = await staleCards(doc);
-    if (g === generation) useTour.setState({ stale });
+    if (g === generation && c === checks) useTour.setState({ stale });
   } catch (e) {
     if (g === generation) set({ state: 'error', message: e instanceof Error ? e.message : String(e) });
   }
@@ -130,9 +133,9 @@ function follow(): void {
     if (s.snapshot.commentKey !== prev.snapshot?.commentKey) void refreshTour();
     else {
       const load = useTour.getState().load;
-      const g = generation;
-      if (load.state === 'ready')
-        void staleCards(load.doc).then((stale) => g === generation && useTour.setState({ stale }));
+      if (load.state !== 'ready') return;
+      const c = ++checks;
+      void staleCards(load.doc).then((stale) => c === checks && useTour.setState({ stale }));
     }
   });
 }
