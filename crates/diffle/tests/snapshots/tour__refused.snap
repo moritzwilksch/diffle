@@ -1,0 +1,88 @@
+---
+source: crates/diffle/tests/tour.rs
+expression: refused.json()
+---
+{
+  "errors": [
+    {
+      "element": "<style>",
+      "message": "<style> is not allowed in a tour"
+    },
+    {
+      "element": "text \"stray text\"",
+      "message": "text belongs inside a diffle-card"
+    },
+    {
+      "element": "diffle-card id=\"a\" step=\"1\" title=\"A\" color=\"red\"",
+      "message": "unknown field `color`, expected one of `id`, `step`, `title`"
+    },
+    {
+      "element": "diffle-card#a > <img src=\"x.png\">",
+      "message": "<img> is not allowed in a tour"
+    },
+    {
+      "element": "diffle-card#a > <p onclick=\"steal()\">",
+      "message": "<p> takes no attribute onclick"
+    },
+    {
+      "element": "diffle-card#a > <a href=\"javascript:alert(1)\">",
+      "message": "href must be an http(s) URL"
+    },
+    {
+      "element": "diffle-card#a > diffle-diff path=\"missing.py\" lines=\"1-2\"",
+      "message": "missing.py is not on the new side of the review"
+    },
+    {
+      "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"2-9\"",
+      "message": "lines 2-9 are past the end of app.py, which has 3 lines on the new side"
+    },
+    {
+      "element": "diffle-card#a > diffle-diff path=\"app.py\" side=\"old\" lines=\"3\"",
+      "message": "line 3 is past the end of app.py, which has 2 lines on the old side"
+    },
+    {
+      "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"5-2\"",
+      "message": "lines 5-2 run backwards"
+    },
+    {
+      "element": "diffle-card#a > diffle-symbol path=\"app.py\" line=\"2\" name=\"load\"",
+      "message": "load is not on line 2 of app.py on the new side"
+    },
+    {
+      "element": "diffle-card#a > diffle-card id=\"nested\" title=\"Nested\"",
+      "message": "diffle-card belongs at the top level or in a diffle-group"
+    },
+    {
+      "element": "diffle-card#a > diffle-callout kind=\"aside\"",
+      "message": "unknown variant `aside`, expected `note` or `warning`"
+    },
+    {
+      "element": "diffle-card id=\"a\" step=\"1\" title=\"Again\"",
+      "message": "id a is taken by an earlier card"
+    },
+    {
+      "element": "diffle-card id=\"a\" step=\"1\" title=\"Again\"",
+      "message": "step 1 is taken by diffle-card#a"
+    },
+    {
+      "element": "diffle-card id=\"b\" step=\"x\" title=\"B\"",
+      "message": "step: doesn't match pattern \"^[1-9][0-9]*$\""
+    },
+    {
+      "element": "diffle-card#b > diffle-tree root=\"src\" paths=\"src/a.py…\"",
+      "message": "docs/readme.md is not under the root src"
+    },
+    {
+      "element": "diffle-card#b > diffle-tree root=\"src\" paths=\"src/a.py…\"",
+      "message": "src/a.py is not a file of the review"
+    },
+    {
+      "element": "diffle-edge from=\"a\" to=\"ghost\"",
+      "message": "diffle-edge holds nothing; close it with </diffle-edge> right after it (HTML ignores />)"
+    },
+    {
+      "element": "diffle-edge from=\"a\" to=\"ghost\"",
+      "message": "no diffle-card has the id ghost"
+    }
+  ]
+}

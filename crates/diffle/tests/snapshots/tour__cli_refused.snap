@@ -1,0 +1,7 @@
+---
+source: crates/diffle/tests/tour.rs
+expression: stderr(&refused)
+---
+✖ the tour was refused:
+  diffle-card#a > diffle-edge: missing field `from`
+  diffle-card#a > diffle-edge: diffle-edge belongs at the top level

@@ -25,6 +25,7 @@ use crate::protocol::{
     CommentAuthor, FollowRefs, Live, Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations,
 };
 use crate::snapshotter::Snapshotter;
+use crate::tour::TourStore;
 use crate::watcher::Watcher;
 
 pub use files::{ReadablePaths, side_path};
@@ -209,6 +210,11 @@ impl Session {
 
     pub fn comments(&self) -> Result<Arc<CommentStore>> {
         Ok(self.active()?.comments.clone())
+    }
+
+    /// The tour of the shown comment set: one per key, as the comments are.
+    pub fn tour(&self) -> Result<TourStore> {
+        Ok(TourStore::open(&self.repo.git_dir, self.active()?.comments.key()))
     }
 
     /// The comment changes of this run, the shown set's key switches among them.

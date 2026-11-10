@@ -1,4 +1,4 @@
-//! The command line: options, the shorthand commands, and `config` / `completion` / `comments`.
+//! The command line: options, the shorthand commands, and `config` / `completion` / `comments` / `tour`.
 use std::path::PathBuf;
 
 use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
@@ -178,6 +178,11 @@ pub enum Command {
         #[command(subcommand)]
         command: CommentsCommand,
     },
+    /// show a guided tour of the review diffle is running for this repository, as an agent
+    Tour {
+        #[command(subcommand)]
+        command: TourCommand,
+    },
     /// print the config file path and contents
     Config,
     /// show the language server each language would get, and what is missing from PATH
@@ -206,7 +211,24 @@ pub enum CommentsCommand {
     },
 }
 
-/// The repository whose running diffle a `diffle comments` call talks to.
+#[derive(Subcommand, Debug)]
+pub enum TourCommand {
+    /// check an HTML tour and show it in place of the review's tour; prints it as JSON
+    Push {
+        /// the HTML document (default: stdin)
+        #[arg(value_name = "file|-", value_hint = ValueHint::FilePath)]
+        file: Option<PathBuf>,
+        #[command(flatten)]
+        repo: RepoOpts,
+    },
+    /// remove the review's tour
+    Clear {
+        #[command(flatten)]
+        repo: RepoOpts,
+    },
+}
+
+/// The repository whose running diffle a `diffle comments` or `diffle tour` call talks to.
 #[derive(Args, Debug, Clone, Default)]
 pub struct RepoOpts {
     /// run as if started in <path> (any directory inside a git worktree)

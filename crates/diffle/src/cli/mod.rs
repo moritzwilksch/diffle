@@ -49,7 +49,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Some(Command::Config) => return config::run().await,
         Some(Command::Lsp) => return lsp::list().await,
         // `diffle -C <path> comments ...` names the repository as well as `comments ... -C <path>`.
-        Some(Command::Comments { command }) => return agent::run(command, cli.global.dir).await,
+        Some(Command::Comments { command }) => return agent::comments(command, cli.global.dir).await,
+        Some(Command::Tour { command }) => return agent::tour(command, cli.global.dir).await,
         Some(Command::Completion { shell }) => {
             completion::print(shell);
             return Ok(());

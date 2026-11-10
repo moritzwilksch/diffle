@@ -911,6 +911,178 @@ export const GraphResponseSchema = z.object({
 });
 export type GraphResponse = z.infer<typeof GraphResponseSchema>;
 
+/** A card's `id`: what edges name. Letters, digits, `-` and `_`, starting with a letter. */
+const tourIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
+/** A positive integer, as an HTML attribute spells it. */
+const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
+
+/**
+ * A box of prose and primitives, and a node on the canvas. It sits at the top level or in a
+ * `diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,
+ * `diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff.
+ */
+export const TourCardSchema = z
+  .object({
+    tag: z.literal('diffle-card'),
+    /** Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter. */
+    id: tourIdSchema,
+    /** Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context. */
+    step: tourNumberSchema.optional(),
+    /** The heading the card and the step outline show. */
+    title: z.string().min(1),
+  })
+  .strict();
+
+/** A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only. */
+export const TourGroupSchema = z
+  .object({
+    tag: z.literal('diffle-group'),
+    /** What the cards in it have in common. */
+    title: z.string().min(1),
+  })
+  .strict();
+
+/** An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`. */
+export const TourEdgeSchema = z
+  .object({
+    tag: z.literal('diffle-edge'),
+    /** The card the arrow leaves. */
+    from: tourIdSchema,
+    /** The card the arrow points at. */
+    to: tourIdSchema,
+    /** A few words on the arrow: what flows along it. */
+    label: z.string().min(1).optional(),
+  })
+  .strict();
+
+/** Lines of the review's diff, highlighted, with a jump to them. It holds nothing. */
+export const TourDiffSchema = z
+  .object({
+    tag: z.literal('diffle-diff'),
+    /** A file of the review, relative to the repository root; a renamed file by its new path. */
+    path: z.string().min(1),
+    /** Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default). */
+    side: SideSchema.optional(),
+    /** The line range on that side, `40-58`, or one line, `40`. */
+    lines: z.string().regex(/^[1-9][0-9]*(-[1-9][0-9]*)?$/),
+  })
+  .strict();
+
+/** A directory tree of some files; changed ones show their status. It holds nothing. */
+export const TourTreeSchema = z
+  .object({
+    tag: z.literal('diffle-tree'),
+    /** Files of the review, one per line, relative to the repository root. */
+    paths: z.string().min(1),
+    /** The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root. */
+    root: z.string().min(1).optional(),
+  })
+  .strict();
+
+/** A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`. */
+export const TourJumpSchema = z
+  .object({
+    tag: z.literal('diffle-jump'),
+    /** A file of the review, relative to the repository root. */
+    path: z.string().min(1),
+    /** The line to land on; without it, the file's first change. */
+    line: tourNumberSchema.optional(),
+    /** Which side `line` counts on: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+  })
+  .strict();
+
+/** A chip for a symbol on a line; it opens the language server's references to it. It holds nothing. */
+export const TourSymbolSchema = z
+  .object({
+    tag: z.literal('diffle-symbol'),
+    /** A file of the review, relative to the repository root. */
+    path: z.string().min(1),
+    /** The line `name` is on. */
+    line: tourNumberSchema,
+    /** The symbol, exactly as it appears on that line. */
+    name: z.string().min(1),
+    /** Which side `line` counts on: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+  })
+  .strict();
+
+/** A highlighted aside inside a card. It holds what a card holds, except another callout. */
+export const TourCalloutSchema = z
+  .object({
+    tag: z.literal('diffle-callout'),
+    /** `note` for context, `warning` for a risk the reviewer should check. */
+    kind: z.enum(['note', 'warning']),
+  })
+  .strict();
+
+/** A `diffle-*` element of a tour with its attributes, which are strings as in HTML. */
+export const TourElementSchema = z.discriminatedUnion('tag', [
+  TourCardSchema,
+  TourGroupSchema,
+  TourEdgeSchema,
+  TourDiffSchema,
+  TourTreeSchema,
+  TourJumpSchema,
+  TourSymbolSchema,
+  TourCalloutSchema,
+]);
+export type TourElement = z.infer<typeof TourElementSchema>;
+export type TourElementTag = TourElement['tag'];
+
+/**
+ * The plain tags a tour may use inside cards, for prose and structure. They take no attributes,
+ * except `a`, which takes an `href` to an `http(s)` URL.
+ */
+export const TourTagSchema = z.enum([
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'p',
+  'ul',
+  'ol',
+  'li',
+  'code',
+  'pre',
+  'strong',
+  'em',
+  'a',
+  'section',
+  'div',
+]);
+export type TourTag = z.infer<typeof TourTagSchema>;
+
+/** The review's tour: one HTML document, as the agent last pushed it. */
+export const TourSchema = z.object({
+  html: z.string(),
+  /** Milliseconds since the epoch. */
+  pushedAt: z.number().int(),
+  /** The `Snapshot.version` the tour was checked against when pushed. */
+  version: z.number().int(),
+});
+export type Tour = z.infer<typeof TourSchema>;
+
+/** `PUT /api/tour`: replaces the review's tour. */
+export const TourPushSchema = z.object({ html: z.string() });
+export type TourPush = z.infer<typeof TourPushSchema>;
+
+/** `GET /api/tour`: the review's tour, or null without one. */
+export const TourResponseSchema = z.object({ tour: TourSchema.nullable() });
+export type TourResponse = z.infer<typeof TourResponseSchema>;
+
+/** One reason a pushed tour was refused. */
+export const TourErrorSchema = z.object({
+  /** The culprit as the document spells it, with the card it sits in: `diffle-card#auth > diffle-diff path="a.rs"`. */
+  element: z.string(),
+  message: z.string(),
+});
+export type TourError = z.infer<typeof TourErrorSchema>;
+
+/** What `PUT /api/tour` answers with 422: every reason, in document order. */
+export const TourRejectionSchema = z.object({ errors: TourErrorSchema.array() });
+export type TourRejection = z.infer<typeof TourRejectionSchema>;
+
 /** Derived per changed file: 'restale' means viewed at an older blob. */
 export const ViewedStateSchema = z.enum(['unviewed', 'viewed', 'restale']);
 export type ViewedState = z.infer<typeof ViewedStateSchema>;
@@ -935,6 +1107,10 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('config'),
+  }),
+  /** The review's tour was pushed or cleared; `GET /api/tour` answers the new one. */
+  z.object({
+    type: z.literal('tour'),
   }),
   z.object({
     type: z.literal('lsp'),

@@ -30,5 +30,6 @@ pub mod protocol;
 pub mod server;
 pub mod session;
 pub mod snapshotter;
+pub mod tour;
 pub mod user_config;
 pub mod watcher;

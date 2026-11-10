@@ -2587,6 +2587,18 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "tour"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "lsp"
             },
             "payload": {
@@ -2837,6 +2849,571 @@
         "link"
       ],
       "description": "What a highlighted token is, from its grammar's scopes; each client picks the colors."
+    },
+    "Tour": {
+      "type": "object",
+      "properties": {
+        "html": {
+          "type": "string"
+        },
+        "pushedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Milliseconds since the epoch."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "The `Snapshot.version` the tour was checked against when pushed."
+        }
+      },
+      "required": [
+        "html",
+        "pushedAt",
+        "version"
+      ],
+      "description": "The review's tour: one HTML document, as the agent last pushed it."
+    },
+    "TourCallout": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-callout"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "note",
+            "warning"
+          ],
+          "description": "`note` for context, `warning` for a risk the reviewer should check."
+        }
+      },
+      "required": [
+        "tag",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "A highlighted aside inside a card. It holds what a card holds, except another callout."
+    },
+    "TourCard": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-card"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "description": "Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter."
+        },
+        "step": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The heading the card and the step outline show."
+        }
+      },
+      "required": [
+        "tag",
+        "id",
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "A box of prose and primitives, and a node on the canvas. It sits at the top level or in a\n`diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,\n`diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff."
+    },
+    "TourDiff": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-diff"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root; a renamed file by its new path."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default)."
+        },
+        "lines": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+          "description": "The line range on that side, `40-58`, or one line, `40`."
+        }
+      },
+      "required": [
+        "tag",
+        "path",
+        "lines"
+      ],
+      "additionalProperties": false,
+      "description": "Lines of the review's diff, highlighted, with a jump to them. It holds nothing."
+    },
+    "TourEdge": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-edge"
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "description": "The card the arrow leaves."
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "description": "The card the arrow points at."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A few words on the arrow: what flows along it."
+        }
+      },
+      "required": [
+        "tag",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false,
+      "description": "An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`."
+    },
+    "TourElement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-card"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+              "description": "Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter."
+            },
+            "step": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The heading the card and the step outline show."
+            }
+          },
+          "required": [
+            "tag",
+            "id",
+            "title"
+          ],
+          "additionalProperties": false,
+          "description": "A box of prose and primitives, and a node on the canvas. It sits at the top level or in a\n`diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,\n`diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-group"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What the cards in it have in common."
+            }
+          },
+          "required": [
+            "tag",
+            "title"
+          ],
+          "additionalProperties": false,
+          "description": "A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-edge"
+            },
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+              "description": "The card the arrow leaves."
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+              "description": "The card the arrow points at."
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A few words on the arrow: what flows along it."
+            }
+          },
+          "required": [
+            "tag",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false,
+          "description": "An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-diff"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root; a renamed file by its new path."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default)."
+            },
+            "lines": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+              "description": "The line range on that side, `40-58`, or one line, `40`."
+            }
+          },
+          "required": [
+            "tag",
+            "path",
+            "lines"
+          ],
+          "additionalProperties": false,
+          "description": "Lines of the review's diff, highlighted, with a jump to them. It holds nothing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-tree"
+            },
+            "paths": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Files of the review, one per line, relative to the repository root."
+            },
+            "root": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root."
+            }
+          },
+          "required": [
+            "tag",
+            "paths"
+          ],
+          "additionalProperties": false,
+          "description": "A directory tree of some files; changed ones show their status. It holds nothing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-jump"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root."
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "The line to land on; without it, the file's first change."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side `line` counts on: `old` or `new` (the default)."
+            }
+          },
+          "required": [
+            "tag",
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-symbol"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root."
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "The line `name` is on."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The symbol, exactly as it appears on that line."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side `line` counts on: `old` or `new` (the default)."
+            }
+          },
+          "required": [
+            "tag",
+            "path",
+            "line",
+            "name"
+          ],
+          "additionalProperties": false,
+          "description": "A chip for a symbol on a line; it opens the language server's references to it. It holds nothing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-callout"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "note",
+                "warning"
+              ],
+              "description": "`note` for context, `warning` for a risk the reviewer should check."
+            }
+          },
+          "required": [
+            "tag",
+            "kind"
+          ],
+          "additionalProperties": false,
+          "description": "A highlighted aside inside a card. It holds what a card holds, except another callout."
+        }
+      ],
+      "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
+    },
+    "TourError": {
+      "type": "object",
+      "properties": {
+        "element": {
+          "type": "string",
+          "description": "The culprit as the document spells it, with the card it sits in: `diffle-card#auth > diffle-diff path=\"a.rs\"`."
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "element",
+        "message"
+      ],
+      "description": "One reason a pushed tour was refused."
+    },
+    "TourGroup": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-group"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the cards in it have in common."
+        }
+      },
+      "required": [
+        "tag",
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
+    },
+    "TourJump": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-jump"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root."
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "The line to land on; without it, the file's first change."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side `line` counts on: `old` or `new` (the default)."
+        }
+      },
+      "required": [
+        "tag",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`."
+    },
+    "TourPush": {
+      "type": "object",
+      "properties": {
+        "html": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "html"
+      ],
+      "description": "`PUT /api/tour`: replaces the review's tour."
+    },
+    "TourRejection": {
+      "type": "object",
+      "properties": {
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TourError"
+          }
+        }
+      },
+      "required": [
+        "errors"
+      ],
+      "description": "What `PUT /api/tour` answers with 422: every reason, in document order."
+    },
+    "TourResponse": {
+      "type": "object",
+      "properties": {
+        "tour": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tour"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "tour"
+      ],
+      "description": "`GET /api/tour`: the review's tour, or null without one."
+    },
+    "TourSymbol": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-symbol"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root."
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "The line `name` is on."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The symbol, exactly as it appears on that line."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side `line` counts on: `old` or `new` (the default)."
+        }
+      },
+      "required": [
+        "tag",
+        "path",
+        "line",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "A chip for a symbol on a line; it opens the language server's references to it. It holds nothing."
+    },
+    "TourTag": {
+      "type": "string",
+      "enum": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "p",
+        "ul",
+        "ol",
+        "li",
+        "code",
+        "pre",
+        "strong",
+        "em",
+        "a",
+        "section",
+        "div"
+      ],
+      "description": "The plain tags a tour may use inside cards, for prose and structure. They take no attributes,\nexcept `a`, which takes an `href` to an `http(s)` URL."
+    },
+    "TourTree": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-tree"
+        },
+        "paths": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Files of the review, one per line, relative to the repository root."
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root."
+        }
+      },
+      "required": [
+        "tag",
+        "paths"
+      ],
+      "additionalProperties": false,
+      "description": "A directory tree of some files; changed ones show their status. It holds nothing."
     },
     "UserConfig": {
       "type": "object",
