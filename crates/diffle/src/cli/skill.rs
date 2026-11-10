@@ -39,8 +39,8 @@ with `n` and `p`. Each review has one tour.
 
 - The order is part of the explanation. Number the cards the reviewer should read, `step=\"1\"`
   on, in the order that explains the change best; leave context cards without a step.
-- Keep cards short: a title, a sentence or two, and one diff of a few lines. Split a long story
-  into more steps.
+- Keep cards short: a title, a sentence or two, and one diff of at most about 12 lines. Split a
+  long story into more steps.
 - Cards sit at the top level or in a `diffle-group`; groups and edges sit at the top level; every
   other element sits inside a card.
 - Close every `diffle-*` element with its end tag: HTML ignores `/>` on them.
