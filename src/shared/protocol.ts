@@ -1021,6 +1021,42 @@ export const ResolvedRequestSchema = z.object({
 });
 export const ViewedBulkRequestSchema = z.object({ entries: ViewedEntrySchema.array() });
 export const FileQuerySchema = z.object({ path: z.string().min(1), rev: SideSchema });
+
+/** What a highlighted token is, from its grammar's scopes; each client picks the colors. */
+export const TokenKindSchema = z.enum([
+  'comment',
+  'string',
+  'number',
+  'constant',
+  'keyword',
+  'operator',
+  'type',
+  'function',
+  'variable',
+  'property',
+  'tag',
+  'attribute',
+  'heading',
+  'link',
+]);
+export type TokenKind = z.infer<typeof TokenKindSchema>;
+
+/** A token on one line. Columns count UTF-16 units, like a JS string index; `end` is exclusive. Text outside every token is plain. */
+export const TokenSchema = z.object({ start: z.number().int(), end: z.number().int(), kind: TokenKindSchema });
+export type Token = z.infer<typeof TokenSchema>;
+
+/**
+ * `GET /api/highlight` (a `FileQuery`): one side of a file as syntax tokens, read as `/api/file` reads it.
+ * Highlighting the whole side keeps multi-line strings and comments right in a hunk.
+ */
+export const HighlightResponseSchema = z.object({
+  path: z.string(),
+  /** The grammar's name, e.g. `Rust`. Null when none matched or the side is binary or too large to highlight; `lines` is empty then. */
+  language: z.string().nullable(),
+  /** Tokens per line, first line first. Highlighting stops at a time limit, so a long side may have fewer entries than lines: the rest are plain. */
+  lines: TokenSchema.array().array(),
+});
+export type HighlightResponse = z.infer<typeof HighlightResponseSchema>;
 /**
  * `GET /api/image`: one side of a file as image bytes. The server answers 404 unless `key` is that side's
  * `imageKey` in its current snapshot, the bytes are still the ones the key names, and they are a raster image.
