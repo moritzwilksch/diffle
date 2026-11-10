@@ -8,7 +8,7 @@ license = "Apache-2.0"
 rust-version = "1.89"
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 codegen-units = 1
 strip = true
 
