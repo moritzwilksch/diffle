@@ -1,5 +1,16 @@
 import { prepareFileTreeInput } from '@pierre/trees';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// `relativeTime` formats in the host's locale, built at import: pin English before model.ts loads.
+vi.hoisted(() => {
+  const Native = Intl.RelativeTimeFormat;
+  class English extends Native {
+    constructor(_locales?: Intl.LocalesArgument, options?: Intl.RelativeTimeFormatOptions) {
+      super('en', options);
+    }
+  }
+  Object.defineProperty(Intl, 'RelativeTimeFormat', { value: English });
+});
 import {
   comparisonLabel,
   DEFAULT_USER_CONFIG,
