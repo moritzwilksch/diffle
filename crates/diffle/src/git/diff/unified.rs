@@ -46,6 +46,10 @@ pub fn write(
         (None, Some(new)) => out.extend_from_slice(format!("new file mode {:06o}\n", new.mode).as_bytes()),
         (Some(old), None) => out.extend_from_slice(format!("deleted file mode {:06o}\n", old.mode).as_bytes()),
         (Some(old), Some(new)) => {
+            // git prints a mode change before the rename lines.
+            if old.mode != new.mode {
+                out.extend_from_slice(format!("old mode {:06o}\nnew mode {:06o}\n", old.mode, new.mode).as_bytes());
+            }
             if let Some(score) = rename {
                 out.extend_from_slice(
                     format!("similarity index {}%\nrename from ", score * 100 / MAX_SCORE).as_bytes(),
@@ -54,9 +58,6 @@ pub fn write(
                 out.extend_from_slice(b"\nrename to ");
                 out.extend_from_slice(&quote(new.path));
                 out.push(b'\n');
-            }
-            if old.mode != new.mode {
-                out.extend_from_slice(format!("old mode {:06o}\nnew mode {:06o}\n", old.mode, new.mode).as_bytes());
             }
         }
         (None, None) => unreachable!("a side"),

@@ -79,7 +79,7 @@ impl GitRepo {
                     return Ok(repo.head_name()?.map(|name| name.as_bstr().to_string()));
                 }
                 if let Some(found) = repo.try_find_reference(rev.as_str()).ok().flatten() {
-                    return Ok(Some(found.name().as_bstr().to_string()));
+                    return Ok(Some(followed(found)?));
                 }
                 // `@{-1}` or `main@{upstream}` name a branch through the reflog or config, as git's
                 // `--symbolic-full-name` follows them; any other expression (`main~0`) names none.
@@ -89,7 +89,10 @@ impl GitRepo {
                 let Ok(spec) = repo.rev_parse(rev.as_str()) else { return Ok(None) };
                 let (Some(id), Some(named)) = (spec.single(), spec.first_reference()) else { return Ok(None) };
                 let mut named = repo.find_reference(named.name.as_ref())?;
-                Ok((named.peel_to_id()? == id).then(|| named.name().as_bstr().to_string()))
+                if named.peel_to_id()? != id {
+                    return Ok(None);
+                }
+                Ok(Some(followed(named)?))
             })
             .await?;
         Ok(name.filter(|name| name.starts_with("refs/heads/") || name.starts_with("refs/remotes/")))
@@ -197,6 +200,19 @@ impl GitRepo {
         let (branches, remote_branches, tags, current, recent) = listed?;
         Ok(RefsResponse { default_branch: default_branch.ok(), current, branches, remote_branches, tags, recent })
     }
+}
+
+/// The full name of the ref a symbolic one finally points to (`origin/HEAD` → `refs/remotes/origin/main`),
+/// as `--symbolic-full-name` follows it; a direct ref's own.
+fn followed(mut reference: gix::Reference<'_>) -> anyhow::Result<String> {
+    // git gives up past five levels of symbolic refs; a cycle must not spin.
+    for _ in 0..5 {
+        match reference.follow() {
+            Some(next) => reference = next?,
+            None => break,
+        }
+    }
+    Ok(reference.name().as_bstr().to_string())
 }
 
 /// Whether `rev` is one of the forms that stand for a ref: `@{-N}`, or `<branch>@{upstream}`

@@ -18,9 +18,16 @@ impl GitRepo {
     /// Untracked files git does not ignore, sorted; a nested repository is `dir/`, as git has no
     /// diff for it.
     pub async fn untracked(&self) -> Result<Vec<String>> {
-        self.gix("listing untracked files", |repo| {
+        self.untracked_in(&[]).await
+    }
+
+    /// The untracked files at or under `paths`, each a literal path or directory, walking only
+    /// those; no paths walks the whole worktree.
+    pub async fn untracked_in(&self, paths: &[String]) -> Result<Vec<String>> {
+        let patterns: Vec<String> = paths.iter().map(|p| format!(":(literal){p}")).collect();
+        self.gix("listing untracked files", move |repo| {
             let options = repo.dirwalk_options()?.emit_untracked(EmissionMode::Matching).emit_ignored(None);
-            walk(repo, options, |status| status == Status::Untracked)
+            walk(repo, &patterns, options, |status| status == Status::Untracked)
         })
         .await
     }
@@ -32,7 +39,7 @@ impl GitRepo {
                 .dirwalk_options()?
                 .emit_untracked(EmissionMode::Matching)
                 .emit_ignored(Some(EmissionMode::CollapseDirectory));
-            walk(repo, options, |status| matches!(status, Status::Ignored(_)))
+            walk(repo, &[], options, |status| matches!(status, Status::Ignored(_)))
         })
         .await
     }
@@ -124,14 +131,15 @@ impl GitRepo {
 /// The worktree entries `keep` selects, as repository-relative paths with a directory's ending in '/'.
 fn walk(
     repo: &gix::Repository,
+    patterns: &[String],
     options: gix::dirwalk::Options,
     keep: impl Fn(Status) -> bool,
 ) -> anyhow::Result<Vec<String>> {
     let index = repo.index_or_empty()?;
     let options = options.emit_tracked(false).recurse_repositories(false).emit_empty_directories(false);
     let mut collect = Collect::default();
-    let none: [&BStr; 0] = [];
-    repo.dirwalk(&index, none, &AtomicBool::new(false), options, &mut collect)?;
+    let patterns = patterns.iter().map(|p| BStr::new(p.as_bytes()));
+    repo.dirwalk(&index, patterns, &AtomicBool::new(false), options, &mut collect)?;
     let mut paths: Vec<String> = collect
         .unorded_entries
         .into_iter()

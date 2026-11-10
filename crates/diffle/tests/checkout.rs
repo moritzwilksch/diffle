@@ -234,6 +234,20 @@ async fn lists_what_moving_between_two_commits_touches() {
     assert_eq!(back, [("new.txt".to_owned(), Touched::Deleted)]);
 }
 
+/// A file turned symlink is one change, as git's `T` lists it.
+#[cfg(unix)]
+#[tokio::test]
+async fn lists_a_typechange_as_one_change() {
+    let t = branches();
+    t.git(&["checkout", "-q", "feat"]);
+    t.rm("a.txt");
+    std::os::unix::fs::symlink("elsewhere", t.path.join("a.txt")).unwrap();
+    t.commit("link");
+    let repo = t.open().await;
+    assert_eq!(t.git(&["diff", "--name-status", "feat~1", "feat"]), "T\ta.txt");
+    assert_eq!(repo.touched_between("feat~1", "feat").await.unwrap(), [("a.txt".to_owned(), Touched::Changed)]);
+}
+
 #[tokio::test]
 async fn keeps_a_range_named_after_head_on_where_the_reviewer_left_it() {
     let t = branches();
@@ -430,6 +444,26 @@ async fn a_change_only_the_index_holds_is_not_clean() {
         "Your local changes to the following files would be overwritten by checkout: a.txt"
     );
     assert_eq!(t.git(&["show", ":a.txt"]), "staged");
+}
+
+#[tokio::test]
+async fn refuses_before_writing_when_a_target_blob_is_missing() {
+    let t = TestRepo::new();
+    t.write("gone.txt", "deleted by the switch\n");
+    t.write("a.txt", "one\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.rm("gone.txt");
+    t.write("new.txt", "a blob this clone lacks\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    // As in a blobless partial clone: the object is not there to read.
+    let blob = t.git(&["rev-parse", "feat:new.txt"]);
+    std::fs::remove_file(t.path.join(".git/objects").join(&blob[..2]).join(&blob[2..])).unwrap();
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert!(t.path.join("gone.txt").exists() && !t.path.join("new.txt").exists());
+    assert_eq!((head(&t), t.git(&["status", "--porcelain"])), ("main".to_owned(), String::new()));
 }
 
 #[tokio::test]

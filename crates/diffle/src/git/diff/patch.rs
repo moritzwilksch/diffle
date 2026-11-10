@@ -104,15 +104,20 @@ fn write_patch(
         None => Some(Vec::new()),
     };
     let (before, after) = (read(reader, old.as_ref()), read(reader, new.as_ref()));
-    let rename = file.old_path.as_ref().map(|_| match (&old, &new, &before, &after) {
-        (Some(o), Some(n), _, _) if o.id == n.id => rename::MAX_SCORE,
-        (_, _, Some(before), Some(after)) => {
-            let text = !is_binary(before) && !is_binary(after);
-            rename::score(&rename::Fingerprint::new(before, text), &rename::Fingerprint::new(after, text))
-        }
-        _ => 0,
+    let rename = file.old_path.as_ref().map(|_| match (&old, &new) {
+        (Some(o), Some(n)) if o.id == n.id => rename::MAX_SCORE,
+        // A binary pair's contents go unread for the body, but its score is git's from them all the same.
+        (Some(o), Some(n)) if file.binary => score(&reader.content(o), &reader.content(n)),
+        _ => score(&before, &after),
     });
     write_pair(out, repo, (old.as_ref(), new.as_ref()), rename, (&before, &after), context);
+}
+
+/// The rename score of two contents, as `detect_renames` paired them; 0 where one cannot be read.
+fn score(before: &Option<Vec<u8>>, after: &Option<Vec<u8>>) -> u64 {
+    let (Some(before), Some(after)) = (before, after) else { return 0 };
+    let print = |content: &Vec<u8>| rename::Fingerprint::new(content, !is_binary(content));
+    rename::score(&print(before), &print(after))
 }
 
 fn side<'a>(repo: &gix::Repository, item: &'a Item, abbrev: usize) -> Side<'a> {

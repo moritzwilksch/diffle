@@ -6,6 +6,8 @@ use gix::ObjectId;
 use gix::bstr::{BString, ByteSlice};
 use gix::index::entry::{Flags, Mode, Stage, Stat};
 
+use crate::git::BIG_FILE_THRESHOLD;
+
 use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, hash_path, kind, native, submodule_head};
 
 /// Paths to stat before the stat pass is split across threads.
@@ -128,7 +130,8 @@ fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Ve
     })
 }
 
-/// Untracked files as worktree items; their contents are hashed, never kept.
+/// Untracked files as worktree items; their contents are hashed, never kept. One past the big-file
+/// threshold is not read at all: git diffs it as binary unread, and its blob reads as empty.
 pub fn untracked_items(repo: &gix::Repository, root: &Path, paths: &[String]) -> anyhow::Result<Vec<Item>> {
     let (mut pipeline, index) = repo.filter_pipeline(None)?;
     let caps = repo.filesystem_options()?;
@@ -139,8 +142,11 @@ pub fn untracked_items(repo: &gix::Repository, root: &Path, paths: &[String]) ->
             let meta = std::fs::symlink_metadata(&abs).ok()?;
             let mode = mode_on_disk(meta.is_symlink(), is_executable(&meta), None, caps);
             let path = BString::from(path.as_str());
+            let big = meta.is_file() && meta.len() >= BIG_FILE_THRESHOLD;
             // Unreadable (permissions) counts as empty: one bad path must not fail the snapshot.
-            let id = hash_path(repo, &mut pipeline, &index, &path, &abs)
+            let id = (!big)
+                .then(|| hash_path(repo, &mut pipeline, &index, &path, &abs))
+                .flatten()
                 .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
             Some(Item { path, mode, id, worktree: true, size: Some(meta.len()), untracked: true })
         })

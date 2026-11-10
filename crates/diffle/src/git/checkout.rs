@@ -91,10 +91,7 @@ impl GitRepo {
                 .flat_map(|(old, new)| match (old, new) {
                     (None, Some(n)) => vec![(n.path, Touched::Created)],
                     (Some(o), None) => vec![(o.path, Touched::Deleted)],
-                    // A file turned symlink (or back) is a deletion and a creation, as git lists it.
-                    (Some(o), Some(n)) if kind(o.mode) != kind(n.mode) => {
-                        vec![(o.path, Touched::Deleted), (n.path, Touched::Created)]
-                    }
+                    // A file turned symlink (or back) is one change at its path, as git's `T` lists it.
                     (Some(o), Some(_)) => vec![(o.path, Touched::Changed)],
                     (None, None) => Vec::new(),
                 })

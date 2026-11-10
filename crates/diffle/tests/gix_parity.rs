@@ -86,6 +86,9 @@ async fn finds_neighbours_on_heads_first_parent_line_only() {
     // `d` reached HEAD through the merge's second parent: it has a parent but no child on the line.
     assert_eq!(at("side").await, (Some(sha("side~1")), None));
     assert_eq!(at("HEAD~3").await, (None, Some(sha("HEAD~2"))));
+    // A commit off HEAD's history altogether.
+    let off = t.git(&["commit-tree", "HEAD~2^{tree}", "-p", "HEAD~2", "-m", "off"]);
+    assert_eq!(repo.commit_neighbours(&off).await.unwrap(), (Some(sha("HEAD~2")), None));
 }
 
 #[tokio::test]
@@ -172,6 +175,30 @@ async fn reads_remotes_and_upstreams_from_config_changed_after_opening() {
     assert_eq!(repo.branch_ref("side").await.unwrap().as_deref(), Some("refs/heads/side"));
     assert_eq!(repo.branch_ref("v1").await.unwrap(), None);
     assert_eq!(repo.branch_ref("main~1").await.unwrap(), None);
+    // A symbolic ref names the branch it points to, as `rev-parse --symbolic-full-name` follows it.
+    t.git(&["symbolic-ref", "refs/remotes/fork/x/HEAD", "refs/remotes/fork/x/topic"]);
+    t.git(&["symbolic-ref", "refs/heads/alias", "refs/heads/side"]);
+    for (rev, full) in [("fork/x/HEAD", "refs/remotes/fork/x/topic"), ("alias", "refs/heads/side")] {
+        assert_eq!(t.git(&["rev-parse", "--symbolic-full-name", rev]), full);
+        assert_eq!(repo.branch_ref(rev).await.unwrap().as_deref(), Some(full));
+        let upstream = repo.upstream_branch(rev).await.unwrap().unwrap();
+        assert_eq!((upstream.remote.as_str(), upstream.branch.as_str()), ("fork/x", "topic"));
+    }
+}
+
+#[tokio::test]
+async fn fetches_from_a_remote_at_a_relative_path_from_the_repository() {
+    let upstream = TestRepo::new();
+    upstream.write("a.txt", "a\n");
+    upstream.commit("base");
+    let t = TestRepo::new();
+    // Both temporary directories are siblings; the path is relative to the repository, not the process.
+    let name = upstream.path.file_name().unwrap().to_str().unwrap();
+    t.git(&["remote", "add", "up", &format!("../{name}")]);
+    let repo = t.open().await;
+    let dst = format!("{}/up/main", repo.review_refs);
+    repo.fetch("up", &[format!("+refs/heads/main:{dst}")]).await.unwrap();
+    assert_eq!(repo.resolve(&dst).await.unwrap(), upstream.git(&["rev-parse", "HEAD"]));
 }
 
 #[tokio::test]
@@ -261,6 +288,9 @@ async fn lists_untracked_and_ignored_paths_as_ls_files_others_does() {
         out
     };
     assert_eq!(repo.untracked().await.unwrap(), lines(&[]));
+    // Limited to literal paths, as `ls-files -- <pathspec>` limits it.
+    let scoped = ["dir".to_owned(), "new.txt".to_owned(), "*.txt".to_owned()];
+    assert_eq!(repo.untracked_in(&scoped).await.unwrap(), lines(&["--", ":(literal)dir", "new.txt"]));
     assert_eq!(repo.ignored_paths().await.unwrap(), lines(&["--ignored", "--directory"]));
 }
 

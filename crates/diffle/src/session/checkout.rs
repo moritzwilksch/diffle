@@ -150,9 +150,14 @@ fn report((done, skipped): (&str, &str), target: &str, outcome: Outcome) {
     crate::status!("🔀 {} {target} {}", dim(skipped), dim(&format!("({why})")));
 }
 
-/// A refusal in a status line: its first line.
+/// A refusal in a status line: its first line. An unexpected failure keeps its causes, which its
+/// outermost context alone would not name.
 fn reason(e: &Error) -> String {
-    e.to_string().trim().lines().next().unwrap_or_default().to_owned()
+    let text = match e {
+        Error::Other(e) => format!("{e:#}"),
+        e => e.to_string(),
+    };
+    text.trim().lines().next().unwrap_or_default().to_owned()
 }
 
 /// What HEAD named before this run moved it: the branch it was on, or its commit.

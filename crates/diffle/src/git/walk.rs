@@ -61,24 +61,14 @@ impl GitRepo {
             let Ok(head) = repo.head_id() else {
                 return Ok((parent, None));
             };
-            // Only commits that reach `sha` can lead to it, as `rev-list --ancestry-path sha..HEAD`
-            // bounds it: the walk stops at the first one that does not, short of the root.
-            let between = repo
-                .rev_walk([head.detach()])
-                .with_hidden([target_commit.id])
-                .all()?
-                .map(|info| info.map(|info| info.id))
-                .collect::<Result<HashSet<_>, _>>()?;
-            let (mut at, mut child) = (Some(head.detach()), None);
-            while let Some(id) = at {
-                if id == target_commit.id {
-                    return Ok((parent, child.map(|c: ObjectId| c.to_string())));
+            // HEAD's first-parent line down to where `sha`'s history begins, as `rev-list
+            // --first-parent sha..HEAD` walks it: the child is the commit there whose first parent is `sha`.
+            let line = repo.rev_walk([head.detach()]).first_parent_only().with_hidden([target_commit.id]).all()?;
+            for info in line {
+                let info = info?;
+                if info.parent_ids.first() == Some(&target_commit.id) {
+                    return Ok((parent, Some(info.id.to_string())));
                 }
-                if !between.contains(&id) {
-                    break;
-                }
-                child = Some(id);
-                at = repo.find_commit(id)?.parent_ids().next().map(gix::Id::detach);
             }
             Ok((parent, None))
         })

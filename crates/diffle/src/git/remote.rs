@@ -70,7 +70,9 @@ fn fetch_into(
     };
     let url = remote.url(Direction::Fetch).context("the remote has no url")?.clone();
     if url.scheme == gix::url::Scheme::File {
-        return copy_refs(repo, &gix::path::from_bstr(url.path.as_bstr())?, refspecs);
+        // A relative path is the repository's, as git runs a fetch from the top of its worktree.
+        let base = repo.workdir().unwrap_or_else(|| repo.git_dir());
+        return copy_refs(repo, &base.join(gix::path::from_bstr(url.path.as_bstr())?), refspecs);
     }
     remote.replace_refspecs(refspecs.iter().map(String::as_str), Direction::Fetch)?;
     let remote = remote.with_fetch_tags(gix::remote::fetch::Tags::None);

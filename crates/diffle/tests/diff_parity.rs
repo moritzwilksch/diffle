@@ -118,6 +118,9 @@ fn varied(t: &TestRepo) {
     t.write("typed", "a file\n");
     t.write(".gitattributes", "*.lock -diff\n");
     t.write("deps.lock", "v1\n");
+    let binary = |n: u8| (0..2000u32).map(|i| if i >= 1900 { n } else { (i % 251) as u8 }).collect::<Vec<u8>>();
+    t.write("blobs/old.bin", binary(0));
+    t.write("scripts/old.sh", body(30));
     t.commit("base");
     t.write("code.rs", code.replace("let b = 2;", "let b = 20;").replace("    7\n", "    seven\n"));
     let mut long = body(60);
@@ -140,9 +143,16 @@ fn varied(t: &TestRepo) {
     t.write("deps.lock", "v2\n");
     t.write("added.txt", "new\nlines\n");
     t.write("new space.txt", "spaced\n");
+    // An inexact binary rename: git scores it from the contents it never prints.
+    t.rm("blobs/old.bin");
+    t.write("blobs/new.bin", binary(1));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
+        // A rename that also changes mode: git prints the mode lines first.
+        t.rm("scripts/old.sh");
+        t.write("scripts/new.sh", body(30).replace("line 3\n", "line three\n"));
+        std::fs::set_permissions(t.path.join("scripts/new.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
         std::fs::set_permissions(t.path.join("mode.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
         t.rm("typed");
         std::os::unix::fs::symlink("code.rs", t.path.join("typed")).unwrap();

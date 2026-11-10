@@ -64,7 +64,12 @@ impl GitRepo {
             .multi_line(true)
             .build()
             .map_err(|e| GitError::new(format!("invalid search pattern: {e}")))?;
-        let untracked = if rev == WORKTREE { self.untracked().await? } else { Vec::new() };
+        // A search limited to some paths walks only those for untracked files.
+        let untracked = match opts.paths {
+            _ if rev != WORKTREE => Vec::new(),
+            Some(paths) => self.untracked_in(paths).await?,
+            None => self.untracked().await?,
+        };
         let (rev, root, word) = (rev.to_owned(), self.root.clone(), opts.word);
         let paths = opts.paths.map(<[String]>::to_vec);
         let ranges = opts.ranges.cloned();
