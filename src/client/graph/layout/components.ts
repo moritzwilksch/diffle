@@ -1,4 +1,5 @@
 import type { GraphNode } from '@/shared/protocol.js';
+import { sharedFolder } from '@/client/graph/labels.js';
 import { layout, type Placed, type PlacedNode, type Size } from './layout.js';
 import { type Graph, rank } from './rank.js';
 
@@ -8,6 +9,11 @@ export interface Part {
   key: string;
   /** Its most-used node: what the part is "around". */
   hub: GraphNode;
+  /**
+   * In file view, the folder all its files share, which its header names and its boxes leave out of
+   * their paths; '' for none, and always in symbol view.
+   */
+  folder: string;
   placed: Placed;
   /** Where the part sits in the stack; its header sits above this. */
   x: number;
@@ -32,7 +38,12 @@ const PART_GAP = 72;
  * bottom with the symbols linked to nothing last. Each part is ranked and laid out alone, so a
  * small part sits by itself instead of stretching across a big one's layers.
  */
-export function stack(graph: Graph, size: (n: GraphNode) => Size, clustered: boolean, only: string | null): Stacked {
+export function stack(
+  graph: Graph,
+  size: (n: GraphNode, folder: string) => Size,
+  clustered: boolean,
+  only: string | null,
+): Stacked {
   const all = split(graph);
   // Showing one part: the others and the unlinked symbols stand aside.
   const one = only == null ? undefined : all.parts.find((g) => hubOf(g).id === only);
@@ -41,15 +52,17 @@ export function stack(graph: Graph, size: (n: GraphNode) => Size, clustered: boo
   let y = 0;
   let width = 0;
   const parts = groups.map((g): Part => {
-    const placed = layout(g, rank(g), size, clustered);
-    const part = { key: hubOf(g).id, hub: hubOf(g), placed, x: 0, y: y + PART_HEADER };
+    const folder = clustered ? '' : sharedFolder(g.nodes.map((n) => n.path));
+    const placed = layout(g, rank(g), (n) => size(n, folder), clustered);
+    const part = { key: hubOf(g).id, hub: hubOf(g), folder, placed, x: 0, y: y + PART_HEADER };
     y += PART_HEADER + placed.height + PART_GAP;
     width = Math.max(width, placed.width);
     return part;
   });
   const nodes = parts.flatMap((p) => p.placed.nodes.map((n) => ({ ...n, x: n.x + p.x, y: n.y + p.y })));
   if (!unlinked.nodes.length) return { parts, unlinked: null, nodes, width, height: Math.max(0, y - PART_GAP) };
-  const placed = layout(unlinked, rank(unlinked), size, clustered);
+  // "No links" names no folder, so its boxes keep their whole paths.
+  const placed = layout(unlinked, rank(unlinked), (n) => size(n, ''), clustered);
   const top = y + PART_HEADER;
   nodes.push(...placed.nodes.map((n) => ({ ...n, y: n.y + top })));
   return {

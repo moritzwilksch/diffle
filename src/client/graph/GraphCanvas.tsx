@@ -2,7 +2,7 @@ import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useStat
 import { CanvasToolbar } from './CanvasToolbar.js';
 import { GraphFind } from './GraphFind.js';
 import { type EdgeLabel, GraphPart, type Lit } from './GraphPart.js';
-import { groupName, PartHeader } from './PartHeader.js';
+import { PartHeader } from './PartHeader.js';
 import { ArrowDefs, CANVAS_BG } from './GraphShapes.js';
 import type { Box, PlacedNode } from '@/client/graph/layout/layout.js';
 import { edgeKey } from '@/client/graph/layout/rank.js';
@@ -51,6 +51,7 @@ export const canvasControl = { fit: () => {}, zoom: (_factor: number) => {}, fra
 export function GraphCanvas({ view: shown, clustered }: { view: View; clustered: boolean }) {
   const stacked = shown.stacked;
   const only = useGraph((s) => s.only);
+  const grouped = stacked.parts.length > 1 || !!stacked.unlinked || only != null;
   const selectedEdge = useGraph((s) => s.selectedEdge);
   // With nothing selected, the node under the pointer previews its links.
   const [hovered, setHovered] = useState<string | null>(null);
@@ -247,21 +248,19 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
           >
             {stacked.parts.map((part) => (
               <g key={part.key} transform={`translate(${part.x},${part.y})`}>
-                {(stacked.parts.length > 1 || stacked.unlinked || only != null) && (
+                {/* A lone part's header still names the folder its boxes leave out, without the switch. */}
+                {(grouped || part.folder) && (
                   <PartHeader
-                    name={groupName(
-                      part.hub,
-                      part.placed.nodes.map((p) => p.node),
-                      !clustered,
-                    )}
+                    name={part.folder ? { folder: part.folder } : { hub: part.hub }}
                     count={part.placed.nodes.length}
                     noun={clustered ? 'symbol' : 'file'}
                     width={stacked.width}
-                    action={{ partKey: part.key, showingOnly: only != null }}
+                    action={grouped ? { partKey: part.key, showingOnly: only != null } : null}
                   />
                 )}
                 <GraphPart
                   placed={part.placed}
+                  folder={part.folder}
                   clustered={clustered}
                   selected={selected}
                   lit={lit}
@@ -281,6 +280,7 @@ export function GraphCanvas({ view: shown, clustered }: { view: View; clustered:
                 />
                 <GraphPart
                   placed={stacked.unlinked.placed}
+                  folder=""
                   clustered={clustered}
                   selected={selected}
                   lit={lit}

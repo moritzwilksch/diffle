@@ -14,19 +14,6 @@ const AROUND_W = 46;
 /** What a header names its group by: the hub it is around, the folder its files share, or a plain title. */
 export type HeaderName = { hub: GraphNode } | { folder: string } | { plain: string };
 
-/** File view names a group by its files' shared folder; with none, or in symbol view, by its hub. */
-export function groupName(hub: GraphNode, nodes: GraphNode[], files: boolean): HeaderName {
-  if (!files) return { hub };
-  const [first = [], ...rest] = nodes.map((n) => n.path.split('/').slice(0, -1));
-  let shared = first.length;
-  for (const dir of rest) {
-    let i = 0;
-    while (i < shared && dir[i] === first[i]) i++;
-    shared = i;
-  }
-  return shared ? { folder: first.slice(0, shared).join('/') } : { hub };
-}
-
 /**
  * A group's heading row above its boxes, ruled across the whole graph: its name, how many boxes it
  * holds, and beside them the switch between it alone and every group, which shows on hover until it
