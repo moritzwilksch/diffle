@@ -1,0 +1,39 @@
+---
+source: crates/diffle/tests/server.rs
+expression: new.json()
+---
+{
+  "language": "Rust",
+  "lines": [
+    [
+      {
+        "end": 4,
+        "kind": "comment",
+        "start": 0
+      }
+    ],
+    [
+      {
+        "end": 2,
+        "kind": "keyword",
+        "start": 0
+      },
+      {
+        "end": 4,
+        "kind": "function",
+        "start": 3
+      },
+      {
+        "end": 12,
+        "kind": "keyword",
+        "start": 10
+      },
+      {
+        "end": 16,
+        "kind": "number",
+        "start": 15
+      }
+    ]
+  ],
+  "path": "a.rs"
+}

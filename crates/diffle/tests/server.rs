@@ -113,6 +113,7 @@ async fn validates_query_parameters() {
     let s = TestServer::start().await;
     for path in [
         "/api/file?path=a.txt&rev=other",
+        "/api/highlight?path=a.txt&rev=other",
         "/api/search?scope=other",
         "/api/search?content=other",
         "/api/search?word=true",
@@ -448,5 +449,26 @@ async fn writes_the_config_file_and_its_directory_owner_only() {
     let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode(s.config.file()), 0o600);
     assert_eq!(mode(&s.repo.path.join("cfg")), 0o700);
+    s.close().await;
+}
+
+#[tokio::test]
+async fn highlights_one_side_of_a_file() {
+    let repo = common::TestRepo::new();
+    repo.write("a.rs", "fn a() {}\n");
+    repo.commit("base");
+    repo.write("a.rs", "// b\nfn b() -> u8 { 1 }\n");
+    repo.write("notes.unknownext", "plain\n");
+    let s = TestServer::over(repo, EnterRequest::Working).await;
+    let new = s.get("/api/highlight?path=a.rs&rev=new").await;
+    assert_eq!(new.status, 200);
+    insta::assert_json_snapshot!(new.json());
+    let old = s.get("/api/highlight?path=a.rs&rev=old").await.json();
+    assert_eq!((&old["language"], old["lines"].as_array().unwrap().len()), (&json!("Rust"), 1));
+    // Untracked, so only on the new side; no grammar matches it.
+    let plain = s.get("/api/highlight?path=notes.unknownext&rev=new").await.json();
+    assert_eq!(plain, json!({ "path": "notes.unknownext", "language": null, "lines": [] }));
+    assert_eq!(s.get("/api/highlight?path=notes.unknownext&rev=old").await.status, 404);
+    assert_eq!(s.get("/api/highlight?path=../x&rev=new").await.status, 404);
     s.close().await;
 }

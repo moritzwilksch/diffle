@@ -17,8 +17,8 @@ use crate::concurrency::map_limit;
 use crate::git::GrepOptions;
 use crate::git::is_binary;
 use crate::protocol::{
-    ChangeStatus, FileQuery, FileResponse, ImageQuery, PatchQuery, SearchContent, SearchMatch, SearchQuery,
-    SearchResponse, SearchScope, Side,
+    ChangeStatus, FileQuery, FileResponse, HighlightResponse, ImageQuery, PatchQuery, SearchContent, SearchMatch,
+    SearchQuery, SearchResponse, SearchScope, Side,
 };
 use crate::server::image::image_type;
 
@@ -31,6 +31,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
         .route("/api/patch", get(patch).post(patch_many))
         .route("/api/file", get(file))
+        .route("/api/highlight", get(highlight))
         .route("/api/image", get(image))
         .route("/api/search", get(search))
 }
@@ -80,6 +81,22 @@ async fn file(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResu
     let binary = is_binary(&buf);
     let contents = if binary { String::new() } else { String::from_utf8_lossy(&buf).into_owned() };
     Ok(Json(FileResponse { path, contents, binary }).into_response())
+}
+
+/// Snapshot files only, as `file` reads them; highlighting runs off the async workers.
+async fn highlight(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
+    let q: FileQuery = query(raw.as_deref())?;
+    let path = q.path.to_string();
+    let snap = d.session.snapshotter()?.current().await?;
+    let Some(buf) = d.session.read_side(&snap, &path, q.rev).await? else {
+        return Err(ApiError::not_found("absent on that side"));
+    };
+    let name = path.clone();
+    let found = tokio::task::spawn_blocking(move || crate::highlight::highlight(&name, &buf))
+        .await
+        .map_err(anyhow::Error::from)?;
+    let (language, lines) = found.map_or((None, Vec::new()), |(language, lines)| (Some(language), lines));
+    Ok(Json(HighlightResponse { path, language, lines }).into_response())
 }
 
 /// Snapshot files only, under the key `image_key` gives their side.
