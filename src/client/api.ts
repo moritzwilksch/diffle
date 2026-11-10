@@ -35,6 +35,7 @@ import {
   ServerMessageSchema,
   SnapshotSchema,
   ThreadListSchema,
+  TourResponseSchema,
   UserConfigSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
@@ -96,6 +97,11 @@ class ApiError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Whether `e` is the server answering that what was asked for does not exist. */
+export function isNotFound(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 404;
 }
 
 const q = (params: Record<string, string | undefined>) =>
@@ -228,6 +234,7 @@ export const api = {
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   /** The snapshot's changed symbols and the code using them. */
+  tour: () => json(TourResponseSchema, 'api/tour'),
   lspGraph: (query: GraphQuery) => json(GraphResponseSchema, `api/lsp/graph?${q(query)}`),
   lspOccurrences: (pos: LspPosition) =>
     json(LspOccurrencesResponseSchema, 'api/lsp/occurrences', { method: 'POST', body: encode(LspPositionSchema, pos) }),

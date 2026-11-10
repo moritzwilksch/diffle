@@ -13,10 +13,14 @@ export function ViewSwitch() {
   );
 }
 
+const always = () => true;
+
 function ViewButton({ view }: { view: ViewDef }) {
   const selected = useViews((s) => s.active === view.id);
   const blocked = useStore((s) => view.blocked?.(s) ?? null);
+  const listed = (view.useListed ?? always)();
   const Icon = view.icon;
+  if (!listed && !selected) return null;
   return (
     <ToggleButton
       selected={selected}

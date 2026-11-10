@@ -1,0 +1,9 @@
+- navigation "Steps":
+  - heading "Steps" [level=2]
+  - list:
+    - listitem:
+      - button "1 Entries learn their kind"
+    - listitem:
+      - button "2 Parsing reads the kind column"
+    - listitem:
+      - button "3 Unmatched refunds"

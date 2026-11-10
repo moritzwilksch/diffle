@@ -56,7 +56,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 8. A tour survives refreshes; a card whose lines left the diff says so in place
 
-- **Chosen:** The tour stays under its `commentKey` across `Snapshot.version` changes. Each `diffle-diff` resolves against the current snapshot when it renders. When its lines are gone, the card shows a stale notice in place of the lines, and its jump still goes to the file. The view's header counts the stale cards.
+- **Chosen:** The tour stays under its `commentKey` across `Snapshot.version` changes. Each `diffle-diff` resolves against the current snapshot when it renders: the client cuts its lines from the file's patch and its text on that side (`src/client/tour/excerpt.ts`). When its lines are gone (the file left that side, or the range runs past its end), the card shows a stale notice in place of the lines, and its jump still goes to the file. The view's header counts the stale cards.
 - **Rejected:** Dropping the tour, or marking all of it stale, once the snapshot moves past the version it was pushed against. Simpler, and it never shows outdated prose, but one fixup commit would wipe out a tour the reviewer was halfway through.
 - **Why:** The agent keeps editing code while the tour is open, and most cards keep their lines. The stale count tells the reviewer when to ask for a fresh push.
 
@@ -111,7 +111,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 12. Share the canvas with the graph view; the tour is a third `ViewDef`
 
-- **Chosen:** Move the viewport (pan, zoom, fit, eased focus) and the arrow shapes out of `src/client/graph/GraphCanvas.tsx` and `GraphShapes.tsx` into `src/client/canvas/`. Generalize `src/client/graph/layout/` from `GraphNode` to nodes with only an `id`, given a size and an optional cluster (the box a layer's members share: a file for the graph, a `diffle-group` for a tour) by the caller, and move it into `src/client/canvas/layout/`. What only the graph knows stays in `graph/layout/`: its parts (`components.ts`) and source order (`source.ts`). Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and its `keys` take `n` and `p` for steps (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph).
+- **Chosen:** Move the viewport (pan, zoom, fit, eased focus) and the arrow shapes out of `src/client/graph/GraphCanvas.tsx` and `GraphShapes.tsx` into `src/client/canvas/`. Generalize `src/client/graph/layout/` from `GraphNode` to nodes with only an `id`, given a size and an optional cluster (the box a layer's members share: a file for the graph, a `diffle-group` for a tour) by the caller, and move it into `src/client/canvas/layout/`. What only the graph knows stays in `graph/layout/`: its parts (`components.ts`) and source order (`source.ts`). Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and the header's view switch lists it only while there is one (`ViewDef.useListed`), so reviews without tours look as before. Its `keys` take `n` and `p` for steps (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph); in the graph view `T` stays the tests filter. On the canvas a `diffle-group` is the layout's cluster: a group ranks as one unit, so its cards share a layer and one frame.
 - **Rejected:** A separate, simpler canvas and layout for tours. It ships faster, but two canvases drift apart in pan, zoom and keys.
 - **Why:** One canvas behaviour, and one set of canvas keys, across both views.
 - **Cost:** A refactor of the graph view lands inside this feature, so the graph's e2e screenshots must stay unchanged.
@@ -193,10 +193,14 @@ src/client/canvas/                             NEW       viewport, arrows, layou
 src/client/graph/GraphCanvas.tsx, layout/      MODIFIED  use canvas/
 src/client/tour/view.ts                        NEW       tourView ViewDef: blocked, keys n/p, place
 src/client/tour/TourCanvas.tsx                 NEW       lays out cards, groups and edges on the canvas
-src/client/tour/render.tsx                     NEW       DOMParser → allowlisted React (decision 2)
-src/client/tour/primitives/                    NEW       Card, Group, Diff, Tree, Jump, Symbol, Callout
+src/client/tour/document.ts                    NEW       DOMParser → cards, groups, arrows and steps, through the catalog's schemas
+src/client/tour/render.tsx                     NEW       a card's contents → allowlisted React (decision 2)
+src/client/tour/excerpt.ts                     NEW       a diff primitive's lines as a one-hunk patch, numbered as in the file
+src/client/tour/state.ts                       NEW       the tour, the step shown, stale cards, per-snapshot file reads
+src/client/tour/primitives/                    NEW       Card, Diff, Tree, Jump, Symbol, Callout (groups and edges are drawn by TourCanvas)
 src/client/tour/StepOutline.tsx                NEW       side panel (decision 14)
-src/client/views/registry.ts, state.ts         MODIFIED  register 'tour'; ViewId gains 'tour'
+src/client/views/registry.ts, state.ts         MODIFIED  register 'tour'; ViewId gains 'tour'; ViewDef.useListed
+src/client/views/ViewSwitch.tsx                MODIFIED  leaves out a view its useListed declines
 src/client/keyboard/useKeymap.ts, HelpOverlay  MODIFIED  T toggles the tour view; help rows
 test/e2e/tour.spec.ts                          NEW       pushes a tour over the fixture repository; screenshots
 ```
