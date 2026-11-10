@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0](https://github.com/moritzwilksch/diffle/compare/v0.4.0...v0.5.0) - 2026-11-10
+
+### Features
+
+- _(cli)_ [**breaking**] Run one diffle per worktree, announced in `server.json` ([#437](https://github.com/moritzwilksch/diffle/pull/437))
+- _(comments)_ Mark messages written by an agent ([#440](https://github.com/moritzwilksch/diffle/pull/440))
+- _(cli)_ [**breaking**] Add `diffle comments list`, reaching the run through its announcement ([#439](https://github.com/moritzwilksch/diffle/pull/439))
+- _(comments)_ Log comment activity and long-poll it ([#438](https://github.com/moritzwilksch/diffle/pull/438))
+- _(graph)_ Strip a group's shared folder from its file boxes ([#444](https://github.com/moritzwilksch/diffle/pull/444))
+- _(server)_ Highlight a file's side as syntax tokens ([#443](https://github.com/moritzwilksch/diffle/pull/443))
+- Name diffle in its user agent, update npm and Rust dependencies ([#447](https://github.com/moritzwilksch/diffle/pull/447))
+
+### Bug fixes
+
+- _(client)_ Undo typing in runs, not per character ([#441](https://github.com/moritzwilksch/diffle/pull/441))
+
+### Refactors
+
+- _(git)_ [**breaking**] Run all Git access in-process through gix ([#365](https://github.com/moritzwilksch/diffle/pull/365))
+
+### Testing
+
+- _(model)_ Pin relativeTime's locale to English ([#445](https://github.com/moritzwilksch/diffle/pull/445))
+- _(e2e)_ Centre the permalink's Copy link before clicking it ([#448](https://github.com/moritzwilksch/diffle/pull/448))
+
+### Build and CI
+
+- _(rust)_ Deny warnings on every platform, gate POSIX-only CLI tests as a unit ([#446](https://github.com/moritzwilksch/diffle/pull/446))
+
+### Other
+
+- _(github)_ Add pull request template ([#414](https://github.com/moritzwilksch/diffle/pull/414))
+- Add hestia nix cache ([#434](https://github.com/moritzwilksch/diffle/pull/434))
+
 ## [0.4.0](https://github.com/moritzwilksch/diffle/compare/v0.3.6...v0.4.0) - 2026-11-06
 
 ### Features
