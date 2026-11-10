@@ -2602,6 +2602,26 @@
       ],
       "description": "Create payload. Without `startLine` the thread is on the file as a whole; then `side`,\n`endLine` and `quoted` are refused rather than ignored, so a payload that meant a line\nnever lands on the file. `quoted` is optional: the server quotes the range from the snapshot."
     },
+    "ThreadList": {
+      "type": "object",
+      "properties": {
+        "commentKey": {
+          "type": "string",
+          "description": "The set the threads belong to: `Snapshot.commentKey` of the slice shown when they were read."
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CommentThread"
+          }
+        }
+      },
+      "required": [
+        "commentKey",
+        "threads"
+      ],
+      "description": "What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key."
+    },
     "ThreadQuery": {
       "type": "object",
       "properties": {

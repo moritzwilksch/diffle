@@ -1,5 +1,6 @@
 //! Temporary real repositories for the integration tests.
 #![allow(dead_code)]
+pub mod cli;
 pub mod github;
 #[cfg(unix)]
 pub mod lsp;

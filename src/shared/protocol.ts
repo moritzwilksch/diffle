@@ -541,6 +541,14 @@ export const ThreadQuerySchema = z.object({
 });
 export type ThreadQuery = z.infer<typeof ThreadQuerySchema>;
 
+/** What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key. */
+export const ThreadListSchema = z.object({
+  /** The set the threads belong to: `Snapshot.commentKey` of the slice shown when they were read. */
+  commentKey: z.string(),
+  threads: CommentThreadSchema.array(),
+});
+export type ThreadList = z.infer<typeof ThreadListSchema>;
+
 export const MessagePatchSchema = z.object({
   body: z.string(),
   /** Absent: the reviewer edits. */

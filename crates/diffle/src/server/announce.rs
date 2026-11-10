@@ -91,7 +91,8 @@ async fn read(file: &Path) -> Option<Announcement> {
 async fn confirm(announcement: Announcement, git_dir: &Path) -> Lookup {
     let Some((http, base)) = client(&announcement.url) else { return Lookup::Absent };
     let url = base.join("api/server").expect("a relative path joins any base");
-    let answer = async { http.get(url).send().await?.error_for_status()?.json::<ServerInfo>().await };
+    let request = http.get(url).timeout(TIMEOUT_CONNECT + TIMEOUT_CONFIRM);
+    let answer = async { request.send().await?.error_for_status()?.json::<ServerInfo>().await };
     let info = match answer.await {
         Ok(info) => info,
         // A busy server still accepts the connection (the kernel's backlog does), so only a timeout
@@ -105,13 +106,11 @@ async fn confirm(announcement: Announcement, git_dir: &Path) -> Lookup {
     Lookup::Live { info, url: announcement.url }
 }
 
-/// A client for `url` and the base its requests resolve against; a socket's requests name `localhost`.
-fn client(url: &str) -> Option<(reqwest::Client, url::Url)> {
+/// A client for the run announced at `url`, and the base its requests resolve against; a socket's
+/// requests name `localhost`. Requests have no overall time limit; one that needs it sets its own.
+pub fn client(url: &str) -> Option<(reqwest::Client, url::Url)> {
     // A proxy from the environment must not stand between a client and a local server.
-    let builder = reqwest::Client::builder()
-        .no_proxy()
-        .connect_timeout(TIMEOUT_CONNECT)
-        .timeout(TIMEOUT_CONNECT + TIMEOUT_CONFIRM);
+    let builder = reqwest::Client::builder().no_proxy().connect_timeout(TIMEOUT_CONNECT);
     let Some(socket) = url.strip_prefix("unix:") else {
         return Some((builder.build().ok()?, url::Url::parse(url).ok()?));
     };

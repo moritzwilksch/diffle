@@ -91,7 +91,7 @@ describe('proxy paths', () => {
     vi.stubGlobal('location', new URL(page));
     const fetch = vi
       .fn()
-      .mockResolvedValueOnce(new Response('[]'))
+      .mockResolvedValueOnce(new Response('{"commentKey":"k","threads":[]}'))
       .mockResolvedValueOnce(new Response('patch'))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);

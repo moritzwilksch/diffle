@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { rmTmp } from '../tmp.js';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CommentThread, ReplyCreate, ThreadCreate } from '@/shared/protocol.js';
+import type { CommentThread, ReplyCreate, ThreadCreate, ThreadList } from '@/shared/protocol.js';
 
 /** The diffle checkout that contains this file. */
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -153,7 +153,7 @@ export async function seedReply(url: string, threadId: string, reply: ReplyCreat
 export async function readThreads(url: string): Promise<CommentThread[]> {
   const response = await fetch(new URL('api/threads', url));
   if (!response.ok) throw new Error(`reading threads failed: HTTP ${response.status} ${await response.text()}`);
-  return (await response.json()) as CommentThread[];
+  return ((await response.json()) as ThreadList).threads;
 }
 
 /** Wait until every language server diffle started reports ready, so a hover gets an answer. */

@@ -1,0 +1,58 @@
+---
+source: crates/diffle/tests/agent.rs
+expression: masked(all)
+---
+{
+  "commentKey": "[id]",
+  "threads": [
+    {
+      "anchor": {
+        "endLine": 2,
+        "kind": "line",
+        "path": "app.py",
+        "quoted": "y = 2",
+        "side": "new",
+        "startLine": 2
+      },
+      "id": "[id]",
+      "messages": [
+        {
+          "body": "rename y",
+          "createdAt": "[time]",
+          "id": "[id]",
+          "updatedAt": "[time]"
+        },
+        {
+          "body": "to what?",
+          "createdAt": "[time]",
+          "id": "[id]",
+          "updatedAt": "[time]"
+        }
+      ],
+      "resolved": false,
+      "stale": false
+    },
+    {
+      "anchor": {
+        "endLine": 1,
+        "kind": "line",
+        "path": "lib.py",
+        "quoted": "z = 2",
+        "side": "new",
+        "startLine": 1
+      },
+      "id": "[id]",
+      "messages": [
+        {
+          "body": "why 2?",
+          "createdAt": "[time]",
+          "id": "[id]",
+          "updatedAt": "[time]"
+        }
+      ],
+      "resolved": true,
+      "resolvedAt": "[time]",
+      "stale": false
+    }
+  ]
+}
