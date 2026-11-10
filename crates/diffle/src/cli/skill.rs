@@ -29,8 +29,9 @@ on a canvas, connected by the arrows you declare, and the reviewer steps through
 with `n` and `p`. Each review has one tour.
 
 - `diffle tour push [<file>|-]` checks the document (stdin without a file) and shows it in place
-  of the review's tour, and prints the stored tour as JSON. A refused document exits 2 and lists
-  every reason as `<element>: <reason>`; fix them all and push again.
+  of the review's tour, and prints the stored tour as JSON. A refused document exits 2, lists
+  every reason as `<element>: <reason>`, and leaves the previous tour in place; fix them all and
+  push again.
 - `diffle tour clear` removes the review's tour.
 - The reviewer answers in this chat. Revise the document and push it again; the open tour updates
   in place. Cards whose lines left the review since are marked stale.
