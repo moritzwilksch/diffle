@@ -288,7 +288,7 @@ function derive(graph: GraphResponse, filters: Record<Filter, boolean>, only: st
     graph: shown,
     symbols,
     via,
-    stacked: stack(shown, (n) => nodeSize(n, filters.symbols), filters.symbols, only),
+    stacked: stack(shown, (n, folder) => nodeSize(n, filters.symbols, folder), filters.symbols, only),
   };
 }
 

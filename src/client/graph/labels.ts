@@ -32,21 +32,41 @@ export function dirname(path: string): string {
   return path.slice(0, Math.max(0, path.lastIndexOf('/')));
 }
 
+/** The folder every path in `paths` sits under, in whole segments; '' when they share none. */
+export function sharedFolder(paths: string[]): string {
+  const [first = [], ...rest] = paths.map((p) => p.split('/').slice(0, -1));
+  let shared = first.length;
+  for (const dir of rest) {
+    let i = 0;
+    while (i < shared && dir[i] === first[i]) i++;
+    shared = i;
+  }
+  return first.slice(0, shared).join('/');
+}
+
+/** `path` below `folder`, which is '' or one of its ancestors. */
+export function relativeTo(path: string, folder: string): string {
+  return folder ? path.slice(folder.length + 1) : path;
+}
+
 export function clip(text: string, max = MAX_CHARS): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-/** In file mode, or for a use from a file's top level, the node is the file itself. */
-export function nodeLabel(node: GraphNode, clustered: boolean): NodeLabel {
+/**
+ * In file mode, or for a use from a file's top level, the node is the file itself; its folder leaves
+ * out `stripped`, the one its group's header names.
+ */
+export function nodeLabel(node: GraphNode, clustered: boolean, stripped: string): NodeLabel {
   if (node.kind === 1)
     return clustered
       ? { title: 'top level', kind: 'module', code: '' }
-      : { title: basename(node.path), kind: '', code: dirname(node.path) };
+      : { title: basename(node.path), kind: '', code: dirname(relativeTo(node.path, stripped)) };
   return { title: node.name, kind: KIND_LABEL[node.kind] ?? 'symbol', code: node.container ?? '' };
 }
 
-export function nodeSize(node: GraphNode, clustered: boolean): Size {
-  const { title, kind, code } = nodeLabel(node, clustered);
+export function nodeSize(node: GraphNode, clustered: boolean, stripped: string): Size {
+  const { title, kind, code } = nodeLabel(node, clustered, stripped);
   const detail = kind.length * KIND_CHAR + (kind && code ? SEPARATOR_W : 0) + clip(code, 30).length * CODE_CHAR;
   const w = Math.max(clip(title).length * TITLE_CHAR + TITLE_PAD, detail + DETAIL_PAD);
   return { w: Math.min(320, Math.max(120, Math.ceil(w))), h: NODE_H };

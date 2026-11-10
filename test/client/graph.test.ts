@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { split } from '@/client/graph/layout/components.js';
+import { split, stack } from '@/client/graph/layout/components.js';
 import { type Box, layout } from '@/client/graph/layout/layout.js';
 import { byFile, rank } from '@/client/graph/layout/rank.js';
 import { signatureOf } from '@/client/graph/details/useSignatures.js';
 import { hiddenReason } from '@/client/graph/focus.js';
-import { groupName } from '@/client/graph/PartHeader.js';
+import { nodeLabel } from '@/client/graph/labels.js';
 import { findMatches, type View } from '@/client/graph/state.js';
 import type { GraphNode, GraphResponse } from '@/shared/protocol.js';
 
@@ -174,17 +174,38 @@ describe('split', () => {
   });
 });
 
-describe('groupName', () => {
+describe('part folders', () => {
   const file = (path: string) => ({ ...node(path), kind: 1, path });
+  const size = () => ({ w: 100, h: 40 });
+  const folders = (g: GraphResponse, clustered = false) => stack(g, size, clustered, null).parts.map((p) => p.folder);
 
-  it('names a file view group by the folder its files share, else by its hub', () => {
-    const hub = file('pkg/core/tools.py');
-    expect(groupName(hub, [hub, file('pkg/core/agent.py'), file('pkg/core/sub/x.py')], true)).toEqual({
-      folder: 'pkg/core',
-    });
-    expect(groupName(hub, [hub, file('pkg/coreutils/a.py')], true)).toEqual({ folder: 'pkg' });
-    expect(groupName(hub, [hub, file('main.py')], true)).toEqual({ hub });
-    expect(groupName(hub, [hub, file('pkg/core/agent.py')], false)).toEqual({ hub });
+  it('names a file view part by the folder its files share, in whole segments', () => {
+    const g = graph(
+      [
+        'pkg/core/tools.py',
+        'pkg/core/agent.py',
+        'pkg/core/sub/x.py',
+        'pkg/core/a.py',
+        'pkg/coreutils/b.py',
+        'main.py',
+        'pkg/lib.py',
+      ].map(file),
+      [
+        'pkg/core/agent.py>pkg/core/tools.py',
+        'pkg/core/sub/x.py>pkg/core/tools.py',
+        'pkg/core/a.py>pkg/coreutils/b.py',
+        'main.py>pkg/lib.py',
+      ],
+    );
+    expect(folders(g)).toEqual(['pkg/core', 'pkg', '']);
+    expect(folders(g, true)).toEqual(['', '', '']);
+  });
+
+  it("leaves the part's folder out of its file boxes", () => {
+    expect(['pkg/core/a.py', 'pkg/core/sub/b.py'].map((p) => nodeLabel(file(p), false, 'pkg/core'))).toEqual([
+      { title: 'a.py', kind: '', code: '' },
+      { title: 'b.py', kind: '', code: 'sub' },
+    ]);
   });
 });
 

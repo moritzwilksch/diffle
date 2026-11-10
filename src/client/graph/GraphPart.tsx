@@ -39,6 +39,7 @@ const LABEL_SPOTS = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8];
 /** One placed part of the graph in its own coordinates: file boxes, arrows, symbols. */
 export function GraphPart({
   placed,
+  folder,
   clustered,
   selected,
   lit,
@@ -46,6 +47,8 @@ export function GraphPart({
   labels,
 }: {
   placed: Placed;
+  /** The folder its header names, which its file boxes leave out of their paths; '' for none. */
+  folder: string;
   clustered: boolean;
   selected: string | null;
   lit: Lit | null;
@@ -101,6 +104,7 @@ export function GraphPart({
             members={members}
             opacity={opacity(members.map((n) => n.node.id))}
             focused={c.path === focusPath}
+            stripped={folder}
           />
         );
       })}
@@ -131,6 +135,7 @@ export function GraphPart({
           key={p.node.id}
           placed={p}
           clustered={clustered}
+          stripped={folder}
           focus={
             p.node.id === selected
               ? 'selected'
