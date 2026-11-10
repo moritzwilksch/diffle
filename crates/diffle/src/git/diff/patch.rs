@@ -107,8 +107,8 @@ fn write_patch(
     write_pair(out, repo, (old.as_ref(), new.as_ref()), renamed, (before.as_deref(), after.as_deref()), context);
 }
 
-fn side<'a>(repo: &gix::Repository, item: &'a Item, abbrev: usize) -> Side<'a> {
-    Side { path: &item.path, mode: item.mode, id: item.id, short: short(repo, item.id, abbrev) }
+fn side<'a>(repo: &gix::Repository, item: &'a Item) -> Side<'a> {
+    Side { path: &item.path, mode: item.mode, id: item.id, short: short(repo, item.id) }
 }
 
 /// Appends one pair's patch from its contents, none where binary.
@@ -120,13 +120,12 @@ pub(super) fn write_pair(
     (before, after): (Option<&[u8]>, Option<&[u8]>),
     context: u32,
 ) {
-    let abbrev = abbrev(repo);
-    let side = |item| side(repo, item, abbrev);
+    let side = |item| side(repo, item);
     let (old_side, new_side) = (old.map(side), new.map(side));
     match (&old_side, &new_side) {
         (Some(o), Some(n)) if unified::splits(o.mode, n.mode) => {
-            unified::write(out, (Some(o), None), None, body(before, Some(b"")), context, abbrev);
-            unified::write(out, (None, Some(n)), None, body(Some(b""), after), context, abbrev);
+            unified::write(out, (Some(o), None), None, body(before, Some(b"")), context);
+            unified::write(out, (None, Some(n)), None, body(Some(b""), after), context);
         }
         _ => {
             let similarity = renamed.then(|| match (old, new, before, after) {
@@ -136,7 +135,7 @@ pub(super) fn write_pair(
                 _ => 100,
             });
             let sides = (old_side.as_ref(), new_side.as_ref());
-            unified::write(out, sides, similarity, body(before, after), context, abbrev);
+            unified::write(out, sides, similarity, body(before, after), context);
         }
     }
 }
@@ -149,21 +148,8 @@ fn body<'a>(before: Option<&'a [u8]>, after: Option<&'a [u8]>) -> Body<'a> {
     }
 }
 
-/// The abbreviated id git prints in an `index` line: unique among the repository's objects, and
-/// at least `abbrev` long, which an object git does not store yet gets exactly.
-fn short(repo: &gix::Repository, id: ObjectId, abbrev: usize) -> String {
-    id.attach(repo).shorten().map_or_else(|_| id.to_hex_with_len(abbrev).to_string(), |p| p.to_string())
-}
-
-/// Git's shortest abbreviation: `core.abbrev`, or by default one growing with the packed object count.
-fn abbrev(repo: &gix::Repository) -> usize {
-    let full = repo.object_hash().len_in_hex();
-    match repo.config_snapshot().string("core.abbrev").map(|v| v.to_string()) {
-        Some(v) if v.parse::<usize>().is_ok() => v.parse::<usize>().unwrap_or(7).clamp(4, full),
-        Some(v) if ["no", "false", "off"].contains(&v.to_lowercase().as_str()) => full,
-        _ => {
-            let objects = repo.objects.packed_object_count().unwrap_or(0);
-            ((64 - objects.leading_zeros()).div_ceil(2) as usize).max(7)
-        }
-    }
+/// The abbreviated id an `index` line prints, as gix shortens it (`core.abbrev`, else unique);
+/// an object not stored yet gets git's default seven digits.
+fn short(repo: &gix::Repository, id: ObjectId) -> String {
+    id.attach(repo).shorten().map_or_else(|_| id.to_hex_with_len(7).to_string(), |p| p.to_string())
 }

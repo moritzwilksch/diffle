@@ -4178,7 +4178,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The binary links the crates below, grouped by licence. Each licence's text follows the crates
 that use it.
 
-- MIT License: 326
+- MIT License: 331
 - Unicode License v3: 20
 - Apache License 2.0: 8
 - ISC License: 6
@@ -8548,13 +8548,16 @@ SOFTWARE.
 
 Used by:
 - chrono 0.4.45 (https://github.com/chronotope/chrono)
+- deprecate-until 1.0.0 (https://github.com/samueltardieu/deprecate-until)
 - dua-core 4.2.0 (https://github.com/Byron/dua-cli)
 - http-serde 2.1.1 (https://gitlab.com/kornelski/http-serde)
+- integer-sqrt 0.1.5 (https://github.com/derekdreery/integer-sqrt-rs)
 - jni-macros 0.22.4 (https://github.com/jni-rs/jni-rs)
 - jni-sys-macros 0.4.1 (https://github.com/jni-rs/jni-sys)
 - jni 0.22.4 (https://github.com/jni-rs/jni-rs)
 - objc2-core-foundation 0.3.2 (https://github.com/madsmtm/objc2)
 - objc2-core-services 0.3.2 (https://github.com/madsmtm/objc2)
+- pathfinding 4.16.0 (https://github.com/evenfurther/pathfinding)
 - r-efi 5.3.0 (https://github.com/r-efi/r-efi)
 - r-efi 6.0.0 (https://github.com/r-efi/r-efi)
 - rustls-platform-verifier-android 0.2.0 (https://github.com/rustls/rustls-platform-verifier)
@@ -8813,6 +8816,37 @@ THE SOFTWARE.
 ### MIT License
 
 Used by:
+- rustc-hash 2.1.3 (https://github.com/rust-lang/rustc-hash)
+
+```
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
+### MIT License
+
+Used by:
 - adler2 2.0.1 (https://github.com/oyvindln/adler2)
 - anyhow 1.0.104 (https://github.com/dtolnay/anyhow)
 - atomic-waker 1.1.2 (https://github.com/smol-rs/atomic-waker)
@@ -8830,6 +8864,7 @@ Used by:
 - quote 1.0.47 (https://github.com/dtolnay/quote)
 - rustix 1.1.5 (https://github.com/bytecodealliance/rustix)
 - rustversion 1.0.23 (https://github.com/dtolnay/rustversion)
+- semver 1.0.28 (https://github.com/dtolnay/semver)
 - serde 1.0.229 (https://github.com/serde-rs/serde)
 - serde_core 1.0.229 (https://github.com/serde-rs/serde)
 - serde_derive 1.0.229 (https://github.com/serde-rs/serde)

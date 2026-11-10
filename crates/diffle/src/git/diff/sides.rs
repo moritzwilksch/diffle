@@ -56,7 +56,7 @@ pub fn tree_items(repo: &gix::Repository, tree: ObjectId) -> anyhow::Result<Vec<
 
 /// The index, every tracked path listed. A sparse index collapses whole directories into one
 /// entry, which gix does not expand, so it is refused rather than misread.
-pub(super) fn full_index(repo: &gix::Repository) -> anyhow::Result<gix::worktree::Index> {
+pub(in crate::git) fn full_index(repo: &gix::Repository) -> anyhow::Result<gix::worktree::Index> {
     let index = repo.index_or_empty()?;
     if index.is_sparse() {
         return Err(GitError::new(

@@ -7,8 +7,7 @@ use gix::ObjectId;
 use gix::bstr::ByteSlice;
 use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
 
-use super::diff::sides::{GITLINK, kind};
-use super::diff::{PathChange, index_changes, tree_changes, worktree_changes};
+use super::diff::tree_changes;
 use super::{GitRepo, native_path};
 use crate::error::Result;
 
@@ -32,8 +31,7 @@ impl GitRepo {
     /// a switch keeps them, and refuses when one would be overwritten. Submodules do not either:
     /// a switch leaves them alone, so one whose recorded commit it changed reads as modified.
     pub async fn is_clean(&self) -> Result<bool> {
-        let root = self.root.clone();
-        self.gix("status", move |repo| clean(repo, &root)).await
+        self.gix("status", clean).await
     }
 
     /// Where HEAD is: on a branch, or detached at a commit; none in an unborn repository's detached HEAD.
@@ -105,15 +103,33 @@ pub(super) fn branch(repo: &gix::Repository) -> anyhow::Result<Option<String>> {
 }
 
 /// `is_clean`, on a handle.
-pub(super) fn clean(repo: &gix::Repository, root: &Path) -> anyhow::Result<bool> {
-    let head = repo.head_tree_id_or_empty()?.detach();
-    let (unstaged, conflicted) = worktree_changes(repo, root, head)?;
-    let is_submodule = |(old, new): &PathChange| [old, new].into_iter().flatten().any(|i| kind(i.mode) == GITLINK);
-    // Staged changes count even where the worktree matches HEAD again.
-    Ok(!conflicted && unstaged.iter().chain(&index_changes(repo, head)?).all(is_submodule))
+pub(super) fn clean(repo: &gix::Repository) -> anyhow::Result<bool> {
+    use gix::status::{Submodule, tree_index::TrackRenames};
+    // Submodules are left alone by a switch, so their changes never make a checkout dirty.
+    let head = repo.head_tree_id_or_empty()?;
+    // A sparse index is refused here, as where the worktree is read.
+    let index = super::diff::sides::full_index(repo)?;
+    // An explicit pathspec, or gix would limit the comparison to the current directory.
+    let mut everything =
+        repo.pathspec(false, None::<&str>, false, &index, gix::worktree::stack::state::attributes::Source::IdMapping)?;
+    let mut staged = false;
+    repo.tree_index_status(&head, &index, Some(&mut everything), TrackRenames::Disabled, |change, _, _| {
+        staged |= !change.entry_mode().is_submodule();
+        Ok(if staged { std::ops::ControlFlow::Break(()) } else { std::ops::ControlFlow::Continue(()) })
+    })?;
+    if staged {
+        return Ok(false);
+    }
+    let ignore = gix::submodule::config::Ignore::All;
+    let mut unstaged = repo
+        .status(gix::progress::Discard)?
+        .index_worktree_rewrites(None)
+        .index_worktree_submodules(Submodule::Given { ignore, check_dirty: false })
+        .index_worktree_options_mut(|opts| opts.dirwalk_options = None)
+        .into_index_worktree_iter(Vec::new())?;
+    Ok(unstaged.next().transpose()?.is_none())
 }
 
-/// The other worktree that has `branch` checked out, if any.
 pub(super) fn holder(repo: &gix::Repository, root: &Path, branch: &str) -> anyhow::Result<Option<PathBuf>> {
     let mut others = vec![repo.main_repo()?];
     for proxy in repo.main_repo()?.worktrees()? {

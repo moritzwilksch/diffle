@@ -38,6 +38,17 @@ fn blocks(patch: &str) -> Vec<String> {
     out
 }
 
+/// `block` with its `index` line's ids cut to seven digits.
+fn seven(block: &str) -> String {
+    let cut = |line: &str| -> String {
+        let Some(rest) = line.strip_prefix("index ") else { return line.to_owned() };
+        let (ids, mode) = rest.split_once(' ').map_or((rest, ""), |(ids, mode)| (ids, mode));
+        let short: Vec<&str> = ids.split("..").map(|id| &id[..id.len().min(7)]).collect();
+        format!("index {}{}{mode}", short.join(".."), if mode.is_empty() { "" } else { " " })
+    };
+    block.lines().map(|l| cut(l) + "\n").collect()
+}
+
 /// `--numstat -z` as `(path, old path, additions, deletions)`, binaries as `-1`.
 fn numstat(raw: &str) -> Vec<Stat> {
     let mut parts = raw.split('\0');
@@ -119,6 +130,10 @@ async fn compare(
     let mut mine = blocks(&repo.patch_all(old, new, &files, context).await.unwrap());
     theirs.retain(kept);
     mine.retain(kept);
+    if skip_renames {
+        // gix abbreviates ids by its own rule: a large history's `index` lines may be wider in git's.
+        (theirs, mine) = (theirs.iter().map(|b| seven(b)).collect(), mine.iter().map(|b| seven(b)).collect());
+    }
     for (a, b) in mine.iter().zip(&theirs) {
         if a != b {
             let at =

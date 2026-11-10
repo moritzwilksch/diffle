@@ -1,17 +1,18 @@
-//! Moving a clean checkout to another commit. Nothing tracked can be lost, as it all matches HEAD,
+//! Moving a clean checkout to another commit, written by gix's checkout. Nothing tracked can be lost, as it all matches HEAD,
 //! so the switch refuses only what it cannot redo: a dirty or sparse checkout, a branch another
 //! worktree holds, and anything on disk, untracked or ignored, where the target puts a file.
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 use anyhow::Context;
 use gix::ObjectId;
-use gix::bstr::{BString, ByteSlice};
-use gix::index::entry::{Flags, Mode, Stat};
+use gix::bstr::ByteSlice;
+use gix::index::entry::Flags;
 use gix::worktree::stack::state::attributes::Source as AttributeSource;
 
 use super::checkout::{CheckoutTarget, clean, holder, move_head};
-use super::diff::sides::{EXECUTABLE, GITLINK, Item, SYMLINK, kind};
+use super::diff::sides::{GITLINK, Item, kind};
 use super::diff::{PathChange, tree_changes};
 use crate::error::GitError;
 
@@ -40,14 +41,14 @@ pub(super) fn switch(repo: &gix::Repository, root: &Path, target: &CheckoutTarge
         refuse!("a sparse checkout is left as it is");
     }
     // Checked again here: the worktree may have changed since the caller looked.
-    if !clean(repo, root)? {
+    if !clean(repo)? {
         refuse!("the worktree has uncommitted changes");
     }
     let target_tree = repo.find_commit(id)?.tree_id()?.detach();
     let changes = tree_changes(repo, repo.head_tree_id_or_empty()?.detach(), target_tree)?;
     refuse_in_the_way(root, &changes)?;
-    write_worktree(repo, root, target_tree, &changes)?;
-    write_index(root, &index, &changes)?;
+    let checked_out = write_worktree(repo, root, target_tree, &changes)?;
+    write_index(&index, &checked_out, &changes)?;
     move_head(repo, target, id)
 }
 
@@ -108,118 +109,53 @@ fn kept_file(abs: &Path, rel: &[u8], removed: &HashSet<&[u8]>) -> anyhow::Result
     Ok(None)
 }
 
-/// Removes what the target lacks, then writes what it adds or changes through the smudge filters
-/// its own `.gitattributes` name. Every blob is read and filtered first, so a missing object or a
-/// failing filter refuses the switch instead of halting it midway.
+/// Removes what the target lacks, then has gix check out what it adds or changes, through the
+/// smudge filters its own `.gitattributes` name. Returns the target's index, its checked-out
+/// entries carrying fresh stat data.
 fn write_worktree(
     repo: &gix::Repository,
     root: &Path,
     target_tree: ObjectId,
     changes: &[PathChange],
-) -> anyhow::Result<()> {
-    let target_index = repo.index_from_tree(&target_tree)?;
-    let attributes = repo.attributes_only(&target_index, AttributeSource::IdMapping)?;
-    let mut pipeline = gix::filter::Pipeline::new(repo, attributes.detach())?;
-    let symlinks = repo.filesystem_options()?.symlink;
-    let written = changes
-        .iter()
-        .filter_map(|(_, n)| n.as_ref())
-        .map(|new| Ok((root.join(native(&new.path)?), render(repo, &mut pipeline, new, symlinks)?)))
-        .collect::<anyhow::Result<Vec<_>>>()?;
+) -> anyhow::Result<gix::index::File> {
+    // A missing object refuses the switch before anything on disk changes, not halfway through.
+    for new in changes.iter().filter_map(|(_, n)| n.as_ref()).filter(|n| kind(n.mode) != GITLINK) {
+        if !repo.has_object(new.id) {
+            refuse!("{} is missing from the object database; fetch it first", new.id);
+        }
+    }
     for old in deleted(changes) {
         let abs = root.join(native(&old.path)?);
         // A submodule's checkout is left in place; an emptied one goes.
         let _ = if kind(old.mode) == GITLINK { std::fs::remove_dir(&abs) } else { std::fs::remove_file(&abs) };
         prune_empty_parents(root, &abs);
     }
-    for (abs, content) in written {
-        if let Some(parent) = abs.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        if let Content::Submodule = content {
-            std::fs::create_dir_all(&abs)?;
-            continue;
-        }
-        if let Ok(meta) = std::fs::symlink_metadata(&abs) {
-            // Only empty directories are left here: `refuse_in_the_way` saw to that.
-            if meta.is_dir() { remove_empty_dirs(&abs)? } else { std::fs::remove_file(&abs)? }
-        }
-        put(&abs, content)?;
-    }
-    Ok(())
-}
-
-/// What the switch puts at one path, ready to write.
-enum Content {
-    /// A submodule's directory, left for its own checkout.
-    Submodule,
-    Symlink(BString),
-    File {
-        bytes: Vec<u8>,
-        executable: bool,
-    },
-}
-
-/// `item` as the worktree holds it: its blob through the smudge filters.
-fn render(
-    repo: &gix::Repository,
-    pipeline: &mut gix::filter::Pipeline<'_>,
-    item: &Item,
-    symlinks: bool,
-) -> anyhow::Result<Content> {
-    use gix::filter::plumbing::driver::apply::MaybeDelayed;
-    use gix::filter::plumbing::pipeline::convert::ToWorktreeOutcome;
-    if kind(item.mode) == GITLINK {
-        return Ok(Content::Submodule);
-    }
-    let blob = repo.find_object(item.id)?.detach().data;
-    // Without symlinks (`core.symlinks=false`, or a platform without them) a link is a plain file
-    // holding its target, as git writes it.
-    if item.mode == SYMLINK && symlinks && cfg!(unix) {
-        return Ok(Content::Symlink(blob.into()));
-    }
-    let bytes = match pipeline.convert_to_worktree(&blob, item.path.as_bstr(), Default::default())? {
-        ToWorktreeOutcome::Unchanged(bytes) | ToWorktreeOutcome::Buffer(bytes) => bytes.to_vec(),
-        ToWorktreeOutcome::Process(MaybeDelayed::Immediate(mut read)) => {
-            let mut buf = Vec::new();
-            std::io::Read::read_to_end(&mut read, &mut buf)?;
-            buf
-        }
-        ToWorktreeOutcome::Process(MaybeDelayed::Delayed(_)) => {
-            refuse!("a delayed filter cannot write {}; switch by hand", item.path)
-        }
-    };
-    Ok(Content::File { bytes, executable: item.mode == EXECUTABLE })
-}
-
-fn put(abs: &Path, content: Content) -> anyhow::Result<()> {
-    match content {
-        Content::Submodule => Ok(()),
-        #[cfg(unix)]
-        Content::Symlink(target) => Ok(std::os::unix::fs::symlink(gix::path::from_bstr(target.as_bstr())?, abs)?),
-        #[cfg(not(unix))]
-        Content::Symlink(_) => unreachable!("rendered as a file without symlinks"),
-        Content::File { bytes, executable } => {
-            std::fs::write(abs, bytes)?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let mode = std::fs::metadata(abs)?.permissions().mode();
-                let mode = if executable { mode | ((mode & 0o444) >> 2) } else { mode & !0o111 };
-                std::fs::set_permissions(abs, std::fs::Permissions::from_mode(mode))?;
-            }
-            #[cfg(not(unix))]
-            let _ = executable;
-            Ok(())
+    let written: HashSet<&[u8]> = changes.iter().filter_map(|(_, n)| n.as_ref()).map(|n| n.path.as_slice()).collect();
+    let mut target = repo.index_from_tree(&target_tree)?;
+    // Paths both sides agree on are on disk already: gix's checkout passes over skipped entries.
+    for (entry, path) in target.entries_mut_with_paths() {
+        if !written.contains(path.as_bytes()) {
+            entry.flags.insert(Flags::SKIP_WORKTREE);
         }
     }
-}
-
-fn remove_empty_dirs(dir: &Path) -> std::io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        remove_empty_dirs(&entry?.path())?;
+    let mut options = repo.checkout_options(AttributeSource::IdMapping)?;
+    // `refuse_in_the_way` left only what the switch may replace where a file goes.
+    options.overwrite_existing = true;
+    let progress = gix::progress::Discard;
+    let objects = repo.objects.clone().into_arc()?;
+    let outcome = gix::worktree::state::checkout(
+        &mut target,
+        root,
+        objects,
+        &progress,
+        &progress,
+        &AtomicBool::new(false),
+        options,
+    )?;
+    if let Some(failed) = outcome.errors.first() {
+        anyhow::bail!("could not write {}: {}", failed.path, failed.error);
     }
-    std::fs::remove_dir(dir)
+    Ok(target)
 }
 
 fn prune_empty_parents(root: &Path, file: &Path) {
@@ -232,18 +168,16 @@ fn prune_empty_parents(root: &Path, file: &Path) {
     }
 }
 
-/// The index moved to the target: the changed paths get the target's entries with fresh stat
-/// data; every other entry, which matches both HEAD and the target, keeps its own.
-fn write_index(root: &Path, index: &gix::index::File, changes: &[PathChange]) -> anyhow::Result<()> {
+/// The index moved to the target: the changed paths get the target's entries with the stat data
+/// the checkout recorded; every other entry, which matches both HEAD and the target, keeps its own.
+fn write_index(index: &gix::index::File, target: &gix::index::State, changes: &[PathChange]) -> anyhow::Result<()> {
     let mut index = index.clone();
     let changed: HashSet<&[u8]> =
         changes.iter().filter_map(|(o, n)| n.as_ref().or(o.as_ref())).map(|i| i.path.as_slice()).collect();
     index.remove_entries(|_, path, _| changed.contains(path.as_bytes()));
     for new in changes.iter().filter_map(|(_, n)| n.as_ref()) {
-        let meta = gix::index::fs::Metadata::from_path_no_follow(&root.join(native(&new.path)?)).ok();
-        let stat = meta.map_or(Ok(Stat::default()), |meta| Stat::from_fs(&meta))?;
-        let mode = Mode::from_bits(new.mode).context("a tree entry's mode")?;
-        index.dangerously_push_entry(stat, new.id, Flags::empty(), mode, new.path.as_bstr());
+        let entry = target.entry_by_path(new.path.as_bstr()).context("a checked-out entry")?;
+        index.dangerously_push_entry(entry.stat, entry.id, Flags::empty(), entry.mode, new.path.as_bstr());
     }
     index.sort_entries();
     // The cache-tree describes the old entries; git rebuilds it on the next write-tree.

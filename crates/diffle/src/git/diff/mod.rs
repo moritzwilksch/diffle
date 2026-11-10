@@ -1,6 +1,5 @@
 //! What changed between two sides and the patches showing it, computed in-process the way `git
 //! diff -M` does: the same files, renames, line counts and patch text.
-mod assignment;
 mod hunks;
 mod patch;
 mod patch_id;
@@ -97,34 +96,8 @@ pub(in crate::git) fn tree_changes(
     sides::tree_diff(repo, old, new)
 }
 
-/// What the index stages differently from `base`, path by path; conflicted paths aside, which
-/// `worktree_changes` reports.
-pub(in crate::git) fn index_changes(repo: &gix::Repository, base: ObjectId) -> anyhow::Result<Vec<PathChange>> {
-    let index = sides::full_index(repo)?;
-    let staged = index
-        .entries()
-        .iter()
-        .filter(|e| e.stage() == gix::index::entry::Stage::Unconflicted)
-        .map(|e| sides::item(e.path(&index), e.mode.bits(), e.id))
-        .collect();
-    let changes = compare(sides::tree_items(repo, base)?, staged, &[]);
-    Ok(changes.into_iter().map(|c| (c.old, c.new)).collect())
-}
-
 fn pair(changes: Vec<PathChange>) -> Vec<Change> {
     changes.into_iter().map(|(old, new)| Change { old, new, rename: false, unmerged: false }).collect()
-}
-
-/// What tracked paths differ between `base` and the worktree, staged or not, and whether the index
-/// holds unresolved conflicts. Untracked files are not looked at.
-pub(in crate::git) fn worktree_changes(
-    repo: &gix::Repository,
-    root: &std::path::Path,
-    base: ObjectId,
-) -> anyhow::Result<(Vec<PathChange>, bool)> {
-    let (items, conflicts) = worktree::worktree_items(repo, root)?;
-    let changes = compare(sides::tree_items(repo, base)?, items, &conflicts);
-    Ok((changes.into_iter().map(|c| (c.old, c.new)).collect(), !conflicts.is_empty()))
 }
 
 /// Pairs both sorted lists by path into the changes between them.

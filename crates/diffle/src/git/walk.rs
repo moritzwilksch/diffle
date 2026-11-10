@@ -1,7 +1,4 @@
 //! Walking history: the commits of a range in git's order, and a commit's neighbours on HEAD's line.
-use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap, HashSet};
-
 use gix::ObjectId;
 use gix::bstr::ByteSlice;
 use gix::revision::plumbing::Spec;
@@ -91,40 +88,12 @@ pub(super) fn commits_in(repo: &gix::Repository, range: &str) -> anyhow::Result<
     date_order(repo, &tips, hidden)
 }
 
-/// The commits reachable from `tips` but not from `hidden`, newest first as `git log` lists them:
-/// by committer date, ties in the order they were reached, a commit only once.
+/// The commits reachable from `tips` but not from `hidden`, newest first by committer date.
 fn date_order(repo: &gix::Repository, tips: &[ObjectId], hidden: Vec<ObjectId>) -> anyhow::Result<Vec<ObjectId>> {
     let walk = repo
         .rev_walk(tips.iter().copied())
         .with_hidden(hidden)
         .sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst))
         .all()?;
-    let mut selected = HashMap::new();
-    for info in walk {
-        let info = info?;
-        selected.insert(info.id, (info.commit_time(), info.parent_ids.to_vec()));
-    }
-    // gix's queue breaks date ties arbitrarily; git's keeps them first-come, first-served.
-    let mut queue = BinaryHeap::new();
-    let mut seen = HashSet::new();
-    let mut reached = 0u64;
-    let mut push = |queue: &mut BinaryHeap<_>, id: ObjectId| {
-        if let Some((time, _)) = selected.get(&id)
-            && seen.insert(id)
-        {
-            queue.push((*time, Reverse(reached), id));
-            reached += 1;
-        }
-    };
-    for &tip in tips {
-        push(&mut queue, tip);
-    }
-    let mut order = Vec::with_capacity(selected.len());
-    while let Some((_, _, id)) = queue.pop() {
-        order.push(id);
-        for parent in selected[&id].1.clone() {
-            push(&mut queue, parent);
-        }
-    }
-    Ok(order)
+    walk.map(|info| Ok(info?.id)).collect()
 }

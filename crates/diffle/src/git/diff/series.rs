@@ -4,8 +4,9 @@ use std::collections::HashMap;
 
 use gix::ObjectId;
 use gix::bstr::ByteSlice;
+use pathfinding::kuhn_munkres::kuhn_munkres_min;
+use pathfinding::matrix::Matrix;
 
-use super::assignment::compute_assignment;
 use super::hunks;
 use super::patch::write_pair;
 use super::patch_id::patch_id;
@@ -202,7 +203,7 @@ impl Text {
     }
 }
 
-/// Which commit of `b` each commit of `a` pairs with: identical diffs first, then the assignment
+/// Which commit of `b` each commit of `a` pairs with: identical diffs first, then the (Kuhn–Munkres) assignment
 /// minimising the size of the diffs between paired diffs, against creating or dropping either.
 fn correspondences(a: &[Text], b: &[Text]) -> Vec<Option<usize>> {
     let mut matching_a: Vec<Option<usize>> = vec![None; a.len()];
@@ -238,8 +239,12 @@ fn correspondences(a: &[Text], b: &[Text]) -> Vec<Option<usize>> {
             cost[i + n * j] = create(tb, matching_b[j].is_some());
         }
     }
-    let (a2b, _) = compute_assignment(n, n, &cost);
-    (0..a.len()).map(|i| usize::try_from(a2b[i]).ok().filter(|&j| j < b.len())).collect()
+    if n == 0 {
+        return Vec::new();
+    }
+    let costs = Matrix::from_fn(n, n, |(i, j)| i64::from(cost[i + n * j]));
+    let (_, a2b) = kuhn_munkres_min(&costs);
+    a2b[..a.len()].iter().map(|&j| (j < b.len()).then_some(j)).collect()
 }
 
 /// How big the diff between two patches is: its hunks and their lines, with three lines of context.

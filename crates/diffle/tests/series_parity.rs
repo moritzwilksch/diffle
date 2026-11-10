@@ -35,6 +35,36 @@ async fn assert_rows(dir: &std::path::Path, repo: &GitRepo, a: &str, b: &str) {
     assert_eq!(ours.len(), theirs.len(), "range-diff rows {a} {b}");
 }
 
+/// What any cheapest pairing shares with git's: the identical commits, and how many pairs there
+/// are. Between equally cheap pairings, Kuhn–Munkres and git's solver may pick differently.
+async fn assert_pairing(dir: &std::path::Path, repo: &GitRepo, a: &str, b: &str) {
+    let ours = repo.range_diff(a, b).await.unwrap();
+    let theirs = git_rows(dir, a, b);
+    let identical = |rows: Vec<(Option<String>, char)>| -> Vec<String> {
+        let mut ids: Vec<String> =
+            rows.into_iter().filter(|(_, m)| *m == '=').filter_map(|(id, _)| Some(id?[..7].to_owned())).collect();
+        ids.sort();
+        ids
+    };
+    let paired = |markers: Vec<char>| markers.iter().filter(|m| matches!(m, '=' | '!')).count();
+    assert_eq!(
+        identical(ours.iter().map(|r| (r.new.clone(), r.marker)).collect()),
+        identical(
+            theirs
+                .iter()
+                .map(|r| (Some(r.2.clone()), r.1))
+                .filter(|(id, _)| id.as_ref().is_some_and(|i| i.len() >= 7))
+                .collect()
+        ),
+        "identical rows {a} {b}"
+    );
+    assert_eq!(
+        paired(ours.iter().map(|r| r.marker).collect()),
+        paired(theirs.iter().map(|r| r.1).collect()),
+        "pairs {a} {b}"
+    );
+}
+
 async fn assert_patch_ids(dir: &std::path::Path, repo: &GitRepo, shas: &[String]) {
     let mut log = Command::new("git")
         .args(["-c", "core.quotePath=false", "-c", "diff.noprefix=false", "log", "-p", "--no-color", "--no-walk"])
@@ -120,7 +150,7 @@ async fn matches_git_over_a_real_history() {
     let repo = GitRepo::open(&dir).await.unwrap();
     for k in [0, 7, 20, 41] {
         let (a, b) = (format!("HEAD~{}..HEAD~{}", k + 20, k), format!("HEAD~{}..HEAD~{}", k + 26, k + 4));
-        assert_rows(&dir, &repo, &a, &b).await;
+        assert_pairing(&dir, &repo, &a, &b).await;
     }
     // A rename enters the patch, and gix's tracker and git's disagree on borderline ones.
     let renamed = git_in(&dir, &["log", "-n", "300", "-M", "--diff-filter=R", "--format=%H", "HEAD"]);

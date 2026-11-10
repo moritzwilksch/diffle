@@ -33,7 +33,6 @@ pub fn write(
     rename: Option<u32>,
     body: Body,
     context: u32,
-    abbrev: usize,
 ) {
     let (a, b) = (old.or(new).expect("a side"), new.or(old).expect("a side"));
     out.extend_from_slice(b"diff --git ");
@@ -61,7 +60,9 @@ pub fn write(
     }
     let (old_id, new_id) = (old.map(|s| s.id), new.map(|s| s.id));
     if old_id != new_id {
-        let short = |side: Option<&Side>| side.map_or_else(|| "0".repeat(abbrev), |s| s.short.clone());
+        // An absent side's zeros match the present one's width.
+        let width = a.short.len().max(b.short.len());
+        let short = |side: Option<&Side>| side.map_or_else(|| "0".repeat(width), |s| s.short.clone());
         out.extend_from_slice(format!("index {}..{}", short(old), short(new)).as_bytes());
         if let (Some(old), Some(new)) = (old, new)
             && old.mode == new.mode
