@@ -130,7 +130,7 @@ async fn detaches_at_a_branch_another_worktree_holds() {
 }
 
 #[tokio::test]
-async fn leaves_the_checkout_alone_when_git_refuses() {
+async fn leaves_the_checkout_alone_when_an_untracked_file_is_in_the_way() {
     let t = branches();
     // An untracked file the switch would overwrite.
     t.git(&["checkout", "-q", "feat"]);
@@ -439,10 +439,7 @@ async fn a_change_only_the_index_holds_is_not_clean() {
     t.write("a.txt", "one\n");
     assert!(!repo.is_clean().await.unwrap());
     let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
-    assert_eq!(
-        refused.to_string(),
-        "Your local changes to the following files would be overwritten by checkout: a.txt"
-    );
+    assert_eq!(refused.to_string(), "the worktree has uncommitted changes");
     assert_eq!(t.git(&["show", ":a.txt"]), "staged");
 }
 
@@ -483,56 +480,59 @@ async fn writes_files_through_the_targets_attributes() {
 }
 
 #[tokio::test]
-async fn refuses_before_writing_when_a_kept_file_holds_a_directory_in_place() {
+async fn refuses_before_writing_when_an_untracked_file_holds_a_directory_in_place() {
     let t = branches();
-    // Staged only, so the switch keeps it, and `feat` puts a file where its directory is.
-    t.write("dir/x.txt", "staged\n");
-    t.git(&["add", "dir/x.txt"]);
-    t.git(&["stash", "-q"]);
     t.git(&["checkout", "-q", "feat"]);
     t.write("dir", "a file\n");
     t.commit("dir becomes a file");
     t.git(&["checkout", "-q", "main"]);
-    t.git(&["stash", "pop", "-q", "--index"]);
+    t.write("dir/x.txt", "mine\n");
     let repo = t.open().await;
     let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
-    assert_eq!(
-        refused.to_string(),
-        "Your local changes to the following files would be overwritten by checkout: dir/x.txt"
-    );
+    assert_eq!(refused.to_string(), "an untracked or ignored file is in the way: dir/x.txt");
     // Nothing moved: `a.txt`, which `feat` changes, still holds main's content.
     assert_eq!(head(&t), "main");
     assert_eq!(std::fs::read_to_string(t.path.join("a.txt")).unwrap(), "one\n");
-    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "A  dir/x.txt");
+    assert_eq!(std::fs::read_to_string(t.path.join("dir/x.txt")).unwrap(), "mine\n");
 }
 
 #[tokio::test]
-async fn keeps_a_sparse_checkout_sparse_across_a_switch() {
+async fn refuses_to_overwrite_an_ignored_file() {
+    let t = branches();
+    t.write(".gitignore", "*.log\n");
+    t.commit("ignore logs");
+    t.git(&["checkout", "-q", "feat"]);
+    t.git(&["merge", "-q", "main"]);
+    t.write("build.log", "tracked on feat\n");
+    t.git(&["add", "-f", "build.log"]);
+    t.git(&["commit", "-q", "-m", "a log"]);
+    t.git(&["checkout", "-q", "main"]);
+    t.write("build.log", "mine\n");
+    let repo = t.open().await;
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(refused.to_string(), "an untracked or ignored file is in the way: build.log");
+    assert_eq!(
+        (head(&t), std::fs::read_to_string(t.path.join("build.log")).unwrap()),
+        ("main".to_owned(), "mine\n".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn leaves_a_sparse_checkout_alone() {
     let t = TestRepo::new();
-    t.write("top.txt", "top\n");
     t.write("inside/a.txt", "a\n");
     t.write("outside/b.txt", "b\n");
     t.commit("base");
     t.git(&["checkout", "-q", "-b", "feat"]);
     t.write("inside/a.txt", "a2\n");
-    t.write("outside/b.txt", "b2\n");
-    t.write("outside/new.txt", "new\n");
     t.commit("feat");
     t.git(&["checkout", "-q", "main"]);
     t.git(&["sparse-checkout", "set", "--cone", "inside"]);
-    // Something staged elsewhere stays staged, as git switch carries it.
-    t.write("top.txt", "staged\n");
-    t.git(&["add", "top.txt"]);
     let repo = t.open().await;
-    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
-    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "M  top.txt");
-    assert_eq!(std::fs::read_to_string(t.path.join("inside/a.txt")).unwrap(), "a2\n");
-    assert!(!t.path.join("outside").exists(), "paths outside the cone stay off disk");
-    assert_eq!(
-        t.git(&["ls-files", "-t", "--", "inside", "outside"]),
-        "H inside/a.txt\nS outside/b.txt\nS outside/new.txt"
-    );
-    assert_eq!(t.git(&["rev-parse", ":outside/b.txt"]), t.git(&["rev-parse", "feat:outside/b.txt"]));
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(refused.to_string(), "a sparse checkout is left as it is");
+    assert_eq!(head(&t), "main");
+    assert_eq!(std::fs::read_to_string(t.path.join("inside/a.txt")).unwrap(), "a\n");
 }
 
 #[tokio::test]

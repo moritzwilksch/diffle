@@ -33,13 +33,7 @@ impl GitRepo {
     /// a switch leaves them alone, so one whose recorded commit it changed reads as modified.
     pub async fn is_clean(&self) -> Result<bool> {
         let root = self.root.clone();
-        self.gix("status", move |repo| {
-            let head = head_tree(repo)?;
-            let (unstaged, conflicted) = worktree_changes(repo, &root, head)?;
-            // Staged changes count even where the worktree matches HEAD again.
-            Ok(!conflicted && unstaged.iter().chain(&index_changes(repo, head)?).all(is_submodule))
-        })
-        .await
+        self.gix("status", move |repo| clean(repo, &root)).await
     }
 
     /// Where HEAD is: on a branch, or detached at a commit; none in an unborn repository's detached HEAD.
@@ -65,8 +59,9 @@ impl GitRepo {
         .await
     }
 
-    /// Moves HEAD and the worktree to `target`. Refuses, leaving everything as it was, when a
-    /// change or an untracked file would be lost, or the branch is checked out in another worktree.
+    /// Moves a clean checkout to `target`. Refuses, leaving everything as it was, when the checkout
+    /// is dirty or sparse, a file HEAD does not track is in the way, or the branch is checked out
+    /// in another worktree.
     pub async fn switch(&self, target: &CheckoutTarget) -> Result<()> {
         let (target, root) = (target.clone(), self.root.clone());
         self.gix("switch", move |repo| super::switch::switch(repo, &root, &target)).await
@@ -109,12 +104,13 @@ pub(super) fn branch(repo: &gix::Repository) -> anyhow::Result<Option<String>> {
         .and_then(|name| name.as_bstr().strip_prefix(b"refs/heads/").map(|b| b.to_str_lossy().into_owned())))
 }
 
-pub(super) fn head_tree(repo: &gix::Repository) -> anyhow::Result<ObjectId> {
-    Ok(repo.head_tree_id_or_empty()?.detach())
-}
-
-pub(super) fn is_submodule((old, new): &PathChange) -> bool {
-    [old, new].into_iter().flatten().any(|item| kind(item.mode) == GITLINK)
+/// `is_clean`, on a handle.
+pub(super) fn clean(repo: &gix::Repository, root: &Path) -> anyhow::Result<bool> {
+    let head = repo.head_tree_id_or_empty()?.detach();
+    let (unstaged, conflicted) = worktree_changes(repo, root, head)?;
+    let is_submodule = |(old, new): &PathChange| [old, new].into_iter().flatten().any(|i| kind(i.mode) == GITLINK);
+    // Staged changes count even where the worktree matches HEAD again.
+    Ok(!conflicted && unstaged.iter().chain(&index_changes(repo, head)?).all(is_submodule))
 }
 
 /// The other worktree that has `branch` checked out, if any.
