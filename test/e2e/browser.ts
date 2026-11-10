@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from '@playwright/test';
+import { chromium, type Browser, type Locator, type Page } from '@playwright/test';
 import { connectOptions, ensureBrowserServer, stopBrowserServer } from './browser-server.js';
 
 /**
@@ -124,13 +124,29 @@ async function revealLine(root: ReturnType<Page['locator']>, number: number): Pr
   const cell = root.locator(`[data-column-number="${number}"]`).first();
   if ((await cell.count()) === 0) return;
   await cell.scrollIntoViewIfNeeded();
-  let last = (await cell.boundingBox())?.y;
+  await holdStill(cell);
+}
+
+/** Wait until `target` stops moving, as the viewer corrects an estimated layout around it. */
+async function holdStill(target: Locator): Promise<void> {
+  let last = (await target.boundingBox())?.y;
   for (let i = 0; i < 20; i++) {
-    await root.page().waitForTimeout(50);
-    const now = (await cell.boundingBox())?.y;
+    await target.page().waitForTimeout(50);
+    const now = (await target.boundingBox())?.y;
     if (now === last) return;
     last = now;
   }
+}
+
+/**
+ * Click a control in the review, centred first: one at the top edge (the composer under a file's
+ * first line) hides beneath the sticky file header, and Playwright's own scrolling races the
+ * viewer's layout correction, so the click keeps landing on whatever covers it.
+ */
+export async function clickCentred(target: Locator): Promise<void> {
+  await target.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  await holdStill(target);
+  await target.click();
 }
 
 /** The file header's content (path, counts, badges and controls), for reading or clicking. */
