@@ -230,6 +230,27 @@ async fn creates_a_thread_on_the_whole_file_from_a_payload_without_a_line_and_ex
 }
 
 #[tokio::test]
+async fn keeps_who_wrote_each_message_and_marks_the_agent_in_the_prompt() {
+    let s = TestServer::start().await;
+    let created =
+        s.json("POST", "/api/threads", json!({ "path": "a.txt", "body": "Split it.", "author": "agent" })).await;
+    let id = created.json()[0]["id"].as_str().unwrap().to_owned();
+    s.json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "Why?" })).await;
+    let replied = s
+        .json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "Smaller diffs.", "author": "agent" }))
+        .await;
+    assert_eq!(replied.status, 201);
+    let stored = s.get("/api/threads").await.json();
+    let authors: Vec<&Value> = stored[0]["messages"].as_array().unwrap().iter().map(|m| &m["author"]).collect();
+    assert_eq!(authors, [&json!("agent"), &Value::Null, &json!("agent")]);
+    let r = s.get("/api/threads/export").await;
+    assert_eq!(r.body, "(file) a.txt\n\n(agent) Split it.\n\nWhy?\n\n(agent) Smaller diffs.\n\n---\n");
+    let refused = s.json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "x", "author": "bot" })).await;
+    assert_eq!(refused.status, 400);
+    s.close().await;
+}
+
+#[tokio::test]
 async fn exports_one_message_with_its_thread_context() {
     let s = TestServer::start().await;
     let created =

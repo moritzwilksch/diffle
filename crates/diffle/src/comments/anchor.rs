@@ -94,7 +94,13 @@ mod tests {
     }
 
     fn thread(id: &str, anchor: CommentAnchor, created_at: i64) -> CommentThread {
-        let message = CommentMessage { id: format!("{id}-m"), body: "b".into(), created_at, updated_at: created_at };
+        let message = CommentMessage {
+            id: format!("{id}-m"),
+            body: "b".into(),
+            created_at,
+            updated_at: created_at,
+            author: None,
+        };
         CommentThread {
             id: id.into(),
             anchor,

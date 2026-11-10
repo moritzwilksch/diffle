@@ -9,7 +9,8 @@ use diffle::github::client::GithubClient;
 use diffle::github::pulls::repo_of_pr_url;
 use diffle::github::review::{ExportInput, GithubExporter, build_review, format_body};
 use diffle::protocol::{
-    CommentAnchor, CommentMessage, CommentThread, GithubExportResponse, GithubPullRequest, GithubPullRequestState, Side,
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, GithubExportResponse, GithubPullRequest,
+    GithubPullRequestState, Side,
 };
 use serde_json::{Value, json};
 
@@ -82,7 +83,13 @@ fn thread_with(id: &str, anchor: CommentAnchor, body: &str, resolved: bool, stal
     CommentThread {
         anchor,
         id: id.into(),
-        messages: vec![CommentMessage { id: format!("{id}-m"), body: body.into(), created_at: 1, updated_at: 1 }],
+        messages: vec![CommentMessage {
+            id: format!("{id}-m"),
+            body: body.into(),
+            created_at: 1,
+            updated_at: 1,
+            author: None,
+        }],
         resolved,
         resolved_at: None,
         stale,
@@ -141,10 +148,39 @@ fn build_review_with_ids_posts_the_named_threads_resolved_included_and_reports_u
 }
 
 #[test]
+fn build_review_posts_agent_messages_like_the_reviewers_without_a_prefix() {
+    let mut opened = file_thread("a", "Split this module.", "a.txt");
+    opened.messages[0].author = Some(CommentAuthor::Agent);
+    let mut answered = t("r").body("Why here?").build();
+    answered.messages.push(CommentMessage {
+        id: "r-m2".into(),
+        body: "It keeps the parser pure.".into(),
+        created_at: 2,
+        updated_at: 2,
+        author: Some(CommentAuthor::Agent),
+    });
+    let built = build_review(&[opened, answered], None);
+    assert!(built.skipped.is_empty());
+    assert_eq!(
+        json_of(&built.comments),
+        json!([
+            { "path": "a.txt", "subjectType": "FILE", "body": "Split this module." },
+            { "path": "a.txt", "line": 3, "side": "RIGHT", "body": "Why here?\n\n---\n\nIt keeps the parser pure." },
+        ])
+    );
+}
+
+#[test]
 fn format_body_joins_messages_and_keeps_suggestion_fences_verbatim() {
     let body = format_body(&[
-        CommentMessage { id: "1".into(), body: "Batch this.".into(), created_at: 1, updated_at: 1 },
-        CommentMessage { id: "2".into(), body: "```suggestion\nfoo()\n```".into(), created_at: 2, updated_at: 2 },
+        CommentMessage { id: "1".into(), body: "Batch this.".into(), created_at: 1, updated_at: 1, author: None },
+        CommentMessage {
+            id: "2".into(),
+            body: "```suggestion\nfoo()\n```".into(),
+            created_at: 2,
+            updated_at: 2,
+            author: None,
+        },
     ]);
     assert_eq!(body, "Batch this.\n\n---\n\n```suggestion\nfoo()\n```");
 }
