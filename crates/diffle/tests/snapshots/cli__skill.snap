@@ -40,6 +40,9 @@ with `n` and `p`. Each review has one tour.
 - Paths are relative to the repository root and must be files of the review. Line numbers count on
   the side you name: `new`, the file after the change, by default.
 - diffle styles the tour: no `style`, `class`, scripts or images.
+- A `diffle-symbol` lists its references through the language server for its file. Without one,
+  or on the `old` side, it renders as plain code. Run `diffle lsp` to see which languages have a
+  server before you rely on symbol chips.
 
 ### Elements
 
