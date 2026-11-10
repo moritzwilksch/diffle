@@ -2,7 +2,17 @@ import { FileCode2, Pencil, Plus } from 'lucide-react';
 import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
 import { Marked, useFindHits } from './GraphFind.js';
-import { basename, clip, CODE_CHAR, dirname, KIND_CHAR, nodeLabel, SEPARATOR_W, TITLE_CHAR } from './labels.js';
+import {
+  basename,
+  clip,
+  CODE_CHAR,
+  dirname,
+  KIND_CHAR,
+  nodeLabel,
+  relativeTo,
+  SEPARATOR_W,
+  TITLE_CHAR,
+} from './labels.js';
 import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
 
 const STATUS_STROKE: Record<GraphNode['status'], string> = {
@@ -19,23 +29,26 @@ export const CANVAS_BG = 'color-mix(in srgb, var(--fg) 2.5%, var(--bg))';
 
 /**
  * A file's box in one column: the file icon and its path as everywhere in diffle, dim directories and
- * a bold name. `focused`, the file picked in the tree, takes the accent.
+ * a bold name, below `stripped`, the folder its group's header names. `focused`, the file picked in the
+ * tree, takes the accent.
  */
 export function Cluster({
   cluster,
   members,
   opacity,
   focused,
+  stripped,
 }: {
   cluster: PlacedCluster;
   members: PlacedNode[];
   opacity: number;
   focused: boolean;
+  stripped: string;
 }) {
   const unchanged = members.every((n) => n.node.status === 'consumer');
   const room = Math.floor((cluster.w - 34) / HEADER_CHAR);
   const name = clip(basename(cluster.path), room);
-  const dir = dirname(cluster.path);
+  const dir = dirname(relativeTo(cluster.path, stripped));
   // The directory gives way first, from its start, so the nearest folders stay.
   const dirRoom = room - name.length - 1;
   const shownDir = !dir || dirRoom < 4 ? '' : dir.length + 1 > dirRoom ? `…${dir.slice(-(dirRoom - 2))}/` : `${dir}/`;
@@ -100,6 +113,7 @@ const FOCUS: Record<Focus, { fill: string; stroke: string; width: number }> = {
 export function Node({
   placed,
   clustered,
+  stripped,
   focus,
   opacity,
   test,
@@ -107,13 +121,15 @@ export function Node({
 }: {
   placed: PlacedNode;
   clustered: boolean;
+  /** The folder its group's header names, which a file's box leaves out of its path. */
+  stripped: string;
   focus: Focus | null;
   opacity: number;
   test: boolean;
   mark: string | null;
 }) {
   const { node, x, y, w, h } = placed;
-  const { title, kind, code } = nodeLabel(node, clustered);
+  const { title, kind, code } = nodeLabel(node, clustered, stripped);
   // The code part takes what room the kind leaves on its line.
   const codeRoom = w - 34 - (test ? 30 : 0) - kind.length * KIND_CHAR - (kind && code ? SEPARATOR_W : 0);
   const quiet = node.status === 'consumer' || test;
@@ -122,6 +138,10 @@ export function Node({
   const shownTitle = clip(title, Math.floor((w - 56) / TITLE_CHAR));
   const shownCode = clip(code, Math.floor(codeRoom / CODE_CHAR));
   const current = focus === 'selected';
+  // A file's box may leave out part of its path: the shared folder, or what did not fit.
+  const fileBox = node.kind === 1 && !clustered;
+  // With no line under the name, a file at the top of its group's folder, the name row sits centred.
+  const lift = test || kind || code ? 0 : 6;
   const [group, hits] = useFindHits(mark && `${mark}\0${shownTitle}\0${shownCode}\0${x},${y}`);
   return (
     <g
@@ -132,6 +152,7 @@ export function Node({
       opacity={opacity}
       className="cursor-pointer"
     >
+      {fileBox && `${shownCode && `${shownCode}/`}${shownTitle}` !== node.path && <title>{node.path}</title>}
       <rect
         x={x}
         y={y}
@@ -152,7 +173,7 @@ export function Node({
         // An unchanged file stays dashed under focus too, its dashes stretched to the wider stroke.
         strokeDasharray={node.status === 'consumer' && !clustered ? (focus === 'selected' ? '7 4' : '4 3') : undefined}
       />
-      <KindIcon kind={node.kind} x={x + 7} y={y + 7} size={14} opacity={quiet ? 0.6 : 1} />
+      <KindIcon kind={node.kind} x={x + 7} y={y + 7 + lift} size={14} opacity={quiet ? 0.6 : 1} />
       {hits.map((b) => (
         <rect
           key={`${b.x},${b.y}`}
@@ -166,7 +187,7 @@ export function Node({
       ))}
       <text
         x={x + 26}
-        y={y + 18}
+        y={y + 18 + lift}
         className={`font-mono text-[12px] ${quiet ? 'fill-muted' : 'fill-foreground'}`}
         // A quiet box keeps its name muted, as it keeps its icon faded.
         style={quiet || !nameColor ? undefined : { fill: nameColor }}
@@ -187,13 +208,13 @@ export function Node({
         <g>
           <rect
             x={x + w - 22}
-            y={y + 5}
+            y={y + 5 + lift}
             width={16}
             height={16}
             rx={4}
             fill={`color-mix(in srgb, ${badge.color} 15%, transparent)`}
           />
-          <badge.icon x={x + w - 19} y={y + 8} size={10} color={badge.color} strokeWidth={2.5} />
+          <badge.icon x={x + w - 19} y={y + 8 + lift} size={10} color={badge.color} strokeWidth={2.5} />
         </g>
       )}
     </g>
