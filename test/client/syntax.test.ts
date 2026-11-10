@@ -147,7 +147,7 @@ describe('client syntax classification', () => {
   });
 
   it('leaves languages without a lexer alone', () => {
-    expect(classifier.blocked('file', 'prisma', '// comment', 1, 3)).toBe(false);
+    expect(classifier.blocked('file', 'racket', '; comment', 1, 3)).toBe(false);
   });
 
   it('leaves plain text, overlong lines, and oversized files alone', () => {

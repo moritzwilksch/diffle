@@ -62,6 +62,12 @@ fn fetch_into(
 ) -> anyhow::Result<Option<String>> {
     // Reflogs of remote-tracking refs need a committer, which a fresh clone may lack.
     repo.committer_or_set_fallback("diffle", "diffle@localhost")?;
+    // The protocol's `agent` names diffle: gix's reqwest transport fixes the HTTP `User-Agent` and
+    // only appends another, so that header stays `git/oxide-*`.
+    let agent = format!("{}-{}", gix::env::agent(), crate::USER_AGENT);
+    let mut config = repo.config_snapshot_mut();
+    config.set_raw_value(gix::config::tree::Gitoxide::USER_AGENT, agent.as_str())?;
+    config.commit()?;
     let repo = &*repo;
     let mut remote = match repo.find_remote(remote) {
         Ok(found) => found,

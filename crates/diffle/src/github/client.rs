@@ -2,6 +2,10 @@
 use std::time::Duration;
 
 use futures::future::BoxFuture;
+use octocrab::service::middleware::auth_header::AuthHeaderLayer;
+use octocrab::service::middleware::base_uri::BaseUriLayer;
+use octocrab::service::middleware::reqwest_connector::ReqwestConnector;
+use reqwest::header::HeaderValue;
 use serde_json::{Value, json};
 
 use crate::error::GithubError;
@@ -72,12 +76,21 @@ pub struct HttpClient {
 impl HttpClient {
     /// A client for the REST root `base_url` (see `api_base_url`); GraphQL sits beside it.
     pub fn new(token: String, base_url: &str) -> Result<Self, GithubError> {
-        let octocrab = octocrab::Octocrab::builder()
-            .base_uri(graphql_root(base_url))
-            .and_then(|b| b.personal_token(token).build_with_reqwest(octocrab::ReqwestClientConfig::Default))
-            .map_err(|e| {
-                GithubError::new(format!("cannot set up the GitHub client: {}", first_line(&e.to_string())), 400)
-            })?;
+        let fail = |e: &dyn std::fmt::Display| {
+            GithubError::new(format!("cannot set up the GitHub client: {}", first_line(&e.to_string())), 400)
+        };
+        let root: http::Uri = graphql_root(base_url).parse().map_err(|e| fail(&e))?;
+        let mut auth = HeaderValue::try_from(format!("Bearer {token}")).map_err(|e| fail(&e))?;
+        auth.set_sensitive(true);
+        let http = reqwest::Client::builder().user_agent(crate::USER_AGENT).build().map_err(|e| fail(&e))?;
+        // `Octocrab::builder()` would add `User-Agent: octocrab` beside ours; this is its stack without it.
+        let octocrab = octocrab::OctocrabBuilder::new_empty()
+            .with_service(ReqwestConnector::new(http))
+            .with_layer(&BaseUriLayer::new(root.clone()))
+            .with_layer(&AuthHeaderLayer::new(Some(auth), root.clone(), root))
+            .with_auth(octocrab::AuthState::None)
+            .build()
+            .map_err(|e| match e {})?;
         Ok(Self { octocrab })
     }
 }
