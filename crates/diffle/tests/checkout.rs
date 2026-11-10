@@ -96,11 +96,10 @@ async fn detaches_at_a_commit_a_tag_or_an_expression() {
     assert_eq!(at(&t), ("HEAD".to_owned(), main.clone()));
     s.enter(revspec(&["main..feat~0"])).await.unwrap();
     assert_eq!(at(&t), ("HEAD".to_owned(), feat));
-    // The uncommitted changes are the checkout already.
-    s.enter(EnterRequest::Working).await.unwrap();
-    assert_eq!(head(&t), "HEAD");
-    s.close().await;
+    // The uncommitted changes are the reviewer's: their checkout comes back.
+    let snap = s.enter(EnterRequest::Working).await.unwrap();
     assert_eq!(head(&t), "main");
+    assert_eq!(snap.new_sha, "worktree");
 }
 
 #[tokio::test]
@@ -289,6 +288,53 @@ async fn checks_out_a_focused_commit_and_the_range_again() {
     let snap = s.show(RangeView::Whole).await.unwrap();
     assert_eq!(head(&t), "feat");
     assert!(follows_checkout(&snap));
+}
+
+#[tokio::test]
+async fn checks_out_a_focused_commit_of_a_range_ending_at_the_worktree_and_comes_back() {
+    let (t, first) = on_feat();
+    let s = session(t.open().await, Github::tokenless(), true);
+    let whole = s.start(s.resolve(revspec(&["main"])).await.unwrap()).await.unwrap();
+    assert_eq!(whole.new_sha, "worktree");
+    let snap = s.show(RangeView::Commit { sha: first.clone() }).await.unwrap();
+    assert_eq!((head(&t), t.git(&["rev-parse", "HEAD"])), ("HEAD".to_owned(), first));
+    assert!(follows_checkout(&snap));
+    assert_eq!(snap.commits.list.len(), 2, "the worktree still names feat: the range keeps both commits");
+    let snap = s.show(RangeView::Whole).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert_eq!((snap.new_sha.as_str(), &snap.comment_key), ("worktree", &whole.comment_key));
+    let snap = s.show(RangeView::Commit { sha: snap.commits.list[0].sha.clone() }).await.unwrap();
+    assert!(follows_checkout(&snap));
+    s.close().await;
+    assert_eq!(head(&t), "feat");
+}
+
+#[tokio::test]
+async fn leaves_a_dirty_worktrees_focused_commit_unchecked_out() {
+    let (t, first) = on_feat();
+    t.write("a.txt", "edited\n");
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["main"])).await.unwrap()).await.unwrap();
+    let snap = s.show(RangeView::Commit { sha: first }).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert!(!follows_checkout(&snap));
+    assert_eq!(std::fs::read_to_string(t.path.join("a.txt")).unwrap(), "edited\n");
+}
+
+#[tokio::test]
+async fn keys_a_direct_worktree_range_as_entered_while_its_worktree_is_pinned() {
+    let (t, first) = on_feat();
+    let s = session(t.open().await, Github::tokenless(), true);
+    let whole = s.start(s.resolve(revspec(&["main..worktree"])).await.unwrap()).await.unwrap();
+    s.show(RangeView::Commit { sha: first.clone() }).await.unwrap();
+    // Edited on the focused commit: the way back is refused, and the range shows where HEAD was left.
+    t.write("scratch.txt", "x\n");
+    t.git(&["add", "scratch.txt"]);
+    let snap = s.show(RangeView::Whole).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first);
+    assert_eq!(snap.new_sha, t.git(&["rev-parse", "feat"]));
+    assert_eq!(snap.comment_key, whole.comment_key);
+    assert!(snap.iterations.is_empty(), "a worktree range records no iterations");
 }
 
 #[tokio::test]
