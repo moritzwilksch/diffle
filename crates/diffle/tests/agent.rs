@@ -125,7 +125,9 @@ fn lists_the_shown_threads_by_state_and_path() {
         assert!(status.contains("201"), "{status}");
         serde_json::from_str::<Value>(&body).unwrap()[0]["id"].as_str().unwrap().to_owned()
     };
-    post(json!({ "path": "app.py", "startLine": 2, "body": "rename y" }));
+    let open = post(json!({ "path": "app.py", "startLine": 2, "body": "rename y" }));
+    let (status, _) = http(&served.url, "POST", &format!("/api/threads/{open}/replies"), r#"{"body":"to what?"}"#);
+    assert!(status.contains("201"), "{status}");
     let resolved = post(json!({ "path": "lib.py", "startLine": 1, "body": "why 2?" }));
     let (status, _) = http(&served.url, "PUT", &format!("/api/threads/{resolved}/resolved"), r#"{"resolved":true}"#);
     assert!(status.contains("200"), "{status}");
@@ -139,9 +141,29 @@ fn lists_the_shown_threads_by_state_and_path() {
     assert_eq!(all.as_object().unwrap().keys().collect::<Vec<_>>(), ["commentKey", "threads"]);
     assert_eq!(all["commentKey"], key);
     assert_eq!(bodies(&all), ["rename y", "why 2?"]);
+    // What an agent reads, one line on stdout; pretty here, with ids and times masked.
+    insta::assert_json_snapshot!("list", masked(all));
     assert_eq!(bodies(&json_out(&comments(&t.path, &["list", "--state", "open"]))), ["rename y"]);
     assert_eq!(bodies(&json_out(&comments(&t.path, &["list", "--state", "resolved"]))), ["why 2?"]);
     assert_eq!(bodies(&json_out(&comments(&t.path, &["list", "--path", "lib.py"]))), ["why 2?"]);
+}
+
+/// `value` with its ids, times and comment key masked, which change from run to run.
+fn masked(value: Value) -> Value {
+    match value {
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| match key.as_str() {
+                    "id" | "commentKey" => (key, json!("[id]")),
+                    "createdAt" | "updatedAt" | "resolvedAt" => (key, json!("[time]")),
+                    _ => (key, masked(value)),
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(masked).collect()),
+        value => value,
+    }
 }
 
 #[cfg(unix)]
