@@ -1,7 +1,8 @@
-import type { GraphNode } from '@/shared/protocol.js';
+import { layout, type Placed, type PlacedNode, type Size } from '@/client/canvas/layout/layout.js';
+import { rank } from '@/client/canvas/layout/rank.js';
 import { sharedFolder } from '@/client/graph/labels.js';
-import { layout, type Placed, type PlacedNode, type Size } from './layout.js';
-import { type Graph, rank } from './rank.js';
+import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
+import { bySource, type Graph } from './source.js';
 
 /** One connected part of the graph, placed on its own. */
 export interface Part {
@@ -14,7 +15,7 @@ export interface Part {
    * their paths; '' for none, and always in symbol view.
    */
   folder: string;
-  placed: Placed;
+  placed: Placed<GraphNode, GraphEdge>;
   /** Where the part sits in the stack; its header sits above this. */
   x: number;
   y: number;
@@ -23,9 +24,9 @@ export interface Part {
 export interface Stacked {
   parts: Part[];
   /** The symbols linked to nothing, laid out below the parts under their own header; null when there are none. */
-  unlinked: { placed: Placed; y: number } | null;
+  unlinked: { placed: Placed<GraphNode, GraphEdge>; y: number } | null;
   /** Every node at its place in the whole stack, for selection, keys and focus. */
-  nodes: PlacedNode[];
+  nodes: PlacedNode<GraphNode>[];
   width: number;
   height: number;
 }
@@ -53,7 +54,7 @@ export function stack(
   let width = 0;
   const parts = groups.map((g): Part => {
     const folder = clustered ? '' : sharedFolder(g.nodes.map((n) => n.path));
-    const placed = layout(g, rank(g), (n) => size(n, folder), clustered);
+    const placed = place(g, (n) => size(n, folder), clustered);
     const part = { key: hubOf(g).id, hub: hubOf(g), folder, placed, x: 0, y: y + PART_HEADER };
     y += PART_HEADER + placed.height + PART_GAP;
     width = Math.max(width, placed.width);
@@ -62,7 +63,7 @@ export function stack(
   const nodes = parts.flatMap((p) => p.placed.nodes.map((n) => ({ ...n, x: n.x + p.x, y: n.y + p.y })));
   if (!unlinked.nodes.length) return { parts, unlinked: null, nodes, width, height: Math.max(0, y - PART_GAP) };
   // "No links" names no folder, so its boxes keep their whole paths.
-  const placed = layout(unlinked, rank(unlinked), (n) => size(n, ''), clustered);
+  const placed = place(unlinked, (n) => size(n, ''), clustered);
   const top = y + PART_HEADER;
   nodes.push(...placed.nodes.map((n) => ({ ...n, y: n.y + top })));
   return {
@@ -72,6 +73,12 @@ export function stack(
     width: Math.max(width, placed.width),
     height: top + placed.height,
   };
+}
+
+/** `g` laid out in source order; in symbol view, a layer's symbols cluster by file. */
+function place(g: Graph, size: (n: GraphNode) => Size, clustered: boolean): Placed<GraphNode, GraphEdge> {
+  const nodes = [...g.nodes].sort(bySource);
+  return layout({ nodes, edges: g.edges }, rank(g), { size, cluster: (n) => (clustered ? n.path : null) });
 }
 
 /** The weakly connected parts with at least one link, largest first, and the nodes with none. */

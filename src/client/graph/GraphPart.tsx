@@ -1,10 +1,12 @@
 import { Fragment } from 'react';
+import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import { isTest } from './filters.js';
-import { arrowHead, Cluster, Node } from './GraphShapes.js';
+import { arrowHead } from '@/client/canvas/arrows.js';
+import { Cluster, Node } from './GraphShapes.js';
 import { useGraph } from './state.js';
-import type { Box, Placed } from '@/client/graph/layout/layout.js';
-import { edgeKey } from '@/client/graph/layout/rank.js';
+import type { Box, Placed } from '@/client/canvas/layout/layout.js';
+import { edgeKey } from '@/client/canvas/layout/rank.js';
 
 /**
  * What stays lit: the selection, hovered node or focused file (`seeds`) and everything linked to
@@ -46,7 +48,7 @@ export function GraphPart({
   zoom,
   labels,
 }: {
-  placed: Placed;
+  placed: Placed<GraphNode, GraphEdge>;
   /** The folder its header names, which its file boxes leave out of their paths; '' for none. */
   folder: string;
   clustered: boolean;
@@ -96,14 +98,14 @@ export function GraphPart({
   return (
     <>
       {placed.clusters.map((c) => {
-        const members = placed.nodes.filter((n) => n.node.path === c.path && within(n, c));
+        const members = placed.nodes.filter((n) => n.node.path === c.cluster && within(n, c));
         return (
           <Cluster
-            key={`${c.path}@${c.layer}@${c.x},${c.y}`}
+            key={`${c.cluster}@${c.layer}@${c.x},${c.y}`}
             cluster={c}
             members={members}
             opacity={opacity(members.map((n) => n.node.id))}
-            focused={c.path === focusPath}
+            focused={c.cluster === focusPath}
             stripped={folder}
           />
         );

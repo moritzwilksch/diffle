@@ -1,6 +1,7 @@
 import { FileCode2, Pencil, Plus } from 'lucide-react';
 import { kindColor, KindIcon } from '@/client/lsp/symbolKind.js';
 import type { GraphNode } from '@/shared/protocol.js';
+import { CANVAS_BG } from '@/client/canvas/arrows.js';
 import { Marked, useFindHits } from './GraphFind.js';
 import {
   basename,
@@ -13,7 +14,7 @@ import {
   SEPARATOR_W,
   TITLE_CHAR,
 } from './labels.js';
-import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/graph/layout/layout.js';
+import { CLUSTER_HEADER, type PlacedCluster, type PlacedNode } from '@/client/canvas/layout/layout.js';
 
 const STATUS_STROKE: Record<GraphNode['status'], string> = {
   added: 'var(--add)',
@@ -23,9 +24,6 @@ const STATUS_STROKE: Record<GraphNode['status'], string> = {
 
 // The file header's monospace character width, to clip its path to the box.
 const HEADER_CHAR = 6.9;
-
-/** The canvas grey, also under a dependents-only file so its dots stop at the dashed outline. */
-export const CANVAS_BG = 'color-mix(in srgb, var(--fg) 2.5%, var(--bg))';
 
 /**
  * A file's box in one column: the file icon and its path as everywhere in diffle, dim directories and
@@ -40,21 +38,21 @@ export function Cluster({
   stripped,
 }: {
   cluster: PlacedCluster;
-  members: PlacedNode[];
+  members: PlacedNode<GraphNode>[];
   opacity: number;
   focused: boolean;
   stripped: string;
 }) {
   const unchanged = members.every((n) => n.node.status === 'consumer');
   const room = Math.floor((cluster.w - 34) / HEADER_CHAR);
-  const name = clip(basename(cluster.path), room);
-  const dir = dirname(relativeTo(cluster.path, stripped));
+  const name = clip(basename(cluster.cluster), room);
+  const dir = dirname(relativeTo(cluster.cluster, stripped));
   // The directory gives way first, from its start, so the nearest folders stay.
   const dirRoom = room - name.length - 1;
   const shownDir = !dir || dirRoom < 4 ? '' : dir.length + 1 > dirRoom ? `…${dir.slice(-(dirRoom - 2))}/` : `${dir}/`;
   return (
     <g opacity={opacity}>
-      {`${shownDir}${name}` !== cluster.path && <title>{cluster.path}</title>}
+      {`${shownDir}${name}` !== cluster.cluster && <title>{cluster.cluster}</title>}
       <rect
         x={cluster.x}
         y={cluster.y}
@@ -119,7 +117,7 @@ export function Node({
   test,
   mark,
 }: {
-  placed: PlacedNode;
+  placed: PlacedNode<GraphNode>;
   clustered: boolean;
   /** The folder its group's header names, which a file's box leaves out of its path. */
   stripped: string;
@@ -218,39 +216,5 @@ export function Node({
         </g>
       )}
     </g>
-  );
-}
-
-/** Stroke widths an arrow is drawn in; each has its own head, sized to it. */
-export const ARROW_WIDTHS = [1, 2, 3] as const;
-
-/** The arrowhead for a stroke of `width`, muted or lit. */
-export const arrowHead = (width: number, lit: boolean) => `url(#graph-arrow-${width}${lit ? '-lit' : ''})`;
-
-/** Arrowheads in user units, so a head keeps to its line's weight instead of growing with it. */
-export function ArrowDefs() {
-  return (
-    <defs>
-      {ARROW_WIDTHS.flatMap((w) =>
-        [false, true].map((lit) => {
-          const size = 5 + 2.5 * w;
-          return (
-            <marker
-              key={`${w}${lit}`}
-              id={`graph-arrow-${w}${lit ? '-lit' : ''}`}
-              viewBox="0 0 8 8"
-              refX="7"
-              refY="4"
-              markerUnits="userSpaceOnUse"
-              markerWidth={size}
-              markerHeight={size}
-              orient="auto"
-            >
-              <path d="M0,0.5 L7.5,4 L0,7.5 z" fill={lit ? 'var(--accent)' : 'var(--fg-2)'} />
-            </marker>
-          );
-        }),
-      )}
-    </defs>
   );
 }

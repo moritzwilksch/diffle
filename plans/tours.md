@@ -7,7 +7,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 ### 1. Write a tour as an HTML subset with `diffle-*` elements, laid out on an open canvas
 
 - **Chosen:** The agent writes one HTML document. Plain tags (`h1`–`h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`) carry prose and structure. Custom elements carry the primitives: `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump` (catalog: open question 1). The agent places and connects primitives on a pannable, zoomable canvas, as the graph view does (`src/client/graph/GraphCanvas.tsx`), rather than in one column of text.
-- **Rejected:** Markdown with primitive fences (```` ```diffle-diff path=… ````) through `src/client/Markdown.tsx`. It is safe already and agents write it reliably, but it renders as one column, and the reviewer wants creative layouts that the agent connects freely.
+- **Rejected:** Markdown with primitive fences (` ```diffle-diff path=… `) through `src/client/Markdown.tsx`. It is safe already and agents write it reliably, but it renders as one column, and the reviewer wants creative layouts that the agent connects freely.
 - **Why:**
   - An explanation of a change is often a picture: a request flowing through three files, or one type feeding two callers.
   - HTML nests primitives inside cards and lets the agent group them.
@@ -64,16 +64,16 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 - **Chosen:**
 
-  | Element | Attributes | Shows |
-  |---|---|---|
-  | `diffle-card` | `id`, `step?`, `title` | a box of prose and primitives; a node on the canvas, with its step number when it has one |
-  | `diffle-group` | `title` | a frame around related cards |
-  | `diffle-edge` | `from`, `to`, `label?` | an arrow between two cards |
-  | `diffle-diff` | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`) | those diff lines, highlighted, with a jump to them |
-  | `diffle-tree` | `paths` (newline-separated), `root?` | a directory tree; changed files carry their status from the snapshot |
-  | `diffle-jump` | `path`, `line?`, `side?` | a button into the diff view |
-  | `diffle-symbol` | `path`, `line`, `name`, `side?` | a chip for the symbol `name` on that line; it opens the language server's references, like the references peek in the diff view |
-  | `diffle-callout` | `kind` (`note` \| `warning`) | a highlighted aside inside a card |
+  | Element          | Attributes                                                         | Shows                                                                                                                           |
+  | ---------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+  | `diffle-card`    | `id`, `step?`, `title`                                             | a box of prose and primitives; a node on the canvas, with its step number when it has one                                       |
+  | `diffle-group`   | `title`                                                            | a frame around related cards                                                                                                    |
+  | `diffle-edge`    | `from`, `to`, `label?`                                             | an arrow between two cards                                                                                                      |
+  | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`) | those diff lines, highlighted, with a jump to them                                                                              |
+  | `diffle-tree`    | `paths` (newline-separated), `root?`                               | a directory tree; changed files carry their status from the snapshot                                                            |
+  | `diffle-jump`    | `path`, `line?`, `side?`                                           | a button into the diff view                                                                                                     |
+  | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                    | a chip for the symbol `name` on that line; it opens the language server's references, like the references peek in the diff view |
+  | `diffle-callout` | `kind` (`note` \| `warning`)                                       | a highlighted aside inside a card                                                                                               |
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
 - **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably.
@@ -93,6 +93,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   - a document without a card
 
   Each error names the element and the reason. A refusal is a user error (`Error::is_user_error`), so `diffle tour push` exits 2 with the list, and the agent fixes the document and pushes again. The client still applies its own allowlist when rendering (decision 2).
+
 - **Rejected:** Storing any document and letting the client drop what it doesn't know. The agent would never learn that a card vanished or an edge dangles, and the reviewer would get a broken tour.
 - **Why:** The agent writes and pushes in a loop, so the CLI's exit status and stderr are its only feedback.
 - **Cost:** A new dependency, plus an allowlist on each side of the contract; decision 11 gives both one source.
@@ -110,7 +111,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 12. Share the canvas with the graph view; the tour is a third `ViewDef`
 
-- **Chosen:** Move the viewport (pan, zoom, fit, eased focus) and the arrow shapes out of `src/client/graph/GraphCanvas.tsx` and `GraphShapes.tsx` into `src/client/canvas/`. Generalize `src/client/graph/layout/` from `GraphNode` to nodes with only an `id` and a size, and move it into `src/client/canvas/layout/`. Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and its `keys` take `n` and `p` for steps (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph).
+- **Chosen:** Move the viewport (pan, zoom, fit, eased focus) and the arrow shapes out of `src/client/graph/GraphCanvas.tsx` and `GraphShapes.tsx` into `src/client/canvas/`. Generalize `src/client/graph/layout/` from `GraphNode` to nodes with only an `id`, given a size and an optional cluster (the box a layer's members share: a file for the graph, a `diffle-group` for a tour) by the caller, and move it into `src/client/canvas/layout/`. What only the graph knows stays in `graph/layout/`: its parts (`components.ts`) and source order (`source.ts`). Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and its `keys` take `n` and `p` for steps (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph).
 - **Rejected:** A separate, simpler canvas and layout for tours. It ships faster, but two canvases drift apart in pan, zoom and keys.
 - **Why:** One canvas behaviour, and one set of canvas keys, across both views.
 - **Cost:** A refactor of the graph view lands inside this feature, so the graph's e2e screenshots must stay unchanged.

@@ -1,3 +1,4 @@
+import { canvasKeys } from '@/client/canvas/keys.js';
 import { canvasControl } from './GraphCanvas.js';
 import { type Direction, useGraph } from './state.js';
 
@@ -12,7 +13,6 @@ const STEPS: Record<string, Direction> = {
   ArrowDown: 'down',
 };
 
-const ZOOM_STEP = 1.25;
 /** How soon a second `z` makes `zz`, as the review's chords wait. */
 const CHORD_MS = 800;
 let zAt = -Infinity;
@@ -73,17 +73,7 @@ export function graphKeys(e: KeyboardEvent): boolean {
       if (graph.selected) canvasControl.frame(graph.selected);
       else canvasControl.fit();
       return true;
-    case '0':
-      canvasControl.fit();
-      return true;
-    case '+':
-    case '=':
-      canvasControl.zoom(ZOOM_STEP);
-      return true;
-    case '-':
-      canvasControl.zoom(1 / ZOOM_STEP);
-      return true;
     default:
-      return false;
+      return canvasKeys(e, canvasControl);
   }
 }

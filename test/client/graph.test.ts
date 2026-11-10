@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { split, stack } from '@/client/graph/layout/components.js';
-import { type Box, layout } from '@/client/graph/layout/layout.js';
-import { byFile, rank } from '@/client/graph/layout/rank.js';
+import { type Box, layout } from '@/client/canvas/layout/layout.js';
+import { bySource } from '@/client/graph/layout/source.js';
+import { rank } from '@/client/canvas/layout/rank.js';
+import { byFile } from '@/client/graph/layout/source.js';
 import { signatureOf } from '@/client/graph/details/useSignatures.js';
 import { hiddenReason } from '@/client/graph/focus.js';
 import { nodeLabel } from '@/client/graph/labels.js';
@@ -95,6 +97,12 @@ describe('byFile', () => {
 
 describe('layout', () => {
   const size = () => ({ w: 140, h: 40 });
+  /** Laid out as the graph does: in source order, clustered by file in symbol view. */
+  const place = (g: GraphResponse, clustered: boolean) =>
+    layout({ nodes: [...g.nodes].sort(bySource), edges: g.edges }, rank(g), {
+      size,
+      cluster: (n) => (clustered ? n.path : null),
+    });
   const overlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
   it('keeps boxes apart, layers in rank order top to bottom, and unlinked symbols on a shelf below', () => {
@@ -108,7 +116,7 @@ describe('layout', () => {
       ],
       ['main>run', 'main>get', 'run>get', 'init>get'],
     );
-    const placed = layout(g, rank(g), size, true);
+    const placed = place(g, true);
     const at = new Map(placed.nodes.map((p) => [p.node.id, p]));
     expect(at.get('main')!.y).toBeLessThan(at.get('run')!.y);
     expect(at.get('run')!.y).toBeLessThan(at.get('get')!.y);
@@ -117,7 +125,7 @@ describe('layout', () => {
     expect(placed.shelf).not.toBeNull();
     expect(at.get('lone')!.y).toBeGreaterThanOrEqual(placed.shelf!);
     // One cluster per file and layer; the shelf's cluster has no layer.
-    expect(placed.clusters.map((c) => [c.path, c.layer])).toEqual(
+    expect(placed.clusters.map((c) => [c.cluster, c.layer])).toEqual(
       expect.arrayContaining([
         ['agent.py', 1],
         ['misc.py', -1],
@@ -133,7 +141,7 @@ describe('layout', () => {
       Array.from({ length: 9 }, (_, i) => node(`lone${i}`, 'added', `f${i}.py`)),
       [],
     );
-    const placed = layout(g, rank(g), size, false);
+    const placed = place(g, false);
     expect(new Set(placed.nodes.map((p) => p.y)).size).toBeGreaterThan(1);
     for (const p of placed.nodes) expect(p.x + p.w, p.node.id).toBeLessThanOrEqual(placed.width);
   });
@@ -144,7 +152,7 @@ describe('layout', () => {
       [at('first', 'users.py', 1), at('second', 'users.py', 9), at('early', 'lib.py', 3), at('late', 'lib.py', 7)],
       ['first>late', 'second>early'],
     );
-    const x = new Map(layout(g, rank(g), size, true).nodes.map((p) => [p.node.id, p.x]));
+    const x = new Map(place(g, true).nodes.map((p) => [p.node.id, p.x]));
     expect(x.get('first')!).toBeLessThan(x.get('second')!);
     expect(x.get('early')!).toBeLessThan(x.get('late')!);
   });
