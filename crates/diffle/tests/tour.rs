@@ -12,13 +12,14 @@ use diffle::protocol::EnterRequest;
 use futures::StreamExt;
 use serde_json::{Value, json};
 
-/// `app.py` changed in the worktree: line 2 added, line 3 changed.
+/// `app.py` changed in the worktree: line 2 added, line 3 changed; `added.py` new there.
 async fn server() -> TestServer {
     let repo = TestRepo::new();
     repo.write("app.py", "import os\ndef old(): pass\n");
     repo.write("docs/readme.md", "docs\n");
     repo.commit("base");
     repo.write("app.py", "import os\ndef load_user(id):\n    return id\n");
+    repo.write("added.py", "x = 1\n");
     TestServer::over(repo, EnterRequest::Working).await
 }
 
@@ -93,6 +94,7 @@ stray text
   <img src="x.png">
   <p onclick="steal()">Hi <a href="javascript:alert(1)">there</a></p>
   <diffle-diff path="missing.py" lines="1-2"></diffle-diff>
+  <diffle-diff path="added.py" side="old" lines="1"></diffle-diff>
   <diffle-diff path="app.py" lines="2-9"></diffle-diff>
   <diffle-diff path="app.py" side="old" lines="3"></diffle-diff>
   <diffle-diff path="app.py" lines="5-2"></diffle-diff>

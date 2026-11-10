@@ -35,8 +35,8 @@ impl Need {
 pub fn refusal(reference: &Reference, is_file: bool, text: Option<&str>) -> Option<TourError> {
     let path = &reference.path;
     let message = match (&reference.need, text) {
-        (Need::File, _) if is_file => return None,
-        (Need::File, _) => format!("{path} is not a file of the review"),
+        _ if !is_file => format!("{path} is not a file of the review"),
+        (Need::File, _) => return None,
         (need, None) => format!("{path} is not on the {} side of the review", side_name(need.side()?)),
         (Need::Side(_), Some(_)) => return None,
         (Need::Lines { side, start, end }, Some(text)) => {

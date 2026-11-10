@@ -30,7 +30,11 @@ expression: refused.json()
     },
     {
       "element": "diffle-card#a > diffle-diff path=\"missing.py\" lines=\"1-2\"",
-      "message": "missing.py is not on the new side of the review"
+      "message": "missing.py is not a file of the review"
+    },
+    {
+      "element": "diffle-card#a > diffle-diff path=\"added.py\" side=\"old\" lines=\"1\"",
+      "message": "added.py is not on the old side of the review"
     },
     {
       "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"2-9\"",
