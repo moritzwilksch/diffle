@@ -8,7 +8,9 @@ use super::anchor::{anchor_path, compare_threads};
 use crate::error::{Error, Result};
 use crate::iterations::now_ms;
 use crate::persist::{with_file_lock, write_file_atomic};
-use crate::protocol::{CommentAnchor, CommentMessage, CommentThread, ThreadQuery, ThreadState, ViewedEntry};
+use crate::protocol::{
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, ThreadQuery, ThreadState, ViewedEntry,
+};
 
 /// Viewed marks kept per path: the current one plus the newest previous, so `restale` is derivable.
 const VIEWED_HISTORY: usize = 2;
@@ -74,17 +76,17 @@ impl CommentStore {
 
     pub async fn add_thread(&self, anchor: CommentAnchor, body: String) -> Result<CommentThread> {
         self.mutate(|set| {
-            let t = new_thread(anchor, body);
+            let t = new_thread(anchor, body, None);
             set.threads.push(t.clone());
             Ok((t, true))
         })
         .await
     }
 
-    pub async fn reply(&self, thread_id: &str, body: String) -> Result<CommentThread> {
+    pub async fn reply(&self, thread_id: &str, body: String, author: Option<CommentAuthor>) -> Result<CommentThread> {
         self.mutate(|set| {
             let t = find_thread(set, thread_id)?;
-            t.messages.push(new_message(body));
+            t.messages.push(new_message(body, author));
             Ok((t.clone(), true))
         })
         .await
@@ -142,21 +144,22 @@ impl CommentStore {
         .await
     }
 
-    pub async fn clear(&self) -> Result<()> {
+    /// Drops every thread and returns their ids.
+    pub async fn clear(&self) -> Result<Vec<String>> {
         self.mutate(|set| {
-            set.threads.clear();
-            Ok(((), true))
+            let gone: Vec<String> = set.threads.drain(..).map(|t| t.id).collect();
+            Ok((gone, true))
         })
         .await
     }
 
-    /// Drops every stale thread and returns how many went.
-    pub async fn remove_stale(&self) -> Result<usize> {
+    /// Drops every stale thread and returns their ids.
+    pub async fn remove_stale(&self) -> Result<Vec<String>> {
         self.mutate(|set| {
-            let before = set.threads.len();
+            let gone: Vec<String> = set.threads.iter().filter(|t| t.stale).map(|t| t.id.clone()).collect();
             set.threads.retain(|t| !t.stale);
-            let gone = before - set.threads.len();
-            Ok((gone, gone > 0))
+            let changed = !gone.is_empty();
+            Ok((gone, changed))
         })
         .await
     }
@@ -245,16 +248,16 @@ pub(super) async fn write_store_file(file: &Path, data: &StoreFile) -> anyhow::R
     write_file_atomic(file, &serde_json::to_string_pretty(data)?).await
 }
 
-fn new_message(body: String) -> CommentMessage {
+fn new_message(body: String, author: Option<CommentAuthor>) -> CommentMessage {
     let now = now_ms();
-    CommentMessage { id: uuid::Uuid::new_v4().to_string(), body, created_at: now, updated_at: now }
+    CommentMessage { id: uuid::Uuid::new_v4().to_string(), body, created_at: now, updated_at: now, author }
 }
 
-pub(super) fn new_thread(anchor: CommentAnchor, body: String) -> CommentThread {
+pub(super) fn new_thread(anchor: CommentAnchor, body: String, author: Option<CommentAuthor>) -> CommentThread {
     CommentThread {
         id: uuid::Uuid::new_v4().to_string(),
         anchor,
-        messages: vec![new_message(body)],
+        messages: vec![new_message(body, author)],
         resolved: false,
         resolved_at: None,
         stale: false,

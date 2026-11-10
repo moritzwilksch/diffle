@@ -13,7 +13,14 @@ use diffle::protocol::{EnterRequest, FollowRefs, RangeView, comparison_label, fo
 use diffle::session::{Session, SessionOptions};
 
 fn session(repo: GitRepo, github: Github, checkout: bool) -> Arc<Session> {
-    let opts = SessionOptions { watch: false, github, context: 3, follow_refs: FollowRefs::Off, checkout };
+    let opts = SessionOptions {
+        watch: false,
+        github,
+        context: 3,
+        follow_refs: FollowRefs::Off,
+        checkout,
+        instance: "test".into(),
+    };
     Session::new(Arc::new(repo), Arc::new(Recorder::default()), opts)
 }
 

@@ -32,8 +32,8 @@ import {
   SearchResponseSchema,
   ServerMessageSchema,
   SnapshotSchema,
+  ThreadListSchema,
   UserConfigSchema,
-  VersionResponseSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import type {
@@ -100,7 +100,6 @@ const q = (params: Record<string, string | undefined>) =>
 
 export const api = {
   /** The server's release; answers before the first review resolves. */
-  version: () => json(VersionResponseSchema, 'api/version'),
   github: () => json(GithubMetadataSchema, 'api/github'),
   /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
   permalink: (req: PermalinkRequest) =>
@@ -155,7 +154,7 @@ export const api = {
       `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, content: opts.content, path: opts.path })}`,
     ),
   threads: (query: ThreadQuery = {}) =>
-    json(CommentThreadSchema.array(), `api/threads?${q({ state: query.state, path: query.path })}`),
+    json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`).then((list) => list.threads),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`api/threads/export?${q({ state: 'open' })}`),
   /** One message, with its thread's location and quote, as an agent prompt. */

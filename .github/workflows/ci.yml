@@ -17,9 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Lets hestia see which cached packs GitHub evicted, rather than fail a download first.
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - uses: Mic92/hestia@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
+        with:
+          # The action downloads its daemon; pin it to the action's release, not "latest".
+          version: v3.1.0
+          # cache.nixos.org already serves nixpkgs; keep the shared 10 GB quota for rust-cache.
+          upstream-cache-filter: true
       - name: Build Nix package
         run: nix build
       - name: Smoke test Nix package

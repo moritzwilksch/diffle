@@ -442,11 +442,17 @@ export type FileAnchor = z.infer<typeof FileAnchorSchema>;
 export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
+/** Who wrote a message that the reviewer did not: only `diffle comments` sends it, never the browser. */
+export const CommentAuthorSchema = z.enum(['agent']);
+export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
+
 export const CommentMessageSchema = z.object({
   id: z.string(),
   body: z.string(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
+  /** Absent: the reviewer wrote it. */
+  author: CommentAuthorSchema.optional(),
 });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
@@ -480,6 +486,8 @@ export const ThreadCreateSchema = z
     endLine: z.number().int().positive().optional(),
     body: z.string().refine((body) => body.trim().length > 0, 'body required'),
     quoted: z.string().optional(),
+    /** Absent: the reviewer opens the thread. */
+    author: CommentAuthorSchema.optional(),
   })
   .refine((t) => t.startLine == null || t.endLine == null || t.endLine >= t.startLine, {
     path: ['endLine'],
@@ -493,6 +501,8 @@ export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
 
 export const ReplyCreateSchema = z.object({
   body: z.string().refine((body) => body.trim().length > 0, 'body required'),
+  /** Absent: the reviewer replies. */
+  author: CommentAuthorSchema.optional(),
 });
 export type ReplyCreate = z.infer<typeof ReplyCreateSchema>;
 
@@ -531,8 +541,18 @@ export const ThreadQuerySchema = z.object({
 });
 export type ThreadQuery = z.infer<typeof ThreadQuerySchema>;
 
+/** What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key. */
+export const ThreadListSchema = z.object({
+  /** The set the threads belong to: `Snapshot.commentKey` of the slice shown when they were read. */
+  commentKey: z.string(),
+  threads: CommentThreadSchema.array(),
+});
+export type ThreadList = z.infer<typeof ThreadListSchema>;
+
 export const MessagePatchSchema = z.object({
   body: z.string(),
+  /** Absent: the reviewer edits. */
+  author: CommentAuthorSchema.optional(),
 });
 export type MessagePatch = z.infer<typeof MessagePatchSchema>;
 
@@ -907,6 +927,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('threads'),
+    /** After the change this announces; `GET /api/threads/activity` takes it as `since`. */
+    cursor: z.string(),
   }),
   z.object({
     type: z.literal('viewed'),
@@ -992,7 +1014,11 @@ export const ConfigUpdateSchema = z.object({
   lineWrap: z.boolean().optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
-export const ResolvedRequestSchema = z.object({ resolved: z.boolean() });
+export const ResolvedRequestSchema = z.object({
+  resolved: z.boolean(),
+  /** Absent: the reviewer resolves or reopens. */
+  author: CommentAuthorSchema.optional(),
+});
 export const ViewedBulkRequestSchema = z.object({ entries: ViewedEntrySchema.array() });
 export const FileQuerySchema = z.object({ path: z.string().min(1), rev: SideSchema });
 /**
@@ -1044,16 +1070,62 @@ export type SymbolsQuery = z.infer<typeof SymbolsQuerySchema>;
  */
 export const GraphQuerySchema = z.object({ all: z.literal('1').optional(), scope: z.string().min(1).optional() });
 export type GraphQuery = z.infer<typeof GraphQuerySchema>;
-export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
+/** Who deletes, on `DELETE` of a thread or a message. Absent: the reviewer. */
+export const AuthorQuerySchema = z.object({ author: CommentAuthorSchema.optional() });
+export type AuthorQuery = z.infer<typeof AuthorQuerySchema>;
+export const ClearThreadsQuerySchema = AuthorQuerySchema.extend({ stale: z.literal('1').optional() });
 export const PatchQuerySchema = z.object({ path: z.string().optional() });
 /**
- * What `GET /api/version` answers before anything else is ready: the server's release, so a
- * client can tell whether it speaks this server's contract.
+ * What `GET /api/server` answers, before the first review resolves too: which run is listening, for
+ * which repository. A client trusts `<git-dir>/diffle/server.json` only when its `instance` and
+ * `gitDir` match this.
  */
-export const VersionResponseSchema = z.object({
+export const ServerInfoSchema = z.object({
+  /** Minted once per run. */
+  instance: z.string(),
+  pid: z.number().int(),
+  /** The repository's git directory, as the server resolved it. */
+  gitDir: z.string(),
   /** The server's semantic version, as `diffle --version` prints it. */
   version: z.string(),
+  /** The active review's comparison label, as the run's status line names it; absent until the first review resolves. */
+  label: z.string().optional(),
 });
-export type VersionResponse = z.infer<typeof VersionResponseSchema>;
+export type ServerInfo = z.infer<typeof ServerInfoSchema>;
+
+/**
+ * `GET /api/threads/activity`. Without `since`, answers the current state and a fresh cursor at once;
+ * with it, waits until a thread or the comment key changed after the cursor, by anyone but `ignore`.
+ * Without `timeout`, waits until then or until the server closes.
+ */
+export const ActivityQuerySchema = z.object({
+  /** A `cursor` this server answered earlier. */
+  since: z.string().optional(),
+  /** An author whose changes do not end the wait; they are still reported once something else does. */
+  ignore: CommentAuthorSchema.optional(),
+  /** Seconds to wait at most. */
+  timeout: z
+    .string()
+    .regex(/^[0-9]+$/)
+    .optional(),
+});
+export type ActivityQuery = z.infer<typeof ActivityQuerySchema>;
+
+/** What changed in the shown comment set since a cursor. */
+export const ActivitySchema = z.object({
+  /** `<instance>:<seq>`; the next wait's `since`. */
+  cursor: z.string(),
+  /** The set `threads` belong to; it switches when the reviewer focuses another slice. */
+  commentKey: z.string(),
+  /** Threads changed since the cursor, as they are now; after a key switch or a resync, every thread of the set. */
+  threads: CommentThreadSchema.array(),
+  /** Ids of threads changed since the cursor that no longer exist. */
+  removed: z.string().array(),
+  /** The cursor came from another run or fell out of the log's window: `threads` is the full set. */
+  resync: z.boolean(),
+  /** The server is closing; nothing more will come. */
+  closed: z.boolean(),
+});
+export type Activity = z.infer<typeof ActivitySchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });

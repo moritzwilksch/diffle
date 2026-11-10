@@ -40,8 +40,8 @@ describe('connectWs', () => {
     expect(onOpen).not.toHaveBeenCalled();
     FakeWebSocket.instances[0]!.onopen?.();
     expect(onOpen).toHaveBeenCalledTimes(1);
-    FakeWebSocket.instances[0]!.onmessage?.({ data: JSON.stringify({ type: 'threads' }) });
-    expect(onMessage).toHaveBeenLastCalledWith({ type: 'threads' });
+    FakeWebSocket.instances[0]!.onmessage?.({ data: JSON.stringify({ type: 'threads', cursor: 'run:1' }) });
+    expect(onMessage).toHaveBeenLastCalledWith({ type: 'threads', cursor: 'run:1' });
 
     // The server goes away; the repository and comments change meanwhile; no push can arrive.
     expect(onLost).not.toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe('proxy paths', () => {
     vi.stubGlobal('location', new URL(page));
     const fetch = vi
       .fn()
-      .mockResolvedValueOnce(new Response('[]'))
+      .mockResolvedValueOnce(new Response('{"commentKey":"k","threads":[]}'))
       .mockResolvedValueOnce(new Response('patch'))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);

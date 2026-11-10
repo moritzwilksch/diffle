@@ -64,20 +64,28 @@ async fn rejects_malformed_json_and_null_before_side_effects() {
     s.close().await;
 }
 
-/// Another client checks the server's release first, so the version answers before the review does.
+/// A starting run confirms the one already serving, so `/api/server` answers before the review does.
 #[tokio::test]
-async fn answers_the_version_before_the_first_review_resolves() {
+async fn confirms_the_run_before_the_first_review_resolves() {
     let repo = common::TestRepo::new();
     repo.write("a.txt", "a\n");
     repo.commit("base");
     let s = TestServer::listening(repo, None).await;
-    let r = tokio::time::timeout(Duration::from_secs(5), s.get("/api/version")).await.expect("answers while unready");
+    let r = tokio::time::timeout(Duration::from_secs(5), s.get("/api/server")).await.expect("answers while unready");
     assert_eq!(r.status, 200, "{}", r.body);
-    assert_eq!(r.json(), json!({ "version": env!("CARGO_PKG_VERSION") }));
+    let git_dir = s.repo.path.join(".git");
+    let expected = json!({
+        "instance": "test",
+        "pid": std::process::id(),
+        "gitDir": git_dir.to_str().unwrap(),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+    assert_eq!(r.json(), expected);
     // The rest of the API waits for the review.
     assert!(tokio::time::timeout(Duration::from_millis(300), s.get("/api/snapshot")).await.is_err());
     s.session.start(s.session.resolve(EnterRequest::Working).await.unwrap()).await.unwrap();
     assert_eq!(s.get("/api/snapshot").await.status, 200);
+    assert_eq!(s.get("/api/server").await.json()["label"], "HEAD..worktree");
     s.close().await;
 }
 
@@ -131,7 +139,7 @@ async fn does_not_clear_threads_for_an_invalid_stale_filter() {
     let created = s.json("POST", "/api/threads", json!({ "path": "a.txt", "body": "keep" })).await;
     assert_eq!(created.status, 201);
     assert_eq!(s.send("DELETE", "/api/threads?stale=0", &[], None).await.status, 400);
-    assert_eq!(s.get("/api/threads").await.json().as_array().unwrap().len(), 1);
+    assert_eq!(s.get("/api/threads").await.json()["threads"].as_array().unwrap().len(), 1);
     s.close().await;
 }
 
@@ -218,6 +226,28 @@ async fn creates_a_thread_on_the_whole_file_from_a_payload_without_a_line_and_ex
     let missing = s.json("POST", "/api/threads", json!({ "path": "nope.txt", "body": "x" })).await;
     assert_eq!(missing.status, 400);
     assert!(missing.json()["error"].as_str().unwrap().contains("nope.txt"));
+    s.close().await;
+}
+
+#[tokio::test]
+async fn keeps_who_wrote_each_message_and_marks_the_agent_in_the_prompt() {
+    let s = TestServer::start().await;
+    let created =
+        s.json("POST", "/api/threads", json!({ "path": "a.txt", "body": "Split it.", "author": "agent" })).await;
+    let id = created.json()[0]["id"].as_str().unwrap().to_owned();
+    s.json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "Why?" })).await;
+    let replied = s
+        .json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "Smaller diffs.", "author": "agent" }))
+        .await;
+    assert_eq!(replied.status, 201);
+    let stored = s.get("/api/threads").await.json();
+    let authors: Vec<&Value> =
+        stored["threads"][0]["messages"].as_array().unwrap().iter().map(|m| &m["author"]).collect();
+    assert_eq!(authors, [&json!("agent"), &Value::Null, &json!("agent")]);
+    let r = s.get("/api/threads/export").await;
+    assert_eq!(r.body, "(file) a.txt\n\n(agent) Split it.\n\nWhy?\n\n(agent) Smaller diffs.\n\n---\n");
+    let refused = s.json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "x", "author": "bot" })).await;
+    assert_eq!(refused.status, 400);
     s.close().await;
 }
 

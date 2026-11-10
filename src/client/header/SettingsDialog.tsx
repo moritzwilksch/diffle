@@ -1,5 +1,6 @@
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { Button } from '@/client/ui/Button.js';
+import { TextArea } from '@/client/ui/TextArea.js';
 import { useEffect, useRef, useState } from 'react';
 import { applyTextSize, readTextSize, storeTextSize, TEXT_SIZES, type TextSize } from '@/client/scale.js';
 import { useStore } from '@/client/store.js';
@@ -74,10 +75,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           Matching files start collapsed and viewed. One glob per line: <code>*.lock</code> matches a file name,{' '}
           <code>**/generated/**</code> a path.
         </p>
-        <textarea
+        <TextArea
           className="min-h-40 w-full rounded-md border border-border bg-surface p-2 font-mono text-[0.75rem]"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onValueChange={setText}
           spellCheck={false}
           autoFocus
         />

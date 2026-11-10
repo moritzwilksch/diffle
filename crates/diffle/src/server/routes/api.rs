@@ -11,14 +11,15 @@ use serde::Deserialize;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::protocol::{
-    EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerMessage, UserConfig, VersionResponse,
+    EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerInfo, ServerMessage, UserConfig,
+    comparison_label,
 };
 use crate::session::Broadcaster;
 use crate::user_config::UserConfigPatch;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
-        .route("/api/version", get(version))
+        .route("/api/server", get(server))
         .route("/api/snapshot", get(snapshot))
         .route("/api/moved", get(moved))
         .route("/api/reload", post(reload))
@@ -33,9 +34,17 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/config", get(config).put(set_config))
 }
 
-/// The server's release, for a client to check before it relies on the rest of the API.
-async fn version() -> Response {
-    Json(VersionResponse { version: env!("CARGO_PKG_VERSION").to_owned() }).into_response()
+/// Which run answers, for which repository: what a client checks an announcement against. Answers
+/// before the first review resolves, so a slow start does not look like a hung run.
+async fn server(State(d): State<Arc<ApiDeps>>) -> Response {
+    Json(ServerInfo {
+        instance: d.session.activity().instance().to_owned(),
+        pid: std::process::id().into(),
+        git_dir: d.session.repo.git_dir.to_string_lossy().into_owned(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        label: d.session.review().ok().map(|review| comparison_label(&review)),
+    })
+    .into_response()
 }
 
 async fn snapshot(State(d): State<Arc<ApiDeps>>) -> ApiResult {

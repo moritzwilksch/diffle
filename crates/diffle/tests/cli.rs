@@ -1,37 +1,12 @@
 //! The built `diffle` binary, as a user runs it.
 mod common;
 
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::io::Read;
 use std::path::Path;
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Child, Command};
 
 use common::TestRepo;
-
-/// The binary with its own config directory and no colours, so no real config is touched.
-fn diffle(config: &Path, args: &[&str]) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_diffle"));
-    cmd.args(args).env("NO_COLOR", "1").env("XDG_CONFIG_HOME", config).env("GIT_CONFIG_GLOBAL", no_global_config());
-    cmd
-}
-
-/// A global git config that does not exist: git reads none, and every git accepts the path, where
-/// conda-forge's on Windows refuses `NUL`.
-fn no_global_config() -> std::path::PathBuf {
-    std::env::temp_dir().join("diffle-tests-no-global-gitconfig")
-}
-
-fn run(config: &Path, args: &[&str]) -> Output {
-    diffle(config, args).stdin(Stdio::null()).output().unwrap()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
+use common::cli::{diffle, exchange, http, run, serve, stderr, stdout, version};
 
 #[test]
 fn prints_the_bare_version() {
@@ -41,13 +16,6 @@ fn prints_the_bare_version() {
         assert!(out.status.success());
         assert_eq!(stdout(&out), format!("{}\n", version()));
     }
-}
-
-/// The version the build took from package.json.
-fn version() -> String {
-    let package = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../package.json")).unwrap();
-    let json: serde_json::Value = serde_json::from_str(&package).unwrap();
-    json["version"].as_str().unwrap().to_owned()
 }
 
 #[test]
@@ -156,48 +124,6 @@ fn fails_with_1_when_the_requested_port_is_taken() {
     assert!(!stderr(&out).contains("running at"));
 }
 
-/// Starts a review listening as `listen` says, and returns it with where it listens (the URL, or
-/// `unix:<path>`) once stderr announces that and its version.
-// The child goes to the caller, who stops and reaps it.
-#[allow(clippy::zombie_processes)]
-fn serve(config: &Path, repo: &Path, listen: &[&str]) -> (Child, String, BufReader<std::process::ChildStderr>) {
-    let args = [&["--no-open", "--no-watch", "--no-lsp", "-C", repo.to_str().unwrap()], listen].concat();
-    let mut child =
-        diffle(config, &args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
-    let mut lines = BufReader::new(child.stderr.take().unwrap());
-    let mut line = String::new();
-    let announcement = format!("🚀 diffle v{} running at ", version());
-    loop {
-        line.clear();
-        if lines.read_line(&mut line).unwrap() == 0 {
-            let _ = child.wait();
-            panic!("diffle exited before serving");
-        }
-        if let Some(url) = line.trim().strip_prefix(&announcement) {
-            return (child, url.to_owned(), lines);
-        }
-    }
-}
-
-/// One HTTP/1.1 request on its own connection; returns the status line and body.
-fn http(url: &str, method: &str, path: &str, body: &str) -> (String, String) {
-    let authority = url.trim_start_matches("http://").trim_end_matches('/');
-    exchange(TcpStream::connect(authority).unwrap(), authority, method, path, body)
-}
-
-/// One HTTP/1.1 request on `stream`, naming `authority` as its Host.
-fn exchange(mut stream: impl Read + Write, authority: &str, method: &str, path: &str, body: &str) -> (String, String) {
-    let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    );
-    stream.write_all(request.as_bytes()).unwrap();
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
-    let (head, body) = response.split_once("\r\n\r\n").unwrap_or((&response, ""));
-    (head.lines().next().unwrap_or_default().to_owned(), body.to_owned())
-}
-
 // Stopped with SIGTERM, which Windows has no way to send.
 #[cfg(unix)]
 #[test]
@@ -206,6 +132,8 @@ fn reports_the_review_and_hands_off_the_open_comments_on_stdout_when_stopped() {
     t.write("app.py", "x = 1\ny = 2\n");
     let config = tempfile::tempdir().unwrap();
     let (mut child, url, mut lines) = serve(config.path(), &t.path, &["--port", "0"]);
+    let (_, info) = http(&url, "GET", "/api/server", "");
+    assert_announced(&t.path, &child, &url, &info);
     let thread = r#"{"path":"app.py","startLine":2,"body":"rename y"}"#;
     let (status, _) = http(&url, "POST", "/api/threads", thread);
     assert!(status.contains("201"), "{status}");
@@ -224,6 +152,79 @@ fn reports_the_review_and_hands_off_the_open_comments_on_stdout_when_stopped() {
         assert!(rest.contains(part), "{part} missing from:\n{rest}");
     }
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
+    assert!(!announcement_file(&t.path).exists());
+}
+
+/// Where a run serving `repo` announces itself.
+fn announcement_file(repo: &Path) -> std::path::PathBuf {
+    repo.join(".git").join("diffle").join("server.json")
+}
+
+/// `child` announced itself as listening at `at`, and `GET /api/server` answered `info` to match.
+fn assert_announced(repo: &Path, child: &Child, at: &str, info: &str) {
+    let text = std::fs::read_to_string(announcement_file(repo)).unwrap();
+    let announced: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let instance = announced["instance"].as_str().unwrap();
+    assert!(uuid::Uuid::parse_str(instance).is_ok(), "{instance}");
+    let expected = serde_json::json!({ "instance": instance, "pid": child.id(), "url": at, "version": version() });
+    assert_eq!(announced, expected);
+    let expected = serde_json::json!({
+        "instance": instance,
+        "pid": child.id(),
+        "gitDir": repo.join(".git").to_str().unwrap(),
+        "version": version(),
+    });
+    // The label arrives with the review, which may still be resolving; `tests/server.rs` covers it.
+    let mut info: serde_json::Value = serde_json::from_str(info).unwrap();
+    info.as_object_mut().unwrap().remove("label");
+    assert_eq!(info, expected);
+}
+
+#[test]
+fn refuses_a_second_run_on_the_same_git_dir_while_the_first_serves() {
+    let t = one_file_repo();
+    let config = tempfile::tempdir().unwrap();
+    let (mut first, url, _lines) = serve(config.path(), &t.path, &["--port", "0"]);
+
+    let second = run(config.path(), &["working", "--no-open", "--no-watch", "-C", t.path.to_str().unwrap(), "-p", "0"]);
+    assert_eq!(second.status.code(), Some(2), "{}", stderr(&second));
+    assert!(stderr(&second).contains(&format!("diffle is already running at {url}")), "{}", stderr(&second));
+    assert!(!stderr(&second).contains("🚀"), "{}", stderr(&second));
+
+    let (status, after) = http(&url, "GET", "/api/server", "");
+    assert!(status.contains("200"), "{status}");
+    assert_announced(&t.path, &first, &url, &after);
+    first.kill().unwrap();
+    first.wait().unwrap();
+}
+
+#[test]
+fn fails_with_1_when_it_cannot_announce_itself() {
+    let t = one_file_repo();
+    let config = tempfile::tempdir().unwrap();
+    // A directory where the file goes: nothing can replace it.
+    std::fs::create_dir_all(announcement_file(&t.path)).unwrap();
+    let out = run(config.path(), &["working", "--no-open", "--no-watch", "-C", t.path.to_str().unwrap(), "-p", "0"]);
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("server.json"), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("🚀"), "{}", stderr(&out));
+}
+
+#[test]
+fn starts_over_a_crashed_runs_announcement() {
+    let t = one_file_repo();
+    let config = tempfile::tempdir().unwrap();
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let crashed =
+        format!(r#"{{"instance":"crashed","pid":1,"url":"http://127.0.0.1:{closed}/","version":"{}"}}"#, version());
+    std::fs::create_dir_all(announcement_file(&t.path).parent().unwrap()).unwrap();
+    std::fs::write(announcement_file(&t.path), crashed).unwrap();
+
+    let (mut child, url, _lines) = serve(config.path(), &t.path, &["--port", "0"]);
+    let (_, info) = http(&url, "GET", "/api/server", "");
+    assert_announced(&t.path, &child, &url, &info);
+    child.kill().unwrap();
+    child.wait().unwrap();
 }
 
 /// Waits for `child` to exit on its own, killing it after `limit`.
@@ -256,6 +257,8 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     let (mut child, at, mut lines) = serve(config.path(), &t.path, &["--socket", socket.to_str().unwrap()]);
     assert_eq!(at, format!("unix:{}", socket.display()));
     assert_eq!(std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777, 0o600);
+    let (_, info) = exchange(UnixStream::connect(&socket).unwrap(), "localhost", "GET", "/api/server", "");
+    assert_announced(&t.path, &child, &at, &info);
 
     // A forward (ssh -L) names its own local port in Host.
     let thread = r#"{"path":"app.py","startLine":2,"body":"rename y"}"#;
@@ -264,7 +267,9 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     let (status, _) = exchange(UnixStream::connect(&socket).unwrap(), "evil.example", "GET", "/api/config", "");
     assert!(status.contains("403"), "{status}");
 
-    let repo = t.path.to_str().unwrap();
+    // Another repository: this one's run would be refused before it reached the socket.
+    let other = one_file_repo();
+    let repo = other.path.to_str().unwrap();
     let taken =
         run(config.path(), &["--no-open", "--no-watch", "--no-lsp", "-C", repo, "--socket", socket.to_str().unwrap()]);
     assert_eq!(taken.status.code(), Some(1), "{}", stderr(&taken));
@@ -284,6 +289,7 @@ fn serves_a_socket_only_its_user_can_reach_and_ends_with_the_last_tab_through_it
     assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
     assert!(!socket.exists());
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "staging left behind");
+    assert!(!announcement_file(&t.path).exists());
 }
 
 #[cfg(unix)]

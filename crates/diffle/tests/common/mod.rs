@@ -1,5 +1,6 @@
 //! Temporary real repositories for the integration tests.
 #![allow(dead_code)]
+pub mod cli;
 pub mod github;
 #[cfg(unix)]
 pub mod lsp;
@@ -143,7 +144,14 @@ pub fn session(
     follow_refs: FollowRefs,
 ) -> (Arc<Session>, Arc<Recorder>) {
     let hub = Arc::new(Recorder::default());
-    let opts = SessionOptions { watch, github: Github::tokenless(), context, follow_refs, checkout: false };
+    let opts = SessionOptions {
+        watch,
+        github: Github::tokenless(),
+        context,
+        follow_refs,
+        checkout: false,
+        instance: "test".into(),
+    };
     (Session::new(repo.clone(), hub.clone(), opts), hub)
 }
 

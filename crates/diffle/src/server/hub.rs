@@ -49,6 +49,16 @@ impl Hub {
         self.clients.send_replace(count);
     }
 
+    /// Every message broadcast from now on.
+    pub fn messages(&self) -> broadcast::Receiver<String> {
+        self.messages.subscribe()
+    }
+
+    /// Resolves once the server closes.
+    pub async fn closed(&self) {
+        drop(self.closing.subscribe().wait_for(|closed| *closed).await);
+    }
+
     /// Ends every client connection, now and for any that connect later.
     pub fn close(&self) {
         self.closing.send_replace(true);

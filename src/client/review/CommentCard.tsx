@@ -1,24 +1,27 @@
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
+import { TextArea } from '@/client/ui/TextArea.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
 import {
   AlertTriangle,
+  Bot,
   Check,
   Copy,
   GitPullRequestArrow,
-  MessageSquare,
   Pencil,
   Reply,
   RotateCcw,
   Trash2,
+  User,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
+import { ThreadIcon } from '@/client/comments/AgentMark.js';
 import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
-import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
+import { anchorLabel, composerKey, exportLabel, relativeTime, type ExportOutcome } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
@@ -30,8 +33,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
   const replying = useStore((s) => s.replyTo === thread.id);
   const openReply = useStore((s) => s.openReply);
   const closeReply = useStore((s) => s.closeReply);
-  const editingId = useStore((s) => s.editingId);
-  const setEditingId = useStore((s) => s.setEditingId);
   const focused = useStore((s) => s.focusedThread === thread.id);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
@@ -49,10 +50,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     const t = setTimeout(() => setPosted(null), 2000);
     return () => clearTimeout(t);
   }, [posted]);
-  // A lone message has no `who` row of its own, so its edit control sits with the thread actions.
-  const solo = thread.messages.length === 1 ? thread.messages[0]! : null;
-  const editingSolo = solo != null && editingId === solo.id;
-
   const a = thread.anchor;
 
   return (
@@ -62,7 +59,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
       )}
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
-        <MessageSquare size="0.8125rem" />
+        <ThreadIcon thread={thread} />
         <span className="font-mono font-semibold text-foreground">{anchorLabel(a)}</span>
         {thread.stale && (
           <span
@@ -82,17 +79,6 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           </span>
         )}
         <span className="flex-1" />
-        {solo && <CopyMessageButton threadId={thread.id} messageId={solo.id} size="0.875rem" />}
-        {solo && (
-          <Button
-            variant="ghost"
-            icon
-            onClick={() => setEditingId(editingSolo ? null : solo.id)}
-            title={editingSolo ? 'Cancel' : 'Edit (e)'}
-          >
-            {editingSolo ? <X size="0.875rem" /> : <Pencil size="0.875rem" />}
-          </Button>
-        )}
         {canExport && (
           <Button
             variant="ghost"
@@ -159,16 +145,29 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
   const setUnsent = useStore((s) => s.setUnsent);
   const setText = (t: string) => key && setUnsent(key, t === message.body ? '' : t);
   const del = useConfirm(() => void deleteMessage(thread.id, message.id));
-  const threaded = thread.messages.length > 1;
   const save = () => {
     void editMessage(thread.id, message.id, text);
     setEditingId(null);
   };
+  const agent = message.author === 'agent';
   return (
-    <div className="px-2.5 py-2 data-[first=false]:border-t data-[first=false]:border-border" data-first={first}>
-      {threaded && (
-        <div className="mb-[2px] flex items-center gap-1.5 text-[0.6875rem] text-muted">
-          <span className="flex-1" />
+    <div className="group/message px-2.5 pt-2 pb-1 last:pb-2.5">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex size-5 flex-none items-center justify-center rounded-full ${agent ? 'bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-accent' : 'bg-hover text-muted'}`}
+        >
+          {agent ? <Bot size="0.75rem" /> : <User size="0.75rem" />}
+        </span>
+        <span className="text-[0.75rem] font-semibold text-foreground">{agent ? 'Agent' : 'You'}</span>
+        <span className="text-[0.75rem] text-muted" title={new Date(message.createdAt).toLocaleString()}>
+          {relativeTime(message.createdAt)}
+          {message.updatedAt > message.createdAt && ' · edited'}
+        </span>
+        <span className="flex-1" />
+        {/* Hidden until the message is hovered or focused, unless an edit or a delete is in flight. */}
+        <div
+          className={`flex items-center gap-0.5 group-focus-within/message:opacity-100 group-hover/message:opacity-100 ${editing || del.armed ? '' : 'opacity-0'}`}
+        >
           <CopyMessageButton threadId={thread.id} messageId={message.id} size="0.75rem" />
           <Button
             variant="ghost"
@@ -192,31 +191,34 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
             </Button>
           )}
         </div>
-      )}
-      {editing ? (
-        <div className="rounded-md border-0 bg-surface p-0">
-          <textarea
-            className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
-            }}
-            autoFocus
-          />
-          <div className="mt-1.5 flex items-center justify-end gap-1.5">
-            <Button variant="primary" onClick={save}>
-              Save
-            </Button>
+      </div>
+      {/* Indented past the avatar, under the name. */}
+      <div className="pl-7">
+        {editing ? (
+          <div className="rounded-md border-0 bg-surface p-0">
+            <TextArea
+              className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
+              value={text}
+              onValueChange={setText}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+              }}
+              autoFocus
+            />
+            <div className="mt-1.5 flex items-center justify-end gap-1.5">
+              <Button variant="primary" onClick={save}>
+                Save
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <Markdown
-          text={message.body}
-          path={thread.anchor.path}
-          quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
-        />
-      )}
+        ) : (
+          <Markdown
+            text={message.body}
+            path={thread.anchor.path}
+            quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -274,12 +276,12 @@ function ReplyComposer({ threadId }: { threadId: string }) {
   };
   return (
     <div className="@container mx-2.5 mt-0 mb-2.5 rounded-md border border-accent bg-surface p-2">
-      <textarea
+      <TextArea
         className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder="Reply…"
-        onChange={(e) => setText(e.target.value)}
+        onValueChange={setText}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}
