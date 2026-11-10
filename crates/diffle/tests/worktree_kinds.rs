@@ -56,6 +56,19 @@ async fn numstat_loads_every_ordinary_file_and_marks_the_gitlink() {
     assert_eq!(rows, [(".gitmodules", A, None), ("sub", A, Some(true))]);
 }
 
+/// git lists a submodule whose directory is gone as deleted, and one left empty as unchanged.
+#[tokio::test]
+async fn a_removed_submodule_directory_is_a_deletion() {
+    let (_lib, sup) = super_repo();
+    std::fs::remove_dir_all(sup.path.join("sub")).unwrap();
+    let repo = sup.open().await;
+    let status =
+        |files: Vec<diffle::protocol::ChangedFile>| files.into_iter().find(|f| f.path == "sub").map(|f| f.status);
+    assert_eq!(status(repo.numstat("HEAD", "worktree").await.unwrap()), Some(D));
+    std::fs::create_dir(sup.path.join("sub")).unwrap();
+    assert_eq!(status(repo.numstat("HEAD", "worktree").await.unwrap()), None);
+}
+
 #[tokio::test]
 async fn renders_a_gitlink_as_a_commit_id_change_and_leaves_it_out_of_hydration() {
     let (_lib, sup) = super_repo();

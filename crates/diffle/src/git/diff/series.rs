@@ -200,7 +200,7 @@ impl Text {
                     line(&mut patch, format!("@@{func}").as_bytes());
                     for (prefix, text) in hunk.lines {
                         let mut row = vec![prefix];
-                        row.extend_from_slice(text.strip_suffix(b"\n").unwrap_or(text));
+                        row.extend_from_slice(text.strip_suffix(b"\n").unwrap_or(&text));
                         line(&mut patch, &row);
                         if text.last() != Some(&b'\n') {
                             line(&mut patch, b" \\ No newline at end of file");

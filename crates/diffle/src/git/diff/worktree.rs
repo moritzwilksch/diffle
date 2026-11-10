@@ -1,134 +1,161 @@
-//! The worktree as git sees it through the index: tracked paths, cleared by the stat cache where
-//! unchanged, and untracked files.
-use std::path::{Path, PathBuf};
+//! The worktree as git sees it through the index: gix-status clears tracked paths by the stat
+//! cache and hashes the rest; untracked files are hashed here.
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::atomic::AtomicBool;
 
 use gix::ObjectId;
-use gix::bstr::{BString, ByteSlice};
-use gix::index::entry::{Flags, Mode, Stage, Stat};
+use gix::bstr::{BStr, BString, ByteSlice};
+use gix::index::entry::{Mode, Stage};
+use gix::status::plumbing::index_as_worktree::traits::{CompareBlobs, HashEq, ReadData, SubmoduleStatus};
+use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
+use gix::status::plumbing::index_as_worktree_with_renames::{Entry, VisitEntry};
 
 use crate::git::BIG_FILE_THRESHOLD;
 
-use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, full_index, hash_path, kind, native, submodule_head};
+use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, full_index, hash_path, item, native, submodule_head};
 
-/// Paths to stat before the stat pass is split across threads.
-const PARALLEL_FROM: usize = 2048;
-const MAX_THREADS: usize = 8;
 /// The worktree's tracked paths, sorted, each as git would store it now; a path that is gone (or
 /// became a directory) is absent. The second list names the paths with unresolved conflicts. A
 /// sparse index is refused.
 pub fn worktree_items(repo: &gix::Repository, root: &Path) -> anyhow::Result<(Vec<Item>, Vec<BString>)> {
     let index = full_index(repo)?;
+    let mut statuses = Statuses::default();
+    let submodules = SubmoduleHead { root: root.to_owned() };
+    repo.index_worktree_status(
+        &index,
+        None::<&BStr>,
+        &mut statuses,
+        Hash,
+        submodules,
+        &mut gix::progress::Discard,
+        &AtomicBool::new(false),
+        Default::default(),
+    )?;
+    let mut probe = Probe { repo, root, caps: repo.filesystem_options()?, hashing: None };
     let entries = index.entries();
-    // One slot per path: its stage-0 entry, or for a conflict its last stage.
-    let (mut slots, mut conflicts) = (Vec::new(), Vec::new());
+    let (mut items, mut conflicts) = (Vec::with_capacity(entries.len()), Vec::new());
     let mut i = 0;
     while i < entries.len() {
-        let path = entries[i].path(&index);
-        let next = i + entries[i..].iter().take_while(|e| e.path(&index) == path).count();
-        match entries[i..next].iter().position(|e| e.stage() == Stage::Unconflicted) {
-            Some(at) => slots.push((i + at, true)),
-            None => {
-                conflicts.push(path.to_owned());
-                slots.push((next - 1, false));
+        let entry = &entries[i];
+        let path = entry.path(&index);
+        if entry.stage() != Stage::Unconflicted {
+            // A conflict's worktree file is what git diffs; its last stage stands in for the entry.
+            let next = i + entries[i..].iter().take_while(|e| e.path(&index) == path).count();
+            conflicts.push(path.to_owned());
+            items.extend(probe.read(&entries[next - 1], path)?);
+            i = next;
+            continue;
+        }
+        let mut tracked = item(path, entry.mode.bits(), entry.id);
+        match statuses.0.remove(&i) {
+            None | Some(EntryStatus::NeedsUpdate(_)) => items.push(tracked),
+            Some(EntryStatus::Change(Change::Removed)) => {}
+            Some(EntryStatus::Change(Change::SubmoduleModification(head))) => {
+                tracked.id = head;
+                items.push(tracked);
+            }
+            Some(EntryStatus::Change(Change::Modification { executable_bit_changed, content_change, .. })) => {
+                if executable_bit_changed {
+                    tracked.mode = if tracked.mode == EXECUTABLE { FILE } else { EXECUTABLE };
+                }
+                tracked.id = content_change.unwrap_or(tracked.id);
+                tracked.worktree = true;
+                items.push(tracked);
+            }
+            // A typechange or an intent-to-add entry says nothing of the content: it is read here.
+            Some(
+                EntryStatus::Change(Change::Type { .. }) | EntryStatus::IntentToAdd | EntryStatus::Conflict { .. },
+            ) => {
+                items.extend(probe.read(entry, path)?);
             }
         }
-        i = next;
-    }
-    let probe = Probe { index: &index, root, caps: repo.filesystem_options()?, stat_options: repo.stat_options()? };
-    let probed = parallel_map(&slots, |&(i, staged)| probe.entry(&entries[i], staged));
-    // Only files the stat cache could not clear are read and hashed.
-    let mut hashing: Option<(gix::filter::Pipeline<'_>, gix::worktree::IndexPersistedOrInMemory)> = None;
-    let mut items = Vec::with_capacity(probed.len());
-    for state in probed {
-        match state {
-            State::Known(item) => items.push(item),
-            State::Gone => {}
-            State::Dirty(mut item, abs) => {
-                let (pipeline, filter_index) = match &mut hashing {
-                    Some(hashing) => hashing,
-                    None => hashing.insert(repo.filter_pipeline(None)?),
-                };
-                // Unreadable (permissions) gets the null id, an empty blob to callers: one bad path
-                // must not fail the snapshot, nor read as deleted.
-                item.id = hash_path(repo, pipeline, filter_index, &item.path, &abs)
-                    .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
-                items.push(item);
-            }
-        }
+        i += 1;
     }
     Ok((items, conflicts))
 }
 
-/// What the stat cache says about one tracked path.
-enum State {
-    /// Its blob is known: unchanged since staged, skipped by sparse checkout, or a submodule.
-    Known(Item),
-    /// Gone from the worktree, or a directory now.
-    Gone,
-    /// Changed, or not provably unchanged: its content must be hashed.
-    Dirty(Item, PathBuf),
+/// The statuses gix-status found, by index entry; entries it does not report are unchanged.
+#[derive(Default)]
+struct Statuses(HashMap<usize, EntryStatus<ObjectId, ObjectId>>);
+
+impl<'index> VisitEntry<'index> for Statuses {
+    type ContentChange = ObjectId;
+    type SubmoduleStatus = ObjectId;
+
+    fn visit_entry(&mut self, entry: Entry<'index, ObjectId, ObjectId>) {
+        if let Entry::Modification { entry_index, status, .. } = entry {
+            self.0.insert(entry_index, status);
+        }
+    }
 }
 
-struct Probe<'a> {
-    index: &'a gix::index::State,
-    root: &'a Path,
+/// The worktree blob's id when it differs from the staged one. A file that cannot be read
+/// (permissions) gets the null id, an empty blob to callers: one bad path must not fail the
+/// snapshot, nor read as deleted.
+#[derive(Clone)]
+struct Hash;
+
+impl CompareBlobs for Hash {
+    type Output = ObjectId;
+
+    fn compare_blobs<'a, 'b>(
+        &mut self,
+        entry: &gix::index::Entry,
+        size: u64,
+        data: impl ReadData<'a>,
+        buf: &mut Vec<u8>,
+    ) -> gix::error::Result<Option<ObjectId>> {
+        Ok(HashEq.compare_blobs(entry, size, data, buf).unwrap_or_else(|_| Some(ObjectId::null(entry.id.kind()))))
+    }
+}
+
+/// A checked-out submodule changes when its HEAD moves; an unpopulated one is unchanged, as git sees it.
+#[derive(Clone)]
+struct SubmoduleHead {
+    root: std::path::PathBuf,
+}
+
+impl SubmoduleStatus for SubmoduleHead {
+    type Output = ObjectId;
+
+    fn status(&mut self, entry: &gix::index::Entry, path: &BStr) -> gix::error::Result<Option<ObjectId>> {
+        let head = native(path).and_then(|p| submodule_head(&self.root.join(p)));
+        Ok(head.filter(|head| *head != entry.id))
+    }
+}
+
+/// Reads the worktree side of an entry the stat cache cannot speak for.
+struct Probe<'repo> {
+    repo: &'repo gix::Repository,
+    root: &'repo Path,
     caps: gix::fs::Capabilities,
-    stat_options: gix::index::entry::stat::Options,
+    hashing: Option<(gix::filter::Pipeline<'repo>, gix::worktree::IndexPersistedOrInMemory)>,
 }
 
 impl Probe<'_> {
-    fn entry(&self, entry: &gix::index::Entry, staged: bool) -> State {
-        let path = entry.path(self.index);
-        let mut item = Item {
-            path: path.to_owned(),
-            mode: entry.mode.bits(),
-            id: entry.id,
-            worktree: false,
-            size: None,
-            untracked: false,
-        };
-        if entry.flags.contains(Flags::SKIP_WORKTREE) {
-            return State::Known(item);
-        }
-        let Some(abs) = native(path).map(|p| self.root.join(p)) else { return State::Gone };
+    /// The worktree's side of `entry`; none when the path is gone or a directory now.
+    fn read(&mut self, entry: &gix::index::Entry, path: &BStr) -> anyhow::Result<Option<Item>> {
+        let mut found = item(path, entry.mode.bits(), entry.id);
+        let Some(abs) = native(path).map(|p| self.root.join(p)) else { return Ok(None) };
         if entry.mode.is_submodule() {
-            // An unpopulated submodule is unchanged, as git sees it.
-            if let Some(head) = submodule_head(&abs) {
-                item.id = head;
-            }
-            return State::Known(item);
+            found.id = submodule_head(&abs).unwrap_or(entry.id);
+            return Ok(Some(found));
         }
-        let Ok(meta) = gix::index::fs::Metadata::from_path_no_follow(&abs) else { return State::Gone };
+        let Ok(meta) = std::fs::symlink_metadata(&abs) else { return Ok(None) };
         if meta.is_dir() {
-            return State::Gone;
+            return Ok(None);
         }
-        item.mode = mode_on_disk(meta.is_symlink(), meta.is_executable(), Some(entry.mode), self.caps);
-        item.size = Some(meta.len());
-        let clean = staged
-            && kind(item.mode) == kind(entry.mode.bits())
-            && !entry.flags.contains(Flags::INTENT_TO_ADD)
-            && Stat::from_fs(&meta).is_ok_and(|stat| entry.stat.matches(&stat, self.stat_options))
-            && !entry.stat.is_racy(self.index.timestamp(), self.stat_options);
-        if clean {
-            return State::Known(item);
-        }
-        item.worktree = true;
-        State::Dirty(item, abs)
+        let (pipeline, index) = match &mut self.hashing {
+            Some(hashing) => hashing,
+            None => self.hashing.insert(self.repo.filter_pipeline(None)?),
+        };
+        found.mode = mode_on_disk(meta.is_symlink(), is_executable(&meta), Some(entry.mode), self.caps);
+        found.id = hash_path(self.repo, pipeline, index, &found.path, &abs)
+            .unwrap_or_else(|| ObjectId::null(self.repo.object_hash()));
+        found.worktree = true;
+        Ok(Some(found))
     }
-}
-
-/// `f` over `items` in order, on a few threads once there are enough items to pay for them.
-fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
-    let threads = std::thread::available_parallelism().map_or(1, usize::from).min(MAX_THREADS);
-    if threads < 2 || items.len() < PARALLEL_FROM {
-        return items.iter().map(f).collect();
-    }
-    let chunk = items.len().div_ceil(threads);
-    std::thread::scope(|scope| {
-        let handles: Vec<_> =
-            items.chunks(chunk).map(|part| scope.spawn(|| part.iter().map(&f).collect::<Vec<_>>())).collect();
-        handles.into_iter().flat_map(|h| h.join().expect("stat worker panicked")).collect()
-    })
 }
 
 /// Untracked files as worktree items; their contents are hashed, never kept. One past the big-file
@@ -149,7 +176,7 @@ pub fn untracked_items(repo: &gix::Repository, root: &Path, paths: &[String]) ->
                 .then(|| hash_path(repo, &mut pipeline, &index, &path, &abs))
                 .flatten()
                 .unwrap_or_else(|| ObjectId::null(repo.object_hash()));
-            Some(Item { path, mode, id, worktree: true, size: Some(meta.len()), untracked: true })
+            Some(Item { path, mode, id, worktree: true, untracked: true })
         })
         .collect())
 }
@@ -188,8 +215,7 @@ pub fn worktree_item(
         (None, Some(mode)) => mode.bits(),
         (None, None) => FILE,
     };
-    let size = meta.as_ref().map(std::fs::Metadata::len);
-    Item { path: path.into(), mode, id, worktree: true, size, untracked: staged.is_none() }
+    Item { path: path.into(), mode, id, worktree: true, untracked: staged.is_none() }
 }
 
 #[cfg(unix)]

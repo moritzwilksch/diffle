@@ -61,7 +61,7 @@ impl GitRepo {
                     Some(tree) => {
                         let mode =
                             tree.lookup_entry_by_path(path)?.map_or(sides::FILE, |e| u32::from(e.mode().value()));
-                        Item { path: path.into(), mode, id, worktree: false, size: None, untracked: false }
+                        Item { path: path.into(), mode, id, worktree: false, untracked: false }
                     }
                     None => super::worktree::worktree_item(&root, path, id, &index, caps),
                 }))

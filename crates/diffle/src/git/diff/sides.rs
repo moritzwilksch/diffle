@@ -25,7 +25,6 @@ pub struct Item {
     pub id: ObjectId,
     /// Read from the worktree rather than the object database.
     pub worktree: bool,
-    pub size: Option<u64>,
     /// In the worktree but not the index.
     pub untracked: bool,
 }
@@ -63,7 +62,7 @@ pub(super) fn full_index(repo: &gix::Repository) -> anyhow::Result<gix::worktree
 }
 
 pub(super) fn item(path: &gix::bstr::BStr, mode: u32, id: ObjectId) -> Item {
-    Item { path: path.to_owned(), mode, id, worktree: false, size: None, untracked: false }
+    Item { path: path.to_owned(), mode, id, worktree: false, untracked: false }
 }
 
 /// Every entry of `tree`, sorted by path.
@@ -144,13 +143,17 @@ impl<'repo> Reader<'repo> {
             }
             return self.repo.find_object(item.id).ok().map(|object| object.detach().data);
         }
-        if !item.worktree || item.size.is_some_and(|size| size >= BIG_FILE_THRESHOLD) {
+        if !item.worktree {
             return None;
         }
         let abs = self.root.join(native(item.path.as_bstr())?);
-        if std::fs::symlink_metadata(&abs).ok()?.is_symlink() {
+        let meta = std::fs::symlink_metadata(&abs).ok()?;
+        if meta.is_symlink() {
             let target = std::fs::read_link(&abs).ok()?;
             return Some(gix::path::into_bstr(target).ok()?.into_owned().into());
+        }
+        if meta.len() >= BIG_FILE_THRESHOLD {
+            return None;
         }
         let file = std::fs::File::open(&abs).ok()?;
         to_git(&mut self.pipeline, &self.index, &item.path, file).ok()

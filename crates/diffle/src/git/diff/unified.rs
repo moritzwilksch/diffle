@@ -106,8 +106,8 @@ pub fn write(
                     out.extend_from_slice(&hunk.func);
                 }
                 out.push(b'\n');
-                for &(prefix, line) in &hunk.lines {
-                    emit(out, prefix, line);
+                for (prefix, line) in &hunk.lines {
+                    emit(out, *prefix, line);
                 }
             }
         }
