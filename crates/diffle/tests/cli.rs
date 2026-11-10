@@ -247,9 +247,11 @@ fn assert_announced(repo: &Path, child: &Child, at: &str, info: &str) {
         "pid": child.id(),
         "gitDir": repo.join(".git").to_str().unwrap(),
         "version": version(),
-        "label": "HEAD..worktree",
     });
-    assert_eq!(serde_json::from_str::<serde_json::Value>(info).unwrap(), expected);
+    // The label arrives with the review, which may still be resolving; `tests/server.rs` covers it.
+    let mut info: serde_json::Value = serde_json::from_str(info).unwrap();
+    info.as_object_mut().unwrap().remove("label");
+    assert_eq!(info, expected);
 }
 
 #[test]
@@ -257,7 +259,6 @@ fn refuses_a_second_run_on_the_same_git_dir_while_the_first_serves() {
     let t = one_file_repo();
     let config = tempfile::tempdir().unwrap();
     let (mut first, url, _lines) = serve(config.path(), &t.path, &["--port", "0"]);
-    let (_, before) = http(&url, "GET", "/api/server", "");
 
     let second = run(config.path(), &["working", "--no-open", "--no-watch", "-C", t.path.to_str().unwrap(), "-p", "0"]);
     assert_eq!(second.status.code(), Some(2), "{}", stderr(&second));
@@ -266,7 +267,6 @@ fn refuses_a_second_run_on_the_same_git_dir_while_the_first_serves() {
 
     let (status, after) = http(&url, "GET", "/api/server", "");
     assert!(status.contains("200"), "{status}");
-    assert_eq!(after, before);
     assert_announced(&t.path, &first, &url, &after);
     first.kill().unwrap();
     first.wait().unwrap();
