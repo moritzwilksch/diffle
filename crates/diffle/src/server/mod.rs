@@ -1,4 +1,5 @@
 //! The HTTP server: the API, the WebSocket hub, and the embedded client.
+pub mod announce;
 mod assets;
 pub mod guard;
 pub mod hub;
@@ -46,6 +47,8 @@ pub enum Endpoint {
 }
 
 pub struct ApiDeps {
+    /// This run's id, minted once: what `GET /api/server` and its announcement name.
+    pub instance: String,
     pub session: Arc<Session>,
     pub config: Arc<UserConfigStore>,
     /// Session-only additions from `--auto-viewed`.
@@ -184,9 +187,9 @@ async fn limit_body(req: Request, next: Next) -> Response {
     next.run(Request::from_parts(parts, Body::from(Bytes::from(kept)))).await
 }
 
-/// Paths that answer before the first mode resolves: a client probes the version and loads the
+/// Paths that answer before the first mode resolves: a client confirms the run and loads the
 /// config while the review is still being computed.
-const EARLY_PATHS: [&str; 2] = ["/api/version", "/api/config"];
+const EARLY_PATHS: [&str; 2] = ["/api/server", "/api/config"];
 
 /// Every request but the early paths waits for the first mode to resolve.
 async fn wait_ready(State(deps): State<Arc<ApiDeps>>, req: Request, next: Next) -> Response {
