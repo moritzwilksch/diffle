@@ -22,7 +22,8 @@ async fn tour(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     Ok(Json(TourResponse { tour: d.session.tour()?.get().await? }).into_response())
 }
 
-/// Checks the document against the current snapshot; 422 with every reason when it fails.
+/// Checks the document against the current snapshot and files it under that snapshot's key; 422
+/// with every reason when it fails.
 async fn push(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: TourPush = body(&raw)?;
     let snap = d.session.snapshotter()?.current().await?;
@@ -31,7 +32,7 @@ async fn push(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(TourRejection { errors })).into_response());
     }
     let tour = Tour { html: req.html, pushed_at: now_ms(), version: snap.version };
-    d.session.tour()?.put(tour.clone()).await?;
+    d.session.tour_for(&snap).put(tour.clone()).await?;
     d.hub.broadcast(ServerMessage::Tour);
     Ok(Json(tour).into_response())
 }

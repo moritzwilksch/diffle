@@ -217,6 +217,11 @@ impl Session {
         Ok(TourStore::open(&self.repo.git_dir, self.active()?.comments.key()))
     }
 
+    /// The tour of the comment set `snap` shows, whichever review is active now.
+    pub fn tour_for(&self, snap: &Snapshot) -> TourStore {
+        TourStore::open(&self.repo.git_dir, &snap.comment_key)
+    }
+
     /// The comment changes of this run, the shown set's key switches among them.
     pub fn activity(&self) -> &ActivityLog {
         &self.activity
