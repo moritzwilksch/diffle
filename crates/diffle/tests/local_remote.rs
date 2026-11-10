@@ -31,6 +31,12 @@ fn objects(dir: &std::path::Path) -> (u64, u64) {
     (field("count"), field("packs"))
 }
 
+/// A checked-out file's text. A fresh clone takes the system's `core.autocrlf`, which Git for
+/// Windows sets, so its line endings are the platform's, as `git clone` writes them.
+fn text(path: &std::path::Path) -> String {
+    std::fs::read_to_string(path).unwrap().replace("\r\n", "\n")
+}
+
 fn keep_files(dir: &std::path::Path) -> usize {
     std::fs::read_dir(dir.join(".git/objects/pack"))
         .unwrap()
@@ -80,7 +86,7 @@ async fn clones_a_repository_on_disk_by_linking_its_objects() {
     let clone = dir.path().join("clone");
     let repo = GitRepo::clone_into(s.path.to_str().unwrap(), &clone).await.unwrap();
     assert_eq!(repo.resolve("HEAD").await.unwrap(), s.git(&["rev-parse", "main"]));
-    assert_eq!(std::fs::read_to_string(clone.join("dir/c.txt")).unwrap(), "c\n");
+    assert_eq!(text(&clone.join("dir/c.txt")), "c\n");
     assert_eq!(objects(&clone), objects(&s.path), "the source's packs and loose objects, as they are");
     git_in(&clone, &["fsck", "--full", "--strict", "--no-dangling"]);
     #[cfg(unix)]
@@ -111,5 +117,5 @@ async fn a_clone_keeps_its_sources_alternates_reachable() {
     let clone = dir.path().join("clone");
     GitRepo::clone_into(s.path.to_str().unwrap(), &clone).await.unwrap();
     git_in(&clone, &["fsck", "--full", "--no-dangling"]);
-    assert_eq!(std::fs::read_to_string(clone.join("a.txt")).unwrap(), "one\ntwo\n");
+    assert_eq!(text(&clone.join("a.txt")), "one\ntwo\n");
 }
