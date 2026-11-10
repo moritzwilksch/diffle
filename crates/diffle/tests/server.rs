@@ -416,7 +416,8 @@ async fn rejects_oversized_bodies_with_413() {
     s.close().await;
 }
 
-// GET /api/file serving a file outside the snapshot after a language server named it: tests/server_lsp.rs.
+// GET /api/file and /api/highlight serving a file outside the snapshot after a language server named it:
+// tests/server_lsp.rs.
 #[tokio::test]
 async fn lsp_routes_say_language_servers_are_off() {
     let s = TestServer::start().await;
