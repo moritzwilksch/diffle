@@ -5,6 +5,7 @@ mod diff;
 mod files;
 mod grep;
 mod index;
+mod local;
 mod refs;
 mod remote;
 mod switch;

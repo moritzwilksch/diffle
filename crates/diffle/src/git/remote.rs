@@ -1,17 +1,16 @@
 //! Bringing commits in: pull requests fetched into session-owned refs, and foreign repositories
-//! cloned. Network remotes go through gix's client; a remote that is a local path is read directly.
-use std::collections::HashSet;
+//! cloned. Network remotes go through gix's client; a remote that is a local path is read
+//! directly (`local.rs`).
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use anyhow::Context;
 use gix::ObjectId;
 use gix::bstr::ByteSlice;
-use gix::objs::{Kind, Write};
 use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
 use gix::remote::Direction;
 
-use super::{GitRepo, refs};
+use super::{GitRepo, local, refs};
 use crate::error::{GitError, Result};
 
 /// Where cloned branches are tracked, as `git clone` sets it up.
@@ -68,12 +67,10 @@ fn fetch_into(
         Ok(found) => found,
         Err(_) => repo.remote_at(remote)?,
     };
-    let url = remote.url(Direction::Fetch).context("the remote has no url")?.clone();
-    if url.scheme == gix::url::Scheme::File {
-        // A relative path is the repository's, as git runs a fetch from the top of its worktree.
-        let base = repo.workdir().unwrap_or_else(|| repo.git_dir());
-        return copy_refs(repo, &base.join(gix::path::from_bstr(url.path.as_bstr())?), refspecs);
+    if let Some(path) = on_disk(repo, &remote)? {
+        return local::copy_refs(repo, &path, refspecs);
     }
+    let url = remote.url(Direction::Fetch).context("the remote has no url")?.clone();
     remote.replace_refspecs(refspecs.iter().map(String::as_str), Direction::Fetch)?;
     let remote = remote.with_fetch_tags(gix::remote::fetch::Tags::None);
     let (mut helpers, _, mut prompt) = repo.config_snapshot().credential_helpers(url)?;
@@ -98,88 +95,15 @@ fn fetch_into(
     }))
 }
 
-/// A fetch from a repository on disk: its objects the refs need are copied over, then the refs
-/// updated, without a `git-upload-pack` to talk to.
-fn copy_refs(repo: &gix::Repository, path: &Path, refspecs: &[String]) -> anyhow::Result<Option<String>> {
-    let source = gix::open(path).with_context(|| format!("{} is not a repository", path.display()))?;
-    let mut edits = Vec::new();
-    for spec in refspecs {
-        let spec = spec.trim_start_matches('+');
-        let (src, dst) = spec.split_once(':').unwrap_or((spec, spec));
-        let wanted: Vec<(String, ObjectId)> = match (src.strip_suffix('*'), dst.strip_suffix('*')) {
-            (Some(src), Some(dst)) => {
-                let names: Vec<String> = source
-                    .references()?
-                    .prefixed(src)?
-                    .filter_map(Result::ok)
-                    .map(|r| r.name().as_bstr().to_string())
-                    .collect();
-                names
-                    .into_iter()
-                    .map(|name| {
-                        let id = source.find_reference(name.as_str())?.peel_to_id()?.detach();
-                        Ok((format!("{dst}{}", &name[src.len()..]), id))
-                    })
-                    .collect::<anyhow::Result<_>>()?
-            }
-            _ => {
-                let mut found =
-                    source.find_reference(src).with_context(|| format!("couldn't find remote ref {src}"))?;
-                vec![(dst.to_owned(), found.peel_to_id()?.detach())]
-            }
-        };
-        for (dst, id) in wanted {
-            copy_reachable(&source, repo, id)?;
-            edits.push(refs::update(&dst, id)?);
-        }
+/// Where `remote` is when it is a repository on disk, its `insteadOf` rewrites applied. A relative
+/// path is the repository's, as git runs a fetch from the top of its worktree.
+fn on_disk(repo: &gix::Repository, remote: &gix::Remote<'_>) -> anyhow::Result<Option<std::path::PathBuf>> {
+    let url = remote.url(Direction::Fetch).context("the remote has no url")?;
+    if url.scheme != gix::url::Scheme::File {
+        return Ok(None);
     }
-    if !edits.is_empty() {
-        repo.edit_references(edits)?;
-    }
-    Ok(source.head_name()?.map(|name| name.as_bstr().to_string()))
-}
-
-/// Writes the objects reachable from `tip` that `target` lacks; a commit it has brings its history.
-/// Loose, one per object: a local remote usually shares the history and adds only a few commits.
-/// A pack (`gix-pack`'s `generate` feature) would pay off for large local copies.
-fn copy_reachable(source: &gix::Repository, target: &gix::Repository, tip: ObjectId) -> anyhow::Result<()> {
-    let (mut pending, mut seen) = (vec![tip], HashSet::new());
-    while let Some(id) = pending.pop() {
-        if !seen.insert(id) || target.has_object(id) {
-            continue;
-        }
-        let object = source.find_object(id)?;
-        match object.kind {
-            Kind::Commit => {
-                let commit = object.clone().into_commit();
-                pending.extend(commit.parent_ids().map(gix::Id::detach));
-                copy_tree(source, target, commit.tree_id()?.detach())?;
-            }
-            Kind::Tag => pending.push(object.clone().into_tag().target_id()?.detach()),
-            Kind::Tree => copy_tree(source, target, id)?,
-            Kind::Blob => {}
-        }
-        target.write_buf(object.kind, &object.data)?;
-    }
-    Ok(())
-}
-
-fn copy_tree(source: &gix::Repository, target: &gix::Repository, id: ObjectId) -> anyhow::Result<()> {
-    if target.has_object(id) {
-        return Ok(());
-    }
-    let tree = source.find_tree(id)?;
-    for entry in tree.iter() {
-        let entry = entry?;
-        let (mode, oid) = (entry.mode(), entry.oid().to_owned());
-        if mode.is_tree() {
-            copy_tree(source, target, oid)?;
-        } else if !mode.is_commit() && !target.has_object(oid) {
-            target.write_buf(Kind::Blob, &source.find_object(oid)?.data)?;
-        }
-    }
-    target.write_buf(Kind::Tree, &tree.data)?;
-    Ok(())
+    let base = repo.workdir().unwrap_or_else(|| repo.git_dir());
+    Ok(Some(base.join(gix::path::from_bstr(url.path.as_bstr())?)))
 }
 
 /// `git clone --no-tags url dir`: a repository whose `origin` is `url`, its branches tracked, and
@@ -194,6 +118,11 @@ fn clone(url: &str, dir: &Path) -> anyhow::Result<()> {
     origin.save_as_to("origin", &mut config)?;
     std::fs::write(&config_path, config.to_bstring())?;
     let mut repo = gix::open(dir)?;
+    // A repository on disk lends its objects, as `git clone` links them; the fetch then sends none.
+    if let Some(path) = on_disk(&repo, &repo.find_remote("origin")?)? {
+        let source = gix::open(&path).with_context(|| format!("{} is not a repository", path.display()))?;
+        local::link_objects(&source, &repo)?;
+    }
     let head = fetch_into(&mut repo, "origin", &[TRACKING.to_owned()], true)?;
     let Some(branch) = head.as_deref().and_then(|h| h.strip_prefix("refs/heads/")).map(str::to_owned) else {
         return Ok(());

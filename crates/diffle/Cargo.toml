@@ -49,6 +49,8 @@ gix = { version = "0.89", default-features = false, features = [
   "blocking-network-client",
   "blocking-http-transport-reqwest-rust-tls",
 ] }
+# Pack generation for fetching from a repository on disk; the `gix` version's own gix-pack.
+gix-pack = { version = "0.76", default-features = false, features = ["generate"] }
 hex = "0.4"
 indexmap = "2"
 http-body-util = "0.1"
