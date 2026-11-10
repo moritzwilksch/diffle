@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
 import { activePath } from './browser.js';
-import { pushTour } from './server.js';
+import { pushTour, REPO_ROOT, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
 const TOUR = `
@@ -117,6 +117,47 @@ test.describe('the tour', () => {
       await pushTour(diffle.url, '<diffle-card id="only" step="1" title="A fresh tour"><p>Revised.</p></diffle-card>');
       await expect(page.getByRole('navigation', { name: 'Steps' }).getByRole('button')).toHaveText(['1A fresh tour']);
       await expect(view.getByText('1 stale card')).toBeHidden();
+    });
+  });
+
+  test.describe('with a language server', () => {
+    // The fake server finds references by whole words, as in the graph's scenarios.
+    test.use({
+      args: [
+        '--lsp',
+        `python=${JSON.stringify(process.execPath)} ${JSON.stringify(join(REPO_ROOT, 'test/lsp/fake-lsp.mjs'))}`,
+      ],
+      env: { PATH: '/usr/bin:/bin', FAKE_LSP_GRAPH: '1' },
+    });
+
+    test("a symbol chip lists the symbol's references; on the old side it stays plain code", async ({
+      page,
+      diffle,
+    }) => {
+      await waitForLsp(diffle.url);
+      await pushTour(
+        diffle.url,
+        `<diffle-card id="parse" step="1" title="Parsing reads the kind">
+          <p><diffle-symbol path="tally/ledger.py" line="75" name="parse_row"></diffle-symbol> turns a row into an
+          <diffle-symbol path="tally/ledger.py" line="15" name="Entry" side="old"></diffle-symbol>.</p>
+        </diffle-card>`,
+      );
+      const view = await showTour(page);
+      await expect(view.locator('code[title^="References are asked of the new side"]')).toHaveText('Entry');
+      await view.getByRole('button', { name: 'parse_row' }).click();
+      const list = page.getByRole('dialog', { name: 'References' });
+      await expect(list).toBeVisible();
+      await expect(list).toMatchAriaSnapshot({ name: 'tour-references.aria.yml' });
+
+      // Esc returns to the tour; Enter jumps to the diff, and Ctrl+o comes back.
+      await page.keyboard.press('Escape');
+      await expect(list).toBeHidden();
+      await expect(view).toBeVisible();
+      await view.getByRole('button', { name: 'parse_row' }).click();
+      await page.keyboard.press('Enter');
+      await expect(view).toBeHidden();
+      await page.keyboard.press('Control+o');
+      await expect(view).toBeVisible();
     });
   });
 });

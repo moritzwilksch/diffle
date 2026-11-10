@@ -77,7 +77,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
 - **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably.
-- **Constraint:** `diffle-symbol` depends on the language servers. When `lspBlocker` (`src/shared/lsp.ts`) returns a reason, the chip renders as plain code, and its tooltip gives that reason.
+- **Constraint:** `diffle-symbol` depends on the language servers. When `lspBlocker` (`src/shared/lsp.ts`) returns a reason, the chip renders as plain code, and its tooltip gives that reason. Servers answer for the new side only, so a symbol on the old side is always plain code. A click finds the name on its line as a whole word, asks `POST /api/lsp/references`, and opens the references list the diff's `gA` opens.
 
 ### 10. The server validates a pushed tour; a bad one fails the CLI with exit 2
 
