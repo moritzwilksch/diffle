@@ -1057,13 +1057,21 @@ export type GraphQuery = z.infer<typeof GraphQuerySchema>;
 export const ClearThreadsQuerySchema = z.object({ stale: z.literal('1').optional() });
 export const PatchQuerySchema = z.object({ path: z.string().optional() });
 /**
- * What `GET /api/version` answers before anything else is ready: the server's release, so a
- * client can tell whether it speaks this server's contract.
+ * What `GET /api/server` answers, before the first review resolves too: which run is listening, for
+ * which repository. A client trusts `<git-dir>/diffle/server.json` only when its `instance` and
+ * `gitDir` match this.
  */
-export const VersionResponseSchema = z.object({
+export const ServerInfoSchema = z.object({
+  /** Minted once per run. */
+  instance: z.string(),
+  pid: z.number().int(),
+  /** The repository's git directory, as the server resolved it. */
+  gitDir: z.string(),
   /** The server's semantic version, as `diffle --version` prints it. */
   version: z.string(),
+  /** The active review's comparison label, as the run's status line names it; absent until the first review resolves. */
+  label: z.string().optional(),
 });
-export type VersionResponse = z.infer<typeof VersionResponseSchema>;
+export type ServerInfo = z.infer<typeof ServerInfoSchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });

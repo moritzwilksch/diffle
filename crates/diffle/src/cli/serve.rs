@@ -12,11 +12,13 @@ use super::paint::{bold, cyan, dim, green, red, yellow};
 use super::repository::open_review_repository;
 use super::timing::Timing;
 use crate::comments::format::format_prompt;
+use crate::error::Error;
 use crate::git::GitRepo;
 use crate::github::client::token_variables;
 use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
 use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
+use crate::server::announce::{Announced, Lookup, announce, lookup};
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Endpoint, Server, ServerOptions};
 use crate::session::{Session, SessionOptions};
@@ -57,7 +59,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         overrides.extend(opts.lsp.iter().map(|o| (o.language, o.command.clone())));
         super::lsp::start(&session, &hub, overrides, opts.lsp.iter().map(|o| o.language).collect())
     });
-    let server: Arc<Mutex<Option<Server>>> = Arc::default();
+    let server: Arc<Mutex<Served>> = Arc::default();
 
     let stop = Arc::new(Notify::new());
     let trigger = stop.clone();
@@ -114,16 +116,23 @@ async fn start(
     session: &Arc<Session>,
     config: &Arc<UserConfigStore>,
     hub: &Arc<Hub>,
-    server: &Mutex<Option<Server>>,
+    server: &Mutex<Served>,
     repo: &GitRepo,
     lsp: Option<Arc<LspPool>>,
     (github, token_source): (&Github, Option<&str>),
     timing: &mut Timing,
 ) -> anyhow::Result<()> {
+    // One run per git dir. A silent run is busy, not gone: it still holds the git dir.
+    match lookup(&repo.git_dir).await {
+        Lookup::Live { url, .. } | Lookup::Silent { url } => return Err(Error::AlreadyRunning(url).into()),
+        Lookup::Absent => {}
+    }
     // Resolve the revision before binding, so invalid input never opens a browser.
     let review = session.resolve(req).await?;
     timing.mark("resolve");
+    let instance = uuid::Uuid::new_v4().to_string();
     let deps = ApiDeps {
+        instance: instance.clone(),
         session: session.clone(),
         config: config.clone(),
         extra_auto_viewed: opts.auto_viewed.clone(),
@@ -142,11 +151,13 @@ async fn start(
     };
     let server_opts = ServerOptions { endpoint, allowed_origin: opts.allowed_origin.clone() };
     let (bound, url) = Server::listen(deps, server_opts).await?;
-    *server.lock().unwrap() = Some(bound);
+    server.lock().unwrap().server = Some(bound);
     timing.mark("listen");
+    let reachable = if opts.host() == "0.0.0.0" || opts.host() == "::" { localhost(&url) } else { url.clone() };
+    // Unannounced, a second run could start on this git dir, and agents could not find this one.
+    server.lock().unwrap().announced = Some(announce(&repo.git_dir, &instance, &reachable).await?);
     if !opts.no_open && opts.socket.is_none() {
-        let browser = if opts.host() == "0.0.0.0" || opts.host() == "::" { localhost(&url) } else { url.clone() };
-        open_browser(&browser);
+        open_browser(&reachable);
     }
     crate::status!("🚀 diffle {} running at {}", dim(concat!("v", env!("CARGO_PKG_VERSION"))), cyan(&url));
     crate::status!("📂 {} {}", dim("repo"), repo.root.display());
@@ -207,7 +218,7 @@ fn localhost(url: &str) -> String {
 }
 
 /// The handoff: the open threads, as a prompt, on stdout. Nothing else in the run writes there.
-async fn shutdown(session: &Arc<Session>, server: &Mutex<Option<Server>>, repo: &GitRepo, lsp: Option<&LspPool>) {
+async fn shutdown(session: &Arc<Session>, server: &Mutex<Served>, repo: &GitRepo, lsp: Option<&LspPool>) {
     crate::status!("\n👋 {}", dim("shutting down"));
     if let Ok(comments) = session.comments() {
         let open = ThreadQuery { path: None, state: Some(ThreadState::Open) };
@@ -221,10 +232,20 @@ async fn shutdown(session: &Arc<Session>, server: &Mutex<Option<Server>>, repo: 
     dispose(session, server, repo, lsp).await;
 }
 
-/// Releases everything the run holds, whatever ended it: git settles before its refs go, the
-/// sockets close within a bound.
-async fn dispose(session: &Arc<Session>, server: &Mutex<Option<Server>>, repo: &GitRepo, lsp: Option<&LspPool>) {
-    let server = server.lock().unwrap().take();
+/// What the run serves through once it listens.
+#[derive(Default)]
+struct Served {
+    server: Option<Server>,
+    announced: Option<Announced>,
+}
+
+/// Releases everything the run holds, whatever ended it: the announcement goes first, so no client
+/// finds a closing server; git settles before its refs go; the sockets close within a bound.
+async fn dispose(session: &Arc<Session>, served: &Mutex<Served>, repo: &GitRepo, lsp: Option<&LspPool>) {
+    let Served { server, announced } = std::mem::take(&mut *served.lock().unwrap());
+    if let Some(announced) = announced {
+        announced.withdraw().await;
+    }
     let close_server = async {
         let sockets = async {
             if let Some(server) = server {

@@ -81,7 +81,8 @@ diffle --help           # all commands and flags
 in a temporary clone.
 
 Closing the last diffle tab stops the server and prints your open comments. Pass `--keep-alive`
-to keep it running.
+to keep it running. One diffle runs per worktree: a second start in the same worktree exits with
+the running one's URL.
 
 ## Review
 
