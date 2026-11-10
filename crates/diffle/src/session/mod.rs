@@ -15,11 +15,14 @@ use futures::future::{BoxFuture, Shared};
 use tokio::sync::{mpsc, oneshot, watch as signal};
 
 use crate::comments::CommentStore;
+use crate::comments::activity::{ActivityLog, Change};
 use crate::error::{Error, Result};
 use crate::git::GitRepo;
 use crate::github::hosts::Github;
 use crate::mode::head::HeadPin;
-use crate::protocol::{FollowRefs, Live, Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations};
+use crate::protocol::{
+    CommentAuthor, FollowRefs, Live, Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations,
+};
 use crate::snapshotter::Snapshotter;
 use crate::watcher::Watcher;
 
@@ -39,6 +42,8 @@ pub struct SessionOptions {
     pub context: u32,
     /// What a review between refs does when one moves. The user config; `set_follow_refs` changes it.
     pub follow_refs: FollowRefs,
+    /// This run's id, minted once: what cursors of its comment activity and its announcement name.
+    pub instance: String,
     /// Whether entering a branch or a pull request checks it out, when the worktree is clean, so
     /// language servers see the new side.
     pub checkout: bool,
@@ -119,6 +124,7 @@ pub struct Session {
     queued_check: Mutex<Option<Pending>>,
     listeners: Mutex<Vec<Listener>>,
     readable: Mutex<Option<(Arc<Snapshot>, Arc<ReadablePaths>)>>,
+    activity: ActivityLog,
 }
 
 impl Session {
@@ -149,6 +155,7 @@ impl Session {
             queued_check: Mutex::new(None),
             listeners: Mutex::new(Vec::new()),
             readable: Mutex::new(None),
+            activity: ActivityLog::new(opts.instance),
         })
     }
 
@@ -199,6 +206,19 @@ impl Session {
 
     pub fn comments(&self) -> Result<Arc<CommentStore>> {
         Ok(self.active()?.comments.clone())
+    }
+
+    /// The comment changes of this run, the shown set's key switches among them.
+    pub fn activity(&self) -> &ActivityLog {
+        &self.activity
+    }
+
+    /// Logs comment changes, each with its author (absent: the reviewer), and tells clients the
+    /// cursor after them. Concurrent records may announce their cursors out of order.
+    pub fn record(&self, changes: impl IntoIterator<Item = (Option<CommentAuthor>, Change)>) {
+        if let Some(cursor) = self.activity.record(changes) {
+            self.hub.broadcast(ServerMessage::Threads { cursor: cursor.to_string() });
+        }
     }
 
     /// The pull request the active review was entered as, if any.

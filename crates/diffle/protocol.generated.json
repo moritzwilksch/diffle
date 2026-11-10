@@ -1,6 +1,69 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
+    "Activity": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "`<instance>:<seq>`; the next wait's `since`."
+        },
+        "commentKey": {
+          "type": "string",
+          "description": "The set `threads` belong to; it switches when the reviewer focuses another slice."
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CommentThread"
+          },
+          "description": "Threads changed since the cursor, as they are now; after a key switch or a resync, every thread of the set."
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of threads changed since the cursor that no longer exist."
+        },
+        "resync": {
+          "type": "boolean",
+          "description": "The cursor came from another run or fell out of the log's window: `threads` is the full set."
+        },
+        "closed": {
+          "type": "boolean",
+          "description": "The server is closing; nothing more will come."
+        }
+      },
+      "required": [
+        "cursor",
+        "commentKey",
+        "threads",
+        "removed",
+        "resync",
+        "closed"
+      ],
+      "description": "What changed in the shown comment set since a cursor."
+    },
+    "ActivityQuery": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "A `cursor` this server answered earlier."
+        },
+        "ignore": {
+          "$ref": "#/$defs/CommentAuthor",
+          "description": "An author whose changes do not end the wait; they are still reported once something else does."
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Seconds to wait at most."
+        }
+      },
+      "description": "`GET /api/threads/activity`. Without `since`, answers the current state and a fresh cursor at once;\nwith it, waits until a thread or the comment key changed after the cursor, by anyone but `ignore`.\nWithout `timeout`, waits until then or until the server closes."
+    },
     "ApiError": {
       "type": "object",
       "properties": {
@@ -11,6 +74,15 @@
       "required": [
         "error"
       ]
+    },
+    "AuthorQuery": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "$ref": "#/$defs/CommentAuthor"
+        }
+      },
+      "description": "Who deletes, on `DELETE` of a thread or a message. Absent: the reviewer."
     },
     "ChangedFile": {
       "type": "object",
@@ -83,6 +155,9 @@
     "ClearThreadsQuery": {
       "type": "object",
       "properties": {
+        "author": {
+          "$ref": "#/$defs/CommentAuthor"
+        },
         "stale": {
           "type": "string",
           "const": "1"
@@ -1568,6 +1643,10 @@
       "properties": {
         "body": {
           "type": "string"
+        },
+        "author": {
+          "$ref": "#/$defs/CommentAuthor",
+          "description": "Absent: the reviewer edits."
         }
       },
       "required": [
@@ -2034,6 +2113,10 @@
       "properties": {
         "resolved": {
           "type": "boolean"
+        },
+        "author": {
+          "$ref": "#/$defs/CommentAuthor",
+          "description": "Absent: the reviewer resolves or reopens."
         }
       },
       "required": [
@@ -2312,10 +2395,15 @@
             "type": {
               "type": "string",
               "const": "threads"
+            },
+            "cursor": {
+              "type": "string",
+              "description": "After the change this announces; `GET /api/threads/activity` takes it as `since`."
             }
           },
           "required": [
-            "type"
+            "type",
+            "cursor"
           ]
         },
         {

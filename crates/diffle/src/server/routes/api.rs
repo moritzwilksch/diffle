@@ -38,7 +38,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
 /// before the first review resolves, so a slow start does not look like a hung run.
 async fn server(State(d): State<Arc<ApiDeps>>) -> Response {
     Json(ServerInfo {
-        instance: d.instance.clone(),
+        instance: d.session.activity().instance().to_owned(),
         pid: std::process::id().into(),
         git_dir: d.session.repo.git_dir.to_string_lossy().into_owned(),
         version: env!("CARGO_PKG_VERSION").to_owned(),

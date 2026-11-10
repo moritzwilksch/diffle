@@ -1,4 +1,5 @@
 //! Review comments: persistence, relocation, import, and prompt formatting.
+pub mod activity;
 pub mod anchor;
 pub mod format;
 pub mod hunks;

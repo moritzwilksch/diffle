@@ -144,7 +144,14 @@ pub fn session(
     follow_refs: FollowRefs,
 ) -> (Arc<Session>, Arc<Recorder>) {
     let hub = Arc::new(Recorder::default());
-    let opts = SessionOptions { watch, github: Github::tokenless(), context, follow_refs, checkout: false };
+    let opts = SessionOptions {
+        watch,
+        github: Github::tokenless(),
+        context,
+        follow_refs,
+        checkout: false,
+        instance: "test".into(),
+    };
     (Session::new(repo.clone(), hub.clone(), opts), hub)
 }
 

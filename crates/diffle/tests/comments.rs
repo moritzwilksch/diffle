@@ -169,8 +169,8 @@ async fn replies_edits_removes_messages_and_threads_resolves_and_clears() {
     assert!(matches!(s.remove_thread(&t.id).await, Err(Error::NotFound(_))));
     assert!(matches!(s.reply("nope", "x".into(), None).await, Err(Error::NotFound(_))));
     assert!(matches!(s.edit_message("nope", "m", "x".into()).await, Err(Error::NotFound(_))));
-    s.add_thread(anchor(), "hello".into()).await.unwrap();
-    s.clear().await.unwrap();
+    let t = s.add_thread(anchor(), "hello".into()).await.unwrap();
+    assert_eq!(s.clear().await.unwrap(), [t.id]);
     assert!(s.threads(&all()).await.unwrap().is_empty());
 }
 
@@ -322,8 +322,8 @@ async fn removes_stale_threads_only() {
     let kept = s.add_thread(anchor(), "hello".into()).await.unwrap();
     s.relocate_all(&Whole("a\nb\n", None)).await.unwrap();
     assert!(s.get(&gone.id).await.unwrap().unwrap().stale);
-    assert_eq!(s.remove_stale().await.unwrap(), 1);
-    assert_eq!(s.remove_stale().await.unwrap(), 0);
+    assert_eq!(s.remove_stale().await.unwrap(), std::slice::from_ref(&gone.id));
+    assert!(s.remove_stale().await.unwrap().is_empty());
     assert_eq!(s.threads(&all()).await.unwrap().iter().map(|t| t.id.clone()).collect::<Vec<_>>(), [kept.id]);
 }
 
