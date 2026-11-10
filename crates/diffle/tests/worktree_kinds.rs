@@ -198,3 +198,24 @@ async fn a_committed_comparison_reads_attributes_from_the_new_revision_the_workt
     let (_, live) = snapshot(&repo, EnterRequest::Working).await;
     assert!(!flag(&live, "completions/x.bash"));
 }
+
+#[tokio::test]
+async fn a_sparse_index_is_refused_where_the_worktree_is_read_and_commits_still_compare() {
+    let t = TestRepo::new();
+    t.write("inside/a.txt", "a\n");
+    t.write("outside/b.txt", "b\n");
+    t.commit("base");
+    t.write("inside/a.txt", "a2\n");
+    t.commit("edit");
+    t.git(&["sparse-checkout", "set", "--cone", "--sparse-index", "inside"]);
+    t.write("inside/a.txt", "a3\n");
+    t.git(&["add", "inside/a.txt"]);
+    let repo = t.open().await;
+    let refusal = "a sparse index is not supported; expand it with `git sparse-checkout reapply --no-sparse-index`";
+    let numstat = repo.numstat("HEAD", "worktree").await.unwrap_err();
+    assert!(numstat.is_user_error());
+    assert_eq!(numstat.to_string(), refusal);
+    assert_eq!(repo.is_clean().await.unwrap_err().to_string(), refusal);
+    let committed = repo.numstat("HEAD~1", "HEAD").await.unwrap();
+    assert_eq!(committed.iter().map(|f| (f.path.as_str(), f.status)).collect::<Vec<_>>(), [("inside/a.txt", M)]);
+}

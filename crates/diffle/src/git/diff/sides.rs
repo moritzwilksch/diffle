@@ -9,6 +9,7 @@ use gix::bstr::{BString, ByteSlice};
 use gix::filter::plumbing::pipeline::convert::ToGitOutcome;
 use gix::index::entry::{Flags, Stage};
 
+use crate::error::GitError;
 use crate::git::BIG_FILE_THRESHOLD;
 
 pub const FILE: u32 = 0o100644;
@@ -38,13 +39,27 @@ pub fn kind(mode: u32) -> u32 {
 /// very tree, as it does after a commit or checkout, which spares reading the tree objects.
 pub fn tree_items(repo: &gix::Repository, tree: ObjectId) -> anyhow::Result<Vec<Item>> {
     let index = repo.index_or_empty()?;
-    let recorded = index.tree().is_some_and(|root| root.id == tree && root.num_entries.is_some());
+    // A sparse index's directory entries stand for files it does not list.
+    let recorded = !index.is_sparse() && index.tree().is_some_and(|root| root.id == tree && root.num_entries.is_some());
     if recorded
         && index.entries().iter().all(|e| e.stage() == Stage::Unconflicted && !e.flags.contains(Flags::INTENT_TO_ADD))
     {
         return Ok(index.entries().iter().map(|e| item(e.path(&index), e.mode.bits(), e.id)).collect());
     }
     from_tree(repo, tree)
+}
+
+/// The index, every tracked path listed. A sparse index collapses whole directories into one
+/// entry, which gix does not expand, so it is refused rather than misread.
+pub(super) fn full_index(repo: &gix::Repository) -> anyhow::Result<gix::worktree::Index> {
+    let index = repo.index_or_empty()?;
+    if index.is_sparse() {
+        return Err(GitError::new(
+            "a sparse index is not supported; expand it with `git sparse-checkout reapply --no-sparse-index`",
+        )
+        .into());
+    }
+    Ok(index)
 }
 
 pub(super) fn item(path: &gix::bstr::BStr, mode: u32, id: ObjectId) -> Item {

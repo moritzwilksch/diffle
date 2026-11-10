@@ -8,15 +8,16 @@ use gix::index::entry::{Flags, Mode, Stage, Stat};
 
 use crate::git::BIG_FILE_THRESHOLD;
 
-use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, hash_path, kind, native, submodule_head};
+use super::sides::{EXECUTABLE, FILE, GITLINK, Item, SYMLINK, full_index, hash_path, kind, native, submodule_head};
 
 /// Paths to stat before the stat pass is split across threads.
 const PARALLEL_FROM: usize = 2048;
 const MAX_THREADS: usize = 8;
 /// The worktree's tracked paths, sorted, each as git would store it now; a path that is gone (or
-/// became a directory) is absent. The second list names the paths with unresolved conflicts.
+/// became a directory) is absent. The second list names the paths with unresolved conflicts. A
+/// sparse index is refused.
 pub fn worktree_items(repo: &gix::Repository, root: &Path) -> anyhow::Result<(Vec<Item>, Vec<BString>)> {
-    let index = repo.index_or_empty()?;
+    let index = full_index(repo)?;
     let entries = index.entries();
     // One slot per path: its stage-0 entry, or for a conflict its last stage.
     let (mut slots, mut conflicts) = (Vec::new(), Vec::new());
@@ -86,7 +87,7 @@ impl Probe<'_> {
             size: None,
             untracked: false,
         };
-        if entry.mode.is_sparse() || entry.flags.contains(Flags::SKIP_WORKTREE) {
+        if entry.flags.contains(Flags::SKIP_WORKTREE) {
             return State::Known(item);
         }
         let Some(abs) = native(path).map(|p| self.root.join(p)) else { return State::Gone };

@@ -95,7 +95,7 @@ pub(in crate::git) fn tree_changes(
 /// What the index stages differently from `base`, path by path; conflicted paths aside, which
 /// `worktree_changes` reports.
 pub(in crate::git) fn index_changes(repo: &gix::Repository, base: ObjectId) -> anyhow::Result<Vec<PathChange>> {
-    let index = repo.index_or_empty()?;
+    let index = sides::full_index(repo)?;
     let staged = index
         .entries()
         .iter()
