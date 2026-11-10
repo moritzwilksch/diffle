@@ -3,7 +3,6 @@
 use gix::ObjectId;
 
 use super::hunks;
-use super::rename::MAX_SCORE;
 use super::sides::{GITLINK, kind};
 
 /// Git's `FIRST_FEW_BYTES`: a NUL this early makes a file binary.
@@ -27,11 +26,11 @@ pub enum Body<'a> {
     Binary,
 }
 
-/// Appends one file pair's patch. A typechange is two patches, a deletion then an addition, as git splits it.
+/// Appends one file pair's patch; a rename carries its similarity in percent. A typechange is two patches, a deletion then an addition, as git splits it.
 pub fn write(
     out: &mut Vec<u8>,
     (old, new): (Option<&Side>, Option<&Side>),
-    rename: Option<u64>,
+    rename: Option<u32>,
     body: Body,
     context: u32,
     abbrev: usize,
@@ -51,9 +50,7 @@ pub fn write(
                 out.extend_from_slice(format!("old mode {:06o}\nnew mode {:06o}\n", old.mode, new.mode).as_bytes());
             }
             if let Some(score) = rename {
-                out.extend_from_slice(
-                    format!("similarity index {}%\nrename from ", score * 100 / MAX_SCORE).as_bytes(),
-                );
+                out.extend_from_slice(format!("similarity index {score}%\nrename from ").as_bytes());
                 out.extend_from_slice(&quote(old.path));
                 out.extend_from_slice(b"\nrename to ");
                 out.extend_from_slice(&quote(new.path));
@@ -86,30 +83,29 @@ pub fn write(
         }
         Body::Binary => {}
         Body::Text(before, after) => {
-            let hunks = hunks::hunks(before, after, context, true);
-            if hunks.is_empty() {
-                return;
-            }
             // Git tabs a name with a space, so the line's end is unambiguous to `patch`.
             let tab = |side: Option<&Side>| if side.is_some_and(|s| s.path.contains(&b' ')) { &b"\t"[..] } else { b"" };
-            out.extend_from_slice(b"--- ");
-            out.extend_from_slice(&old_label);
-            out.extend_from_slice(tab(old));
-            out.extend_from_slice(b"\n+++ ");
-            out.extend_from_slice(&new_label);
-            out.extend_from_slice(tab(new));
-            out.push(b'\n');
-            for hunk in &hunks {
-                out.extend_from_slice(hunk.header.as_bytes());
-                if !hunk.func.is_empty() {
+            let mut labelled = false;
+            hunks::each_hunk(before, after, context, true, |header, func, lines| {
+                // No hunks, no `---`/`+++` lines: a pair that differs in mode alone.
+                if !std::mem::replace(&mut labelled, true) {
+                    for (marker, label, side) in [(&b"--- "[..], &old_label, old), (b"+++ ", &new_label, new)] {
+                        out.extend_from_slice(marker);
+                        out.extend_from_slice(label);
+                        out.extend_from_slice(tab(side));
+                        out.push(b'\n');
+                    }
+                }
+                out.extend_from_slice(header.as_bytes());
+                if !func.is_empty() {
                     out.push(b' ');
-                    out.extend_from_slice(&hunk.func);
+                    out.extend_from_slice(func);
                 }
                 out.push(b'\n');
-                for (prefix, line) in &hunk.lines {
-                    emit(out, *prefix, line);
+                for &(kind, line) in lines {
+                    emit(out, kind.to_prefix() as u8, line);
                 }
-            }
+            });
         }
     }
 }

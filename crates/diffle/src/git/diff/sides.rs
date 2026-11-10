@@ -1,16 +1,22 @@
 //! Each side of a comparison as git sees it: a tree's entries, or the worktree through the index,
 //! whose stat cache spares re-reading files that have not changed since they were staged.
+use std::borrow::Cow;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use gix::ObjectId;
 use gix::bstr::{BString, ByteSlice};
+use gix::diff::Rewrites;
+use gix::diff::blob::pipeline::{Mode, WorktreeRoots};
+use gix::diff::blob::{Platform, ResourceKind};
+use gix::diff::rewrites::Tracker;
+use gix::diff::rewrites::tracker::ChangeKind;
 use gix::filter::plumbing::pipeline::convert::ToGitOutcome;
 use gix::index::entry::{Flags, Stage};
+use gix::objs::tree::{EntryKind, EntryMode};
 
 use crate::error::GitError;
-use crate::git::BIG_FILE_THRESHOLD;
 
 pub const FILE: u32 = 0o100644;
 pub const EXECUTABLE: u32 = 0o100755;
@@ -115,48 +121,119 @@ pub fn tree_diff(
     Ok(changes)
 }
 
-/// Reads sides' contents: blobs from the object database, worktree files through their clean filters.
-pub struct Reader<'repo> {
+/// One side's bytes as diffed; none where binary or unreadable.
+pub type Content<'a> = Option<Cow<'a, [u8]>>;
+
+/// Reads both sides of a comparison as git diffs them, through gix's diff pipeline: blobs from
+/// the object database, worktree files through their clean filters. A binary side (a `-diff`
+/// attribute, a NUL early on, past `core.bigFileThreshold`) or an unreadable one reads as none.
+pub struct Contents<'repo> {
     repo: &'repo gix::Repository,
-    root: PathBuf,
-    pipeline: gix::filter::Pipeline<'repo>,
-    index: gix::worktree::IndexPersistedOrInMemory,
+    /// Each side where it lives: the worktree's from disk. Rename tracking reads through it too.
+    pub sides: Platform,
+    /// Blobs the object database holds, on either side: a clean or sparse worktree path's included.
+    blobs: Platform,
+    symlinks: bool,
 }
 
-impl<'repo> Reader<'repo> {
-    pub fn new(repo: &'repo gix::Repository, root: &Path) -> anyhow::Result<Self> {
-        let (pipeline, index) = repo.filter_pipeline(None)?;
-        Ok(Self { repo, root: root.to_owned(), pipeline, index })
+impl<'repo> Contents<'repo> {
+    /// `live` names the side that is the worktree at `root`, if one is.
+    pub fn new(repo: &'repo gix::Repository, root: &Path, live: Option<ResourceKind>) -> anyhow::Result<Self> {
+        let at = |kind| (live == Some(kind)).then(|| root.to_owned());
+        let roots =
+            WorktreeRoots { old_root: at(ResourceKind::OldOrSource), new_root: at(ResourceKind::NewOrDestination) };
+        Ok(Self {
+            repo,
+            sides: repo.diff_resource_cache(Mode::ToGit, roots)?,
+            blobs: repo.diff_resource_cache_for_tree_diff()?,
+            symlinks: repo.filesystem_options()?.symlink,
+        })
     }
 
-    /// What git diffs for `item`: a gitlink reads as its `Subproject commit` line. None when it is
-    /// past the big-file threshold, which git diffs as binary unread, or cannot be read.
-    pub fn content(&mut self, item: &Item) -> Option<Vec<u8>> {
+    /// Both sides of a pair, an absent one empty; a gitlink reads as its `Subproject commit` line.
+    pub fn pair(&mut self, old: Option<&Item>, new: Option<&Item>) -> (Content<'_>, Content<'_>) {
+        self.sides.clear_resource_cache_keep_allocation();
+        self.blobs.clear_resource_cache_keep_allocation();
+        let set = (self.set(old, ResourceKind::OldOrSource), self.set(new, ResourceKind::NewOrDestination));
+        (self.get(old, ResourceKind::OldOrSource, set.0), self.get(new, ResourceKind::NewOrDestination, set.1))
+    }
+
+    fn set(&mut self, item: Option<&Item>, side: ResourceKind) -> bool {
+        let Some(item) = item.filter(|i| kind(i.mode) != GITLINK) else { return true };
+        let mode = match item.mode {
+            // A link checked out as a plain file (`core.symlinks=false`) holds its target.
+            SYMLINK if !(item.worktree && !self.symlinks) => EntryKind::Link,
+            EXECUTABLE => EntryKind::BlobExecutable,
+            _ => EntryKind::Blob,
+        };
+        let platform = if item.worktree { &mut self.sides } else { &mut self.blobs };
+        platform.set_resource(item.id, mode, item.path.as_bstr(), side, &self.repo.objects).is_ok()
+    }
+
+    fn get(&self, item: Option<&Item>, side: ResourceKind, set: bool) -> Content<'_> {
+        let Some(item) = item else { return Some(Cow::Borrowed(&[])) };
         if kind(item.mode) == GITLINK {
-            return Some(format!("Subproject commit {}\n", item.id).into_bytes());
+            return Some(Cow::Owned(format!("Subproject commit {}\n", item.id).into_bytes()));
         }
-        // Bytes git already stores (a staged, unchanged file) come from the object database, sized
-        // by their header first so a big blob is never inflated.
-        if let Ok(Some(header)) = self.repo.try_find_header(item.id) {
-            if header.size() >= BIG_FILE_THRESHOLD {
-                return None;
-            }
-            return self.repo.find_object(item.id).ok().map(|object| object.detach().data);
+        let platform = if item.worktree { &self.sides } else { &self.blobs };
+        set.then(|| platform.resource(side)?.data.as_slice().map(Cow::Borrowed)).flatten()
+    }
+
+    /// Folds deletions and additions gix's rename tracker pairs into renames: `pairs` lists each
+    /// candidate's item, side and its caller's index, and the pairs come back as those indices.
+    pub fn renames(&mut self, candidates: Vec<(Item, ResourceKind, usize)>) -> anyhow::Result<Vec<(usize, usize)>> {
+        let rewrites = Rewrites { copies: None, percentage: Some(0.5), limit: 1000, track_empty: false };
+        let mut tracker = Tracker::new(rewrites);
+        for (item, side, index) in candidates {
+            let path = item.path.clone();
+            tracker.try_push_change(Candidate { item, side, index }, path.as_bstr());
         }
-        if !item.worktree {
-            return None;
+        let mut found = Vec::new();
+        tracker.emit(
+            |dst, src| {
+                if let Some(src) = src {
+                    found.push((src.change.index, dst.change.index));
+                }
+                std::ops::ControlFlow::Continue(())
+            },
+            &mut self.sides,
+            &self.repo.objects,
+            |_| Ok::<_, std::io::Error>(()),
+        )?;
+        Ok(found)
+    }
+}
+
+/// A deletion or addition the rename tracker may pair.
+#[derive(Clone)]
+pub struct Candidate {
+    item: Item,
+    side: ResourceKind,
+    index: usize,
+}
+
+impl gix::diff::rewrites::tracker::Change for Candidate {
+    fn id(&self) -> &gix::oid {
+        &self.item.id
+    }
+
+    fn relation(&self) -> Option<gix::diff::tree::visit::Relation> {
+        None
+    }
+
+    fn kind(&self) -> ChangeKind {
+        match self.side {
+            ResourceKind::OldOrSource => ChangeKind::Deletion,
+            ResourceKind::NewOrDestination => ChangeKind::Addition,
         }
-        let abs = self.root.join(native(item.path.as_bstr())?);
-        let meta = std::fs::symlink_metadata(&abs).ok()?;
-        if meta.is_symlink() {
-            let target = std::fs::read_link(&abs).ok()?;
-            return Some(gix::path::into_bstr(target).ok()?.into_owned().into());
-        }
-        if meta.len() >= BIG_FILE_THRESHOLD {
-            return None;
-        }
-        let file = std::fs::File::open(&abs).ok()?;
-        to_git(&mut self.pipeline, &self.index, &item.path, file).ok()
+    }
+
+    fn entry_mode(&self) -> EntryMode {
+        EntryMode::try_from(self.item.mode).unwrap_or(EntryKind::Blob.into())
+    }
+
+    fn id_and_entry_mode(&self) -> (&gix::oid, EntryMode) {
+        (self.id(), self.entry_mode())
     }
 }
 
@@ -201,25 +278,6 @@ pub fn hash_to_git(
         }
         ToGitOutcome::Buffer(converted) => blob_id(repo, converted)?,
     })
-}
-
-/// `src` as git stores it at `path`.
-fn to_git(
-    pipeline: &mut gix::filter::Pipeline<'_>,
-    index: &gix::index::State,
-    path: &BString,
-    src: impl Read,
-) -> anyhow::Result<Vec<u8>> {
-    let mut buf = Vec::new();
-    match pipeline.convert_to_git(src, &gix::path::from_bstr(path.as_bstr())?, index)? {
-        ToGitOutcome::Unchanged(mut src) => src.read_to_end(&mut buf)?,
-        ToGitOutcome::Process(mut src) => src.read_to_end(&mut buf)?,
-        ToGitOutcome::Buffer(converted) => {
-            buf.extend_from_slice(converted);
-            converted.len()
-        }
-    };
-    Ok(buf)
 }
 
 pub fn blob_id(repo: &gix::Repository, content: &[u8]) -> gix::Result<ObjectId> {

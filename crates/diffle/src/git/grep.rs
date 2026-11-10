@@ -10,7 +10,7 @@ use gix::bstr::{BString, ByteSlice};
 use gix::index::entry::{Flags, Mode, Stage};
 use regex::bytes::{Regex, RegexBuilder};
 
-use super::diff::{NoDiff, is_binary};
+use super::diff::is_binary;
 use super::{GitRepo, WORKTREE};
 use crate::error::{GitError, Result};
 
@@ -247,4 +247,26 @@ fn matches_line(regex: &Regex, line: &[u8], word: bool) -> bool {
         start = m.start() + 1;
     }
     false
+}
+
+/// Paths whose `diff` attribute is unset (`-diff`, `binary`): git greps them as binary, unread.
+struct NoDiff<'repo> {
+    stack: gix::AttributeStack<'repo>,
+    outcome: gix::attrs::search::Outcome,
+}
+
+impl<'repo> NoDiff<'repo> {
+    fn new(repo: &'repo gix::Repository) -> anyhow::Result<Self> {
+        let index = repo.index_or_empty()?;
+        let stack =
+            repo.attributes_only(&index, gix::worktree::stack::state::attributes::Source::WorktreeThenIdMapping)?;
+        let outcome = stack.selected_attribute_matches(["diff"]);
+        Ok(Self { stack, outcome })
+    }
+
+    fn get(&mut self, path: &BString) -> anyhow::Result<bool> {
+        self.outcome.reset();
+        self.stack.at_entry(path.as_bstr(), None)?.matching_attributes(&mut self.outcome);
+        Ok(self.outcome.iter_selected().next().is_some_and(|m| m.assignment.state == gix::attrs::StateRef::Unset))
+    }
 }

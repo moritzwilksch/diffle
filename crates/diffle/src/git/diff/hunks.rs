@@ -5,17 +5,6 @@ use gix::diff::blob::{Algorithm, Diff, InternedInput, UnifiedDiff};
 /// Git keeps this much of a hunk's function line.
 const FUNC_LINE: usize = 80;
 
-/// One hunk: its `@@ -a,b +c,d @@` range, function line, and prefixed lines (` `, `-`, `+`), each
-/// with its newline unless it is a side's unterminated last line.
-pub struct Hunk {
-    pub header: String,
-    pub func: Vec<u8>,
-    pub lines: Lines,
-}
-
-/// A hunk's lines, each with its prefix.
-pub type Lines = Vec<(u8, Vec<u8>)>;
-
 /// The line diff git computes: Myers, with git's slider compaction, and its indent heuristic when
 /// `indent` (as `git diff` has it on; range-diff's internal comparison runs without).
 fn line_diff<'a>(old: &'a [u8], new: &'a [u8], indent: bool) -> (InternedInput<&'a [u8]>, Diff) {
@@ -36,51 +25,64 @@ pub fn line_counts(old: &[u8], new: &[u8]) -> (i64, i64) {
     (i64::from(diff.count_additions()), i64::from(diff.count_removals()))
 }
 
-/// The hunks of a text diff with `context` lines around each change; changes at most twice the
-/// context apart share a hunk.
-pub fn hunks(old: &[u8], new: &[u8], context: u32, indent: bool) -> Vec<Hunk> {
-    let (input, diff) = line_diff(old, new, indent);
-    let Ok(grouped) = UnifiedDiff::new(&diff, &input, Collect::default(), ContextSize::symmetrical(context)).consume()
-    else {
-        unreachable!("collecting hunks cannot fail")
-    };
-    let mut func = FuncLine::default();
-    grouped
-        .0
-        .into_iter()
-        .map(|(h, lines)| {
-            // Git names an empty side's range by the line before it, not one past it.
-            let range = |start: u32, count: u32| {
-                let start = if count == 0 { start - 1 } else { start };
-                if count == 1 { format!("{start}") } else { format!("{start},{count}") }
-            };
-            let header = format!(
-                "@@ -{} +{} @@",
-                range(h.before_hunk_start, h.before_hunk_len),
-                range(h.after_hunk_start, h.after_hunk_len)
-            );
-            let func = func.find(|l| input.interner[input.before[l as usize]], i64::from(h.before_hunk_start) - 2);
-            Hunk { header, func: func.to_vec(), lines }
-        })
-        .collect()
+/// How much of `old` survives in `new`, in percent of the larger: what a rename's `similarity
+/// index` line reports, measured as gix's rename tracker measures it.
+pub fn similarity(old: &[u8], new: &[u8]) -> u32 {
+    let (input, diff) = line_diff(old, new, false);
+    let removed: usize = diff
+        .hunks()
+        .flat_map(|h| input.before[h.before.start as usize..h.before.end as usize].iter())
+        .map(|&token| input.interner[token].len())
+        .sum();
+    let max = old.len().max(new.len());
+    ((old.len() - removed) * 100).checked_div(max).map_or(100, |p| p as u32)
 }
 
-/// Each hunk's range and its lines, prefixed as a patch prints them.
-#[derive(Default)]
-struct Collect(Vec<(HunkHeader, Lines)>);
+/// Calls `each` with every hunk of a text diff with `context` lines around each change (changes at
+/// most twice the context apart share a hunk): its `@@ -a,b +c,d @@` range, function line, and
+/// lines, each with its newline unless it is a side's unterminated last line.
+pub fn each_hunk(
+    old: &[u8],
+    new: &[u8],
+    context: u32,
+    indent: bool,
+    each: impl FnMut(&str, &[u8], &[(DiffLineKind, &[u8])]),
+) {
+    let (input, diff) = line_diff(old, new, indent);
+    let sink = Sink { input: &input, func: FuncLine::default(), each };
+    let Ok(()) = UnifiedDiff::new(&diff, &input, sink, ContextSize::symmetrical(context)).consume() else {
+        unreachable!("the sink never fails")
+    };
+}
 
-impl ConsumeHunk for Collect {
-    type Out = Self;
+/// Hands each hunk gix groups to the caller, with git's header and function line.
+struct Sink<'a, F> {
+    input: &'a InternedInput<&'a [u8]>,
+    func: FuncLine,
+    each: F,
+}
 
-    fn consume_hunk(&mut self, header: HunkHeader, lines: &[(DiffLineKind, &[u8])]) -> std::io::Result<()> {
-        let prefixed = lines.iter().map(|&(kind, line)| (kind.to_prefix() as u8, line.to_vec())).collect();
-        self.0.push((header, prefixed));
+impl<F: FnMut(&str, &[u8], &[(DiffLineKind, &[u8])])> ConsumeHunk for Sink<'_, F> {
+    type Out = ();
+
+    fn consume_hunk(&mut self, h: HunkHeader, lines: &[(DiffLineKind, &[u8])]) -> std::io::Result<()> {
+        // Git names an empty side's range by the line before it, not one past it.
+        let range = |start: u32, count: u32| {
+            let start = if count == 0 { start - 1 } else { start };
+            if count == 1 { format!("{start}") } else { format!("{start},{count}") }
+        };
+        let header = format!(
+            "@@ -{} +{} @@",
+            range(h.before_hunk_start, h.before_hunk_len),
+            range(h.after_hunk_start, h.after_hunk_len)
+        );
+        let input = self.input;
+        let func = self.func.find(|l| input.interner[input.before[l as usize]], i64::from(h.before_hunk_start) - 2);
+        (self.each)(&header, func, lines);
         Ok(())
     }
 
-    fn finish(self) -> Self {
-        self
-    }
+    fn finish(self) {}
 }
 
 /// The `@@` header's function line: the nearest old-side line above the hunk that starts with a

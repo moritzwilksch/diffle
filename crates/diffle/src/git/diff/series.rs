@@ -9,8 +9,8 @@ use super::assignment::compute_assignment;
 use super::hunks;
 use super::patch::write_pair;
 use super::patch_id::patch_id;
-use super::sides::{self, Item, Reader};
-use super::{NoDiff, detect_renames, is_binary, pair, unified};
+use super::sides::{self, Contents, Item};
+use super::{detect_renames, pair, unified};
 use crate::error::Result;
 use crate::git::GitRepo;
 use crate::git::walk::commits_in;
@@ -34,7 +34,7 @@ pub struct RangeDiffRow {
 struct Pair {
     old: Option<Item>,
     new: Option<Item>,
-    rename: Option<u64>,
+    rename: bool,
     before: Option<Vec<u8>>,
     after: Option<Vec<u8>>,
 }
@@ -44,8 +44,7 @@ impl GitRepo {
     pub async fn range_diff(&self, old_range: &str, new_range: &str) -> Result<Vec<RangeDiffRow>> {
         let (old_range, new_range, root) = (old_range.to_owned(), new_range.to_owned(), self.root.clone());
         self.gix("range-diff", move |repo| {
-            let mut reader = Reader::new(repo, &root)?;
-            let mut no_diff = NoDiff::new(repo)?;
+            let mut contents = Contents::new(repo, &root, None)?;
             let mut series = |range: &str| -> anyhow::Result<Vec<Text>> {
                 let mut commits = commits_in(repo, range)?;
                 commits.reverse();
@@ -53,7 +52,7 @@ impl GitRepo {
                 for id in commits {
                     let commit = repo.find_commit(id)?;
                     if commit.parent_ids().count() < 2 {
-                        texts.push(Text::new(&commit, &pairs(repo, &mut reader, &mut no_diff, &commit)?)?);
+                        texts.push(Text::new(&commit, &pairs(repo, &mut contents, &commit)?)?);
                     }
                 }
                 Ok(texts)
@@ -69,8 +68,7 @@ impl GitRepo {
     pub async fn patch_ids(&self, shas: &[String]) -> Result<HashMap<String, String>> {
         let (shas, root) = (shas.to_vec(), self.root.clone());
         self.gix("patch-id", move |repo| {
-            let mut reader = Reader::new(repo, &root)?;
-            let mut no_diff = NoDiff::new(repo)?;
+            let mut contents = Contents::new(repo, &root, None)?;
             let mut ids = HashMap::new();
             for sha in shas {
                 let commit = repo.find_commit(ObjectId::from_hex(sha.as_bytes())?)?;
@@ -78,8 +76,9 @@ impl GitRepo {
                     continue;
                 }
                 let mut patch = Vec::new();
-                for p in pairs(repo, &mut reader, &mut no_diff, &commit)? {
-                    write_pair(&mut patch, repo, (p.old.as_ref(), p.new.as_ref()), p.rename, (&p.before, &p.after), 3);
+                for p in pairs(repo, &mut contents, &commit)? {
+                    let sides = (p.before.as_deref(), p.after.as_deref());
+                    write_pair(&mut patch, repo, (p.old.as_ref(), p.new.as_ref()), p.rename, sides, 3);
                 }
                 if let Some(id) = patch_id(&patch) {
                     ids.insert(sha, id);
@@ -92,31 +91,20 @@ impl GitRepo {
 }
 
 /// What `git log -p` shows for a commit against its first parent.
-fn pairs(
-    repo: &gix::Repository,
-    reader: &mut Reader<'_>,
-    no_diff: &mut NoDiff<'_>,
-    commit: &gix::Commit<'_>,
-) -> anyhow::Result<Vec<Pair>> {
+fn pairs(repo: &gix::Repository, contents: &mut Contents<'_>, commit: &gix::Commit<'_>) -> anyhow::Result<Vec<Pair>> {
     let parent = match commit.parent_ids().next() {
         Some(parent) => repo.find_commit(parent)?.tree_id()?.detach(),
         None => ObjectId::empty_tree(repo.object_hash()),
     };
     let mut changes = pair(sides::tree_diff(repo, parent, commit.tree_id()?.detach())?);
-    detect_renames(&mut changes, reader);
+    detect_renames(&mut changes, contents);
     let mut out = Vec::new();
     for change in changes {
-        let path = &change.new.as_ref().or(change.old.as_ref()).expect("a side").path;
-        let unread = no_diff.get(path)?;
-        let mut read = |item: Option<&Item>| match item {
-            _ if unread => None,
-            Some(item) => reader.content(item),
-            None => Some(Vec::new()),
+        // A binary side leaves both unread.
+        let (before, after) = match contents.pair(change.old.as_ref(), change.new.as_ref()) {
+            (Some(b), Some(a)) => (Some(b.into_owned()), Some(a.into_owned())),
+            _ => (None, None),
         };
-        let (mut before, mut after) = (read(change.old.as_ref()), read(change.new.as_ref()));
-        if before.as_deref().is_none_or(is_binary) || after.as_deref().is_none_or(is_binary) {
-            (before, after) = (None, None);
-        }
         out.push(Pair { old: change.old, new: change.new, rename: change.rename, before, after });
     }
     Ok(out)
@@ -165,7 +153,7 @@ impl Text {
                 let mut header = match (old, new) {
                     (None, Some(n)) => format!("{} (new)", name(n)),
                     (Some(o), None) => format!("{} (deleted)", name(o)),
-                    (Some(o), Some(n)) if pair.rename.is_some() => format!("{} => {}", name(o), name(n)),
+                    (Some(o), Some(n)) if pair.rename => format!("{} => {}", name(o), name(n)),
                     (_, n) => name(n.expect("a side")),
                 };
                 if let (Some(o), Some(n)) = (old, new)
@@ -191,22 +179,19 @@ impl Text {
                         continue;
                     }
                 };
-                for hunk in hunks::hunks(before, after, 3, true) {
-                    let func = if hunk.func.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {file}: {}", hunk.func.to_str_lossy())
-                    };
+                hunks::each_hunk(before, after, 3, true, |_, func, lines| {
+                    let func =
+                        if func.is_empty() { String::new() } else { format!(" {file}: {}", func.to_str_lossy()) };
                     line(&mut patch, format!("@@{func}").as_bytes());
-                    for (prefix, text) in hunk.lines {
-                        let mut row = vec![prefix];
-                        row.extend_from_slice(text.strip_suffix(b"\n").unwrap_or(&text));
+                    for &(kind, text) in lines {
+                        let mut row = vec![kind.to_prefix() as u8];
+                        row.extend_from_slice(text.strip_suffix(b"\n").unwrap_or(text));
                         line(&mut patch, &row);
                         if text.last() != Some(&b'\n') {
                             line(&mut patch, b" \\ No newline at end of file");
                         }
                     }
-                }
+                });
             }
         }
         Ok(Self { id: commit.id, patch, diff_offset, diff_lines })
@@ -259,8 +244,9 @@ fn correspondences(a: &[Text], b: &[Text]) -> Vec<Option<usize>> {
 
 /// How big the diff between two patches is: its hunks and their lines, with three lines of context.
 fn diff_size(a: &[u8], b: &[u8]) -> i32 {
-    let hunks = hunks::hunks(a, b, 3, false);
-    (hunks.len() + hunks.iter().map(|h| h.lines.len()).sum::<usize>()) as i32
+    let mut size = 0;
+    hunks::each_hunk(a, b, 3, false, |_, _, lines| size += 1 + lines.len());
+    size as i32
 }
 
 /// The rows in range-diff's order: the second range's, with each commit only in the first placed

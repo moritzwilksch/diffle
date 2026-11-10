@@ -4,26 +4,26 @@ mod assignment;
 mod hunks;
 mod patch;
 mod patch_id;
-mod rename;
 mod series;
 pub mod sides;
 mod unified;
 mod worktree;
 
 use gix::ObjectId;
-use gix::bstr::{BString, ByteSlice};
+use gix::bstr::BString;
 
 use super::{GitRepo, WORKTREE};
 use crate::error::Result;
 use crate::protocol::{ChangeStatus, ChangedFile};
-use sides::{GITLINK, Item, Reader, kind};
+use gix::diff::blob::ResourceKind;
+use sides::{Contents, GITLINK, Item, kind};
 pub use unified::is_binary;
 
-/// A path's two sides; a rename carries its score.
+/// A path's two sides, or a rename's.
 struct Change {
     old: Option<Item>,
     new: Option<Item>,
-    rename: Option<u64>,
+    rename: bool,
     unmerged: bool,
 }
 
@@ -59,18 +59,23 @@ impl GitRepo {
                     // Two commits: a tree diff, which skips the subtrees they share.
                     pair(sides::tree_diff(repo, tree_id(repo, &old)?, tree_id(repo, &new)?)?)
                 };
-                let mut reader = Reader::new(repo, &root)?;
-                detect_renames(&mut changes, &mut reader);
-                let mut no_diff = NoDiff::new(repo)?;
-                let mut files: Vec<ChangedFile> = changes
-                    .iter()
-                    .map(|c| changed_file(c, &mut reader, &mut no_diff))
-                    .collect::<anyhow::Result<_>>()?;
+                let mut contents = Contents::new(repo, &root, live_side(&old, &new))?;
+                detect_renames(&mut changes, &mut contents);
+                let mut files: Vec<ChangedFile> = changes.iter().map(|c| changed_file(c, &mut contents)).collect();
                 files.sort_by(|a, b| a.path.cmp(&b.path));
                 Ok(files)
             })
             .await?;
         Ok(files)
+    }
+}
+
+/// The side of a comparison that is the worktree, if one is.
+fn live_side(old: &str, new: &str) -> Option<ResourceKind> {
+    match (old == WORKTREE, new == WORKTREE) {
+        (true, _) => Some(ResourceKind::OldOrSource),
+        (_, true) => Some(ResourceKind::NewOrDestination),
+        _ => None,
     }
 }
 
@@ -107,7 +112,7 @@ pub(in crate::git) fn index_changes(repo: &gix::Repository, base: ObjectId) -> a
 }
 
 fn pair(changes: Vec<PathChange>) -> Vec<Change> {
-    changes.into_iter().map(|(old, new)| Change { old, new, rename: None, unmerged: false }).collect()
+    changes.into_iter().map(|(old, new)| Change { old, new, rename: false, unmerged: false }).collect()
 }
 
 /// What tracked paths differ between `base` and the worktree, staged or not, and whether the index
@@ -126,7 +131,7 @@ pub(in crate::git) fn worktree_changes(
 fn compare(old: Vec<Item>, new: Vec<Item>, conflicts: &[BString]) -> Vec<Change> {
     let mut changes = Vec::new();
     let (mut old, mut new) = (old.into_iter().peekable(), new.into_iter().peekable());
-    let change = |old, new| Change { old, new, rename: None, unmerged: false };
+    let change = |old, new| Change { old, new, rename: false, unmerged: false };
     loop {
         let order = match (old.peek(), new.peek()) {
             (None, None) => break,
@@ -149,29 +154,24 @@ fn compare(old: Vec<Item>, new: Vec<Item>, conflicts: &[BString]) -> Vec<Change>
     changes
 }
 
-/// Folds deletions and additions git would call renames into one change each. Untracked files
-/// never take part: git's diff does not see them.
-fn detect_renames(changes: &mut Vec<Change>, reader: &mut Reader<'_>) {
-    let sources: Vec<usize> = (0..changes.len())
-        .filter(|&i| changes[i].new.is_none() && changes[i].old.as_ref().is_some_and(|o| !o.untracked))
+/// Folds deletions and additions gix's rename tracker pairs into one change each. Untracked files
+/// never take part, as git's diff does not see them, nor do unreadable ones. Detection is a
+/// nicety: a side the tracker cannot read leaves the pair a deletion and an addition.
+fn detect_renames(changes: &mut Vec<Change>, contents: &mut Contents<'_>) {
+    let candidate = |item: &Option<Item>| item.as_ref().filter(|i| !i.untracked && !i.id.is_null()).cloned();
+    let candidates = changes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| match (&c.old, &c.new) {
+            (old, None) => Some((candidate(old)?, ResourceKind::OldOrSource, i)),
+            (None, new) => Some((candidate(new)?, ResourceKind::NewOrDestination, i)),
+            _ => None,
+        })
         .collect();
-    let destinations: Vec<usize> = (0..changes.len())
-        .filter(|&i| changes[i].old.is_none() && changes[i].new.as_ref().is_some_and(|n| !n.untracked))
-        .collect();
-    if sources.is_empty() || destinations.is_empty() {
-        return;
-    }
-    let src_items: Vec<Item> = sources.iter().map(|&i| changes[i].old.clone().expect("a deletion")).collect();
-    let dst_items: Vec<Item> = destinations.iter().map(|&i| changes[i].new.clone().expect("an addition")).collect();
-    let pairs = rename::pairs(&src_items, &dst_items, |item| {
-        let content = reader.content(item)?;
-        Some(rename::Fingerprint::new(&content, !is_binary(&content)))
-    });
     let mut gone = Vec::new();
-    for pair in pairs {
-        let (s, d) = (sources[pair.src], destinations[pair.dst]);
+    for (s, d) in contents.renames(candidates).unwrap_or_default() {
         changes[d].old = changes[s].old.take();
-        changes[d].rename = Some(pair.score);
+        changes[d].rename = true;
         gone.push(s);
     }
     gone.sort_unstable();
@@ -185,54 +185,25 @@ fn blob(item: Option<&Item>) -> String {
     item.filter(|i| !i.id.is_null()).map_or_else(String::new, |i| i.id.to_string())
 }
 
-/// Paths whose `diff` attribute is unset (`-diff`, `binary`): git diffs them as binary unread.
-pub(in crate::git) struct NoDiff<'repo> {
-    stack: gix::AttributeStack<'repo>,
-    outcome: gix::attrs::search::Outcome,
-}
-
-impl<'repo> NoDiff<'repo> {
-    pub(in crate::git) fn new(repo: &'repo gix::Repository) -> anyhow::Result<Self> {
-        let index = repo.index_or_empty()?;
-        let stack =
-            repo.attributes_only(&index, gix::worktree::stack::state::attributes::Source::WorktreeThenIdMapping)?;
-        let outcome = stack.selected_attribute_matches(["diff"]);
-        Ok(Self { stack, outcome })
-    }
-
-    pub(in crate::git) fn get(&mut self, path: &BString) -> anyhow::Result<bool> {
-        self.outcome.reset();
-        self.stack.at_entry(path.as_bstr(), None)?.matching_attributes(&mut self.outcome);
-        Ok(self.outcome.iter_selected().next().is_some_and(|m| m.assignment.state == gix::attrs::StateRef::Unset))
-    }
-}
-
-fn changed_file(change: &Change, reader: &mut Reader<'_>, no_diff: &mut NoDiff<'_>) -> anyhow::Result<ChangedFile> {
+fn changed_file(change: &Change, contents: &mut Contents<'_>) -> ChangedFile {
     let (old, new) = (change.old.as_ref(), change.new.as_ref());
     let present = new.or(old).expect("a side");
     let status = match (old, new) {
-        _ if change.rename.is_some() => ChangeStatus::R,
+        _ if change.rename => ChangeStatus::R,
         (None, _) => ChangeStatus::A,
         (_, None) => ChangeStatus::D,
         _ if change.unmerged => ChangeStatus::U,
         (Some(o), Some(n)) if kind(o.mode) != kind(n.mode) => ChangeStatus::T,
         _ => ChangeStatus::M,
     };
-    let unread = no_diff.get(&present.path)?;
-    let read = |reader: &mut Reader<'_>, item: Option<&Item>| match item {
-        _ if unread => None,
-        Some(item) => reader.content(item),
-        None => Some(Vec::new()),
-    };
-    let (before, after) = (read(reader, old), read(reader, new));
-    let (binary, (additions, deletions)) = match (&before, &after) {
-        (Some(b), Some(a)) if !is_binary(b) && !is_binary(a) => (false, hunks::line_counts(b, a)),
+    let (binary, (additions, deletions)) = match contents.pair(old, new) {
+        (Some(b), Some(a)) => (false, hunks::line_counts(&b, &a)),
         _ => (true, (0, 0)),
     };
     let gitlink = [old, new].into_iter().flatten().any(|i| kind(i.mode) == GITLINK);
-    Ok(ChangedFile {
+    ChangedFile {
         path: present.path.to_string(),
-        old_path: change.rename.and(old).map(|o| o.path.to_string()),
+        old_path: change.rename.then(|| old.map(|o| o.path.to_string())).flatten(),
         status,
         additions,
         deletions,
@@ -241,5 +212,5 @@ fn changed_file(change: &Change, reader: &mut Reader<'_>, no_diff: &mut NoDiff<'
         old_blob: blob(old),
         generated: false,
         submodule: gitlink.then_some(true),
-    })
+    }
 }

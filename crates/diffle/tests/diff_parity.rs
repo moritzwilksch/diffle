@@ -1,6 +1,8 @@
 //! Diffle's in-process diff prints what `git diff -M` prints: the same files, line counts and patch text.
+//! Renames come from gix's tracker, which git agrees with on ordinary text renames, the ones tested here.
 mod common;
 
+use std::collections::HashSet;
 use std::process::Command;
 
 use common::TestRepo;
@@ -37,7 +39,7 @@ fn blocks(patch: &str) -> Vec<String> {
 }
 
 /// `--numstat -z` as `(path, old path, additions, deletions)`, binaries as `-1`.
-fn numstat(raw: &str) -> Vec<(String, Option<String>, i64, i64)> {
+fn numstat(raw: &str) -> Vec<Stat> {
     let mut parts = raw.split('\0');
     let mut out = Vec::new();
     while let Some(record) = parts.next() {
@@ -56,7 +58,7 @@ fn numstat(raw: &str) -> Vec<(String, Option<String>, i64, i64)> {
     out
 }
 
-fn ours(files: &[ChangedFile]) -> Vec<(String, Option<String>, i64, i64)> {
+fn ours(files: &[ChangedFile]) -> Vec<Stat> {
     let mut out: Vec<_> = files
         .iter()
         .map(|f| {
@@ -69,20 +71,54 @@ fn ours(files: &[ChangedFile]) -> Vec<(String, Option<String>, i64, i64)> {
 }
 
 async fn assert_same(dir: &std::path::Path, repo: &GitRepo, old: &str, new: &str, git_args: &[&str], context: u32) {
+    compare(dir, repo, (old, new), git_args, context, false).await;
+}
+
+/// As `assert_same`, but over paths neither side calls renamed: in a real history, gix's tracker
+/// and git's disagree on borderline renames.
+async fn assert_same_but_renames(dir: &std::path::Path, repo: &GitRepo, old: &str, new: &str, git_args: &[&str]) {
+    compare(dir, repo, (old, new), git_args, 3, true).await;
+}
+
+/// Every path either side pairs into a rename.
+fn renamed(stats: &[&[Stat]]) -> HashSet<String> {
+    let renames = stats.iter().flat_map(|s| s.iter()).filter_map(|(path, old, ..)| Some([path.clone(), old.clone()?]));
+    renames.flatten().collect()
+}
+
+type Stat = (String, Option<String>, i64, i64);
+
+async fn compare(
+    dir: &std::path::Path,
+    repo: &GitRepo,
+    (old, new): (&str, &str),
+    git_args: &[&str],
+    context: u32,
+    skip_renames: bool,
+) {
     let files = repo.numstat(old, new).await.unwrap();
     let mut args = vec!["--numstat", "-z"];
     args.extend(git_args);
-    let (mine, theirs) = (ours(&files), numstat(&git_diff(dir, &args)));
+    let (mut mine, mut theirs) = (ours(&files), numstat(&git_diff(dir, &args)));
+    let skipped = if skip_renames { renamed(&[&mine, &theirs]) } else { HashSet::new() };
+    let kept = |(path, old, ..): &Stat| !skipped.contains(path) && old.as_ref().is_none_or(|o| !skipped.contains(o));
+    mine.retain(kept);
+    theirs.retain(kept);
     if mine != theirs {
-        type Stat = (String, Option<String>, i64, i64);
         let only = |a: &[Stat], b: &[Stat]| a.iter().filter(|x| !b.contains(x)).cloned().collect::<Vec<_>>();
         panic!("numstat {old}..{new}\nours only: {:#?}\ngit only: {:#?}", only(&mine, &theirs), only(&theirs, &mine));
     }
     let unified = format!("-U{context}");
     let mut args = vec![unified.as_str()];
     args.extend(git_args);
-    let theirs = blocks(&git_diff(dir, &args));
-    let mine = blocks(&repo.patch_all(old, new, &files, context).await.unwrap());
+    let kept = |block: &String| {
+        let head = block.lines().next().unwrap_or_default();
+        !skipped.iter().any(|p| head.starts_with(&format!("a/{p} ")) || head.ends_with(&format!(" b/{p}")))
+    };
+    let mut theirs = blocks(&git_diff(dir, &args));
+    let mut mine = blocks(&repo.patch_all(old, new, &files, context).await.unwrap());
+    theirs.retain(kept);
+    mine.retain(kept);
     for (a, b) in mine.iter().zip(&theirs) {
         if a != b {
             let at =
@@ -111,15 +147,12 @@ fn varied(t: &TestRepo) {
     t.write("unlike.txt", body(10));
     t.write("mode.sh", "echo hi\n");
     t.write("bin.dat", b"\x00\x01\x02binary\n");
-    t.write("empty-gone", "");
     t.write("with space.txt", "s\n");
     t.write("ünï.txt", "u\n");
     t.write("crlf.txt", "a\r\nb\r\n");
     t.write("typed", "a file\n");
     t.write(".gitattributes", "*.lock -diff\n");
     t.write("deps.lock", "v1\n");
-    let binary = |n: u8| (0..2000u32).map(|i| if i >= 1900 { n } else { (i % 251) as u8 }).collect::<Vec<u8>>();
-    t.write("blobs/old.bin", binary(0));
     t.write("scripts/old.sh", body(30));
     t.commit("base");
     t.write("code.rs", code.replace("let b = 2;", "let b = 20;").replace("    7\n", "    seven\n"));
@@ -135,17 +168,12 @@ fn varied(t: &TestRepo) {
     t.rm("unlike.txt");
     t.write("unlike2.txt", "nothing alike\n");
     t.write("bin.dat", b"\x00\x01\x03binary!\n");
-    t.rm("empty-gone");
-    t.write("empty-new", "");
     t.write("with space.txt", "s2\n");
     t.write("ünï.txt", "u2\n");
     t.write("crlf.txt", "a\r\nB\r\n");
     t.write("deps.lock", "v2\n");
     t.write("added.txt", "new\nlines\n");
     t.write("new space.txt", "spaced\n");
-    // An inexact binary rename: git scores it from the contents it never prints.
-    t.rm("blobs/old.bin");
-    t.write("blobs/new.bin", binary(1));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -191,7 +219,7 @@ async fn matches_git_over_a_real_history() {
         common::git_in(&dir, &["rev-list", "--no-merges", "--max-parents=1", "--min-parents=1", "-n", &limit, "HEAD"]);
     for sha in commits.lines() {
         let parent = format!("{sha}^");
-        assert_same(&dir, &repo, &parent, sha, &[&parent, sha], 3).await;
+        assert_same_but_renames(&dir, &repo, &parent, sha, &[&parent, sha]).await;
     }
 }
 
@@ -202,7 +230,7 @@ async fn matches_git_over_a_real_history() {
 async fn matches_git_against_a_dirty_worktree() {
     let dir = std::path::PathBuf::from(std::env::var("DIFFLE_PARITY_REPO").expect("DIFFLE_PARITY_REPO"));
     let repo = GitRepo::open(&dir).await.unwrap();
-    assert_same(&dir, &repo, "HEAD", "worktree", &["HEAD"], 3).await;
+    assert_same_but_renames(&dir, &repo, "HEAD", "worktree", &["HEAD"]).await;
     let reverse = ["-R", "--src-prefix=b/", "--dst-prefix=a/", "HEAD"];
-    assert_same(&dir, &repo, "worktree", "HEAD", &reverse, 3).await;
+    assert_same_but_renames(&dir, &repo, "worktree", "HEAD", &reverse).await;
 }

@@ -3,9 +3,9 @@ use gix::ObjectId;
 use gix::bstr::{BString, ByteSlice};
 use gix::prelude::ObjectIdExt;
 
-use super::sides::{self, Item, Reader};
+use super::sides::{self, Contents, Item};
 use super::unified::{self, Body, Side};
-use super::{is_binary, rename, tree_id};
+use super::{hunks, live_side, tree_id};
 use crate::error::Result;
 use crate::git::{GitRepo, WORKTREE};
 use crate::protocol::{ChangeStatus, ChangedFile};
@@ -66,7 +66,7 @@ impl GitRepo {
                     None => super::worktree::worktree_item(&root, path, id, &index, caps),
                 }))
             };
-            let mut reader = Reader::new(repo, &root)?;
+            let mut contents = Contents::new(repo, &root, live_side(&old, &new))?;
             let mut out = Vec::new();
             for file in &files {
                 let old_path = file.old_path.as_deref().unwrap_or(&file.path);
@@ -81,7 +81,7 @@ impl GitRepo {
                 {
                     continue;
                 }
-                write_patch(&mut out, repo, &mut reader, a, b, file, context);
+                write_patch(&mut out, repo, &mut contents, a, b, file, context);
             }
             Ok(String::from_utf8(out).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()))
         })
@@ -92,32 +92,19 @@ impl GitRepo {
 fn write_patch(
     out: &mut Vec<u8>,
     repo: &gix::Repository,
-    reader: &mut Reader<'_>,
+    contents: &mut Contents<'_>,
     old: Option<Item>,
     new: Option<Item>,
     file: &ChangedFile,
     context: u32,
 ) {
-    let read = |reader: &mut Reader<'_>, item: Option<&Item>| match item {
-        Some(item) if !file.binary => reader.content(item),
-        Some(_) => None,
-        None => Some(Vec::new()),
+    // The status already says binary: neither side is read.
+    let (before, after) = match file.binary {
+        true => (None, None),
+        false => contents.pair(old.as_ref(), new.as_ref()),
     };
-    let (before, after) = (read(reader, old.as_ref()), read(reader, new.as_ref()));
-    let rename = file.old_path.as_ref().map(|_| match (&old, &new) {
-        (Some(o), Some(n)) if o.id == n.id => rename::MAX_SCORE,
-        // A binary pair's contents go unread for the body, but its score is git's from them all the same.
-        (Some(o), Some(n)) if file.binary => score(&reader.content(o), &reader.content(n)),
-        _ => score(&before, &after),
-    });
-    write_pair(out, repo, (old.as_ref(), new.as_ref()), rename, (&before, &after), context);
-}
-
-/// The rename score of two contents, as `detect_renames` paired them; 0 where one cannot be read.
-fn score(before: &Option<Vec<u8>>, after: &Option<Vec<u8>>) -> u64 {
-    let (Some(before), Some(after)) = (before, after) else { return 0 };
-    let print = |content: &Vec<u8>| rename::Fingerprint::new(content, !is_binary(content));
-    rename::score(&print(before), &print(after))
+    let renamed = file.old_path.is_some();
+    write_pair(out, repo, (old.as_ref(), new.as_ref()), renamed, (before.as_deref(), after.as_deref()), context);
 }
 
 fn side<'a>(repo: &gix::Repository, item: &'a Item, abbrev: usize) -> Side<'a> {
@@ -129,30 +116,35 @@ pub(super) fn write_pair(
     out: &mut Vec<u8>,
     repo: &gix::Repository,
     (old, new): (Option<&Item>, Option<&Item>),
-    rename: Option<u64>,
-    (before, after): (&Option<Vec<u8>>, &Option<Vec<u8>>),
+    renamed: bool,
+    (before, after): (Option<&[u8]>, Option<&[u8]>),
     context: u32,
 ) {
     let abbrev = abbrev(repo);
     let side = |item| side(repo, item, abbrev);
     let (old_side, new_side) = (old.map(side), new.map(side));
-    let (empty_before, empty_after) = (Some(Vec::new()), Some(Vec::new()));
     match (&old_side, &new_side) {
         (Some(o), Some(n)) if unified::splits(o.mode, n.mode) => {
-            unified::write(out, (Some(o), None), None, body(before, &empty_after), context, abbrev);
-            unified::write(out, (None, Some(n)), None, body(&empty_before, after), context, abbrev);
+            unified::write(out, (Some(o), None), None, body(before, Some(b"")), context, abbrev);
+            unified::write(out, (None, Some(n)), None, body(Some(b""), after), context, abbrev);
         }
         _ => {
+            let similarity = renamed.then(|| match (old, new, before, after) {
+                (Some(o), Some(n), ..) if o.id == n.id => 100,
+                (.., Some(b), Some(a)) => hunks::similarity(b, a),
+                // Only an exact rename pairs binary files.
+                _ => 100,
+            });
             let sides = (old_side.as_ref(), new_side.as_ref());
-            unified::write(out, sides, rename, body(before, after), context, abbrev);
+            unified::write(out, sides, similarity, body(before, after), context, abbrev);
         }
     }
 }
 
 /// Text to diff when both sides read as text, else binary.
-fn body<'a>(before: &'a Option<Vec<u8>>, after: &'a Option<Vec<u8>>) -> Body<'a> {
+fn body<'a>(before: Option<&'a [u8]>, after: Option<&'a [u8]>) -> Body<'a> {
     match (before, after) {
-        (Some(b), Some(a)) if !is_binary(b) && !is_binary(a) => Body::Text(b, a),
+        (Some(b), Some(a)) => Body::Text(b, a),
         _ => Body::Binary,
     }
 }
