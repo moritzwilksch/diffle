@@ -140,6 +140,8 @@ fn copy_refs(repo: &gix::Repository, path: &Path, refspecs: &[String]) -> anyhow
 }
 
 /// Writes the objects reachable from `tip` that `target` lacks; a commit it has brings its history.
+/// Loose, one per object: a local remote usually shares the history and adds only a few commits.
+/// A pack (`gix-pack`'s `generate` feature) would pay off for large local copies.
 fn copy_reachable(source: &gix::Repository, target: &gix::Repository, tip: ObjectId) -> anyhow::Result<()> {
     let (mut pending, mut seen) = (vec![tip], HashSet::new());
     while let Some(id) = pending.pop() {
@@ -181,7 +183,8 @@ fn copy_tree(source: &gix::Repository, target: &gix::Repository, id: ObjectId) -
 }
 
 /// `git clone --no-tags url dir`: a repository whose `origin` is `url`, its branches tracked, and
-/// the default branch checked out.
+/// the default branch checked out. Not `gix::prepare_clone`: a local path, `insteadOf` included,
+/// would spawn `git-upload-pack`, so one path serves both kinds of URL and the tests cover it.
 fn clone(url: &str, dir: &Path) -> anyhow::Result<()> {
     let repo = gix::init(dir)?;
     let config_path = repo.git_dir().join("config");
