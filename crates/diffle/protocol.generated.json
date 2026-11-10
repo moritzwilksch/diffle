@@ -2318,7 +2318,7 @@
       "properties": {
         "instance": {
           "type": "string",
-          "description": "Minted once per run; names the run's announcement file."
+          "description": "Minted once per run."
         },
         "pid": {
           "type": "integer",
@@ -2335,17 +2335,16 @@
         },
         "label": {
           "type": "string",
-          "description": "The active review's comparison label, as the run's status line names it."
+          "description": "The active review's comparison label, as the run's status line names it; absent until the first review resolves."
         }
       },
       "required": [
         "instance",
         "pid",
         "gitDir",
-        "version",
-        "label"
+        "version"
       ],
-      "description": "What `GET /api/server` answers: which run is listening, for which repository. A client trusts an\nannouncement under `<git-dir>/diffle/servers/` only when `instance` and `gitDir` match it."
+      "description": "What `GET /api/server` answers, before the first review resolves too: which run is listening, for\nwhich repository. A client trusts `<git-dir>/diffle/server.json` only when its `instance` and\n`gitDir` match this."
     },
     "ServerMessage": {
       "oneOf": [
@@ -2676,19 +2675,6 @@
         "lspCommands",
         "githubHosts"
       ]
-    },
-    "VersionResponse": {
-      "type": "object",
-      "properties": {
-        "version": {
-          "type": "string",
-          "description": "The server's semantic version, as `diffle --version` prints it."
-        }
-      },
-      "required": [
-        "version"
-      ],
-      "description": "What `GET /api/version` answers before anything else is ready: the server's release, so a\nclient can tell whether it speaks this server's contract."
     },
     "ViewedBulkRequest": {
       "type": "object",

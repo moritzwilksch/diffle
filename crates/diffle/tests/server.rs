@@ -64,20 +64,28 @@ async fn rejects_malformed_json_and_null_before_side_effects() {
     s.close().await;
 }
 
-/// Another client checks the server's release first, so the version answers before the review does.
+/// A starting run confirms the one already serving, so `/api/server` answers before the review does.
 #[tokio::test]
-async fn answers_the_version_before_the_first_review_resolves() {
+async fn confirms_the_run_before_the_first_review_resolves() {
     let repo = common::TestRepo::new();
     repo.write("a.txt", "a\n");
     repo.commit("base");
     let s = TestServer::listening(repo, None).await;
-    let r = tokio::time::timeout(Duration::from_secs(5), s.get("/api/version")).await.expect("answers while unready");
+    let r = tokio::time::timeout(Duration::from_secs(5), s.get("/api/server")).await.expect("answers while unready");
     assert_eq!(r.status, 200, "{}", r.body);
-    assert_eq!(r.json(), json!({ "version": env!("CARGO_PKG_VERSION") }));
+    let git_dir = s.repo.path.join(".git");
+    let expected = json!({
+        "instance": "test",
+        "pid": std::process::id(),
+        "gitDir": git_dir.to_str().unwrap(),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+    assert_eq!(r.json(), expected);
     // The rest of the API waits for the review.
     assert!(tokio::time::timeout(Duration::from_millis(300), s.get("/api/snapshot")).await.is_err());
     s.session.start(s.session.resolve(EnterRequest::Working).await.unwrap()).await.unwrap();
     assert_eq!(s.get("/api/snapshot").await.status, 200);
+    assert_eq!(s.get("/api/server").await.json()["label"], "HEAD..worktree");
     s.close().await;
 }
 

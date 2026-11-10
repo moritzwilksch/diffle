@@ -154,11 +154,8 @@ async fn start(
     server.lock().unwrap().server = Some(bound);
     timing.mark("listen");
     let reachable = if opts.host() == "0.0.0.0" || opts.host() == "::" { localhost(&url) } else { url.clone() };
-    // Unannounced, the review still works; only agents cannot find it.
-    match announce(&repo.git_dir, &instance, &reachable).await {
-        Ok(announced) => server.lock().unwrap().announced = Some(announced),
-        Err(e) => crate::status!("{} not announced to agents: {e:#}", yellow("!")),
-    }
+    // Unannounced, a second run could start on this git dir, and agents could not find this one.
+    server.lock().unwrap().announced = Some(announce(&repo.git_dir, &instance, &reachable).await?);
     if !opts.no_open && opts.socket.is_none() {
         open_browser(&reachable);
     }
