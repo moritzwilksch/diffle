@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import type { Page } from '@playwright/test';
 import { FEATURE_BRANCH, MAIN_BRANCH } from '../fixture/repo.js';
 import { expect, test as base } from './fixtures.js';
-import { selectLines } from './browser.js';
+import { clickCentred, selectLines } from './browser.js';
 
 const git = (repo: string, ...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
 
@@ -45,13 +45,13 @@ test.describe('a pushed branch', () => {
     const mergeBase = git(repo, 'merge-base', MAIN_BRANCH, FEATURE_BRANCH);
 
     await select(page, 'tally/currency.py', 18, 20);
-    await copyLink(page).click();
+    await clickCentred(copyLink(page));
     await expect.poll(() => clipboard(page)).toBe(`https://github.com/o/tally/blob/${head}/tally/currency.py#L18-L20`);
 
     await page.keyboard.press('Escape');
     // The rename's removed first line lives in tally/money.py at the merge base.
     await select(page, 'tally/currency.py', 1, 1, 'old');
-    await copyLink(page).click();
+    await clickCentred(copyLink(page));
     await expect.poll(() => clipboard(page)).toBe(`https://github.com/o/tally/blob/${mergeBase}/tally/money.py#L1`);
   });
 
