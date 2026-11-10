@@ -139,7 +139,7 @@ async fn does_not_clear_threads_for_an_invalid_stale_filter() {
     let created = s.json("POST", "/api/threads", json!({ "path": "a.txt", "body": "keep" })).await;
     assert_eq!(created.status, 201);
     assert_eq!(s.send("DELETE", "/api/threads?stale=0", &[], None).await.status, 400);
-    assert_eq!(s.get("/api/threads").await.json().as_array().unwrap().len(), 1);
+    assert_eq!(s.get("/api/threads").await.json()["threads"].as_array().unwrap().len(), 1);
     s.close().await;
 }
 
@@ -241,7 +241,8 @@ async fn keeps_who_wrote_each_message_and_marks_the_agent_in_the_prompt() {
         .await;
     assert_eq!(replied.status, 201);
     let stored = s.get("/api/threads").await.json();
-    let authors: Vec<&Value> = stored[0]["messages"].as_array().unwrap().iter().map(|m| &m["author"]).collect();
+    let authors: Vec<&Value> =
+        stored["threads"][0]["messages"].as_array().unwrap().iter().map(|m| &m["author"]).collect();
     assert_eq!(authors, [&json!("agent"), &Value::Null, &json!("agent")]);
     let r = s.get("/api/threads/export").await;
     assert_eq!(r.body, "(file) a.txt\n\n(agent) Split it.\n\nWhy?\n\n(agent) Smaller diffs.\n\n---\n");

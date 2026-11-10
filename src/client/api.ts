@@ -32,6 +32,7 @@ import {
   SearchResponseSchema,
   ServerMessageSchema,
   SnapshotSchema,
+  ThreadListSchema,
   UserConfigSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
@@ -153,7 +154,7 @@ export const api = {
       `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, content: opts.content, path: opts.path })}`,
     ),
   threads: (query: ThreadQuery = {}) =>
-    json(CommentThreadSchema.array(), `api/threads?${q({ state: query.state, path: query.path })}`),
+    json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`).then((list) => list.threads),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`api/threads/export?${q({ state: 'open' })}`),
   /** One message, with its thread's location and quote, as an agent prompt. */
