@@ -1,4 +1,5 @@
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
+import { TextArea } from '@/client/ui/TextArea.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
 import {
@@ -198,10 +199,10 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
       )}
       {editing ? (
         <div className="rounded-md border-0 bg-surface p-0">
-          <textarea
+          <TextArea
             className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onValueChange={setText}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
             }}
@@ -286,12 +287,12 @@ function ReplyComposer({ threadId }: { threadId: string }) {
   };
   return (
     <div className="@container mx-2.5 mt-0 mb-2.5 rounded-md border border-accent bg-surface p-2">
-      <textarea
+      <TextArea
         className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
         ref={ref}
         value={text}
         placeholder="Reply…"
-        onChange={(e) => setText(e.target.value)}
+        onValueChange={setText}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
         }}

@@ -1,5 +1,6 @@
 import { Button } from '@/client/ui/Button.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
+import { TextArea } from '@/client/ui/TextArea.js';
 import { FileDiff, Link, MessageSquare } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useCopied } from '@/client/clipboard.js';
@@ -77,12 +78,12 @@ export function CommentComposer({ label }: { label: string }) {
         <CopyLinkButton />
       </div>
       <div className="p-2">
-        <textarea
+        <TextArea
           className="max-h-[60vh] min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
           ref={ref}
           value={text}
           placeholder="Leave a comment…"
-          onChange={(e) => setText(e.target.value)}
+          onValueChange={setText}
           // Escape is the keymap's: handled here too, it would also drop the cursor.
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
