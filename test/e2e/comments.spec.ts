@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures.js';
 import { clickLine, gotoFile, selectLines, settle } from './browser.js';
-import { readPrompt, readThreads } from './server.js';
+import { readPrompt, readThreads, seedReply, seedThreads } from './server.js';
 
 test('comments on a line range and lists the thread in the panel', async ({ page, diffle }) => {
   await gotoFile(page, 'tally/ledger.py');
@@ -119,4 +119,46 @@ test('regression: closing a composer keeps its text until the comment is posted'
   await composer.press('Escape');
   await page.keyboard.press('C');
   await expect(composer).toHaveValue('About the whole file.');
+});
+
+test('marks a thread the agent opened in its header, in the panel and inline', async ({ page, diffle }) => {
+  await seedThreads(diffle.url, [
+    {
+      path: 'tally/ledger.py',
+      startLine: 3,
+      endLine: 4,
+      body: 'The docstring names `refund` but not how a refund is signed.',
+      author: 'agent',
+    },
+  ]);
+  await gotoFile(page, 'tally/ledger.py');
+  await expect(page.locator('aside').last()).toContainText('agent');
+  await expect(page).toHaveScreenshot('agent-thread.png');
+  await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'agent-threads-panel.aria.yml' });
+});
+
+test("marks only the agent's reply in a reviewer's thread", async ({ page, diffle }) => {
+  const [thread] = await seedThreads(diffle.url, [
+    { path: 'tally/currency.py', startLine: 7, body: '`KWD` gets three decimals above but no symbol here.' },
+  ]);
+  await seedReply(diffle.url, thread!.id, { body: 'Added `KD` to `_SYMBOLS`.', author: 'agent' });
+  await seedReply(diffle.url, thread!.id, { body: 'Thanks.' });
+  await gotoFile(page, 'tally/currency.py');
+  await expect(page.getByText('Thanks.').first()).toBeVisible();
+  await expect(page).toHaveScreenshot('agent-reply.png');
+});
+
+test('exports agent messages with an (agent) prefix in the prompt', async ({ diffle }) => {
+  const [opened, reviewed] = await seedThreads(diffle.url, [
+    {
+      path: 'tally/refunds.py',
+      body: 'Consider folding this into `ledger.py`; it only has two callers.',
+      author: 'agent',
+    },
+    { path: 'tally/currency.py', startLine: 7, body: '`KWD` gets three decimals above but no symbol here.' },
+  ]);
+  await seedReply(diffle.url, opened!.id, { body: 'Agreed, in a follow-up.' });
+  await seedReply(diffle.url, reviewed!.id, { body: 'Added `KD` to `_SYMBOLS`.', author: 'agent' });
+  // The prompt `yy` copies and the shutdown hands over.
+  expect(await readPrompt(diffle.url)).toMatchSnapshot('agent-prompt.md');
 });

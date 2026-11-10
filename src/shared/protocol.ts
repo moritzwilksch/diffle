@@ -442,11 +442,17 @@ export type FileAnchor = z.infer<typeof FileAnchorSchema>;
 export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
+/** Who wrote a message that the reviewer did not: only `diffle comments` sends it, never the browser. */
+export const CommentAuthorSchema = z.enum(['agent']);
+export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
+
 export const CommentMessageSchema = z.object({
   id: z.string(),
   body: z.string(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
+  /** Absent: the reviewer wrote it. */
+  author: CommentAuthorSchema.optional(),
 });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
@@ -480,6 +486,8 @@ export const ThreadCreateSchema = z
     endLine: z.number().int().positive().optional(),
     body: z.string().refine((body) => body.trim().length > 0, 'body required'),
     quoted: z.string().optional(),
+    /** Absent: the reviewer opens the thread. */
+    author: CommentAuthorSchema.optional(),
   })
   .refine((t) => t.startLine == null || t.endLine == null || t.endLine >= t.startLine, {
     path: ['endLine'],
@@ -493,6 +501,8 @@ export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
 
 export const ReplyCreateSchema = z.object({
   body: z.string().refine((body) => body.trim().length > 0, 'body required'),
+  /** Absent: the reviewer replies. */
+  author: CommentAuthorSchema.optional(),
 });
 export type ReplyCreate = z.infer<typeof ReplyCreateSchema>;
 

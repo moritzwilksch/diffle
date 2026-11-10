@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { rmTmp } from '../tmp.js';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CommentThread, ThreadCreate, ThreadList } from '@/shared/protocol.js';
+import type { CommentThread, ReplyCreate, ThreadCreate, ThreadList } from '@/shared/protocol.js';
 
 /** The diffle checkout that contains this file. */
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -136,6 +136,17 @@ export async function seedThreads(url: string, threads: ThreadCreate[]): Promise
   });
   if (!response.ok) throw new Error(`seeding threads failed: HTTP ${response.status} ${await response.text()}`);
   return (await response.json()) as CommentThread[];
+}
+
+/** Reply to a seeded thread directly, as `diffle comments reply` will. */
+export async function seedReply(url: string, threadId: string, reply: ReplyCreate): Promise<CommentThread> {
+  const response = await fetch(new URL(`api/threads/${encodeURIComponent(threadId)}/replies`, url), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(reply),
+  });
+  if (!response.ok) throw new Error(`seeding a reply failed: HTTP ${response.status} ${await response.text()}`);
+  return (await response.json()) as CommentThread;
 }
 
 /** Threads as the client sees them, for asserting that a comment landed where the script meant it to. */

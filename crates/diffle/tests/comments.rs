@@ -147,7 +147,7 @@ async fn replies_edits_removes_messages_and_threads_resolves_and_clears() {
     let dir = tempfile::tempdir().unwrap();
     let s = CommentStore::open(dir.path(), "working").await.unwrap();
     let t = s.add_thread(anchor(), "hello".into()).await.unwrap();
-    s.reply(&t.id, "fixed".into()).await.unwrap();
+    s.reply(&t.id, "fixed".into(), None).await.unwrap();
     let got = s.get(&t.id).await.unwrap().unwrap();
     assert_eq!(got.messages.iter().map(|m| m.body.as_str()).collect::<Vec<_>>(), ["hello", "fixed"]);
     let (first, second) = (got.messages[0].id.clone(), got.messages[1].id.clone());
@@ -167,7 +167,7 @@ async fn replies_edits_removes_messages_and_threads_resolves_and_clears() {
     assert!(s.remove_message(&t.id, &first).await.unwrap().is_none());
     assert!(s.threads(&all()).await.unwrap().is_empty());
     assert!(matches!(s.remove_thread(&t.id).await, Err(Error::NotFound(_))));
-    assert!(matches!(s.reply("nope", "x".into()).await, Err(Error::NotFound(_))));
+    assert!(matches!(s.reply("nope", "x".into(), None).await, Err(Error::NotFound(_))));
     assert!(matches!(s.edit_message("nope", "m", "x".into()).await, Err(Error::NotFound(_))));
     s.add_thread(anchor(), "hello".into()).await.unwrap();
     s.clear().await.unwrap();
@@ -260,7 +260,7 @@ async fn relocates_flags_stale_and_unflags_when_text_returns() {
     let dir = tempfile::tempdir().unwrap();
     let s = CommentStore::open(dir.path(), "working").await.unwrap();
     let t = s.add_thread(anchor(), "hello".into()).await.unwrap();
-    s.reply(&t.id, "follows the anchor".into()).await.unwrap();
+    s.reply(&t.id, "follows the anchor".into(), None).await.unwrap();
     let get = || async { s.get(&t.id).await.unwrap().unwrap() };
     assert!(s.relocate_all(&Whole("z\na\nb\n", None)).await.unwrap());
     assert_eq!(start(&get().await), 3);
@@ -340,7 +340,7 @@ async fn two_stores_on_one_file_keep_each_others_sets_and_writes() {
     assert_eq!(raw["sets"]["working"]["threads"][0]["messages"][0]["body"], "w");
     assert_eq!(raw["sets"]["pr:abc"]["threads"][0]["messages"][0]["body"], "p");
     // The twin never loaded t, yet serves it and must not drop it on its own write.
-    twin.reply(&t.id, "from twin".into()).await.unwrap();
+    twin.reply(&t.id, "from twin".into(), None).await.unwrap();
     let bodies: Vec<String> = working.get(&t.id).await.unwrap().unwrap().messages.into_iter().map(|m| m.body).collect();
     assert_eq!(bodies, ["w", "from twin"]);
     assert_eq!(marks(twin.viewed().await.unwrap()), [mark("a.py", "sha", true)]);
@@ -396,7 +396,7 @@ async fn a_deletion_by_one_store_is_not_resurrected_by_another() {
     assert!(b.get(&t.id).await.unwrap().is_some());
     a.remove_thread(&t.id).await.unwrap();
     b.set_viewed("a.py", "sha", true).await.unwrap();
-    assert!(matches!(b.reply(&t.id, "late".into()).await, Err(Error::NotFound(_))));
+    assert!(matches!(b.reply(&t.id, "late".into(), None).await, Err(Error::NotFound(_))));
     assert!(a.threads(&all()).await.unwrap().is_empty());
 }
 

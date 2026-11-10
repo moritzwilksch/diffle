@@ -1,10 +1,14 @@
 //! One realistic export, pinned as a snapshot, so a change to the format is judged by reading the
 //! prompt an agent would receive.
 use diffle::comments::format::format_prompt;
-use diffle::protocol::{CommentAnchor, CommentMessage, CommentThread, Side};
+use diffle::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side};
 
 fn msg(id: &str, body: &str, at: i64) -> CommentMessage {
-    CommentMessage { id: id.into(), body: body.into(), created_at: at, updated_at: at }
+    CommentMessage { id: id.into(), body: body.into(), created_at: at, updated_at: at, author: None }
+}
+
+fn agent(id: &str, body: &str, at: i64) -> CommentMessage {
+    CommentMessage { author: Some(CommentAuthor::Agent), ..msg(id, body, at) }
 }
 
 fn line(path: &str, side: Side, start: i64, end: i64, quoted: &str) -> CommentAnchor {
@@ -78,7 +82,8 @@ fn reads_as_an_agent_would_receive_it() {
             ),
             vec![
                 msg("a1", "Say what counts as a refund here, not only in the parser.", 10),
-                msg("a2", "Also link the release notes once they mention `kind`.", 20),
+                agent("a2", "Done: the docstring now names the `refund` kind.", 15),
+                msg("a3", "Also link the release notes once they mention `kind`.", 20),
             ],
         ),
         thread(
@@ -110,7 +115,10 @@ fn reads_as_an_agent_would_receive_it() {
         thread(
             "refunds-file",
             CommentAnchor::File { path: "tally/refunds.py".into() },
-            vec![msg("d1", "Consider folding this into `ledger.py`; it only has two callers.", 50)],
+            vec![
+                agent("d1", "Consider folding this into `ledger.py`; it only has two callers.", 50),
+                msg("d2", "Agreed, but in a follow-up.", 55),
+            ],
         ),
         stale,
     ];
