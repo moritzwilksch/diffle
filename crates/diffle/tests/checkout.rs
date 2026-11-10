@@ -96,11 +96,10 @@ async fn detaches_at_a_commit_a_tag_or_an_expression() {
     assert_eq!(at(&t), ("HEAD".to_owned(), main.clone()));
     s.enter(revspec(&["main..feat~0"])).await.unwrap();
     assert_eq!(at(&t), ("HEAD".to_owned(), feat));
-    // The uncommitted changes are the checkout already.
-    s.enter(EnterRequest::Working).await.unwrap();
-    assert_eq!(head(&t), "HEAD");
-    s.close().await;
+    // The uncommitted changes are the reviewer's: their checkout comes back.
+    let snap = s.enter(EnterRequest::Working).await.unwrap();
     assert_eq!(head(&t), "main");
+    assert_eq!(snap.new_sha, "worktree");
 }
 
 #[tokio::test]
@@ -137,7 +136,7 @@ async fn detaches_at_a_branch_another_worktree_holds() {
 }
 
 #[tokio::test]
-async fn leaves_the_checkout_alone_when_git_refuses() {
+async fn leaves_the_checkout_alone_when_an_untracked_file_is_in_the_way() {
     let t = branches();
     // An untracked file the switch would overwrite.
     t.git(&["checkout", "-q", "feat"]);
@@ -241,6 +240,20 @@ async fn lists_what_moving_between_two_commits_touches() {
     assert_eq!(back, [("new.txt".to_owned(), Touched::Deleted)]);
 }
 
+/// A file turned symlink is one change, as git's `T` lists it.
+#[cfg(unix)]
+#[tokio::test]
+async fn lists_a_typechange_as_one_change() {
+    let t = branches();
+    t.git(&["checkout", "-q", "feat"]);
+    t.rm("a.txt");
+    std::os::unix::fs::symlink("elsewhere", t.path.join("a.txt")).unwrap();
+    t.commit("link");
+    let repo = t.open().await;
+    assert_eq!(t.git(&["diff", "--name-status", "feat~1", "feat"]), "T\ta.txt");
+    assert_eq!(repo.touched_between("feat~1", "feat").await.unwrap(), [("a.txt".to_owned(), Touched::Changed)]);
+}
+
 #[tokio::test]
 async fn keeps_a_range_named_after_head_on_where_the_reviewer_left_it() {
     let t = branches();
@@ -275,6 +288,53 @@ async fn checks_out_a_focused_commit_and_the_range_again() {
     let snap = s.show(RangeView::Whole).await.unwrap();
     assert_eq!(head(&t), "feat");
     assert!(follows_checkout(&snap));
+}
+
+#[tokio::test]
+async fn checks_out_a_focused_commit_of_a_range_ending_at_the_worktree_and_comes_back() {
+    let (t, first) = on_feat();
+    let s = session(t.open().await, Github::tokenless(), true);
+    let whole = s.start(s.resolve(revspec(&["main"])).await.unwrap()).await.unwrap();
+    assert_eq!(whole.new_sha, "worktree");
+    let snap = s.show(RangeView::Commit { sha: first.clone() }).await.unwrap();
+    assert_eq!((head(&t), t.git(&["rev-parse", "HEAD"])), ("HEAD".to_owned(), first));
+    assert!(follows_checkout(&snap));
+    assert_eq!(snap.commits.list.len(), 2, "the worktree still names feat: the range keeps both commits");
+    let snap = s.show(RangeView::Whole).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert_eq!((snap.new_sha.as_str(), &snap.comment_key), ("worktree", &whole.comment_key));
+    let snap = s.show(RangeView::Commit { sha: snap.commits.list[0].sha.clone() }).await.unwrap();
+    assert!(follows_checkout(&snap));
+    s.close().await;
+    assert_eq!(head(&t), "feat");
+}
+
+#[tokio::test]
+async fn leaves_a_dirty_worktrees_focused_commit_unchecked_out() {
+    let (t, first) = on_feat();
+    t.write("a.txt", "edited\n");
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["main"])).await.unwrap()).await.unwrap();
+    let snap = s.show(RangeView::Commit { sha: first }).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert!(!follows_checkout(&snap));
+    assert_eq!(std::fs::read_to_string(t.path.join("a.txt")).unwrap(), "edited\n");
+}
+
+#[tokio::test]
+async fn keys_a_direct_worktree_range_as_entered_while_its_worktree_is_pinned() {
+    let (t, first) = on_feat();
+    let s = session(t.open().await, Github::tokenless(), true);
+    let whole = s.start(s.resolve(revspec(&["main..worktree"])).await.unwrap()).await.unwrap();
+    s.show(RangeView::Commit { sha: first.clone() }).await.unwrap();
+    // Edited on the focused commit: the way back is refused, and the range shows where HEAD was left.
+    t.write("scratch.txt", "x\n");
+    t.git(&["add", "scratch.txt"]);
+    let snap = s.show(RangeView::Whole).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first);
+    assert_eq!(snap.new_sha, t.git(&["rev-parse", "feat"]));
+    assert_eq!(snap.comment_key, whole.comment_key);
+    assert!(snap.iterations.is_empty(), "a worktree range records no iterations");
 }
 
 #[tokio::test]
@@ -350,4 +410,207 @@ async fn keeps_a_previous_branch_naming_the_reviewers() {
     assert_eq!(common::paths(&snap), ["a.txt", "b.txt"]);
     s.close().await;
     assert_eq!(head(&t), "main");
+}
+
+#[tokio::test]
+async fn logs_each_switch_in_heads_reflog_as_git_does() {
+    let t = branches();
+    let (main, feat) = (t.git(&["rev-parse", "main"]), t.git(&["rev-parse", "feat"]));
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
+    repo.switch(&diffle::git::CheckoutTarget::Detached(main.clone())).await.unwrap();
+    let log = t.git(&["reflog", "-n", "2", "--format=%H %gs", "HEAD"]);
+    assert_eq!(log, format!("{main} checkout: moving from feat to {main}\n{feat} checkout: moving from main to feat"));
+    assert_eq!(t.git(&["rev-parse", "--symbolic-full-name", "@{-1}"]), "refs/heads/feat");
+    assert_eq!(t.git(&["status", "--porcelain"]), "");
+}
+
+#[tokio::test]
+async fn switches_files_modes_links_and_directories_as_git_checks_them_out() {
+    let t = TestRepo::new();
+    t.write(".gitattributes", "*.crlf text eol=crlf\n");
+    t.write("keep.txt", "same\n");
+    t.write("gone/deep/x.txt", "x\n");
+    t.write("becomes", "a file, then a directory\n");
+    t.write("text.crlf", "one\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.rm("gone");
+    t.rm("becomes");
+    t.write("becomes/inner.txt", "inside\n");
+    t.write("text.crlf", "one\ntwo\n");
+    t.write("tool.sh", "echo hi\n");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(t.path.join("tool.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("keep.txt", t.path.join("link")).unwrap();
+    }
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
+    assert_eq!(head(&t), "feat");
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "");
+    assert!(!t.path.join("gone").exists(), "an emptied directory goes");
+    // What git itself checks out for the same commit, byte for byte.
+    let fresh = tempfile::tempdir().unwrap();
+    common::git_in(fresh.path(), &["clone", "-q", "-b", "feat", &t.path.to_string_lossy(), "."]);
+    for path in ["becomes/inner.txt", "text.crlf", "tool.sh", "keep.txt"] {
+        assert_eq!(
+            std::fs::read(t.path.join(path)).unwrap(),
+            std::fs::read(fresh.path().join(path)).unwrap(),
+            "{path}"
+        );
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_ne!(std::fs::metadata(t.path.join("tool.sh")).unwrap().permissions().mode() & 0o111, 0);
+        assert_eq!(std::fs::read_link(t.path.join("link")).unwrap(), std::path::Path::new("keep.txt"));
+    }
+    // And back: the directory turns into the file again.
+    repo.switch(&diffle::git::CheckoutTarget::Branch("main".into())).await.unwrap();
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "");
+    assert_eq!(std::fs::read_to_string(t.path.join("becomes")).unwrap(), "a file, then a directory\n");
+    assert!(repo.is_clean().await.unwrap());
+}
+
+#[tokio::test]
+async fn a_change_only_the_index_holds_is_not_clean() {
+    let t = branches();
+    let repo = t.open().await;
+    // Added, then removed from disk: git status shows `AD`.
+    t.write("new.txt", "staged\n");
+    t.git(&["add", "new.txt"]);
+    t.rm("new.txt");
+    assert!(!repo.is_clean().await.unwrap());
+    t.git(&["reset", "-q"]);
+    // A staged edit whose worktree went back to HEAD's content: `M `, and a switch would lose it.
+    t.write("a.txt", "staged\n");
+    t.git(&["add", "a.txt"]);
+    t.write("a.txt", "one\n");
+    assert!(!repo.is_clean().await.unwrap());
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(refused.to_string(), "the worktree has uncommitted changes");
+    assert_eq!(t.git(&["show", ":a.txt"]), "staged");
+}
+
+#[tokio::test]
+async fn refuses_before_writing_when_a_target_blob_is_missing() {
+    let t = TestRepo::new();
+    t.write("gone.txt", "deleted by the switch\n");
+    t.write("a.txt", "one\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.rm("gone.txt");
+    t.write("new.txt", "a blob this clone lacks\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    // As in a blobless partial clone: the object is not there to read.
+    let blob = t.git(&["rev-parse", "feat:new.txt"]);
+    std::fs::remove_file(t.path.join(".git/objects").join(&blob[..2]).join(&blob[2..])).unwrap();
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert!(t.path.join("gone.txt").exists() && !t.path.join("new.txt").exists());
+    assert_eq!((head(&t), t.git(&["status", "--porcelain"])), ("main".to_owned(), String::new()));
+}
+
+#[tokio::test]
+async fn writes_files_through_the_targets_attributes() {
+    let t = TestRepo::new();
+    t.write("sub/a.txt", "one\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.write(".gitattributes", "*.txt text eol=crlf\n");
+    t.write("sub/a.txt", "one\ntwo\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    let repo = t.open().await;
+    repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap();
+    assert_eq!(std::fs::read(t.path.join("sub/a.txt")).unwrap(), b"one\r\ntwo\r\n");
+    assert_eq!(t.git(&["status", "--porcelain", "--untracked-files=all"]), "");
+}
+
+#[tokio::test]
+async fn refuses_before_writing_when_an_untracked_file_holds_a_directory_in_place() {
+    let t = branches();
+    t.git(&["checkout", "-q", "feat"]);
+    t.write("dir", "a file\n");
+    t.commit("dir becomes a file");
+    t.git(&["checkout", "-q", "main"]);
+    t.write("dir/x.txt", "mine\n");
+    let repo = t.open().await;
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(refused.to_string(), "an untracked or ignored file is in the way: dir/x.txt");
+    // Nothing moved: `a.txt`, which `feat` changes, still holds main's content.
+    assert_eq!(head(&t), "main");
+    assert_eq!(std::fs::read_to_string(t.path.join("a.txt")).unwrap(), "one\n");
+    assert_eq!(std::fs::read_to_string(t.path.join("dir/x.txt")).unwrap(), "mine\n");
+}
+
+#[tokio::test]
+async fn refuses_to_overwrite_an_ignored_file() {
+    let t = branches();
+    t.write(".gitignore", "*.log\n");
+    t.commit("ignore logs");
+    t.git(&["checkout", "-q", "feat"]);
+    t.git(&["merge", "-q", "main"]);
+    t.write("build.log", "tracked on feat\n");
+    t.git(&["add", "-f", "build.log"]);
+    t.git(&["commit", "-q", "-m", "a log"]);
+    t.git(&["checkout", "-q", "main"]);
+    t.write("build.log", "mine\n");
+    let repo = t.open().await;
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(refused.to_string(), "an untracked or ignored file is in the way: build.log");
+    assert_eq!(
+        (head(&t), std::fs::read_to_string(t.path.join("build.log")).unwrap()),
+        ("main".to_owned(), "mine\n".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn leaves_a_sparse_checkout_alone() {
+    let t = TestRepo::new();
+    t.write("inside/a.txt", "a\n");
+    t.write("outside/b.txt", "b\n");
+    t.commit("base");
+    t.git(&["checkout", "-q", "-b", "feat"]);
+    t.write("inside/a.txt", "a2\n");
+    t.commit("feat");
+    t.git(&["checkout", "-q", "main"]);
+    t.git(&["sparse-checkout", "set", "--cone", "inside"]);
+    let repo = t.open().await;
+    let refused = repo.switch(&diffle::git::CheckoutTarget::Branch("feat".into())).await.unwrap_err();
+    assert_eq!(refused.to_string(), "a sparse checkout is left as it is");
+    assert_eq!(head(&t), "main");
+    assert_eq!(std::fs::read_to_string(t.path.join("inside/a.txt")).unwrap(), "a\n");
+}
+
+#[tokio::test]
+async fn a_link_checked_out_as_a_file_is_unchanged_without_symlinks() {
+    let t = TestRepo::new();
+    t.write("target.txt", "x\n");
+    t.commit("base");
+    // A symlink committed without making one, so the test runs where links cannot be made.
+    t.write("blob", "target.txt");
+    let target = t.git(&["hash-object", "-w", "blob"]);
+    t.rm("blob");
+    t.git(&["update-index", "--add", "--cacheinfo", &format!("120000,{target},link")]);
+    t.git(&["commit", "-q", "-m", "link"]);
+    t.git(&["config", "core.symlinks", "false"]);
+    t.git(&["checkout", "--", "link"]);
+    assert_eq!(std::fs::read_to_string(t.path.join("link")).unwrap(), "target.txt");
+    assert_eq!(t.git(&["status", "--porcelain"]), "");
+    let repo = t.open().await;
+    assert!(repo.is_clean().await.unwrap());
+    assert!(repo.numstat("HEAD", "worktree").await.unwrap().is_empty());
+    // An edit to the file is an edit to the link, as git sees it, not a typechange.
+    t.write("link", "elsewhere.txt");
+    let files = repo.numstat("HEAD", "worktree").await.unwrap();
+    assert_eq!(
+        files.iter().map(|f| (f.path.as_str(), f.status)).collect::<Vec<_>>(),
+        [("link", diffle::protocol::ChangeStatus::M)]
+    );
 }

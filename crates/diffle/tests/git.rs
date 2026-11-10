@@ -154,6 +154,8 @@ async fn marks_an_untracked_file_at_the_big_file_threshold_binary_without_readin
     let files = repo.numstat("HEAD", "worktree").await.unwrap();
     let huge = find(&files, "huge.bin");
     assert_eq!((huge.status, huge.binary, huge.additions), (ChangeStatus::A, true, 0));
+    // Not read to hash it: its blob reads as empty.
+    assert_eq!(huge.blob, "");
     assert!(!repo.patch_all("HEAD", "worktree", &files, 3).await.unwrap().contains("huge.bin"));
 }
 

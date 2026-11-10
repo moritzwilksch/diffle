@@ -35,6 +35,22 @@ dunce = "1"
 form_urlencoded = "1"
 futures = "0.3"
 gethostname = "1"
+gix = { version = "0.89", default-features = false, features = [
+  "sha1",
+  "max-performance-safe",
+  "revision",
+  "revparse-regex",
+  "attributes",
+  "index",
+  "dirwalk",
+  "blob-diff",
+  "merge",
+  "worktree-mutation",
+  "blocking-network-client",
+  "blocking-http-transport-reqwest-rust-tls",
+] }
+# Pack generation for fetching from a repository on disk; the `gix` version's own gix-pack.
+gix-pack = { version = "0.76", default-features = false, features = ["generate"] }
 hex = "0.4"
 indexmap = "2"
 http-body-util = "0.1"
@@ -57,6 +73,7 @@ two-face = { version = "0.5", default-features = false, features = ["syntect-fan
 tower-http = { version = "0.7", features = ["compression-gzip", "compression-deflate"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
+pathfinding = "4"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

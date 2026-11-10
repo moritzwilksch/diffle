@@ -56,6 +56,19 @@ async fn numstat_loads_every_ordinary_file_and_marks_the_gitlink() {
     assert_eq!(rows, [(".gitmodules", A, None), ("sub", A, Some(true))]);
 }
 
+/// git lists a submodule whose directory is gone as deleted, and one left empty as unchanged.
+#[tokio::test]
+async fn a_removed_submodule_directory_is_a_deletion() {
+    let (_lib, sup) = super_repo();
+    std::fs::remove_dir_all(sup.path.join("sub")).unwrap();
+    let repo = sup.open().await;
+    let status =
+        |files: Vec<diffle::protocol::ChangedFile>| files.into_iter().find(|f| f.path == "sub").map(|f| f.status);
+    assert_eq!(status(repo.numstat("HEAD", "worktree").await.unwrap()), Some(D));
+    std::fs::create_dir(sup.path.join("sub")).unwrap();
+    assert_eq!(status(repo.numstat("HEAD", "worktree").await.unwrap()), None);
+}
+
 #[tokio::test]
 async fn renders_a_gitlink_as_a_commit_id_change_and_leaves_it_out_of_hydration() {
     let (_lib, sup) = super_repo();
@@ -81,15 +94,36 @@ async fn an_unreadable_file_keeps_an_empty_blob_without_failing_the_batch() {
     let (_lib, sup) = super_repo();
     sup.write("locked.txt", "x\n");
     let locked = sup.path.join("locked.txt");
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let tracked = sup.path.join("a.txt");
+    for path in [&locked, &tracked] {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    }
     if std::fs::read(&locked).is_ok() {
         return; // running as root
     }
-    let files = sup.open().await.numstat("HEAD", "worktree").await.unwrap();
+    let repo = sup.open().await;
+    let files = repo.numstat("HEAD", "worktree").await.unwrap();
     let by: HashMap<&str, _> = files.iter().map(|f| (f.path.as_str(), f)).collect();
     assert_eq!((by["locked.txt"].status, by["locked.txt"].blob.as_str()), (A, ""));
-    assert_eq!(by["a.txt"].blob, sup.git(&["hash-object", "--", "a.txt"]));
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!((by["a.txt"].status, by["a.txt"].blob.as_str()), (M, ""));
+    // Their patches show them as they are, added and modified, with contents unknown.
+    let patch = |file| {
+        let repo = &repo;
+        async move { repo.patch("HEAD", "worktree", file, 3).await.unwrap() }
+    };
+    let added = patch(by["locked.txt"]).await;
+    assert!(
+        added.contains("new file mode 100644") && added.contains("Binary files /dev/null and b/locked.txt differ"),
+        "{added}"
+    );
+    let modified = patch(by["a.txt"]).await;
+    assert!(
+        !modified.contains("deleted file") && modified.contains("Binary files a/a.txt and b/a.txt differ"),
+        "{modified}"
+    );
+    for path in [&locked, &tracked] {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
 }
 
 const ODD: &str = "completions/odd\nname.bash";
@@ -176,4 +210,25 @@ async fn a_committed_comparison_reads_attributes_from_the_new_revision_the_workt
     t.write("completions/x.bash", "edited\n");
     let (_, live) = snapshot(&repo, EnterRequest::Working).await;
     assert!(!flag(&live, "completions/x.bash"));
+}
+
+#[tokio::test]
+async fn a_sparse_index_is_refused_where_the_worktree_is_read_and_commits_still_compare() {
+    let t = TestRepo::new();
+    t.write("inside/a.txt", "a\n");
+    t.write("outside/b.txt", "b\n");
+    t.commit("base");
+    t.write("inside/a.txt", "a2\n");
+    t.commit("edit");
+    t.git(&["sparse-checkout", "set", "--cone", "--sparse-index", "inside"]);
+    t.write("inside/a.txt", "a3\n");
+    t.git(&["add", "inside/a.txt"]);
+    let repo = t.open().await;
+    let refusal = "a sparse index is not supported; expand it with `git sparse-checkout reapply --no-sparse-index`";
+    let numstat = repo.numstat("HEAD", "worktree").await.unwrap_err();
+    assert!(numstat.is_user_error());
+    assert_eq!(numstat.to_string(), refusal);
+    assert_eq!(repo.is_clean().await.unwrap_err().to_string(), refusal);
+    let committed = repo.numstat("HEAD~1", "HEAD").await.unwrap();
+    assert_eq!(committed.iter().map(|f| (f.path.as_str(), f.status)).collect::<Vec<_>>(), [("inside/a.txt", M)]);
 }

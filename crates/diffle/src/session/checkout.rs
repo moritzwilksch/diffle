@@ -13,6 +13,15 @@ pub(super) struct MovedCheckout {
     to: CheckoutTarget,
 }
 
+/// Where a review puts the checkout.
+enum Target {
+    Move(CheckoutTarget),
+    /// What it shows is checked out already: the worktree, a slice of it, or HEAD's commit.
+    Stay,
+    /// It names no one revision to check out, for this reason.
+    Skip(&'static str),
+}
+
 /// What entering a review did to the checkout, when there was something to check out.
 enum Outcome {
     Switched,
@@ -23,16 +32,17 @@ enum Outcome {
 const DIRTY: &str = "the worktree has uncommitted changes";
 
 impl Session {
-    /// Checks out the new side of an entered review when the worktree is clean.
-    /// Never fails the review: a dirty worktree or a refused switch leaves the checkout as it
-    /// was, and the review is shown without language servers.
+    /// Checks out the new side of an entered review when the worktree is clean, and says why
+    /// when it does not. Never fails the review: a dirty worktree or a refused switch leaves the
+    /// checkout as it was, and the review is shown without language servers.
     pub(super) async fn check_out(&self, review: &Review) {
         if !self.checkout.load(Ordering::SeqCst) {
             return;
         }
         let target = match self.checkout_target(review).await {
-            Ok(Some(target)) => target,
-            Ok(None) => return,
+            Ok(Target::Move(target)) => target,
+            Ok(Target::Stay) => return,
+            Ok(Target::Skip(why)) => return report(CHECK_OUT, "the new side", Outcome::Skipped(why)),
             Err(e) => return report(CHECK_OUT, "the new side", Outcome::Refused(e)),
         };
         let outcome = match self.try_check_out(&target).await {
@@ -111,18 +121,25 @@ impl Session {
 
     /// A local branch, switched to; any other commit on the new side (a pull request's head, a
     /// remote branch, a branch another worktree holds, a tag, a hash, an expression, a lone
-    /// commit, one commit focused within a range), detached at. A range with the worktree on
-    /// either side, its uncommitted changes and an interdiff are left alone.
-    async fn checkout_target(&self, review: &Review) -> Result<Option<CheckoutTarget>> {
+    /// commit, one commit focused within a range, the worktree's included), detached at. While this
+    /// run holds HEAD elsewhere, a range ending at the worktree, or its uncommitted changes, goes
+    /// back to where the reviewer left it. The worktree as the old side and an interdiff are skipped.
+    async fn checkout_target(&self, review: &Review) -> Result<Target> {
+        if let Review::Range { old, .. } = review
+            && old == WORKTREE
+        {
+            return Ok(Target::Skip("the worktree is the old side"));
+        }
         let new = match &self.head.apply(review) {
-            Review::Commit { sha } => return Ok(Some(CheckoutTarget::Detached(self.repo.resolve(sha).await?))),
-            // The worktree on either side is what a switch would rewrite.
-            Review::Range { old, new, .. } if old == WORKTREE || new == WORKTREE => return Ok(None),
+            Review::Commit { sha } => return Ok(Target::Move(CheckoutTarget::Detached(self.repo.resolve(sha).await?))),
             Review::Range { view: RangeView::Commit { sha }, .. } => {
-                return Ok(Some(CheckoutTarget::Detached(sha.clone())));
+                return Ok(Target::Move(CheckoutTarget::Detached(sha.clone())));
             }
-            Review::Range { new, view: RangeView::Whole, .. } => new.clone(),
-            Review::Range { .. } => return Ok(None),
+            Review::Range { view: RangeView::Interdiff { .. }, .. } => {
+                return Ok(Target::Skip("an interdiff shows no one revision"));
+            }
+            Review::Range { new, .. } if new == WORKTREE => return Ok(Target::Stay),
+            Review::Range { new, .. } => new.clone(),
         };
         let new = &new;
         // A pull request's head lives under refs/diffle/, which names no branch. A branch another
@@ -130,9 +147,9 @@ impl Session {
         if let Some(branch) = self.repo.branch_ref(new).await?.as_deref().and_then(|r| r.strip_prefix("refs/heads/"))
             && !self.repo.checked_out_elsewhere(branch).await?
         {
-            return Ok(Some(CheckoutTarget::Branch(branch.to_owned())));
+            return Ok(Target::Move(CheckoutTarget::Branch(branch.to_owned())));
         }
-        Ok(Some(CheckoutTarget::Detached(self.repo.resolve(new).await?)))
+        Ok(Target::Move(CheckoutTarget::Detached(self.repo.resolve(new).await?)))
     }
 }
 
@@ -150,14 +167,14 @@ fn report((done, skipped): (&str, &str), target: &str, outcome: Outcome) {
     crate::status!("🔀 {} {target} {}", dim(skipped), dim(&format!("({why})")));
 }
 
-/// Git's own words for a refusal: the first line of its stderr, without the `fatal:` or `error:`.
+/// A refusal in a status line: its first line. An unexpected failure keeps its causes, which its
+/// outermost context alone would not name.
 fn reason(e: &Error) -> String {
     let text = match e {
-        Error::Git(git) if !git.stderr.trim().is_empty() => git.stderr.clone(),
+        Error::Other(e) => format!("{e:#}"),
         e => e.to_string(),
     };
-    let line = text.trim().lines().next().unwrap_or_default();
-    line.strip_prefix("fatal: ").or_else(|| line.strip_prefix("error: ")).unwrap_or(line).to_owned()
+    text.trim().lines().next().unwrap_or_default().to_owned()
 }
 
 /// What HEAD named before this run moved it: the branch it was on, or its commit.

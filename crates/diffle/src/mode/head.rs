@@ -1,12 +1,14 @@
 //! What `HEAD` names in a review while this run holds the checkout.
 use std::sync::{Arc, Mutex};
 
+use crate::git::WORKTREE;
 use crate::protocol::{RangeRef, RangeView, Review};
 
 /// Where the reviewer left HEAD, while this run has HEAD elsewhere. A review named after HEAD
-/// (`HEAD~6`, `main...HEAD`, `@{u}`, `@{-1}`) keeps meaning that, so checking out one of its
-/// commits does not change which range it shows. Released once HEAD is back or the reviewer moved
-/// it: their amend or rebase is then followed as before.
+/// (`HEAD~6`, `main...HEAD`, `@{u}`, `@{-1}`) or the worktree (`main`, `main..worktree`) keeps
+/// meaning that, so checking out one of its commits does not change which range it shows: this run
+/// moves only a clean checkout, whose worktree held what HEAD did. Released once HEAD is back or
+/// the reviewer moved it: their amend or rebase is then followed as before.
 #[derive(Clone, Default)]
 pub struct HeadPin(Arc<Mutex<Option<Held>>>);
 
@@ -31,7 +33,7 @@ impl HeadPin {
         *self.0.lock().unwrap() = None;
     }
 
-    /// `review` with every revision named after HEAD named after the pin instead.
+    /// `review` with every revision named after HEAD, and the worktree, named after the pin instead.
     pub fn apply(&self, review: &Review) -> Review {
         let Some(held) = self.0.lock().unwrap().clone() else { return review.clone() };
         let pin = |rev: &String| pinned(rev, &held).unwrap_or_else(|| rev.clone());
@@ -54,10 +56,14 @@ impl HeadPin {
     }
 }
 
-/// `rev` as the reviewer meant it, when it names HEAD: `HEAD`, `HEAD~2`, `HEAD@{u}`, `@`, `@^`,
-/// `@{u}` relative to where they left HEAD; `@{-N}`, the Nth branch checked out before, past the
-/// switches this run made since. A branch merely starting with the letters (`HEADER`) is left alone.
+/// `rev` as the reviewer meant it, when it names HEAD or the worktree: `worktree` where they left
+/// HEAD; `HEAD`, `HEAD~2`, `HEAD@{u}`, `@`, `@^`, `@{u}` relative to it; `@{-N}`, the Nth branch
+/// checked out before, past the switches this run made since. A branch merely starting with the
+/// letters (`HEADER`) is left alone.
 fn pinned(rev: &str, held: &Held) -> Option<String> {
+    if rev == WORKTREE {
+        return Some(held.at.clone());
+    }
     if let Some((n, rest)) = rev.strip_prefix("@{-").and_then(|r| r.split_once('}')) {
         let n: u32 = n.parse().ok()?;
         return Some(format!("@{{-{}}}{rest}", n + held.switches));
@@ -89,7 +95,8 @@ mod tests {
         assert_eq!(at("@{u}").as_deref(), Some("feat@{u}"));
         assert_eq!(at("HEADER"), None);
         assert_eq!(at("main"), None);
-        assert_eq!(at("worktree"), None);
+        assert_eq!(at("worktree").as_deref(), Some("feat"));
+        assert_eq!(at("worktrees"), None);
     }
 
     #[test]

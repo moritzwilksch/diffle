@@ -120,7 +120,7 @@ impl Snapshotter {
         let task = {
             let mut state = self.state.lock().unwrap();
             let (repo, context, snap) = (self.repo.clone(), state.context, snap.clone());
-            let all = async move { Ok(repo.patch_all(&snap.old_sha, &snap.new_sha, &snap.changed, context).await?) };
+            let all = async move { repo.patch_all(&snap.old_sha, &snap.new_sha, &snap.changed, context).await };
             state.all.get_or_insert_with(|| all.boxed().shared()).clone()
         };
         let result = task.clone().await;
@@ -176,9 +176,7 @@ impl Snapshotter {
                 .patches
                 .entry(file.path.clone())
                 .or_insert_with(|| {
-                    async move { Ok(repo.patch(&snap.old_sha, &snap.new_sha, &file, context, None).await?) }
-                        .boxed()
-                        .shared()
+                    async move { repo.patch(&snap.old_sha, &snap.new_sha, &file, context).await }.boxed().shared()
                 })
                 .clone()
         };

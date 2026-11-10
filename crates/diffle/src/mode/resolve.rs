@@ -43,7 +43,8 @@ pub async fn resolve_range(repo: &GitRepo, old: &str, new: &str, base: Compariso
                 Err(e) if base == ComparisonBase::Direct && rev == "HEAD" && has_worktree && e.is_missing() => {
                     Ok(repo.empty_tree().await?)
                 }
-                Err(_) => Err(Error::revspec(format!("unknown revision: {rev}"))),
+                Err(Error::Git(_)) => Err(Error::revspec(format!("unknown revision: {rev}"))),
+                Err(e) => Err(e),
             }
         }
     };
@@ -51,10 +52,10 @@ pub async fn resolve_range(repo: &GitRepo, old: &str, new: &str, base: Compariso
     let mut old_sha = old_rev.clone();
     if base == ComparisonBase::MergeBase {
         let (a, b) = tokio::try_join!(merge_base_side(&old_rev, &resolve), merge_base_side(&new_rev, &resolve))?;
-        old_sha = repo
-            .merge_base(&a, &b)
-            .await
-            .map_err(|_| Error::revspec(format!("no merge base between {old} and {new}")))?;
+        old_sha = repo.merge_base(&a, &b).await.map_err(|e| match e {
+            Error::Git(_) => Error::revspec(format!("no merge base between {old} and {new}")),
+            e => e,
+        })?;
     }
     let pinned = |rev: &str, sha: &str| rev.len() >= 7 && sha.starts_with(&rev.to_lowercase());
     let live = if has_worktree {

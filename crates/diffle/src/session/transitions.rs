@@ -6,11 +6,13 @@ use super::{Active, Session};
 use crate::comments::CommentStore;
 use crate::comments::activity::Change;
 use crate::error::{Error, Result};
+use crate::git::WORKTREE;
 use crate::iterations::IterationStore;
 use crate::mode::keys::range_comment_key;
 use crate::mode::resolve::{names_branch, resolve_range, resolve_review};
 use crate::protocol::{
-    EnterRequest, Live, RangeRef, RangeView, Review, ServerMessage, Snapshot, comparison_label, range_of, with_view,
+    ComparisonBase, EnterRequest, Live, RangeRef, RangeView, Review, ServerMessage, Snapshot, comparison_label,
+    range_of, with_view,
 };
 use crate::snapshotter::Snapshotter;
 
@@ -68,22 +70,35 @@ impl Session {
         let version = self.next_version();
         // A range that can move again gets its iterations recorded: one between refs, or a PR's,
         // fetched anew each run. Its key is the range's, whatever slice is shown.
-        let (range_key, followed, branches) = match &self.head.apply(&review) {
-            Review::Commit { .. } => (None, false, false),
-            Review::Range { old, new, base, pr, .. } => {
+        let (range_key, followed, branches) = match (&review, &self.head.apply(&review)) {
+            (Review::Range { old: as_old, new: as_new, .. }, Review::Range { old, new, base, pr, .. }) => {
                 let ends = resolve_range(&self.repo, old, new, *base).await?;
+                // A worktree the pin names after HEAD keys as entered: compared directly, by its
+                // name; from a merge base, by HEAD, which the pin names already.
+                let keyed = |entered: &str, pinned: &'_ str, sha: &'_ str| {
+                    if *base == ComparisonBase::Direct && entered == WORKTREE {
+                        (WORKTREE.to_owned(), WORKTREE.to_owned())
+                    } else {
+                        (pinned.to_owned(), sha.to_owned())
+                    }
+                };
+                let (key_old, old_sha) = keyed(as_old, old, &ends.old_sha);
+                let (key_new, new_sha) = keyed(as_new, new, &ends.new_sha);
                 let key = range_comment_key(
                     &self.repo,
                     &self.github.instance,
-                    (old, new, *base),
+                    (&key_old, &key_new, *base),
                     pr.as_ref(),
-                    (&ends.old_sha, &ends.new_sha),
+                    (&old_sha, &new_sha),
                 )
                 .await?;
-                let followed = ends.live == Live::Refs || pr.is_some();
-                let branches = ends.live == Live::Refs && names_branch(&self.repo, old, new).await?;
+                // The worktree is no ref to follow, pinned or not.
+                let refs = ends.live == Live::Refs && as_old != WORKTREE && as_new != WORKTREE;
+                let followed = refs || pr.is_some();
+                let branches = refs && names_branch(&self.repo, old, new).await?;
                 (Some(key), followed, branches)
             }
+            _ => (None, false, false),
         };
         let iterations = followed.then(|| IterationStore::new(self.repo.clone(), range_key.clone().expect("a range")));
         let snapshotter = Snapshotter::new(

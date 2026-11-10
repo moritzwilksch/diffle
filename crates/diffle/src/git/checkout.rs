@@ -1,7 +1,15 @@
-//! Moving the checkout to what a review shows, so language servers index the new side.
-use super::exec::split_z;
-use super::{GitRepo, native};
-use crate::error::GitError;
+//! Where the checkout is, what moving it would touch, and HEAD moved with its reflog; `switch.rs`
+//! moves the rest, so language servers index what a review shows.
+use std::path::{Path, PathBuf};
+
+use anyhow::Context;
+use gix::ObjectId;
+use gix::bstr::ByteSlice;
+use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
+
+use super::diff::tree_changes;
+use super::{GitRepo, native_path};
+use crate::error::Result;
 
 /// How a checkout changed one file on disk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,74 +30,157 @@ impl GitRepo {
     /// Whether no tracked file differs from HEAD, staged or not. Untracked files do not count:
     /// a switch keeps them, and refuses when one would be overwritten. Submodules do not either:
     /// a switch leaves them alone, so one whose recorded commit it changed reads as modified.
-    pub async fn is_clean(&self) -> Result<bool, GitError> {
-        let args = ["status", "--porcelain=v1", "-z", "--untracked-files=no", "--ignore-submodules=all"];
-        let out = self.exec(&args, Default::default()).await?;
-        Ok(out.is_empty())
+    pub async fn is_clean(&self) -> Result<bool> {
+        self.gix("status", clean).await
     }
 
     /// Where HEAD is: on a branch, or detached at a commit; none in an unborn repository's detached HEAD.
-    pub async fn current_checkout(&self) -> Result<Option<CheckoutTarget>, GitError> {
-        if let Ok(branch) = self.text(&["symbolic-ref", "--quiet", "--short", "HEAD"]).await {
-            return Ok(Some(CheckoutTarget::Branch(branch.trim().to_owned())));
-        }
-        Ok(self.try_resolve("HEAD").await?.map(CheckoutTarget::Detached))
+    pub async fn current_checkout(&self) -> Result<Option<CheckoutTarget>> {
+        self.gix("reading HEAD", |repo| {
+            if let Some(branch) = branch(repo)? {
+                return Ok(Some(CheckoutTarget::Branch(branch)));
+            }
+            Ok(repo.head_id().ok().map(|id| CheckoutTarget::Detached(id.to_string())))
+        })
+        .await
     }
 
     /// Whether HEAD already is `target`: on that branch, or at that commit, attached or not.
-    pub async fn checked_out(&self, target: &CheckoutTarget) -> Result<bool, GitError> {
-        Ok(match target {
-            CheckoutTarget::Branch(name) => {
-                let head = self.text(&["symbolic-ref", "--quiet", "--short", "HEAD"]).await.unwrap_or_default();
-                head.trim() == name
-            }
-            CheckoutTarget::Detached(sha) => self.try_resolve("HEAD").await?.is_some_and(|head| &head == sha),
+    pub async fn checked_out(&self, target: &CheckoutTarget) -> Result<bool> {
+        let target = target.clone();
+        self.gix("reading HEAD", move |repo| {
+            Ok(match target {
+                CheckoutTarget::Branch(name) => branch(repo)?.is_some_and(|b| b == name),
+                CheckoutTarget::Detached(sha) => repo.head_id().is_ok_and(|id| id == sha.as_str()),
+            })
         })
+        .await
     }
 
-    /// Moves HEAD and the worktree to `target`. Git refuses, leaving everything as it was, when a
-    /// change or an untracked file would be lost, or the branch is checked out in another worktree.
-    pub async fn switch(&self, target: &CheckoutTarget) -> Result<(), GitError> {
-        let args: &[&str] = match target {
-            CheckoutTarget::Branch(name) => &["switch", "--quiet", "--no-guess", name],
-            CheckoutTarget::Detached(sha) => &["switch", "--quiet", "--detach", sha],
-        };
-        self.exec(args, Default::default()).await?;
-        Ok(())
+    /// Moves a clean checkout to `target`. Refuses, leaving everything as it was, when the checkout
+    /// is dirty or sparse, a file HEAD does not track is in the way, or the branch is checked out
+    /// in another worktree.
+    pub async fn switch(&self, target: &CheckoutTarget) -> Result<()> {
+        let (target, root) = (target.clone(), self.root.clone());
+        self.gix("switch", move |repo| super::switch::switch(repo, &root, &target)).await
     }
 
     /// Whether `branch` is checked out in another worktree of this repository, where git refuses to
     /// switch to it.
-    pub async fn checked_out_elsewhere(&self, branch: &str) -> Result<bool, GitError> {
-        let out = self.exec(&["worktree", "list", "--porcelain", "-z"], Default::default()).await?;
-        let wanted = format!("branch refs/heads/{branch}");
-        let mut here = false;
-        for field in split_z(&out) {
-            if let Some(path) = field.strip_prefix("worktree ") {
-                here = native(path) == self.root;
-            } else if field == wanted && !here {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+    pub async fn checked_out_elsewhere(&self, branch: &str) -> Result<bool> {
+        let (branch, root) = (branch.to_owned(), self.root.clone());
+        self.gix("listing worktrees", move |repo| Ok(holder(repo, &root, &branch)?.is_some())).await
     }
 
     /// The files that differ between two commits, as moving the checkout from `old` to `new` touches them.
-    pub async fn touched_between(&self, old: &str, new: &str) -> Result<Vec<(String, Touched)>, GitError> {
-        let args = ["diff", "--name-status", "-z", "--no-renames", "--no-ext-diff", old, new, "--"];
-        let fields = split_z(&self.exec(&args, Default::default()).await?);
-        Ok(fields
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|[status, path]| {
-                let touched = match status.as_str() {
-                    "A" => Touched::Created,
-                    "D" => Touched::Deleted,
-                    _ => Touched::Changed,
-                };
-                (path.clone(), touched)
-            })
-            .collect())
+    pub async fn touched_between(&self, old: &str, new: &str) -> Result<Vec<(String, Touched)>> {
+        let (old, new) = (old.to_owned(), new.to_owned());
+        self.gix("diff", move |repo| {
+            let tree = |rev: &str| -> anyhow::Result<ObjectId> {
+                Ok(repo.rev_parse_single(rev)?.object()?.peel_to_tree()?.id)
+            };
+            Ok(tree_changes(repo, tree(&old)?, tree(&new)?)?
+                .into_iter()
+                .flat_map(|(old, new)| match (old, new) {
+                    (None, Some(n)) => vec![(n.path, Touched::Created)],
+                    (Some(o), None) => vec![(o.path, Touched::Deleted)],
+                    // A file turned symlink (or back) is one change at its path, as git's `T` lists it.
+                    (Some(o), Some(_)) => vec![(o.path, Touched::Changed)],
+                    (None, None) => Vec::new(),
+                })
+                .map(|(path, touched)| (path.to_string(), touched))
+                .collect())
+        })
+        .await
     }
+}
+
+/// The local branch HEAD is on, by its short name, born or not.
+pub(super) fn branch(repo: &gix::Repository) -> anyhow::Result<Option<String>> {
+    Ok(repo
+        .head_name()?
+        .and_then(|name| name.as_bstr().strip_prefix(b"refs/heads/").map(|b| b.to_str_lossy().into_owned())))
+}
+
+/// `is_clean`, on a handle.
+pub(super) fn clean(repo: &gix::Repository) -> anyhow::Result<bool> {
+    use gix::status::{Submodule, tree_index::TrackRenames};
+    // Submodules are left alone by a switch, so their changes never make a checkout dirty.
+    let head = repo.head_tree_id_or_empty()?;
+    // A sparse index is refused here, as where the worktree is read.
+    let index = super::diff::sides::full_index(repo)?;
+    // An explicit pathspec, or gix would limit the comparison to the current directory.
+    let mut everything =
+        repo.pathspec(false, None::<&str>, false, &index, gix::worktree::stack::state::attributes::Source::IdMapping)?;
+    let mut staged = false;
+    repo.tree_index_status(&head, &index, Some(&mut everything), TrackRenames::Disabled, |change, _, _| {
+        staged |= !change.entry_mode().is_submodule();
+        Ok(if staged { std::ops::ControlFlow::Break(()) } else { std::ops::ControlFlow::Continue(()) })
+    })?;
+    if staged {
+        return Ok(false);
+    }
+    let ignore = gix::submodule::config::Ignore::All;
+    let mut unstaged = repo
+        .status(gix::progress::Discard)?
+        .index_worktree_rewrites(None)
+        .index_worktree_submodules(Submodule::Given { ignore, check_dirty: false })
+        .index_worktree_options_mut(|opts| opts.dirwalk_options = None)
+        .into_index_worktree_iter(Vec::new())?;
+    Ok(unstaged.next().transpose()?.is_none())
+}
+
+pub(super) fn holder(repo: &gix::Repository, root: &Path, branch: &str) -> anyhow::Result<Option<PathBuf>> {
+    let mut others = vec![repo.main_repo()?];
+    for proxy in repo.main_repo()?.worktrees()? {
+        others.push(proxy.into_repo_with_possibly_inaccessible_worktree()?);
+    }
+    for other in others {
+        let Some(workdir) = other.workdir().map(|dir| dunce::canonicalize(dir).unwrap_or_else(|_| dir.to_owned()))
+        else {
+            continue;
+        };
+        if native_path(&workdir) != root && self::branch(&other)?.is_some_and(|b| b == branch) {
+            return Ok(Some(workdir));
+        }
+    }
+    Ok(None)
+}
+
+/// Points HEAD at the branch, or detaches it at the commit, and logs the move in HEAD's reflog as
+/// git does, where `@{-N}` finds the branches checked out before.
+pub(super) fn move_head(repo: &gix::Repository, target: &CheckoutTarget, id: ObjectId) -> anyhow::Result<()> {
+    let mut repo = repo.clone();
+    repo.committer_or_set_fallback("diffle", "diffle@localhost")?;
+    let previous = repo.head_id().ok().map(gix::Id::detach);
+    let from = branch(&repo)?.or_else(|| previous.map(|id| id.to_string())).unwrap_or_default();
+    let (to, new) = match target {
+        CheckoutTarget::Branch(name) => {
+            (name.clone(), gix::refs::Target::Symbolic(format!("refs/heads/{name}").try_into()?))
+        }
+        CheckoutTarget::Detached(_) => (id.to_string(), gix::refs::Target::Object(id)),
+    };
+    let message = format!("checkout: moving from {from} to {to}");
+    let log_path = repo.git_dir().join("logs").join("HEAD");
+    let logged = std::fs::metadata(&log_path).map_or(0, |m| m.len());
+    let log = LogChange { mode: RefLog::AndReference, force_create_reflog: false, message: message.clone().into() };
+    let edit = RefEdit {
+        change: Change::Update { log, expected: PreviousValue::Any, new },
+        name: "HEAD".try_into()?,
+        deref: false,
+    };
+    repo.edit_reference(edit)?;
+    // gix logs a move to a commit but not one onto a branch.
+    if std::fs::metadata(&log_path).map_or(0, |m| m.len()) == logged {
+        let old = previous.unwrap_or_else(|| ObjectId::null(repo.object_hash()));
+        let mut who = Vec::new();
+        repo.committer().transpose()?.context("a committer")?.write_to(&mut who)?;
+        let line = format!("{old} {id} {}\t{message}\n", who.as_bstr());
+        std::fs::create_dir_all(log_path.parent().expect("a logs directory"))?;
+        std::io::Write::write_all(
+            &mut std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?,
+            line.as_bytes(),
+        )?;
+    }
+    Ok(())
 }
