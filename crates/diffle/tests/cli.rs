@@ -273,6 +273,18 @@ fn refuses_a_second_run_on_the_same_git_dir_while_the_first_serves() {
 }
 
 #[test]
+fn fails_with_1_when_it_cannot_announce_itself() {
+    let t = one_file_repo();
+    let config = tempfile::tempdir().unwrap();
+    // A directory where the file goes: nothing can replace it.
+    std::fs::create_dir_all(announcement_file(&t.path)).unwrap();
+    let out = run(config.path(), &["working", "--no-open", "--no-watch", "-C", t.path.to_str().unwrap(), "-p", "0"]);
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("server.json"), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("🚀"), "{}", stderr(&out));
+}
+
+#[test]
 fn starts_over_a_crashed_runs_announcement() {
     let t = one_file_repo();
     let config = tempfile::tempdir().unwrap();
