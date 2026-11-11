@@ -68,6 +68,7 @@ docs/readme.md"></diffle-tree>
 <diffle-note title="A request names an id">It carries the id <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes.</diffle-note>
 <diffle-note title="The loader answers">It returns the id.</diffle-note>
 </diffle-diagram>
+<details><summary>Why the id is not checked</summary><p>Callers pass ids they read from the store.</p><diffle-diff path="app.py" lines="3"></diffle-diff></details>
 <diffle-tabs>
   <diffle-tab title="The loader" kind="chosen"><p>It returns the id it takes.</p><diffle-diff path="app.py" lines="2-3"></diffle-diff></diffle-tab>
   <diffle-tab title="A cache" kind="rejected"><p>A cache would serve stale users.</p></diffle-tab>
@@ -194,6 +195,8 @@ docs/readme.md"></diffle-tree>
 <diffle-tabs>loose<diffle-tab><p>No title.</p></diffle-tab></diffle-tabs>
 <diffle-tabs><p>prose</p><diffle-tab title="A"><diffle-tabs><diffle-tab title="In">x</diffle-tab><diffle-tab title="Tabs">y</diffle-tab></diffle-tabs></diffle-tab><diffle-tab title="B" kind="maybe"><h2>Heading</h2></diffle-tab></diffle-tabs>
 <p><diffle-tab title="Loose">Alone.</diffle-tab></p>
+<details><p>No summary.</p></details>
+<p><summary>Loose</summary></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;

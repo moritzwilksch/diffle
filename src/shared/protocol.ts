@@ -1361,7 +1361,8 @@ export type TourElementTag = TourElement['tag'];
 
 /**
  * The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the
- * walk, and `h3` a subsection; the rest carry prose, lists and tables. They take no
+ * walk, and `h3` a subsection; the rest carry prose, lists and tables, and `details` folds away what
+ * the main path can do without, opening with its `summary`. They take no
  * attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take
  * `colspan` and `rowspan` as positive numbers.
  */
@@ -1381,6 +1382,8 @@ export const TourTagSchema = z.enum([
   'a',
   'section',
   'div',
+  'details',
+  'summary',
   'table',
   'thead',
   'tbody',

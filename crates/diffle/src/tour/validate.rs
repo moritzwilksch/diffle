@@ -120,6 +120,10 @@ impl Walk {
         }
         match tag {
             "h1" => self.titles.push((node, element.clone(), self.sections > 0)),
+            "details" if !opens_with_summary(dom, node) => {
+                let message = "a <details> opens with one <summary>: what opening it shows, in a few words";
+                self.error(node, element.clone(), message);
+            }
             "h2" => {
                 self.sections += 1;
                 self.section = Some(short(dom.text(node).trim()));
@@ -301,6 +305,14 @@ impl Walk {
             self.error(0, "the document".into(), "a tour holds at least one <h2>: each starts a step of the walk");
         }
     }
+}
+
+/// Whether the `<details>` at `node` holds one `<summary>`, as its first element.
+fn opens_with_summary(dom: &Dom, node: NodeId) -> bool {
+    let is_summary = |&c: &NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "summary");
+    let elements: Vec<NodeId> =
+        dom.children(node).iter().copied().filter(|&c| matches!(dom.node(c), Node::Element { .. })).collect();
+    elements.first().is_some_and(is_summary) && elements.iter().filter(|c| is_summary(c)).count() == 1
 }
 
 /// Whether a `diffle-diff` sits anywhere inside `node`.

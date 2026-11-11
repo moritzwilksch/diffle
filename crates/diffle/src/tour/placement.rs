@@ -18,6 +18,8 @@ pub struct Place {
     pub in_tabs: bool,
     /// Inside a `diffle-tab`'s pane.
     pub in_tab: bool,
+    /// Directly in a `<details>`, where its `<summary>` sits.
+    pub in_details: bool,
 }
 
 impl Place {
@@ -29,12 +31,14 @@ impl Place {
         in_steps: false,
         in_tabs: false,
         in_tab: false,
+        in_details: false,
     };
 
     /// The place of what a plain `tag` here holds.
     pub fn within(self, tag: &str) -> Self {
-        let text = matches!(tag, "p" | "h1" | "h2" | "h3" | "h4" | "a" | "strong" | "em" | "code" | "pre");
-        Self { top: false, in_text: self.in_text || text, in_steps: false, in_tabs: false, ..self }
+        let text = matches!(tag, "p" | "h1" | "h2" | "h3" | "h4" | "a" | "strong" | "em" | "code" | "pre" | "summary");
+        let in_details = tag == "details";
+        Self { top: false, in_text: self.in_text || text, in_steps: false, in_tabs: false, in_details, ..self }
     }
 }
 
@@ -122,7 +126,7 @@ impl Rule {
 impl Rule {
     /// The place of what an element of this rule at `place` holds.
     pub fn inner(self, place: Place) -> Place {
-        let inside = Place { top: false, in_steps: false, in_tabs: false, ..place };
+        let inside = Place { top: false, in_steps: false, in_tabs: false, in_details: false, ..place };
         match self {
             Self::Card => Place { in_card: true, ..inside },
             Self::Callout => Place { in_callout: true, ..inside },
@@ -140,6 +144,8 @@ pub fn misplaced(tag: &str, place: Place) -> Option<&'static str> {
     match tag {
         "h1" if !place.top => Some("<h1> sits at the top level, where it titles the tour"),
         "h2" | "h3" if !place.top => Some("a heading sits at the top level, where it starts a section"),
+        "details" if place.in_text => Some("<details> is a block: it sits between paragraphs"),
+        "summary" if !place.in_details => Some("<summary> sits first in a <details>, saying what opening it shows"),
         _ => None,
     }
 }

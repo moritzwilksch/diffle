@@ -317,6 +317,14 @@ expression: refused.json()
       "message": "diffle-tab belongs directly inside a diffle-tabs"
     },
     {
+      "element": "h2 \"A\" > <details>",
+      "message": "a <details> opens with one <summary>: what opening it shows, in a few words"
+    },
+    {
+      "element": "h2 \"A\" > <summary>",
+      "message": "<summary> sits first in a <details>, saying what opening it shows"
+    },
+    {
       "element": "h2 \"A\" > <h1>",
       "message": "a tour has one <h1>, its title"
     },
