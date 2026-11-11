@@ -96,8 +96,22 @@
   padding: 0.75rem 1rem;
 }
 
-/* A `diffle-walk`'s note numbers in its header: the taken one filled, as its marker on the gutter. */
-.tour-walk-step {
+/* A stepped block's controls; tinted while h and l step this block, so a keypress is predictable. */
+.tour-stepper {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.0625rem;
+  border-radius: 999px;
+}
+
+.tour-stepper[data-targeted] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* A stepped block's numbers in its header: the taken one filled, as its marker on the gutter. */
+.tour-step {
   display: grid;
   place-items: center;
   min-width: 1.25rem;
@@ -111,17 +125,17 @@
   cursor: pointer;
 }
 
-.tour-walk-step:hover {
+.tour-step:hover {
   background: var(--bg-3);
 }
 
-.tour-walk-step[aria-pressed='true'] {
+.tour-step[aria-pressed='true'] {
   background: var(--accent);
   color: var(--accent-fg);
 }
 
 /* The taken note under its last lit line: compact and full width, so the walk costs no column. */
-.tour-walk-note {
+.tour-note {
   display: flex;
   gap: 0.625rem;
   padding: 0.5rem 0.75rem 0.5625rem;
@@ -133,7 +147,7 @@
   white-space: normal;
 }
 
-.tour-walk-number {
+.tour-note-number {
   display: grid;
   flex: none;
   place-items: center;
@@ -147,7 +161,7 @@
   font-weight: 600;
 }
 
-.tour-walk-title {
+.tour-note-title {
   font-weight: 600;
 }
 

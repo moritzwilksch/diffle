@@ -17,10 +17,10 @@ import { blockAround, shapeAt, useElementMarks, useHoveredBlock } from './blocks
 import { BlockComment, type HoveredBlock, InlineThreads, Margin, SelectionComment, StaleThreads } from './Margin.js';
 import { TourArticle } from './render.js';
 import { useTour } from './state.js';
-import { walkAt, walkPage } from './walk.js';
+import { retarget, stepPage, stepTarget } from './steps/steps.js';
 
-/** What the keys do to the mounted page: scroll it, or step the walk at the gaze point; false for none in view. */
-export const tourPage = { scroll: (_by: number) => {}, stepWalk: (_by: 1 | -1): boolean => false };
+/** What the keys do to the mounted page: scroll it, or step the stepped block `keyTarget` picks; false for none in view. */
+export const tourPage = { scroll: (_by: number) => {}, step: (_by: 1 | -1): boolean => false };
 
 /**
  * How far below the page's top a taken section's heading lands: the gap the diff keeps above a file
@@ -83,18 +83,19 @@ export function TourPage({ doc }: { doc: TourDocument }) {
     const page = ref.current;
     if (!page || !article) return;
     tourArticle.current = article;
-    walkPage.current = page;
+    stepPage.current = page;
     setWidth(page.clientWidth);
     const observer = new ResizeObserver(() => {
       setWidth(page.clientWidth);
       setLayout((n) => n + 1);
+      retarget();
     });
     observer.observe(page);
     observer.observe(article);
     return () => {
       observer.disconnect();
       if (tourArticle.current === article) tourArticle.current = null;
-      if (walkPage.current === page) walkPage.current = null;
+      if (stepPage.current === page) stepPage.current = null;
     };
   }, [article]);
 
@@ -138,19 +139,13 @@ export function TourPage({ doc }: { doc: TourDocument }) {
       landing.current = null;
       ref.current?.scrollBy({ top: by * (ref.current.clientHeight || 0) });
     };
-    tourPage.stepWalk = (by) => {
-      const page = ref.current;
-      if (!page) return false;
-      const view = page.getBoundingClientRect();
-      const step = walkAt(view, view.top + page.clientHeight * EYE_FRACTION);
-      step?.(by);
-      return step != null;
-    };
+    tourPage.step = stepTarget;
   });
 
   const follow = () => {
     const page = ref.current;
     if (!page) return;
+    retarget();
     // A glide, and its landing, leave the section taken current: near the end it cannot reach the top.
     if (landing.current != null) {
       if (Math.abs(page.scrollTop - landing.current) <= 1) landing.current = null;

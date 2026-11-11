@@ -1036,14 +1036,14 @@ export const TourWalkSchema = z
   .strict();
 
 /**
- * One step of a `diffle-walk`: the lines it explains and a sentence or two about them, in inline
- * prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ * One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in
+ * inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
  */
 export const TourNoteSchema = z
   .object({
     tag: z.literal('diffle-note'),
-    /** The lines it explains, within its walk's, on the walk's side: `14-17`, or `14`. */
-    lines: tourLinesSchema,
+    /** In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number. */
+    lines: tourLinesSchema.optional(),
     /** What these lines do, in a few words: `Record each sale`. */
     title: z.string().min(1),
   })

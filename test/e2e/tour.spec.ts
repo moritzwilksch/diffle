@@ -70,6 +70,19 @@ tally/currency.py"></diffle-tree>
 </diffle-walk>
 `;
 
+/** Two walks, both in view on a laptop's screen. */
+const TWO_WALKS = `
+<h2>Refunds, in two parts</h2>
+<diffle-walk path="tally/refunds.py" lines="14-17">
+<diffle-note lines="14" title="One set per account">A missing account starts with an empty set.</diffle-note>
+<diffle-note lines="15-17" title="Record each sale">Every sale adds its description.</diffle-note>
+</diffle-walk>
+<diffle-walk path="tally/refunds.py" lines="18-22">
+<diffle-note lines="18-22" title="Keep the unmatched refunds">A refund stays when no sale matches it.</diffle-note>
+</diffle-walk>
+${'<p>Room to scroll the lower walk to the top.</p>'.repeat(30)}
+`;
+
 /** A short tour to comment on. */
 const COMMENTED = `
 <h1>Refunds count against sales</h1>
@@ -192,7 +205,7 @@ test.describe('the tour', () => {
       .getByRole('button', { name: /Finding unmatched/ })
       .click();
     await expect(view.getByText('Section 4 of 4')).toBeVisible();
-    const note = walk.locator('.tour-walk-note');
+    const note = walk.locator('.tour-note');
     // At rest the diff shows plainly, each note's number on the gutter of its first line.
     await expect(note).toHaveCount(0);
     await expect(walk).toHaveScreenshot('tour-walk.png');
@@ -243,6 +256,30 @@ test.describe('the tour', () => {
     expect(await readPrompt(diffle.url)).toContain(
       '(tour) 4. Finding unmatched refunds, in the note "One set per account" in the walk of tally/refunds.py:12-22\n\n> starts with an empty set',
     );
+  });
+
+  test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {
+    await pushTour(diffle.url, TWO_WALKS);
+    const view = await showTour(page);
+    const [upper, lower] = [view.locator('figure[data-walk]').first(), view.locator('figure[data-walk]').last()];
+    const stepper = (walk: typeof upper) => walk.getByRole('group', { name: 'Notes' });
+    await expect(stepper(upper)).toHaveAttribute('data-targeted');
+    await expect(stepper(lower)).not.toHaveAttribute('data-targeted');
+
+    await page.keyboard.press('l');
+    await expect(upper.locator('.tour-note')).toContainText('One set per account');
+    await expect(lower.locator('.tour-note')).toHaveCount(0);
+
+    // Scrolled past the upper walk, the lower one takes the keys.
+    await page.keyboard.press('h');
+    await lower.evaluate((el) => {
+      const page = el.closest('.overflow-auto')!;
+      page.scrollTop += el.getBoundingClientRect().top - page.getBoundingClientRect().top - 8;
+    });
+    await expect(stepper(lower)).toHaveAttribute('data-targeted');
+    await page.keyboard.press('l');
+    await expect(lower.locator('.tour-note')).toContainText('Keep the unmatched refunds');
+    await expect(upper.locator('.tour-note')).toHaveCount(0);
   });
 
   test.describe('in a wide window', () => {

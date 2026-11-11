@@ -10,7 +10,7 @@ use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
 use super::placement::{Place, Rule, is_column, misplaced};
-use super::walk;
+use super::stepped::{self, walk};
 use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
@@ -141,7 +141,7 @@ impl Walk {
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
         let element = format!("{context}{}", label(tag, attrs));
         let parsed = parse::<TourElement>(tag, attrs).map_err(|message| match attr(attrs, "title") {
-            None if tag == "diffle-note" => walk::UNTITLED.into(),
+            None if tag == "diffle-note" => stepped::UNTITLED.into(),
             _ => message,
         });
         let Some(rule) = Rule::of(tag) else {
@@ -176,7 +176,7 @@ impl Walk {
                 self.errors.extend(found.errors);
                 self.warnings.extend(found.warnings);
                 let outer = self.walk.replace(label(tag, attrs));
-                for note in walk::notes(dom, node) {
+                for note in stepped::step_nodes(dom, node, "diffle-note") {
                     self.visit(dom, note, Place { top: false, in_walk: true, ..place });
                 }
                 self.walk = outer;

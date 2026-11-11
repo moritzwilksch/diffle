@@ -332,12 +332,12 @@ Lines of the review's diff walked one note at a time, a block in the article's f
 
 #### `diffle-note`
 
-One step of a `diffle-walk`: the lines it explains and a sentence or two about them, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
 
 | Attribute | Required | Meaning |
 |---|---|---|
-| `lines` | yes | The lines it explains, within its walk's, on the walk's side: `14-17`, or `14`. |
 | `title` | yes | What these lines do, in a few words: `Record each sale`. |
+| `lines` | no | In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number. |
 
 ### Plain tags
 

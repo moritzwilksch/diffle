@@ -7,7 +7,7 @@ export const TOUR_HELP: HelpSection[][] = [
       title: 'Tour',
       rows: [
         ['n / p', 'next / previous section'],
-        ['l / h', 'next / previous note of the walk in view'],
+        ['l / h', 'next / previous step of the block whose numbers are tinted'],
         ['click a heading in the contents', 'go to it'],
         ['j / k', 'scroll the page'],
         ['d / u', 'scroll half a page'],

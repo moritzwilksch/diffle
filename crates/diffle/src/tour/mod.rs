@@ -9,9 +9,9 @@ mod files;
 mod icon;
 mod layout;
 mod placement;
+mod stepped;
 mod store;
 mod validate;
-mod walk;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;

@@ -242,11 +242,11 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"2\"",
-      "message": "a diffle-note takes a title: what its lines do, in a few words"
+      "message": "a diffle-note takes a title: what its step shows, in a few words"
     },
     {
       "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"3\" title=\"Block\" > <p>",
-      "message": "a diffle-note holds a sentence or two: text, <code>, <strong>, <em>, <a> and inline primitives"
+      "message": "a note holds a sentence or two: text, <code>, <strong>, <em>, <a> and inline primitives"
     },
     {
       "element": "h2 \"A\" > diffle-note lines=\"2\" title=\"Loose\"",

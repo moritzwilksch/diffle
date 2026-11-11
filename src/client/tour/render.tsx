@@ -11,7 +11,7 @@ import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
-import { TourWalk } from './primitives/Walk.js';
+import { TourWalk } from './steps/Walk.js';
 
 /**
  * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to

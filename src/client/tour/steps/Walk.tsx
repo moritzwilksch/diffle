@@ -1,22 +1,12 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { FilePath } from '@/client/FilePath.js';
-import { useStore } from '@/client/store.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { type LineRange, lineSpan, primitive } from '@/client/tour/document.js';
-import {
-  excerptRows,
-  lineSelector,
-  type NoteSpan,
-  noteAt,
-  noteRows,
-  reveal,
-  rowSpot,
-  walkCss,
-  walks,
-} from '@/client/tour/walk.js';
-import { DiffRows, ExcerptNotice, linesLabel, useExcerpt } from './Diff.js';
-import { TourJump } from './Jump.js';
+import { DiffRows, ExcerptNotice, linesLabel, useExcerpt } from '@/client/tour/primitives/Diff.js';
+import { TourJump } from '@/client/tour/primitives/Jump.js';
+import { excerptRows, lineSelector, type NoteSpan, noteAt, noteRows, rowSpot, walkCss } from './rows.js';
+import { NoteBand, Stepper } from './Stepper.js';
+import { reveal, useFocusedChild, useSteps } from './steps.js';
 
 /** One note of a walk, as the article renders it. */
 interface WalkNote extends NoteSpan {
@@ -30,7 +20,7 @@ interface WalkNote extends NoteSpan {
 function readNotes(source: Element, render: (note: Element) => ReactNode): WalkNote[] {
   return [...source.children].flatMap((el) => {
     const note = primitive(el);
-    if (note?.tag !== 'diffle-note') return [];
+    if (note?.tag !== 'diffle-note' || note.lines == null) return [];
     const [start, end] = lineSpan(note.lines);
     return [{ start, end, title: note.title, content: render(el), place: placeOf(el) }];
   });
@@ -55,25 +45,11 @@ export function TourWalk({
   const place = placeOf(source);
   const notes = useMemo(() => readNotes(source, renderNote), [source, renderNote]);
   const shown = useExcerpt(range);
-  const [active, setActive] = useState<number | null>(null);
   const figure = useRef<HTMLElement>(null);
+  const steps = useSteps(figure, notes.length, 'rest');
+  const { active, take } = steps;
+  useFocusedChild(place, take);
   const rows = useMemo(() => (shown.state === 'ready' ? excerptRows(shown.patch) : []), [shown]);
-  const step = useCallback(
-    (by: 1 | -1) =>
-      setActive((at) => {
-        if (at == null) return by > 0 ? 0 : null;
-        const next = at + by;
-        return next < 0 ? null : Math.min(next, notes.length - 1);
-      }),
-    [notes.length],
-  );
-  useEffect(() => {
-    const el = figure.current;
-    if (!el) return;
-    walks.set(el, step);
-    return () => void walks.delete(el);
-  }, [step]);
-  useFocusedNote(place, setActive);
 
   const lit = active == null ? null : noteRows(rows, range.side, notes[active]!);
   // Once the band hangs under the lit lines, they and the band come into view.
@@ -84,7 +60,7 @@ export function TourWalk({
       requestAnimationFrame(() => {
         const host = figure.current?.querySelector('diffs-container');
         const row = host?.shadowRoot?.querySelector(lineSelector(first));
-        const band = figure.current?.querySelector('.tour-walk-note');
+        const band = figure.current?.querySelector('.tour-note');
         if (row && band) reveal(row.getBoundingClientRect().top, band.getBoundingClientRect().bottom);
       }),
     );
@@ -101,15 +77,22 @@ export function TourWalk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, rows]);
   const renderAnnotation = useCallback(
-    ({ metadata }: { metadata: number }) => <NoteBand note={notes[metadata]!} number={metadata + 1} />,
+    ({ metadata }: { metadata: number }) => {
+      const note = notes[metadata]!;
+      return (
+        <NoteBand place={note.place} number={metadata + 1} title={note.title}>
+          {note.content}
+        </NoteBand>
+      );
+    },
     [notes],
   );
   const onLineNumberClick = useCallback(
     (spot: { side: 'deletions' | 'additions'; lineNumber: number }) => {
       const found = noteAt(rows, range.side, notes, spot);
-      if (found != null) setActive((at) => (at === found ? null : found));
+      if (found != null) take(found === active ? null : found);
     },
-    [rows, range.side, notes],
+    [rows, range.side, notes, take, active],
   );
 
   return (
@@ -128,7 +111,7 @@ export function TourWalk({
           {range.side === 'old' ? 'before ' : ''}
           {linesLabel(range)}
         </span>
-        {shown.state === 'ready' && <Stepper notes={notes} active={active} setActive={setActive} step={step} />}
+        {shown.state === 'ready' && <Stepper titles={notes.map((n) => n.title)} label="Note" steps={steps} />}
         <TourJump path={range.path} line={range.start} side={range.side} label="Open" placed />
       </figcaption>
       {shown.state === 'ready' ? (
@@ -144,84 +127,4 @@ export function TourWalk({
       )}
     </figure>
   );
-}
-
-/** The walk's notes by number, between a step back and a step on; the taken one filled. */
-function Stepper({
-  notes,
-  active,
-  setActive,
-  step,
-}: {
-  notes: readonly WalkNote[];
-  active: number | null;
-  setActive: (at: number | null) => void;
-  step: (by: 1 | -1) => void;
-}) {
-  const arrow =
-    'grid size-5 cursor-pointer place-items-center rounded-sm border-0 bg-transparent p-0 text-muted hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent';
-  return (
-    <div role="group" aria-label="Notes" className="flex shrink-0 items-center gap-0.5">
-      <button
-        type="button"
-        className={arrow}
-        disabled={active == null}
-        onClick={() => step(-1)}
-        title="Previous note (h)"
-      >
-        <ChevronLeft size="0.875rem" />
-      </button>
-      {notes.map((note, i) => (
-        <button
-          key={i}
-          type="button"
-          className="tour-walk-step"
-          aria-pressed={i === active}
-          aria-label={`Note ${i + 1}: ${note.title}`}
-          title={note.title}
-          onClick={() => setActive(i === active ? null : i)}
-        >
-          {i + 1}
-        </button>
-      ))}
-      <button
-        type="button"
-        className={arrow}
-        disabled={active === notes.length - 1}
-        onClick={() => step(1)}
-        title="Next note (l)"
-      >
-        <ChevronRight size="0.875rem" />
-      </button>
-    </div>
-  );
-}
-
-/** The taken note's text, a band under its last lit line: its number, its title, its sentence. */
-function NoteBand({ note, number }: { note: WalkNote; number: number }) {
-  return (
-    <div {...note.place} className="tour-walk-note">
-      <span data-opaque="" className="tour-walk-number" aria-hidden>
-        {number}
-      </span>
-      <div className="min-w-0">
-        <div className="tour-walk-title">{note.title}</div>
-        <div>{note.content}</div>
-      </div>
-    </div>
-  );
-}
-
-/** Takes the note a focused thread is on, so its words show beside the thread's card. */
-function useFocusedNote(place: Place, setActive: (at: number) => void): void {
-  const walk = place['data-node'];
-  const note = useStore((s) => {
-    const thread = s.focusedThread == null ? undefined : s.threads.find((t) => t.id === s.focusedThread);
-    if (thread?.anchor.kind !== 'tour') return null;
-    const node = thread.anchor.node.join('.');
-    return node.startsWith(`${walk}.`) ? Number(node.slice(walk.length + 1).split('.')[0]) : null;
-  });
-  useEffect(() => {
-    if (note != null) setActive(note);
-  }, [note, setActive]);
 }

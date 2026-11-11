@@ -1,7 +1,7 @@
 import type { Side } from '@/shared/protocol.js';
 
 /**
- * A `diffle-walk` on the page: which rows of its excerpt each note lights, where the active note's
+ * Rows of an excerpt a stepped block lights: which rows each note lights, where the taken note's
  * text hangs, and the stylesheet that marks and dims the rows inside the diff's shadow root. Rows
  * are named as `@pierre/diffs` renders a unified diff: a deletion by its old number, any other row
  * by its new one, each with its `data-line-type`.
@@ -128,39 +128,3 @@ const MARKER = `content: var(--walk-marker); position: absolute; left: 3px; top:
 const MARKER_IDLE = `color: var(--accent); background: var(--bg-card); box-shadow: inset 0 0 0 1px var(--accent);`;
 const MARKER_ACTIVE = `color: var(--accent-fg); background: var(--accent);`;
 const LIT_FACE = 'color-mix(in srgb, var(--accent) 8%, transparent)';
-
-/** Each walk on the page with what steps it: by one note on, or back. */
-export const walks = new Map<Element, (by: 1 | -1) => void>();
-
-/**
- * The walk the reader is at: of those in `view`, the one nearest `gaze` (a client y), inside it
- * when one holds that line. Null when none is in view.
- */
-export function walkAt(view: DOMRect, gaze: number): ((by: 1 | -1) => void) | null {
-  let best: { step: (by: 1 | -1) => void; distance: number } | null = null;
-  for (const [el, step] of walks) {
-    const box = el.getBoundingClientRect();
-    if (box.bottom <= view.top || box.top >= view.bottom) continue;
-    const distance = gaze < box.top ? box.top - gaze : gaze > box.bottom ? gaze - box.bottom : 0;
-    if (!best || distance < best.distance) best = { step, distance };
-  }
-  return best?.step ?? null;
-}
-
-/** The tour's scrolling page, which a walk scrolls to keep its lit lines in view. */
-export const walkPage: { current: HTMLElement | null } = { current: null };
-
-/** Room kept between lit lines and the page's edge when stepping scrolls. */
-const EDGE = 16;
-
-/** Scrolls the page just enough to show `top` to `bottom` (client y); not at all when they show. */
-export function reveal(top: number, bottom: number): void {
-  const page = walkPage.current;
-  if (!page) return;
-  const view = page.getBoundingClientRect();
-  const above = top - (view.top + EDGE);
-  const below = bottom - (view.bottom - EDGE);
-  // Too tall to fit: its top shows first.
-  const by = above < 0 ? above : below > 0 ? Math.min(below, above) : 0;
-  if (by !== 0) page.scrollBy({ top: by, behavior: 'smooth' });
-}
