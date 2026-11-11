@@ -1,4 +1,4 @@
-import { parsePatchFiles } from '@pierre/diffs';
+import { type FileDiffMetadata, parsePatchFiles } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FilePath } from '@/client/FilePath.js';
@@ -23,7 +23,6 @@ type Shown =
 export function TourDiff({ range, place }: { range: LineRange; place?: Place }) {
   const { path, side, start, end } = range;
   const version = useStore((s) => s.snapshot?.version);
-  const theme = useStore((s) => s.theme);
   const [shown, setShown] = useState<Shown>({ state: 'loading' });
   useEffect(() => {
     let live = true;
@@ -42,24 +41,6 @@ export function TourDiff({ range, place }: { range: LineRange; place?: Place }) 
         : undefined,
     [shown, version, side, path, start, end],
   );
-  const options = useMemo(
-    () => ({
-      theme: CODE_THEMES,
-      preferredHighlighter: HIGHLIGHTER,
-      themeType: theme,
-      diffStyle: 'unified' as const,
-      diffIndicators: 'classic' as const,
-      hunkSeparators: 'simple' as const,
-      disableFileHeader: true,
-      overflow: 'wrap' as const,
-    }),
-    [theme],
-  );
-  const prime = useCallback(
-    (pool: WorkerPool) => (fileDiff ? pool.primeDiffHighlightCache(fileDiff) : Promise.resolve()),
-    [fileDiff],
-  );
-  const primed = usePrimed(prime);
   const lines = start === end ? `${start}` : `${start}-${end}`;
   return (
     <figure
@@ -76,7 +57,7 @@ export function TourDiff({ range, place }: { range: LineRange; place?: Place }) 
         <TourJump path={path} line={start} side={side} label="Open" placed />
       </figcaption>
       {shown.state === 'ready' && fileDiff ? (
-        <FileDiff key={primed} fileDiff={fileDiff} options={options} />
+        <DiffRows fileDiff={fileDiff} />
       ) : (
         <p className={`m-0 px-2.5 py-2 text-[0.75rem] ${shown.state === 'loading' ? 'text-muted' : 'text-warn'}`}>
           {shown.state === 'loading'
@@ -88,4 +69,28 @@ export function TourDiff({ range, place }: { range: LineRange; place?: Place }) 
       )}
     </figure>
   );
+}
+
+/**
+ * A patch's rows as the tour shows every excerpt: unified, numbered in the gutter, long lines
+ * wrapped, highlighted like the diff view. A code block uses it too, so the two read alike.
+ */
+export function DiffRows({ fileDiff }: { fileDiff: FileDiffMetadata }) {
+  const theme = useStore((s) => s.theme);
+  const options = useMemo(
+    () => ({
+      theme: CODE_THEMES,
+      preferredHighlighter: HIGHLIGHTER,
+      themeType: theme,
+      diffStyle: 'unified' as const,
+      diffIndicators: 'classic' as const,
+      hunkSeparators: 'simple' as const,
+      disableFileHeader: true,
+      overflow: 'wrap' as const,
+    }),
+    [theme],
+  );
+  const prime = useCallback((pool: WorkerPool) => pool.primeDiffHighlightCache(fileDiff), [fileDiff]);
+  const primed = usePrimed(prime);
+  return <FileDiff key={primed} fileDiff={fileDiff} options={options} />;
 }

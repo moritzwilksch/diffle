@@ -1,14 +1,20 @@
-import { getFiletypeFromFileName } from '@pierre/diffs';
+import {
+  type FileDiffMetadata,
+  getFiletypeFromFileName,
+  parsePatchFiles,
+  type SupportedLanguages,
+} from '@pierre/diffs';
+import { useMemo } from 'react';
 import { FilePath } from '@/client/FilePath.js';
-import { HighlightedCode } from '@/client/lsp/highlight.js';
-import { useStore } from '@/client/store.js';
+import { DiffRows } from './Diff.js';
 import { TourJump } from './Jump.js';
 import type { Place } from '@/client/tour/anchor.js';
 
 /**
- * Code the agent wrote, such as an interface or a signature, highlighted like the diff and in its
- * frame; with `path`, under the file's path, its line and a jump there. An example the agent made up
- * says so in its header, beside its title, so it never passes for the repository's code.
+ * Code the agent wrote, such as an interface or a signature, in the diff's frame and rows: the same
+ * gutter, numbered from `line` (else 1), and long lines wrapped. With `path`, under the file's path,
+ * its line and a jump there. An example the agent made up says so in its header, beside its title,
+ * so it never passes for the repository's code.
  */
 export function TourCode({
   code,
@@ -27,8 +33,8 @@ export function TourCode({
   title?: string;
   place?: Place;
 }) {
-  const theme = useStore((s) => s.theme);
   const language = lang ?? (path ? getFiletypeFromFileName(path) : 'text');
+  const fileDiff = useMemo(() => codeRows(dedent(code), line ?? 1, language), [code, line, language]);
   return (
     <figure
       {...place}
@@ -48,11 +54,25 @@ export function TourCode({
           <TourJump path={path} line={line} side="new" label="Open" placed />
         </figcaption>
       )}
-      <pre className="m-0 overflow-x-auto bg-canvas px-3 py-2 font-mono text-[13px] leading-5">
-        <HighlightedCode code={dedent(code)} lang={language} theme={theme} />
-      </pre>
+      {fileDiff && <DiffRows fileDiff={fileDiff} />}
     </figure>
   );
+}
+
+/** `text` as a patch of one hunk whose lines are all unchanged, numbered from `start`, in `lang`. */
+function codeRows(text: string, start: number, lang: string): FileDiffMetadata | undefined {
+  const lines = text.split('\n');
+  const range = `${start},${lines.length}`;
+  const patch = `--- a/code\n+++ b/code\n@@ -${range} +${range} @@\n${lines.map((l) => ` ${l}`).join('\n')}\n`;
+  const file = parsePatchFiles(patch, `tour-code:${lang}:${start}:${hash(text)}`)[0]?.files[0];
+  return file && { ...file, lang: lang as SupportedLanguages };
+}
+
+/** A short key for `text`, so each block's rows keep their own place in the highlight cache. */
+function hash(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = (h * 33) ^ text.charCodeAt(i);
+  return (h >>> 0).toString(36);
 }
 
 /** `text` without the blank lines around it and the indentation its lines share, as the server reads it. */
