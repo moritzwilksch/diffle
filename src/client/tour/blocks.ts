@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { elementAt, NODE_ATTR, type Spot } from './anchor.js';
 
 /**
@@ -55,6 +55,42 @@ export function shapeAt(svg: Element, target: Element, x: number, y: number): nu
   if (box) return nodeOf(box);
   const label = target.closest(`text[${NODE_ATTR}]`);
   return label ? nodeOf(label) : null;
+}
+
+/** How long a block's Comment button outlasts the pointer leaving it: time to reach the button. */
+const GRACE_MS = 300;
+
+/**
+ * The block under the pointer, kept a moment after the pointer leaves it so it can reach the
+ * block's button, and for as long as it rests there. `enter` takes the block now under the pointer
+ * (null for none); `hold` and `release` are the button's.
+ */
+export function useHoveredBlock<B extends { el: Element }>(): {
+  block: B | null;
+  enter: (found: B | null) => void;
+  hold: () => void;
+  release: () => void;
+} {
+  const [block, setBlock] = useState<B | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hold = () => {
+    if (timer.current != null) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  // Pending already: the pointer moving on through prose must not put the end off.
+  const release = () => {
+    timer.current ??= setTimeout(() => {
+      timer.current = null;
+      setBlock(null);
+    }, GRACE_MS);
+  };
+  const enter = (found: B | null) => {
+    if (!found) return release();
+    hold();
+    setBlock((prev) => (prev?.el === found.el ? prev : found));
+  };
+  useEffect(() => hold, []);
+  return { block, enter, hold, release };
 }
 
 const MARK = 'data-comment';

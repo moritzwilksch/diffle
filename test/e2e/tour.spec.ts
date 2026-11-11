@@ -180,6 +180,19 @@ test.describe('the tour', () => {
     }) => {
       await pushTour(diffle.url, COMMENTED);
       const view = await showTour(page);
+      const button = view.getByRole('button', { name: 'Comment', exact: true });
+      // A block's button leaves with the pointer, and waits for a pointer on its way to it.
+      const diff = view.locator('figure').first();
+      await diff.hover();
+      await expect(button).toBeVisible();
+      await view.getByText('Any other kind is refused.').hover();
+      await expect(button).toBeHidden();
+      await diff.hover();
+      await button.click();
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeHidden();
+
       await select(page, 'a refund counts negative');
       const margin = view.getByLabel('Comments');
       await expect(view.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();

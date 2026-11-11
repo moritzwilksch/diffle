@@ -7,7 +7,7 @@ import { useStore, type TourDraft } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 import { anchorTop, selectionTarget } from './anchor.js';
 import { commentOnSelection, DRAFT, type TourThread, useActiveCard, useTourDraft, useTourThreads } from './comments.js';
-import { sourceAt, sourceLabel } from './blocks.js';
+import { sourceAt, sourceLabel, type useHoveredBlock } from './blocks.js';
 import { placeCards } from './placement.js';
 import { useTour } from './state.js';
 
@@ -35,22 +35,38 @@ export interface HoveredBlock {
   tag: string;
 }
 
+/** Whether words are selected: their own button stands for the comment then. */
+function useSelecting(): boolean {
+  const [selecting, setSelecting] = useState(false);
+  useEffect(() => {
+    const update = () => setSelecting(document.getSelection()?.isCollapsed === false);
+    document.addEventListener('selectionchange', update);
+    return () => document.removeEventListener('selectionchange', update);
+  }, []);
+  return selecting;
+}
+
+/** The hovered block, as `useHoveredBlock` keeps it. */
+export type Hovering = ReturnType<typeof useHoveredBlock<HoveredBlock>>;
+
 /**
  * A button to comment on the hovered block as a whole, in `container` (positioned): level with its
  * top at the margin's `edge`, or just under its bottom-right corner (inline), clear of what it holds.
  */
 export function BlockComment({
-  block,
+  hovering,
   container,
   at,
 }: {
-  block: HoveredBlock | null;
+  hovering: Hovering;
   container: RefObject<HTMLElement | null>;
   at: 'edge' | 'end';
 }) {
+  const { block } = hovering;
   const drafting = useTourDraft() != null;
+  const selecting = useSelecting();
   const box = container.current?.getBoundingClientRect();
-  if (!block || drafting || !box || document.getSelection()?.isCollapsed === false) return null;
+  if (!block || drafting || !box || selecting) return null;
   const rect = block.el.getBoundingClientRect();
   const kind = elementKind(block.tag);
   const spot =
@@ -61,6 +77,8 @@ export function BlockComment({
     <Button
       className="tour-comment-button"
       style={spot}
+      onPointerEnter={hovering.hold}
+      onPointerLeave={hovering.release}
       onClick={() => useStore.getState().openTourDraft(block.node, { on: 'element' })}
       title={`Comment on this ${kind}`}
     >
@@ -79,10 +97,10 @@ export function Margin({
   layout,
   onHover,
   hovered,
-  block,
+  hovering,
 }: {
   article: HTMLElement | null;
-  block: HoveredBlock | null;
+  hovering: Hovering;
   layout: number;
   onHover: (id: string | null) => void;
   hovered: string | null;
@@ -146,7 +164,7 @@ export function Margin({
         </div>
       ))}
       <SelectionComment article={article} container={rail} at="edge" />
-      <BlockComment block={block} container={rail} at="edge" />
+      <BlockComment hovering={hovering} container={rail} at="edge" />
     </div>
   );
 }
