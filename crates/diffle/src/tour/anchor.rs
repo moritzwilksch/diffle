@@ -260,7 +260,7 @@ impl Walk<'_> {
             "diffle-tabs" => self.titles(id),
             // An item's whole question: ticks and answers find it again by it.
             "diffle-item" => collapse(&reading(self.dom, id)),
-            "diffle-tree" => short(&attr("paths")),
+            "diffle-tree" => attr("title"),
             "diffle-code" if !attr("title").is_empty() => attr("title"),
             "diffle-code" if !attr("path").is_empty() => format!("{}:{}", attr("path"), attr("line")),
             "diffle-code" => short(self.dom.text(id).trim()),

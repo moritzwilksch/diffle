@@ -34,7 +34,7 @@ class Ledger:
   <text x="16" y="22" class="code" lang="python"><tspan x="16" dy="0">def unmatched_refunds(</tspan><tspan x="16" dy="16">    ledger: Ledger) -&gt; list[Entry]</tspan></text>
 </svg></diffle-diagram>
 <h3><diffle-icon name="folder-tree"></diffle-icon> Where it lives</h3>
-<diffle-tree root="tally" paths="tally/ledger.py
+<diffle-tree title="Ledger and refunds · Python" icon="package" root="tally" paths="tally/ledger.py
 tally/refunds.py
 tally/currency.py"></diffle-tree>
 <p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
@@ -208,6 +208,9 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
     await expect(view.locator('aside[aria-label="danger"]')).toHaveScreenshot('tour-danger.png');
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
+    await expect(view.locator('.tour-block').filter({ hasText: 'Ledger and refunds · Python' })).toHaveScreenshot(
+      'tour-tree.png',
+    );
     await expect(view.locator('figure').filter({ hasText: 'Example' })).toHaveScreenshot('tour-example.png');
     await expect(view.locator('.tour-row').filter({ has: page.locator('.tour-diagram') })).toHaveScreenshot(
       'tour-row.png',

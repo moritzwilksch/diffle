@@ -170,7 +170,7 @@ fn spoken(element: &str, text: bool) -> String {
         "diffle-stop" => format!("the stop at {}:{}", attr("path"), attr("line")),
         "diffle-code" if !attr("path").is_empty() => format!("the code of {}:{}", attr("path"), attr("line")),
         "diffle-code" => "a code block".into(),
-        "diffle-tree" => "the file tree".into(),
+        "diffle-tree" => format!("the tree \"{}\"", attr("title")),
         "diffle-callout" => format!("a {} callout", attr("kind")),
         "diffle-diagram" => "a diagram".into(),
         "rect" => "a box in the diagram".into(),

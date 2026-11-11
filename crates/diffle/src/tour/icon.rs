@@ -2,8 +2,21 @@
 //! every name the validator accepts.
 use std::cmp::Reverse;
 
+use crate::protocol::TourElement;
+
 /// One name per line, written from lucide-react by `test/scripts/lucide-icons.test.ts`.
 const NAMES: &str = include_str!("../../lucide-icons.generated.txt");
+
+/// The Lucide icon `element` names, if it names one.
+pub fn named(element: &TourElement) -> Option<&str> {
+    match element {
+        TourElement::DiffleIcon { name, .. } => Some(name.as_str()),
+        TourElement::DiffleCard { icon, .. } | TourElement::DiffleTree { icon, .. } => {
+            icon.as_ref().map(|i| i.as_str())
+        }
+        _ => None,
+    }
+}
 
 /// Why `name` names no Lucide icon, with the closest few names; none when it names one.
 pub fn refusal(name: &str) -> Option<String> {

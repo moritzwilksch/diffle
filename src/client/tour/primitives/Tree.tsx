@@ -3,6 +3,7 @@ import { useStore } from '@/client/store.js';
 import { jump } from '@/client/tour/state.js';
 import type { ChangeStatus } from '@/shared/protocol.js';
 import type { Place } from '@/client/tour/anchor.js';
+import { TourIcon } from './Icon.js';
 
 interface Dir {
   dirs: Map<string, Dir>;
@@ -11,8 +12,23 @@ interface Dir {
 
 const STATUS_COLOR: Partial<Record<ChangeStatus, string>> = { A: 'var(--add)', D: 'var(--del)' };
 
-/** A directory tree of `paths` under `root`; a changed file shows its status and opens in the diff. */
-export function TourTree({ paths, root, place }: { paths: string; root: string; place?: Place }) {
+/**
+ * A directory tree of `paths` under `root`, headed by its title and icon as a card is; a changed
+ * file shows its status and opens in the diff.
+ */
+export function TourTree({
+  paths,
+  root,
+  title,
+  icon,
+  place,
+}: {
+  paths: string;
+  root: string;
+  title: string;
+  icon?: string;
+  place?: Place;
+}) {
   const changed = useStore((s) => s.snapshot?.changed);
   const status = new Map(changed?.map((f) => [f.path, f.status]));
   const top: Dir = { dirs: new Map(), files: [] };
@@ -60,13 +76,15 @@ export function TourTree({ paths, root, place }: { paths: string; root: string; 
     </ul>
   );
   return (
-    <div
-      {...place}
-      data-opaque=""
-      className="tour-block rounded-md border border-border bg-canvas py-1.5 pr-2 font-mono text-[0.75rem] [&>ul]:pl-2"
-    >
-      {root && <div className="pl-2 text-muted">{root}/</div>}
-      {level(top)}
+    <div {...place} data-opaque="" className="tour-block rounded-md border border-border bg-canvas">
+      <div className="tour-tree-title">
+        {icon && <TourIcon name={icon} />}
+        {title}
+      </div>
+      <div className="py-1.5 pr-2 font-mono text-[0.75rem] [&>ul]:pl-2">
+        {root && <div className="pl-2 text-muted">{root}/</div>}
+        {level(top)}
+      </div>
     </div>
   );
 }

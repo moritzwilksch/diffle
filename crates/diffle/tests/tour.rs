@@ -57,7 +57,7 @@ const TOUR: &str = r#"
 <diffle-code lang="json" example title="Response to GET /users/7">{ "id": 7 }</diffle-code>
 <h2>Docs</h2>
 <h3>Layout</h3>
-<diffle-tree paths="app.py
+<diffle-tree title="Loader and docs" icon="folder" paths="app.py
 docs/readme.md"></diffle-tree>
 <diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
@@ -162,7 +162,7 @@ stray text
   <diffle-callout kind="note"><diffle-callout kind="info"></diffle-callout><h2>Inside</h2></diffle-callout>
 </diffle-card>
 <diffle-card id="a" title="Again"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
-<diffle-tree root="src" paths="src/a.py
+<diffle-tree title="Sources" root="src" paths="src/a.py
 docs/readme.md"></diffle-tree>
 <diffle-group title="G"></diffle-group>
 <diffle-code>x = 1</diffle-code>

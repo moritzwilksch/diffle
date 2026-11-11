@@ -3240,6 +3240,16 @@
               "type": "string",
               "const": "diffle-tree"
             },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What its files are, in a few words, as its header: `Server · Rust`."
+            },
+            "icon": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+              "description": "A Lucide icon before the title, by its name on lucide.dev."
+            },
             "paths": {
               "type": "string",
               "minLength": 1,
@@ -3253,10 +3263,11 @@
           },
           "required": [
             "tag",
+            "title",
             "paths"
           ],
           "additionalProperties": false,
-          "description": "A directory tree of some files; changed ones show their status. It holds nothing."
+          "description": "A directory tree of some files under a title; changed ones show their status. It holds nothing."
         },
         {
           "type": "object",
@@ -4530,6 +4541,16 @@
           "type": "string",
           "const": "diffle-tree"
         },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What its files are, in a few words, as its header: `Server · Rust`."
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "A Lucide icon before the title, by its name on lucide.dev."
+        },
         "paths": {
           "type": "string",
           "minLength": 1,
@@ -4543,10 +4564,11 @@
       },
       "required": [
         "tag",
+        "title",
         "paths"
       ],
       "additionalProperties": false,
-      "description": "A directory tree of some files; changed ones show their status. It holds nothing."
+      "description": "A directory tree of some files under a title; changed ones show their status. It holds nothing."
     },
     "TourWalk": {
       "type": "object",

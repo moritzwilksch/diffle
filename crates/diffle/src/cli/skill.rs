@@ -34,7 +34,7 @@ const EXAMPLE: &str = r#"<h1>Tokens expire</h1>
 <diffle-diff path="src/login.rs" lines="40-44"></diffle-diff>
 <diffle-callout kind="warning"><p>Sessions issued before the deploy expire at once.</p></diffle-callout>
 <h3>Where the auth code lives</h3>
-<diffle-tree root="src" paths="src/auth.rs
+<diffle-tree title="Auth · Rust" root="src" paths="src/auth.rs
 src/login.rs"></diffle-tree>
 <p>The old check is gone: <diffle-jump path="src/auth.rs" line="30" side="old">see what it did</diffle-jump>.</p>"#;
 

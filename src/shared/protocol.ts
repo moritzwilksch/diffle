@@ -1164,10 +1164,14 @@ export const TourCodeSchema = z
   })
   .strict();
 
-/** A directory tree of some files; changed ones show their status. It holds nothing. */
+/** A directory tree of some files under a title; changed ones show their status. It holds nothing. */
 export const TourTreeSchema = z
   .object({
     tag: z.literal('diffle-tree'),
+    /** What its files are, in a few words, as its header: `Server · Rust`. */
+    title: z.string().min(1),
+    /** A Lucide icon before the title, by its name on lucide.dev. */
+    icon: tourIconNameSchema.optional(),
     /** Files of the review, one per line, relative to the repository root. */
     paths: z.string().min(1),
     /** The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root. */

@@ -87,7 +87,16 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     case 'diffle-tabs':
       return <TourTabs key={key} source={node} renderPane={paneContent} />;
     case 'diffle-tree':
-      return <TourTree key={key} paths={element.paths} root={element.root ?? ''} place={placeOf(node)} />;
+      return (
+        <TourTree
+          key={key}
+          paths={element.paths}
+          root={element.root ?? ''}
+          title={element.title}
+          icon={element.icon}
+          place={placeOf(node)}
+        />
+      );
     case 'diffle-jump': {
       const line = element.line == null ? undefined : Number(element.line);
       const label = node.textContent?.trim() || (line == null ? element.path : `${element.path}:${line}`);

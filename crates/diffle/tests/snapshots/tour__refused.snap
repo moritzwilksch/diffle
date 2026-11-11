@@ -125,11 +125,11 @@ expression: refused.json()
       "message": "id a is taken by an earlier card"
     },
     {
-      "element": "h2 \"A\" > diffle-tree root=\"src\" paths=\"src/a.py…\"",
+      "element": "h2 \"A\" > diffle-tree title=\"Sources\" root=\"src\" paths=\"src/a.py…\"",
       "message": "docs/readme.md is not under the root src"
     },
     {
-      "element": "h2 \"A\" > diffle-tree root=\"src\" paths=\"src/a.py…\"",
+      "element": "h2 \"A\" > diffle-tree title=\"Sources\" root=\"src\" paths=\"src/a.py…\"",
       "message": "src/a.py is not a file of the review"
     },
     {
@@ -339,6 +339,10 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > <h1>",
       "message": "a tour has one <h1>, its title"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tree paths=\"app.py\"",
+      "message": "a diffle-tree takes a title: what its files are, such as Server · Rust"
     },
     {
       "element": "h2 \"A\" > diffle-tree paths=\"app.py\"",

@@ -66,6 +66,8 @@ their `<h3>` subsections. Each review has one tour.
 - Fold what the main path can do without into a `<details>` that opens with its `<summary>`: an
   edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
   the reviewer needs to follow the change.
+- Give a `diffle-tree` a `title` that says what its files are, such as `Server · Rust`, so two trees
+  side by side read apart at a glance.
 - Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
   `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
   bug or breaking change, and only where the diff supports it.
@@ -325,11 +327,13 @@ Lines of the review's diff, highlighted, with a jump to them. It holds nothing.
 
 #### `diffle-tree`
 
-A directory tree of some files; changed ones show their status. It holds nothing.
+A directory tree of some files under a title; changed ones show their status. It holds nothing.
 
 | Attribute | Required | Meaning |
 |---|---|---|
+| `title` | yes | What its files are, in a few words, as its header: `Server · Rust`. |
 | `paths` | yes | Files of the review, one per line, relative to the repository root. |
+| `icon` | no | A Lucide icon before the title, by its name on lucide.dev. |
 | `root` | no | The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root. |
 
 #### `diffle-jump`
@@ -469,7 +473,7 @@ The plain tags a tour is written in: `h1` titles it, each `h2` starts a section,
 <diffle-diff path="src/login.rs" lines="40-44"></diffle-diff>
 <diffle-callout kind="warning"><p>Sessions issued before the deploy expire at once.</p></diffle-callout>
 <h3>Where the auth code lives</h3>
-<diffle-tree root="src" paths="src/auth.rs
+<diffle-tree title="Auth · Rust" root="src" paths="src/auth.rs
 src/login.rs"></diffle-tree>
 <p>The old check is gone: <diffle-jump path="src/auth.rs" line="30" side="old">see what it did</diffle-jump>.</p>
 ```

@@ -149,6 +149,7 @@ impl Walk {
         let parsed = parse::<TourElement>(tag, attrs).map_err(|message| match (attr(attrs, "title"), tag) {
             (None, "diffle-note") => stepped::UNTITLED.into(),
             (None, "diffle-tab") => tabs::UNTITLED.into(),
+            (None, "diffle-tree") => "a diffle-tree takes a title: what its files are, such as Server · Rust".into(),
             _ => message,
         });
         let Some(rule) = Rule::of(tag) else {
@@ -228,12 +229,7 @@ impl Walk {
                 }
             }
         }
-        let named = match &parsed {
-            Some(TourElement::DiffleIcon { name, .. }) => Some(name.as_str()),
-            Some(TourElement::DiffleCard { icon, .. }) => icon.as_ref().map(|icon| icon.as_str()),
-            _ => None,
-        };
-        if let Some(message) = named.and_then(icon::refusal) {
+        if let Some(message) = parsed.as_ref().and_then(icon::named).and_then(icon::refusal) {
             self.error(node, element.clone(), message);
         }
         if let (Some(parsed), true) = (parsed, fits) {

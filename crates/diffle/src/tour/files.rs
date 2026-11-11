@@ -44,7 +44,7 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
                 needs.push((path.to_string(), Need::Lines { side: side.unwrap_or(Side::New), start, end }));
             }
         }
-        TourElement::DiffleTree { paths, root } => {
+        TourElement::DiffleTree { paths, root, .. } => {
             for path in paths.lines().map(str::trim).filter(|p| !p.is_empty()) {
                 match root.as_deref() {
                     Some(root) if !path.strip_prefix(root).is_some_and(|rest| rest.starts_with('/')) => {
