@@ -57,6 +57,8 @@ their `<h3>` subsections. Each review has one tour.
   diffs and cards with diffs full width: in a row their lines may wrap. A narrow window stacks a
   row's columns.
 - Keep a diff to at most about 12 lines, and split a long story into more sections.
+- Inside a card, a tab, a callout or a `<details>`, where `<h2>` and `<h3>` cannot go, use `<h4>`
+  for a small heading. Group prose with `<div>` only to make one column of a row.
 - Fold what the main path can do without into a `<details>` that opens with its `<summary>`: an
   edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
   the reviewer needs to follow the change.

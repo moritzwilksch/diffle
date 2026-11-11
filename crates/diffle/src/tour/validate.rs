@@ -180,7 +180,8 @@ impl Walk {
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
             Rule::Tabs => {
-                self.parts(dom, tabs::panes(dom, node), rule.inner(place), tag.into(), tabs::check(dom, node, &element))
+                let found = tabs::check(dom, node, &element);
+                self.parts(dom, tabs::panes(dom, node), rule.inner(place), tag.into(), found);
             }
             Rule::Tab => {
                 // Inside a tab, errors name its tabs and the tab itself.

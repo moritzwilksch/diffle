@@ -2999,7 +2999,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "A highlighted aside inside a card. It holds what a card holds, except another callout."
+      "description": "A highlighted aside, a block in the article's flow or in a card. It holds what a card holds, except another callout."
     },
     "TourCard": {
       "type": "object",
@@ -3138,7 +3138,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand."
+      "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it."
     },
     "TourDiff": {
       "type": "object",
@@ -3285,7 +3285,7 @@
             "path"
           ],
           "additionalProperties": false,
-          "description": "A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`."
+          "description": "A button that opens the diff view at a file or a line. Its text is the label, plain text: markup\ninside it is refused. Empty, it shows `path:line`."
         },
         {
           "type": "object",
@@ -3345,7 +3345,7 @@
             "kind"
           ],
           "additionalProperties": false,
-          "description": "A highlighted aside inside a card. It holds what a card holds, except another callout."
+          "description": "A highlighted aside, a block in the article's flow or in a card. It holds what a card holds, except another callout."
         },
         {
           "type": "object",
@@ -3359,7 +3359,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand."
+          "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it."
         },
         {
           "type": "object",
@@ -3727,7 +3727,7 @@
         "path"
       ],
       "additionalProperties": false,
-      "description": "A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`."
+      "description": "A button that opens the diff view at a file or a line. Its text is the label, plain text: markup\ninside it is refused. Empty, it shows `path:line`."
     },
     "TourNote": {
       "type": "object",
@@ -4341,7 +4341,6 @@
         "strong",
         "em",
         "a",
-        "section",
         "div",
         "details",
         "summary",
@@ -4352,7 +4351,7 @@
         "th",
         "td"
       ],
-      "description": "The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the\nwalk, and `h3` a subsection; the rest carry prose, lists and tables, and `details` folds away what\nthe main path can do without, opening with its `summary`. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
+      "description": "The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the\nwalk, and `h3` a subsection; `h4` is a small heading inside a card, a tab, a callout or a\n`details`, where those cannot go. The rest carry prose, lists and tables, and `details` folds away\nwhat the main path can do without, opening with its `summary`. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
     },
     "TourTarget": {
       "oneOf": [

@@ -1175,7 +1175,10 @@ export const TourTreeSchema = z
   })
   .strict();
 
-/** A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`. */
+/**
+ * A button that opens the diff view at a file or a line. Its text is the label, plain text: markup
+ * inside it is refused. Empty, it shows `path:line`.
+ */
 export const TourJumpSchema = z
   .object({
     tag: z.literal('diffle-jump'),
@@ -1207,7 +1210,7 @@ export const TourSymbolSchema = z
   })
   .strict();
 
-/** A highlighted aside inside a card. It holds what a card holds, except another callout. */
+/** A highlighted aside, a block in the article's flow or in a card. It holds what a card holds, except another callout. */
 export const TourCalloutSchema = z
   .object({
     tag: z.literal('diffle-callout'),
@@ -1216,7 +1219,10 @@ export const TourCalloutSchema = z
   })
   .strict();
 
-/** A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand. */
+/**
+ * A simple architecture diagram, a block in the article's flow: one inline `<svg>` of
+ * `TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it.
+ */
 export const TourDiagramSchema = z
   .object({
     tag: z.literal('diffle-diagram'),
@@ -1400,8 +1406,9 @@ export type TourElementTag = TourElement['tag'];
 
 /**
  * The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the
- * walk, and `h3` a subsection; the rest carry prose, lists and tables, and `details` folds away what
- * the main path can do without, opening with its `summary`. They take no
+ * walk, and `h3` a subsection; `h4` is a small heading inside a card, a tab, a callout or a
+ * `details`, where those cannot go. The rest carry prose, lists and tables, and `details` folds away
+ * what the main path can do without, opening with its `summary`. They take no
  * attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take
  * `colspan` and `rowspan` as positive numbers.
  */
@@ -1419,7 +1426,6 @@ export const TourTagSchema = z.enum([
   'strong',
   'em',
   'a',
-  'section',
   'div',
   'details',
   'summary',
