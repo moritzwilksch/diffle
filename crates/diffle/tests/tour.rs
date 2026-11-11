@@ -26,6 +26,8 @@ async fn server() -> TestServer {
 const TOUR: &str = r#"
 <diffle-card id="entry" step="1" title="Where it starts">
   <p>The loader is <strong>new</strong>.</p>
+  <table><thead><tr><th>Before</th><th>After</th></tr></thead>
+  <tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
   <diffle-diff path="app.py" lines="2-3"></diffle-diff>
   <diffle-jump path="app.py" line="2">see it</diffle-jump>
 </diffle-card>
@@ -94,6 +96,7 @@ stray text
   <p onclick="steal()">Hi <a href="javascript:alert(1)">there</a></p>
   <diffle-diff path="missing.py" lines="1-2"></diffle-diff>
   <diffle-diff path="added.py" side="old" lines="1"></diffle-diff>
+  <table><tr><td rowspan="0" align="left">x</td></tr></table>
   <diffle-diff path="app.py" lines="2-9"></diffle-diff>
   <diffle-diff path="app.py" side="old" lines="3"></diffle-diff>
   <diffle-diff path="app.py" lines="5-2"></diffle-diff>

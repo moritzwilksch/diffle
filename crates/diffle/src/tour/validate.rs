@@ -138,10 +138,13 @@ impl Walk {
         }
         for (key, value) in attrs {
             let is_link = known == TourTag::A && key == "href";
-            if !is_link {
-                self.error(node, element.clone(), format!("<{tag}> takes no attribute {key}"));
-            } else if !(value.starts_with("https://") || value.starts_with("http://")) {
+            let is_span = matches!(known, TourTag::Th | TourTag::Td) && matches!(key.as_str(), "colspan" | "rowspan");
+            if is_link && !(value.starts_with("https://") || value.starts_with("http://")) {
                 self.error(node, element.clone(), "href must be an http(s) URL");
+            } else if is_span && !is_count(value) {
+                self.error(node, element.clone(), format!("{key} must be a positive number"));
+            } else if !is_link && !is_span {
+                self.error(node, element.clone(), format!("<{tag}> takes no attribute {key}"));
             }
         }
         self.children(dom, node, place, context);
@@ -284,6 +287,11 @@ fn explain(tag: &str, attrs: &[(String, String)], message: String) -> String {
     // Alone, a bad value fails on its pattern before any missing attribute is noticed.
     let culprit = attrs.iter().find(|a| element_of(tag, std::slice::from_ref(a)).is_err_and(|m| m == message));
     culprit.map_or(message.clone(), |(name, _)| format!("{name}: {message}"))
+}
+
+/// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.
+fn is_count(value: &str) -> bool {
+    value.parse::<u16>().is_ok_and(|n| n > 0) && !value.starts_with('0')
 }
 
 /// An attribute value the schema already matched as a positive number.

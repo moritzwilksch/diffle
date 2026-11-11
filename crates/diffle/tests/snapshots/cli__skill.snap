@@ -125,7 +125,7 @@ A highlighted aside inside a card. It holds what a card holds, except another ca
 
 ### Plain tags
 
-The plain tags a tour may use inside cards, for prose and structure. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`
+The plain tags a tour may use inside cards, for prose, structure and tables. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take `colspan` and `rowspan` as positive numbers. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`, `table`, `thead`, `tbody`, `tr`, `th`, `td`
 
 ### Example
 

@@ -1017,8 +1017,9 @@ export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
 
 /**
- * The plain tags a tour may use inside cards, for prose and structure. They take no attributes,
- * except `a`, which takes an `href` to an `http(s)` URL.
+ * The plain tags a tour may use inside cards, for prose, structure and tables. They take no
+ * attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take
+ * `colspan` and `rowspan` as positive numbers.
  */
 export const TourTagSchema = z.enum([
   'h1',
@@ -1036,6 +1037,12 @@ export const TourTagSchema = z.enum([
   'a',
   'section',
   'div',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
 ]);
 export type TourTag = z.infer<typeof TourTagSchema>;
 

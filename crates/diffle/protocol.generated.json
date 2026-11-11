@@ -3324,9 +3324,15 @@
         "em",
         "a",
         "section",
-        "div"
+        "div",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td"
       ],
-      "description": "The plain tags a tour may use inside cards, for prose and structure. They take no attributes,\nexcept `a`, which takes an `href` to an `http(s)` URL."
+      "description": "The plain tags a tour may use inside cards, for prose, structure and tables. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
     },
     "TourTree": {
       "type": "object",

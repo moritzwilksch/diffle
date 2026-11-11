@@ -37,6 +37,14 @@ expression: refused.json()
       "message": "added.py is not on the old side of the review"
     },
     {
+      "element": "diffle-card#a > <td rowspan=\"0\" align=\"left\">",
+      "message": "rowspan must be a positive number"
+    },
+    {
+      "element": "diffle-card#a > <td rowspan=\"0\" align=\"left\">",
+      "message": "<td> takes no attribute align"
+    },
+    {
       "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"2-9\"",
       "message": "lines 2-9 are past the end of app.py, which has 3 lines on the new side"
     },

@@ -25,6 +25,11 @@ const TOUR = `
 tally/refunds.py
 tally/currency.py"></diffle-tree>
     <p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
+    <table>
+      <thead><tr><th>Kind</th><th>Counts as</th></tr></thead>
+      <tbody><tr><td>sale</td><td>its amount</td></tr><tr><td>refund</td><td>minus its amount</td></tr>
+      <tr><td colspan="2">anything else fails the file</td></tr></tbody>
+    </table>
   </diffle-card>
 </diffle-group>
 `;
@@ -69,6 +74,7 @@ test.describe('the tour', () => {
     await expect(view.getByText('Step 1 of 3')).toBeVisible();
     await steps.getByRole('button', { name: /Unmatched refunds/ }).click();
     await expect(page.locator('[data-card="unmatched"]')).toHaveAttribute('aria-current', 'step');
+    await expect(page.locator('[data-card="layout"]')).toHaveScreenshot('tour-context-card.png');
 
     // A jump leaves for the diff at its line; Ctrl+o comes back to the step it left.
     await page.getByRole('button', { name: 'stops on an empty ledger' }).click();

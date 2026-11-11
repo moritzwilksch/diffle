@@ -8,7 +8,8 @@ import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
 
 /**
- * What a card holds, as React: the plain tags `TourTag` allows (an `a` only to an http(s) URL),
+ * What a card holds, as React: the plain tags `TourTag` allows (an `a` only to an http(s) URL, a
+ * table cell with its spans),
  * the content primitives, and text. Everything else, its attributes included, is left out, so a
  * tour, written by an agent that read untrusted code, can do no more than the catalog says.
  */
@@ -24,7 +25,9 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     const href = node.getAttribute('href');
     const link =
       tag.data === 'a' && href && /^https?:\/\//.test(href) ? { href, target: '_blank', rel: 'noreferrer' } : {};
-    return createElement(tag.data, { key, ...link }, <TourContent of={node} inCallout={inCallout} />);
+    const spans =
+      tag.data === 'th' || tag.data === 'td' ? { colSpan: span(node, 'colspan'), rowSpan: span(node, 'rowspan') } : {};
+    return createElement(tag.data, { key, ...link, ...spans }, <TourContent of={node} inCallout={inCallout} />);
   }
   const element = primitive(node);
   switch (element?.tag) {
@@ -58,4 +61,10 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     default:
       return null;
   }
+}
+
+/** A cell's `colspan` or `rowspan` when it is a positive number. */
+function span(cell: Element, name: string): number | undefined {
+  const value = cell.getAttribute(name);
+  return value && /^[1-9][0-9]*$/.test(value) ? Number(value) : undefined;
 }
