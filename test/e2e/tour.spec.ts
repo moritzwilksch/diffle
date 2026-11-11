@@ -44,6 +44,10 @@ tally/currency.py"></diffle-tree>
   <tr><td><diffle-icon name="circle-minus" tone="error"></diffle-icon> refund</td><td>minus its amount</td></tr>
   <tr><td colspan="2">anything else fails the file</td></tr></tbody>
 </table>
+<p>Each row parses to an entry; a refund carries its kind:</p>
+<diffle-code lang="json" example title="An entry, parsed">
+{ "account": "acme", "description": "gadget", "amount": "80.00", "kind": "refund" }
+</diffle-code>
 <diffle-row>
 <div><p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
 <p>Only the refund check is new.</p></div>
@@ -104,6 +108,7 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 3')).toBeVisible();
     await expect(view.locator('aside[aria-label="danger"]')).toHaveScreenshot('tour-danger.png');
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
+    await expect(view.locator('figure').filter({ hasText: 'Example' })).toHaveScreenshot('tour-example.png');
     await expect(view.locator('.tour-row').filter({ has: page.locator('.tour-diagram') })).toHaveScreenshot(
       'tour-row.png',
     );
