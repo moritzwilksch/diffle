@@ -213,6 +213,18 @@ expression: refused.json()
       "message": "an icon's <svg> holds nothing"
     },
     {
+      "element": "h2 \"A\" > diffle-code lang=\"json\" example=\"\" path=\"app.py\" line=\"2\"",
+      "message": "an example is made up, not from a file: it takes no path or line"
+    },
+    {
+      "element": "h2 \"A\" > diffle-code example=\"\"",
+      "message": "diffle-code takes lang when it has no path to name it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-code lang=\"rust\" title=\"Shape\"",
+      "message": "title names an example: add example, or drop title"
+    },
+    {
       "element": "h2 \"A\" > <h1>",
       "message": "a tour has one <h1>, its title"
     },

@@ -169,16 +169,14 @@ impl Walk {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
                     self.error(node, element.clone(), message);
                 }
+                for message in code::refusals(attrs) {
+                    self.error(node, element.clone(), message);
+                }
                 let path = attr(attrs, "path").map(str::to_owned);
-                if path.is_none() && attr(attrs, "lang").is_none() {
-                    self.error(node, element.clone(), "diffle-code takes lang when it has no path to name it");
-                }
                 let line = attr(attrs, "line").and_then(|l| l.parse().ok());
-                if line.is_some() && path.is_none() {
-                    self.error(node, element.clone(), "line counts in a path: give diffle-code its path");
-                }
+                let example = attr(attrs, "example").is_some();
                 let lines = code::lines(&text_of(dom, node));
-                self.codes.push(Code { node, element: element.clone(), path, line, lines });
+                self.codes.push(Code { node, element: element.clone(), path, line, example, lines });
             }
             Rule::Callout => {
                 let inside = Place { top: false, in_callout: true, ..place };

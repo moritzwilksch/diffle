@@ -2952,13 +2952,22 @@
           "type": "string",
           "pattern": "^[1-9][0-9]*$",
           "description": "Where in `path`, on the new side, its first declaration sits."
+        },
+        "example": {
+          "type": "string",
+          "description": "Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What an example shows, beside its label: `Response to POST /login`."
         }
       },
       "required": [
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. It holds its code as text, `<` written `&lt;`."
+      "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. With `example`, a snippet the agent made up to show how something works\n(data as it flows, a simplified spike, an alternative design), labelled as an example. It holds\nits code as text, `<` written `&lt;`."
     },
     "TourDiagram": {
       "type": "object",
@@ -3230,13 +3239,22 @@
               "type": "string",
               "pattern": "^[1-9][0-9]*$",
               "description": "Where in `path`, on the new side, its first declaration sits."
+            },
+            "example": {
+              "type": "string",
+              "description": "Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What an example shows, beside its label: `Response to POST /login`."
             }
           },
           "required": [
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. It holds its code as text, `<` written `&lt;`."
+          "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. With `example`, a snippet the agent made up to show how something works\n(data as it flows, a simplified spike, an alternative design), labelled as an example. It holds\nits code as text, `<` written `&lt;`."
         },
         {
           "type": "object",

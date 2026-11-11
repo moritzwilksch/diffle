@@ -52,6 +52,14 @@ expression: "pushed.json()[\"warnings\"]"
     "message": "May run past the drawing's right edge"
   },
   {
+    "element": "h2 \"Flow\" > diffle-code lang=\"python\" example=\"\"",
+    "message": "May re-type the diff: 2 of 2 lines match changed lines but for spacing; show changed code with diffle-diff"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-code lang=\"json\" example=\"\"",
+    "message": "Long for an example, at 24 lines: keep only what shows the point"
+  },
+  {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 368 60\">",
     "message": "2 of 3 labelled boxes 28 tall carry an icon: give each one an icon, or none"
   },

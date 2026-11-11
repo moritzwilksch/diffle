@@ -967,7 +967,9 @@ const tourLangSchema = z.string().regex(/^[a-z0-9][a-z0-9+#-]*$/);
 /**
  * Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,
  * never code the diff already shows. Highlighted like the diff; with `path`, framed with the file's
- * path and a jump to it. It holds its code as text, `<` written `&lt;`.
+ * path and a jump to it. With `example`, a snippet the agent made up to show how something works
+ * (data as it flows, a simplified spike, an alternative design), labelled as an example. It holds
+ * its code as text, `<` written `&lt;`.
  */
 export const TourCodeSchema = z
   .object({
@@ -978,6 +980,10 @@ export const TourCodeSchema = z
     path: z.string().min(1).optional(),
     /** Where in `path`, on the new side, its first declaration sits. */
     line: tourNumberSchema.optional(),
+    /** Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`. */
+    example: z.string().optional(),
+    /** What an example shows, beside its label: `Response to POST /login`. */
+    title: z.string().min(1).optional(),
   })
   .strict();
 

@@ -6,13 +6,34 @@ import { TourJump } from './Jump.js';
 
 /**
  * Code the agent wrote, such as an interface or a signature, highlighted like the diff and in its
- * frame; with `path`, under the file's path, its line and a jump there.
+ * frame; with `path`, under the file's path, its line and a jump there. An example the agent made up
+ * says so in its header, beside its title, so it never passes for the repository's code.
  */
-export function TourCode({ code, lang, path, line }: { code: string; lang?: string; path?: string; line?: number }) {
+export function TourCode({
+  code,
+  lang,
+  path,
+  line,
+  example = false,
+  title,
+}: {
+  code: string;
+  lang?: string;
+  path?: string;
+  line?: number;
+  example?: boolean;
+  title?: string;
+}) {
   const theme = useStore((s) => s.theme);
   const language = lang ?? (path ? getFiletypeFromFileName(path) : 'text');
   return (
     <figure className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas">
+      {example && (
+        <figcaption className="flex items-center gap-2 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
+          <span className="shrink-0 rounded-sm bg-hover px-1.5 font-medium text-muted">Example</span>
+          {title && <span className="min-w-0 truncate">{title}</span>}
+        </figcaption>
+      )}
       {path && (
         <figcaption className="flex items-center gap-1.5 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
           <FilePath path={path} className="min-w-0 flex-1" nowrap />

@@ -1,5 +1,5 @@
-//! A `diffle-code` block: the code it holds, and the warnings that keep it to signatures and
-//! interfaces rather than code the diff already shows.
+//! A `diffle-code` block: the code it holds, what its attributes may combine, and the warnings that
+//! keep it to signatures, interfaces and short made-up examples rather than code the diff shows.
 use std::collections::HashSet;
 
 use super::dom::NodeId;
@@ -8,6 +8,8 @@ use crate::protocol::TourError;
 
 /// Past this many lines a block shows more than an interface.
 const LONG: usize = 12;
+/// Past this many lines an example shows more than the point needs.
+const LONG_EXAMPLE: usize = 20;
 /// Keywords after which a declaration names what it declares.
 const DECLARES: &[&str] = &[
     "fn",
@@ -37,7 +39,27 @@ pub struct Code {
     pub element: String,
     pub path: Option<String>,
     pub line: Option<usize>,
+    /// Made up by the agent, not from the repository.
+    pub example: bool,
     pub lines: Vec<String>,
+}
+
+/// Why a `diffle-code` with `attrs` is refused: attributes that do not go together.
+pub fn refusals(attrs: &[(String, String)]) -> Vec<&'static str> {
+    let has = |name: &str| attrs.iter().any(|(key, _)| key == name);
+    let mut found = Vec::new();
+    if has("example") && (has("path") || has("line")) {
+        found.push("an example is made up, not from a file: it takes no path or line");
+    } else if has("line") && !has("path") {
+        found.push("line counts in a path: give diffle-code its path");
+    }
+    if !has("path") && !has("lang") {
+        found.push("diffle-code takes lang when it has no path to name it");
+    }
+    if has("title") && !has("example") {
+        found.push("title names an example: add example, or drop title");
+    }
+    found
 }
 
 /// `text` as lines of code: the blank lines around it dropped, the indentation they share removed.
@@ -80,13 +102,30 @@ pub fn warnings(code: &Code, text: Option<&str>, changed: &HashSet<String>) -> V
         .filter(|l| l.chars().filter(|c| c.is_alphanumeric()).count() >= 3)
         .collect();
     let repeated = telling.iter().filter(|l| changed.contains(**l)).count();
+    // A re-typed excerpt differs in spacing and trailing punctuation only.
+    let loose: HashSet<String> = changed.iter().map(|l| loosely(l)).collect();
+    let retyped = telling.iter().filter(|l| loose.contains(&loosely(l))).count();
     if telling.len() >= 2 && repeated * 2 > telling.len() {
         warn("Repeats the diff: show these lines with diffle-diff".into());
+    } else if telling.len() >= 2 && retyped * 2 >= telling.len() {
+        warn(format!(
+            "May re-type the diff: {retyped} of {} lines match changed lines but for spacing; show changed code with diffle-diff",
+            telling.len()
+        ));
     }
-    if code.lines.len() > LONG {
-        warn(format!("Long for a signature block, at {} lines: show only the interface", code.lines.len()));
+    let n = code.lines.len();
+    if code.example && n > LONG_EXAMPLE {
+        warn(format!("Long for an example, at {n} lines: keep only what shows the point"));
+    } else if !code.example && n > LONG {
+        warn(format!("Long for a signature block, at {n} lines: show only the interface"));
     }
     found
+}
+
+/// `line` without its whitespace and trailing `,` or `;`.
+fn loosely(line: &str) -> String {
+    let squeezed: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+    squeezed.trim_end_matches([',', ';']).to_owned()
 }
 
 /// The name the first declaration in `lines` declares: the word after a keyword such as `fn`.

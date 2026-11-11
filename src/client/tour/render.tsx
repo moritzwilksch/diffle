@@ -76,6 +76,8 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
           lang={element.lang}
           path={element.path}
           line={element.line == null ? undefined : Number(element.line)}
+          example={element.example != null}
+          title={element.title}
         />
       );
     case 'diffle-row':

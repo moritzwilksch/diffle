@@ -53,6 +53,8 @@ const TOUR: &str = r#"
     class Store:
         def get(self, id: int) -&gt; "User": ...
 </diffle-code>
+<p>A lookup answers with the id:</p>
+<diffle-code lang="json" example title="Response to GET /users/7">{ "id": 7 }</diffle-code>
 <h2>Docs</h2>
 <h3>Layout</h3>
 <diffle-tree paths="app.py
@@ -155,6 +157,9 @@ docs/readme.md"></diffle-tree>
   <svg data-lucide="user-icon" x="1" y="1"></svg>
   <svg data-lucide="user" x="1" y="1" width="9"><path d="M0 0 H1"/></svg>
 </svg></diffle-diagram>
+<diffle-code lang="json" example path="app.py" line="2">{}</diffle-code>
+<diffle-code example>{}</diffle-code>
+<diffle-code lang="rust" title="Shape">fn a()</diffle-code>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -225,6 +230,36 @@ m = 13
   <rect x="960" y="24" width="64" height="40"></rect>
   <text x="990" y="88" class="small">ws: tour</text>
 </svg></diffle-diagram>
+<diffle-code lang="python" example>
+def load_user( id ):
+    return  id;
+</diffle-code>
+<diffle-code lang="json" example>
+{
+  "k0": 0,
+  "k1": 1,
+  "k2": 2,
+  "k3": 3,
+  "k4": 4,
+  "k5": 5,
+  "k6": 6,
+  "k7": 7,
+  "k8": 8,
+  "k9": 9,
+  "k10": 10,
+  "k11": 11,
+  "k12": 12,
+  "k13": 13,
+  "k14": 14,
+  "k15": 15,
+  "k16": 16,
+  "k17": 17,
+  "k18": 18,
+  "k19": 19,
+  "k20": 20,
+  "k21": 21,
+}
+</diffle-code>
 <diffle-diagram><svg viewBox="0 0 368 60">
   <rect x="8" y="16" width="96" height="28"/><svg data-lucide="user" x="16" y="20"/><text x="24" y="30">Overlaps</text>
   <rect x="136" y="16" width="96" height="28"/><svg data-lucide="user" x="220" y="22"/><text x="144" y="30">Past</text>
