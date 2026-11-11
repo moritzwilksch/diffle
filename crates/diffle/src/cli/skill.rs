@@ -79,7 +79,8 @@ rationale. Cut filler, stacked hedges, reflexive triads, windups such as \"Here'
 and closing summaries. Skip stock phrasing such as \"delve\", \"robust\", \"seamless\",
 \"crucial\", \"leverage\" and \"it's worth noting\". Use straight quotes, no em dashes, and
 no emoji. A section opens with a sentence or two on what it shows; a card is its title and one or
-two sentences. Let the diff show the code.
+two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
+unless the reviewer asks for them.
 
 ### Diagrams and tables
 
