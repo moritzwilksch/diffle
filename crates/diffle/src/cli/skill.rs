@@ -80,9 +80,11 @@ write no `style`, `fill`, `stroke`, font or marker attributes and no `<defs>`.
 - Make one point per diagram, and draw only the parts it needs. Keep it 960 wide or less.
 - Place parts on a grid: snap to 8, keep one column and row pitch, and give the boxes in a row the
   same height and gaps.
-- Lay out a node from its corner (x, y): its name at (x+12, y+20) in a box 40 tall, or with a
-  detail line at (x+12, y+40) in a box 56 tall. Make it about 24 plus 9 per character wide. Keep
-  names to three words or fewer, in sentence case, without a period.
+- Text is centred vertically on its `y`, not set on a baseline. Lay out a node from its corner
+  (x, y): a lone name at (x+12, y+20) in a box 40 tall, the box's middle; with a detail line at
+  (x+12, y+40), the box is 56 tall. Make the box 24 wide plus about 9 per character of its longest
+  line (10 in `mono`, 8 in `small`), so 12 units of padding stay on each side. Keep names to three
+  words or fewer, in sentence case, without a period.
 - Put a box and its text in a `<g>`, so a tone on the group colors all of it.
 - Keep one main direction of flow. Start and end each line at the middle of a box side, square to
   it, with at most two bends and no crossings. Put a line's label 16 above a horizontal line or 16
