@@ -8,8 +8,8 @@ expression: "pushed.json()[\"warnings\"]"
     "message": "Lines in this diff may wrap: a column in a row of two is about 688 wide"
   },
   {
-    "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",
-    "message": "Is 1000 wide; keep a diagram 960 wide or less"
+    "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 720 40\">",
+    "message": "Is 720 wide; a column in a row of two is about 688, so it shrinks, text and all"
   },
   {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",

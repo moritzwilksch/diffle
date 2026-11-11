@@ -6,8 +6,6 @@ use super::dom::{Dom, Node, NodeId};
 use super::element::label;
 use crate::protocol::TourError;
 
-/// The widest a diagram should be, in units.
-pub const MAX_WIDTH: f64 = 960.0;
 /// The article's width at its widest, and the gap between a row's columns, as `TourPage.tsx` and
 /// `styles/tour.css` lay them out.
 const PAGE_WIDTH: f64 = 1400.0;
@@ -51,8 +49,9 @@ struct Drawing {
     toned: usize,
 }
 
-/// Every layout warning about the `diffle-diagram` at `node`, which warnings name as `element`.
-pub fn warnings(dom: &Dom, node: NodeId, element: &str) -> Vec<(NodeId, TourError)> {
+/// Every layout warning about the `diffle-diagram` at `node`, which warnings name as `element`;
+/// `columns` is the size of the row it sits in, 0 outside one.
+pub fn warnings(dom: &Dom, node: NodeId, element: &str, columns: usize) -> Vec<(NodeId, TourError)> {
     let Some((svg, attrs)) = dom.children(node).iter().find_map(|&c| match dom.node(c) {
         Node::Element { name, attrs } if &*name.local == "svg" => Some((c, attrs)),
         _ => None,
@@ -71,8 +70,16 @@ pub fn warnings(dom: &Dom, node: NodeId, element: &str) -> Vec<(NodeId, TourErro
         found.push((node, TourError { element: element.into(), message }));
     };
     let svg_element = format!("{context}{}", label("svg", attrs));
-    if width > MAX_WIDTH {
-        warn(svg, &svg_element, format!("Is {} wide; keep a diagram {} wide or less", n(width), n(MAX_WIDTH)));
+    let (room, place) = match columns {
+        0 => (PAGE_WIDTH, "the page is at most".to_owned()),
+        _ => (
+            column_width(columns),
+            format!("a column in a row of {} is about", if columns == 2 { "two" } else { "three" }),
+        ),
+    };
+    if width > room.floor() {
+        let message = format!("Is {} wide; {place} {}, so it shrinks, text and all", n(width), n(room.floor()));
+        warn(svg, &svg_element, message);
     }
     if drawing.shapes >= 3 && drawing.toned > drawing.shapes.div_ceil(3) {
         let message = format!(

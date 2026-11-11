@@ -82,7 +82,9 @@ A diagram holds one `<svg viewBox="0 0 <width> <height>">` that you draw by hand
 one pixel. diffle styles it from the classes below and the theme, and draws the arrowheads, so
 write no `style`, `fill`, `stroke`, font or marker attributes and no `<defs>`.
 
-- Make one point per diagram, and draw only the parts it needs. Keep it 960 wide or less.
+- Make one point per diagram, and draw only the parts it needs. It shows at its own width and
+  never larger; keep it 1400 wide or less, the page at its widest, or a row's column width, or it
+  shrinks, text and all.
 - Place parts on a grid: snap to 8, keep one column and row pitch, and give the boxes in a row the
   same height and gaps.
 - Text is centred vertically on its `y`, not set on a baseline. Lay out a node from its corner

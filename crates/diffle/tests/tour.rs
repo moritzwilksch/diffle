@@ -169,6 +169,7 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 /// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
 const CROWDED: &str = r#"<h2>Flow</h2>
 <diffle-row><p>The new line.</p><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-row>
+<diffle-row><p>Too wide for its column.</p><diffle-diagram><svg viewBox="0 0 720 40"></svg></diffle-diagram></diffle-row>
 <diffle-diagram><svg viewBox="0 0 1000 96">
   <rect x="4" y="24" width="100" height="40" class="fill"></rect>
   <text x="54" y="48" class="c small">agent</text>

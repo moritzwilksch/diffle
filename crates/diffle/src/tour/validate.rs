@@ -170,7 +170,7 @@ impl Walk {
             }
             Rule::Diagram => {
                 self.errors.extend(diagram::check(dom, node, &element));
-                self.warnings.extend(layout::warnings(dom, node, &element));
+                self.warnings.extend(layout::warnings(dom, node, &element, self.row));
             }
             Rule::Block | Rule::Symbol => {
                 self.empty(dom, node, tag, &element);
