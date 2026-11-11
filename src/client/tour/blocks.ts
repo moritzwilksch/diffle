@@ -10,6 +10,7 @@ const BLOCKS = new Set([
   'diffle-diff',
   'diffle-walk',
   'diffle-trace',
+  'diffle-tabs',
   'diffle-code',
   'diffle-tree',
   'diffle-callout',

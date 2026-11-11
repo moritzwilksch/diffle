@@ -66,7 +66,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Dropping the tour, or marking all of it stale, once the snapshot moves past the version it was pushed against. Simpler, and it never shows outdated prose, but one fixup commit would wipe out a tour the reviewer was halfway through.
 - **Why:** The agent keeps editing code while the tour is open, and most diffs keep their lines. The stale count tells the reviewer when to ask for a fresh push.
 
-### 9. Fourteen primitives, all structure and no styling knobs
+### 9. Sixteen primitives, all structure and no styling knobs
 
 - **Chosen:**
 
@@ -80,6 +80,8 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-note`    | `lines?`, `title`; holds a sentence of inline prose                     | one step of a walk (its lines lit) or a stepped diagram (decision 22), its text under it                               |
   | `diffle-trace`   | none; holds `diffle-stop`s                                              | a call followed through several places, one stop at a time (decision 23)                                               |
   | `diffle-stop`    | `path`, `line`, `side?`; holds a sentence of inline prose               | one stop of a trace: its line lit among a few around it                                                                |
+  | `diffle-tabs`    | none; holds two to four `diffle-tab`s                                   | alternatives in one block's width, one shown at a time (decision 24)                                                   |
+  | `diffle-tab`     | `title`, `kind?` (`chosen` \| `rejected` \| `example`)                  | one pane of tabs, holding what a card holds                                                                            |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                                    | a directory tree; changed files carry their status from the snapshot                                                   |
   | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
@@ -207,6 +209,12 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** All stops shown at once, one excerpt each. That is a column of diffs, which prose and `diffle-diff` already make.
 - **Why:** A request's path through a handler, a helper and a store reads in call order; one stop at a time keeps the reader on the line that matters at each.
 
+### 24. Tabs set two to four alternatives in one block's width
+
+- **Chosen:** `<diffle-tabs>` holds two to four `<diffle-tab title kind?>` panes, one shown at a time; `kind` (`chosen`, `rejected`, `example`) shows as a chip beside the title, the chosen one in the add tone. A pane holds what a card holds. The validator (`tour/tabs.rs`) refuses fewer than two or more than four tabs, content other than tabs, a tab without `title`, a tab outside tabs, and tabs inside a tab. The tabs take a thread as a whole (label: their titles), a pane's words a selection; a focused thread on a hidden pane shows that pane.
+- **Rejected:** A `diffle-row` of the alternatives. It halves each one's width, and a diff in it wraps.
+- **Why:** A design next to the one it beat, or a payload before and after, reads best in one place, at full width.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -281,6 +289,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 11. Walks: `diffle-walk` and `diffle-note`, the stepper, keys, refusals and warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
 12. Stepped diagrams: `step` on a diagram's groups, its notes. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
 13. Traces: `diffle-trace` and `diffle-stop`. Verify: as slice 12.
+14. Tabs: `diffle-tabs` and `diffle-tab`. Verify: as slice 12.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

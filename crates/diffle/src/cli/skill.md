@@ -46,8 +46,8 @@ their `<h3>` subsections. Each review has one tour.
   explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
   level of the document.
 - Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
-  `diffle-walk`, a `diffle-trace`, a `diffle-diagram`, a table, a `diffle-tree`, a
-  `diffle-callout`. A block sits between paragraphs, never inside one.
+  `diffle-walk`, a `diffle-trace`, a `diffle-tabs`, a `diffle-diagram`, a table, a `diffle-tree`,
+  a `diffle-callout`. A block sits between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
   two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
   inside another, and a heading never goes inside a card.
@@ -118,6 +118,21 @@ needs, about 6 at most. One place read part by part is a walk; one place with a 
 <diffle-stop path="src/routes.rs" line="40">The route reads the token from the header.</diffle-stop>
 <diffle-stop path="src/auth.rs" line="12">Validation compares its expiry with the clock.</diffle-stop>
 </diffle-trace>
+```
+
+### Tabs
+
+Use a `diffle-tabs` to set two to four alternatives in one block's width, one shown at a time: the
+design you chose next to one you rejected, a payload before and after. Each `diffle-tab` takes a
+`title` of a few words and holds what a card holds: prose and blocks, no headings or other tabs.
+Mark a pane with `kind`: `chosen`, `rejected` or `example`. Keep what every reader needs out of
+the tabs a reader may never open; a single alternative is a sentence of prose.
+
+```html
+<diffle-tabs>
+<diffle-tab title="Expire on the server" kind="chosen"><p>Every check compares the expiry with the clock.</p></diffle-tab>
+<diffle-tab title="Expire in the client" kind="rejected"><p>A client with a wrong clock would keep old tokens.</p></diffle-tab>
+</diffle-tabs>
 ```
 
 ### Icons

@@ -9,6 +9,7 @@ import { TourDiff } from './primitives/Diff.js';
 import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
+import { TourTabs } from './primitives/Tabs.js';
 import { TourTree } from './primitives/Tree.js';
 import { TourDiagram } from './steps/StepDiagram.js';
 import { TourTrace } from './steps/Trace.js';
@@ -80,6 +81,8 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     }
     case 'diffle-trace':
       return <TourTrace key={key} source={node} renderNote={noteContent} />;
+    case 'diffle-tabs':
+      return <TourTabs key={key} source={node} renderPane={paneContent} />;
     case 'diffle-tree':
       return <TourTree key={key} paths={element.paths} root={element.root ?? ''} place={placeOf(node)} />;
     case 'diffle-jump': {
@@ -140,6 +143,11 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
 /** A walk's note as inline prose; one function, so a walk reads its notes once per document. */
 function noteContent(note: Element): ReactNode {
   return <TourContent of={note} />;
+}
+
+/** A tab's pane as the article renders a card's content; one function, so tabs read their panes once. */
+function paneContent(tab: Element): ReactNode {
+  return <TourContent of={tab} />;
 }
 
 /** A cell's `colspan` or `rowspan` when it is a positive number. */

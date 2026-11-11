@@ -118,15 +118,13 @@ mod tests {
     fn the_interface_examples_are_ones_the_validator_accepts() {
         let blocks: Vec<&str> =
             super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        assert_eq!(blocks.len(), 6);
-        let walk = format!("<h2>A</h2>{}", blocks[0]);
-        let trace = format!("<h2>A</h2>{}", blocks[1]);
-        let row = format!("<h2>A</h2>{}", blocks[2]);
-        let example = format!("<h2>A</h2>{}", blocks[4]);
+        assert_eq!(blocks.len(), 7);
         let diagram =
-            format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[3]);
-        let steps = format!("<h2>A</h2>{}", blocks[5]);
-        for html in [walk, trace, row, diagram, example, steps] {
+            |b: &str| format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{b}</svg></diffle-diagram>");
+        let whole = |b: &str| format!("<h2>A</h2>{b}");
+        // One block is part of a drawing; the others are whole blocks.
+        let documents = blocks.iter().map(|b| if b.starts_with("<rect") { diagram(b) } else { whole(b) });
+        for html in documents {
             let errors = crate::tour::outline_errors(&html);
             assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
         }

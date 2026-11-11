@@ -84,6 +84,13 @@ tally/currency.py"></diffle-tree>
 <diffle-stop path="tally/ledger.py" line="95">Reading a file parses each CSV row into an entry.</diffle-stop>
 <diffle-stop path="tally/ledger.py" line="77">A row without a <code>kind</code> counts as a sale.</diffle-stop>
 </diffle-trace>
+<p>The check could have read the ledger once:</p>
+<diffle-tabs>
+<diffle-tab title="Two passes" kind="chosen"><p>Sales first, then refunds, so a refund listed before its sale still matches.</p>
+<diffle-diff path="tally/refunds.py" lines="18-22"></diffle-diff></diffle-tab>
+<diffle-tab title="One pass" kind="rejected"><p>One pass flags a refund whose sale comes later in the file.</p></diffle-tab>
+<diffle-tab title="A flagged refund" kind="example"><diffle-code lang="json" example>{ "account": "acme", "description": "gadget", "kind": "refund" }</diffle-code></diffle-tab>
+</diffle-tabs>
 `;
 
 /** Two walks, both in view on a laptop's screen. */
@@ -323,6 +330,25 @@ test.describe('the tour', () => {
     await expect(trace).toHaveScreenshot('tour-trace.png');
     await trace.getByRole('button', { name: /^Stop 3/ }).click();
     await expect(note).toContainText('counts as a sale');
+  });
+
+  test('tabs show one pane at a time, each titled and marked with what it is', async ({ page, diffle }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    await page
+      .getByRole('navigation', { name: 'Contents' })
+      .getByRole('button', { name: /Finding unmatched/ })
+      .click();
+    const tabs = view.locator('.tour-tabs');
+    await tabs.scrollIntoViewIfNeeded();
+    await expect(tabs.getByRole('tabpanel')).toContainText('Sales first, then refunds');
+    await expect(tabs.getByText('Loading…')).toHaveCount(0);
+    await expect(tabs).toHaveScreenshot('tour-tabs.png');
+
+    await tabs.getByRole('tab', { name: /One pass/ }).click();
+    await expect(tabs.getByRole('tab', { name: /One pass/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.getByRole('tabpanel')).toContainText('flags a refund whose sale comes later');
+    await expect(tabs.getByRole('tabpanel')).not.toContainText('Sales first');
   });
 
   test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {
