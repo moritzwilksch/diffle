@@ -243,7 +243,7 @@ impl Walk {
             TourElement::DiffleCard { .. }
             | TourElement::DiffleGroup { .. }
             | TourElement::DiffleCallout { .. }
-            | TourElement::DiffleDiagram {} => {}
+            | TourElement::DiffleDiagram => {}
         }
     }
 

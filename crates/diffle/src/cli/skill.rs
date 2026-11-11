@@ -191,6 +191,7 @@ mod tests {
     #[test]
     fn the_diagram_example_is_one_the_validator_accepts() {
         let card = format!(r#"<diffle-card id="a" title="A">{}</diffle-card>"#, super::DIAGRAM);
-        assert_eq!(crate::tour::outline_errors(&card), []);
+        let errors = crate::tour::outline_errors(&card);
+        assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
     }
 }
