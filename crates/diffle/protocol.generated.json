@@ -3153,6 +3153,20 @@
           ],
           "additionalProperties": false,
           "description": "A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-row"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3267,6 +3281,20 @@
         "tour"
       ],
       "description": "`GET /api/tour`: the review's tour, or null without one."
+    },
+    "TourRow": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-row"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
     },
     "TourSvgClass": {
       "type": "string",

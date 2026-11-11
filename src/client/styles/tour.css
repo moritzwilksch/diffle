@@ -1,5 +1,6 @@
 /* A tour's article (`TourPage`): prose keeps a reading measure, blocks take the page's width. */
 .tour-article {
+  container-type: inline-size;
   font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--fg);
@@ -47,4 +48,30 @@
 
 .tour-article .tour-card-body {
   padding: 0.75rem 1rem;
+}
+
+/* Two or three columns side by side while the article has room for them, stacked below that.
+   The gap is `ROW_GAP` in crates/diffle/src/tour/layout.rs, which words a diff's wrap warning. */
+.tour-row {
+  display: grid;
+  gap: 24px;
+  margin: 1.25rem 0;
+}
+
+.tour-row > * {
+  min-width: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+@container (min-width: 760px) {
+  .tour-row[data-columns='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 1040px) {
+  .tour-row[data-columns='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

@@ -30,7 +30,9 @@ tally/currency.py"></diffle-tree>
   <tbody><tr><td>sale</td><td>its amount</td></tr><tr><td>refund</td><td>minus its amount</td></tr>
   <tr><td colspan="2">anything else fails the file</td></tr></tbody>
 </table>
-<p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
+<diffle-row>
+<div><p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
+<p>Only the refund check is new.</p></div>
 <diffle-diagram><svg viewBox="0 0 440 88">
   <g><rect x="24" y="24" width="88" height="40"/><text x="36" y="44" class="bold">CLI</text></g>
   <path d="M112 44 H176" class="arrow"/>
@@ -40,6 +42,7 @@ tally/currency.py"></diffle-tree>
   <text x="296" y="28" class="c small">feeds</text>
   <g class="accent"><rect x="328" y="24" width="88" height="40"/><text x="340" y="44" class="bold">Refunds</text></g>
 </svg></diffle-diagram>
+</diffle-row>
 `;
 
 /** The tour view once every card's lines rendered. */
@@ -83,7 +86,7 @@ test.describe('the tour', () => {
     await contents.getByRole('button', { name: /Unmatched refunds/ }).click();
     await expect(view.getByText('Section 3 of 3')).toBeVisible();
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
-    await expect(view.locator('.tour-diagram')).toHaveScreenshot('tour-diagram.png');
+    await expect(view.locator('.tour-row')).toHaveScreenshot('tour-row.png');
 
     // A jump leaves for the diff at its line; Ctrl+o comes back to the step it left.
     await page.getByRole('button', { name: 'stops on an empty ledger' }).click();

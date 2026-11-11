@@ -56,6 +56,12 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       );
     case 'diffle-diagram':
       return <TourDiagram key={key} of={node} />;
+    case 'diffle-row':
+      return (
+        <div key={key} className="tour-row" data-columns={node.children.length}>
+          {[...node.children].map((column, i) => contentNode(column, i, inCallout))}
+        </div>
+      );
     case 'diffle-card':
       return (
         <TourCard key={key} id={element.id} title={element.title}>

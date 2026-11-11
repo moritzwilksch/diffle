@@ -8,6 +8,16 @@ use crate::protocol::TourError;
 
 /// The widest a diagram should be, in units.
 pub const MAX_WIDTH: f64 = 960.0;
+/// The article's width at its widest, and the gap between a row's columns, as `TourPage.tsx` and
+/// `styles/tour.css` lay them out.
+const PAGE_WIDTH: f64 = 1400.0;
+const ROW_GAP: f64 = 24.0;
+
+/// How wide a column of a row of `columns` is when the page is at its widest.
+pub fn column_width(columns: usize) -> f64 {
+    let n = columns as f64;
+    (PAGE_WIDTH - ROW_GAP * (n - 1.0)) / n
+}
 const GRID: f64 = 8.0;
 const TONES: [&str; 4] = ["accent", "success", "warning", "error"];
 

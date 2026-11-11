@@ -1108,6 +1108,17 @@ export const TourSvgClassSchema = z.enum([
 ]);
 export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
 
+/**
+ * Two or three columns side by side while the window has room, stacked below that, at the top
+ * level. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,
+ * `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
+ */
+export const TourRowSchema = z
+  .object({
+    tag: z.literal('diffle-row'),
+  })
+  .strict();
+
 /** A `diffle-*` element of a tour with its attributes, which are strings as in HTML. */
 export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCardSchema,
@@ -1117,6 +1128,7 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourSymbolSchema,
   TourCalloutSchema,
   TourDiagramSchema,
+  TourRowSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];

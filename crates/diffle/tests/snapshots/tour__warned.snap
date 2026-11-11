@@ -4,6 +4,10 @@ expression: "pushed.json()[\"warnings\"]"
 ---
 [
   {
+    "element": "h2 \"Flow\" > diffle-diff path=\"app.py\" lines=\"2\"",
+    "message": "Lines in this diff may wrap: a column in a row of two is about 688 wide"
+  },
+  {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",
     "message": "Is 1000 wide; keep a diagram 960 wide or less"
   },

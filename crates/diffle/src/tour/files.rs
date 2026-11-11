@@ -1,6 +1,6 @@
 //! What a tour's elements ask of the review's files, and whether the snapshot has it.
 use super::dom::NodeId;
-use crate::protocol::{Side, TourError};
+use crate::protocol::{Side, TourElement, TourError};
 
 /// One element's claim about a file of the review.
 pub struct Reference {
@@ -28,6 +28,54 @@ impl Need {
             Self::Side(side) | Self::Lines { side, .. } | Self::Name { side, .. } => Some(*side),
         }
     }
+}
+
+/// What `element` asks of the review's files, each path with its need, and the reasons it asks
+/// nothing sensible: lines that run backwards, a tree path outside its root.
+pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
+    let mut needs = Vec::new();
+    let mut errors = Vec::new();
+    match element {
+        TourElement::DiffleDiff { path, side, lines } => {
+            let (start, end) =
+                lines.split_once('-').map_or((number(&lines), number(&lines)), |(a, b)| (number(a), number(b)));
+            if start > end {
+                errors.push(format!("lines {} run backwards", *lines));
+            } else {
+                needs.push((path.to_string(), Need::Lines { side: side.unwrap_or(Side::New), start, end }));
+            }
+        }
+        TourElement::DiffleTree { paths, root } => {
+            for path in paths.lines().map(str::trim).filter(|p| !p.is_empty()) {
+                match root.as_deref() {
+                    Some(root) if !path.strip_prefix(root).is_some_and(|rest| rest.starts_with('/')) => {
+                        errors.push(format!("{path} is not under the root {root}"));
+                    }
+                    _ => needs.push((path.to_owned(), Need::File)),
+                }
+            }
+        }
+        TourElement::DiffleJump { path, line, side } => {
+            let side = side.unwrap_or(Side::New);
+            let need =
+                line.map_or(Need::Side(side), |line| Need::Lines { side, start: number(&line), end: number(&line) });
+            needs.push((path.to_string(), need));
+        }
+        TourElement::DiffleSymbol { path, line, name, side } => {
+            let need = Need::Name { side: side.unwrap_or(Side::New), line: number(&line), name: name.to_string() };
+            needs.push((path.to_string(), need));
+        }
+        TourElement::DiffleCard { .. }
+        | TourElement::DiffleCallout { .. }
+        | TourElement::DiffleDiagram
+        | TourElement::DiffleRow => {}
+    }
+    (needs, errors)
+}
+
+/// An attribute value the schema already matched as a positive number.
+fn number(digits: &str) -> usize {
+    digits.parse().unwrap_or(usize::MAX)
 }
 
 /// Why `reference` does not hold, given whether its path is a file of the review and its text on

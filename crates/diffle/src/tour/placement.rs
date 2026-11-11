@@ -27,6 +27,7 @@ impl Place {
 /// What a `diffle-*` tag is, deciding where it may sit.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Rule {
+    Row,
     Card,
     Callout,
     Diagram,
@@ -40,6 +41,7 @@ pub enum Rule {
 impl Rule {
     pub fn of(tag: &str) -> Option<Self> {
         Some(match tag {
+            "diffle-row" => Self::Row,
             "diffle-card" => Self::Card,
             "diffle-callout" => Self::Callout,
             "diffle-diagram" => Self::Diagram,
@@ -52,6 +54,7 @@ impl Rule {
 
     pub fn fits(self, place: Place) -> bool {
         match self {
+            Self::Row => place.top,
             Self::Card => !place.in_text && !place.in_card && !place.in_callout,
             Self::Callout => !place.in_text && !place.in_callout,
             Self::Diagram | Self::Block => !place.in_text,
@@ -61,6 +64,7 @@ impl Rule {
 
     pub fn home(self) -> &'static str {
         match self {
+            Self::Row => "at the top level, between paragraphs",
             Self::Card => "between paragraphs, outside other cards and callouts",
             Self::Callout => "between paragraphs, outside other callouts",
             Self::Diagram | Self::Block => "between paragraphs: it is a block, not part of a line of text",
@@ -76,4 +80,21 @@ pub fn misplaced(tag: &str, place: Place) -> Option<&'static str> {
         "h2" | "h3" if !place.top => Some("a heading sits at the top level, where it starts a section"),
         _ => None,
     }
+}
+
+/// Whether `tag` can be a column of a `diffle-row`: a block, or short prose.
+pub fn is_column(tag: &str) -> bool {
+    matches!(
+        tag,
+        "diffle-card"
+            | "diffle-diff"
+            | "diffle-diagram"
+            | "diffle-tree"
+            | "diffle-callout"
+            | "table"
+            | "div"
+            | "p"
+            | "ul"
+            | "ol"
+    )
 }

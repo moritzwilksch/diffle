@@ -5,10 +5,10 @@ use serde_json::Value;
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
 use super::element::{label, parse, short};
-use super::files::{Need, Reference};
+use super::files::{Reference, asks};
 use super::layout;
-use super::placement::{Place, Rule, misplaced};
-use crate::protocol::{Side, TourElement, TourError, TourTag};
+use super::placement::{Place, Rule, is_column, misplaced};
+use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
 pub struct Outline {
@@ -29,6 +29,8 @@ struct Walk {
     references: Vec<Reference>,
     /// The `h2` the walk is in, which names what errors are about.
     section: Option<String>,
+    /// How many columns the row the walk is in has; 0 outside a row.
+    row: usize,
     /// The card the walk is in, by its `id`.
     card: Option<String>,
     /// Each card's `id`, to find one taken twice.
@@ -156,6 +158,7 @@ impl Walk {
                     );
                 }
             }
+            Rule::Row => self.row(dom, node, place, &element),
             Rule::Callout => {
                 let inside = Place { top: false, in_callout: true, ..place };
                 self.children(dom, node, inside);
@@ -169,55 +172,59 @@ impl Walk {
                 self.errors.extend(diagram::check(dom, node, &element));
                 self.warnings.extend(layout::warnings(dom, node, &element));
             }
-            Rule::Block | Rule::Symbol => self.empty(dom, node, tag, &element),
+            Rule::Block | Rule::Symbol => {
+                self.empty(dom, node, tag, &element);
+                if tag == "diffle-diff" && self.row > 0 {
+                    let message = format!(
+                        "Lines in this diff may wrap: a column in a row of {} is about {} wide",
+                        if self.row == 2 { "two" } else { "three" },
+                        layout::column_width(self.row).round()
+                    );
+                    self.warnings.push((node, TourError { element: element.clone(), message }));
+                }
+            }
         }
         if let (Some(parsed), true) = (parsed, fits) {
             self.refer(node, element, parsed);
         }
     }
 
-    /// Notes what a well-placed element asks of the review's files.
-    fn refer(&mut self, node: NodeId, element: String, parsed: TourElement) {
-        let mut push = |path: &str, need: Need, element: String| {
-            self.references.push(Reference { node, element, path: path.into(), need });
-        };
-        match parsed {
-            TourElement::DiffleDiff { path, side, lines } => {
-                let (start, end) =
-                    lines.split_once('-').map_or((number(&lines), number(&lines)), |(a, b)| (number(a), number(b)));
-                if start > end {
-                    return self.error(node, element, format!("lines {} run backwards", *lines));
+    /// Checks a `diffle-row`'s columns, then what they hold.
+    fn row(&mut self, dom: &Dom, node: NodeId, place: Place, element: &str) {
+        let context = self.context();
+        let mut columns = 0;
+        for &child in dom.children(node) {
+            match dom.node(child) {
+                Node::Text(text) if !text.trim().is_empty() => {
+                    let message = "text in a diffle-row belongs in a column: a <p> or a <div>";
+                    self.error(child, format!("{context}text \"{}\"", short(text.trim())), message);
                 }
-                push(&path, Need::Lines { side: side.unwrap_or(Side::New), start, end }, element);
-            }
-            TourElement::DiffleTree { paths, root } => {
-                let mut outside = Vec::new();
-                for path in paths.lines().map(str::trim).filter(|p| !p.is_empty()) {
-                    match root.as_deref() {
-                        Some(root) if !path.strip_prefix(root).is_some_and(|rest| rest.starts_with('/')) => {
-                            outside.push(format!("{path} is not under the root {root}"));
-                        }
-                        _ => push(path, Need::File, element.clone()),
+                Node::Element { name, attrs } => {
+                    columns += 1;
+                    if !is_column(&name.local) {
+                        let message = "a column of a diffle-row is a block, or prose in a <div>, <p>, <ul> or <ol>";
+                        self.error(child, format!("{context}{}", label(&name.local, attrs)), message);
                     }
                 }
-                for message in outside {
-                    self.error(node, element.clone(), message);
-                }
+                _ => {}
             }
-            TourElement::DiffleJump { path, line, side } => {
-                let side = side.unwrap_or(Side::New);
-                let need = line.map_or(Need::Side(side), |line| Need::Lines {
-                    side,
-                    start: number(&line),
-                    end: number(&line),
-                });
-                push(&path, need, element);
-            }
-            TourElement::DiffleSymbol { path, line, name, side } => {
-                let need = Need::Name { side: side.unwrap_or(Side::New), line: number(&line), name: name.to_string() };
-                push(&path, need, element);
-            }
-            TourElement::DiffleCard { .. } | TourElement::DiffleCallout { .. } | TourElement::DiffleDiagram => {}
+        }
+        if !(2..=3).contains(&columns) {
+            self.error(node, element.into(), format!("a diffle-row holds two or three columns, not {columns}"));
+        }
+        let outer = std::mem::replace(&mut self.row, columns);
+        self.children(dom, node, Place { top: false, ..place });
+        self.row = outer;
+    }
+
+    /// Notes what a well-placed element asks of the review's files.
+    fn refer(&mut self, node: NodeId, element: String, parsed: TourElement) {
+        let (needs, errors) = asks(parsed);
+        for (path, need) in needs {
+            self.references.push(Reference { node, element: element.clone(), path, need });
+        }
+        for message in errors {
+            self.error(node, element.clone(), message);
         }
     }
 
@@ -279,11 +286,6 @@ fn text_of(dom: &Dom, node: NodeId) -> String {
 /// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.
 fn is_count(value: &str) -> bool {
     value.parse::<u16>().is_ok_and(|n| n > 0) && !value.starts_with('0')
-}
-
-/// An attribute value the schema already matched as a positive number.
-fn number(digits: &str) -> usize {
-    digits.parse().unwrap_or(usize::MAX)
 }
 
 fn attr<'a>(attrs: &'a [(String, String)], name: &str) -> Option<&'a str> {

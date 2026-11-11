@@ -33,8 +33,11 @@ const TOUR: &str = r#"
   <p>It replaces <code>old</code>.</p>
   <diffle-diff path="app.py" lines="2-3"></diffle-diff>
 </diffle-card>
-<table><thead><tr><th>Before</th><th>After</th></tr></thead>
-<tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
+<diffle-row>
+  <div><p>The name changes, the file stays.</p></div>
+  <table><thead><tr><th>Before</th><th>After</th></tr></thead>
+  <tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
+</diffle-row>
 <diffle-diagram><svg viewBox="0 0 320 72">
   <g class="accent"><rect x="8" y="16" width="120" height="40"/><text x="20" y="36" class="bold">Loader</text></g>
   <path d="M128 36 H192" class="arrow"/>
@@ -129,6 +132,8 @@ stray text
 <diffle-tree root="src" paths="src/a.py
 docs/readme.md"></diffle-tree>
 <diffle-group title="G"></diffle-group>
+<diffle-row><p>alone</p></diffle-row>
+<diffle-row>loose text<h2>In a row</h2><img src="x.png"><diffle-row><p>a</p><p>b</p></diffle-row></diffle-row>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -162,7 +167,9 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 
 /// The demo tour's first diagram, as an agent drew it before `--skill` said how text sits: labels on
 /// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
-const CROWDED: &str = r#"<h2>Flow</h2><diffle-diagram><svg viewBox="0 0 1000 96">
+const CROWDED: &str = r#"<h2>Flow</h2>
+<diffle-row><p>The new line.</p><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-row>
+<diffle-diagram><svg viewBox="0 0 1000 96">
   <rect x="4" y="24" width="100" height="40" class="fill"></rect>
   <text x="54" y="48" class="c small">agent</text>
   <rect x="248" y="24" width="104" height="40" class="fill accent"></rect>
@@ -212,8 +219,7 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     let warned = tour_cli(&t.path, &["push", "-"], CROWDED);
     assert!(warned.status.success(), "{}", stderr(&warned));
     assert!(
-        stderr(&warned)
-            .starts_with("⚠ the tour was shown, with warnings to judge:\n  h2 \"Flow\" > diffle-diagram > <svg"),
+        stderr(&warned).starts_with("⚠ the tour was shown, with warnings to judge:\n  h2 \"Flow\" > "),
         "{}",
         stderr(&warned)
     );
