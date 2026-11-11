@@ -12,7 +12,7 @@ const TOUR = `
 <p>An <code>Entry</code> is a sale unless its <code>kind</code> says <strong>refund</strong>; a refund counts negative.</p>
 <diffle-diff path="tally/ledger.py" lines="29-34"></diffle-diff>
 <h2>Parsing reads the kind column</h2>
-<diffle-card id="parse" title="A row defaults to a sale">
+<diffle-card id="parse" title="A row defaults to a sale" icon="file-input">
   <p>Any other kind is refused.</p>
   <diffle-diff path="tally/ledger.py" lines="76-79"></diffle-diff>
 </diffle-card>
@@ -33,27 +33,28 @@ class Ledger:
   <rect x="8" y="8" width="280" height="44"/>
   <text x="16" y="22" class="code" lang="python"><tspan x="16" dy="0">def unmatched_refunds(</tspan><tspan x="16" dy="16">    ledger: Ledger) -&gt; list[Entry]</tspan></text>
 </svg></diffle-diagram>
-<h3>Where it lives</h3>
+<h3><diffle-icon name="folder-tree"></diffle-icon> Where it lives</h3>
 <diffle-tree root="tally" paths="tally/ledger.py
 tally/refunds.py
 tally/currency.py"></diffle-tree>
 <p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
 <table>
   <thead><tr><th>Kind</th><th>Counts as</th></tr></thead>
-  <tbody><tr><td>sale</td><td>its amount</td></tr><tr><td>refund</td><td>minus its amount</td></tr>
+  <tbody><tr><td><diffle-icon name="circle-plus" tone="success"></diffle-icon> sale</td><td>its amount</td></tr>
+  <tr><td><diffle-icon name="circle-minus" tone="error"></diffle-icon> refund</td><td>minus its amount</td></tr>
   <tr><td colspan="2">anything else fails the file</td></tr></tbody>
 </table>
 <diffle-row>
 <div><p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
 <p>Only the refund check is new.</p></div>
-<diffle-diagram><svg viewBox="0 0 288 52">
-  <g><rect x="8" y="16" width="64" height="28"/><text x="16" y="30">CLI</text></g>
-  <path d="M72 30 H112" class="arrow"/>
-  <text x="92" y="20" class="c small">reads</text>
-  <g><rect x="112" y="16" width="64" height="28"/><text x="120" y="30">Ledger</text></g>
-  <path d="M176 30 H216" class="arrow"/>
-  <text x="196" y="20" class="c small">feeds</text>
-  <g class="accent"><rect x="216" y="16" width="64" height="28"/><text x="224" y="30">Refunds</text></g>
+<diffle-diagram><svg viewBox="0 0 336 52">
+  <g><rect x="8" y="16" width="80" height="28"/><svg data-lucide="terminal" x="16" y="23"/><text x="36" y="30">CLI</text></g>
+  <path d="M88 30 H128" class="arrow"/>
+  <text x="108" y="20" class="c small">reads</text>
+  <g><rect x="128" y="16" width="80" height="28"/><svg data-lucide="book-open" x="136" y="23"/><text x="156" y="30">Ledger</text></g>
+  <path d="M208 30 H248" class="arrow"/>
+  <text x="228" y="20" class="c small">feeds</text>
+  <g class="accent"><rect x="248" y="16" width="80" height="28"/><svg data-lucide="undo-2" x="256" y="23"/><text x="276" y="30">Refunds</text></g>
 </svg></diffle-diagram>
 </diffle-row>
 `;
@@ -67,6 +68,8 @@ async function showTour(page: Page) {
     await expect(view).toBeVisible({ timeout: 500 });
   }).toPass();
   await expect(view.getByText('Loading…')).toHaveCount(0);
+  // Each icon loads its own chunk; until then its place is empty.
+  await expect(view.locator('.tour-icon:not(:has(svg))')).toHaveCount(0);
   return view;
 }
 
@@ -83,6 +86,7 @@ test.describe('the tour', () => {
     await expect(page.getByText('No tour yet')).toBeHidden();
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
+    await expect(view.locator('.tour-diagram-icon')).toHaveCount(3);
     await expect(page).toHaveScreenshot('tour.png');
     const contents = page.getByRole('navigation', { name: 'Contents' });
     await expect(contents).toMatchAriaSnapshot({ name: 'tour-contents.aria.yml' });
