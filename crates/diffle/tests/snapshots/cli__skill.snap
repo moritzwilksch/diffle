@@ -75,6 +75,14 @@ no emoji. A section opens with a sentence or two on what it shows; a card is its
 two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
 unless the reviewer asks for them.
 
+### Icons
+
+Use a Lucide icon to mark one kind of thing the same way throughout the tour, such as a database
+or a network call; never as decoration. Find names at lucide.dev/icons; a push refuses a name
+diffle does not know and suggests the closest. In text, `<diffle-icon name="database"></diffle-icon>`
+sits at the text's size and colour: in prose, a heading, a table cell or a callout. `tone` colours
+it. A card takes one before its title with `icon`. A diagram takes them too, below.
+
 ### Interfaces
 
 Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
@@ -126,6 +134,10 @@ diffle styles it from the classes below and the theme, and draws the arrowheads,
   Names are regular weight unless you add `bold`. Keep names to three words or fewer, in sentence
   case, without a period.
 - Put a box and its text in a `<g>`, so a tone on the group colors all of it.
+- Draw an icon in a node as `<svg data-lucide="database" x="…" y="…"/>`, 14 square: at (x+8, y+7)
+  beside a lone name in a box 28 tall, or (x+8, y+13) beside a name and detail in a box 40 tall,
+  with the text at x+28 and the box 20 wider. Give every sibling box an icon, or none. It takes
+  its text's colour, or its group's tone.
 - Keep one main direction of flow. Start and end each line at the middle of a box side, square to
   it, with at most two bends and no crossings. Put a line's label 10 above a horizontal line or 8
   right of a vertical one, never on it.
@@ -147,6 +159,7 @@ Each takes the attributes listed; `?` marks an optional one.
 - `line`: `x1`, `y1`, `x2`, `y2`, `class?`
 - `text`: `x`, `y`, `class?`, `lang?`
 - `tspan`: `class?`, `dx?`, `dy?`, `x?`, `y?`
+- `svg` inside the drawing, an icon: `data-lucide`, `x`, `y`, `class?`, `size?`
 
 #### Diagram classes
 
@@ -176,6 +189,7 @@ A framed explainer for one part of the diff, a block in the article's flow: its 
 |---|---|---|
 | `id` | yes | Unique in the tour. Letters, digits, `-` and `_`, starting with a letter. |
 | `title` | yes | What this part of the diff does, as the card's heading. |
+| `icon` | no | A Lucide icon before the title, by its name on lucide.dev. |
 
 #### `diffle-diff`
 
@@ -242,6 +256,15 @@ Code the agent writes: signatures, interfaces, type definitions, the shape of an
 | `lang` | no | The highlighter's language; required without `path`, which otherwise names it. |
 | `line` | no | Where in `path`, on the new side, its first declaration sits. |
 | `path` | no | The file of the review the code comes from, relative to the repository root. |
+
+#### `diffle-icon`
+
+A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and colour. It marks one kind of thing the same way throughout the tour. It holds nothing.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `name` | yes | Its name on lucide.dev: `database`, `shield-check`. |
+| `tone` | no | A colour in place of the text's: `accent`, or `success`, `warning` and `error` for status. |
 
 ### Plain tags
 

@@ -73,7 +73,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
   | Element          | Attributes                                                         | Shows                                                                                                                  |
   | ---------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-  | `diffle-card`    | `id`, `title`                                                      | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                       |
+  | `diffle-card`    | `id`, `title`, `icon?`                                             | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                       |
   | `diffle-code`    | `lang?`, `path?`, `line?`; holds its code as text                  | a signature or interface the agent writes, highlighted in the diff's frame                                             |
   | `diffle-row`     | none; holds two or three columns                                   | blocks or short prose side by side, stacked in a narrow column                                                         |
   | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`) | those diff lines, highlighted, with a jump to them                                                                     |
@@ -82,10 +82,11 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                    | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
   | `diffle-callout` | `kind` (`info` \| `warning` \| `danger`)                           | a highlighted aside                                                                                                    |
   | `diffle-diagram` | none; holds one `<svg viewBox>`                                    | a simple architecture diagram the agent draws by hand, styled by diffle                                                |
+  | `diffle-icon`    | `name`, `tone?` (`accent` \| `success` \| `warning` \| `error`)    | a Lucide icon in a line of text, at its size and colour (decision 20)                                                  |
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
 - **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably. Prose, callouts and blocks share one centred 920px column, as on a well-set page: wider than a prose measure, wide enough that a 100-character line in a card's diff doesn't wrap. A diagram shows at its own width up to the column's, never larger.
-- **Diagrams:** `TourSvgElementSchema` allows `svg` (`viewBox="0 0 <w> <h>"`), `g`, `rect`, `circle`, `ellipse`, `polygon`, `path`, `line`, `polyline`, `text` and `tspan`, each with its geometry and a `class`. `TourSvgClassSchema` is the vocabulary, a subset of the svg-diagram skill's: `arrow`, `arrows`, `dashed`; `bold`, `small`, `mono`, `c`, `e`, `eyebrow`; `fill`, `frame`; `accent`, `success`, `warning`, `error`. `src/client/styles/diagram.css` styles them from the theme tokens, and `src/client/tour/primitives/Diagram.tsx` redraws only what the catalog allows and adds arrowheads in each line's tone. A table compares or maps; a diagram shows how parts connect. A diagram's `text class="code" lang="…"` holds code lines, one `tspan` each, coloured by the diff's highlighter (`primitives/DiagramCode.tsx`).
+- **Diagrams:** `TourSvgElementSchema` allows `svg` (`viewBox="0 0 <w> <h>"`), `g`, `rect`, `circle`, `ellipse`, `polygon`, `path`, `line`, `polyline`, `text` and `tspan`, each with its geometry and a `class`. `TourSvgClassSchema` is the vocabulary, a subset of the svg-diagram skill's: `arrow`, `arrows`, `dashed`; `bold`, `small`, `mono`, `c`, `e`, `eyebrow`; `fill`, `frame`; `accent`, `success`, `warning`, `error`. `src/client/styles/diagram.css` styles them from the theme tokens, and `src/client/tour/primitives/Diagram.tsx` redraws only what the catalog allows and adds arrowheads in each line's tone. A table compares or maps; a diagram shows how parts connect. A diagram's `text class="code" lang="…"` holds code lines, one `tspan` each, coloured by the diff's highlighter (`primitives/DiagramCode.tsx`). An `<svg data-lucide x y size?>` nested in the drawing is a Lucide icon (`TourSvgIconSchema`, decision 20).
 - **Constraint:** `diffle-symbol` takes its colour from `highlightLines` (`src/client/lsp/highlight.tsx`), the shared highlighter and theme that lists outside the diff use, over its line alone, so it needs no language server and works on the old side. Hover and references depend on the language servers. When `lspBlocker` (`src/shared/lsp.ts`) returns a reason, the chip stays coloured code without hover, and its tooltip gives that reason. Servers answer for the new side only, so a symbol on the old side never hovers. Hovering goes through the diff's own `hoverControl` and `HoverTooltip` (`src/client/lsp/HoverTooltip.tsx`) and the store's `requestHover`. A click finds the name on its line as a whole word, asks `POST /api/lsp/references`, and opens the references list the diff's `gA` opens. `diffle --skill` tells agents to mark every symbol their prose names this way and keep `<code>` for paths, commands and literals.
 
 ### 10. The server validates a pushed tour; a bad one fails the CLI with exit 2
@@ -173,6 +174,13 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** The UI first. Without the validator, nothing tells the agent what it got wrong.
 - **Why:** An agent can push and get refusals before any UI exists, which tests the catalog and the validator early.
 
+### 20. Lucide icons by name, in text and in diagrams, each loaded on first use
+
+- **Chosen:** `<diffle-icon name tone?>` sits in a line of text at its size and colour; a card takes `icon` before its title; a diagram takes `<svg data-lucide x y size?>`, 14 square by default, in its text's colour or its group's tone. The names are those `lucide-react` ships: `test/scripts/lucide-icons.test.ts` writes its `dynamicIconImports` keys to `crates/diffle/lucide-icons.generated.txt`, which the validator embeds (`tour/icon.rs`) to refuse an unknown name with the three closest (most shared words, then edit distance, `strsim`). The client loads the name map and then each icon from chunks of their own (`primitives/Icon.tsx`). `--skill` tells the agent to use an icon to mark one kind of thing consistently, never as decoration, and where it sits in a node; the layout warnings (`tour/layout.rs`) check an icon sits inside its box, on its middle and clear of its text, and that labelled boxes of one height carry an icon all or none.
+- **Rejected:** The names as a `z.enum` in the contract. typify would generate a 2,171-variant enum, and serde's refusal would list every name instead of the closest few. Rejected too: importing the map into the main bundle, which added 274 kB (57 kB gzipped) to it.
+- **Why:** An icon marks a kind of thing at a glance, as in the svg-diagram convention. Every name the validator accepts is one the client can load, and the client ships only the icons a tour names.
+- **Cost:** About 2,170 chunks of a few hundred bytes each in the client build (522 files grew to 2,336; 18.3 MB to 19.3 MB on disk).
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -199,6 +207,9 @@ crates/diffle/src/tour/dom.rs                  NEW       html5ever into an arena
 crates/diffle/src/tour/validate.rs             NEW       check against TourElement and TourTag, rows, cross-element rules (decision 10)
 crates/diffle/src/tour/placement.rs            NEW       where each element may sit in the article
 crates/diffle/src/tour/layout.rs               NEW       warnings from a diagram's geometry; the column's widths
+crates/diffle/src/tour/drawing.rs              NEW       a diagram's boxes, labels and icons, as the warnings read them
+crates/diffle/src/tour/icon.rs                 NEW       the Lucide names a tour may use, and the closest to a wrong one
+crates/diffle/lucide-icons.generated.txt       NEW       lucide-react's icon names (test/scripts/lucide-icons.test.ts -u)
 crates/diffle/src/tour/code.rs                 NEW       a diffle-code block's lines and its warnings
 crates/diffle/src/tour/files.rs                NEW       what elements ask of the review's files, checked against the snapshot
 crates/diffle/src/tour/element.rs              NEW       reads an element's attributes through the catalog; names it in errors
@@ -217,7 +228,7 @@ src/client/tour/document.ts                    NEW       DOMParser → title, h2
 src/client/tour/render.tsx                     NEW       the article → allowlisted React (decision 2)
 src/client/tour/excerpt.ts                     NEW       a diff primitive's lines as a one-hunk patch, numbered as in the file
 src/client/tour/state.ts                       NEW       the tour, the section read, stale sections, per-snapshot file reads
-src/client/tour/primitives/                    NEW       Card, Code, Diff, Tree, Jump, Symbol, Callout, Diagram, DiagramCode
+src/client/tour/primitives/                    NEW       Card, Code, Diff, Tree, Jump, Symbol, Callout, Diagram, DiagramCode, Icon
 src/client/styles/diagram.css                  NEW       a diagram's classes, from the theme tokens
 src/client/styles/tour.css                     NEW       the article: column, headings, rhythm, cards, rows
 src/client/tour/Contents.tsx                   NEW       side panel (decision 14)
@@ -237,6 +248,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 6. Warnings on an accepted push. Verify: `pixi run test-rust`.
 7. The article: headings as structure, cards as blocks, `diffle-row`, one centred column. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 8. `diffle-code` and code in diagrams, with their warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
+9. Lucide icons in text, card titles and diagrams, with their name check and layout warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g tour`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

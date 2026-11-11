@@ -82,6 +82,14 @@ no emoji. A section opens with a sentence or two on what it shows; a card is its
 two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
 unless the reviewer asks for them.
 
+### Icons
+
+Use a Lucide icon to mark one kind of thing the same way throughout the tour, such as a database
+or a network call; never as decoration. Find names at lucide.dev/icons; a push refuses a name
+diffle does not know and suggests the closest. In text, `<diffle-icon name=\"database\"></diffle-icon>`
+sits at the text's size and colour: in prose, a heading, a table cell or a callout. `tone` colours
+it. A card takes one before its title with `icon`. A diagram takes them too, below.
+
 ### Interfaces
 
 Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
@@ -133,6 +141,10 @@ diffle styles it from the classes below and the theme, and draws the arrowheads,
   Names are regular weight unless you add `bold`. Keep names to three words or fewer, in sentence
   case, without a period.
 - Put a box and its text in a `<g>`, so a tone on the group colors all of it.
+- Draw an icon in a node as `<svg data-lucide=\"database\" x=\"…\" y=\"…\"/>`, 14 square: at (x+8, y+7)
+  beside a lone name in a box 28 tall, or (x+8, y+13) beside a name and detail in a box 40 tall,
+  with the text at x+28 and the box 20 wider. Give every sibling box an icon, or none. It takes
+  its text's colour, or its group's tone.
 - Keep one main direction of flow. Start and end each line at the middle of a box side, square to
   it, with at most two bends and no crossings. Put a line's label 10 above a horizontal line or 8
   right of a vertical one, never on it.
@@ -176,18 +188,9 @@ pub fn render() -> String {
     out.push_str("\n#### Diagram elements\n\nEach takes the attributes listed; `?` marks an optional one.\n\n");
     for element in defs["TourSvgElement"]["oneOf"].as_array().expect("TourSvgElement is a union") {
         let tag = element["properties"]["tag"]["const"].as_str().expect("each element names its tag");
-        let required: Vec<&str> =
-            element["required"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        let optional = element["properties"].as_object().into_iter().flatten().map(|(name, _)| name.as_str());
-        let optional = optional.filter(|name| *name != "tag" && !required.contains(name));
-        let attributes: Vec<String> = required
-            .iter()
-            .filter(|name| **name != "tag")
-            .map(|name| format!("`{name}`"))
-            .chain(optional.map(|name| format!("`{name}?`")))
-            .collect();
-        let _ = writeln!(out, "- `{tag}`: {}", attributes.join(", "));
+        let _ = writeln!(out, "- `{tag}`: {}", attributes(element));
     }
+    let _ = writeln!(out, "- `svg` inside the drawing, an icon: {}", attributes(&defs["TourSvgIcon"]));
     let _ = write!(
         out,
         "\n#### Diagram classes\n\n{}\n\n#### Diagram example\n\n```html\n{DIAGRAM}\n```\n",
@@ -225,6 +228,20 @@ pub fn render() -> String {
         tags.join(", "),
     );
     out
+}
+
+/// A diagram element's attributes, required first, the optional ones marked `?`.
+fn attributes(element: &Value) -> String {
+    let required: Vec<&str> = element["required"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    let optional = element["properties"].as_object().into_iter().flatten().map(|(name, _)| name.as_str());
+    let optional = optional.filter(|name| *name != "tag" && !required.contains(name));
+    let attributes: Vec<String> = required
+        .iter()
+        .filter(|name| **name != "tag")
+        .map(|name| format!("`{name}`"))
+        .chain(optional.map(|name| format!("`{name}?`")))
+        .collect();
+    attributes.join(", ")
 }
 
 /// A description on one line, as a table cell needs it.
