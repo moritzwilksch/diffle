@@ -89,35 +89,37 @@ to another. Put its caption in the prose before it. A table is plain HTML:
 `table`, `thead`, `tbody`, `tr`, `th` and `td`, with `colspan` and `rowspan` on a cell.
 
 A diagram holds one `<svg viewBox=\"0 0 <width> <height>\">` that you draw by hand; one unit is
-one pixel. diffle styles it from the classes below and the theme, and draws the arrowheads, so
-write no `style`, `fill`, `stroke`, font or marker attributes and no `<defs>`.
+one pixel, and the text takes the UI's own fonts and sizes, small enough to fit many parts across.
+diffle styles it from the classes below and the theme, and draws the arrowheads, so write no
+`style`, `fill`, `stroke`, font or marker attributes and no `<defs>`.
 
 - Make one point per diagram, and draw only the parts it needs. It shows at its own width and
   never larger; keep it 920 wide or less, the page's column, or a row's column width, or it
-  shrinks, text and all.
-- Place parts on a grid: snap to 8, keep one column and row pitch, and give the boxes in a row the
-  same height and gaps.
+  shrinks, text and all. 920 holds seven 96-wide boxes with 32 between them.
+- Place parts on a grid: snap to 4, keep one column and row pitch, and give the boxes in a row the
+  same height and gaps; 24 to 40 between boxes reads well.
 - Text is centred vertically on its `y`, not set on a baseline. Lay out a node from its corner
-  (x, y): a lone name at (x+12, y+20) in a box 40 tall, the box's middle; with a detail line at
-  (x+12, y+40), the box is 56 tall. Make the box 24 wide plus about 9 per character of its longest
-  line (10 in `mono`, 8 in `small`), so 12 units of padding stay on each side. Keep names to three
-  words or fewer, in sentence case, without a period.
+  (x, y): a lone name at (x+8, y+14) in a box 28 tall, the box's middle; with a detail line, the
+  name at (x+8, y+12) and the detail at (x+8, y+28) in a box 40 tall. Make the box 16 wide plus 6
+  per character of its longest line (5.5 in `small`), so 8 units of padding stay on each side.
+  Names are regular weight unless you add `bold`. Keep names to three words or fewer, in sentence
+  case, without a period.
 - Put a box and its text in a `<g>`, so a tone on the group colors all of it.
 - Keep one main direction of flow. Start and end each line at the middle of a box side, square to
-  it, with at most two bends and no crossings. Put a line's label 16 above a horizontal line or 16
+  it, with at most two bends and no crossings. Put a line's label 10 above a horizontal line or 8
   right of a vertical one, never on it.
-- Name a region with a `frame` rect and an `eyebrow` text at (x+16, y+20).
+- Name a region with a `frame` rect and an `eyebrow` text at (x+8, y+12).
 - Tone at most about a third of the nodes, and only those the point is about.
 ";
 
-const DIAGRAM: &str = r#"<diffle-diagram><svg viewBox="0 0 560 88">
-  <g><rect x="24" y="24" width="128" height="40"/><text x="36" y="44" class="bold">Login</text></g>
-  <path d="M152 44 H216" class="arrow"/>
-  <text x="184" y="28" class="c small">checks</text>
-  <g class="accent"><rect x="216" y="24" width="128" height="40"/><text x="228" y="44" class="bold">Validate</text></g>
-  <path d="M344 44 H408" class="arrow"/>
-  <text x="376" y="28" class="c small">reads</text>
-  <g><rect x="408" y="24" width="128" height="40"/><text x="420" y="44" class="bold">Token store</text></g>
+const DIAGRAM: &str = r#"<diffle-diagram><svg viewBox="0 0 360 52">
+  <g><rect x="8" y="16" width="88" height="28"/><text x="16" y="30">Login</text></g>
+  <path d="M96 30 H136" class="arrow"/>
+  <text x="116" y="20" class="c small">checks</text>
+  <g class="accent"><rect x="136" y="16" width="88" height="28"/><text x="144" y="30">Validate</text></g>
+  <path d="M224 30 H264" class="arrow"/>
+  <text x="244" y="20" class="c small">reads</text>
+  <g><rect x="264" y="16" width="88" height="28"/><text x="272" y="30">Token store</text></g>
 </svg></diffle-diagram>"#;
 
 const EXAMPLE: &str = r#"<h1>Tokens expire</h1>

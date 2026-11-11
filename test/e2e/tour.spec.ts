@@ -34,14 +34,14 @@ tally/currency.py"></diffle-tree>
 <diffle-row>
 <div><p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
 <p>Only the refund check is new.</p></div>
-<diffle-diagram><svg viewBox="0 0 440 88">
-  <g><rect x="24" y="24" width="88" height="40"/><text x="36" y="44" class="bold">CLI</text></g>
-  <path d="M112 44 H176" class="arrow"/>
-  <text x="144" y="28" class="c small">reads</text>
-  <g><rect x="176" y="24" width="88" height="40"/><text x="188" y="44" class="bold">Ledger</text></g>
-  <path d="M264 44 H328" class="arrow"/>
-  <text x="296" y="28" class="c small">feeds</text>
-  <g class="accent"><rect x="328" y="24" width="88" height="40"/><text x="340" y="44" class="bold">Refunds</text></g>
+<diffle-diagram><svg viewBox="0 0 288 52">
+  <g><rect x="8" y="16" width="64" height="28"/><text x="16" y="30">CLI</text></g>
+  <path d="M72 30 H112" class="arrow"/>
+  <text x="92" y="20" class="c small">reads</text>
+  <g><rect x="112" y="16" width="64" height="28"/><text x="120" y="30">Ledger</text></g>
+  <path d="M176 30 H216" class="arrow"/>
+  <text x="196" y="20" class="c small">feeds</text>
+  <g class="accent"><rect x="216" y="16" width="64" height="28"/><text x="224" y="30">Refunds</text></g>
 </svg></diffle-diagram>
 </diffle-row>
 `;

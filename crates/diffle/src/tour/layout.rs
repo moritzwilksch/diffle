@@ -16,7 +16,7 @@ pub fn column_width(columns: usize) -> f64 {
     let n = columns as f64;
     (PAGE_WIDTH - ROW_GAP * (n - 1.0)) / n
 }
-const GRID: f64 = 8.0;
+const GRID: f64 = 4.0;
 const TONES: [&str; 4] = ["accent", "success", "warning", "error"];
 
 struct Rect {
@@ -95,7 +95,7 @@ pub fn warnings(dom: &Dom, node: NodeId, element: &str, columns: usize) -> Vec<(
             .map(|(name, v)| format!("{name} {}", n(v)))
             .collect();
         if !off.is_empty() {
-            warn(rect.node, &rect.element, format!("Is off the 8-unit grid: {}", off.join(", ")));
+            warn(rect.node, &rect.element, format!("Is off the 4-unit grid: {}", off.join(", ")));
         }
         if rect.x < 0.0 || rect.y < 0.0 || rect.x + rect.w > width || rect.y + rect.h > height {
             let message = format!(
@@ -193,16 +193,10 @@ impl Drawing {
     }
 }
 
-/// A label's width by the `--skill` estimate: per character 9 units, 10 in `mono`, 8 in `small`
-/// and `eyebrow`; a `tspan` adds its own classes to its text's.
+/// A label's width by the `--skill` estimate, measured from Chromium's rendering of the UI fonts:
+/// per character 6 units, 5.5 in `small` and `eyebrow`; a `tspan` adds its own classes to its text's.
 fn width(dom: &Dom, node: NodeId, classes: &[&str]) -> f64 {
-    let per = if classes.iter().any(|c| matches!(*c, "small" | "eyebrow")) {
-        8.0
-    } else if classes.contains(&"mono") {
-        10.0
-    } else {
-        9.0
-    };
+    let per = if classes.iter().any(|c| matches!(*c, "small" | "eyebrow")) { 5.5 } else { 6.0 };
     let mut total = 0.0;
     for &child in dom.children(node) {
         match dom.node(child) {

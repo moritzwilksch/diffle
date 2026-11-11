@@ -26,7 +26,11 @@ export function TourDiagram({ of }: { of: Element }) {
   const width = Number(root.viewBox.split(' ')[2]);
   const head = (tone: Tone | 'ink') => `url(#${CSS.escape(`${id}-${tone}`)})`;
   return (
-    <svg viewBox={root.viewBox} width={width} className="tour-diagram">
+    <svg
+      viewBox={root.viewBox}
+      className="tour-diagram"
+      style={{ width: `calc(${width}px * var(--diffle-text-scale, 1))` }}
+    >
       <defs>
         {Object.entries(HEAD).map(([tone, fill]) => (
           <marker
@@ -35,8 +39,8 @@ export function TourDiagram({ of }: { of: Element }) {
             viewBox="0 0 10 10"
             refX={9}
             refY={5}
-            markerWidth={10}
-            markerHeight={10}
+            markerWidth={7}
+            markerHeight={7}
             markerUnits="userSpaceOnUse"
             orient="auto-start-reverse"
           >
