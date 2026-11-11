@@ -1,30 +1,72 @@
 import { MessageSquarePlus } from 'lucide-react';
 import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { tourLabel } from '@/client/comments/threads.js';
+import { elementKind, tourLabel } from '@/client/comments/threads.js';
 import { CommentCard } from '@/client/review/CommentCard.js';
 import { CommentComposer } from '@/client/review/CommentComposer.js';
-import type { TourDraft } from '@/client/store.js';
+import { useStore, type TourDraft } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 import { anchorTop, selectionTarget } from './anchor.js';
 import { commentOnSelection, DRAFT, type TourThread, useActiveCard, useTourDraft, useTourThreads } from './comments.js';
+import { sourceAt, sourceLabel } from './blocks.js';
 import { placeCards } from './placement.js';
+import { useTour } from './state.js';
 
-/** The composer's header: the words or the element the draft is on. */
-function draftLabel(draft: TourDraft): string {
-  const target = draft.target.on === 'text' ? draft.target : { on: 'element' as const, label: '' };
-  return tourLabel({
-    kind: 'tour',
-    node: draft.node,
-    section: '',
-    element: '',
-    target,
-  });
+/** The composer's header: the words or the element the draft is on, read from the tour's `body`. */
+function draftLabel(draft: TourDraft, body: Element | null): string {
+  const source = body && sourceAt(body, draft.node);
+  const target =
+    draft.target.on === 'text' ? draft.target : { on: 'element' as const, label: source ? sourceLabel(source) : '' };
+  return tourLabel({ kind: 'tour', node: draft.node, section: '', element: source?.localName ?? '', target });
 }
 
 /** One card in the margin or inline: a thread, or the draft. */
 function Card({ id, thread, draft }: { id: string; thread?: TourThread; draft?: TourDraft }): ReactNode {
-  if (thread) return <CommentCard thread={thread} />;
-  return draft ? <CommentComposer key={id} label={draftLabel(draft)} /> : null;
+  const body = useTour((s) => (s.load.state === 'ready' ? s.load.doc.body : null));
+  // Flush with the margin or the column, where the diff indents them from its gutter.
+  if (thread) return <CommentCard thread={thread} className="mx-0" />;
+  return draft ? <CommentComposer key={id} label={draftLabel(draft, body)} className="mx-0" /> : null;
+}
+
+/** A block the pointer is over, which takes a thread as a whole. */
+export interface HoveredBlock {
+  el: Element;
+  node: number[];
+  /** Its source tag, which names its kind. */
+  tag: string;
+}
+
+/**
+ * A button to comment on the hovered block as a whole, in `container` (positioned): level with its
+ * top at the margin's `edge`, or just under its bottom-right corner (inline), clear of what it holds.
+ */
+export function BlockComment({
+  block,
+  container,
+  at,
+}: {
+  block: HoveredBlock | null;
+  container: RefObject<HTMLElement | null>;
+  at: 'edge' | 'end';
+}) {
+  const drafting = useTourDraft() != null;
+  const box = container.current?.getBoundingClientRect();
+  if (!block || drafting || !box || document.getSelection()?.isCollapsed === false) return null;
+  const rect = block.el.getBoundingClientRect();
+  const kind = elementKind(block.tag);
+  const spot =
+    at === 'edge'
+      ? { top: rect.top - box.top, left: 0 }
+      : { top: rect.bottom - box.top + 2, left: rect.right - box.left, transform: 'translateX(-100%)' };
+  return (
+    <Button
+      className="tour-comment-button"
+      style={spot}
+      onClick={() => useStore.getState().openTourDraft(block.node, { on: 'element' })}
+      title={`Comment on this ${kind}`}
+    >
+      <MessageSquarePlus size="0.875rem" /> Comment
+    </Button>
+  );
 }
 
 /**
@@ -37,8 +79,10 @@ export function Margin({
   layout,
   onHover,
   hovered,
+  block,
 }: {
   article: HTMLElement | null;
+  block: HoveredBlock | null;
   layout: number;
   onHover: (id: string | null) => void;
   hovered: string | null;
@@ -102,6 +146,7 @@ export function Margin({
         </div>
       ))}
       <SelectionComment article={article} container={rail} at="edge" />
+      <BlockComment block={block} container={rail} at="edge" />
     </div>
   );
 }
@@ -183,7 +228,7 @@ export function StaleThreads() {
       <p>The agent's last push no longer holds what these comments are on.</p>
       {stale.map((t) => (
         <div key={t.id} data-thread={t.id}>
-          <CommentCard thread={t} />
+          <CommentCard thread={t} className="mx-0" />
         </div>
       ))}
     </section>

@@ -73,6 +73,20 @@ const COMMENTED = `
 <p>Any other kind is refused.</p>
 `;
 
+/** A card and a diagram to comment on as a whole. */
+const BLOCKS = `
+<h2>Parsing reads the kind column</h2>
+<diffle-card id="parse" title="A row defaults to a sale">
+  <p>Any other kind is refused.</p>
+  <diffle-diff path="tally/ledger.py" lines="76-79"></diffle-diff>
+</diffle-card>
+<diffle-diagram><svg viewBox="0 0 216 52">
+  <rect x="8" y="16" width="80" height="28"/><text x="48" y="30" class="c">CLI</text>
+  <path d="M88 30 H128" class="arrow"/>
+  <rect x="128" y="16" width="80" height="28"/><text x="168" y="30" class="c">Ledger</text>
+</svg></diffle-diagram>
+`;
+
 /** Selects `words` in the tour's article, as a reader dragging across them would. */
 async function select(page: Page, words: string) {
   await page.evaluate((words) => {
@@ -168,7 +182,7 @@ test.describe('the tour', () => {
       const view = await showTour(page);
       await select(page, 'a refund counts negative');
       const margin = view.getByLabel('Comments');
-      await expect(view.getByRole('button', { name: 'Comment' })).toBeVisible();
+      await expect(view.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
       await page.keyboard.press('c');
       await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
       await page.keyboard.type('Negative in which total?');
@@ -205,6 +219,37 @@ test.describe('the tour', () => {
       await expect(lost).toHaveScreenshot('tour-comment-lost.png');
       await expect(margin.locator('.tour-margin-card')).toHaveCount(0);
     });
+  });
+
+  test('a diagram box takes a comment with a click and a card with its button; a narrow page shows them under their blocks', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, BLOCKS);
+    const view = await showTour(page);
+    await view.locator('.tour-diagram').getByText('Ledger').click();
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Does the ledger check this?');
+    await page.keyboard.press('Control+Enter');
+    await view.locator('[data-card="parse"] p').hover();
+    await view.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Why a sale by default?');
+    await page.keyboard.press('Control+Enter');
+
+    const threads = view.locator('.tour-inline-threads');
+    await expect(threads).toHaveCount(2);
+    await expect(threads.first()).toContainText('card "A row defaults to a sale"');
+    await expect(threads.last()).toContainText('box "Ledger"');
+    const contents = page.getByRole('navigation', { name: 'Contents' });
+    await expect(contents.getByRole('button', { name: /Parsing reads/ })).toContainText('2');
+    await page.mouse.move(1, 1);
+    await expect(page).toHaveScreenshot('tour-comment-inline.png');
+    const prompt = await readPrompt(diffle.url);
+    expect(prompt).toContain(
+      '(tour) 1. Parsing reads the kind column, on the card #parse\n\n> A row defaults to a sale',
+    );
+    expect(prompt).toContain('(tour) 1. Parsing reads the kind column, on a box in the diagram\n\n> Ledger');
   });
 
   test.describe('over the working tree', () => {

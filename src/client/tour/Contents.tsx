@@ -1,4 +1,6 @@
+import { MessageSquare } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { useTourThreads } from './comments.js';
 import { useTour } from './state.js';
 
 const ENTRY =
@@ -6,13 +8,16 @@ const ENTRY =
 
 /**
  * The side panel: the article's table of contents, each `h2` a step of the walk with its `h3`s under
- * it. It marks the section read and those holding a diff whose lines left the review.
+ * it. It marks the section read, those holding a diff whose lines left the review, and how many
+ * comments each holds.
  */
 export function TourContents() {
   const load = useTour((s) => s.load);
   const step = useTour((s) => s.step);
   const stale = useTour((s) => s.stale);
+  const { live } = useTourThreads();
   if (load.state !== 'ready') return null;
+  const comments = (index: number) => live.filter((t) => t.anchor.step === index + 1).length;
   const { title, sections } = load.doc;
   return (
     <nav className="flex h-full min-h-0 flex-col overflow-auto bg-surface p-3" aria-label="Contents">
@@ -32,6 +37,12 @@ export function TourContents() {
             >
               <span className="w-4 shrink-0 text-right text-muted tabular-nums">{section.index + 1}</span>
               <span className="min-w-0 flex-1 leading-5">{section.title}</span>
+              {comments(section.index) > 0 && (
+                <span className="flex shrink-0 items-center gap-0.5 text-[0.6875rem] leading-5 text-muted">
+                  <MessageSquare size="0.6875rem" aria-label="comments" />
+                  {comments(section.index)}
+                </span>
+              )}
               {stale.has(section.index) && (
                 <span className="shrink-0 text-[0.6875rem] leading-5 text-warn" title="A diff in it left the review">
                   stale

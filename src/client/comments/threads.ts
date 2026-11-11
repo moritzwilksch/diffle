@@ -43,11 +43,15 @@ const KINDS: Record<string, string> = {
   table: 'table',
 };
 
+/** What a tour element is to a reader, by its tag: `box`, `card`, `diff`. */
+export function elementKind(tag: string): string {
+  return KINDS[tag] ?? 'element';
+}
+
 /** A tour thread's header: the words it is on, or the element by its kind and label. */
 export function tourLabel(a: TourAnchor): string {
   if (a.target.on === 'text') return `"${cut(a.target.quoted)}"`;
-  const tag = (a.element.split(' > ').pop() ?? '').replace(/^</, '').split(/[ >]/)[0] ?? '';
-  const kind = KINDS[tag] ?? 'element';
+  const kind = elementKind((a.element.split(' > ').pop() ?? '').replace(/^</, '').split(/[ >]/)[0] ?? '');
   return a.target.label ? `${kind} "${cut(a.target.label)}"` : kind;
 }
 

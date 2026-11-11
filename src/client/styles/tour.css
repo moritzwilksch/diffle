@@ -178,11 +178,6 @@
   transition: top 120ms ease;
 }
 
-.tour-margin .tour-margin-card > *,
-.tour-inline-threads > * {
-  margin-inline: 0;
-}
-
 .tour-comment-button {
   position: absolute;
   left: 0;
@@ -220,6 +215,36 @@
   font-size: 0.8125rem;
 }
 
-.tour-stale-threads > div > * {
-  margin-inline: 0;
+/* An element a thread is on as a whole: a block ringed, a diagram's box outlined and its label
+   coloured; the active thread's stronger. A diagram's boxes and labels take a comment with a click. */
+.tour-article [data-comment]:not(rect, text, svg) {
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.tour-article [data-comment-active]:not(rect, text, svg) {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.tour-article svg.tour-diagram[data-comment] {
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  outline-offset: 4px;
+  border-radius: 0.25rem;
+}
+
+.tour-article .tour-diagram :is(rect, text)[data-node] {
+  cursor: pointer;
+}
+
+.tour-article .tour-diagram rect[data-node]:hover,
+.tour-article .tour-diagram rect[data-comment] {
+  stroke: var(--accent);
+}
+
+.tour-article .tour-diagram rect[data-comment-active] {
+  stroke-width: 2;
+}
+
+.tour-article .tour-diagram text[data-comment] {
+  fill: var(--accent);
 }

@@ -13,7 +13,8 @@ import {
   useTourThreads,
 } from './comments.js';
 import type { TourDocument } from './document.js';
-import { InlineThreads, Margin, SelectionComment, StaleThreads } from './Margin.js';
+import { blockAround, shapeAt, useElementMarks } from './blocks.js';
+import { BlockComment, type HoveredBlock, InlineThreads, Margin, SelectionComment, StaleThreads } from './Margin.js';
 import { TourArticle } from './render.js';
 import { useTour } from './state.js';
 
@@ -64,6 +65,7 @@ export function TourPage({ doc }: { doc: TourDocument }) {
   /** Counts the article's resizes: a diff that loads moves what the threads are on. */
   const [layout, setLayout] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [block, setBlock] = useState<HoveredBlock | null>(null);
   const { live } = useTourThreads();
   const draft = useTourDraft();
   const active = useActiveCard(hovered);
@@ -74,6 +76,7 @@ export function TourPage({ doc }: { doc: TourDocument }) {
     [live, draft],
   );
   useTextHighlights(article, anchors, active, layout);
+  useElementMarks(article, anchors, active, layout);
 
   useLayoutEffect(() => {
     const page = ref.current;
@@ -160,13 +163,23 @@ export function TourPage({ doc }: { doc: TourDocument }) {
       onWheel={() => (landing.current = null)}
       onTouchStart={() => (landing.current = null)}
     >
-      <div className="tour-layout" style={{ gap: margin ? MARGIN_GAP : 0 }}>
+      <div className="tour-layout" style={{ gap: margin ? MARGIN_GAP : 0 }} onPointerLeave={() => setBlock(null)}>
         <div ref={columnRef} className="relative min-w-0" style={{ width: column + 2 * GUTTER, paddingInline: GUTTER }}>
           <article
             ref={setArticle}
             className="tour-article markdown"
+            onPointerMove={(e) => {
+              // The last block stays hovered across the gaps, so the pointer can reach its button.
+              const found = blockAround(e.target as Element, doc.body);
+              if (found && found.el !== block?.el) setBlock(found);
+            }}
             onClick={(e) => {
               if (!article || !document.getSelection()?.isCollapsed) return;
+              const target = e.target as Element;
+              // A diagram's box or label takes a comment with a click; the words a thread is on focus it.
+              const svg = target.closest('.tour-diagram');
+              const shape = svg && shapeAt(svg, target, e.clientX, e.clientY);
+              if (shape) return useStore.getState().openTourDraft(shape, { on: 'element' });
               const id = threadAt(article, live, e.clientX, e.clientY);
               if (id) useStore.getState().focusThread(id);
             }}
@@ -175,10 +188,11 @@ export function TourPage({ doc }: { doc: TourDocument }) {
           </article>
           <StaleThreads />
           {!margin && <SelectionComment article={article} container={columnRef} at="end" />}
+          {!margin && <BlockComment block={block} container={columnRef} at="end" />}
         </div>
         {margin && (
           <div style={{ width: `${MARGIN_REM}rem` }} className="shrink-0">
-            <Margin article={article} layout={layout} onHover={setHovered} hovered={hovered} />
+            <Margin article={article} block={block} layout={layout} onHover={setHovered} hovered={hovered} />
           </div>
         )}
       </div>

@@ -27,8 +27,11 @@ import { useStore } from '@/client/store.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
 
-/** A thread rendered inline under its last anchored line: messages, reply composer, resolve. */
-export function CommentCard({ thread }: { thread: CommentThread }) {
+/**
+ * A thread rendered inline under its last anchored line, or beside the tour: messages, reply
+ * composer, resolve. `className` adjusts its outer spacing to where it sits.
+ */
+export function CommentCard({ thread, className }: { thread: CommentThread; className?: string }) {
   const deleteThread = useStore((s) => s.deleteThread);
   const setResolved = useStore((s) => s.setResolved);
   const replying = useStore((s) => s.replyTo === thread.id);
@@ -57,6 +60,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     <div
       className={twMerge(
         `mx-2 my-1 overflow-hidden rounded-md border border-border bg-card p-0 font-sans text-[0.8125rem] shadow-card [&_.markdown]:[word-break:break-word] ${thread.stale ? 'border-dashed' : ''} ${thread.resolved ? 'opacity-70' : ''} ${focused ? 'border-accent shadow-[0_0_0_1px_var(--accent),_var(--review-card-shadow)]' : ''}`,
+        className,
       )}
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">

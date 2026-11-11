@@ -43,7 +43,7 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
   - A heading-only anchor (comment on a section). Too coarse for the screenshot's cases: a phrase and a diagram box.
   - Reusing `path` as the field name. Code reads `anchor.path` as a file path everywhere (Markdown, the panel, `activePath`); `node` makes the compiler find each place that must handle tours.
 - **Why:** `node` finds the element exactly in the tour it was made on; `quoted`, `section` and `element` find it again in a revised tour (decision 2) and tell the agent what it is about (decision 3).
-- **Cost:** The reading-text rule exists twice, `tour/anchor.rs` and `src/client/tour/anchor.ts`. The e2e scenario comments on prose holding a symbol and a jump, and a Rust test relocates the same document.
+- **Cost:** The reading-text rule exists twice, `tour/anchor.rs` and `src/client/tour/anchor.ts`. A Rust test places a selection across a `diffle-symbol`; a client test and the e2e scenario select prose across inline markup.
 
 ### 2. A push relocates tour threads on the server; a clear makes them stale
 
@@ -92,7 +92,7 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
   - **Narrow windows:** the column narrows from 920px to 680px before the rail goes (cards' diffs may wrap there, as in a row). Below `680 + rail`, threads render inline, full width, after the top-level block holding their anchor, as the diff hangs a card under its line.
   - **Contents panel:** unchanged in place; it shows each section's open-thread count. Hiding it (or the file tree) gives the rail room.
   - **Highlights:** text through the CSS Custom Highlight API (no DOM edits in the rendered article); blocks and boxes through a `data-comment` attribute the stylesheet tints. Hovering a card strengthens its anchor's tint; clicking a highlight focuses its card.
-  - **Starting a comment:** a selection in prose shows a comment button in the rail at its top, and `c` opens the composer, as in the diff. Hovering a block shows the same button at its top; a diagram box outlines on hover and a click opens the composer. `Escape` closes it through the store's `escape()`.
+  - **Starting a comment:** a selection in prose shows a Comment button (in the margin level with its first line, or inline just past its end), and `c` opens the composer, as in the diff. Hovering a block shows the same button, at its top in the margin or under its bottom-right corner inline, clear of what it holds. A click on a diagram's box, or its label, opens the composer on the box. `Escape` closes it through the store's `escape()`.
   - **Stale threads:** after the last section, under "Not in this tour", full width; the header counts them beside the stale diffs.
   - The diff view's comment panel lists tour threads; opening one switches to the tour and scrolls its anchor to the gaze line, focusing its card.
 - **Rejected:**
@@ -142,7 +142,9 @@ src/client/api.ts                          MODIFIED  createTourThread
 src/client/comments/threads.ts             NEW       a thread's file, review order, a tour thread's label
 src/client/store.ts, model.ts              MODIFIED  Draft union, composerKey, anchorLabel, submitDraft
 src/client/tour/anchor.ts                  NEW       selection ↔ anchor, reading text, Ranges for highlights
-src/client/tour/Margin.tsx                 NEW       the rail: cards, composer, comment button
+src/client/tour/Margin.tsx                 NEW       the rail, inline and lost threads, the comment buttons
+src/client/tour/comments.ts                NEW       the tour's threads, the active card, text highlights, c on a selection
+src/client/tour/blocks.ts                  NEW       blocks and diagram boxes as whole targets, their marks
 src/client/tour/placement.ts               NEW       cards' tops from anchors and heights (decision 4)
 src/client/tour/render.tsx, primitives/    MODIFIED  data-node on rendered elements and diagram shapes
 src/client/tour/TourPage.tsx, TourView.tsx MODIFIED  column + rail, inline mode, stale group, header count
