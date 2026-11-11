@@ -118,6 +118,24 @@ line, 16 apart, each 6 units per character wide:
 <text x=\"16\" y=\"22\" class=\"code\" lang=\"rust\"><tspan x=\"16\" dy=\"0\">trait TokenStore {</tspan><tspan x=\"16\" dy=\"16\">    fn get(&amp;self, id: &amp;str) -&gt; Token; }</tspan></text>
 ```
 
+### Examples
+
+Add `example` to a `diffle-code` for a snippet you make up, never code from the repository. Use one
+for three things: data as it flows through the system (a request, a response, a token, a config,
+the order of calls), a simplified spike of an idea, or an alternative design the reviewer could
+weigh. diffle labels it as an example, beside its `title`. Changed code always goes in a
+`diffle-diff`, never re-typed in an example; signatures stay a plain `diffle-code`. Keep an example
+minimal and realistic: the fields the point needs, with plain placeholder values, and never a real
+secret. An example takes `lang` and no `path` or `line`. diffle warns when it may re-type the diff
+or runs past about 20 lines.
+
+```html
+<p>A login answers with a token the next request carries:</p>
+<diffle-code lang=\"json\" example title=\"Response to POST /login\">
+{ \"token\": \"eyJhbGciOi...\", \"expiresAt\": \"2026-01-01T12:00:00Z\" }
+</diffle-code>
+```
+
 ### Diagrams and tables
 
 Draw a `diffle-diagram` to show how parts connect; use a table to compare options or map one thing
@@ -260,11 +278,12 @@ mod tests {
     fn the_interface_examples_are_ones_the_validator_accepts() {
         let blocks: Vec<&str> =
             super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks.len(), 3);
         let row = format!("<h2>A</h2>{}", blocks[0]);
+        let example = format!("<h2>A</h2>{}", blocks[2]);
         let diagram =
             format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[1]);
-        for html in [row, diagram] {
+        for html in [row, diagram, example] {
             let errors = crate::tour::outline_errors(&html);
             assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
         }

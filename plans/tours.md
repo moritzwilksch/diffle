@@ -71,18 +71,18 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 - **Chosen:**
 
-  | Element          | Attributes                                                         | Shows                                                                                                                  |
-  | ---------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-  | `diffle-card`    | `id`, `title`, `icon?`                                             | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                       |
-  | `diffle-code`    | `lang?`, `path?`, `line?`; holds its code as text                  | a signature or interface the agent writes, highlighted in the diff's frame                                             |
-  | `diffle-row`     | none; holds two or three columns                                   | blocks or short prose side by side, stacked in a narrow column                                                         |
-  | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`) | those diff lines, highlighted, with a jump to them                                                                     |
-  | `diffle-tree`    | `paths` (newline-separated), `root?`                               | a directory tree; changed files carry their status from the snapshot                                                   |
-  | `diffle-jump`    | `path`, `line?`, `side?`                                           | a button into the diff view                                                                                            |
-  | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                    | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
-  | `diffle-callout` | `kind` (`info` \| `warning` \| `danger`)                           | a highlighted aside                                                                                                    |
-  | `diffle-diagram` | none; holds one `<svg viewBox>`                                    | a simple architecture diagram the agent draws by hand, styled by diffle                                                |
-  | `diffle-icon`    | `name`, `tone?` (`accent` \| `success` \| `warning` \| `error`)    | a Lucide icon in a line of text, at its size and colour (decision 20)                                                  |
+  | Element          | Attributes                                                              | Shows                                                                                                                  |
+  | ---------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+  | `diffle-card`    | `id`, `title`, `icon?`                                                  | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                       |
+  | `diffle-code`    | `lang?`, `path?`, `line?`, `example?`, `title?`; holds its code as text | a signature or interface the agent writes, or a made-up example, highlighted in the diff's frame                       |
+  | `diffle-row`     | none; holds two or three columns                                        | blocks or short prose side by side, stacked in a narrow column                                                         |
+  | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`)      | those diff lines, highlighted, with a jump to them                                                                     |
+  | `diffle-tree`    | `paths` (newline-separated), `root?`                                    | a directory tree; changed files carry their status from the snapshot                                                   |
+  | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
+  | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
+  | `diffle-callout` | `kind` (`info` \| `warning` \| `danger`)                                | a highlighted aside                                                                                                    |
+  | `diffle-diagram` | none; holds one `<svg viewBox>`                                         | a simple architecture diagram the agent draws by hand, styled by diffle                                                |
+  | `diffle-icon`    | `name`, `tone?` (`accent` \| `success` \| `warning` \| `error`)         | a Lucide icon in a line of text, at its size and colour (decision 20)                                                  |
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
 - **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably. Prose, callouts and blocks share one centred 920px column, as on a well-set page: wider than a prose measure, wide enough that a 100-character line in a card's diff doesn't wrap. A diagram shows at its own width up to the column's, never larger.
@@ -167,6 +167,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Chosen:** `diffle-code` holds code the agent writes, for signatures, interfaces, type definitions and the shape of an abstraction: what a collaborator offers and takes, bodies elided, private details left out. diffle highlights it with the diff's highlighter (`highlightCode` in `src/client/lsp/highlight.tsx`) in the diff's frame, and warns when it repeats the diff, runs long, or misses its line (decision 10). Changed code stays in `diffle-diff`.
 - **Rejected:** Signatures filled from the language servers (hover or document symbols for a path and line). The reviewer's call: every tour feature must work without a language server, and the agent already knows which parts of an interface matter.
 - **Why:** A walk through collaborators needs more than a diagram's names and less than the whole diff; the agent can write exactly that.
+- **Examples:** `example` (an HTML boolean attribute) marks a `diffle-code` the agent made up: data as it flows (a request, a response, a token, a config, the order of calls), a simplified spike, or an alternative design. The header labels it "Example", beside its `title`, so it never passes for the repository's code; it takes `lang` and refuses `path` and `line`. The reviewer's call: an example shows how information flows, and is never a way to rehash the diff, so changed code stays in `diffle-diff`. Warnings: "Repeats the diff" when most lines are changed lines verbatim, "May re-type the diff" when half or more match but for spacing and trailing `,` or `;` (every `diffle-code`), and past 20 lines for an example instead of the 12 of a signature block. Rejected: a separate `diffle-example` element; it would duplicate the highlighting, the frame and the diff check for one flag's worth of difference.
 
 ### 19. Ship in slices, the server first
 
@@ -249,6 +250,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 7. The article: headings as structure, cards as blocks, `diffle-row`, one centred column. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 8. `diffle-code` and code in diagrams, with their warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 9. Lucide icons in text, card titles and diagrams, with their name check and layout warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g tour`.
+10. Examples: `diffle-code example`, its label, refusals and warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

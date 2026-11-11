@@ -111,6 +111,24 @@ line, 16 apart, each 6 units per character wide:
 <text x="16" y="22" class="code" lang="rust"><tspan x="16" dy="0">trait TokenStore {</tspan><tspan x="16" dy="16">    fn get(&amp;self, id: &amp;str) -&gt; Token; }</tspan></text>
 ```
 
+### Examples
+
+Add `example` to a `diffle-code` for a snippet you make up, never code from the repository. Use one
+for three things: data as it flows through the system (a request, a response, a token, a config,
+the order of calls), a simplified spike of an idea, or an alternative design the reviewer could
+weigh. diffle labels it as an example, beside its `title`. Changed code always goes in a
+`diffle-diff`, never re-typed in an example; signatures stay a plain `diffle-code`. Keep an example
+minimal and realistic: the fields the point needs, with plain placeholder values, and never a real
+secret. An example takes `lang` and no `path` or `line`. diffle warns when it may re-type the diff
+or runs past about 20 lines.
+
+```html
+<p>A login answers with a token the next request carries:</p>
+<diffle-code lang="json" example title="Response to POST /login">
+{ "token": "eyJhbGciOi...", "expiresAt": "2026-01-01T12:00:00Z" }
+</diffle-code>
+```
+
 ### Diagrams and tables
 
 Draw a `diffle-diagram` to show how parts connect; use a table to compare options or map one thing
@@ -249,13 +267,15 @@ Two or three columns side by side while the window has room, stacked below that,
 
 #### `diffle-code`
 
-Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction, never code the diff already shows. Highlighted like the diff; with `path`, framed with the file's path and a jump to it. It holds its code as text, `<` written `&lt;`.
+Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction, never code the diff already shows. Highlighted like the diff; with `path`, framed with the file's path and a jump to it. With `example`, a snippet the agent made up to show how something works (data as it flows, a simplified spike, an alternative design), labelled as an example. It holds its code as text, `<` written `&lt;`.
 
 | Attribute | Required | Meaning |
 |---|---|---|
+| `example` | no | Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`. |
 | `lang` | no | The highlighter's language; required without `path`, which otherwise names it. |
 | `line` | no | Where in `path`, on the new side, its first declaration sits. |
 | `path` | no | The file of the review the code comes from, relative to the repository root. |
+| `title` | no | What an example shows, beside its label: `Response to POST /login`. |
 
 #### `diffle-icon`
 
