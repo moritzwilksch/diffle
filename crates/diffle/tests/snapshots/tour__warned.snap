@@ -4,6 +4,14 @@ expression: "pushed.json()[\"warnings\"]"
 ---
 [
   {
+    "element": "h2 \"Flow\" > diffle-walk path=\"app.py\" lines=\"1-2\" > diffle-note lines=\"1-2\" title=\"The loader\"",
+    "message": "May be long for a note, at about 3 sentences: keep it to one or two"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-walk path=\"app.py\" lines=\"1-2\" > diffle-note lines=\"1-2\" title=\"The loader\"",
+    "message": "Shares lines with note 1 (line 1): the reader sees them lit twice"
+  },
+  {
     "element": "h2 \"Flow\" > diffle-diff path=\"app.py\" lines=\"2\"",
     "message": "Lines in this diff may wrap: a column in a row of two is about 448 wide"
   },

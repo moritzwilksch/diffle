@@ -10,6 +10,7 @@ use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
 use super::placement::{Place, Rule, is_column, misplaced};
+use super::walk;
 use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
@@ -38,6 +39,8 @@ struct Walk {
     row: usize,
     /// The card the walk is in, by its `id`.
     card: Option<String>,
+    /// The `diffle-walk` the walk is in, as errors name it.
+    walk: Option<String>,
     /// Each card's `id`, to find one taken twice.
     ids: Vec<(NodeId, String, String)>,
     /// Each `h1`, and whether an `h2` came before it.
@@ -68,7 +71,8 @@ impl Walk {
     fn context(&self) -> String {
         let section = self.section.as_ref().map_or_else(String::new, |title| format!("h2 \"{title}\" > "));
         let card = self.card.as_ref().map_or_else(String::new, |id| format!("diffle-card#{id} > "));
-        format!("{section}{card}")
+        let walk = self.walk.as_ref().map_or_else(String::new, |walk| format!("{walk} > "));
+        format!("{section}{card}{walk}")
     }
 
     fn visit(&mut self, dom: &Dom, node: NodeId, place: Place) {
@@ -116,7 +120,7 @@ impl Walk {
             "h1" => self.titles.push((node, element.clone(), self.sections > 0)),
             "h2" => {
                 self.sections += 1;
-                self.section = Some(short(text_of(dom, node).trim()));
+                self.section = Some(short(dom.text(node).trim()));
             }
             _ => {}
         }
@@ -136,7 +140,10 @@ impl Walk {
 
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
         let element = format!("{context}{}", label(tag, attrs));
-        let parsed = parse::<TourElement>(tag, attrs);
+        let parsed = parse::<TourElement>(tag, attrs).map_err(|message| match attr(attrs, "title") {
+            None if tag == "diffle-note" => walk::UNTITLED.into(),
+            _ => message,
+        });
         let Some(rule) = Rule::of(tag) else {
             return self.error(node, element, parsed.err().unwrap_or_default());
         };
@@ -164,6 +171,17 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
+            Rule::Walk => {
+                let found = walk::check(dom, node, &element, parsed.as_ref());
+                self.errors.extend(found.errors);
+                self.warnings.extend(found.warnings);
+                let outer = self.walk.replace(label(tag, attrs));
+                for note in walk::notes(dom, node) {
+                    self.visit(dom, note, Place { top: false, in_walk: true, ..place });
+                }
+                self.walk = outer;
+            }
+            Rule::Note => self.children(dom, node, Place { top: false, in_text: true, in_walk: false, ..place }),
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
@@ -175,7 +193,7 @@ impl Walk {
                 let path = attr(attrs, "path").map(str::to_owned);
                 let line = attr(attrs, "line").and_then(|l| l.parse().ok());
                 let example = attr(attrs, "example").is_some();
-                let lines = code::lines(&text_of(dom, node));
+                let lines = code::lines(&dom.text(node));
                 self.codes.push(Code { node, element: element.clone(), path, line, example, lines });
             }
             Rule::Callout => {
@@ -296,18 +314,6 @@ fn holds_diff(dom: &Dom, node: NodeId) -> bool {
         Node::Element { name, .. } => &*name.local == "diffle-diff" || holds_diff(dom, c),
         _ => false,
     })
-}
-
-/// The text inside `node`, as a heading reads.
-fn text_of(dom: &Dom, node: NodeId) -> String {
-    dom.children(node)
-        .iter()
-        .map(|&c| match dom.node(c) {
-            Node::Text(text) => text.to_string(),
-            Node::Element { .. } => text_of(dom, c),
-            _ => String::new(),
-        })
-        .collect()
 }
 
 /// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.

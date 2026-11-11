@@ -970,6 +970,8 @@ export type GraphResponse = z.infer<typeof GraphResponseSchema>;
 const tourIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 /** A positive integer, as an HTML attribute spells it. */
 const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
+/** A line range on one side, `40-58`, or one line, `40`. */
+const tourLinesSchema = z.string().regex(/^[1-9][0-9]*(-[1-9][0-9]*)?$/);
 /** A Lucide icon by its name on lucide.dev: `database`, `shield-check`. */
 const tourIconNameSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 
@@ -1012,7 +1014,38 @@ export const TourDiffSchema = z
     /** Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default). */
     side: SideSchema.optional(),
     /** The line range on that side, `40-58`, or one line, `40`. */
-    lines: z.string().regex(/^[1-9][0-9]*(-[1-9][0-9]*)?$/),
+    lines: tourLinesSchema,
+  })
+  .strict();
+
+/**
+ * Lines of the review's diff walked one note at a time, a block in the article's flow: the reader
+ * steps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds
+ * only its notes.
+ */
+export const TourWalkSchema = z
+  .object({
+    tag: z.literal('diffle-walk'),
+    /** A file of the review, relative to the repository root; a renamed file by its new path. */
+    path: z.string().min(1),
+    /** Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+    /** The line range the walk shows, `12-30`. */
+    lines: tourLinesSchema,
+  })
+  .strict();
+
+/**
+ * One step of a `diffle-walk`: the lines it explains and a sentence or two about them, in inline
+ * prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ */
+export const TourNoteSchema = z
+  .object({
+    tag: z.literal('diffle-note'),
+    /** The lines it explains, within its walk's, on the walk's side: `14-17`, or `14`. */
+    lines: tourLinesSchema,
+    /** What these lines do, in a few words: `Record each sale`. */
+    title: z.string().min(1),
   })
   .strict();
 
@@ -1257,6 +1290,8 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourRowSchema,
   TourCodeSchema,
   TourIconSchema,
+  TourWalkSchema,
+  TourNoteSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];

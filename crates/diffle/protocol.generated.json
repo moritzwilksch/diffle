@@ -3371,6 +3371,62 @@
           ],
           "additionalProperties": false,
           "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-walk"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root; a renamed file by its new path."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default)."
+            },
+            "lines": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+              "description": "The line range the walk shows, `12-30`."
+            }
+          },
+          "required": [
+            "tag",
+            "path",
+            "lines"
+          ],
+          "additionalProperties": false,
+          "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-note"
+            },
+            "lines": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+              "description": "The lines it explains, within its walk's, on the walk's side: `14-17`, or `14`."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What these lines do, in a few words: `Record each sale`."
+            }
+          },
+          "required": [
+            "tag",
+            "lines",
+            "title"
+          ],
+          "additionalProperties": false,
+          "description": "One step of a `diffle-walk`: the lines it explains and a sentence or two about them, in inline\nprose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3468,6 +3524,32 @@
       ],
       "additionalProperties": false,
       "description": "A button that opens the diff view at a file or a line. Its text is the label; empty, it shows `path:line`."
+    },
+    "TourNote": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-note"
+        },
+        "lines": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+          "description": "The lines it explains, within its walk's, on the walk's side: `14-17`, or `14`."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What these lines do, in a few words: `Record each sale`."
+        }
+      },
+      "required": [
+        "tag",
+        "lines",
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "One step of a `diffle-walk`: the lines it explains and a sentence or two about them, in inline\nprose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
     },
     "TourPush": {
       "type": "object",
@@ -4141,6 +4223,36 @@
       ],
       "additionalProperties": false,
       "description": "A directory tree of some files; changed ones show their status. It holds nothing."
+    },
+    "TourWalk": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-walk"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root; a renamed file by its new path."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default)."
+        },
+        "lines": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+          "description": "The line range the walk shows, `12-30`."
+        }
+      },
+      "required": [
+        "tag",
+        "path",
+        "lines"
+      ],
+      "additionalProperties": false,
+      "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
     },
     "UserConfig": {
       "type": "object",

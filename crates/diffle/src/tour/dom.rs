@@ -46,6 +46,16 @@ impl Dom {
         self.children(html).iter().copied().find(|&id| self.is(id, local)).expect("head and body")
     }
 
+    /// The plain text under `id`, as a heading or a code block reads.
+    pub fn text(&self, id: NodeId) -> String {
+        let text = |&c: &NodeId| match self.node(c) {
+            Node::Text(t) => t.to_string(),
+            Node::Element { .. } => self.text(c),
+            _ => String::new(),
+        };
+        self.children(id).iter().map(text).collect()
+    }
+
     /// Whether `id` is an HTML element named `local`.
     fn is(&self, id: NodeId, local: &str) -> bool {
         matches!(self.node(id), Node::Element { name, .. } if name.ns == ns!(html) && &*name.local == local)

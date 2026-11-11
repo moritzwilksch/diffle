@@ -36,9 +36,8 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
     let mut needs = Vec::new();
     let mut errors = Vec::new();
     match element {
-        TourElement::DiffleDiff { path, side, lines } => {
-            let (start, end) =
-                lines.split_once('-').map_or((number(&lines), number(&lines)), |(a, b)| (number(a), number(b)));
+        TourElement::DiffleDiff { path, side, lines } | TourElement::DiffleWalk { path, side, lines } => {
+            let (start, end) = span(&lines);
             if start > end {
                 errors.push(format!("lines {} run backwards", *lines));
             } else {
@@ -78,9 +77,15 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
         | TourElement::DiffleCallout { .. }
         | TourElement::DiffleDiagram
         | TourElement::DiffleRow
-        | TourElement::DiffleIcon { .. } => {}
+        | TourElement::DiffleIcon { .. }
+        | TourElement::DiffleNote { .. } => {}
     }
     (needs, errors)
+}
+
+/// The first and last line of a `lines` value the schema already matched: `40-58`, or `40`.
+pub fn span(lines: &str) -> (usize, usize) {
+    lines.split_once('-').map_or((number(lines), number(lines)), |(a, b)| (number(a), number(b)))
 }
 
 /// An attribute value the schema already matched as a positive number.

@@ -61,6 +61,10 @@ const TOUR: &str = r#"
 docs/readme.md"></diffle-tree>
 <diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
+<diffle-walk path="app.py" lines="1-3">
+  <diffle-note lines="1" title="Imports">It imports <code>os</code>.</diffle-note>
+  <diffle-note lines="2-3" title="The loader">Takes an id and returns it.</diffle-note>
+</diffle-walk>
 "#;
 
 async fn push(s: &TestServer, html: &str) -> common::server::Res {
@@ -160,6 +164,13 @@ docs/readme.md"></diffle-tree>
 <diffle-code lang="json" example path="app.py" line="2">{}</diffle-code>
 <diffle-code example>{}</diffle-code>
 <diffle-code lang="rust" title="Shape">fn a()</diffle-code>
+<diffle-walk path="app.py" lines="1-3"></diffle-walk>
+<diffle-walk path="app.py" lines="2-3">stray<p>prose</p>
+  <diffle-note lines="1-3" title="Out">Leaves the walk.</diffle-note>
+  <diffle-note lines="2">Has no title.</diffle-note>
+  <diffle-note lines="3" title="Block"><p>A paragraph.</p></diffle-note>
+</diffle-walk>
+<p><diffle-note lines="2" title="Loose">Alone.</diffle-note></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -194,6 +205,10 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 /// The demo tour's first diagram, as an agent drew it before `--skill` said how text sits: labels on
 /// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
 const CROWDED: &str = r#"<h2>Flow</h2>
+<diffle-walk path="app.py" lines="1-2">
+  <diffle-note lines="1" title="Imports">It imports os.</diffle-note>
+  <diffle-note lines="1-2" title="The loader">It defines the loader. It takes an id. It returns it.</diffle-note>
+</diffle-walk>
 <diffle-row><p>The new line.</p><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-row>
 <diffle-row><p>Too wide for its column.</p><diffle-diagram><svg viewBox="0 0 720 40"></svg></diffle-diagram></diffle-row>
 <diffle-code path="app.py" line="1">def missing(): ...</diffle-code>
