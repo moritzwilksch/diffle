@@ -1,11 +1,12 @@
 //! A `diffle-walk`: where its notes' lines lie, and the warning that keeps it to one piece of code.
-use super::{Findings, Kind, spell, steps};
+use super::{Findings, Kind, Others, spell, steps};
 use crate::protocol::TourElement;
 use crate::tour::dom::{Dom, NodeId};
 use crate::tour::element::parse;
 use crate::tour::files::span;
 
-pub const KIND: Kind = Kind { block: "diffle-walk", step: "diffle-note", noun: "walk", word: "note", beside: &[] };
+pub const KIND: Kind =
+    Kind { block: "diffle-walk", step: "diffle-note", noun: "walk", word: "note", others: Others::Refused };
 /// Past this many lines a walk shows more than one piece of code.
 const LONG_WALK: usize = 40;
 

@@ -18,10 +18,14 @@ enum Place {
 /// Every reason to refuse the `diffle-diagram` at `node`, which errors name as `element`.
 pub fn check(dom: &Dom, node: NodeId, element: &str) -> Vec<(NodeId, TourError)> {
     let mut check = Check { dom, context: format!("{element} > "), errors: Vec::new() };
-    let content: Vec<NodeId> = dom.children(node).iter().copied().filter(|&c| holds(dom.node(c))).collect();
+    // Its notes, which step through the drawing, are checked as steps.
+    let is_note = |c: NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "diffle-note");
+    let content: Vec<NodeId> =
+        dom.children(node).iter().copied().filter(|&c| holds(dom.node(c)) && !is_note(c)).collect();
     let is_svg = |&c: &NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "svg");
     if content.len() != 1 || !content.iter().all(is_svg) {
-        check.error(node, element.into(), "diffle-diagram holds one <svg> and nothing else");
+        let message = "diffle-diagram holds one <svg>, then a diffle-note per step when its groups take step";
+        check.error(node, element.into(), message);
     }
     for child in content {
         check.visit(child, Place::Root);

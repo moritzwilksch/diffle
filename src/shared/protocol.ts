@@ -1155,7 +1155,14 @@ export const TourSvgElementSchema = z.discriminatedUnion('tag', [
       viewBox: z.string().regex(/^0 0 [1-9][0-9]* [1-9][0-9]*$/),
     })
     .strict(),
-  z.object({ tag: z.literal('g'), class: svgClassSchema.optional() }).strict(),
+  z
+    .object({
+      tag: z.literal('g'),
+      class: svgClassSchema.optional(),
+      /** The step of a stepped diagram that lights this group; the diagram holds one `diffle-note` per step. */
+      step: tourNumberSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       tag: z.literal('rect'),

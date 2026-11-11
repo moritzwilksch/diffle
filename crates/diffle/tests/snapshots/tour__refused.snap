@@ -250,7 +250,23 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-note lines=\"2\" title=\"Loose\"",
-      "message": "diffle-note belongs directly inside a diffle-walk"
+      "message": "diffle-note belongs directly inside a diffle-walk, or a diffle-diagram after its <svg>"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram",
+      "message": "steps run 1 to 3 without a gap: no <g> takes step=\"2\""
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram",
+      "message": "has 3 steps and 2 notes: one diffle-note per step, in order"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram > diffle-note lines=\"2\" title=\"Two\"",
+      "message": "a diagram's note takes no lines: it explains the step of its number"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram",
+      "message": "a diagram's notes step through its groups: give each <g> a note lights step=\"n\""
     },
     {
       "element": "h2 \"A\" > <h1>",

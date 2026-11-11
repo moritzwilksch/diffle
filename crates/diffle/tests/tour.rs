@@ -61,6 +61,13 @@ const TOUR: &str = r#"
 docs/readme.md"></diffle-tree>
 <diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
+<diffle-diagram><svg viewBox="0 0 216 52">
+  <g step="1"><rect x="8" y="16" width="80" height="28"/><text x="16" y="30">Request</text></g>
+  <g step="2"><path d="M88 30 H128" class="arrow"/><rect x="128" y="16" width="80" height="28"/><text x="136" y="30">Loader</text></g>
+</svg>
+<diffle-note title="A request names an id">It carries the id <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes.</diffle-note>
+<diffle-note title="The loader answers">It returns the id.</diffle-note>
+</diffle-diagram>
 <diffle-walk path="app.py" lines="1-3">
   <diffle-note lines="1" title="Imports">It imports <code>os</code>.</diffle-note>
   <diffle-note lines="2-3" title="The loader">Takes an id and returns it.</diffle-note>
@@ -171,6 +178,9 @@ docs/readme.md"></diffle-tree>
   <diffle-note lines="3" title="Block"><p>A paragraph.</p></diffle-note>
 </diffle-walk>
 <p><diffle-note lines="2" title="Loose">Alone.</diffle-note></p>
+<diffle-diagram><svg viewBox="0 0 104 44"><g step="1"><rect x="8" y="8" width="40" height="28"/></g><g step="3"><rect x="56" y="8" width="40" height="28"/></g></svg>
+<diffle-note title="One">First.</diffle-note><diffle-note lines="2" title="Two">Second.</diffle-note></diffle-diagram>
+<diffle-diagram><svg viewBox="0 0 56 44"><rect x="8" y="8" width="40" height="28"/></svg><diffle-note title="Lost">No steps.</diffle-note></diffle-diagram>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;

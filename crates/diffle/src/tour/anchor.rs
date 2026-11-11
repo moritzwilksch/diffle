@@ -146,6 +146,7 @@ pub fn spoken(element: &str, text: bool) -> String {
         (_, Some(walk)) if tag_in(element) != "diffle-walk" => {
             format!(" in the walk of {}:{}", of(walk, "path"), of(walk, "lines"))
         }
+        _ if tag_in(element) == "diffle-note" && segments.contains(&"diffle-diagram") => " in the diagram".into(),
         _ => String::new(),
     };
     format!("{} {name}{within}", if text { "in" } else { "on" })
@@ -197,13 +198,25 @@ impl Walk<'_> {
     /// A diagram, and each box and label in it, which take threads as a whole.
     fn diagram(&mut self, id: NodeId, node: &[i64], element: String) {
         self.push(node, element, "diffle-diagram", None, Some(String::new()));
-        let Some(&svg) = self.dom.children(id).iter().find(|&&c| matches!(self.dom.node(c), Node::Element { .. }))
-        else {
-            return;
-        };
+        let elements: Vec<NodeId> = self
+            .dom
+            .children(id)
+            .iter()
+            .copied()
+            .filter(|&c| matches!(self.dom.node(c), Node::Element { .. }))
+            .collect();
+        // Its notes, when it steps, read as prose.
+        let is = |c: NodeId, tag: &str| matches!(self.dom.node(c), Node::Element { name, .. } if &*name.local == tag);
+        for (i, &child) in elements.iter().enumerate() {
+            if is(child, "diffle-note") {
+                self.visit(child, [node, &[i as i64]].concat(), "diffle-diagram > ");
+            }
+        }
+        let Some(at) = elements.iter().position(|&c| is(c, "svg")) else { return };
+        let svg = elements[at];
         let drawing = Drawing::read(self.dom, svg, "");
         let mut shapes = Vec::new();
-        self.places(svg, &[node, &[0]].concat(), &mut shapes);
+        self.places(svg, &[node, &[at as i64]].concat(), &mut shapes);
         for (shape, at) in shapes {
             let Node::Element { name, attrs } = self.dom.node(shape) else { continue };
             let label = match &*name.local {

@@ -24,6 +24,11 @@ fn explain<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)], message: 
     culprit.map_or(message.clone(), |(name, _)| format!("{name}: {message}"))
 }
 
+/// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.
+pub fn is_count(value: &str) -> bool {
+    value.parse::<u16>().is_ok_and(|n| n > 0) && !value.starts_with('0')
+}
+
 /// How an error names an element: its tag with its attributes as written.
 pub fn label(tag: &str, attrs: &[(String, String)]) -> String {
     let attrs: String = attrs.iter().map(|(k, v)| format!(" {k}=\"{}\"", short(v))).collect();

@@ -5,7 +5,7 @@ use serde_json::Value;
 use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
-use super::element::{label, parse, short};
+use super::element::{is_count, label, parse, short};
 use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
@@ -39,8 +39,8 @@ struct Walk {
     row: usize,
     /// The card the walk is in, by its `id`.
     card: Option<String>,
-    /// The `diffle-walk` the walk is in, as errors name it.
-    walk: Option<String>,
+    /// The stepped block (a walk, a diagram) the walk is in, as errors name it.
+    stepped: Option<String>,
     /// Each card's `id`, to find one taken twice.
     ids: Vec<(NodeId, String, String)>,
     /// Each `h1`, and whether an `h2` came before it.
@@ -71,8 +71,8 @@ impl Walk {
     fn context(&self) -> String {
         let section = self.section.as_ref().map_or_else(String::new, |title| format!("h2 \"{title}\" > "));
         let card = self.card.as_ref().map_or_else(String::new, |id| format!("diffle-card#{id} > "));
-        let walk = self.walk.as_ref().map_or_else(String::new, |walk| format!("{walk} > "));
-        format!("{section}{card}{walk}")
+        let stepped = self.stepped.as_ref().map_or_else(String::new, |block| format!("{block} > "));
+        format!("{section}{card}{stepped}")
     }
 
     fn visit(&mut self, dom: &Dom, node: NodeId, place: Place) {
@@ -173,15 +173,9 @@ impl Walk {
             Rule::Row => self.row(dom, node, place, &element),
             Rule::Walk => {
                 let found = walk::check(dom, node, &element, parsed.as_ref());
-                self.errors.extend(found.errors);
-                self.warnings.extend(found.warnings);
-                let outer = self.walk.replace(label(tag, attrs));
-                for note in stepped::step_nodes(dom, node, "diffle-note") {
-                    self.visit(dom, note, Place { top: false, in_walk: true, ..place });
-                }
-                self.walk = outer;
+                self.notes(dom, node, place, label(tag, attrs), found);
             }
-            Rule::Note => self.children(dom, node, Place { top: false, in_text: true, in_walk: false, ..place }),
+            Rule::Note => self.children(dom, node, Place { top: false, in_text: true, in_steps: false, ..place }),
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
@@ -208,6 +202,7 @@ impl Walk {
             Rule::Diagram => {
                 self.errors.extend(diagram::check(dom, node, &element));
                 self.warnings.extend(layout::warnings(dom, node, &element, self.row));
+                self.notes(dom, node, place, tag.into(), stepped::diagram::check(dom, node, &element));
             }
             Rule::Block | Rule::Symbol | Rule::Icon => {
                 self.empty(dom, node, tag, &element);
@@ -232,6 +227,17 @@ impl Walk {
         if let (Some(parsed), true) = (parsed, fits) {
             self.refer(node, element, parsed);
         }
+    }
+
+    /// Takes what checking a stepped block found, then checks its notes as prose under `name`.
+    fn notes(&mut self, dom: &Dom, node: NodeId, place: Place, name: String, found: stepped::Findings) {
+        self.errors.extend(found.errors);
+        self.warnings.extend(found.warnings);
+        let outer = self.stepped.replace(name);
+        for note in stepped::step_nodes(dom, node, "diffle-note") {
+            self.visit(dom, note, Place { top: false, in_steps: true, ..place });
+        }
+        self.stepped = outer;
     }
 
     /// Checks a `diffle-row`'s columns, then what they hold.
@@ -314,11 +320,6 @@ fn holds_diff(dom: &Dom, node: NodeId) -> bool {
         Node::Element { name, .. } => &*name.local == "diffle-diff" || holds_diff(dom, c),
         _ => false,
     })
-}
-
-/// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.
-fn is_count(value: &str) -> bool {
-    value.parse::<u16>().is_ok_and(|n| n > 0) && !value.starts_with('0')
 }
 
 fn attr<'a>(attrs: &'a [(String, String)], name: &str) -> Option<&'a str> {

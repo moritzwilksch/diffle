@@ -1,6 +1,7 @@
 //! Stepped blocks: a walk, a trace and a stepped diagram each hold steps the reader takes one at a
 //! time, each a sentence of inline prose. What their steps share is checked here; each block's own
 //! rules sit in its module.
+pub mod diagram;
 pub mod walk;
 
 use super::anchor::reading;
@@ -50,18 +51,27 @@ pub struct Kind {
     /// The words a reader uses for the block and for one step: `walk` and `note`.
     pub noun: &'static str,
     pub word: &'static str,
-    /// Tags besides the steps the block holds, such as a diagram's `svg`.
-    pub beside: &'static [&'static str],
+    /// Who refuses what the block holds besides its steps.
+    pub others: Others,
+}
+
+/// Who refuses what a stepped block holds besides its steps.
+pub enum Others {
+    /// `steps` does: the block holds its steps alone.
+    Refused,
+    /// The block's own check does, as a diagram's checks its `<svg>`.
+    Checked,
 }
 
 /// The steps of the block at `node`, named `element`, each checked as a sentence of inline prose;
 /// refuses what else it holds and a block without steps, and warns of too many.
 pub fn steps<'a>(dom: &'a Dom, node: NodeId, element: &str, kind: &Kind, found: &mut Findings) -> Vec<Step<'a>> {
-    let Kind { block, step, noun, word, beside } = kind;
+    let Kind { block, step, noun, word, others } = kind;
+    let checked = matches!(others, Others::Checked);
     let mut steps = Vec::new();
     for &child in dom.children(node) {
         match dom.node(child) {
-            Node::Text(text) if !text.trim().is_empty() => {
+            Node::Text(text) if !checked && !text.trim().is_empty() => {
                 let name = format!("{element} > text \"{}\"", short(text.trim()));
                 found.error(child, name, format!("a {block} holds only {step}s: text belongs in a {word}"));
             }
@@ -70,7 +80,7 @@ pub fn steps<'a>(dom: &'a Dom, node: NodeId, element: &str, kind: &Kind, found: 
                 sentence(dom, child, &name, word, found);
                 steps.push(Step { node: child, element: name, number: steps.len() + 1, attrs });
             }
-            Node::Element { name, .. } if beside.contains(&&*name.local) => {}
+            Node::Element { .. } if checked => {}
             Node::Element { name, attrs } => {
                 let name = format!("{element} > {}", label(&name.local, attrs));
                 found.error(child, name, format!("a {block} holds only {step}s: prose goes before or after it"));
