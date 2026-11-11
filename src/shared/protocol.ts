@@ -1057,6 +1057,52 @@ export const HighlightResponseSchema = z.object({
   lines: TokenSchema.array().array(),
 });
 export type HighlightResponse = z.infer<typeof HighlightResponseSchema>;
+/** `POST /api/blame`: who last changed lines of one side of a file, read through the allowlist `/api/file` reads. */
+export const BlameRequestSchema = z.object({
+  path: z.string().min(1),
+  side: SideSchema,
+  /** 1-based first line to blame; the whole side when absent. */
+  start: z.number().int().positive().optional(),
+  /** 1-based last line, inclusive; `start` alone blames that one line. */
+  end: z.number().int().positive().optional(),
+});
+export type BlameRequest = z.infer<typeof BlameRequestSchema>;
+
+/** A commit that last changed some blamed lines. */
+export const BlameCommitSchema = z.object({
+  sha: z.string(),
+  short: z.string(),
+  author: z.string(),
+  /** Author time, in seconds since the epoch. */
+  time: z.number().int(),
+  /** The message's first line. */
+  summary: z.string(),
+});
+export type BlameCommit = z.infer<typeof BlameCommitSchema>;
+
+/** Consecutive lines one commit last changed. */
+export const BlameHunkSchema = z.object({
+  /** 1-based first line on the blamed side. */
+  start: z.number().int().positive(),
+  lines: z.number().int().positive(),
+  /** A `commits` entry's sha; null for worktree lines no commit holds yet. */
+  commit: z.string().nullable(),
+});
+export type BlameHunk = z.infer<typeof BlameHunkSchema>;
+
+/**
+ * A side is blamed at its own commit, so in a range a line the range added names its commit there;
+ * the worktree is blamed against HEAD. A side with no history, as an interdiff's replayed old side, is a 404.
+ */
+export const BlameResponseSchema = z.object({
+  path: z.string(),
+  side: SideSchema,
+  /** In line order, covering the requested lines that exist. */
+  hunks: BlameHunkSchema.array(),
+  commits: BlameCommitSchema.array(),
+});
+export type BlameResponse = z.infer<typeof BlameResponseSchema>;
+
 /**
  * `GET /api/image`: one side of a file as image bytes. The server answers 404 unless `key` is that side's
  * `imageKey` in its current snapshot, the bytes are still the ones the key names, and they are a raster image.

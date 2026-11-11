@@ -8,7 +8,7 @@ use axum::body::Bytes;
 use axum::extract::{RawQuery, State};
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use serde::Deserialize;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
@@ -17,8 +17,8 @@ use crate::concurrency::map_limit;
 use crate::git::GrepOptions;
 use crate::git::is_binary;
 use crate::protocol::{
-    ChangeStatus, FileQuery, FileResponse, HighlightResponse, ImageQuery, PatchQuery, SearchContent, SearchMatch,
-    SearchQuery, SearchResponse, SearchScope, Side,
+    BlameRequest, BlameResponse, ChangeStatus, FileQuery, FileResponse, HighlightResponse, ImageQuery, PatchQuery,
+    SearchContent, SearchMatch, SearchQuery, SearchResponse, SearchScope, Side,
 };
 use crate::server::image::image_type;
 
@@ -32,6 +32,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/patch", get(patch).post(patch_many))
         .route("/api/file", get(file))
         .route("/api/highlight", get(highlight))
+        .route("/api/blame", post(blame))
         .route("/api/image", get(image))
         .route("/api/search", get(search))
 }
@@ -83,6 +84,29 @@ async fn highlight(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> Ap
         .map_err(anyhow::Error::from)?;
     let (language, lines) = found.map_or((None, Vec::new()), |(language, lines)| (Some(language), lines));
     Ok(Json(HighlightResponse { path, language, lines }).into_response())
+}
+
+/// Blame runs off the async workers against the current snapshot, never through the session's queue,
+/// and answers from the blames the session computed ahead when it has them.
+async fn blame(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    let req: BlameRequest = body(&raw)?;
+    let lines = match (req.start, req.end) {
+        (None, None) => None,
+        (None, Some(_)) => return Err(ApiError::bad_request("end needs a start")),
+        (Some(start), end) => {
+            let (start, end) = (start.get(), end.unwrap_or(start).get());
+            if end < start {
+                return Err(ApiError::bad_request("end before start"));
+            }
+            Some((start, end))
+        }
+    };
+    let path = req.path.to_string();
+    let snap = d.session.snapshotter()?.current().await?;
+    let Some(found) = d.session.blame(&snap, &path, req.side, lines).await? else {
+        return Err(ApiError::not_found("no history on that side"));
+    };
+    Ok(Json(BlameResponse { path, side: req.side, hunks: found.hunks, commits: found.commits }).into_response())
 }
 
 /// One side of `path` from the snapshot. Outside it only a file a language server named is

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  BlameRequestSchema,
+  BlameResponseSchema,
   ConfigUpdateSchema,
   GithubExportRequestSchema,
   LspHoverRequestSchema,
@@ -37,6 +39,7 @@ import {
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import type {
+  BlameRequest,
   GraphQuery,
   GithubExportRequest,
   LspHoverRequest,
@@ -215,6 +218,9 @@ export const api = {
       method: 'POST',
       body: encode(LspPositionSchema, pos),
     }),
+  /** Who last changed lines of one side of a file; a 404 when that side has no history. */
+  blame: (req: BlameRequest) =>
+    json(BlameResponseSchema, 'api/blame', { method: 'POST', body: encode(BlameRequestSchema, req) }),
   /** What the server knows about the symbol at `pos`, as markdown. */
   lspHover: (req: LspHoverRequest) =>
     json(LspHoverResponseSchema, 'api/lsp/hover', { method: 'POST', body: encode(LspHoverRequestSchema, req) }),

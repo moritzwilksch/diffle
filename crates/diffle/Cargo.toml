@@ -45,6 +45,7 @@ gix = { version = "0.90", default-features = false, features = [
   "index",
   "dirwalk",
   "blob-diff",
+  "blame",
   "merge",
   "worktree-mutation",
   "blocking-network-client",

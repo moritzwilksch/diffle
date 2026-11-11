@@ -1,4 +1,5 @@
 //! The active review and everything derived from it, behind one serialized transition queue.
+mod blame;
 mod checkout;
 mod files;
 mod github;
@@ -124,6 +125,7 @@ pub struct Session {
     queued_check: Mutex<Option<Pending>>,
     listeners: Mutex<Vec<Listener>>,
     readable: Mutex<Option<(Arc<Snapshot>, Arc<ReadablePaths>)>>,
+    blames: blame::BlameCache,
     activity: ActivityLog,
 }
 
@@ -155,6 +157,7 @@ impl Session {
             queued_check: Mutex::new(None),
             listeners: Mutex::new(Vec::new()),
             readable: Mutex::new(None),
+            blames: blame::BlameCache::default(),
             activity: ActivityLog::new(opts.instance),
         })
     }
@@ -261,7 +264,8 @@ impl Session {
         self.listeners.lock().unwrap().push(Box::new(listener));
     }
 
-    fn announce(&self, snap: &Arc<Snapshot>) {
+    fn announce(self: &Arc<Self>, snap: &Arc<Snapshot>) {
+        self.prefetch_blames(snap);
         for listener in self.listeners.lock().unwrap().iter() {
             listener(snap);
         }

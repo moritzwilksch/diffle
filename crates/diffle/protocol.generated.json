@@ -84,6 +84,127 @@
       },
       "description": "Who deletes, on `DELETE` of a thread or a message. Absent: the reviewer."
     },
+    "BlameCommit": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "short": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "time": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Author time, in seconds since the epoch."
+        },
+        "summary": {
+          "type": "string",
+          "description": "The message's first line."
+        }
+      },
+      "required": [
+        "sha",
+        "short",
+        "author",
+        "time",
+        "summary"
+      ],
+      "description": "A commit that last changed some blamed lines."
+    },
+    "BlameHunk": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "1-based first line on the blamed side."
+        },
+        "lines": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "A `commits` entry's sha; null for worktree lines no commit holds yet."
+        }
+      },
+      "required": [
+        "start",
+        "lines",
+        "commit"
+      ],
+      "description": "Consecutive lines one commit last changed."
+    },
+    "BlameRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "start": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "1-based first line to blame; the whole side when absent."
+        },
+        "end": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "1-based last line, inclusive; `start` alone blames that one line."
+        }
+      },
+      "required": [
+        "path",
+        "side"
+      ],
+      "description": "`POST /api/blame`: who last changed lines of one side of a file, read through the allowlist `/api/file` reads."
+    },
+    "BlameResponse": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "hunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BlameHunk"
+          },
+          "description": "In line order, covering the requested lines that exist."
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BlameCommit"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "side",
+        "hunks",
+        "commits"
+      ],
+      "description": "A side is blamed at its own commit, so in a range a line the range added names its commit there;\nthe worktree is blamed against HEAD. A side with no history, as an interdiff's replayed old side, is a 404."
+    },
     "ChangedFile": {
       "type": "object",
       "properties": {

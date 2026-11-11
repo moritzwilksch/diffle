@@ -43,7 +43,7 @@ pub fn side_path<'a>(r: &'a ReadablePaths, path: &'a str, side: Side) -> Option<
 }
 
 impl Session {
-    fn readable_paths(&self, snap: &Arc<Snapshot>) -> Arc<ReadablePaths> {
+    pub(super) fn readable_paths(&self, snap: &Arc<Snapshot>) -> Arc<ReadablePaths> {
         let mut cache = self.readable.lock().unwrap();
         if let Some((cached, paths)) = cache.as_ref()
             && Arc::ptr_eq(cached, snap)
