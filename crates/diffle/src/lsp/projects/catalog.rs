@@ -6,7 +6,7 @@ use futures::future::BoxFuture;
 use serde_json::{Map, Value, json};
 
 use super::cargo::{cargo_projects, linked_projects};
-use super::tsdk::{tsdk, typescript_projects};
+use super::tsdk::{native_projects, native_typescript, tsdk, typescript_projects};
 use super::vue::{VUE_PLUGIN, vue_plugin, vue_plugin_location};
 use crate::lsp::configuration::{SCHEMA_CATALOG, load_schema_catalog};
 use crate::lsp::registry::{ServerContext, SettingsFn};
@@ -57,6 +57,8 @@ fn ready(value: Value) -> BoxFuture<'static, Value> {
 }
 
 const TYPESCRIPT: &[LanguageId] = &[Typescript, Typescriptreact, Javascript, Javascriptreact];
+/// TypeScript 7, the Go port, serves LSP from `tsc` itself; an older `tsc` cannot.
+const NATIVE: Requirement = Requirement { program: "tsc", what: "TypeScript 7", locate: native_typescript };
 const VUE: Requirement = Requirement { program: "vue-language-server", what: VUE_PLUGIN, locate: vue_plugin_location };
 
 /// typescript-language-server loads tsserver plugins and its TypeScript from initializationOptions;
@@ -124,13 +126,16 @@ fn json_settings(_: &ServerContext) -> BoxFuture<'static, Value> {
 /// Built-in servers, in preference order per language: the first one whose program is on PATH is
 /// used. Entries serving several languages become one process, which is how the servers themselves
 /// want it (clangd for c and cpp, tsserver for all of js/ts).
-static CANDIDATES: [Candidate; 39] = [
+static CANDIDATES: [Candidate; 40] = [
     plain(&[Python], "pyrefly lsp"),
     plain(&[Python], "ty server"),
     plain(&[Python], "basedpyright-langserver --stdio"),
     plain(&[Python], "pyright-langserver --stdio"),
     plain(&[Python], "pylsp"),
     plain(&[Python], "jedi-language-server"),
+    // First: the tsserver clients cannot load TypeScript 7, and on a PATH that has it, it is often
+    // the only TypeScript they would find.
+    Candidate { projects: Some(native_projects), requires: Some(NATIVE), ..plain(TYPESCRIPT, "tsc --lsp --stdio") },
     tsserver(TYPESCRIPT, None),
     vtsls(TYPESCRIPT, None),
     // Vue 3 language tools answer for .vue files from inside tsserver, through the plugin that

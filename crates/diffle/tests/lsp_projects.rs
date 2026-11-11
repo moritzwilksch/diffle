@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use diffle::lsp::projects::cargo::cargo_workspaces;
-use diffle::lsp::projects::tsdk::tsdk_location;
+use diffle::lsp::projects::tsdk::{native_typescript, tsdk_location};
 use diffle::lsp::projects::vue::vue_plugin_location;
 use diffle::lsp::registry::{Lookup, ServerContext, definition_of};
 use serde_json::json;
@@ -221,6 +221,43 @@ fn passes_over_typescript_7_and_over_nothing_at_all() {
     let other = typescript(&at(&bin, "other/node_modules"), "6.0.3");
     let vtsls = executable(&at(&bin, "other/vtsls"));
     assert_eq!(tsdk_location(&root.join("repo"), &[], &[Some(astro), Some(vtsls)]), Some(other));
+}
+
+#[cfg(unix)]
+#[test]
+fn finds_the_typescript_7_a_tsc_runs_through_npms_symlink_and_names_it_in_the_status() {
+    let (_dir, root) = tmp();
+    let modules = at(&root, "repo/node_modules");
+    let package = typescript(&modules, "7.0.2").parent().unwrap().to_path_buf();
+    executable(&at(&package, "bin/tsc"));
+    std::fs::create_dir(modules.join(".bin")).unwrap();
+    std::os::unix::fs::symlink("../typescript/bin/tsc", at(&modules, ".bin/tsc")).unwrap();
+    let tsc = at(&modules, ".bin/tsc");
+    assert_eq!(native_typescript(&tsc), Some(package));
+    let lookup: Lookup = Arc::new(move |c: &str| c.starts_with("tsc").then(|| tsc.clone()));
+    let projects = definition_of("tsc --lsp --stdio").projects.unwrap()(&ctx(&root.join("repo"), &[], lookup));
+    assert_eq!(
+        (projects.label.as_str(), projects.paths),
+        ("TypeScript 7.0.2", vec!["node_modules/typescript".to_owned()])
+    );
+}
+
+#[test]
+fn finds_typescript_7_beside_a_windows_tsc_shim_and_passes_over_an_older_tsc() {
+    let (_dir, root) = tmp();
+    let bin = root.join("npm");
+    let package = typescript(&bin.join("node_modules"), "7.0.2").parent().unwrap().to_path_buf();
+    write(&bin, "tsc.cmd", "@node \"%~dp0\\node_modules\\typescript\\bin\\tsc\" %*\n");
+    assert_eq!(native_typescript(&bin.join("tsc.cmd")), Some(package));
+    // TypeScript 6's tsc has no language server in it.
+    let old = typescript(&at(&root, "old/node_modules"), "6.0.3").parent().unwrap().to_path_buf();
+    assert_eq!(native_typescript(&executable(&at(&old, "bin/tsc"))), None);
+    assert_eq!(native_typescript(&root.join("missing/tsc")), None);
+    // A pixi environment's TypeScript 6 inside a checkout of TypeScript 7: its `tsc` cannot serve.
+    let repo = root.join("repo");
+    typescript(&repo.join("node_modules"), "7.0.2");
+    typescript(&at(&repo, ".pixi/envs/default/lib/node_modules"), "6.0.2");
+    assert_eq!(native_typescript(&executable(&at(&repo, ".pixi/envs/default/bin/tsc"))), None);
 }
 
 fn programs_at(bin: PathBuf, programs: &'static [&'static str]) -> Lookup {

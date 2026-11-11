@@ -375,7 +375,7 @@ async fn serves_a_language_nothing_owns_by_itself() {
     assert_eq!(status.servers.iter().map(|x| x.command.as_str()).collect::<Vec<_>>(), [TAILWIND]);
     assert_eq!(
         json_of(&status.missing),
-        json!([{ "language": "javascript", "tried": ["typescript-language-server", "vtsls"] }])
+        json!([{ "language": "javascript", "tried": ["tsc", "typescript-language-server", "vtsls"] }])
     );
     assert_eq!(
         json_of(&s.pool.hover(&pos("b.js", 2, 0), false).await.unwrap()),
