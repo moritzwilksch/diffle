@@ -2930,6 +2930,20 @@
       "additionalProperties": false,
       "description": "A box of prose and primitives, and a node on the canvas. It sits at the top level or in a\n`diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,\n`diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff."
     },
+    "TourDiagram": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-diagram"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand."
+    },
     "TourDiff": {
       "type": "object",
       "properties": {
@@ -3155,6 +3169,20 @@
           ],
           "additionalProperties": false,
           "description": "A highlighted aside inside a card. It holds what a card holds, except another callout."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-diagram"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3270,6 +3298,327 @@
         "tour"
       ],
       "description": "`GET /api/tour`: the review's tour, or null without one."
+    },
+    "TourSvgClass": {
+      "type": "string",
+      "enum": [
+        "arrow",
+        "arrows",
+        "dashed",
+        "bold",
+        "small",
+        "mono",
+        "c",
+        "e",
+        "eyebrow",
+        "fill",
+        "frame",
+        "accent",
+        "success",
+        "warning",
+        "error"
+      ],
+      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),\n`dashed`. Text: `bold`, `small`, `mono`, `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a\nregion's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).\nTones, on a shape, group, line or text: `accent` for what the point is about, `success`,\n`warning` and `error` for status."
+    },
+    "TourSvgElement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "svg"
+            },
+            "viewBox": {
+              "type": "string",
+              "pattern": "^0 0 [1-9][0-9]* [1-9][0-9]*$",
+              "description": "`0 0 <width> <height>`; one unit is one pixel."
+            }
+          },
+          "required": [
+            "tag",
+            "viewBox"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "g"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "rect"
+            },
+            "x": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "y": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "width": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "height": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "circle"
+            },
+            "cx": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "cy": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "r": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "cx",
+            "cy",
+            "r"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "ellipse"
+            },
+            "cx": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "cy": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "rx": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "ry": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "cx",
+            "cy",
+            "rx",
+            "ry"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "polygon"
+            },
+            "points": {
+              "type": "string",
+              "pattern": "^[0-9.,\\s-]+$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "points"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "polyline"
+            },
+            "points": {
+              "type": "string",
+              "pattern": "^[0-9.,\\s-]+$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "points"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "path"
+            },
+            "d": {
+              "type": "string",
+              "pattern": "^[MmLlHhVvCcSsQqZz0-9.,\\s-]+$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "d"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "line"
+            },
+            "x1": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "y1": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "x2": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "y2": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "x1",
+            "y1",
+            "x2",
+            "y2"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "text"
+            },
+            "x": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "y": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag",
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "tspan"
+            },
+            "x": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "y": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "dx": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "dy": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "class": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "An element of a diagram's `<svg>`, with its geometry. diffle styles each from its classes and the\ntheme and draws the arrowheads, so none takes `style`, `fill`, `stroke`, fonts or markers."
     },
     "TourSymbol": {
       "type": "object",

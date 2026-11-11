@@ -30,6 +30,16 @@ tally/currency.py"></diffle-tree>
       <tbody><tr><td>sale</td><td>its amount</td></tr><tr><td>refund</td><td>minus its amount</td></tr>
       <tr><td colspan="2">anything else fails the file</td></tr></tbody>
     </table>
+    <p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
+    <diffle-diagram><svg viewBox="0 0 440 88">
+      <g><rect x="24" y="24" width="88" height="40"/><text x="36" y="44" class="bold">CLI</text></g>
+      <path d="M112 44 H176" class="arrow"/>
+      <text x="144" y="28" class="c small">reads</text>
+      <g><rect x="176" y="24" width="88" height="40"/><text x="188" y="44" class="bold">Ledger</text></g>
+      <path d="M264 44 H328" class="arrow"/>
+      <text x="296" y="28" class="c small">feeds</text>
+      <g class="accent"><rect x="328" y="24" width="88" height="40"/><text x="340" y="44" class="bold">Refunds</text></g>
+    </svg></diffle-diagram>
   </diffle-card>
 </diffle-group>
 `;

@@ -6,6 +6,7 @@
 @import './styles/base.css' layer(base);
 @import './styles/markdown.css' layer(components);
 @import './styles/viewers.css' layer(components);
+@import './styles/diagram.css' layer(components);
 
 @theme inline {
   --color-canvas: var(--bg);

@@ -2,9 +2,11 @@
 //! rules across elements: where each element may sit, unique card ids and steps.
 use std::collections::{HashMap, HashSet};
 
-use serde_json::{Map, Value};
+use serde_json::Value;
 
+use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
+use super::element::{label, parse, short};
 use super::files::{Need, Reference};
 use crate::protocol::{Side, TourElement, TourError, TourTag};
 
@@ -32,6 +34,7 @@ enum Rule {
     Card,
     Group,
     Callout,
+    Diagram,
     Jump,
     /// `diffle-diff`, `diffle-tree`, `diffle-symbol`: inside a card, holding nothing.
     Leaf,
@@ -43,6 +46,7 @@ impl Rule {
             "diffle-card" => Self::Card,
             "diffle-group" => Self::Group,
             "diffle-callout" => Self::Callout,
+            "diffle-diagram" => Self::Diagram,
             "diffle-jump" => Self::Jump,
             "diffle-diff" | "diffle-tree" | "diffle-symbol" => Self::Leaf,
             _ => return None,
@@ -54,7 +58,7 @@ impl Rule {
             Self::Card => matches!(place, Place::Top | Place::Group),
             Self::Group => place == Place::Top,
             Self::Callout => place == Place::Card { in_callout: false },
-            Self::Jump | Self::Leaf => matches!(place, Place::Card { .. }),
+            Self::Diagram | Self::Jump | Self::Leaf => matches!(place, Place::Card { .. }),
         }
     }
 
@@ -63,7 +67,7 @@ impl Rule {
             Self::Card => "at the top level or in a diffle-group",
             Self::Group => "at the top level",
             Self::Callout => "inside a diffle-card, outside other callouts",
-            Self::Jump | Self::Leaf => "inside a diffle-card",
+            Self::Diagram | Self::Jump | Self::Leaf => "inside a diffle-card",
         }
     }
 }
@@ -111,7 +115,12 @@ impl Walk {
                 let tag = name.local.to_string();
                 if name.ns != html5ever::ns!(html) {
                     let element = format!("{context}{}", label(&tag, attrs));
-                    self.error(node, element, format!("<{tag}> is not allowed in a tour"));
+                    let message = if tag == "svg" {
+                        "<svg> belongs in a diffle-diagram".into()
+                    } else {
+                        format!("<{tag}> is not allowed in a tour")
+                    };
+                    self.error(node, element, message);
                 } else if tag.starts_with("diffle-") {
                     self.primitive(dom, node, place, (&tag, attrs), context);
                 } else {
@@ -152,7 +161,7 @@ impl Walk {
 
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
         let element = format!("{context}{}", label(tag, attrs));
-        let parsed = element_of(tag, attrs).map_err(|message| explain(tag, attrs, message));
+        let parsed = parse::<TourElement>(tag, attrs);
         let Some(rule) = Rule::of(tag) else {
             return self.error(node, element, parsed.err().unwrap_or_default());
         };
@@ -182,6 +191,7 @@ impl Walk {
                     self.error(node, element.clone(), "diffle-jump holds only its label text");
                 }
             }
+            Rule::Diagram => self.errors.extend(diagram::check(dom, node, &element)),
             Rule::Leaf => self.empty(dom, node, tag, &element),
         }
         if let (Some(parsed), true) = (parsed, fits) {
@@ -230,7 +240,10 @@ impl Walk {
                 let need = Need::Name { side: side.unwrap_or(Side::New), line: number(&line), name: name.to_string() };
                 push(&path, need, element);
             }
-            TourElement::DiffleCard { .. } | TourElement::DiffleGroup { .. } | TourElement::DiffleCallout { .. } => {}
+            TourElement::DiffleCard { .. }
+            | TourElement::DiffleGroup { .. }
+            | TourElement::DiffleCallout { .. }
+            | TourElement::DiffleDiagram {} => {}
         }
     }
 
@@ -272,23 +285,6 @@ impl Walk {
     }
 }
 
-/// The element `tag` with `attrs`, as the catalog in `protocol.ts` reads it.
-fn element_of(tag: &str, attrs: &[(String, String)]) -> Result<TourElement, String> {
-    let mut fields: Map<String, Value> = attrs.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
-    fields.insert("tag".into(), Value::String(tag.into()));
-    serde_json::from_value(Value::Object(fields)).map_err(|e| e.to_string())
-}
-
-/// `message` naming the attribute whose value failed its pattern, which serde's message leaves out.
-fn explain(tag: &str, attrs: &[(String, String)], message: String) -> String {
-    if !message.starts_with("doesn't match pattern") {
-        return message;
-    }
-    // Alone, a bad value fails on its pattern before any missing attribute is noticed.
-    let culprit = attrs.iter().find(|a| element_of(tag, std::slice::from_ref(a)).is_err_and(|m| m == message));
-    culprit.map_or(message.clone(), |(name, _)| format!("{name}: {message}"))
-}
-
 /// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.
 fn is_count(value: &str) -> bool {
     value.parse::<u16>().is_ok_and(|n| n > 0) && !value.starts_with('0')
@@ -301,17 +297,4 @@ fn number(digits: &str) -> usize {
 
 fn attr<'a>(attrs: &'a [(String, String)], name: &str) -> Option<&'a str> {
     attrs.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
-}
-
-/// How an error names an element: its tag with its attributes as written.
-fn label(tag: &str, attrs: &[(String, String)]) -> String {
-    let attrs: String = attrs.iter().map(|(k, v)| format!(" {k}=\"{}\"", short(v))).collect();
-    if tag.starts_with("diffle-") { format!("{tag}{attrs}") } else { format!("<{tag}{attrs}>") }
-}
-
-/// The first line of `text`, cut to 40 characters.
-fn short(text: &str) -> String {
-    let line = text.lines().next().unwrap_or_default();
-    let cut: String = line.chars().take(40).collect();
-    if cut.len() < text.len() { format!("{cut}…") } else { cut }
 }

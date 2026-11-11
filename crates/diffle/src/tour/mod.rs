@@ -1,5 +1,7 @@
 //! Tours: an agent's guided walk through the review, one HTML document per comment key.
+mod diagram;
 mod dom;
+mod element;
 mod files;
 mod store;
 mod validate;

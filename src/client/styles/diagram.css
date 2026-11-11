@@ -1,0 +1,102 @@
+/* A tour's diagram (`diffle-diagram`): every shape, line and label takes its look from its classes
+   (`TourSvgClass`) and the theme, so it follows light and dark like the rest of the page. */
+.tour-diagram {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+  font-family: var(--sans);
+  --edge: var(--fg);
+  --face: var(--bg-card);
+  --line: var(--fg-2);
+}
+
+.tour-diagram :is(rect, circle, ellipse, polygon) {
+  fill: var(--face);
+  stroke: var(--edge);
+  stroke-width: 1.5;
+}
+
+.tour-diagram rect {
+  rx: 6px;
+}
+
+.tour-diagram :is(path, line, polyline) {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.tour-diagram text {
+  fill: var(--fg);
+  font-size: 16px;
+  dominant-baseline: central;
+}
+
+.tour-diagram .bold {
+  font-weight: 600;
+}
+
+.tour-diagram .small {
+  font-size: 13px;
+  fill: var(--fg-2);
+}
+
+.tour-diagram .mono {
+  font-family: var(--mono);
+}
+
+.tour-diagram .c {
+  text-anchor: middle;
+}
+
+.tour-diagram .e {
+  text-anchor: end;
+}
+
+.tour-diagram .eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--fg-2);
+}
+
+.tour-diagram .dashed {
+  stroke-dasharray: 6 4;
+}
+
+.tour-diagram .fill {
+  --face: var(--bg-3);
+}
+
+.tour-diagram .frame {
+  fill: none;
+  stroke: var(--fg-2);
+  stroke-dasharray: 6 4;
+}
+
+/* A tone colours the edges, faces and lines of what carries it or sits in it; text only its own. */
+.tour-diagram .accent {
+  --tone: var(--accent);
+}
+
+.tour-diagram .success {
+  --tone: var(--add);
+}
+
+.tour-diagram .warning {
+  --tone: var(--warn);
+}
+
+.tour-diagram .error {
+  --tone: var(--danger);
+}
+
+.tour-diagram :is(.accent, .success, .warning, .error) {
+  --edge: var(--tone);
+  --line: var(--tone);
+  --face: color-mix(in srgb, var(--tone) 14%, var(--bg-card));
+}
+
+.tour-diagram :is(text, tspan):is(.accent, .success, .warning, .error) {
+  fill: var(--tone);
+}

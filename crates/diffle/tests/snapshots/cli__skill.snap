@@ -123,6 +123,10 @@ A highlighted aside inside a card. It holds what a card holds, except another ca
 |---|---|---|
 | `kind` | yes | `note` for context, `warning` for a risk the reviewer should check. |
 
+#### `diffle-diagram`
+
+A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand.
+
 ### Plain tags
 
 The plain tags a tour may use inside cards, for prose, structure and tables. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take `colspan` and `rowspan` as positive numbers. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`, `table`, `thead`, `tbody`, `tr`, `th`, `td`

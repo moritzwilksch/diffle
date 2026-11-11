@@ -1003,6 +1003,119 @@ export const TourCalloutSchema = z
   })
   .strict();
 
+/** A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgElement`s, drawn by hand. */
+export const TourDiagramSchema = z
+  .object({
+    tag: z.literal('diffle-diagram'),
+  })
+  .strict();
+
+/** A coordinate or length in diagram units; one unit is one pixel. */
+const svgNumberSchema = z.string().regex(/^-?[0-9]+(\.[0-9]+)?$/);
+/** Coordinate pairs, `x,y x,y ...`. */
+const svgPointsSchema = z.string().regex(/^[0-9.,\s-]+$/);
+/** A path's commands and numbers, such as `M168 116 H240`. */
+const svgPathSchema = z.string().regex(/^[MmLlHhVvCcSsQqZz0-9.,\s-]+$/);
+/** Words of `TourSvgClass`, separated by spaces. */
+const svgClassSchema = z.string();
+
+/**
+ * An element of a diagram's `<svg>`, with its geometry. diffle styles each from its classes and the
+ * theme and draws the arrowheads, so none takes `style`, `fill`, `stroke`, fonts or markers.
+ */
+export const TourSvgElementSchema = z.discriminatedUnion('tag', [
+  z
+    .object({
+      tag: z.literal('svg'),
+      /** `0 0 <width> <height>`; one unit is one pixel. */
+      viewBox: z.string().regex(/^0 0 [1-9][0-9]* [1-9][0-9]*$/),
+    })
+    .strict(),
+  z.object({ tag: z.literal('g'), class: svgClassSchema.optional() }).strict(),
+  z
+    .object({
+      tag: z.literal('rect'),
+      x: svgNumberSchema,
+      y: svgNumberSchema,
+      width: svgNumberSchema,
+      height: svgNumberSchema,
+      class: svgClassSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      tag: z.literal('circle'),
+      cx: svgNumberSchema,
+      cy: svgNumberSchema,
+      r: svgNumberSchema,
+      class: svgClassSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      tag: z.literal('ellipse'),
+      cx: svgNumberSchema,
+      cy: svgNumberSchema,
+      rx: svgNumberSchema,
+      ry: svgNumberSchema,
+      class: svgClassSchema.optional(),
+    })
+    .strict(),
+  z.object({ tag: z.literal('polygon'), points: svgPointsSchema, class: svgClassSchema.optional() }).strict(),
+  z.object({ tag: z.literal('polyline'), points: svgPointsSchema, class: svgClassSchema.optional() }).strict(),
+  z.object({ tag: z.literal('path'), d: svgPathSchema, class: svgClassSchema.optional() }).strict(),
+  z
+    .object({
+      tag: z.literal('line'),
+      x1: svgNumberSchema,
+      y1: svgNumberSchema,
+      x2: svgNumberSchema,
+      y2: svgNumberSchema,
+      class: svgClassSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({ tag: z.literal('text'), x: svgNumberSchema, y: svgNumberSchema, class: svgClassSchema.optional() })
+    .strict(),
+  z
+    .object({
+      tag: z.literal('tspan'),
+      x: svgNumberSchema.optional(),
+      y: svgNumberSchema.optional(),
+      dx: svgNumberSchema.optional(),
+      dy: svgNumberSchema.optional(),
+      class: svgClassSchema.optional(),
+    })
+    .strict(),
+]);
+export type TourSvgElement = z.infer<typeof TourSvgElementSchema>;
+
+/**
+ * The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),
+ * `dashed`. Text: `bold`, `small`, `mono`, `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a
+ * region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).
+ * Tones, on a shape, group, line or text: `accent` for what the point is about, `success`,
+ * `warning` and `error` for status.
+ */
+export const TourSvgClassSchema = z.enum([
+  'arrow',
+  'arrows',
+  'dashed',
+  'bold',
+  'small',
+  'mono',
+  'c',
+  'e',
+  'eyebrow',
+  'fill',
+  'frame',
+  'accent',
+  'success',
+  'warning',
+  'error',
+]);
+export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
+
 /** A `diffle-*` element of a tour with its attributes, which are strings as in HTML. */
 export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCardSchema,
@@ -1012,6 +1125,7 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourJumpSchema,
   TourSymbolSchema,
   TourCalloutSchema,
+  TourDiagramSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];

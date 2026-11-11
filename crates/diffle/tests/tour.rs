@@ -28,6 +28,12 @@ const TOUR: &str = r#"
   <p>The loader is <strong>new</strong>.</p>
   <table><thead><tr><th>Before</th><th>After</th></tr></thead>
   <tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
+  <diffle-diagram><svg viewBox="0 0 320 72">
+    <g class="accent"><rect x="8" y="16" width="120" height="40"/><text x="20" y="36" class="bold">Loader</text></g>
+    <path d="M128 36 H192" class="arrow"/>
+    <rect x="192" y="16" width="120" height="40" class="fill"/>
+    <text x="252" y="36" class="c">User <tspan class="mono">id</tspan></text>
+  </svg></diffle-diagram>
   <diffle-diff path="app.py" lines="2-3"></diffle-diff>
   <diffle-jump path="app.py" line="2">see it</diffle-jump>
 </diffle-card>
@@ -97,6 +103,15 @@ stray text
   <diffle-diff path="missing.py" lines="1-2"></diffle-diff>
   <diffle-diff path="added.py" side="old" lines="1"></diffle-diff>
   <table><tr><td rowspan="0" align="left">x</td></tr></table>
+  <diffle-diagram><svg viewBox="0 0 100 50">
+    <defs><marker id="m"></marker></defs>
+    <rect x="1" y="1" width="10" height="10" fill="red" class="box"/>
+    <tspan>loose</tspan>
+    <path d="M0 0 L10 10" class="arrow" marker-end="url(#m)"/>
+    <text x="1" y="1"><rect x="1" y="1" width="2" height="2"/></text>
+    <circle cx="5" cy="5"/>
+  </svg></diffle-diagram>
+  <p>A stray <svg viewBox="0 0 1 1"></svg> drawing.</p>
   <diffle-diff path="app.py" lines="2-9"></diffle-diff>
   <diffle-diff path="app.py" side="old" lines="3"></diffle-diff>
   <diffle-diff path="app.py" lines="5-2"></diffle-diff>

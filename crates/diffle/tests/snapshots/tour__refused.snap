@@ -45,6 +45,38 @@ expression: refused.json()
       "message": "<td> takes no attribute align"
     },
     {
+      "element": "diffle-card#a > diffle-diagram > <defs>",
+      "message": "diffle draws the arrowheads: give the line the class arrow or arrows"
+    },
+    {
+      "element": "diffle-card#a > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"10\" height=\"10\" fill=\"red\" class=\"box\">",
+      "message": "fill: diffle styles diagrams; use its classes instead"
+    },
+    {
+      "element": "diffle-card#a > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"10\" height=\"10\" fill=\"red\" class=\"box\">",
+      "message": "class box is not a diagram class"
+    },
+    {
+      "element": "diffle-card#a > diffle-diagram > <tspan>",
+      "message": "<tspan> belongs in a <text>"
+    },
+    {
+      "element": "diffle-card#a > diffle-diagram > <path d=\"M0 0 L10 10\" class=\"arrow\" marker-end=\"url(#m)\">",
+      "message": "marker-end: diffle styles diagrams; use its classes instead"
+    },
+    {
+      "element": "diffle-card#a > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"2\" height=\"2\">",
+      "message": "<text> holds text and <tspan>s only"
+    },
+    {
+      "element": "diffle-card#a > diffle-diagram > <circle cx=\"5\" cy=\"5\">",
+      "message": "missing field `r`"
+    },
+    {
+      "element": "diffle-card#a > <svg viewBox=\"0 0 1 1\">",
+      "message": "<svg> belongs in a diffle-diagram"
+    },
+    {
       "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"2-9\"",
       "message": "lines 2-9 are past the end of app.py, which has 3 lines on the new side"
     },
@@ -94,7 +126,7 @@ expression: refused.json()
     },
     {
       "element": "diffle-shape",
-      "message": "unknown variant `diffle-shape`, expected one of `diffle-card`, `diffle-group`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`"
+      "message": "unknown variant `diffle-shape`, expected one of `diffle-card`, `diffle-group`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`"
     }
   ]
 }

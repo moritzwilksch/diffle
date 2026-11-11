@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react';
 import { TourTagSchema } from '@/shared/protocol.js';
 import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
+import { TourDiagram } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
@@ -52,6 +53,8 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
           side={element.side ?? 'new'}
         />
       );
+    case 'diffle-diagram':
+      return <TourDiagram key={key} of={node} />;
     case 'diffle-callout':
       return inCallout ? null : (
         <Callout key={key} kind={element.kind}>
