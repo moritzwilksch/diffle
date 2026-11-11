@@ -76,6 +76,9 @@ export const test = base.extend<Options & Fixtures, WorkerFixtures>({
 
   /** Already on the review, fonts loaded and the first file rendered. */
   page: async ({ page, diffle }, use) => {
+    // Relative dates ("3 weeks ago") count from the clock; start it at a fixed moment after the
+    // fixture's commits so screenshots do not age. It keeps running: cache keys use Date.now().
+    await page.clock.setSystemTime(new Date('2024-06-01T12:00:00Z'));
     await page.goto(diffle.url);
     await settle(page);
     await use(page);
