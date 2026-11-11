@@ -19,6 +19,7 @@ const TOUR = `
 <diffle-callout kind="warning"><p>An unknown kind now fails the whole file.</p></diffle-callout>
 <h2>Unmatched refunds</h2>
 <p>Refunds of something the account never sold.</p>
+<diffle-callout kind="danger"><p>A refund with no matching sale used to count as income.</p></diffle-callout>
 <diffle-diff path="tally/refunds.py" lines="12-22"></diffle-diff>
 <h3>Where it lives</h3>
 <diffle-tree root="tally" paths="tally/ledger.py
@@ -85,6 +86,7 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 1 of 3')).toBeVisible();
     await contents.getByRole('button', { name: /Unmatched refunds/ }).click();
     await expect(view.getByText('Section 3 of 3')).toBeVisible();
+    await expect(view.locator('aside[aria-label="danger"]')).toHaveScreenshot('tour-danger.png');
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
     await expect(view.locator('.tour-row')).toHaveScreenshot('tour-row.png');
 

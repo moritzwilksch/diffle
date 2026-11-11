@@ -56,7 +56,9 @@ their `<h3>` subsections. Each review has one tour.
   diffs and cards with diffs full width: in a row their lines may wrap. A narrow window stacks a
   row's columns.
 - Keep a diff to at most about 12 lines, and split a long story into more sections.
-- Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings.
+- Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
+  `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
+  bug or breaking change, and only where the diff supports it.
 - Close every `diffle-*` element with its end tag: HTML ignores `/>` on them.
 - Paths are relative to the repository root and must be files of the review. Line numbers count on
   the side you name: `new`, the file after the change, by default.

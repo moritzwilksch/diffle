@@ -109,11 +109,11 @@ expression: refused.json()
       "message": "diffle-card belongs between paragraphs, outside other cards and callouts"
     },
     {
-      "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"aside\"",
-      "message": "unknown variant `aside`, expected `note` or `warning`"
+      "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"note\"",
+      "message": "unknown variant `note`, expected one of `info`, `warning`, `danger`"
     },
     {
-      "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"note\"",
+      "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"info\"",
       "message": "diffle-callout belongs between paragraphs, outside other callouts"
     },
     {

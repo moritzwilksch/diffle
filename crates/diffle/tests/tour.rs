@@ -48,7 +48,8 @@ const TOUR: &str = r#"
 <h3>Layout</h3>
 <diffle-tree paths="app.py
 docs/readme.md"></diffle-tree>
-<diffle-callout kind="note"><p>Unchanged.</p></diffle-callout>
+<diffle-callout kind="info"><p>Unchanged.</p></diffle-callout>
+<diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
 "#;
 
 async fn push(s: &TestServer, html: &str) -> common::server::Res {
@@ -126,7 +127,7 @@ stray text
 <p><diffle-symbol path="app.py" line="2" name="load"></diffle-symbol></p>
 <diffle-card id="a" title="A" step="1" color="red">
   <diffle-card id="nested" title="Nested"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
-  <diffle-callout kind="aside"><diffle-callout kind="note"></diffle-callout><h2>Inside</h2></diffle-callout>
+  <diffle-callout kind="note"><diffle-callout kind="info"></diffle-callout><h2>Inside</h2></diffle-callout>
 </diffle-card>
 <diffle-card id="a" title="Again"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
 <diffle-tree root="src" paths="src/a.py

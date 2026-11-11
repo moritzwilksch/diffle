@@ -79,7 +79,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-tree`    | `paths` (newline-separated), `root?`                               | a directory tree; changed files carry their status from the snapshot                                                   |
   | `diffle-jump`    | `path`, `line?`, `side?`                                           | a button into the diff view                                                                                            |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                    | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
-  | `diffle-callout` | `kind` (`note` \| `warning`)                                       | a highlighted aside                                                                                                    |
+  | `diffle-callout` | `kind` (`info` \| `warning` \| `danger`)                           | a highlighted aside                                                                                                    |
   | `diffle-diagram` | none; holds one `<svg viewBox>`                                    | a simple architecture diagram the agent draws by hand, styled by diffle                                                |
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.

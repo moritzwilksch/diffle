@@ -990,8 +990,8 @@ export const TourSymbolSchema = z
 export const TourCalloutSchema = z
   .object({
     tag: z.literal('diffle-callout'),
-    /** `note` for context, `warning` for a risk the reviewer should check. */
-    kind: z.enum(['note', 'warning']),
+    /** `info` for context, `warning` for something the reviewer should check, `danger` for a likely bug or breaking change. */
+    kind: z.enum(['info', 'warning', 'danger']),
   })
   .strict();
 

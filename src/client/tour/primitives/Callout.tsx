@@ -1,10 +1,18 @@
-import { Info, TriangleAlert } from 'lucide-react';
+import { Info, OctagonAlert, TriangleAlert } from 'lucide-react';
+import type { TourElement } from '@/shared/protocol.js';
 import type { ReactNode } from 'react';
 
-/** A highlighted aside behind a straight left rule: `note` in the accent, `warning` in the warning colour. */
-export function Callout({ kind, children }: { kind: 'note' | 'warning'; children: ReactNode }) {
-  const color = kind === 'warning' ? 'var(--warn)' : 'var(--accent)';
-  const Icon = kind === 'warning' ? TriangleAlert : Info;
+type Kind = Extract<TourElement, { tag: 'diffle-callout' }>['kind'];
+
+const LOOK = {
+  info: { color: 'var(--accent)', Icon: Info },
+  warning: { color: 'var(--warn)', Icon: TriangleAlert },
+  danger: { color: 'var(--danger)', Icon: OctagonAlert },
+} satisfies Record<Kind, unknown>;
+
+/** A highlighted aside behind a straight left rule, coloured and marked by its kind. */
+export function Callout({ kind, children }: { kind: Kind; children: ReactNode }) {
+  const { color, Icon } = LOOK[kind];
   return (
     <aside
       className="tour-block flex gap-2 rounded-r-md border-l-3 px-3 py-2"

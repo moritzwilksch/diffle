@@ -2886,10 +2886,11 @@
         "kind": {
           "type": "string",
           "enum": [
-            "note",
-            "warning"
+            "info",
+            "warning",
+            "danger"
           ],
-          "description": "`note` for context, `warning` for a risk the reviewer should check."
+          "description": "`info` for context, `warning` for something the reviewer should check, `danger` for a likely bug or breaking change."
         }
       },
       "required": [
@@ -3127,10 +3128,11 @@
             "kind": {
               "type": "string",
               "enum": [
-                "note",
-                "warning"
+                "info",
+                "warning",
+                "danger"
               ],
-              "description": "`note` for context, `warning` for a risk the reviewer should check."
+              "description": "`info` for context, `warning` for something the reviewer should check, `danger` for a likely bug or breaking change."
             }
           },
           "required": [
