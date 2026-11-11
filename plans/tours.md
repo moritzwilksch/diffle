@@ -4,13 +4,15 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ## Design decisions
 
-### 1. Write a tour as an HTML subset with `diffle-*` elements, laid out on an open canvas
+### 1. Write a tour as an HTML subset with `diffle-*` elements, read as one scrolling page
 
-- **Chosen:** The agent writes one HTML document. Plain tags (`h1`–`h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`) carry prose and structure. Custom elements carry the primitives: `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump` (catalog: open question 1). The agent places and connects primitives on a pannable, zoomable canvas, as the graph view does (`src/client/graph/GraphCanvas.tsx`), rather than in one column of text.
-- **Rejected:** Markdown with primitive fences (` ```diffle-diff path=… `) through `src/client/Markdown.tsx`. It is safe already and agents write it reliably, but it renders as one column, and the reviewer wants creative layouts that the agent connects freely.
+- **Chosen:** The agent writes one HTML document. Plain tags (`h1`–`h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`, and tables: `table`, `thead`, `tbody`, `tr`, `th`, `td`) carry prose and structure. Custom elements carry the primitives (decision 9). Diffle shows the cards as one vertically scrolling page, in step order (decision 6). A picture of how parts connect is a `diffle-diagram` inside a card.
+- **Rejected:**
+  - Markdown with primitive fences (` ```diffle-diff path=… `) through `src/client/Markdown.tsx`. It is safe already and agents write it reliably, but it has no cards, groups or steps.
+  - A pannable, zoomable canvas of cards joined by arrows, as the graph view draws (`src/client/graph/GraphCanvas.tsx`). It was built first and dropped: the reviewer found it looked too much like the graph view and wanted a page, with cards wide enough that diff lines don't wrap. Arrows between cards also collided with group frames.
 - **Why:**
-  - An explanation of a change is often a picture: a request flowing through three files, or one type feeding two callers.
-  - HTML nests primitives inside cards and lets the agent group them.
+  - A page reads top to bottom like a walkthrough, and its cards can take the full width.
+  - HTML nests primitives inside cards and lets the agent group them; a diagram carries the pictures the canvas's arrows were for.
 
 ### 2. Render the tour in the app from an allowlist, not in an iframe
 
@@ -34,17 +36,18 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Why:** The card always shows the real, current diff, highlighted like the diff view. A jump and the card it sits in name the same lines.
 - **Cost:** A card can go stale when a refresh moves or drops its lines (see decision 8).
 
-### 5. The agent declares cards and edges; diffle lays them out
+### 5. The agent declares cards and groups; diffle orders them on the page
 
-- **Chosen:** Each top-level `diffle-card` has an `id`. `<diffle-edge from="<id>" to="<id>" label="…">` connects two cards, and `diffle-group` boxes related cards under a title (a layer, a package). Diffle places them with the layered layout from the graph view (`src/client/graph/layout/rank.ts`, `order.ts`, `layout.ts`), sizing each card by its rendered contents.
-- **Rejected:** Coordinates (`x`/`y`, or grid row and column) on each card. The agent can't know a card's rendered height, which depends on its diff lines and prose, so cards would overlap or leave gaps, and each fix would cost another push.
-- **Why:** The agent states structure, which it knows. Diffle handles geometry, which it can measure.
-- **Revisit when:** tours need exact placement. A `rank` hint on a card could pin its layer (Follow-ups).
+- **Chosen:** Each `diffle-card` has a unique `id`, and `diffle-group` puts related cards in a titled section (a layer, a package). The page reads the steps in order, then the cards without one in document order; a group stays one section, placed at its first step, its stepped cards before the rest (`pageOrder` in `src/client/tour/document.ts`). Relations between cards go in the prose or a `diffle-diagram`.
+- **Rejected:**
+  - `diffle-edge`, an arrow between two cards. A page can't draw arrows between cards cleanly.
+  - Coordinates on each card. The agent can't know a card's rendered height, so cards would overlap or leave gaps.
+- **Why:** The agent states order and grouping, which it knows; diffle handles the geometry.
 
 ### 6. A tour is an ordered walk: numbered steps the reviewer steps through
 
-- **Chosen:** A card can carry `step="<n>"`, and the card shows its number. `n` and `p` move to the next and previous step, and the canvas glides to that card, as the graph view's focus does. A card without `step` is context the reviewer reaches by panning or by an edge.
-- **Rejected:** A free canvas with no order. The keymap stays smaller, but on a large canvas the reviewer has to guess where to begin.
+- **Chosen:** A card can carry `step="<n>"`, and the card shows its number. `n` and `p` move to the next and previous step and scroll its card to the gaze point: centred when it fits, its top near the page's top when it is taller. A card without `step` is context, after the steps. `j`/`k` and `d`/`u` scroll the page.
+- **Rejected:** No order at all. The reviewer would have to guess where to begin.
 - **Why:** A tour exists to give the reviewer a high-level walk through the change. The order the agent picks is part of the explanation, and walking it step by step is the main way to read it.
 
 ### 7. The reviewer's feedback goes to the agent's own chat in v1
@@ -66,26 +69,27 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
   | Element          | Attributes                                                         | Shows                                                                                                                           |
   | ---------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-  | `diffle-card`    | `id`, `step?`, `title`                                             | a box of prose and primitives; a node on the canvas, with its step number when it has one                                       |
-  | `diffle-group`   | `title`                                                            | a frame around related cards                                                                                                    |
-  | `diffle-edge`    | `from`, `to`, `label?`                                             | an arrow between two cards                                                                                                      |
+  | `diffle-card`    | `id`, `step?`, `title`                                             | a box of prose and primitives on the page, with its step number when it has one                                                 |
+  | `diffle-group`   | `title`                                                            | a titled section around related cards                                                                                           |
   | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`) | those diff lines, highlighted, with a jump to them                                                                              |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                               | a directory tree; changed files carry their status from the snapshot                                                            |
   | `diffle-jump`    | `path`, `line?`, `side?`                                           | a button into the diff view                                                                                                     |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                    | a chip for the symbol `name` on that line; it opens the language server's references, like the references peek in the diff view |
   | `diffle-callout` | `kind` (`note` \| `warning`)                                       | a highlighted aside inside a card                                                                                               |
+  | `diffle-diagram` | none; holds one `<svg viewBox>`                                    | a simple architecture diagram the agent draws by hand, styled by diffle                                                         |
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
-- **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably.
+- **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably. Cards share the page column's width, 896 pixels, so a diff line of about 100 characters doesn't wrap.
+- **Diagrams:** `TourSvgElementSchema` allows `svg` (`viewBox="0 0 <w> <h>"`), `g`, `rect`, `circle`, `ellipse`, `polygon`, `path`, `line`, `polyline`, `text` and `tspan`, each with its geometry and a `class`. `TourSvgClassSchema` is the vocabulary, a subset of the svg-diagram skill's: `arrow`, `arrows`, `dashed`; `bold`, `small`, `mono`, `c`, `e`, `eyebrow`; `fill`, `frame`; `accent`, `success`, `warning`, `error`. `src/client/styles/diagram.css` styles them from the theme tokens, and `src/client/tour/primitives/Diagram.tsx` redraws only what the catalog allows and adds arrowheads in each line's tone. A table compares or maps; a diagram shows how parts connect.
 - **Constraint:** `diffle-symbol` depends on the language servers. When `lspBlocker` (`src/shared/lsp.ts`) returns a reason, the chip renders as plain code, and its tooltip gives that reason. Servers answer for the new side only, so a symbol on the old side is always plain code. A click finds the name on its line as a whole word, asks `POST /api/lsp/references`, and opens the references list the diff's `gA` opens.
 
 ### 10. The server validates a pushed tour; a bad one fails the CLI with exit 2
 
 - **Chosen:** `PUT /api/tour` parses the document in Rust with `html5ever` (MIT OR Apache-2.0, both in `about.toml`'s `accepted`), through a small arena tree sink of its own (`tour/dom.rs`; `markup5ever_rcdom` is test-only by its authors' word), so the validator sees the tree `DOMParser` builds. It refuses:
-  - unknown elements and attributes, and any attribute on a plain tag but an `http(s)` `href` on `a`
-  - an element where it may not sit: cards at the top level or in a group, groups and edges at the top level, the other primitives inside a card, text and plain tags inside a card
-  - content in an element that holds none (`diffle-edge`, `diffle-diff`, `diffle-tree`, `diffle-symbol`), which is what `<diffle-edge ... />` produces, since HTML ignores `/>` there
-  - an edge whose `from` or `to` names no card
+  - unknown elements and attributes, and any attribute on a plain tag but an `http(s)` `href` on `a` and a positive `colspan` or `rowspan` on `th` and `td`
+  - an element where it may not sit: cards at the top level or in a group, groups at the top level, the other primitives inside a card, text and plain tags inside a card
+  - content in an element that holds none (`diffle-diff`, `diffle-tree`, `diffle-symbol`), which is what `<diffle-diff ... />` produces, since HTML ignores `/>` there
+  - in a `diffle-diagram` (`tour/diagram.rs`): anything but one `<svg>`; an element or class outside the diagram catalog; `style`, `fill`, `stroke`, font, marker and other styling attributes; `<defs>` and markers (diffle draws the arrowheads); a `tspan` outside a `text`; an `<svg>` outside a diagram
   - a duplicate `id` or `step`
   - a `path` outside the snapshot on the side it names, or a tree path outside its `root`
   - a line range past the end of its file on that side
@@ -94,13 +98,13 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
   Each error names the element and the reason. A refusal is a user error (`Error::is_user_error`), so `diffle tour push` exits 2 with the list, and the agent fixes the document and pushes again. The client still applies its own allowlist when rendering (decision 2).
 
-- **Rejected:** Storing any document and letting the client drop what it doesn't know. The agent would never learn that a card vanished or an edge dangles, and the reviewer would get a broken tour.
+- **Rejected:** Storing any document and letting the client drop what it doesn't know. The agent would never learn that a card or a diagram vanished, and the reviewer would get a broken tour.
 - **Why:** The agent writes and pushes in a loop, so the CLI's exit status and stderr are its only feedback.
 - **Cost:** A new dependency, plus an allowlist on each side of the contract; decision 11 gives both one source.
 
 ### 11. `protocol.ts` defines the catalog; the client, the validator and the agent's documentation all read it
 
-- **Chosen:** In `src/shared/protocol.ts`, each `diffle-*` element is a `.strict()` zod object of its attributes, documented with JSDoc. `TourElementSchema` is their discriminated union on `tag`, and `TourTagSchema` is a `z.enum` of the plain tags. They cross to Rust like the rest of the contract (`protocol.generated.json`, `build.rs`). The validator (decision 10) turns each parsed element into `{tag, ...attributes}` and deserializes it into `crate::protocol::TourElement`, so an unknown tag or attribute fails there. Cross-element rules (edge targets, unique ids and steps, paths, symbol names) stay in Rust. The client builds its allowlist (decision 2) from the same schemas. The agent documentation (decision 13) prints the catalog from the schemas' descriptions, with one example document and the authoring rules: the order is part of the explanation, and cards stay short.
+- **Chosen:** In `src/shared/protocol.ts`, each `diffle-*` element is a `.strict()` zod object of its attributes, documented with JSDoc. `TourElementSchema` is their discriminated union on `tag`, and `TourTagSchema` is a `z.enum` of the plain tags. They cross to Rust like the rest of the contract (`protocol.generated.json`, `build.rs`). The validator (decision 10) turns each parsed element into `{tag, ...attributes}` and deserializes it into `crate::protocol::TourElement`, so an unknown tag or attribute fails there. `TourSvgElementSchema` and `TourSvgClassSchema` do the same for a diagram's `<svg>`. Cross-element rules (unique ids and steps, paths, symbol names) stay in Rust. The client builds its allowlist (decision 2) from the same schemas. The agent documentation (decision 13) prints the catalog from the schemas' descriptions, with one example document and the authoring rules: the order is part of the explanation, and cards stay short.
 - **Rejected:**
   - A Rust table in `crates/diffle/src/tour/catalog.rs` plus a Node test comparing it with a TypeScript copy. Two hand-kept copies, and a test whose only job is to catch drift between them.
   - A separate, hand-written skill file or `AGENTS.md` snippet. It would drift from the running diffle and needs an install step.
@@ -109,12 +113,11 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   - What the agent reads can't disagree with what the validator enforces.
 - **Constraint:** HTML attribute values are strings, so the attribute schemas use strings: `z.enum` for `side` and `kind`, and a regex for `step` and `lines`. A `.strict()` object exports `additionalProperties: false`, which typify 0.8 turns into `#[serde(deny_unknown_fields)]` (verified in `typify-impl-0.8.0/src/structs.rs`; `crates/diffle/Cargo.toml` pins `typify = "0.8"`).
 
-### 12. Share the canvas with the graph view; the tour is a third `ViewDef`
+### 12. The tour is a third `ViewDef`, a page of its own; the graph view is untouched
 
-- **Chosen:** Move the viewport (pan, zoom, fit, eased focus) and the arrow shapes out of `src/client/graph/GraphCanvas.tsx` and `GraphShapes.tsx` into `src/client/canvas/`. Generalize `src/client/graph/layout/` from `GraphNode` to nodes with only an `id`, given a size and an optional cluster (the box a layer's members share: a file for the graph, a `diffle-group` for a tour) by the caller, and move it into `src/client/canvas/layout/`. What only the graph knows stays in `graph/layout/`: its parts (`components.ts`) and source order (`source.ts`). Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and the header's view switch lists it only while there is one (`ViewDef.useListed`), so reviews without tours look as before. Its `keys` take `n` and `p` for steps (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph); in the graph view `T` stays the tests filter. On the canvas a `diffle-group` is the layout's cluster: a group ranks as one unit, so its cards share a layer and one frame.
-- **Rejected:** A separate, simpler canvas and layout for tours. It ships faster, but two canvases drift apart in pan, zoom and keys.
-- **Why:** One canvas behaviour, and one set of canvas keys, across both views.
-- **Cost:** A refactor of the graph view lands inside this feature, so the graph's e2e screenshots must stay unchanged.
+- **Chosen:** `src/client/tour/TourPage.tsx` renders the page. Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and the header's view switch lists it only while there is one (`ViewDef.useListed`), so reviews without tours look as before. Its `keys` take `n` and `p` for steps and `j`/`k`/`d`/`u` to scroll (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph); in the graph view `T` stays the tests filter.
+- **Rejected:** Sharing the graph's canvas (`src/client/canvas/`, the viewport and a generalized layered layout). It was built for the canvas tour and reverted with it (decision 1); the graph's code is as on `main`.
+- **Why:** A page needs no viewport or layout, so the graph view has nothing to share.
 
 ### 13. `diffle --skill` prints the agent interface as Markdown, with no frontmatter
 
@@ -126,7 +129,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 14. The tour view's side panel is the step outline
 
-- **Chosen:** `ViewDef.Side` lists the steps in order with their number and card title, marks stale cards (decision 8), and highlights the current step. Clicking a step glides to its card.
+- **Chosen:** `ViewDef.Side` lists the steps in order with their number and card title, marks stale cards (decision 8), and highlights the current step. Clicking a step scrolls to its card.
 - **Rejected:** Details of the selected card, like the graph view's `GraphDetails`. They would repeat what the card already shows.
 - **Why:** The walk is the main way to read a tour (decision 6). The outline shows where the reviewer is in it and how much remains.
 
@@ -150,10 +153,10 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Living under `comments/`. A tour isn't a comment, and the shared parts (key, lock, atomic write) are small.
 - **Why:** The comments module stays untouched and within the line caps.
 
-### 18. Ship in five slices, the server first
+### 18. Ship in slices, the server first
 
 - **Chosen:** The order under **Delivery**.
-- **Rejected:** The canvas refactor first. It front-loads risk to the graph view while nothing depends on it yet.
+- **Rejected:** The UI first. Without the validator, nothing tells the agent what it got wrong.
 - **Why:** An agent can push and get refusals before any UI exists, which tests the catalog and the validator early.
 
 ## Context for the implementer
@@ -173,7 +176,7 @@ diffle --skill                            # prints the agent interface as Markdo
 ```
 
 ```
-src/shared/protocol.ts                         MODIFIED  Tour, TourPush, TourResponse, TourRejection, TourElement (+ one strict attribute schema per diffle-* element), TourTag, ServerMessage 'tour'
+src/shared/protocol.ts                         MODIFIED  Tour, TourPush, TourResponse, TourRejection, TourElement (+ one strict attribute schema per diffle-* element), TourTag, TourSvgElement, TourSvgClass, ServerMessage 'tour'
 crates/diffle/protocol.generated.json          MODIFIED  regenerated (npx vitest run test/scripts/protocol-schema.test.ts -u)
 crates/diffle/Cargo.toml                       MODIFIED  html5ever
 crates/diffle/src/tour/mod.rs                  NEW       module root
@@ -181,6 +184,8 @@ crates/diffle/src/tour/store.rs                NEW       <git-dir>/diffle/tours.
 crates/diffle/src/tour/dom.rs                  NEW       html5ever into an arena tree, as DOMParser builds it
 crates/diffle/src/tour/validate.rs             NEW       check against TourElement and TourTag, placement, cross-element rules (decision 10)
 crates/diffle/src/tour/files.rs                NEW       what elements ask of the review's files, checked against the snapshot
+crates/diffle/src/tour/element.rs              NEW       reads an element's attributes through the catalog; names it in errors
+crates/diffle/src/tour/diagram.rs              NEW       checks a diffle-diagram's svg against TourSvgElement and TourSvgClass
 crates/diffle/src/session/mod.rs               MODIFIED  Session::tour()
 crates/diffle/src/server/routes/tour.rs        NEW       GET/PUT/DELETE /api/tour, broadcasts 'tour'
 crates/diffle/src/server/routes/mod.rs         MODIFIED  mount tour routes
@@ -189,15 +194,14 @@ crates/diffle/src/cli/agent/tour.rs            NEW       push and clear through 
 crates/diffle/src/cli/skill.rs                 NEW       renders the agent interface and the catalog
 crates/diffle/tests/tour.rs                    NEW       push, rejection, clear, refresh survival; insta snapshots
 src/client/api.ts                              MODIFIED  tour(), on 'tour' refetch
-src/client/canvas/                             NEW       viewport, arrows, layout moved from graph/ (decision 12)
-src/client/graph/GraphCanvas.tsx, layout/      MODIFIED  use canvas/
-src/client/tour/view.ts                        NEW       tourView ViewDef: blocked, keys n/p, place
-src/client/tour/TourCanvas.tsx                 NEW       lays out cards, groups and edges on the canvas
-src/client/tour/document.ts                    NEW       DOMParser → cards, groups, arrows and steps, through the catalog's schemas
+src/client/tour/view.ts                        NEW       tourView ViewDef: blocked, keys n/p and scrolling, place
+src/client/tour/TourPage.tsx                   NEW       the page: sections in reading order, a step scrolled to the gaze point
+src/client/tour/document.ts                    NEW       DOMParser → cards, groups and steps through the catalog's schemas; pageOrder
 src/client/tour/render.tsx                     NEW       a card's contents → allowlisted React (decision 2)
 src/client/tour/excerpt.ts                     NEW       a diff primitive's lines as a one-hunk patch, numbered as in the file
 src/client/tour/state.ts                       NEW       the tour, the step shown, stale cards, per-snapshot file reads
-src/client/tour/primitives/                    NEW       Card, Diff, Tree, Jump, Symbol, Callout (groups and edges are drawn by TourCanvas)
+src/client/tour/primitives/                    NEW       Card, Diff, Tree, Jump, Symbol, Callout, Diagram
+src/client/styles/diagram.css                  NEW       a diagram's classes, from the theme tokens
 src/client/tour/StepOutline.tsx                NEW       side panel (decision 14)
 src/client/views/registry.ts, state.ts         MODIFIED  register 'tour'; ViewId gains 'tour'; ViewDef.useListed
 src/client/views/ViewSwitch.tsx                MODIFIED  leaves out a view its useListed declines
@@ -208,10 +212,10 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 ## Delivery
 
 1. Protocol, store, validator, routes, `diffle tour push`/`clear`. Verify: `pixi run test-rust`, `pixi run test-node`.
-2. Move the canvas into `src/client/canvas/`; the graph view's behaviour doesn't change. Verify: `pixi run test-node`, `pixi run e2e -g graph` with no screenshot changes.
-3. The tour view: cards, groups, edges, `diff`, `jump`, `tree`, `callout`, steps, `n`/`p`, outline, stale notice. Verify: `pixi run e2e -g tour`.
-4. `diffle-symbol` through the language-server pool. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
-5. `diffle --skill`. Verify: an insta snapshot of its output in `pixi run test-rust`.
+2. The tour view: cards, groups, `diff`, `jump`, `tree`, `callout`, steps, `n`/`p`, outline, stale notice. Verify: `pixi run e2e -g tour`.
+3. `diffle-symbol` through the language-server pool. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
+4. `diffle --skill`. Verify: an insta snapshot of its output in `pixi run test-rust`.
+5. The page redesign: drop `diffle-edge`, the page in place of the canvas (the canvas refactor reverted), wide cards, tables, `diffle-diagram`. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 
@@ -221,5 +225,4 @@ None.
 
 ## Follow-ups
 
-- A `rank` hint on a card that pins its layer, for when auto-layout misplaces a card the agent cares about (decision 5).
 - Comments on tour cards that reach the agent through diffle, for when reviewers want answers without leaving diffle (decision 7).

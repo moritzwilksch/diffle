@@ -2928,7 +2928,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "A box of prose and primitives, and a node on the canvas. It sits at the top level or in a\n`diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,\n`diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff."
+      "description": "A box of prose and primitives on the page. It sits at the top level or in a `diffle-group`, and\nholds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`\nand `diffle-diagram`. Keep it short: a title, a sentence or two, and one diff."
     },
     "TourDiagram": {
       "type": "object",
@@ -3005,7 +3005,7 @@
             "title"
           ],
           "additionalProperties": false,
-          "description": "A box of prose and primitives, and a node on the canvas. It sits at the top level or in a\n`diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,\n`diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff."
+          "description": "A box of prose and primitives on the page. It sits at the top level or in a `diffle-group`, and\nholds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`\nand `diffle-diagram`. Keep it short: a title, a sentence or two, and one diff."
         },
         {
           "type": "object",
@@ -3025,7 +3025,7 @@
             "title"
           ],
           "additionalProperties": false,
-          "description": "A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
+          "description": "A titled section around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
         },
         {
           "type": "object",
@@ -3222,7 +3222,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
+      "description": "A titled section around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
     },
     "TourJump": {
       "type": "object",

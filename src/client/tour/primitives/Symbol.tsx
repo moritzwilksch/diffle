@@ -19,8 +19,6 @@ export function TourSymbol({ path, line, name, side }: { path: string; line: num
     <button
       type="button"
       className="cursor-pointer rounded-sm border-0 bg-transparent p-0 align-baseline hover:underline"
-      // The canvas pans on a press; a press on the chip is the chip's.
-      onPointerDown={(e) => e.stopPropagation()}
       onClick={() => void references(path, line, name)}
       title={`References to ${name}`}
     >

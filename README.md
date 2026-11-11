@@ -213,10 +213,10 @@ diffle tour push tour.html      # show a guided tour of the change; stdin withou
 diffle tour clear               # remove it
 ```
 
-A tour is one HTML document of cards, each showing lines of the diff, linked by arrows and
-walked in steps. diffle checks it against the review and refuses it with every reason when it
-names a file, line, or symbol the review lacks. Press `T` to open the tour and `n` / `p` to step
-through it. Each review keeps its own tour.
+A tour is one HTML document of cards, each showing lines of the diff, a table or a small
+diagram, read as one page and walked in steps. diffle checks it against the review and refuses
+it with every reason when it names a file, line, or symbol the review lacks. Press `T` to open
+the tour and `n` / `p` to step through it. Each review keeps its own tour.
 
 `diffle --skill` prints all of this for the agent, the tour's elements included, as Markdown
 without frontmatter. Add a name and description of your choice and install it as a skill.

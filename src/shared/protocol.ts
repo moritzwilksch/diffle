@@ -917,9 +917,9 @@ const tourIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
 
 /**
- * A box of prose and primitives, and a node on the canvas. It sits at the top level or in a
- * `diffle-group`, and holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`,
- * `diffle-symbol` and `diffle-callout`. Keep it short: a title, a sentence or two, and one diff.
+ * A box of prose and primitives on the page. It sits at the top level or in a `diffle-group`, and
+ * holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`
+ * and `diffle-diagram`. Keep it short: a title, a sentence or two, and one diff.
  */
 export const TourCardSchema = z
   .object({
@@ -933,7 +933,7 @@ export const TourCardSchema = z
   })
   .strict();
 
-/** A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only. */
+/** A titled section around related cards (a layer, a package), at the top level. It holds `diffle-card`s only. */
 export const TourGroupSchema = z
   .object({
     tag: z.literal('diffle-group'),
