@@ -21,6 +21,11 @@ pub async fn comments(command: CommentsCommand, dir: Option<PathBuf>) -> anyhow:
             let diffle = connect(repo, dir).await?;
             print(&comments::list(&diffle, state.as_deref(), path.as_deref()).await?)
         }
+        CommentsCommand::Reply { thread, body, repo } => {
+            let body = if body == "-" { read_document(None)? } else { body };
+            let diffle = connect(repo, dir).await?;
+            print(&comments::reply(&diffle, &thread, body).await?)
+        }
     }
 }
 
@@ -36,7 +41,7 @@ pub async fn tour(command: TourCommand, dir: Option<PathBuf>) -> anyhow::Result<
     }
 }
 
-/// The document at `file`, or on stdin for none or `-`.
+/// The text in `file`, or on stdin for none or `-`.
 fn read_document(file: Option<PathBuf>) -> anyhow::Result<String> {
     let mut html = String::new();
     match file.filter(|f| f.as_os_str() != "-") {

@@ -16,11 +16,16 @@ to the diffle serving the repository you are in, or the one `-C <path>` names: a
 itself in `<git-dir>/diffle/server.json`. Without a run they exit 2 with \"no diffle is running for
 this repository\"; ask the reviewer to start one (`diffle` in the repository).
 
-## Read the review's comments
+## Read and answer the review's comments
 
 `diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
 is shown as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its
-anchor (a path and a line range on the `old` or `new` side, or a whole file) and its messages.
+`id`, its anchor (a path and a line range on the `old` or `new` side, or a whole file) and its
+messages. A message you wrote carries `\"author\": \"agent\"`.
+
+`diffle comments reply <thread-id> <body|->` adds your reply to a thread, in Markdown (stdin with
+`-`), and prints the thread as JSON. The reviewer sees it marked as yours. Reply to answer a
+question or to say what you changed; when the answer is a change, make it first, then reply.
 
 ## Give the reviewer a tour
 
