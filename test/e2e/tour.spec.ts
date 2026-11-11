@@ -87,7 +87,7 @@ test.describe('the tour', () => {
     const contents = page.getByRole('navigation', { name: 'Contents' });
     await expect(contents).toMatchAriaSnapshot({ name: 'tour-contents.aria.yml' });
 
-    // n takes the first section and scrolls its heading to the gaze point; p does not go before it.
+    // n takes the first section and scrolls its heading near the top; p does not go before it.
     await page.keyboard.press('n');
     await page.keyboard.press('n');
     await expect(view.getByText('Section 2 of 3')).toBeVisible();

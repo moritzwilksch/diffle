@@ -21,7 +21,7 @@ interface TourState {
   stale: ReadonlySet<number>;
   /** How many `diffle-diff`s went stale. */
   staleDiffs: number;
-  /** Shows section `index`, or its subsection `sub`, and scrolls its heading to the gaze point. */
+  /** Shows section `index`, or its subsection `sub`, and scrolls its heading near the page's top. */
   goTo(index: number, sub?: number): void;
   move(by: 1 | -1): void;
 }

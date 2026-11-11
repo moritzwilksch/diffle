@@ -48,7 +48,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 6. A tour is an ordered walk: its `h2` sections are the steps
 
-- **Chosen:** Each `h2` is a step, in document order; the heading shows its number in a soft circle above a hairline. `n` and `p` move to the next and previous section and scroll its heading to the gaze point, half the page's height, as the diff's jumps land; room below the last section lets it get there. Scrolling the page makes the section at the gaze point the current one. `j`/`k` and `d`/`u` scroll the page.
+- **Chosen:** Each `h2` is a step, in document order; the heading shows its number in a soft circle above a hairline. `n` and `p`, and a click in the table of contents, move to a section and scroll its heading to 15% of the page's height from its top (`HEADING_FRACTION` in `TourPage.tsx`); room below the last section lets it get there. The diff lands jumps at its gaze point, half the height, where the eye rests on one line; an article departs from it because its reader wants the section below the heading, not the end of the one before. Scrolling the page makes the section whose heading passed that line the current one. While a taken section glides into place, scrolling leaves the current section alone, so `n` pressed twice reaches the second section. `j`/`k` and `d`/`u` scroll the page.
 - **Rejected:**
   - No order at all. The reviewer would have to guess where to begin.
   - A `step` attribute on cards. A page reads top to bottom, so document order is the walk.
@@ -212,7 +212,7 @@ crates/diffle/src/cli/skill.rs                 NEW       renders the agent inter
 crates/diffle/tests/tour.rs                    NEW       push, rejection, clear, refresh survival; insta snapshots
 src/client/api.ts                              MODIFIED  tour(), on 'tour' refetch
 src/client/tour/view.ts                        NEW       tourView ViewDef: blocked, keys n/p and scrolling, place
-src/client/tour/TourPage.tsx                   NEW       the article: one column, a section's heading scrolled to the gaze point
+src/client/tour/TourPage.tsx                   NEW       the article: one column, a section's heading scrolled near the top
 src/client/tour/document.ts                    NEW       DOMParser → title, h2 sections with their h3s and diffs
 src/client/tour/render.tsx                     NEW       the article → allowlisted React (decision 2)
 src/client/tour/excerpt.ts                     NEW       a diff primitive's lines as a one-hunk patch, numbered as in the file
