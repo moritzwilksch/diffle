@@ -68,7 +68,7 @@ export function TourDiff({ range }: { range: LineRange }) {
           {side === 'old' ? 'before ' : ''}
           {lines}
         </span>
-        <TourJump path={path} line={start} side={side} label="Open" />
+        <TourJump path={path} line={start} side={side} label="Open" placed />
       </figcaption>
       {shown.state === 'ready' && fileDiff ? (
         <FileDiff key={primed} fileDiff={fileDiff} options={options} />

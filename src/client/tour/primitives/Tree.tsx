@@ -43,9 +43,7 @@ export function TourTree({ paths, root }: { paths: string; root: string }) {
             <button
               type="button"
               className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono text-[0.75rem] text-foreground hover:underline"
-              onPointerDown={(e) => e.stopPropagation()}
               onClick={() => void jump(path)}
-              title="Open in the diff"
             >
               <File size="0.75rem" className="text-muted" />
               {path.slice(path.lastIndexOf('/') + 1)}
