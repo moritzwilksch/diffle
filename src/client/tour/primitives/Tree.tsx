@@ -14,7 +14,7 @@ const STATUS_COLOR: Partial<Record<ChangeStatus, string>> = { A: 'var(--add)', D
 
 /**
  * A directory tree of `paths` under `root`, headed by its title and icon as a card is; a changed
- * file shows its status and opens in the diff.
+ * file shows its status and its lines added and removed, and opens in the diff.
  */
 export function TourTree({
   paths,
@@ -30,7 +30,7 @@ export function TourTree({
   place?: Place;
 }) {
   const changed = useStore((s) => s.snapshot?.changed);
-  const status = new Map(changed?.map((f) => [f.path, f.status]));
+  const files = new Map(changed?.map((f) => [f.path, f]));
   const top: Dir = { dirs: new Map(), files: [] };
   const prefix = root ? `${root}/` : '';
   for (const path of paths.split('\n').map((p) => p.trim())) {
@@ -54,7 +54,8 @@ export function TourTree({
         </li>
       ))}
       {dir.files.map((path) => {
-        const s = status.get(path);
+        const file = files.get(path);
+        const s = file?.status;
         return (
           <li key={path}>
             <button
@@ -67,6 +68,13 @@ export function TourTree({
               {s && (
                 <span className="font-semibold" style={{ color: STATUS_COLOR[s] ?? 'var(--accent)' }}>
                   {s}
+                </span>
+              )}
+              {file && file.additions + file.deletions > 0 && (
+                <span className="text-muted">
+                  {[file.additions && `+${file.additions}`, file.deletions && `−${file.deletions}`]
+                    .filter(Boolean)
+                    .join(' ')}
                 </span>
               )}
             </button>
