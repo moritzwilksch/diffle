@@ -43,9 +43,11 @@ with `n` and `p`. Each review has one tour.
 - Paths are relative to the repository root and must be files of the review. Line numbers count on
   the side you name: `new`, the file after the change, by default.
 - diffle styles the tour: no `style`, scripts or images, and `class` only inside a diagram.
-- A `diffle-symbol` lists its references through the language server for its file. Without one,
-  or on the `old` side, it renders as plain code. Run `diffle lsp` to see which languages have a
-  server before you rely on symbol chips.
+- Mark every code symbol your prose names with a `diffle-symbol` when it has a line in the review
+  to point at: the reviewer sees it coloured as in the diff, hovers it for its signature, and
+  clicks it for its references. Keep `<code>` for what is not a symbol: paths, commands, literals.
+- Hover and references need the language server for the symbol's file, and the `new` side. Without
+  them the chip is coloured code only. Run `diffle lsp` to see which languages have a server.
 
 ### Writing
 
@@ -166,7 +168,7 @@ A button that opens the diff view at a file or a line. Its text is the label; em
 
 #### `diffle-symbol`
 
-A chip for a symbol on a line; it opens the language server's references to it. It holds nothing.
+A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the diff's hover card and a click that lists its references when a language server serves its file. It holds nothing.
 
 | Attribute | Required | Meaning |
 |---|---|---|

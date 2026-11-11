@@ -3145,7 +3145,7 @@
             "name"
           ],
           "additionalProperties": false,
-          "description": "A chip for a symbol on a line; it opens the language server's references to it. It holds nothing."
+          "description": "A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the\ndiff's hover card and a click that lists its references when a language server serves its file.\nIt holds nothing."
         },
         {
           "type": "object",
@@ -3654,7 +3654,7 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "A chip for a symbol on a line; it opens the language server's references to it. It holds nothing."
+      "description": "A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the\ndiff's hover card and a click that lists its references when a language server serves its file.\nIt holds nothing."
     },
     "TourTag": {
       "type": "string",

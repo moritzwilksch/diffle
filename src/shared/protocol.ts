@@ -979,7 +979,11 @@ export const TourJumpSchema = z
   })
   .strict();
 
-/** A chip for a symbol on a line; it opens the language server's references to it. It holds nothing. */
+/**
+ * A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the
+ * diff's hover card and a click that lists its references when a language server serves its file.
+ * It holds nothing.
+ */
 export const TourSymbolSchema = z
   .object({
     tag: z.literal('diffle-symbol'),

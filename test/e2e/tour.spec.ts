@@ -142,7 +142,7 @@ test.describe('the tour', () => {
       env: { PATH: '/usr/bin:/bin', FAKE_LSP_GRAPH: '1' },
     });
 
-    test("a symbol chip lists the symbol's references; on the old side it stays plain code", async ({
+    test('a symbol chip is coloured as in the diff, hovers, and lists its references; on the old side it only shows', async ({
       page,
       diffle,
     }) => {
@@ -156,6 +156,13 @@ test.describe('the tour', () => {
       );
       const view = await showTour(page);
       await expect(view.locator('code[title^="References are asked of the new side"]')).toHaveText('Entry');
+      // Both chips take the colours the highlighter gives them on their lines.
+      await expect(page.locator('[data-card="parse"]')).toHaveScreenshot('tour-symbols.png');
+
+      // Hovering the chip with a server shows the diff's hover card.
+      await view.getByRole('button', { name: 'parse_row' }).hover();
+      await expect(page.locator('.hover-markdown')).toContainText('def f() -> None');
+      await expect(page).toHaveScreenshot('tour-symbol-hover.png');
       await view.getByRole('button', { name: 'parse_row' }).click();
       const list = page.getByRole('dialog', { name: 'References' });
       await expect(list).toBeVisible();
