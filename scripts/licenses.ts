@@ -1,6 +1,6 @@
 // Writes THIRD_PARTY_NOTICES.md, which ships in every archive and npm package: the fonts
 // (licenses-fonts.md), the packages the client build bundled (vite's licence plugin lists them in
-// dist/*-licenses.json, so the client must be built first), and the crates the binary links
+// dist/client-licenses.json, so the client must be built first), and the crates the binary links
 // (cargo-about over Cargo.lock, through about.toml and about.hbs). usage: node scripts/licenses.ts
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -29,12 +29,8 @@ packages bundled into the browser client, and the Rust crates linked into the bi
 `;
 
 function packages(): Package[] {
-  const seen = new Map<string, Package>();
-  for (const bundle of ['client', 'worker']) {
-    const listed: Package[] = JSON.parse(readFileSync(join(ROOT, 'dist', `${bundle}-licenses.json`), 'utf8'));
-    for (const pkg of listed) seen.set(`${pkg.name}@${pkg.version}`, pkg);
-  }
-  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
+  const listed: Package[] = JSON.parse(readFileSync(join(ROOT, 'dist', 'client-licenses.json'), 'utf8'));
+  return listed.sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
 }
 
 function clientSection(): string {

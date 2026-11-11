@@ -1,11 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import pkg from './package.json' with { type: 'json' };
+import { chunkUrl } from './scripts/lib/vite-chunk-url.js';
 
 // Mirrors `paths` in the tsconfigs: vite's own tsconfig lookup skips files a config excludes.
 const srcRoot = fileURLToPath(new URL('./src', import.meta.url));
 
 export default defineConfig({
+  plugins: [chunkUrl()],
   define: { __DIFFLE_VERSION__: JSON.stringify(pkg.version) },
   resolve: { alias: { '@': srcRoot } },
   test: {

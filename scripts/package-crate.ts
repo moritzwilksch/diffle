@@ -13,7 +13,7 @@ const CRATE = join(ROOT, 'crates/diffle');
 const LIMIT = 10 * 1000 * 1000;
 const BUDGET = 0.8 * LIMIT;
 
-if (!existsSync(join(CRATE, 'client/index.html')))
+if (!existsSync(join(CRATE, 'client/index.html.gz')))
   throw new Error('crates/diffle/client is missing: run npm run build');
 for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) copyFileSync(join(ROOT, name), join(CRATE, name));
 

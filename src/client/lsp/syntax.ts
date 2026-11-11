@@ -1,4 +1,5 @@
 import { getFiletypeFromFileName, type SupportedLanguages } from '@pierre/diffs';
+import syntaxWorker from './syntax.worker.ts?chunk-url';
 
 type Language = Exclude<SupportedLanguages, 'text' | 'ansi'>;
 
@@ -52,7 +53,7 @@ export async function blocksSymbol(
     // Large files remain usable without copying and tokenizing them for an advisory popup.
     if (text.length > 1_000_000 || unavailable) return false;
     if (!worker) {
-      worker = new Worker(new URL('./syntax.worker.ts', import.meta.url), { type: 'module' });
+      worker = new Worker(syntaxWorker, { type: 'module' });
       worker.onmessage = ({ data }: MessageEvent<SyntaxResponse>) => {
         pending.get(data.id)?.(data.blocked);
         pending.delete(data.id);

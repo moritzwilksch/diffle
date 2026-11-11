@@ -717,6 +717,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "dunce",
+ "flate2",
  "form_urlencoded",
  "futures",
  "gethostname",

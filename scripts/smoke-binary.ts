@@ -39,16 +39,19 @@ try {
     child.on('exit', (code) => rej(new Error(`exited ${code}:\n${err}`)));
   });
 
-  const fetchOk = async (path: string, type: string) => {
+  // The client is embedded gzipped and sent so; fetch decodes it.
+  const fetchOk = async (path: string, type: string, encoding?: string) => {
     const res = await fetch(new URL(path, base));
     const got = res.headers.get('content-type') ?? '';
-    if (!res.ok || !got.startsWith(type)) throw new Error(`${path}: ${res.status} ${got}`);
+    const coded = res.headers.get('content-encoding');
+    if (!res.ok || !got.startsWith(type) || (encoding && coded !== encoding))
+      throw new Error(`${path}: ${res.status} ${got} encoded ${coded}`);
     return res.text();
   };
-  const html = await fetchOk('/', 'text/html');
+  const html = await fetchOk('/', 'text/html', 'gzip');
   const find = (re: RegExp, text: string, what: string) => re.exec(text)?.[0] ?? fail(`found no ${what}`);
   const script = find(/assets\/index-[\w-]+\.js/, html, 'entry script');
-  const entry = await fetchOk(script, 'text/javascript');
+  const entry = await fetchOk(script, 'text/javascript', 'gzip');
   const worker = find(/syntax\.worker-[\w-]+\.js/, entry, 'syntax worker');
   await fetchOk(`assets/${worker}`, 'text/javascript');
   // The viewer's highlighting worker loads the lexers lazily, one chunk further down.

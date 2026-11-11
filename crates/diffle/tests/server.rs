@@ -503,3 +503,44 @@ async fn highlights_one_side_of_a_file() {
     assert_eq!(s.get("/api/highlight?path=../x&rev=new").await.status, 404);
     s.close().await;
 }
+
+/// The embedded client goes out gzipped to a client accepting gzip and plain to any other; hashed assets
+/// are cached for good, `index.html` revalidated. Needs the client build (`npm run build`).
+#[tokio::test]
+async fn serves_the_client_gzipped_and_cached() {
+    use std::io::Read;
+    let built = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("client/index.html.gz");
+    if !built.exists() {
+        eprintln!("skipped: no client build at {}", built.display());
+        return;
+    }
+    let s = TestServer::start().await;
+    let get = |path: String, encoding: &'static str| {
+        let url = format!("{}{}", s.base.trim_end_matches('/'), path);
+        async move {
+            let res = reqwest::Client::new().get(url).header("accept-encoding", encoding).send().await.unwrap();
+            let header = |name: &str| res.headers().get(name).map(|v| v.to_str().unwrap().to_owned());
+            let heads = [header("content-type"), header("content-encoding"), header("cache-control"), header("vary")];
+            (heads, res.bytes().await.unwrap().to_vec())
+        }
+    };
+
+    let (heads, gzipped) = get("/".into(), "gzip, deflate").await;
+    let mut html = String::new();
+    flate2::read::GzDecoder::new(&gzipped[..]).read_to_string(&mut html).unwrap();
+    assert_eq!(
+        heads.map(|h| h.unwrap_or_default()),
+        ["text/html", "gzip", "no-cache", "accept-encoding"].map(String::from)
+    );
+    for refused in ["identity", "gzip;q=0, br"] {
+        let (heads, plain) = get("/".into(), refused).await;
+        assert_eq!(heads[1], None, "{refused}");
+        assert_eq!(String::from_utf8(plain).unwrap(), html, "{refused}");
+    }
+
+    let script = html.split('"').find(|part| part.starts_with("./assets/index-")).expect("an entry script");
+    let (heads, _) = get(format!("/{}", &script[2..]), "gzip").await;
+    assert_eq!(heads[0].as_deref(), Some("text/javascript"));
+    assert_eq!(heads[2].as_deref(), Some("public, max-age=31536000, immutable"));
+    s.close().await;
+}
