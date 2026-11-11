@@ -2,8 +2,8 @@ import { twMerge } from 'tailwind-merge';
 import type { TourCard } from '@/client/tour/document.js';
 import { TourContent } from '@/client/tour/render.js';
 
-/** The page column's width, which every card takes. */
-export const CARD_W = 440;
+/** The page column's width, which every card takes: a diff line of about 100 characters fits unwrapped. */
+export const CARD_W = 896;
 
 /**
  * A card of the page: its step number and title over its contents. The current step takes the
