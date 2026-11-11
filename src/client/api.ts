@@ -242,7 +242,8 @@ const CONNECT_TIMEOUT_MS = 2000;
  * included: pushes are not replayed, so the caller resyncs there, and fetching only once the
  * socket is subscribed is what makes the resync authoritative. `onLost` fires once per dropped
  * connection, before the retries begin; the next `onOpen` ends the outage. An attempt that has
- * not opened after `CONNECT_TIMEOUT_MS` is abandoned and retried.
+ * not opened after `CONNECT_TIMEOUT_MS` is abandoned and retried. A server shutdown closes the
+ * tab when the browser permits it; otherwise it keeps reconnecting.
  */
 export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () => void, onLost: () => void): () => void {
   let ws: WebSocket | null = null;
@@ -271,9 +272,12 @@ export function connectWs(onMessage: (msg: ServerMessage) => void, onOpen: () =>
         /* ignore malformed */
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       clearTimeout(abandon);
       if (closed) return;
+      // 1001 (Going Away) distinguishes a deliberate shutdown from a broken connection.
+      // Manually opened tabs may refuse to close; keep the outage screen and retries for those.
+      if (event.code === 1001) window.close();
       if (connected) {
         connected = false;
         onLost();

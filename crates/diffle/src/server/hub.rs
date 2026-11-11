@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use axum::extract::ws::{Message, WebSocket};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use tokio::sync::{broadcast, watch};
 
 use crate::protocol::ServerMessage;
@@ -71,7 +71,13 @@ impl Hub {
         self.counted(1);
         loop {
             tokio::select! {
-                () = async { drop(closing.wait_for(|closed| *closed).await) } => break,
+                () = async { drop(closing.wait_for(|closed| *closed).await) } => {
+                    let _ = socket.send(Message::Close(Some(CloseFrame {
+                        code: close_code::AWAY,
+                        reason: "diffle shutting down".into(),
+                    }))).await;
+                    break;
+                },
                 message = messages.recv() => match message {
                     Ok(text) => {
                         if socket.send(Message::Text(text.into())).await.is_err() {
