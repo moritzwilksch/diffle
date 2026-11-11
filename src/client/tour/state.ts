@@ -2,13 +2,13 @@ import { create } from 'zustand';
 import { api, isNotFound } from '@/client/api.js';
 import { useStore, type ViewPlace } from '@/client/store.js';
 import { showView, useViews } from '@/client/views/state.js';
-import type { Side, Snapshot, Tour } from '@/shared/protocol.js';
+import type { Side, Snapshot, Tour, TourCheckItem } from '@/shared/protocol.js';
 import { readTour, type LineRange, type TourDocument } from './document.js';
 import { excerpt } from './excerpt.js';
 
 export type TourLoad =
   | { state: 'none' }
-  | { state: 'ready'; tour: Tour; doc: TourDocument }
+  | { state: 'ready'; tour: Tour; doc: TourDocument; checks: TourCheckItem[] }
   | { state: 'error'; message: string };
 
 interface TourState {
@@ -114,11 +114,11 @@ export async function refreshTour(): Promise<void> {
   follow();
   const g = ++generation;
   try {
-    const { tour } = await api.tour();
+    const { tour, checks: items } = await api.tour();
     if (g !== generation) return;
     if (!tour) return set({ state: 'none' });
     const doc = readTour(tour.html);
-    set({ state: 'ready', tour, doc });
+    set({ state: 'ready', tour, doc, checks: items });
     const c = ++checks;
     const stale = await staleSections(doc);
     if (g === generation && c === checks) useTour.setState(stale);

@@ -11,6 +11,7 @@ const BLOCKS = new Set([
   'diffle-walk',
   'diffle-trace',
   'diffle-tabs',
+  'diffle-check',
   'diffle-code',
   'diffle-tree',
   'diffle-callout',
@@ -27,7 +28,8 @@ export function sourceAt(body: Element, node: readonly number[]): Element | null
 
 /** What a draft on a whole element shows as its label before the server names it: a card's title. */
 export function sourceLabel(source: Element): string {
-  return source.localName === 'diffle-card' ? (source.getAttribute('title') ?? '') : '';
+  if (source.localName === 'diffle-card') return source.getAttribute('title') ?? '';
+  return source.localName === 'diffle-item' ? (source.textContent ?? '').replace(/\s+/g, ' ').trim() : '';
 }
 
 function nodeOf(el: Element): number[] {

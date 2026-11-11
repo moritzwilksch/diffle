@@ -66,7 +66,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Dropping the tour, or marking all of it stale, once the snapshot moves past the version it was pushed against. Simpler, and it never shows outdated prose, but one fixup commit would wipe out a tour the reviewer was halfway through.
 - **Why:** The agent keeps editing code while the tour is open, and most diffs keep their lines. The stale count tells the reviewer when to ask for a fresh push.
 
-### 9. Sixteen primitives, all structure and no styling knobs
+### 9. Eighteen primitives, all structure and no styling knobs
 
 - **Chosen:**
 
@@ -82,6 +82,8 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-stop`    | `path`, `line`, `side?`; holds a sentence of inline prose               | one stop of a trace: its line lit among a few around it                                                                |
   | `diffle-tabs`    | none; holds two to four `diffle-tab`s                                   | alternatives in one block's width, one shown at a time (decision 24)                                                   |
   | `diffle-tab`     | `title`, `kind?` (`chosen` \| `rejected` \| `example`)                  | one pane of tabs, holding what a card holds                                                                            |
+  | `diffle-check`   | none; holds `diffle-item`s                                              | questions the reviewer ticks or answers (decision 26)                                                                  |
+  | `diffle-item`    | `context?`; holds a line of inline prose                                | one question of a checklist                                                                                            |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                                    | a directory tree; changed files carry their status from the snapshot                                                   |
   | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
@@ -221,6 +223,14 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** A `diffle-aside` element. The platform's own element opens and closes without script and is one an agent already writes.
 - **Why:** Some explanations matter to one reviewer in five; folded, they cost the others one line.
 
+### 26. A checklist asks the reviewer to decide; its ticks and answers reach the agent
+
+- **Chosen:** `<diffle-check>` holds `<diffle-item context?>` questions, one line of inline prose each. The reviewer ticks an item as decided or answers it. An answer is a tour thread on the item as a whole (its label the question, whitespace collapsed), so replies, the agent's `diffle comments reply`, `diffle comments list` and relocation on a push come with it. A tick is a question kept in the stored tour's `ticked` (`tours.json`, under the comment key); a push keeps the ticks whose question it still asks, in the same write that replaces the tour. `TourIndex::checks` names each item's question, so the reading rule has one owner; `GET /api/tour` answers the items with their ticks, `PUT /api/tour/ticks` sets one, and `ThreadList.checks` gives each with its tick and answering thread. The prompt carries, after the threads, every item not settled by a tick alone: `(check) 4. Heading, open` or `decided`, the question, and its answer or `(no answer yet)`; a ticked item without an answer drops out. The validator refuses an item without a question, two items asking the same, an item outside a checklist, and anything but items in one; it warns as for a stepped block.
+- **Rejected:**
+  - A separate `checks.json`, the first proposal. A tick only means something with its tour, and keeping it there carries ticks across a push in one locked write.
+  - Ticks as resolved threads. A tick without an answer has no message for a thread to hold.
+- **Why:** The reviewer asked for a checklist only if what they tick and answer reaches the agent; the prompt and `diffle comments list` are the two places it reads.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -297,6 +307,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 13. Traces: `diffle-trace` and `diffle-stop`. Verify: as slice 12.
 14. Tabs: `diffle-tabs` and `diffle-tab`. Verify: as slice 12.
 15. Details: `<details>` and `<summary>`. Verify: as slice 12.
+16. Checklists: `diffle-check`, `diffle-item`, ticks, answers, the prompt and the list. Verify: as slice 12.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

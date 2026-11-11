@@ -95,6 +95,12 @@ tally/currency.py"></diffle-tree>
 <p>A refund matches a sale by account and description alone; the currency plays no part.</p>
 <diffle-diff path="tally/refunds.py" lines="21"></diffle-diff>
 </details>
+<p>Before this merges:</p>
+<diffle-check>
+<diffle-item context="An unknown kind now stops the whole file.">Should a bad row fail the file, or be skipped?</diffle-item>
+<diffle-item>Is matching by description strict enough?</diffle-item>
+<diffle-item context="The CLI exits 1 on an empty ledger.">Is exit code 1 right for an empty ledger?</diffle-item>
+</diffle-check>
 `;
 
 /** Two walks, both in view on a laptop's screen. */
@@ -367,6 +373,39 @@ test.describe('the tour', () => {
     await expect(details.getByText('Loading…')).toHaveCount(0);
     await page.mouse.move(0, 0);
     await expect(details).toHaveScreenshot('tour-details-open.png');
+  });
+
+  test('a checklist takes ticks and answers, and the prompt carries what is open or answered', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    const check = view.getByRole('region', { name: 'Checklist' });
+    await check.scrollIntoViewIfNeeded();
+    await expect(check.getByText('0 of 3 decided')).toBeVisible();
+    await expect(check).toHaveScreenshot('tour-check.png');
+
+    await check.getByRole('checkbox', { name: /strict enough/ }).check();
+    await expect(check.getByText('1 of 3 decided')).toBeVisible();
+    await check
+      .getByRole('listitem')
+      .filter({ hasText: 'empty ledger' })
+      .getByRole('button', { name: 'Answer' })
+      .click();
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Yes: scripts treat it as a failure.');
+    await page.keyboard.press('Control+Enter');
+    await expect(check.getByRole('button', { name: 'Show answer' })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(check).toHaveScreenshot('tour-check-answered.png');
+
+    const prompt = await readPrompt(diffle.url);
+    expect(prompt).toContain(
+      '(check) 4. Finding unmatched refunds, open\n\n> Should a bad row fail the file, or be skipped?\n\n(no answer yet)',
+    );
+    expect(prompt).toContain('> Is exit code 1 right for an empty ledger?\n\nYes: scripts treat it as a failure.');
+    expect(prompt).not.toContain('strict enough');
   });
 
   test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {

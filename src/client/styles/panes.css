@@ -1,4 +1,4 @@
-/* Blocks that show part of their content on demand: a `<details>` and its summary, and tabs. */
+/* Blocks the reader acts on beyond reading: a `<details>` and its summary, tabs, and a checklist. */
 
 /* What the main path can do without, folded under its summary. */
 .tour-article details {
@@ -106,4 +106,58 @@
 
 .tour-article .tour-tab-pane > :last-child {
   margin-bottom: 0;
+}
+
+/* A checklist: a tick, the question with its context, and a button to answer it. A ticked item's
+   question is struck through and muted. */
+.tour-check {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-card);
+}
+
+.tour-check-head {
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-size: 0.75rem;
+}
+
+.tour-article .tour-check-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour-article .tour-check-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.625rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.tour-check-item + .tour-check-item {
+  border-top: 1px solid var(--border);
+}
+
+.tour-check-item > input {
+  margin-top: 0.25rem;
+}
+
+.tour-check-question {
+  font-weight: 600;
+}
+
+.tour-check-item[data-ticked] .tour-check-question {
+  color: var(--fg-2);
+  text-decoration: line-through;
+}
+
+.tour-check-context {
+  color: var(--fg-2);
+  font-size: 0.8125rem;
 }

@@ -46,8 +46,8 @@ their `<h3>` subsections. Each review has one tour.
   explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
   level of the document.
 - Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
-  `diffle-walk`, a `diffle-trace`, a `diffle-tabs`, a `diffle-diagram`, a table, a `diffle-tree`,
-  a `diffle-callout`. A block sits between paragraphs, never inside one.
+  `diffle-walk`, a `diffle-trace`, a `diffle-tabs`, a `diffle-check`, a `diffle-diagram`, a table,
+  a `diffle-tree`, a `diffle-callout`. A block sits between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
   two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
   inside another, and a heading never goes inside a card.
@@ -136,6 +136,24 @@ the tabs a reader may never open; a single alternative is a sentence of prose.
 <diffle-tab title="Expire on the server" kind="chosen"><p>Every check compares the expiry with the clock.</p></diffle-tab>
 <diffle-tab title="Expire in the client" kind="rejected"><p>A client with a wrong clock would keep old tokens.</p></diffle-tab>
 </diffle-tabs>
+```
+
+### Checklists
+
+Use a `diffle-check` for what you need the reviewer to decide before the change can land: a
+behaviour you chose that they may not want, a trade-off you could not settle from the code. Each
+`diffle-item` asks one question in one line of inline prose; give it `context` for the one fact the
+answer rests on. Ask only real questions, a handful at most, and never one the diff already
+answers. The reviewer ticks an item as decided or answers it. `diffle comments list` reports each
+item under `checks`, with `ticked` and the `thread` that answers it; the prompt carries every item
+still open and every answer. Reply to an answer with `diffle comments reply`. A push that keeps an
+item's question keeps its tick.
+
+```html
+<diffle-check>
+<diffle-item context="Sessions issued before the deploy expire at once.">Should old sessions get a grace period?</diffle-item>
+<diffle-item>Is one hour the right lifetime for a token?</diffle-item>
+</diffle-check>
 ```
 
 ### Icons

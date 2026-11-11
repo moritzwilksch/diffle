@@ -4,6 +4,7 @@ import { placeOf } from './anchor.js';
 import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
+import { TourCheck } from './primitives/Check.js';
 import { TourCode } from './primitives/Code.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourIcon } from './primitives/Icon.js';
@@ -81,6 +82,8 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     }
     case 'diffle-trace':
       return <TourTrace key={key} source={node} renderNote={noteContent} />;
+    case 'diffle-check':
+      return <TourCheck key={key} source={node} renderItem={noteContent} />;
     case 'diffle-tabs':
       return <TourTabs key={key} source={node} renderPane={paneContent} />;
     case 'diffle-tree':
