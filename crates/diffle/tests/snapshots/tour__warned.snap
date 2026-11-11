@@ -4,6 +4,10 @@ expression: "pushed.json()[\"warnings\"]"
 ---
 [
   {
+    "element": "h2 \"Flow\" > diffle-tree title=\"Loader\" paths=\"app.py\" > diffle-file path=\"app.py\"",
+    "message": "May be long for a file note, at 8 words: a few say where to start or what surprises"
+  },
+  {
     "element": "h2 \"Flow\" > diffle-trace",
     "message": "Has one stop: a trace follows a path across places; show one place with diffle-diff"
   },

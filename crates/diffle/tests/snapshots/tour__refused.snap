@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`, `diffle-check`, `diffle-item`"
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`, `diffle-check`, `diffle-item`, `diffle-file`"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -325,6 +325,22 @@ expression: refused.json()
       "message": "<summary> sits first in a <details>, saying what opening it shows"
     },
     {
+      "element": "h2 \"A\" > diffle-tree title=\"Notes\" paths=\"app.py\" > <p>",
+      "message": "a diffle-tree holds only diffle-file notes: close it with </diffle-tree> (HTML ignores />), and put prose before or after it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tree title=\"Notes\" paths=\"app.py\" > diffle-file path=\"gone.py\"",
+      "message": "gone.py is not one of the tree's paths: a note sits beside a file it lists"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tree title=\"Notes\" paths=\"app.py\" > diffle-file path=\"app.py\"",
+      "message": "a diffle-file holds its note: a few words on where to start or what surprises"
+    },
+    {
+      "element": "h2 \"A\" > diffle-file path=\"app.py\"",
+      "message": "diffle-file belongs directly inside a diffle-tree"
+    },
+    {
       "element": "h2 \"A\" > diffle-check > diffle-item",
       "message": "asks what item 1 asks: each item asks its own question"
     },
@@ -345,8 +361,8 @@ expression: refused.json()
       "message": "a diffle-tree takes a title: what its files are, such as Server · Rust"
     },
     {
-      "element": "h2 \"A\" > diffle-tree paths=\"app.py\"",
-      "message": "diffle-tree holds nothing; close it with </diffle-tree> right after it (HTML ignores />)"
+      "element": "h2 \"A\" > diffle-tree paths=\"app.py\" > <p>",
+      "message": "a diffle-tree holds only diffle-file notes: close it with </diffle-tree> (HTML ignores />), and put prose before or after it"
     }
   ]
 }

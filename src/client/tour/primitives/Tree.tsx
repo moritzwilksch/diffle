@@ -1,4 +1,5 @@
 import { File, Folder } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useStore } from '@/client/store.js';
 import { jump } from '@/client/tour/state.js';
 import type { ChangeStatus } from '@/shared/protocol.js';
@@ -14,19 +15,23 @@ const STATUS_COLOR: Partial<Record<ChangeStatus, string>> = { A: 'var(--add)', D
 
 /**
  * A directory tree of `paths` under `root`, headed by its title and icon as a card is; a changed
- * file shows its status and its lines added and removed, and opens in the diff.
+ * file shows its status and its lines added and removed, and opens in the diff. A few files carry a
+ * note beside their name.
  */
 export function TourTree({
   paths,
   root,
   title,
   icon,
+  notes,
   place,
 }: {
   paths: string;
   root: string;
   title: string;
   icon?: string;
+  /** A few words beside some files, by path. */
+  notes: ReadonlyMap<string, ReactNode>;
   place?: Place;
 }) {
   const changed = useStore((s) => s.snapshot?.changed);
@@ -56,8 +61,9 @@ export function TourTree({
       {dir.files.map((path) => {
         const file = files.get(path);
         const s = file?.status;
+        const note = notes.get(path);
         return (
-          <li key={path}>
+          <li key={path} className="flex items-baseline gap-2">
             <button
               type="button"
               className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono text-[0.75rem] text-foreground hover:underline"
@@ -78,6 +84,7 @@ export function TourTree({
                 </span>
               )}
             </button>
+            {note && <span className="tour-tree-note">{note}</span>}
           </li>
         );
       })}

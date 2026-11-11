@@ -3267,7 +3267,7 @@
             "paths"
           ],
           "additionalProperties": false,
-          "description": "A directory tree of some files under a title; changed ones show their status. It holds nothing."
+          "description": "A directory tree of some files under a title; changed ones show their status and line counts. It\nholds only `diffle-file` notes, on a few of its files."
         },
         {
           "type": "object",
@@ -3623,6 +3623,26 @@
           ],
           "additionalProperties": false,
           "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-file"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One of its tree's `paths`."
+            }
+          },
+          "required": [
+            "tag",
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "A note beside one file of its `diffle-tree`: a few words of inline prose on where to start or what\nsurprises, never the file's name again."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3661,6 +3681,26 @@
         "message"
       ],
       "description": "One reason a pushed tour was refused, or one warning about an accepted one."
+    },
+    "TourFile": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-file"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One of its tree's `paths`."
+        }
+      },
+      "required": [
+        "tag",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "A note beside one file of its `diffle-tree`: a few words of inline prose on where to start or what\nsurprises, never the file's name again."
     },
     "TourIcon": {
       "type": "object",
@@ -4568,7 +4608,7 @@
         "paths"
       ],
       "additionalProperties": false,
-      "description": "A directory tree of some files under a title; changed ones show their status. It holds nothing."
+      "description": "A directory tree of some files under a title; changed ones show their status and line counts. It\nholds only `diffle-file` notes, on a few of its files."
     },
     "TourWalk": {
       "type": "object",

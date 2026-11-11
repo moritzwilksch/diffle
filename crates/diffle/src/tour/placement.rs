@@ -12,8 +12,8 @@ pub struct Place {
     pub in_callout: bool,
     /// Inside a line of text (a paragraph, a heading, a link, code), where no block fits.
     pub in_text: bool,
-    /// Directly in a stepped block (a walk, a trace, a diagram), where its steps sit.
-    pub in_steps: bool,
+    /// Directly in a block of parts (a walk, a trace, a diagram, a checklist, a tree), where they sit.
+    pub in_parts: bool,
     /// Directly in a `diffle-tabs`, where its tabs sit.
     pub in_tabs: bool,
     /// Inside a `diffle-tab`'s pane.
@@ -28,7 +28,7 @@ impl Place {
         in_card: false,
         in_callout: false,
         in_text: false,
-        in_steps: false,
+        in_parts: false,
         in_tabs: false,
         in_tab: false,
         in_details: false,
@@ -38,7 +38,7 @@ impl Place {
     pub fn within(self, tag: &str) -> Self {
         let text = matches!(tag, "p" | "h1" | "h2" | "h3" | "h4" | "a" | "strong" | "em" | "code" | "pre" | "summary");
         let in_details = tag == "details";
-        Self { top: false, in_text: self.in_text || text, in_steps: false, in_tabs: false, in_details, ..self }
+        Self { top: false, in_text: self.in_text || text, in_parts: false, in_tabs: false, in_details, ..self }
     }
 }
 
@@ -68,8 +68,12 @@ pub enum Rule {
     Item,
     Diagram,
     Jump,
-    /// `diffle-diff` and `diffle-tree`: blocks holding nothing.
+    /// `diffle-diff`: a block holding nothing.
     Block,
+    /// `diffle-tree`: a block holding notes on some of its files.
+    Tree,
+    /// `diffle-file`: a note on a file of a tree, holding a few words.
+    File,
     /// `diffle-symbol`: a word of the prose, holding nothing.
     Symbol,
     /// `diffle-icon`: a mark in a line of text, holding nothing.
@@ -93,7 +97,9 @@ impl Rule {
             "diffle-item" => Self::Item,
             "diffle-diagram" => Self::Diagram,
             "diffle-jump" => Self::Jump,
-            "diffle-diff" | "diffle-tree" => Self::Block,
+            "diffle-diff" => Self::Block,
+            "diffle-tree" => Self::Tree,
+            "diffle-file" => Self::File,
             "diffle-symbol" => Self::Symbol,
             "diffle-icon" => Self::Icon,
             _ => return None,
@@ -106,11 +112,11 @@ impl Rule {
             Self::Card | Self::Walk | Self::Trace | Self::Check => {
                 !place.in_text && !place.in_card && !place.in_callout
             }
-            Self::Note | Self::Stop | Self::Item => place.in_steps,
+            Self::Note | Self::Stop | Self::Item | Self::File => place.in_parts,
             Self::Tabs => !place.in_text && !place.in_card && !place.in_callout && !place.in_tab,
             Self::Tab => place.in_tabs,
             Self::Callout => !place.in_text && !place.in_callout,
-            Self::Code | Self::Diagram | Self::Block => !place.in_text,
+            Self::Code | Self::Diagram | Self::Block | Self::Tree => !place.in_text,
             Self::Jump | Self::Symbol | Self::Icon => !place.top,
         }
     }
@@ -123,10 +129,13 @@ impl Rule {
             Self::Note => "directly inside a diffle-walk, or a diffle-diagram after its <svg>",
             Self::Stop => "directly inside a diffle-trace",
             Self::Item => "directly inside a diffle-check",
+            Self::File => "directly inside a diffle-tree",
             Self::Tabs => "between paragraphs, outside cards, callouts and other tabs",
             Self::Tab => "directly inside a diffle-tabs",
             Self::Callout => "between paragraphs, outside other callouts",
-            Self::Code | Self::Diagram | Self::Block => "between paragraphs: it is a block, not part of a line of text",
+            Self::Code | Self::Diagram | Self::Block | Self::Tree => {
+                "between paragraphs: it is a block, not part of a line of text"
+            }
             Self::Jump | Self::Symbol | Self::Icon => "inside a paragraph, a list item or other text",
         }
     }
@@ -135,12 +144,12 @@ impl Rule {
 impl Rule {
     /// The place of what an element of this rule at `place` holds.
     pub fn inner(self, place: Place) -> Place {
-        let inside = Place { top: false, in_steps: false, in_tabs: false, in_details: false, ..place };
+        let inside = Place { top: false, in_parts: false, in_tabs: false, in_details: false, ..place };
         match self {
             Self::Card => Place { in_card: true, ..inside },
             Self::Callout => Place { in_callout: true, ..inside },
-            Self::Note | Self::Stop | Self::Item => Place { in_text: true, ..inside },
-            Self::Walk | Self::Trace | Self::Diagram | Self::Check => Place { in_steps: true, ..inside },
+            Self::Note | Self::Stop | Self::Item | Self::File => Place { in_text: true, ..inside },
+            Self::Walk | Self::Trace | Self::Diagram | Self::Check | Self::Tree => Place { in_parts: true, ..inside },
             Self::Tabs => Place { in_tabs: true, ..inside },
             Self::Tab => Place { in_tab: true, ..inside },
             _ => inside,

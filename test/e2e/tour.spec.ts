@@ -36,7 +36,7 @@ class Ledger:
 <h3><diffle-icon name="folder-tree"></diffle-icon> Where it lives</h3>
 <diffle-tree title="Ledger and refunds · Python" icon="package" root="tally" paths="tally/ledger.py
 tally/refunds.py
-tally/currency.py"></diffle-tree>
+tally/currency.py"><diffle-file path="tally/refunds.py">start here: <diffle-symbol path="tally/refunds.py" line="12" name="unmatched_refunds"></diffle-symbol></diffle-file></diffle-tree>
 <p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
 <table>
   <thead><tr><th>Kind</th><th>Counts as</th></tr></thead>

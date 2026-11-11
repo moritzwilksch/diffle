@@ -94,6 +94,7 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
           root={element.root ?? ''}
           title={element.title}
           icon={element.icon}
+          notes={treeNotes(node)}
           place={placeOf(node)}
         />
       );
@@ -160,6 +161,16 @@ function noteContent(note: Element): ReactNode {
 /** A tab's pane as the article renders a card's content; one function, so tabs read their panes once. */
 function paneContent(tab: Element): ReactNode {
   return <TourContent of={tab} />;
+}
+
+/** A tree's notes by the path each sits beside, as inline prose. */
+function treeNotes(tree: Element): Map<string, ReactNode> {
+  return new Map(
+    [...tree.children].flatMap((el) => {
+      const file = primitive(el);
+      return file?.tag === 'diffle-file' ? [[file.path, <TourContent key={file.path} of={el} />] as const] : [];
+    }),
+  );
 }
 
 /** A cell's `colspan` or `rowspan` when it is a positive number. */

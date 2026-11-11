@@ -1164,7 +1164,10 @@ export const TourCodeSchema = z
   })
   .strict();
 
-/** A directory tree of some files under a title; changed ones show their status. It holds nothing. */
+/**
+ * A directory tree of some files under a title; changed ones show their status and line counts. It
+ * holds only `diffle-file` notes, on a few of its files.
+ */
 export const TourTreeSchema = z
   .object({
     tag: z.literal('diffle-tree'),
@@ -1176,6 +1179,18 @@ export const TourTreeSchema = z
     paths: z.string().min(1),
     /** The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root. */
     root: z.string().min(1).optional(),
+  })
+  .strict();
+
+/**
+ * A note beside one file of its `diffle-tree`: a few words of inline prose on where to start or what
+ * surprises, never the file's name again.
+ */
+export const TourFileSchema = z
+  .object({
+    tag: z.literal('diffle-file'),
+    /** One of its tree's `paths`. */
+    path: z.string().min(1),
   })
   .strict();
 
@@ -1404,6 +1419,7 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourTabSchema,
   TourCheckSchema,
   TourItemSchema,
+  TourFileSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];

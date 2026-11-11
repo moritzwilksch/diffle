@@ -58,7 +58,7 @@ const TOUR: &str = r#"
 <h2>Docs</h2>
 <h3>Layout</h3>
 <diffle-tree title="Loader and docs" icon="folder" paths="app.py
-docs/readme.md"></diffle-tree>
+docs/readme.md"><diffle-file path="app.py">start at <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol></diffle-file></diffle-tree>
 <diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
 <diffle-diagram><svg viewBox="0 0 216 52">
@@ -198,6 +198,8 @@ docs/readme.md"></diffle-tree>
 <p><diffle-tab title="Loose">Alone.</diffle-tab></p>
 <details><p>No summary.</p></details>
 <p><summary>Loose</summary></p>
+<diffle-tree title="Notes" paths="app.py"><p>prose</p><diffle-file path="gone.py">Not listed.</diffle-file><diffle-file path="app.py"> </diffle-file></diffle-tree>
+<p><diffle-file path="app.py">Loose.</diffle-file></p>
 <diffle-check><diffle-item>Same?</diffle-item><diffle-item> Same? </diffle-item><diffle-item context="x"></diffle-item></diffle-check>
 <p><diffle-item>Alone?</diffle-item></p>
 <h1>Second title</h1>
@@ -234,6 +236,7 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 /// The demo tour's first diagram, as an agent drew it before `--skill` said how text sits: labels on
 /// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
 const CROWDED: &str = r#"<h2>Flow</h2>
+<diffle-tree title="Loader" paths="app.py"><diffle-file path="app.py">the one file that holds every change here</diffle-file></diffle-tree>
 <diffle-trace><diffle-stop path="app.py" line="2">The one place.</diffle-stop></diffle-trace>
 <diffle-walk path="app.py" lines="1-2">
   <diffle-note lines="1" title="Imports">It imports os.</diffle-note>

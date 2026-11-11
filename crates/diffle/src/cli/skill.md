@@ -63,7 +63,9 @@ their `<h3>` subsections. Each review has one tour.
   edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
   the reviewer needs to follow the change.
 - Give a `diffle-tree` a `title` that says what its files are, such as `Server · Rust`, so two trees
-  side by side read apart at a glance.
+  side by side read apart at a glance. diffle shows each changed file's status and line counts.
+  Mark where to start or what surprises with a `<diffle-file path>` note inside the tree, a few
+  words of inline prose, on three files at most; a note never restates the file's name.
 - Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
   `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
   bug or breaking change, and only where the diff supports it.

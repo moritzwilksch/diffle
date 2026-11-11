@@ -3,4 +3,4 @@ source: crates/diffle/tests/tour.rs
 expression: stderr(&refused)
 ---
 ✖ the tour was refused:
-  h2 "A" > diffle-edge: unknown variant `diffle-edge`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`, `diffle-check`, `diffle-item`
+  h2 "A" > diffle-edge: unknown variant `diffle-edge`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`, `diffle-check`, `diffle-item`, `diffle-file`

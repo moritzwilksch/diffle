@@ -109,6 +109,14 @@
   font-weight: 600;
 }
 
+/* A few words beside a file in a tree: where to start, or what surprises. */
+.tour-tree-note {
+  min-width: 0;
+  color: var(--fg-2);
+  font-family: var(--sans);
+  font-size: 0.75rem;
+}
+
 /* Two or three columns side by side while the article has room for them, stacked below that.
    The gap is `ROW_GAP` in crates/diffle/src/tour/layout.rs, which words a diff's wrap warning. */
 .tour-row {

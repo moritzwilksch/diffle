@@ -70,26 +70,26 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 - **Chosen:**
 
-  | Element          | Attributes                                                              | Shows                                                                                                                  |
-  | ---------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-  | `diffle-card`    | `id`, `title`, `icon?`                                                  | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                       |
-  | `diffle-code`    | `lang?`, `path?`, `line?`, `example?`, `title?`; holds its code as text | a signature or interface the agent writes, or a made-up example, highlighted in the diff's frame                       |
-  | `diffle-row`     | none; holds two or three columns                                        | blocks or short prose side by side, stacked in a narrow column                                                         |
-  | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`)      | those diff lines, highlighted, with a jump to them                                                                     |
-  | `diffle-walk`    | `path`, `side?`, `lines`; holds `diffle-note`s                          | those diff lines walked one note at a time (decision 21)                                                               |
-  | `diffle-note`    | `lines?`, `title`; holds a sentence of inline prose                     | one step of a walk (its lines lit) or a stepped diagram (decision 22), its text under it                               |
-  | `diffle-trace`   | none; holds `diffle-stop`s                                              | a call followed through several places, one stop at a time (decision 23)                                               |
-  | `diffle-stop`    | `path`, `line`, `side?`; holds a sentence of inline prose               | one stop of a trace: its line lit among a few around it                                                                |
-  | `diffle-tabs`    | none; holds two to four `diffle-tab`s                                   | alternatives in one block's width, one shown at a time (decision 24)                                                   |
-  | `diffle-tab`     | `title`, `kind?` (`chosen` \| `rejected` \| `example`)                  | one pane of tabs, holding what a card holds                                                                            |
-  | `diffle-check`   | none; holds `diffle-item`s                                              | questions the reviewer ticks or answers (decision 26)                                                                  |
-  | `diffle-item`    | `context?`; holds a line of inline prose                                | one question of a checklist                                                                                            |
-  | `diffle-tree`    | `title`, `icon?`, `paths` (newline-separated), `root?`                  | a directory tree under its title; changed files carry their status and line counts from the snapshot                   |
-  | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
-  | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
-  | `diffle-callout` | `kind` (`info` \| `warning` \| `danger`)                                | a highlighted aside                                                                                                    |
-  | `diffle-diagram` | none; holds one `<svg viewBox>`                                         | a simple architecture diagram the agent draws by hand, styled by diffle                                                |
-  | `diffle-icon`    | `name`, `tone?` (`accent` \| `success` \| `warning` \| `error`)         | a Lucide icon in a line of text, at its size and colour (decision 20)                                                  |
+  | Element          | Attributes                                                                        | Shows                                                                                                                                  |
+  | ---------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+  | `diffle-card`    | `id`, `title`, `icon?`                                                            | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                                       |
+  | `diffle-code`    | `lang?`, `path?`, `line?`, `example?`, `title?`; holds its code as text           | a signature or interface the agent writes, or a made-up example, highlighted in the diff's frame                                       |
+  | `diffle-row`     | none; holds two or three columns                                                  | blocks or short prose side by side, stacked in a narrow column                                                                         |
+  | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`)                | those diff lines, highlighted, with a jump to them                                                                                     |
+  | `diffle-walk`    | `path`, `side?`, `lines`; holds `diffle-note`s                                    | those diff lines walked one note at a time (decision 21)                                                                               |
+  | `diffle-note`    | `lines?`, `title`; holds a sentence of inline prose                               | one step of a walk (its lines lit) or a stepped diagram (decision 22), its text under it                                               |
+  | `diffle-trace`   | none; holds `diffle-stop`s                                                        | a call followed through several places, one stop at a time (decision 23)                                                               |
+  | `diffle-stop`    | `path`, `line`, `side?`; holds a sentence of inline prose                         | one stop of a trace: its line lit among a few around it                                                                                |
+  | `diffle-tabs`    | none; holds two to four `diffle-tab`s                                             | alternatives in one block's width, one shown at a time (decision 24)                                                                   |
+  | `diffle-tab`     | `title`, `kind?` (`chosen` \| `rejected` \| `example`)                            | one pane of tabs, holding what a card holds                                                                                            |
+  | `diffle-check`   | none; holds `diffle-item`s                                                        | questions the reviewer ticks or answers (decision 26)                                                                                  |
+  | `diffle-item`    | `context?`; holds a line of inline prose                                          | one question of a checklist                                                                                                            |
+  | `diffle-tree`    | `title`, `icon?`, `paths` (newline-separated), `root?`; holds `diffle-file` notes | a directory tree under its title; changed files carry their status and line counts from the snapshot, a few files a note (decision 27) |
+  | `diffle-jump`    | `path`, `line?`, `side?`                                                          | a button into the diff view                                                                                                            |
+  | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                                   | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens                 |
+  | `diffle-callout` | `kind` (`info` \| `warning` \| `danger`)                                          | a highlighted aside                                                                                                                    |
+  | `diffle-diagram` | none; holds one `<svg viewBox>`                                                   | a simple architecture diagram the agent draws by hand, styled by diffle                                                                |
+  | `diffle-icon`    | `name`, `tone?` (`accent` \| `success` \| `warning` \| `error`)                   | a Lucide icon in a line of text, at its size and colour (decision 20)                                                                  |
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
 - **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably. Prose, callouts and blocks share one centred 920px column, as on a well-set page: wider than a prose measure, wide enough that a 100-character line in a card's diff doesn't wrap. A diagram shows at its own width up to the column's, never larger.
@@ -231,6 +231,12 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   - Ticks as resolved threads. A tick without an answer has no message for a thread to hold.
 - **Why:** The reviewer asked for a checklist only if what they tick and answer reaches the agent; the prompt and `diffle comments list` are the two places it reads.
 
+### 27. A tree has a title, its line counts and a few notes
+
+- **Chosen:** A `diffle-tree` takes a required `title` (and an `icon`) shown as a small header like a card's, so two trees side by side read apart: `Server · Rust`, `Client · TypeScript`. A changed file shows `+N −M` from the snapshot beside its status letter, a zero part left out as the file panel does. A few files carry a `<diffle-file path>` note inside the tree, a few words of inline prose on where to start or what surprises. The validator (`tour/blocks/tree.rs`) refuses a tree without a title, a note on a file the tree does not list, a second note on a file, an empty note, and anything but notes inside; it warns when more than 3 files or more than a third of the tree carry a note (a lone note never warns) and when a note runs past about six words.
+- **Rejected:** A description on every file. The reviewer called it overwhelming: notes stand out only where few files carry one.
+- **Why:** The reviewer found trees bare and, side by side, hard to tell apart.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -308,6 +314,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 14. Tabs: `diffle-tabs` and `diffle-tab`. Verify: as slice 12.
 15. Details: `<details>` and `<summary>`. Verify: as slice 12.
 16. Checklists: `diffle-check`, `diffle-item`, ticks, answers, the prompt and the list. Verify: as slice 12.
+17. Trees: a title, line counts, notes. Verify: as slice 12.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

@@ -67,7 +67,9 @@ their `<h3>` subsections. Each review has one tour.
   edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
   the reviewer needs to follow the change.
 - Give a `diffle-tree` a `title` that says what its files are, such as `Server · Rust`, so two trees
-  side by side read apart at a glance.
+  side by side read apart at a glance. diffle shows each changed file's status and line counts.
+  Mark where to start or what surprises with a `<diffle-file path>` note inside the tree, a few
+  words of inline prose, on three files at most; a note never restates the file's name.
 - Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
   `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
   bug or breaking change, and only where the diff supports it.
@@ -327,7 +329,7 @@ Lines of the review's diff, highlighted, with a jump to them. It holds nothing.
 
 #### `diffle-tree`
 
-A directory tree of some files under a title; changed ones show their status. It holds nothing.
+A directory tree of some files under a title; changed ones show their status and line counts. It holds only `diffle-file` notes, on a few of its files.
 
 | Attribute | Required | Meaning |
 |---|---|---|
@@ -452,6 +454,14 @@ A question of a `diffle-check`, one line of inline prose: what the reviewer shou
 |---|---|---|
 | `context` | no | A sentence of context under the question: what the choice costs or what it rests on. |
 
+#### `diffle-file`
+
+A note beside one file of its `diffle-tree`: a few words of inline prose on where to start or what surprises, never the file's name again.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `path` | yes | One of its tree's `paths`. |
+
 ### Plain tags
 
 The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the walk, and `h3` a subsection; `h4` is a small heading inside a card, a tab, a callout or a `details`, where those cannot go. The rest carry prose, lists and tables, and `details` folds away what the main path can do without, opening with its `summary`. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take `colspan` and `rowspan` as positive numbers. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `div`, `details`, `summary`, `table`, `thead`, `tbody`, `tr`, `th`, `td`
@@ -474,6 +484,6 @@ The plain tags a tour is written in: `h1` titles it, each `h2` starts a section,
 <diffle-callout kind="warning"><p>Sessions issued before the deploy expire at once.</p></diffle-callout>
 <h3>Where the auth code lives</h3>
 <diffle-tree title="Auth · Rust" root="src" paths="src/auth.rs
-src/login.rs"></diffle-tree>
+src/login.rs"><diffle-file path="src/auth.rs">start here</diffle-file></diffle-tree>
 <p>The old check is gone: <diffle-jump path="src/auth.rs" line="30" side="old">see what it did</diffle-jump>.</p>
 ```

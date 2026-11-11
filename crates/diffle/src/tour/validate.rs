@@ -2,7 +2,7 @@
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
-use super::blocks::{row, tabs};
+use super::blocks::{row, tabs, tree};
 use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
@@ -179,6 +179,10 @@ impl Walk {
                 let found = stepped::check(dom, node, &element, parsed.as_ref());
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
+            Rule::Tree => {
+                let found = tree::check(dom, node, &element, parsed.as_ref());
+                self.parts(dom, tree::files(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
             Rule::Tabs => {
                 let found = tabs::check(dom, node, &element);
                 self.parts(dom, tabs::panes(dom, node), rule.inner(place), tag.into(), found);
@@ -190,7 +194,9 @@ impl Walk {
                 self.children(dom, node, rule.inner(place));
                 self.parts = outer;
             }
-            Rule::Callout | Rule::Note | Rule::Stop | Rule::Item => self.children(dom, node, rule.inner(place)),
+            Rule::Callout | Rule::Note | Rule::Stop | Rule::Item | Rule::File => {
+                self.children(dom, node, rule.inner(place))
+            }
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
