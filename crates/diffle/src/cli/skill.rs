@@ -118,14 +118,15 @@ mod tests {
     fn the_interface_examples_are_ones_the_validator_accepts() {
         let blocks: Vec<&str> =
             super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        assert_eq!(blocks.len(), 5);
+        assert_eq!(blocks.len(), 6);
         let walk = format!("<h2>A</h2>{}", blocks[0]);
-        let row = format!("<h2>A</h2>{}", blocks[1]);
-        let example = format!("<h2>A</h2>{}", blocks[3]);
+        let trace = format!("<h2>A</h2>{}", blocks[1]);
+        let row = format!("<h2>A</h2>{}", blocks[2]);
+        let example = format!("<h2>A</h2>{}", blocks[4]);
         let diagram =
-            format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[2]);
-        let steps = format!("<h2>A</h2>{}", blocks[4]);
-        for html in [walk, row, diagram, example, steps] {
+            format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[3]);
+        let steps = format!("<h2>A</h2>{}", blocks[5]);
+        for html in [walk, trace, row, diagram, example, steps] {
             let errors = crate::tour::outline_errors(&html);
             assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
         }

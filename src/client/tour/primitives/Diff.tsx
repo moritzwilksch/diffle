@@ -17,20 +17,23 @@ export type Shown =
   | { state: 'error'; message: string }
   | { state: 'ready'; patch: string; fileDiff: FileDiffMetadata };
 
-/** The lines `range` names, cut from the review's diff, again whenever the snapshot moves. */
-export function useExcerpt(range: LineRange): Shown {
+/**
+ * The lines `range` names and `context` lines around them, cut from the review's diff, again
+ * whenever the snapshot moves.
+ */
+export function useExcerpt(range: LineRange, context = 0): Shown {
   const { path, side, start, end } = range;
   const version = useStore((s) => s.snapshot?.version);
   const [shown, setShown] = useState<Shown>({ state: 'loading' });
   useEffect(() => {
     let live = true;
-    rangePatch({ path, side, start, end }).then(
+    rangePatch({ path, side, start, end }, context).then(
       (patch) => {
         if (!live) return;
         const fileDiff =
           patch == null
             ? undefined
-            : parsePatchFiles(patch, `tour:${version}:${side}:${path}:${start}-${end}`)[0]?.files[0];
+            : parsePatchFiles(patch, `tour:${version}:${side}:${path}:${start}-${end}+${context}`)[0]?.files[0];
         setShown(patch == null || !fileDiff ? { state: 'gone' } : { state: 'ready', patch, fileDiff });
       },
       (e: unknown) => live && setShown({ state: 'error', message: e instanceof Error ? e.message : String(e) }),
@@ -38,7 +41,7 @@ export function useExcerpt(range: LineRange): Shown {
     return () => {
       live = false;
     };
-  }, [path, side, start, end, version]);
+  }, [path, side, start, end, context, version]);
   return shown;
 }
 
@@ -58,7 +61,7 @@ export function ExcerptNotice({ shown, range }: { shown: Exclude<Shown, { state:
         ? 'Loading…'
         : shown.state === 'error'
           ? `Cannot show these lines: ${shown.message}`
-          : `Lines ${linesLabel(range)} are no longer in the review; ask the agent for a fresh tour.`}
+          : `${range.start === range.end ? `Line ${range.start} is` : `Lines ${linesLabel(range)} are`} no longer in the review; ask the agent for a fresh tour.`}
     </p>
   );
 }

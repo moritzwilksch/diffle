@@ -46,8 +46,8 @@ their `<h3>` subsections. Each review has one tour.
   explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
   level of the document.
 - Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
-  `diffle-walk`, a `diffle-diagram`, a table, a `diffle-tree`, a `diffle-callout`. A block sits
-  between paragraphs, never inside one.
+  `diffle-walk`, a `diffle-trace`, a `diffle-diagram`, a table, a `diffle-tree`, a
+  `diffle-callout`. A block sits between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
   two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
   inside another, and a heading never goes inside a card.
@@ -103,6 +103,21 @@ for what spans several files.
 <diffle-note lines="26-33" title="Back off">Each failure doubles the wait, up to 30 seconds.</diffle-note>
 <diffle-note lines="35-41" title="Give up">The last error goes back to the caller unchanged.</diffle-note>
 </diffle-walk>
+```
+
+### Traces
+
+Use a `diffle-trace` to follow one request or call through several places in call order: a
+handler, the function it calls, where the result lands. Each `diffle-stop` names a `path` and a
+`line` the review has, and holds one sentence on what happens there; diffle shows a few lines
+around it with the line lit, and the reader steps from stop to stop. Keep to the places the point
+needs, about 6 at most. One place read part by part is a walk; one place with a sentence is a card.
+
+```html
+<diffle-trace>
+<diffle-stop path="src/routes.rs" line="40">The route reads the token from the header.</diffle-stop>
+<diffle-stop path="src/auth.rs" line="12">Validation compares its expiry with the clock.</diffle-stop>
+</diffle-trace>
 ```
 
 ### Icons

@@ -78,6 +78,12 @@ tally/currency.py"></diffle-tree>
 <diffle-note title="Collect the sales">Each account's sold descriptions go into one set.</diffle-note>
 <diffle-note title="Flag the refunds">A refund whose description is not in its account's set is flagged.</diffle-note>
 </diffle-diagram>
+<p>Before the check runs, the CLI reads each ledger:</p>
+<diffle-trace>
+<diffle-stop path="tally/cli.py" line="25">The CLI merges one ledger per file it is given.</diffle-stop>
+<diffle-stop path="tally/ledger.py" line="95">Reading a file parses each CSV row into an entry.</diffle-stop>
+<diffle-stop path="tally/ledger.py" line="77">A row without a <code>kind</code> counts as a sale.</diffle-stop>
+</diffle-trace>
 `;
 
 /** Two walks, both in view on a laptop's screen. */
@@ -291,6 +297,32 @@ test.describe('the tour', () => {
     await diagram.getByRole('button', { name: /^Step 2/ }).click();
     await expect(note).toHaveCount(0);
     await expect(diagram.locator('svg[data-stepping]')).toHaveCount(0);
+  });
+
+  test('a trace shows one stop at a time: its tabs, its numbers and its line lit among its neighbours', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    await page
+      .getByRole('navigation', { name: 'Contents' })
+      .getByRole('button', { name: /Finding unmatched/ })
+      .click();
+    const trace = view.locator('figure[data-trace]');
+    const note = trace.locator('.tour-note');
+    await trace.scrollIntoViewIfNeeded();
+    // It starts on its first stop.
+    await expect(note).toContainText('merges one ledger per file');
+    await expect(trace.getByRole('button', { name: /^Stop 1/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await trace.getByRole('button', { name: 'ledger.py' }).first().click();
+    await expect(note).toContainText('parses each CSV row');
+    await expect(trace.locator('figcaption')).toContainText('95');
+    await page.mouse.move(0, 0);
+    await expect(trace).toHaveScreenshot('tour-trace.png');
+    await trace.getByRole('button', { name: /^Stop 3/ }).click();
+    await expect(note).toContainText('counts as a sale');
   });
 
   test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {

@@ -84,10 +84,20 @@ export function source(path: string, side: Side): Promise<Source> {
   return found;
 }
 
-/** The patch showing `range`, or null when its lines left the review. */
-export async function rangePatch(range: LineRange): Promise<string | null> {
+/**
+ * The patch showing `range` and `context` lines on each side of it as far as the file goes, or
+ * null when its lines left the review.
+ */
+export async function rangePatch(range: LineRange, context = 0): Promise<string | null> {
   const { text, patch } = await source(range.path, range.side);
-  return text == null ? null : excerpt(range, text, patch);
+  if (text == null) return null;
+  const count = text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length;
+  if (range.end > count) return null;
+  return excerpt(
+    { ...range, start: Math.max(1, range.start - context), end: Math.min(count, range.end + context) },
+    text,
+    patch,
+  );
 }
 
 let generation = 0;

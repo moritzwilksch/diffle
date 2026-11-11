@@ -32,7 +32,7 @@ export function Stepper({ titles, label, steps }: { titles: readonly string[]; l
           aria-pressed={i === active}
           aria-label={`${label} ${i + 1}: ${title}`}
           title={title}
-          onClick={() => take(i === active ? null : i)}
+          onClick={() => take(i === active && steps.rests ? null : i)}
         >
           {i + 1}
         </button>

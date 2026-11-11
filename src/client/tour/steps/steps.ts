@@ -89,6 +89,8 @@ export interface Steps {
   atStart: boolean;
   /** Whether the keys step this block now. */
   targeted: boolean;
+  /** Whether the block has a rest, with no step taken. */
+  rests: boolean;
 }
 
 /**
@@ -119,7 +121,7 @@ export function useSteps(el: RefObject<Element | null>, count: number, start: St
     };
   }, [el, step]);
   const targeted = useTarget((s) => s.target != null && s.target === el.current);
-  return { active, take, step, atStart: active === floor, targeted };
+  return { active, take, step, atStart: active === floor, targeted, rests: floor == null };
 }
 
 /**

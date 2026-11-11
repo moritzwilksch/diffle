@@ -100,6 +100,12 @@ export function walkCss(
   notes: readonly NoteSpan[],
   active: number | null,
 ): string {
+  const lit = active == null ? '' : litCss(rows, side, notes[active]!);
+  return `${markerCss(rows, side, notes, active)}\n${lit}`;
+}
+
+/** A numbered marker on the gutter of each note's first row, the active one filled. */
+function markerCss(rows: readonly WalkRow[], side: Side, notes: readonly NoteSpan[], active: number | null): string {
   const rules: string[] = [];
   notes.forEach((note, i) => {
     const lit = noteRows(rows, side, note);
@@ -109,17 +115,22 @@ export function walkCss(
     rules.push(`${gutter} { --walk-marker: '${i + 1}'; position: relative; cursor: pointer; }`);
     rules.push(`${gutter}::before { ${MARKER} ${state === 'active' ? MARKER_ACTIVE : MARKER_IDLE} }`);
   });
-  const lit = active == null ? null : noteRows(rows, side, notes[active]!);
-  if (lit) {
-    const shown = rows.slice(lit[0], lit[1] + 1).map(rowSpot);
-    const lines = shown.map(lineSelector).join(', ');
-    const gutters = shown.map(gutterSelector).join(', ');
-    rules.push(`[data-line], [data-column-number] { opacity: 0.38; transition: opacity 120ms; }`);
-    rules.push(`:is(${lines}, ${gutters}) { opacity: 1; }`);
-    rules.push(`:is(${lines})[data-line-type='context'] { background-color: ${LIT_FACE}; }`);
-    rules.push(`:is(${gutters}) { box-shadow: inset 2px 0 0 var(--accent); }`);
-  }
   return rules.join('\n');
+}
+
+/** The rows of `span` lit and every other row dimmed. */
+export function litCss(rows: readonly WalkRow[], side: Side, span: NoteSpan): string {
+  const lit = noteRows(rows, side, span);
+  if (!lit) return '';
+  const shown = rows.slice(lit[0], lit[1] + 1).map(rowSpot);
+  const lines = shown.map(lineSelector).join(', ');
+  const gutters = shown.map(gutterSelector).join(', ');
+  return [
+    `[data-line], [data-column-number] { opacity: 0.38; transition: opacity 120ms; }`,
+    `:is(${lines}, ${gutters}) { opacity: 1; }`,
+    `:is(${lines})[data-line-type='context'] { background-color: ${LIT_FACE}; }`,
+    `:is(${gutters}) { box-shadow: inset 2px 0 0 var(--accent); }`,
+  ].join('\n');
 }
 
 const MARKER = `content: var(--walk-marker); position: absolute; left: 3px; top: 50%; translate: 0 -50%;

@@ -18,7 +18,7 @@ export interface TourHeading {
 /** An `h2` section: a step of the walk, with its `h3` subsections. */
 export interface TourSection extends TourHeading {
   subsections: TourHeading[];
-  /** The lines its `diffle-diff`s and `diffle-walk`s show, which decide whether it holds a stale one. */
+  /** The lines its `diffle-diff`s, `diffle-walk`s and `diffle-stop`s show, which decide whether it holds a stale one. */
   ranges: LineRange[];
 }
 
@@ -68,11 +68,16 @@ export function lineSpan(lines: string): [number, number] {
   return [start, end];
 }
 
-/** The lines of the `diffle-diff`s and `diffle-walk`s at or inside `el`. */
+/** The lines of the `diffle-diff`s, `diffle-walk`s and `diffle-stop`s at or inside `el`. */
 function rangesIn(el: Element): LineRange[] {
   const ranges: LineRange[] = [];
-  for (const found of [el, ...el.querySelectorAll('diffle-diff, diffle-walk')]) {
+  for (const found of [el, ...el.querySelectorAll('diffle-diff, diffle-walk, diffle-stop')]) {
     const diff = primitive(found);
+    if (diff?.tag === 'diffle-stop') {
+      const line = Number(diff.line);
+      ranges.push({ path: diff.path, side: diff.side ?? 'new', start: line, end: line });
+      continue;
+    }
     if (diff?.tag !== 'diffle-diff' && diff?.tag !== 'diffle-walk') continue;
     const [start, end] = lineSpan(diff.lines);
     ranges.push({ path: diff.path, side: diff.side ?? 'new', start, end });

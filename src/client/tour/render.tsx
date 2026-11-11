@@ -11,6 +11,7 @@ import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
 import { TourDiagram } from './steps/StepDiagram.js';
+import { TourTrace } from './steps/Trace.js';
 import { TourWalk } from './steps/Walk.js';
 
 /**
@@ -77,6 +78,8 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       const range = { path: element.path, side: element.side ?? 'new', start, end };
       return <TourWalk key={key} source={node} range={range} renderNote={noteContent} />;
     }
+    case 'diffle-trace':
+      return <TourTrace key={key} source={node} renderNote={noteContent} />;
     case 'diffle-tree':
       return <TourTree key={key} paths={element.paths} root={element.root ?? ''} place={placeOf(node)} />;
     case 'diffle-jump': {

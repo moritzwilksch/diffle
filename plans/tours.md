@@ -66,7 +66,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Dropping the tour, or marking all of it stale, once the snapshot moves past the version it was pushed against. Simpler, and it never shows outdated prose, but one fixup commit would wipe out a tour the reviewer was halfway through.
 - **Why:** The agent keeps editing code while the tour is open, and most diffs keep their lines. The stale count tells the reviewer when to ask for a fresh push.
 
-### 9. Twelve primitives, all structure and no styling knobs
+### 9. Fourteen primitives, all structure and no styling knobs
 
 - **Chosen:**
 
@@ -78,6 +78,8 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`)      | those diff lines, highlighted, with a jump to them                                                                     |
   | `diffle-walk`    | `path`, `side?`, `lines`; holds `diffle-note`s                          | those diff lines walked one note at a time (decision 21)                                                               |
   | `diffle-note`    | `lines?`, `title`; holds a sentence of inline prose                     | one step of a walk (its lines lit) or a stepped diagram (decision 22), its text under it                               |
+  | `diffle-trace`   | none; holds `diffle-stop`s                                              | a call followed through several places, one stop at a time (decision 23)                                               |
+  | `diffle-stop`    | `path`, `line`, `side?`; holds a sentence of inline prose               | one stop of a trace: its line lit among a few around it                                                                |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                                    | a directory tree; changed files carry their status from the snapshot                                                   |
   | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
@@ -199,6 +201,12 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** A `step` attribute on the note instead of its order. Order already numbers the steps, as a walk's notes do, and one fewer attribute is one fewer mismatch.
 - **Why:** A request's trip or a pipeline's stages read in order; lighting one stage keeps the eye on it without a second diagram per stage.
 
+### 23. A trace follows a call through several files, one stop at a time
+
+- **Chosen:** `<diffle-trace>` holds `<diffle-stop path line side?>`s in call order, each a sentence of inline prose. It starts on its first stop and shows that stop's line lit among 3 lines on each side, cut from the file as the snapshot has it (`rangePatch` with context, clamped to the file), with the sentence in the walk's band under the line. Its header holds a tab per stop (number and file name, the full place in its tip) and the shared stepper, pinned at the right; a second row names the stop's path and line with Open. A stop whose line left the review says so in place, and counts as a stale diff. The validator checks each stop's file and line as a `diffle-diff`'s, refuses anything but stops, warns of more than about 6 stops and of a trace of one stop (a diff shows one place).
+- **Rejected:** All stops shown at once, one excerpt each. That is a column of diffs, which prose and `diffle-diff` already make.
+- **Why:** A request's path through a handler, a helper and a store reads in call order; one stop at a time keeps the reader on the line that matters at each.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -272,6 +280,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 10. Examples: `diffle-code example`, its label, refusals and warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 11. Walks: `diffle-walk` and `diffle-note`, the stepper, keys, refusals and warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
 12. Stepped diagrams: `step` on a diagram's groups, its notes. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
+13. Traces: `diffle-trace` and `diffle-stop`. Verify: as slice 12.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

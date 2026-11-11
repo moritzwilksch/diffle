@@ -37,6 +37,7 @@ const KINDS: Record<string, string> = {
   'diffle-card': 'card',
   'diffle-diff': 'diff',
   'diffle-walk': 'walk',
+  'diffle-trace': 'trace',
   'diffle-code': 'code',
   'diffle-tree': 'tree',
   'diffle-callout': 'callout',
