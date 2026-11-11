@@ -1049,6 +1049,33 @@ export const TourNoteSchema = z
   })
   .strict();
 
+/**
+ * A path through the code in call order, a block in the article's flow: the reader steps through
+ * its `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds
+ * only its stops.
+ */
+export const TourTraceSchema = z
+  .object({
+    tag: z.literal('diffle-trace'),
+  })
+  .strict();
+
+/**
+ * One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens
+ * there, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ */
+export const TourStopSchema = z
+  .object({
+    tag: z.literal('diffle-stop'),
+    /** A file of the review, relative to the repository root. */
+    path: z.string().min(1),
+    /** The line the stop lights; a few lines around it show too. */
+    line: tourNumberSchema,
+    /** Which side `line` counts on: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+  })
+  .strict();
+
 /** A language the highlighter knows, by its id: `rust`, `typescript`, `python`. */
 const tourLangSchema = z.string().regex(/^[a-z0-9][a-z0-9+#-]*$/);
 
@@ -1299,6 +1326,8 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourIconSchema,
   TourWalkSchema,
   TourNoteSchema,
+  TourTraceSchema,
+  TourStopSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];

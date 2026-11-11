@@ -60,6 +60,10 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
                 line.map_or(Need::Side(side), |line| Need::Lines { side, start: number(&line), end: number(&line) });
             needs.push((path.to_string(), need));
         }
+        TourElement::DiffleStop { path, line, side } => {
+            let line = number(&line);
+            needs.push((path.to_string(), Need::Lines { side: side.unwrap_or(Side::New), start: line, end: line }));
+        }
         TourElement::DiffleSymbol { path, line, name, side } => {
             let need = Need::Name { side: side.unwrap_or(Side::New), line: number(&line), name: name.to_string() };
             needs.push((path.to_string(), need));
@@ -78,7 +82,8 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
         | TourElement::DiffleDiagram
         | TourElement::DiffleRow
         | TourElement::DiffleIcon { .. }
-        | TourElement::DiffleNote { .. } => {}
+        | TourElement::DiffleNote { .. }
+        | TourElement::DiffleTrace => {}
     }
     (needs, errors)
 }

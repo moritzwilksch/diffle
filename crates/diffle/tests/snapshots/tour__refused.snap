@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`"
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -267,6 +267,22 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > diffle-diagram",
       "message": "a diagram's notes step through its groups: give each <g> a note lights step=\"n\""
+    },
+    {
+      "element": "h2 \"A\" > diffle-trace > <p>",
+      "message": "a diffle-trace holds only diffle-stops: prose goes before or after it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-trace > diffle-stop path=\"app.py\" line=\"9\"",
+      "message": "line 9 is past the end of app.py, which has 3 lines on the new side"
+    },
+    {
+      "element": "h2 \"A\" > diffle-trace > diffle-stop path=\"gone.py\" line=\"1\"",
+      "message": "gone.py is not a file of the review"
+    },
+    {
+      "element": "h2 \"A\" > diffle-stop path=\"app.py\" line=\"2\"",
+      "message": "diffle-stop belongs directly inside a diffle-trace"
     },
     {
       "element": "h2 \"A\" > <h1>",

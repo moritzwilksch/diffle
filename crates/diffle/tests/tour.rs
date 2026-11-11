@@ -68,6 +68,10 @@ docs/readme.md"></diffle-tree>
 <diffle-note title="A request names an id">It carries the id <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes.</diffle-note>
 <diffle-note title="The loader answers">It returns the id.</diffle-note>
 </diffle-diagram>
+<diffle-trace>
+  <diffle-stop path="app.py" line="2">A call enters <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol>.</diffle-stop>
+  <diffle-stop path="app.py" line="3">It returns the id.</diffle-stop>
+</diffle-trace>
 <diffle-walk path="app.py" lines="1-3">
   <diffle-note lines="1" title="Imports">It imports <code>os</code>.</diffle-note>
   <diffle-note lines="2-3" title="The loader">Takes an id and returns it.</diffle-note>
@@ -181,6 +185,8 @@ docs/readme.md"></diffle-tree>
 <diffle-diagram><svg viewBox="0 0 104 44"><g step="1"><rect x="8" y="8" width="40" height="28"/></g><g step="3"><rect x="56" y="8" width="40" height="28"/></g></svg>
 <diffle-note title="One">First.</diffle-note><diffle-note lines="2" title="Two">Second.</diffle-note></diffle-diagram>
 <diffle-diagram><svg viewBox="0 0 56 44"><rect x="8" y="8" width="40" height="28"/></svg><diffle-note title="Lost">No steps.</diffle-note></diffle-diagram>
+<diffle-trace><p>prose</p><diffle-stop path="app.py" line="9">Past the end.</diffle-stop><diffle-stop path="gone.py" line="1">Not in the review.</diffle-stop></diffle-trace>
+<p><diffle-stop path="app.py" line="2">Alone.</diffle-stop></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -215,6 +221,7 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 /// The demo tour's first diagram, as an agent drew it before `--skill` said how text sits: labels on
 /// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
 const CROWDED: &str = r#"<h2>Flow</h2>
+<diffle-trace><diffle-stop path="app.py" line="2">The one place.</diffle-stop></diffle-trace>
 <diffle-walk path="app.py" lines="1-2">
   <diffle-note lines="1" title="Imports">It imports os.</diffle-note>
   <diffle-note lines="1-2" title="The loader">It defines the loader. It takes an id. It returns it.</diffle-note>

@@ -37,6 +37,10 @@ pub enum Rule {
     Walk,
     /// `diffle-note`: a step of a walk, holding a sentence or two.
     Note,
+    /// `diffle-trace`: a block holding its stops.
+    Trace,
+    /// `diffle-stop`: a step of a trace, holding a sentence or two.
+    Stop,
     Callout,
     Diagram,
     Jump,
@@ -56,6 +60,8 @@ impl Rule {
             "diffle-card" => Self::Card,
             "diffle-walk" => Self::Walk,
             "diffle-note" => Self::Note,
+            "diffle-trace" => Self::Trace,
+            "diffle-stop" => Self::Stop,
             "diffle-callout" => Self::Callout,
             "diffle-diagram" => Self::Diagram,
             "diffle-jump" => Self::Jump,
@@ -69,8 +75,8 @@ impl Rule {
     pub fn fits(self, place: Place) -> bool {
         match self {
             Self::Row => place.top,
-            Self::Card | Self::Walk => !place.in_text && !place.in_card && !place.in_callout,
-            Self::Note => place.in_steps,
+            Self::Card | Self::Walk | Self::Trace => !place.in_text && !place.in_card && !place.in_callout,
+            Self::Note | Self::Stop => place.in_steps,
             Self::Callout => !place.in_text && !place.in_callout,
             Self::Code | Self::Diagram | Self::Block => !place.in_text,
             Self::Jump | Self::Symbol | Self::Icon => !place.top,
@@ -81,8 +87,9 @@ impl Rule {
         match self {
             Self::Row => "at the top level, between paragraphs",
             Self::Card => "between paragraphs, outside other cards and callouts",
-            Self::Walk => "between paragraphs, outside cards and callouts",
+            Self::Walk | Self::Trace => "between paragraphs, outside cards and callouts",
             Self::Note => "directly inside a diffle-walk, or a diffle-diagram after its <svg>",
+            Self::Stop => "directly inside a diffle-trace",
             Self::Callout => "between paragraphs, outside other callouts",
             Self::Code | Self::Diagram | Self::Block => "between paragraphs: it is a block, not part of a line of text",
             Self::Jump | Self::Symbol | Self::Icon => "inside a paragraph, a list item or other text",

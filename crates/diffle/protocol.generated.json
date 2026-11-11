@@ -3426,6 +3426,50 @@
           ],
           "additionalProperties": false,
           "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-trace"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A path through the code in call order, a block in the article's flow: the reader steps through\nits `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds\nonly its stops."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-stop"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root."
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "The line the stop lights; a few lines around it show too."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side `line` counts on: `old` or `new` (the default)."
+            }
+          },
+          "required": [
+            "tag",
+            "path",
+            "line"
+          ],
+          "additionalProperties": false,
+          "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3627,6 +3671,36 @@
       ],
       "additionalProperties": false,
       "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+    },
+    "TourStop": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-stop"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root."
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "The line the stop lights; a few lines around it show too."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side `line` counts on: `old` or `new` (the default)."
+        }
+      },
+      "required": [
+        "tag",
+        "path",
+        "line"
+      ],
+      "additionalProperties": false,
+      "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
     },
     "TourSvgClass": {
       "type": "string",
@@ -4201,6 +4275,20 @@
         "body"
       ],
       "description": "`POST /api/tour/threads`: opens a thread on the review's tour as it is now. The server names the\nsection and the element, and an element's label, from the stored tour."
+    },
+    "TourTrace": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-trace"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A path through the code in call order, a block in the article's flow: the reader steps through\nits `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds\nonly its stops."
     },
     "TourTree": {
       "type": "object",

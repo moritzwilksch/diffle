@@ -12,10 +12,11 @@ use crate::protocol::{CommentAnchor, TourTarget, TourTargetRequest};
 /// Blocks whose content is code or a drawing, not reading text: they take a thread as a whole.
 const OPAQUE: [&str; 4] = ["diffle-diff", "diffle-code", "diffle-tree", "diffle-diagram"];
 /// Elements a thread may sit on as a whole, besides a diagram's boxes and labels.
-const BLOCKS: [&str; 8] = [
+const BLOCKS: [&str; 9] = [
     "diffle-card",
     "diffle-diff",
     "diffle-walk",
+    "diffle-trace",
     "diffle-code",
     "diffle-tree",
     "diffle-callout",
@@ -132,6 +133,8 @@ pub fn spoken(element: &str, text: bool) -> String {
         "diffle-diff" => format!("the diff of {}:{}", attr("path"), attr("lines")),
         "diffle-walk" => format!("the walk of {}:{}", attr("path"), attr("lines")),
         "diffle-note" => format!("the note \"{}\"", attr("title")),
+        "diffle-trace" => "the trace".into(),
+        "diffle-stop" => format!("the stop at {}:{}", attr("path"), attr("line")),
         "diffle-code" if !attr("path").is_empty() => format!("the code of {}:{}", attr("path"), attr("line")),
         "diffle-code" => "a code block".into(),
         "diffle-tree" => "the file tree".into(),
@@ -187,7 +190,7 @@ impl Walk<'_> {
         self.push(&node, element, &tag, text, block);
         let inner = match tag.as_str() {
             "diffle-card" => format!("{context}diffle-card#{} > ", get(attrs, "id")),
-            "diffle-walk" => format!("{context}{} > ", label(&tag, attrs)),
+            "diffle-walk" | "diffle-trace" => format!("{context}{} > ", label(&tag, attrs)),
             _ => context.to_owned(),
         };
         if !OPAQUE.contains(&tag.as_str()) {
@@ -232,6 +235,15 @@ impl Walk<'_> {
         }
     }
 
+    /// What finds a trace again: its first stop's place.
+    fn first_stop(&self, id: NodeId) -> String {
+        let stop = self.dom.children(id).iter().find_map(|&c| match self.dom.node(c) {
+            Node::Element { name, attrs } if &*name.local == "diffle-stop" => Some(attrs),
+            _ => None,
+        });
+        stop.map_or_else(String::new, |attrs| format!("{}:{}", get(attrs, "path"), get(attrs, "line")))
+    }
+
     /// Every element under `parent` with its place.
     fn places(&self, parent: NodeId, node: &[i64], out: &mut Vec<(NodeId, Vec<i64>)>) {
         let elements = self.dom.children(parent).iter().filter(|&&c| matches!(self.dom.node(c), Node::Element { .. }));
@@ -256,6 +268,7 @@ impl Walk<'_> {
         match tag {
             "diffle-card" => attr("title"),
             "diffle-diff" | "diffle-walk" => format!("{} {}", attr("path"), attr("lines")),
+            "diffle-trace" => self.first_stop(id),
             "diffle-tree" => short(&attr("paths")),
             "diffle-code" if !attr("title").is_empty() => attr("title"),
             "diffle-code" if !attr("path").is_empty() => format!("{}:{}", attr("path"), attr("line")),

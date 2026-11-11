@@ -2,12 +2,13 @@
 //! time, each a sentence of inline prose. What their steps share is checked here; each block's own
 //! rules sit in its module.
 pub mod diagram;
+pub mod trace;
 pub mod walk;
 
 use super::anchor::reading;
 use super::dom::{Dom, Node, NodeId};
 use super::element::{label, short};
-use crate::protocol::TourError;
+use crate::protocol::{TourElement, TourError};
 
 /// Why a `diffle-note` without a title is refused, in place of the catalog's "missing field".
 pub const UNTITLED: &str = "a diffle-note takes a title: what its step shows, in a few words";
@@ -32,6 +33,14 @@ impl Findings {
 
     pub fn warn(&mut self, node: NodeId, element: String, message: impl Into<String>) {
         self.warnings.push((node, TourError { element, message: message.into() }));
+    }
+}
+
+/// Checks the walk or trace at `node`, named `element`, as the catalog read it (none when it did not fit).
+pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement>) -> Findings {
+    match dom.node(node) {
+        Node::Element { name, .. } if &*name.local == "diffle-trace" => trace::check(dom, node, element),
+        _ => walk::check(dom, node, element, parsed),
     }
 }
 
@@ -100,10 +109,10 @@ pub fn steps<'a>(dom: &'a Dom, node: NodeId, element: &str, kind: &Kind, found: 
     steps
 }
 
-/// The steps of the block at `node` with the tag `step`; what else it holds `steps` refuses, and
+/// The steps of the block at `node`, its notes or stops; what else it holds `steps` refuses, and
 /// its content would only repeat that.
-pub fn step_nodes(dom: &Dom, node: NodeId, step: &str) -> Vec<NodeId> {
-    let is_step = |&&c: &&NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == step);
+pub fn step_nodes(dom: &Dom, node: NodeId) -> Vec<NodeId> {
+    let is_step = |&&c: &&NodeId| matches!(dom.node(c), Node::Element { name, .. } if matches!(&*name.local, "diffle-note" | "diffle-stop"));
     dom.children(node).iter().filter(is_step).copied().collect()
 }
 

@@ -10,7 +10,7 @@ use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
 use super::placement::{Place, Rule, is_column, misplaced};
-use super::stepped::{self, walk};
+use super::stepped;
 use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
@@ -171,11 +171,13 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
-            Rule::Walk => {
-                let found = walk::check(dom, node, &element, parsed.as_ref());
+            Rule::Walk | Rule::Trace => {
+                let found = stepped::check(dom, node, &element, parsed.as_ref());
                 self.notes(dom, node, place, label(tag, attrs), found);
             }
-            Rule::Note => self.children(dom, node, Place { top: false, in_text: true, in_steps: false, ..place }),
+            Rule::Note | Rule::Stop => {
+                self.children(dom, node, Place { top: false, in_text: true, in_steps: false, ..place })
+            }
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
@@ -234,7 +236,7 @@ impl Walk {
         self.errors.extend(found.errors);
         self.warnings.extend(found.warnings);
         let outer = self.stepped.replace(name);
-        for note in stepped::step_nodes(dom, node, "diffle-note") {
+        for note in stepped::step_nodes(dom, node) {
             self.visit(dom, note, Place { top: false, in_steps: true, ..place });
         }
         self.stepped = outer;
