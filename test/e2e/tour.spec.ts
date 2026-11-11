@@ -228,6 +228,19 @@ test.describe('the tour', () => {
       expect(copied).toContain('tally/ledger.py:30');
       expect(copied).toContain('(tour) 1. Entries learn their kind, in a <p>');
 
+      // The tour's side panel lists every thread under the contents, as the diff's does.
+      const side = page.getByRole('complementary').filter({ hasText: 'Negative in which total?' });
+      await expect(side).toContainText('Why a blank line?');
+      await expect(page.getByText('Copied all comments')).toBeHidden();
+      await expect(page).toHaveScreenshot('tour-side.png');
+      await side.getByText('Negative in which total?').click();
+      await expect(margin.locator('.tour-margin-card[data-active]')).toContainText('Negative in which total?');
+      await side.getByText('Why a blank line?').click();
+      await expect(view).toBeHidden();
+      await expect.poll(() => activePath(page)).toBe('tally/ledger.py');
+      await page.keyboard.press('T');
+      await expect(view).toBeVisible();
+
       // The comment panel opens the thread back in the tour.
       await page.keyboard.press('T');
       await page.getByRole('complementary').getByText('Negative in which total?').click();

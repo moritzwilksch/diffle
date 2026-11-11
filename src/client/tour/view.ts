@@ -2,7 +2,7 @@ import { Route } from 'lucide-react';
 import type { ViewDef } from '@/client/views/state.js';
 import { TOUR_HELP } from './help.js';
 import { tourPlace, useTour } from './state.js';
-import { TourContents } from './Contents.js';
+import { TourSide } from './Contents.js';
 import { tourPage } from './TourPage.js';
 import { commentOnSelection } from './comments.js';
 import { TourView } from './TourView.js';
@@ -23,9 +23,9 @@ export const tourView: ViewDef = {
   icon: Route,
   title: "The agent's guided tour of the change (T)",
   Main: TourView,
-  Side: TourContents,
+  Side: TourSide,
   help: TOUR_HELP,
-  panelLabel: 'contents panel',
+  panelLabel: 'contents and comments panel',
   panelWidth: '17.5rem',
   blocked: () =>
     useTour.getState().load.state === 'ready' ? null : 'No tour yet: an agent pushes one with `diffle tour push`',

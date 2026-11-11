@@ -1,5 +1,6 @@
 import { MessageSquare } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { CommentPanel } from '@/client/comments/CommentPanel.js';
 import { useTourThreads } from './comments.js';
 import { useTour } from './state.js';
 
@@ -7,7 +8,24 @@ const ENTRY =
   'flex w-full cursor-pointer items-start gap-2 rounded-md border-0 bg-transparent px-2 text-left text-foreground hover:bg-hover';
 
 /**
- * The side panel: the article's table of contents, each `h2` a step of the walk with its `h3`s under
+ * The tour's side panel: its contents as tall as they need, up to a share of the height, over the
+ * diff view's comment panel, which lists every thread, the code's and the tour's. Each scrolls alone.
+ */
+export function TourSide() {
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-surface">
+      <div className="max-h-[45%] shrink-0 overflow-auto border-b border-b-border">
+        <TourContents />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col [&>aside]:flex-1">
+        <CommentPanel />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The table of contents, each `h2` a step of the walk with its `h3`s under
  * it. It marks the section read, those holding a diff whose lines left the review, and how many
  * comments each holds.
  */
@@ -20,7 +38,7 @@ export function TourContents() {
   const comments = (index: number) => live.filter((t) => t.anchor.step === index + 1).length;
   const { title, sections } = load.doc;
   return (
-    <nav className="flex h-full min-h-0 flex-col overflow-auto bg-surface p-3" aria-label="Contents">
+    <nav className="flex flex-col bg-surface p-3" aria-label="Contents">
       <h2 className="m-0 mb-2 px-2 text-[0.8125rem] font-semibold">{title ?? 'Contents'}</h2>
       <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
         {sections.map((section) => (

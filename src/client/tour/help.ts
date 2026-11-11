@@ -29,7 +29,7 @@ export const TOUR_HELP: HelpSection[][] = [
         ['T', 'back to the diff'],
         ['M', 'the change graph'],
         ['Ctrl+o / Ctrl+i', 'jump back / forward in history'],
-        ['⌘/Ctrl+b', 'toggle the file tree (Shift: contents panel)'],
+        ['⌘/Ctrl+b', 'toggle the file tree (Shift: contents and comments)'],
         ['t', 'cycle theme'],
         ['m, then 1–6', 'open the mode picker and choose an entry'],
       ],
