@@ -151,12 +151,12 @@ describe('draftRange', () => {
       id: 'file:a.py@0',
       range: { start: 8, side: 'additions', end: 3, endSide: 'additions' },
     } as const;
-    expect(draftRange({ draft: { path: 'a.py', selection }, loaded: {} })).toEqual({
+    expect(draftRange({ draft: { kind: 'code', path: 'a.py', selection }, loaded: {} })).toEqual({
       side: 'new',
       startLine: 3,
       endLine: 8,
     });
-    expect(draftRange({ draft: { path: 'a.py', selection: null }, loaded: {} })).toBeNull();
+    expect(draftRange({ draft: { kind: 'code', path: 'a.py', selection: null }, loaded: {} })).toBeNull();
     expect(draftRange({ draft: null, loaded: {} })).toBeNull();
   });
 });

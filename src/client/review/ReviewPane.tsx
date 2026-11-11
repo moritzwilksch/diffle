@@ -41,6 +41,7 @@ import { SymbolMenu } from '@/client/lsp/SymbolMenu.js';
 import { SymbolPicker } from '@/client/lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '@/client/lsp/target.js';
 import {
+  codeDraft,
   draftRange,
   imageSides,
   type ImageSides,
@@ -58,7 +59,7 @@ import {
 } from '@/client/model.js';
 import { onTextSizeChange, useRemPx } from '@/client/scale.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
-import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
+import { useStore, type CodeDraft, type Loaded, type ReviewState } from '@/client/store.js';
 import { gridColumns, useViews } from '@/client/views/state.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
@@ -299,7 +300,7 @@ export function ReviewPane() {
   const showResolved = useStore((s) => s.showResolved);
   const replyTo = useStore((s) => s.replyTo);
   const editingId = useStore((s) => s.editingId);
-  const draft = useStore((s) => s.draft);
+  const draft = useStore((s) => codeDraft(s.draft));
   const collapsed = useStore((s) => s.collapsed);
   const viewed = useStore((s) => s.viewed);
   const config = useStore((s) => s.config);
@@ -1066,7 +1067,7 @@ function toItem(
   loaded: Loaded,
   changed: ChangedFile | undefined,
   mine: CommentThread[],
-  draft: Draft | null,
+  draft: CodeDraft | null,
   version: number,
   gen: number,
   collapsed: boolean,

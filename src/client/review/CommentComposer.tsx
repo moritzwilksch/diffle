@@ -18,8 +18,8 @@ export function CommentComposer({ label }: { label: string }) {
   const draftQuote = useStore((s) => s.draftQuote);
   // Each open request makes a new draft; the viewer may keep this composer mounted across them.
   const draft = useStore((s) => s.draft);
-  // A comment on the whole file has no lines to suggest a replacement for.
-  const fileLevel = draft != null && draft.selection == null;
+  // Only a comment on lines has lines to suggest a replacement for.
+  const onLines = draft?.kind === 'code' && draft.selection != null;
   // The text outlives the composer, so Esc or Cancel and reopening on the same lines resumes it.
   const key = useStore((s) => composerKey(s, { kind: 'draft' }));
   const text = useStore((s) => (key ? (s.unsent[key] ?? '') : ''));
@@ -93,7 +93,7 @@ export function CommentComposer({ label }: { label: string }) {
           <span className="mr-auto text-[0.75rem] whitespace-nowrap text-muted @max-[36rem]:hidden">
             <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
           </span>
-          {!fileLevel && (
+          {onLines && (
             <Button
               variant="ghost"
               onClick={() => void suggest()}

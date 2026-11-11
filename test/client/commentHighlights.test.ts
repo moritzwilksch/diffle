@@ -89,6 +89,7 @@ describe('markCommentRows', () => {
   });
   it('tints the open draft only in its own file', () => {
     const draft: Draft = {
+      kind: 'code',
       path: 'a.ts',
       selection: { id: 'diff:a.ts@0', range: { start: 70, side: 'additions', end: 75, endSide: 'additions' } },
     };

@@ -38,7 +38,7 @@ beforeEach(async () => {
   useStore.setState({
     draftQuote: vi.fn(async () => 'one\ntwo\nthree\nfour\nfive\nsix'),
     snapshot: { commentKey: 'review' } as Snapshot,
-    draft: { path: 'a.txt', selection: { id: 'a.txt', range: { start: 1, end: 6, side: 'additions' } } },
+    draft: { kind: 'code', path: 'a.txt', selection: { id: 'a.txt', range: { start: 1, end: 6, side: 'additions' } } },
   });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -70,10 +70,10 @@ it('takes focus once the viewer lays it out, not while it mounts off screen', as
 
 it('takes focus again when a new draft opens while it stays mounted', async () => {
   // The viewer keys annotation slots by index, so pressing C again can reuse this composer.
-  await act(() => useStore.setState({ draft: { path: 'a.txt', selection: null } }));
+  await act(() => useStore.setState({ draft: { kind: 'code', path: 'a.txt', selection: null } }));
   const textarea = host.querySelector('textarea')!;
   textarea.blur();
-  await act(() => useStore.setState({ draft: { path: 'a.txt', selection: null } }));
+  await act(() => useStore.setState({ draft: { kind: 'code', path: 'a.txt', selection: null } }));
   expect(document.activeElement).toBe(textarea);
 });
 

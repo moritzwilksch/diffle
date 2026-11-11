@@ -13,6 +13,8 @@ import {
   ReplyCreateSchema,
   ResolvedRequestSchema,
   ThreadCreateSchema,
+  TourThreadCreateSchema,
+  type TourThreadCreate,
   ViewedBulkRequestSchema,
   ApiErrorSchema,
   CommentThreadSchema,
@@ -177,6 +179,8 @@ export const api = {
     }),
   addThread: (t: ThreadCreate) =>
     json(CommentThreadSchema.array(), 'api/threads', { method: 'POST', body: encode(ThreadCreateSchema, t) }),
+  addTourThread: (t: TourThreadCreate) =>
+    json(CommentThreadSchema, 'api/tour/threads', { method: 'POST', body: encode(TourThreadCreateSchema, t) }),
   reply: (id: string, r: ReplyCreate) =>
     json(CommentThreadSchema, `api/threads/${encodeURIComponent(id)}/replies`, {
       method: 'POST',

@@ -96,6 +96,7 @@ const { useStore, TOAST_MS, WORKSPACE_SYMBOL_DEBOUNCE_MS } = await import('@/cli
 const {
   viewedState,
   isCollapsed,
+  codeDraft,
   itemIdOf,
   itemDeps,
   itemVersion,
@@ -284,7 +285,7 @@ describe('client transitions', () => {
     const sel = { id, range: { start: 1, side: 'additions' as const, end: 1, endSide: 'additions' as const } };
     useStore.setState({
       selection: sel,
-      draft: { path: 'a.txt', selection: sel },
+      draft: { kind: 'code', path: 'a.txt', selection: sel },
       jumps: [{ path: 'a.txt', side: 'new', line: 1 }],
       jumpIndex: 1,
     });
@@ -292,7 +293,7 @@ describe('client transitions', () => {
     api.snapshot.mockResolvedValueOnce({ ...snap(2, 'working'), changed });
     await useStore.getState().refreshSnapshot();
     let s = useStore.getState();
-    expect(s.draft?.path).toBe('a.txt');
+    expect(codeDraft(s.draft)?.path).toBe('a.txt');
     expect(s.selection?.range.end).toBe(1);
     expect(s.jumps).toHaveLength(1);
 
@@ -432,7 +433,7 @@ describe('client transitions', () => {
     api.file.mockResolvedValue({ contents: 'y\nrest\n', binary: false });
     api.snapshot.mockResolvedValueOnce({ ...snap(1, 'working'), changed });
     await useStore.getState().refreshSnapshot();
-    const draft = { path: 'a.txt', selection: null };
+    const draft = { kind: 'code' as const, path: 'a.txt', selection: null };
     useStore.setState({ draft });
     const id = itemIdOf(useStore.getState(), 'b.txt');
     await new Promise((r) => setTimeout(r, 0));
@@ -929,7 +930,7 @@ describe('client transitions', () => {
     await useStore.getState().boot();
     const id = itemIdOf(useStore.getState(), 'a.txt');
     const sel = { id, range: { start: 1, side: 'additions' as const, end: 1, endSide: 'additions' as const } };
-    useStore.setState({ selection: sel, draft: { path: 'a.txt', selection: sel } });
+    useStore.setState({ selection: sel, draft: { kind: 'code', path: 'a.txt', selection: sel } });
 
     // While the socket was down: a save, a new thread and a viewed mark, with no push to announce them.
     api.snapshot.mockResolvedValueOnce({ ...snap(3, 'working'), changed: [{ ...changed[0]!, blob: 'b2' }] });
@@ -940,7 +941,7 @@ describe('client transitions', () => {
     expect(s.snapshot?.version).toBe(3);
     expect(s.threads.map((t) => t.id)).toEqual(['missed']);
     expect(s.viewed).toEqual([{ path: 'b.txt', blob: 'bb', viewed: true }]);
-    expect(s.draft?.path).toBe('a.txt');
+    expect(codeDraft(s.draft)?.path).toBe('a.txt');
     expect(itemIdOf(s, 'a.txt')).not.toBe(id);
   });
 
@@ -2044,7 +2045,7 @@ describe('threads', () => {
     useStore.setState({ selection: { ...sel, id: 'diff:b.py@0' } });
     useStore.getState().openFileDraft('a.py');
     let s = useStore.getState();
-    expect(s.draft).toEqual({ path: 'a.py', selection: null });
+    expect(s.draft).toEqual({ kind: 'code', path: 'a.py', selection: null });
     // A cursor in another file gives way; one inside the file stays put.
     expect(s.selection).toBeNull();
     expect(s.replyTo).toBeNull();
@@ -2092,7 +2093,7 @@ describe('threads', () => {
     void useStore
       .getState()
       .openDraft({ id: 'diff:a.py@0', range: { start: 2, side: 'additions', end: 2, endSide: 'additions' } });
-    expect(useStore.getState().draft?.path).toBe('a.py');
+    expect(codeDraft(useStore.getState().draft)?.path).toBe('a.py');
     useStore.getState().openReply('t1');
     expect(useStore.getState().replyTo).toBe('t1');
     expect(useStore.getState().draft).toBeNull();
