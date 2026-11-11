@@ -44,6 +44,13 @@
   fill: var(--fg-2);
 }
 
+/* Lines of code, one `tspan` each, keep their indentation; their tokens take the highlighter's colours. */
+.tour-diagram .code {
+  font-family: var(--mono);
+  font-size: 10.8px;
+  white-space: pre;
+}
+
 .tour-diagram .mono {
   font-family: var(--mono);
   font-size: 10.8px;

@@ -65,7 +65,16 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
             let need = Need::Name { side: side.unwrap_or(Side::New), line: number(&line), name: name.to_string() };
             needs.push((path.to_string(), need));
         }
-        TourElement::DiffleCard { .. }
+        TourElement::DiffleCode { path: Some(path), line, .. } => {
+            let need = line.map_or(Need::File, |line| Need::Lines {
+                side: Side::New,
+                start: number(&line),
+                end: number(&line),
+            });
+            needs.push((path.to_string(), need));
+        }
+        TourElement::DiffleCode { path: None, .. }
+        | TourElement::DiffleCard { .. }
         | TourElement::DiffleCallout { .. }
         | TourElement::DiffleDiagram
         | TourElement::DiffleRow => {}

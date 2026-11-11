@@ -134,7 +134,23 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`"
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`"
+    },
+    {
+      "element": "h2 \"A\" > diffle-code",
+      "message": "diffle-code takes lang when it has no path to name it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-code lang=\"rust\" line=\"3\"",
+      "message": "line counts in a path: give diffle-code its path"
+    },
+    {
+      "element": "h2 \"A\" > diffle-code lang=\"rust\"",
+      "message": "diffle-code holds its code as text: write < as &lt; and & as &amp;"
+    },
+    {
+      "element": "h2 \"A\" > diffle-code lang=\"rust\"",
+      "message": "diffle-code belongs between paragraphs: it is a block, not part of a line of text"
     },
     {
       "element": "h2 \"A\" > diffle-row",

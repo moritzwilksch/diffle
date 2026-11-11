@@ -44,6 +44,14 @@ const TOUR: &str = r#"
   <rect x="192" y="16" width="120" height="40" class="fill"/>
   <text x="252" y="36" class="c">User <tspan class="mono">id</tspan></text>
 </svg></diffle-diagram>
+<diffle-row>
+<diffle-code path="app.py" line="2">def load_user(id) -&gt; int: ...</diffle-code>
+<diffle-code lang="python">x: int</diffle-code>
+</diffle-row>
+<diffle-code lang="python">
+    class Store:
+        def get(self, id: int) -&gt; "User": ...
+</diffle-code>
 <h2>Docs</h2>
 <h3>Layout</h3>
 <diffle-tree paths="app.py
@@ -133,6 +141,10 @@ stray text
 <diffle-tree root="src" paths="src/a.py
 docs/readme.md"></diffle-tree>
 <diffle-group title="G"></diffle-group>
+<diffle-code>x = 1</diffle-code>
+<diffle-code lang="rust" line="3">fn a()</diffle-code>
+<diffle-code lang="rust">fn a() -> Vec<String></diffle-code>
+<p><diffle-code lang="rust">fn b()</diffle-code></p>
 <diffle-row><p>alone</p></diffle-row>
 <diffle-row>loose text<h2>In a row</h2><img src="x.png"><diffle-row><p>a</p><p>b</p></diffle-row></diffle-row>
 <h1>Second title</h1>
@@ -171,6 +183,30 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 const CROWDED: &str = r#"<h2>Flow</h2>
 <diffle-row><p>The new line.</p><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-row>
 <diffle-row><p>Too wide for its column.</p><diffle-diagram><svg viewBox="0 0 720 40"></svg></diffle-diagram></diffle-row>
+<diffle-code path="app.py" line="1">def missing(): ...</diffle-code>
+<diffle-code lang="python">
+def load_user(id):
+    return id
+</diffle-code>
+<diffle-code lang="python">
+a = 1
+b = 2
+c = 3
+d = 4
+e = 5
+f = 6
+g = 7
+h = 8
+i = 9
+j = 10
+k = 11
+l = 12
+m = 13
+</diffle-code>
+<diffle-diagram><svg viewBox="0 0 200 48">
+  <rect x="4" y="4" width="80" height="40"/>
+  <text x="12" y="16" class="code" lang="python"><tspan x="12" dy="0">def a_very_long_name(self): ...</tspan><tspan x="12" dy="14">x</tspan></text>
+</svg></diffle-diagram>
 <diffle-diagram><svg viewBox="0 0 1000 96">
   <rect x="4" y="24" width="100" height="40" class="fill"></rect>
   <text x="54" y="48" class="c small">agent</text>

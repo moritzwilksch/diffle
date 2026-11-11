@@ -117,12 +117,12 @@ Each takes the attributes listed; `?` marks an optional one.
 - `polyline`: `points`, `class?`
 - `path`: `d`, `class?`
 - `line`: `x1`, `y1`, `x2`, `y2`, `class?`
-- `text`: `x`, `y`, `class?`
+- `text`: `x`, `y`, `class?`, `lang?`
 - `tspan`: `class?`, `dx?`, `dy?`, `x?`, `y?`
 
 #### Diagram classes
 
-The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends), `dashed`. Text: `bold`, `small`, `mono`, `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line or text: `accent` for what the point is about, `success`, `warning` and `error` for status.
+The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends), `dashed`. Text: `bold`, `small`, `mono`, `code` (lines of code in its `lang`, one `tspan` each, highlighted), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line or text: `accent` for what the point is about, `success`, `warning` and `error` for status.
 
 #### Diagram example
 
@@ -203,7 +203,17 @@ A simple architecture diagram inside a card: one inline `<svg>` of `TourSvgEleme
 
 #### `diffle-row`
 
-Two or three columns side by side while the window has room, stacked below that, at the top level. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
+Two or three columns side by side while the window has room, stacked below that, at the top level. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
+
+#### `diffle-code`
+
+Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction, never code the diff already shows. Highlighted like the diff; with `path`, framed with the file's path and a jump to it. It holds its code as text, `<` written `&lt;`.
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `lang` | no | The highlighter's language; required without `path`, which otherwise names it. |
+| `line` | no | Where in `path`, on the new side, its first declaration sits. |
+| `path` | no | The file of the review the code comes from, relative to the repository root. |
 
 ### Plain tags
 

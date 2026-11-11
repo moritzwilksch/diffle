@@ -28,6 +28,8 @@ impl Place {
 #[derive(Clone, Copy, PartialEq)]
 pub enum Rule {
     Row,
+    /// `diffle-code`: a block holding its code as text.
+    Code,
     Card,
     Callout,
     Diagram,
@@ -42,6 +44,7 @@ impl Rule {
     pub fn of(tag: &str) -> Option<Self> {
         Some(match tag {
             "diffle-row" => Self::Row,
+            "diffle-code" => Self::Code,
             "diffle-card" => Self::Card,
             "diffle-callout" => Self::Callout,
             "diffle-diagram" => Self::Diagram,
@@ -57,7 +60,7 @@ impl Rule {
             Self::Row => place.top,
             Self::Card => !place.in_text && !place.in_card && !place.in_callout,
             Self::Callout => !place.in_text && !place.in_callout,
-            Self::Diagram | Self::Block => !place.in_text,
+            Self::Code | Self::Diagram | Self::Block => !place.in_text,
             Self::Jump | Self::Symbol => !place.top,
         }
     }
@@ -67,7 +70,7 @@ impl Rule {
             Self::Row => "at the top level, between paragraphs",
             Self::Card => "between paragraphs, outside other cards and callouts",
             Self::Callout => "between paragraphs, outside other callouts",
-            Self::Diagram | Self::Block => "between paragraphs: it is a block, not part of a line of text",
+            Self::Code | Self::Diagram | Self::Block => "between paragraphs: it is a block, not part of a line of text",
             Self::Jump | Self::Symbol => "inside a paragraph, a list item or other text",
         }
     }
@@ -87,6 +90,7 @@ pub fn is_column(tag: &str) -> bool {
     matches!(
         tag,
         "diffle-card"
+            | "diffle-code"
             | "diffle-diff"
             | "diffle-diagram"
             | "diffle-tree"

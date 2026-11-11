@@ -2926,6 +2926,35 @@
       "additionalProperties": false,
       "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
     },
+    "TourCode": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-code"
+        },
+        "lang": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9+#-]*$",
+          "description": "The highlighter's language; required without `path`, which otherwise names it."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file of the review the code comes from, relative to the repository root."
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "Where in `path`, on the new side, its first declaration sits."
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. It holds its code as text, `<` written `&lt;`."
+    },
     "TourDiagram": {
       "type": "object",
       "properties": {
@@ -3168,7 +3197,36 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+          "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-code"
+            },
+            "lang": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9+#-]*$",
+              "description": "The highlighter's language; required without `path`, which otherwise names it."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The file of the review the code comes from, relative to the repository root."
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "Where in `path`, on the new side, its first declaration sits."
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. It holds its code as text, `<` written `&lt;`."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3296,7 +3354,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+      "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
     },
     "TourSvgClass": {
       "type": "string",
@@ -3307,6 +3365,7 @@
         "bold",
         "small",
         "mono",
+        "code",
         "c",
         "e",
         "eyebrow",
@@ -3317,7 +3376,7 @@
         "warning",
         "error"
       ],
-      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),\n`dashed`. Text: `bold`, `small`, `mono`, `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a\nregion's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).\nTones, on a shape, group, line or text: `accent` for what the point is about, `success`,\n`warning` and `error` for status."
+      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),\n`dashed`. Text: `bold`, `small`, `mono`, `code` (lines of code in its `lang`, one `tspan` each,\nhighlighted), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).\nTones, on a shape, group, line or text: `accent` for what the point is about, `success`,\n`warning` and `error` for status."
     },
     "TourSvgElement": {
       "oneOf": [
@@ -3575,6 +3634,11 @@
             },
             "class": {
               "type": "string"
+            },
+            "lang": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9+#-]*$",
+              "description": "With the class `code`: the highlighter's language for its lines, one `tspan` each."
             }
           },
           "required": [

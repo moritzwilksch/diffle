@@ -2,6 +2,7 @@
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
+use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
 use super::element::{label, parse, short};
@@ -17,6 +18,8 @@ pub struct Outline {
     /// Judgment calls about an accepted document, such as a diagram's layout.
     pub warnings: Vec<(NodeId, TourError)>,
     pub references: Vec<Reference>,
+    /// The `diffle-code` blocks, whose warnings need the review's files.
+    pub codes: Vec<Code>,
 }
 
 /// An element's tag and attributes.
@@ -27,6 +30,7 @@ struct Walk {
     errors: Vec<(NodeId, TourError)>,
     warnings: Vec<(NodeId, TourError)>,
     references: Vec<Reference>,
+    codes: Vec<Code>,
     /// The `h2` the walk is in, which names what errors are about.
     section: Option<String>,
     /// How many columns the row the walk is in has; 0 outside a row.
@@ -51,7 +55,7 @@ pub fn outline(html: &str) -> Outline {
         walk.visit(&dom, child, Place::TOP);
     }
     walk.across();
-    Outline { errors: walk.errors, warnings: walk.warnings, references: walk.references }
+    Outline { errors: walk.errors, warnings: walk.warnings, references: walk.references, codes: walk.codes }
 }
 
 impl Walk {
@@ -159,6 +163,22 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
+            Rule::Code => {
+                if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
+                    let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
+                    self.error(node, element.clone(), message);
+                }
+                let path = attr(attrs, "path").map(str::to_owned);
+                if path.is_none() && attr(attrs, "lang").is_none() {
+                    self.error(node, element.clone(), "diffle-code takes lang when it has no path to name it");
+                }
+                let line = attr(attrs, "line").and_then(|l| l.parse().ok());
+                if line.is_some() && path.is_none() {
+                    self.error(node, element.clone(), "line counts in a path: give diffle-code its path");
+                }
+                let lines = code::lines(&text_of(dom, node));
+                self.codes.push(Code { node, element: element.clone(), path, line, lines });
+            }
             Rule::Callout => {
                 let inside = Place { top: false, in_callout: true, ..place };
                 self.children(dom, node, inside);

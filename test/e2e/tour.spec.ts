@@ -21,6 +21,18 @@ const TOUR = `
 <p>Refunds of something the account never sold.</p>
 <diffle-callout kind="danger"><p>A refund with no matching sale used to count as income.</p></diffle-callout>
 <diffle-diff path="tally/refunds.py" lines="12-22"></diffle-diff>
+<p>It takes the ledger and hands back entries:</p>
+<diffle-row>
+<diffle-code path="tally/refunds.py" line="12">def unmatched_refunds(ledger: Ledger) -&gt; list[Entry]: ...</diffle-code>
+<diffle-code lang="python">
+class Ledger:
+    entries: list[Entry]
+</diffle-code>
+</diffle-row>
+<diffle-diagram><svg viewBox="0 0 296 60">
+  <rect x="8" y="8" width="280" height="44"/>
+  <text x="16" y="22" class="code" lang="python"><tspan x="16" dy="0">def unmatched_refunds(</tspan><tspan x="16" dy="16">    ledger: Ledger) -&gt; list[Entry]</tspan></text>
+</svg></diffle-diagram>
 <h3>Where it lives</h3>
 <diffle-tree root="tally" paths="tally/ledger.py
 tally/refunds.py
@@ -88,7 +100,13 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 3')).toBeVisible();
     await expect(view.locator('aside[aria-label="danger"]')).toHaveScreenshot('tour-danger.png');
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
-    await expect(view.locator('.tour-row')).toHaveScreenshot('tour-row.png');
+    await expect(view.locator('.tour-row').filter({ has: page.locator('.tour-diagram') })).toHaveScreenshot(
+      'tour-row.png',
+    );
+    await expect(view.locator('.tour-row').filter({ has: page.locator('pre') })).toHaveScreenshot('tour-code.png');
+    await expect(view.locator('.tour-diagram').filter({ has: page.locator('text.code') })).toHaveScreenshot(
+      'tour-diagram-code.png',
+    );
 
     // A jump leaves for the diff at its line; Ctrl+o comes back to the step it left.
     await page.getByRole('button', { name: 'stops on an empty ledger' }).click();

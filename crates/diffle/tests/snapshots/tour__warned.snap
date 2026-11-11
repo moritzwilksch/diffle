@@ -12,6 +12,22 @@ expression: "pushed.json()[\"warnings\"]"
     "message": "Is 720 wide; a column in a row of two is about 448, so it shrinks, text and all"
   },
   {
+    "element": "h2 \"Flow\" > diffle-code path=\"app.py\" line=\"1\"",
+    "message": "May not match app.py:1: missing isn't there"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-code lang=\"python\"",
+    "message": "Repeats the diff: show these lines with diffle-diff"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-code lang=\"python\"",
+    "message": "Long for a signature block, at 13 lines: show only the interface"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <text x=\"12\" y=\"16\" class=\"code\" lang=\"python\">",
+    "message": "May be wider than its box: about 186 wide in a 80-wide rect"
+  },
+  {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",
     "message": "Is 1000 wide; the page is at most 920, so it shrinks, text and all"
   },

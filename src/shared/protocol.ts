@@ -943,6 +943,26 @@ export const TourDiffSchema = z
   })
   .strict();
 
+/** A language the highlighter knows, by its id: `rust`, `typescript`, `python`. */
+const tourLangSchema = z.string().regex(/^[a-z0-9][a-z0-9+#-]*$/);
+
+/**
+ * Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,
+ * never code the diff already shows. Highlighted like the diff; with `path`, framed with the file's
+ * path and a jump to it. It holds its code as text, `<` written `&lt;`.
+ */
+export const TourCodeSchema = z
+  .object({
+    tag: z.literal('diffle-code'),
+    /** The highlighter's language; required without `path`, which otherwise names it. */
+    lang: tourLangSchema.optional(),
+    /** The file of the review the code comes from, relative to the repository root. */
+    path: z.string().min(1).optional(),
+    /** Where in `path`, on the new side, its first declaration sits. */
+    line: tourNumberSchema.optional(),
+  })
+  .strict();
+
 /** A directory tree of some files; changed ones show their status. It holds nothing. */
 export const TourTreeSchema = z
   .object({
@@ -1067,7 +1087,14 @@ export const TourSvgElementSchema = z.discriminatedUnion('tag', [
     })
     .strict(),
   z
-    .object({ tag: z.literal('text'), x: svgNumberSchema, y: svgNumberSchema, class: svgClassSchema.optional() })
+    .object({
+      tag: z.literal('text'),
+      x: svgNumberSchema,
+      y: svgNumberSchema,
+      class: svgClassSchema.optional(),
+      /** With the class `code`: the highlighter's language for its lines, one `tspan` each. */
+      lang: tourLangSchema.optional(),
+    })
     .strict(),
   z
     .object({
@@ -1084,8 +1111,8 @@ export type TourSvgElement = z.infer<typeof TourSvgElementSchema>;
 
 /**
  * The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),
- * `dashed`. Text: `bold`, `small`, `mono`, `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a
- * region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).
+ * `dashed`. Text: `bold`, `small`, `mono`, `code` (lines of code in its `lang`, one `tspan` each,
+ * highlighted), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).
  * Tones, on a shape, group, line or text: `accent` for what the point is about, `success`,
  * `warning` and `error` for status.
  */
@@ -1096,6 +1123,7 @@ export const TourSvgClassSchema = z.enum([
   'bold',
   'small',
   'mono',
+  'code',
   'c',
   'e',
   'eyebrow',
@@ -1110,7 +1138,7 @@ export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
 
 /**
  * Two or three columns side by side while the window has room, stacked below that, at the top
- * level. Each column is a block (`diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,
+ * level. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,
  * `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
  */
 export const TourRowSchema = z
@@ -1129,6 +1157,7 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCalloutSchema,
   TourDiagramSchema,
   TourRowSchema,
+  TourCodeSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];

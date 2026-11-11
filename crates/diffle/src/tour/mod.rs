@@ -1,4 +1,5 @@
 //! Tours: an agent's guided walk through the review, one HTML document per comment key.
+mod code;
 mod diagram;
 mod dom;
 mod element;
@@ -43,6 +44,23 @@ pub async fn check(session: &Session, snap: &Arc<Snapshot>, html: &str) -> Resul
             slot.insert(bytes.map(|b| String::from_utf8_lossy(&b).into_owned()));
         }
     }
+    for code in &outline.codes {
+        let Some(path) = code.path.as_deref() else { continue };
+        if let Entry::Vacant(slot) = texts.entry((path, Side::New)) {
+            let bytes = session.read_side(snap, path, Side::New).await?;
+            slot.insert(bytes.map(|b| String::from_utf8_lossy(&b).into_owned()));
+        }
+    }
+    let changed = if outline.codes.is_empty() {
+        Default::default()
+    } else {
+        code::changed(&session.snapshotter()?.patch_all().await?)
+    };
+    let mut warnings = outline.warnings;
+    for block in &outline.codes {
+        let text = block.path.as_deref().and_then(|path| texts[&(path, Side::New)].as_deref());
+        warnings.extend(code::warnings(block, text, &changed).into_iter().map(|w| (block.node, w)));
+    }
     let mut errors = outline.errors;
     for reference in &outline.references {
         let text = reference.need.side().and_then(|side| texts[&(reference.path.as_str(), side)].as_deref());
@@ -54,5 +72,5 @@ pub async fn check(session: &Session, snap: &Arc<Snapshot>, html: &str) -> Resul
         found.sort_by_key(|(node, _)| *node);
         found.into_iter().map(|(_, e)| e).collect()
     };
-    Ok(Verdict { errors: ordered(errors), warnings: ordered(outline.warnings) })
+    Ok(Verdict { errors: ordered(errors), warnings: ordered(warnings) })
 }

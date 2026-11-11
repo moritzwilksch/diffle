@@ -37,7 +37,8 @@ struct Label {
     /// Its estimated extent, left to right, from its anchor and the per-character widths.
     left: f64,
     right: f64,
-    eyebrow: bool,
+    /// Whether it sits where its box's middle is: not an `eyebrow`, nor lines of `code`.
+    centred: bool,
 }
 
 #[derive(Default)]
@@ -130,9 +131,9 @@ pub fn warnings(dom: &Dom, node: NodeId, element: &str, columns: usize) -> Vec<(
             warn(text.node, &text.element, message);
         }
         let alone =
-            drawing.labels.iter().filter(|l| !l.eyebrow && drawing.box_of(l).is_some_and(|b| b.node == home.node));
+            drawing.labels.iter().filter(|l| l.centred && drawing.box_of(l).is_some_and(|b| b.node == home.node));
         let middle = home.y + home.h / 2.0;
-        if !text.eyebrow && alone.count() == 1 && text.y != middle {
+        if text.centred && alone.count() == 1 && text.y != middle {
             let (side, by) = if text.y > middle { ("below", text.y - middle) } else { ("above", middle - text.y) };
             let message = format!(
                 "Sits {} {side} its box's vertical middle: y is {}, the middle is {}; text centres on its y",
@@ -165,7 +166,14 @@ impl Drawing {
                 self.rects.push(Rect { node, element, x, y, w, h, frame });
             }
             "text" => {
-                let wide = width(dom, node, &classes);
+                let code = classes.contains(&"code");
+                // Lines of code are one `tspan` each: the widest line is the label's width.
+                let wide = if code {
+                    let lines = dom.children(node).iter().filter(|&&c| matches!(dom.node(c), Node::Element { .. }));
+                    lines.map(|&c| width(dom, c, &classes)).fold(0.0, f64::max)
+                } else {
+                    width(dom, node, &classes)
+                };
                 let (x, y) = (num("x"), num("y"));
                 let left = if classes.contains(&"c") {
                     x - wide / 2.0
@@ -174,8 +182,8 @@ impl Drawing {
                 } else {
                     x
                 };
-                let eyebrow = classes.contains(&"eyebrow");
-                self.labels.push(Label { node, element, x, y, left, right: left + wide, eyebrow });
+                let centred = !code && !classes.contains(&"eyebrow");
+                self.labels.push(Label { node, element, x, y, left, right: left + wide, centred });
             }
             "g" => {
                 for &child in dom.children(node) {

@@ -1,5 +1,6 @@
 import { createElement, type ReactNode, useId } from 'react';
 import { type TourSvgClass, TourSvgClassSchema, TourSvgElementSchema } from '@/shared/protocol.js';
+import { DiagramCode } from './DiagramCode.js';
 
 type Tone = 'accent' | 'success' | 'warning' | 'error';
 const TONES: ReadonlySet<TourSvgClass> = new Set<Tone>(['accent', 'success', 'warning', 'error']);
@@ -61,7 +62,8 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: (tone: Tone
   if (!(node instanceof Element)) return null;
   const element = read(node);
   if (!element || element.tag === 'svg') return null;
-  const { tag, class: words = '', ...geometry } = element;
+  const { tag, class: words = '', ...rest } = element;
+  const { lang, ...geometry } = 'lang' in rest ? rest : { ...rest, lang: undefined };
   const classes = words.split(/\s+/).filter((w) => TourSvgClassSchema.safeParse(w).success) as TourSvgClass[];
   const own = (classes.find((c) => TONES.has(c)) as Tone | undefined) ?? tone;
   const arrow = LINES.has(tag) && (classes.includes('arrow') || classes.includes('arrows'));
@@ -72,6 +74,15 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: (tone: Tone
     markerEnd: arrow ? head(own ?? 'ink') : undefined,
     markerStart: arrow && classes.includes('arrows') ? head(own ?? 'ink') : undefined,
   };
+  if (tag === 'text' && classes.includes('code')) {
+    const lines = [...node.children].flatMap((child) => {
+      const line = read(child);
+      if (line?.tag !== 'tspan') return [];
+      const { tag: _, class: __, ...at } = line;
+      return [{ at, text: child.textContent ?? '' }];
+    });
+    return <DiagramCode key={key} props={props} lines={lines} lang={lang ?? 'text'} />;
+  }
   return createElement(tag, props, ...[...node.childNodes].map((child, i) => draw(child, i, own, head)));
 }
 

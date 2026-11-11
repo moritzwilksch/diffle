@@ -3,6 +3,7 @@ import { TourTagSchema } from '@/shared/protocol.js';
 import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
+import { TourCode } from './primitives/Code.js';
 import { TourDiagram } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourJump } from './primitives/Jump.js';
@@ -66,6 +67,16 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       );
     case 'diffle-diagram':
       return <TourDiagram key={key} of={node} />;
+    case 'diffle-code':
+      return (
+        <TourCode
+          key={key}
+          code={node.textContent ?? ''}
+          lang={element.lang}
+          path={element.path}
+          line={element.line == null ? undefined : Number(element.line)}
+        />
+      );
     case 'diffle-row':
       return (
         <div key={key} className="tour-row" data-columns={node.children.length}>
