@@ -5,6 +5,7 @@ import { memo } from 'react';
 import type { CommentThread, Side } from '@/shared/protocol.js';
 import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
 import { anchorLabel } from '@/client/model.js';
+import { anchorPath } from './threads.js';
 import { Markdown } from '@/client/Markdown.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
@@ -29,7 +30,7 @@ export const ThreadRow = memo(function ThreadRow({
   const open = () => {
     // A file thread's card sits above the file's first line, where opening the file lands.
     if (t.anchor.kind === 'line') void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
-    else void openFile(t.anchor.path);
+    else if (t.anchor.kind === 'file') void openFile(t.anchor.path);
     // Set after the jump: moving the cursor or selecting lines clears the ring again.
     focusThread(t.id);
   };
@@ -96,7 +97,7 @@ export const ThreadRow = memo(function ThreadRow({
         )}
         <Markdown
           text={first?.body ?? ''}
-          path={t.anchor.path}
+          path={anchorPath(t.anchor) ?? undefined}
           quoted={t.anchor.kind === 'line' ? t.anchor.quoted : undefined}
         />
       </div>

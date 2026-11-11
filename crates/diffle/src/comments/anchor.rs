@@ -55,26 +55,33 @@ pub fn quote_range(contents: &str, start: i64, end: i64) -> Option<String> {
     Some(lines[start as usize - 1..end as usize].join("\n"))
 }
 
-pub fn anchor_path(anchor: &CommentAnchor) -> &str {
+/// The file a thread is on; none for a thread on the tour.
+pub fn anchor_path(anchor: &CommentAnchor) -> Option<&str> {
     match anchor {
-        CommentAnchor::Line { path, .. } | CommentAnchor::File { path } => path,
+        CommentAnchor::Line { path, .. } | CommentAnchor::File { path } => Some(path),
+        CommentAnchor::Tour { .. } => None,
     }
 }
 
-/// The line a thread sorts under: a file thread comes before every line of its file.
-pub fn anchor_line(anchor: &CommentAnchor) -> i64 {
+/// Where a thread sorts: code by path, then line (a file thread before every line of its file);
+/// after all code, the tour in document order.
+fn place(anchor: &CommentAnchor) -> (Option<&str>, i64, &[i64]) {
     match anchor {
-        CommentAnchor::Line { start_line, .. } => *start_line,
-        CommentAnchor::File { .. } => 0,
+        CommentAnchor::Line { path, start_line, .. } => (Some(path), *start_line, &[]),
+        CommentAnchor::File { path } => (Some(path), 0, &[]),
+        CommentAnchor::Tour { node, .. } => (None, 0, node),
     }
 }
 
-/// Review order: by path, then line (file threads first), then when the thread was opened.
+/// Review order: code threads by path and line, then tour threads in document order, then when
+/// each thread was opened.
 pub fn compare_threads(a: &CommentThread, b: &CommentThread) -> Ordering {
     let opened = |t: &CommentThread| t.messages.first().map_or(0, |m| m.created_at);
-    anchor_path(&a.anchor)
-        .cmp(anchor_path(&b.anchor))
-        .then(anchor_line(&a.anchor).cmp(&anchor_line(&b.anchor)))
+    let (a_path, a_line, a_node) = place(&a.anchor);
+    let (b_path, b_line, b_node) = place(&b.anchor);
+    // `None` sorts first: put the tour's threads last.
+    (a_path.is_none(), a_path, a_line, a_node)
+        .cmp(&(b_path.is_none(), b_path, b_line, b_node))
         .then(opened(a).cmp(&opened(b)))
 }
 

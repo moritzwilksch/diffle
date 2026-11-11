@@ -41,6 +41,8 @@ impl CommentStore {
                         let stale = !review.has_file(path);
                         std::mem::replace(&mut t.stale, stale) != stale
                     }
+                    // A push or a clear moves them, never the snapshot.
+                    CommentAnchor::Tour { .. } => false,
                     CommentAnchor::Line { path, side, .. } => {
                         let key = (*side, path.clone());
                         if !sides.contains_key(&key) {

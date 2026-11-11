@@ -19,6 +19,7 @@ import {
 } from '@/shared/protocol.js';
 import { fuzzyFilter } from '@/shared/fuzzy.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
+import { tourLabel } from './comments/threads.js';
 import type { ReviewState } from './store.js';
 
 // Pure functions over store state. No effects, no store import at runtime, so
@@ -225,8 +226,9 @@ export function visibleThreads(state: Pick<ReviewState, 'threads' | 'showResolve
   return state.showResolved ? state.threads : state.threads.filter((t) => !t.resolved);
 }
 
-/** The header label of a thread: its line range and side, or the whole file. */
+/** The header label of a thread: its line range and side, the whole file, or its place in the tour. */
 export function anchorLabel(a: CommentAnchor): string {
+  if (a.kind === 'tour') return tourLabel(a);
   return a.kind === 'file' ? 'whole file' : rangeLabel(a);
 }
 

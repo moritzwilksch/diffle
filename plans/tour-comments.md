@@ -10,28 +10,34 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
 
   ```ts
   TourAnchorSchema = z.object({
-    kind: z.literal('tour'),
+    kind: z.literal("tour"),
     /** Child-element indices from <body> to the element, in the tour as last pushed. */
     node: z.number().int().array(),
-    /** 'text': a selection inside the element; 'element': the element itself. */
-    on: z.enum(['text', 'element']),
     /** The h2 it sits under: its 1-based number and heading text; absent before the first. */
     step: z.number().int().optional(),
     section: z.string(),
-    /** The element as the validator names it, after its card: `diffle-card#auth > <p>`. */
+    /** The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`. */
     element: z.string(),
-    /** 'text': the selection, whitespace collapsed. 'element': its label (a box's text, a card's title), or ''. */
-    quoted: z.string(),
-    /** 'text': which match of `quoted` in the element's reading text, 0-based. */
-    occurrence: z.number().int().optional(),
+    target: TourTargetSchema,
   });
+  TourTargetSchema = z.discriminatedUnion("on", [
+    /** A selection: its words, whitespace collapsed, and which match in the element's reading text. */
+    z.object({
+      on: z.literal("text"),
+      quoted: z.string(),
+      occurrence: z.number().int(),
+    }),
+    /** The element as a whole, with what finds it again: a card's title, a box's text; '' for none. */
+    z.object({ on: z.literal("element"), label: z.string() }),
+  ]);
   ```
 
-  The browser sends only `node`, `on`, and for text `quoted` and `occurrence`; the server fills `step`, `section`, `element`, and an element's label from the stored tour, as it quotes a code range from the snapshot.
+  The browser sends `node` and a `TourTargetRequest` (the text target, or `{on: 'element'}`); the server fills `step`, `section`, `element`, and an element's label from the stored tour, as it quotes a code range from the snapshot. Both target unions are named schemas, so typify generates tagged enums.
 
   What can carry a thread: a selection within one top-level block of prose (paragraphs, list items, headings, table cells, callout and card prose); a whole block (`diffle-card`, `diffle-diff`, `diffle-code`, `diffle-tree`, `diffle-callout`, `diffle-diagram`, `table`); a diagram box (a `rect` with its labels, by `Drawing::box_of`) or a lone `text`.
 
-  An element's **reading text** is what the reader sees, defined once on each side: text nodes, a `diffle-symbol`'s `name`, a `diffle-jump`'s text or `path[:line]`, a card's `title` before its content; `diffle-diff`, `diffle-code`, `diffle-tree` and `diffle-diagram` add nothing (they take element anchors). Whitespace runs collapse to one space on both sides.
+  An element's **reading text** is what the reader sees, defined once on each side: text nodes, a `diffle-symbol`'s `name`, a `diffle-jump`'s text or `path[:line]`, a card's `title` before its content; `diffle-diff`, `diffle-code`, `diffle-tree` and `diffle-diagram` add nothing (they take element anchors). Matching ignores whitespace on both sides: a selection's line breaks and the source's indentation never agree.
+
 - **Rejected:**
   - Character offsets into the source HTML. Inline primitives render text the source doesn't hold (a symbol's name), so rendered selections and source offsets don't line up.
   - A heading-only anchor (comment on a section). Too coarse for the screenshot's cases: a phrase and a diagram box.
@@ -47,6 +53,7 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
   - Not found: `stale`, the anchor kept as it was. A later push that brings the text back revives it.
 
   `DELETE /api/tour` marks every tour thread stale. Snapshot refreshes leave tour anchors alone. Changes go through `Session::record`, so `/ws` and `/api/threads/activity` announce them.
+
 - **Rejected:**
   - Stale in place on every push. The loop is "reviewer comments, agent revises, pushes": every revision would stale every thread, including the ones about untouched passages.
   - Showing threads "on an earlier tour". Only the latest tour is stored (`tours.json`, one per key), so there is nothing to show them on.
@@ -72,7 +79,8 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
   ---
   ```
 
-  `in` for a selection inside the element, `on` for the element itself, `before the first section` when `step` is absent; the quote is the selection or the label, left out when empty. Tour threads follow the code threads, in document order (`node`). `diffle comments list` prints the anchor's JSON unchanged; `--path` matches code threads only. GitHub export skips tour threads ("a tour comment has no place in a pull request review"), and `CommentCard` hides its export button for them. `--skill` describes the anchor under "Read the review's comments" and tells the agent to find the passage by `section`, `element` and `quoted`.
+  `in` for a selection inside the element, `on` for the element itself, `before the first section` when `step` is absent; the quote is the selection or the label, left out when empty. Tour threads follow the code threads, in document order (`node`). `diffle comments list` prints the anchor's JSON unchanged; `--path` matches code threads only. GitHub export skips tour threads ("a comment on the tour has no place in a pull request review"), and `CommentCard` hides its export button for them. `--skill` describes the anchor under "Read the review's comments" and tells the agent to find the passage by `section`, `element` and `quoted`.
+
 - **Rejected:** Printing `node` in the prompt. The agent keeps its document as written, not as indices; heading, element and quote find the place with a search.
 - **Why:** The agent reads the prompt next to the document it wrote; the validator's element names are the ones its push errors already use.
 
@@ -113,14 +121,14 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
 ## Interfaces and files
 
 ```
-POST /api/tour/threads   TourThreadCreate {node, on, quoted?, occurrence?, body} → 201 CommentThread; 422 when the target is not in the tour
+POST /api/tour/threads   TourThreadCreate {node, target, body} → 201 CommentThread; 400 without a tour, or when the target is not in it
 ```
 
 ```
-src/shared/protocol.ts                     MODIFIED  TourAnchor in CommentAnchor; TourThreadCreate
+src/shared/protocol.ts                     MODIFIED  TourAnchor in CommentAnchor; TourTarget, TourTargetRequest, TourThreadCreate
 crates/diffle/protocol.generated.json      MODIFIED  regenerated
 crates/diffle/src/tour/anchor.rs           NEW       a tour's targets: reading text, labels, sections, finding and relocating
-crates/diffle/src/comments/tour.rs         NEW       CommentStore: add a tour thread; relocate or stale the tour threads
+crates/diffle/src/comments/tour.rs         NEW       CommentStore::relocate_tour: move or stale the tour threads
 crates/diffle/src/comments/format.rs       MODIFIED  the tour block (decision 3)
 crates/diffle/src/comments/anchor.rs       MODIFIED  order: code threads, then tour threads in document order
 crates/diffle/src/comments/relocation.rs   MODIFIED  skip tour anchors on a refresh
@@ -131,6 +139,7 @@ crates/diffle/src/cli/skill.rs             MODIFIED  the reply command; the tour
 crates/diffle/src/cli/args.rs, agent/      MODIFIED  diffle comments reply
 crates/diffle/tests/tour_comments.rs       NEW       create, relocate across pushes, clear, prompt and list (insta)
 src/client/api.ts                          MODIFIED  createTourThread
+src/client/comments/threads.ts             NEW       a thread's file, review order, a tour thread's label
 src/client/store.ts, model.ts              MODIFIED  Draft union, composerKey, anchorLabel, submitDraft
 src/client/tour/anchor.ts                  NEW       selection ↔ anchor, reading text, Ranges for highlights
 src/client/tour/Margin.tsx                 NEW       the rail: cards, composer, comment button

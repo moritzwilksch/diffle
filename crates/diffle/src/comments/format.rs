@@ -4,16 +4,18 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use super::anchor::compare_threads;
-use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side};
+use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourTarget};
 
 static SUGGESTION_FENCE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^```suggestion[^\n]*\n([\s\S]*?)\n?^```[ \t]*$").unwrap());
 
 /// Agent-prompt format, one block per thread:
 ///
-///   path:line            (or path:start-end; `(file) path` for a thread on the whole file)
+///   path:line            (or path:start-end; `(file) path` for a thread on the whole file;
+///                         `(tour) 2. Heading, in <p>` for a selection in the tour, `, on <element>`
+///                         for a tour element as a whole)
 ///
-///   > quoted line        (absent for a file thread)
+///   > quoted line        (absent for a file thread; a tour element's label)
 ///
 ///   body                 (a thread's messages joined by a blank line; an agent's starts `(agent) `)
 ///
@@ -37,6 +39,17 @@ fn format_one(t: &CommentThread) -> String {
         CommentAnchor::Line { path, side, start_line, end_line, quoted } => {
             (path, side, *start_line, *end_line, quoted)
         }
+        CommentAnchor::Tour { step, section, element, target, .. } => {
+            let at = step.map_or_else(|| "before the first section".to_owned(), |n| format!("{n}. {section}"));
+            let (relation, quoted) = match target {
+                TourTarget::Text { quoted, .. } => ("in", quoted),
+                TourTarget::Element { label } => ("on", label),
+            };
+            let header = format!("(tour{}) {at}, {relation} {element}", if t.stale { ", stale" } else { "" });
+            let quote = if quoted.is_empty() { String::new() } else { format!("{}\n\n", quote(quoted)) };
+            let body: Vec<String> = t.messages.iter().map(|m| signed(m, m.body.trim().to_owned())).collect();
+            return format!("{header}\n\n{quote}{}\n\n---\n", body.join("\n\n"));
+        }
     };
     let range = if start == end { start.to_string() } else { format!("{start}-{end}") };
     let mut prefixes = Vec::new();
@@ -47,10 +60,15 @@ fn format_one(t: &CommentThread) -> String {
         prefixes.push(format!("(stale, was line {})", t.stale_from_line.unwrap_or(start)));
     }
     let prefix = if prefixes.is_empty() { String::new() } else { prefixes.join(" ") + " " };
-    let quote: Vec<String> =
-        quoted.split('\n').map(|l| if l.is_empty() { ">".to_owned() } else { format!("> {l}") }).collect();
     let body: Vec<String> = t.messages.iter().map(|m| format_message(m, quoted)).collect();
-    format!("{prefix}{path}:{range}\n\n{}\n\n{}\n\n---\n", quote.join("\n"), body.join("\n\n"))
+    format!("{prefix}{path}:{range}\n\n{}\n\n{}\n\n---\n", quote(quoted), body.join("\n\n"))
+}
+
+/// `text` as a Markdown quote, line by line.
+fn quote(text: &str) -> String {
+    let lines: Vec<String> =
+        text.split('\n').map(|l| if l.is_empty() { ">".to_owned() } else { format!("> {l}") }).collect();
+    lines.join("\n")
 }
 
 fn format_message(m: &CommentMessage, quoted: &str) -> String {

@@ -111,6 +111,18 @@ describe('anchorLabel', () => {
     expect(anchorLabel({ ...line, side: 'old' })).toBe('removed L3');
     expect(anchorLabel({ kind: 'file', path: 'a.py' })).toBe('whole file');
   });
+
+  it('names a tour thread by the words it is on, or an element by its kind and label', () => {
+    const tour = { kind: 'tour' as const, node: [3], step: 1, section: 'S', element: '<p>' };
+    expect(anchorLabel({ ...tour, target: { on: 'text', quoted: 'once per request', occurrence: 0 } })).toBe(
+      '"once per request"',
+    );
+    const rect = 'diffle-diagram > <rect x="8" y="8" width="96" height="40">';
+    expect(anchorLabel({ ...tour, element: rect, target: { on: 'element', label: 'Session' } })).toBe('box "Session"');
+    const card = 'diffle-card id="a" title="T"';
+    expect(anchorLabel({ ...tour, element: card, target: { on: 'element', label: 'T' } })).toBe('card "T"');
+    expect(anchorLabel({ ...tour, element: 'diffle-diagram', target: { on: 'element', label: '' } })).toBe('diagram');
+  });
 });
 
 describe('jumplist buttons', () => {

@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
 import { ThreadIcon } from '@/client/comments/AgentMark.js';
+import { anchorPath } from '@/client/comments/threads.js';
 import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
 import { anchorLabel, composerKey, exportLabel, relativeTime, type ExportOutcome } from '@/client/model.js';
@@ -79,7 +80,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           </span>
         )}
         <span className="flex-1" />
-        {canExport && (
+        {canExport && thread.anchor.kind !== 'tour' && (
           <Button
             variant="ghost"
             icon={!post.armed && !posted}
@@ -214,7 +215,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
         ) : (
           <Markdown
             text={message.body}
-            path={thread.anchor.path}
+            path={anchorPath(thread.anchor) ?? undefined}
             quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
           />
         )}

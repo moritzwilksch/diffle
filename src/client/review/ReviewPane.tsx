@@ -75,6 +75,7 @@ import { CommentComposer } from './CommentComposer.js';
 import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
 import { hostOf } from './host.js';
 import { ImageDiff } from './ImageDiff.js';
+import { anchorPath } from '@/client/comments/threads.js';
 
 export type Annot =
   | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
@@ -330,9 +331,11 @@ export function ReviewPane() {
     const state = { collapsed, viewed, config, snapshot };
     const threadsByPath = new Map<string, CommentThread[]>();
     for (const t of visibleThreads({ threads, showResolved })) {
-      const list = threadsByPath.get(t.anchor.path);
+      const path = anchorPath(t.anchor);
+      if (path == null) continue;
+      const list = threadsByPath.get(path);
       if (list) list.push(t);
-      else threadsByPath.set(t.anchor.path, [t]);
+      else threadsByPath.set(path, [t]);
     }
     const versionOf = (path: string, mine: CommentThread[], isCollapsed: boolean) => {
       const v = itemVersion(
@@ -1295,7 +1298,7 @@ function FileHeaderMeta({ path }: { path: string }) {
   }, [path, toggleCollapsed, selectFile, full]);
   const vs = useStore((s) => (file ? viewedState(s, file) : 'unviewed'));
   const setViewed = useStore((s) => s.setViewed);
-  const count = useStore((s) => s.threads.filter((t) => t.anchor.path === path && !t.resolved).length);
+  const count = useStore((s) => s.threads.filter((t) => anchorPath(t.anchor) === path && !t.resolved).length);
   const collapsedNow = useStore((s) => isCollapsed(s, path));
   const openFullFile = useStore((s) => s.openFullFile);
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');

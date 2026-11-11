@@ -32,6 +32,7 @@ import {
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
+import { anchorPath } from './comments/threads.js';
 import {
   buildNav,
   cursorFromSelection,
@@ -1544,7 +1545,7 @@ export const useStore = create<ReviewState>((set, get) => {
     openReply(threadId) {
       const t = get().threads.find((x) => x.id === threadId);
       if (!t) return;
-      set({ replyTo: threadId, draft: null, activePath: t.anchor.path });
+      set({ replyTo: threadId, draft: null, activePath: anchorPath(t.anchor) ?? get().activePath });
     },
     closeReply() {
       if (get().replyTo) set({ replyTo: null });

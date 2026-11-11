@@ -20,8 +20,13 @@ this repository\"; ask the reviewer to start one (`diffle` in the repository).
 
 `diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
 is shown as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its
-`id`, its anchor (a path and a line range on the `old` or `new` side, or a whole file) and its
-messages. A message you wrote carries `\"author\": \"agent\"`.
+`id`, its anchor and its messages. A message you wrote carries `\"author\": \"agent\"`. An anchor
+is on code (`line`: a path and a line range on the `old` or `new` side; `file`: a whole file) or on
+your tour (`tour`). A tour anchor names the section by `step` and `section`, its heading, and the
+element as a refused push names it. Its `target` is a selection in that element's text
+(`on: \"text\"`, the words in `quoted`) or the element as a whole (`on: \"element\"`, with its
+`label`: a card's title, a box's text). Find the passage in your document by these. A tour thread is
+`stale` when your last push no longer holds its passage.
 
 `diffle comments reply <thread-id> <body|->` adds your reply to a thread, in Markdown (stdin with
 `-`), and prints the thread as JSON. The reviewer sees it marked as yours. Reply to answer a
@@ -41,8 +46,10 @@ their `<h3>` subsections. Each review has one tour.
 - An accepted push can come back with warnings on stderr, in the same form, such as a diagram
   label that may run past its box. They are judgment calls: fix each, or keep it knowingly.
 - `diffle tour clear` removes the review's tour.
-- The reviewer answers in this chat. Revise the document and push it again; the open tour updates
-  in place. A diff whose lines left the review since says so in place.
+- The reviewer answers in this chat, or comments on the tour in diffle: list the threads, reply to
+  a question, and revise the document and push it again for a change. The open tour updates in
+  place, and each thread follows its passage into it. A diff whose lines left the review since says
+  so in place.
 
 ### Structure
 

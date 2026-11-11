@@ -1,0 +1,37 @@
+---
+source: crates/diffle/tests/tour_comments.rs
+expression: prompt
+---
+app.py:2
+
+>     return id
+
+Why the id?
+
+---
+
+(tour) 1. The loader, in <p>
+
+> once per request
+
+Per request?
+
+---
+
+(tour) 1. The loader, on diffle-card id="entry" title="The loader returns the id"
+
+> The loader returns the id
+
+Name the caller.
+
+(agent) The handler.
+
+---
+
+(tour) 2. Wiring, on diffle-diagram > <rect x="8" y="8" width="96" height="40">
+
+> Session
+
+Is this the store?
+
+---

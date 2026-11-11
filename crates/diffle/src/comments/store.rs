@@ -51,7 +51,7 @@ impl CommentStore {
         &self.file
     }
 
-    /// Threads matching `q` (every thread by default), ordered by path, line, then creation.
+    /// Threads matching `q` (every thread by default), in review order (`compare_threads`).
     pub async fn threads(&self, q: &ThreadQuery) -> Result<Vec<CommentThread>> {
         let state = q.state.unwrap_or(ThreadState::All);
         let mut threads: Vec<CommentThread> = self
@@ -64,7 +64,7 @@ impl CommentStore {
                 ThreadState::Resolved => t.resolved,
                 ThreadState::All => true,
             })
-            .filter(|t| q.path.as_deref().is_none_or(|p| anchor_path(&t.anchor) == p))
+            .filter(|t| q.path.as_deref().is_none_or(|p| anchor_path(&t.anchor) == Some(p)))
             .collect();
         threads.sort_by(compare_threads);
         Ok(threads)
@@ -202,7 +202,7 @@ impl CommentStore {
     /// Locked read-modify-write: `f` edits this key's set as read from disk under the lock, other
     /// keys pass through untouched, and the file is rewritten when `f` reports a change. A failing
     /// `f` writes nothing; a failed write fails its caller only.
-    async fn mutate<R>(&self, f: impl FnOnce(&mut SetData) -> Result<(R, bool)>) -> Result<R> {
+    pub(super) async fn mutate<R>(&self, f: impl FnOnce(&mut SetData) -> Result<(R, bool)>) -> Result<R> {
         with_file_lock(&self.file, || async {
             let mut all = read_store_file(&self.file).await?;
             let mut set = all.sets.remove(&self.key).unwrap_or_default();

@@ -1,4 +1,5 @@
 //! Tours: an agent's guided walk through the review, one HTML document per comment key.
+mod anchor;
 mod code;
 mod diagram;
 mod dom;
@@ -15,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+pub use anchor::TourIndex;
 pub use files::column;
 pub use store::TourStore;
 

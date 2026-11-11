@@ -439,7 +439,51 @@ export const FileAnchorSchema = z.object({
 });
 export type FileAnchor = z.infer<typeof FileAnchorSchema>;
 
-export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema]);
+/** A selection in a tour element's reading text: what the reader sees, as `diffle --skill` defines it. */
+export const TourTextTargetSchema = z.object({
+  on: z.literal('text'),
+  /** The selected text, whitespace runs collapsed to one space. */
+  quoted: z.string(),
+  /** Which match of `quoted` in the element's reading text, 0-based, whitespace ignored. */
+  occurrence: z.number().int(),
+});
+export type TourTextTarget = z.infer<typeof TourTextTargetSchema>;
+
+/** A tour element as a whole: a block, a diagram box or a diagram label. */
+export const TourElementTargetSchema = z.object({
+  on: z.literal('element'),
+  /** What finds it again: a card's title, a box's text, a diff's path and lines; '' for none. */
+  label: z.string(),
+});
+export type TourElementTarget = z.infer<typeof TourElementTargetSchema>;
+
+/** The part of a tour element a thread is on. */
+export const TourTargetSchema = z.discriminatedUnion('on', [TourTextTargetSchema, TourElementTargetSchema]);
+export type TourTarget = z.infer<typeof TourTargetSchema>;
+
+/** The part of a tour element a new thread is on; the server labels an element. */
+export const TourTargetRequestSchema = z.discriminatedUnion('on', [
+  TourTextTargetSchema,
+  z.object({ on: z.literal('element') }),
+]);
+export type TourTargetRequest = z.infer<typeof TourTargetRequestSchema>;
+
+/** A thread on the review's tour, at the element `node` names and the part of it `target` names. */
+export const TourAnchorSchema = z.object({
+  kind: z.literal('tour'),
+  /** Child-element indices from the document's `<body>` to the element, in the tour as last pushed. */
+  node: z.number().int().array(),
+  /** The 1-based number of the `h2` section it sits in; absent before the first. */
+  step: z.number().int().optional(),
+  /** That section's heading text; '' before the first. */
+  section: z.string(),
+  /** The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`. */
+  element: z.string(),
+  target: TourTargetSchema,
+});
+export type TourAnchor = z.infer<typeof TourAnchorSchema>;
+
+export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema, TourAnchorSchema]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
 /** Who wrote a message that the reviewer did not: only `diffle comments` sends it, never the browser. */
@@ -456,7 +500,7 @@ export const CommentMessageSchema = z.object({
 });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
-/** A conversation anchored to a line range or a whole file. The thread owns the anchor; replies follow it. */
+/** A conversation anchored to a line range, a whole file, or a part of the tour. The thread owns the anchor; replies follow it. */
 export const CommentThreadSchema = z.object({
   id: z.string(),
   anchor: CommentAnchorSchema,
@@ -464,7 +508,7 @@ export const CommentThreadSchema = z.object({
   messages: CommentMessageSchema.array().min(1),
   resolved: z.boolean(),
   resolvedAt: z.number().int().optional(),
-  /** Relocation failed after a snapshot refresh: the lines left the diff, or the file left the review. */
+  /** Relocation failed: the lines left the diff, the file left the review, or the tour lost the passage. */
   stale: z.boolean(),
   /** Original startLine of a line thread, shown in export when stale. */
   staleFromLine: z.number().int().optional(),
@@ -498,6 +542,17 @@ export const ThreadCreateSchema = z
     message: 'side, endLine and quoted need a startLine; leave all four out for a comment on the whole file',
   });
 export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
+
+/**
+ * `POST /api/tour/threads`: opens a thread on the review's tour as it is now. The server names the
+ * section and the element, and an element's label, from the stored tour.
+ */
+export const TourThreadCreateSchema = z.object({
+  node: z.number().int().array(),
+  target: TourTargetRequestSchema,
+  body: z.string().refine((body) => body.trim().length > 0, 'body required'),
+});
+export type TourThreadCreate = z.infer<typeof TourThreadCreateSchema>;
 
 export const ReplyCreateSchema = z.object({
   body: z.string().refine((body) => body.trim().length > 0, 'body required'),

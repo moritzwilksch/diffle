@@ -14,6 +14,7 @@ import { useConfirm } from '@/client/useConfirm.js';
 import { CommitNavigator } from './CommitNavigator.js';
 import { IterationList } from './IterationList.js';
 import { ThreadRow } from './ThreadRow.js';
+import { anchorPath, compareThreads } from './threads.js';
 
 export function CommentPanel() {
   const threads = useStore((s) => s.threads);
@@ -52,11 +53,13 @@ export function CommentPanel() {
   const resolvedCount = threads.length - open.length;
   const staleCount = threads.filter((t) => t.stale).length;
   const groups = useMemo(() => {
-    const by = new Map<string, CommentThread[]>();
-    for (const t of [...shown].sort(cmp)) {
-      const list = by.get(t.anchor.path) ?? [];
+    // Null: the tour's threads, after every file's.
+    const by = new Map<string | null, CommentThread[]>();
+    for (const t of [...shown].sort(compareThreads)) {
+      const path = anchorPath(t.anchor);
+      const list = by.get(path) ?? [];
       list.push(t);
-      by.set(t.anchor.path, list);
+      by.set(path, list);
     }
     return [...by.entries()];
   }, [shown]);
@@ -174,10 +177,10 @@ export function CommentPanel() {
         {groups.map(([path, list]) => (
           <section
             className="border-0 [&+section]:border-t [&+section]:border-solid [&+section]:border-border [&+section]:pt-3"
-            key={path}
+            key={path ?? '\0tour'}
           >
             <h4 className="m-0 mb-1.5 font-mono text-[0.75rem] leading-[1.4] text-muted">
-              <FilePath path={path} />
+              {path == null ? <span className="font-sans">Tour</span> : <FilePath path={path} />}
             </h4>
             {list.map((t) => (
               <ThreadRow
@@ -258,11 +261,4 @@ function CopyButton({
       <ButtonLabel text={done ? 'Copied' : label} />
     </Button>
   );
-}
-
-/** Review order: by path, then line with the file thread first, then creation. */
-function cmp(a: CommentThread, b: CommentThread): number {
-  if (a.anchor.path !== b.anchor.path) return a.anchor.path < b.anchor.path ? -1 : 1;
-  const line = (x: CommentThread) => (x.anchor.kind === 'line' ? x.anchor.startLine : 0);
-  return line(a) - line(b) || (a.messages[0]?.createdAt ?? 0) - (b.messages[0]?.createdAt ?? 0);
 }

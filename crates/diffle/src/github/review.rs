@@ -26,7 +26,7 @@ fn skip(id: &str, reason: &str) -> GithubExportResponseSkippedItem {
 }
 
 /// Threads → the comments of one pending review, one per thread. Stale threads are skipped: their
-/// lines no longer sit in the diff, and GitHub would refuse them anyway. With `thread_ids`, only
+/// lines no longer sit in the diff, and GitHub would refuse them anyway. So are threads on the tour. With `thread_ids`, only
 /// those (resolved included, the user asked for them by hand); without, every unresolved thread.
 pub fn build_review(threads: &[CommentThread], thread_ids: Option<&[String]>) -> BuiltReview {
     let mut skipped = Vec::new();
@@ -52,13 +52,18 @@ pub fn build_review(threads: &[CommentThread], thread_ids: Option<&[String]>) ->
             skipped.push(skip(&t.id, "stale"));
             continue;
         }
-        comments.push(to_review_comment(t));
+        let Some(comment) = to_review_comment(t) else {
+            skipped.push(skip(&t.id, "a comment on the tour has no place in a pull request review"));
+            continue;
+        };
+        comments.push(comment);
         ids.push(t.id.clone());
     }
     BuiltReview { comments, ids, skipped }
 }
 
-fn to_review_comment(t: &CommentThread) -> ReviewComment {
+/// The review comment for a thread on code; none for one on the tour.
+fn to_review_comment(t: &CommentThread) -> Option<ReviewComment> {
     let body = format_body(&t.messages);
     let mut c = ReviewComment {
         path: String::new(),
@@ -84,8 +89,9 @@ fn to_review_comment(t: &CommentThread) -> ReviewComment {
                 c.start_side = Some(side);
             }
         }
+        CommentAnchor::Tour { .. } => return None,
     }
-    c
+    Some(c)
 }
 
 /// Messages joined as markdown. GitHub renders ```suggestion fences itself, so bodies stay verbatim.

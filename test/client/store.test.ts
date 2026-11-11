@@ -4,6 +4,7 @@ import type {
   ChangedFile,
   CommentThread,
   GraphResponse,
+  LineAnchor,
   LspLogResponse,
   LspServerStatus,
   LspStatus,
@@ -1681,9 +1682,7 @@ describe('symbol navigation', () => {
   });
 });
 
-const thread = (
-  over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<CommentThread['anchor']> },
-): CommentThread => ({
+const thread = (over: Partial<Omit<CommentThread, 'anchor'>> & { anchor?: Partial<LineAnchor> }): CommentThread => ({
   id: over.id ?? 't',
   anchor: { kind: 'line', path: 'a.py', side: 'new', startLine: 1, endLine: 1, quoted: 'x', ...over.anchor },
   messages: [{ id: 'm', body: 'b', createdAt: 1, updatedAt: 1 }],
@@ -1994,7 +1993,7 @@ describe('threads', () => {
     useStore.setState({ snapshot: snap(1, 'working', ['a.py', 'b.py']), threads: [a, b] });
     const version = (path: string, prev?: ReturnType<typeof itemVersion>) => {
       const s = useStore.getState();
-      const mine = visibleThreads(s).filter((t) => t.anchor.path === path);
+      const mine = visibleThreads(s).filter((t) => t.anchor.kind !== 'tour' && t.anchor.path === path);
       return itemVersion(prev, itemDeps(s, path, mine, false));
     };
     const va = version('a.py');

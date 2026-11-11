@@ -343,6 +343,49 @@
             "path"
           ],
           "description": "A thread on a file as a whole, with no line: GitHub's file-level comment."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tour"
+            },
+            "node": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "description": "Child-element indices from the document's `<body>` to the element, in the tour as last pushed."
+            },
+            "step": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "The 1-based number of the `h2` section it sits in; absent before the first."
+            },
+            "section": {
+              "type": "string",
+              "description": "That section's heading text; '' before the first."
+            },
+            "element": {
+              "type": "string",
+              "description": "The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`."
+            },
+            "target": {
+              "$ref": "#/$defs/TourTarget"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "section",
+            "element",
+            "target"
+          ],
+          "description": "A thread on the review's tour, at the element `node` names and the part of it `target` names."
         }
       ]
     },
@@ -411,7 +454,7 @@
         },
         "stale": {
           "type": "boolean",
-          "description": "Relocation failed after a snapshot refresh: the lines left the diff, or the file left the review."
+          "description": "Relocation failed: the lines left the diff, the file left the review, or the tour lost the passage."
         },
         "staleFromLine": {
           "type": "integer",
@@ -427,7 +470,7 @@
         "resolved",
         "stale"
       ],
-      "description": "A conversation anchored to a line range or a whole file. The thread owns the anchor; replies follow it."
+      "description": "A conversation anchored to a line range, a whole file, or a part of the tour. The thread owns the anchor; replies follow it."
     },
     "CommitInfo": {
       "type": "object",
@@ -2876,6 +2919,49 @@
       ],
       "description": "The review's tour: one HTML document, as the agent last pushed it."
     },
+    "TourAnchor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "tour"
+        },
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "Child-element indices from the document's `<body>` to the element, in the tour as last pushed."
+        },
+        "step": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "The 1-based number of the `h2` section it sits in; absent before the first."
+        },
+        "section": {
+          "type": "string",
+          "description": "That section's heading text; '' before the first."
+        },
+        "element": {
+          "type": "string",
+          "description": "The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`."
+        },
+        "target": {
+          "$ref": "#/$defs/TourTarget"
+        }
+      },
+      "required": [
+        "kind",
+        "node",
+        "section",
+        "element",
+        "target"
+      ],
+      "description": "A thread on the review's tour, at the element `node` names and the part of it `target` names."
+    },
     "TourCallout": {
       "type": "object",
       "properties": {
@@ -3288,6 +3374,24 @@
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
+    },
+    "TourElementTarget": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string",
+          "const": "element"
+        },
+        "label": {
+          "type": "string",
+          "description": "What finds it again: a card's title, a box's text, a diff's path and lines; '' for none."
+        }
+      },
+      "required": [
+        "on",
+        "label"
+      ],
+      "description": "A tour element as a whole: a block, a diagram box or a diagram label."
     },
     "TourError": {
       "type": "object",
@@ -3872,6 +3976,146 @@
         "td"
       ],
       "description": "The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the\nwalk, and `h3` a subsection; the rest carry prose, lists and tables. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
+    },
+    "TourTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "text"
+            },
+            "quoted": {
+              "type": "string",
+              "description": "The selected text, whitespace runs collapsed to one space."
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Which match of `quoted` in the element's reading text, 0-based, whitespace ignored."
+            }
+          },
+          "required": [
+            "on",
+            "quoted",
+            "occurrence"
+          ],
+          "description": "A selection in a tour element's reading text: what the reader sees, as `diffle --skill` defines it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "element"
+            },
+            "label": {
+              "type": "string",
+              "description": "What finds it again: a card's title, a box's text, a diff's path and lines; '' for none."
+            }
+          },
+          "required": [
+            "on",
+            "label"
+          ],
+          "description": "A tour element as a whole: a block, a diagram box or a diagram label."
+        }
+      ],
+      "description": "The part of a tour element a thread is on."
+    },
+    "TourTargetRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "text"
+            },
+            "quoted": {
+              "type": "string",
+              "description": "The selected text, whitespace runs collapsed to one space."
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Which match of `quoted` in the element's reading text, 0-based, whitespace ignored."
+            }
+          },
+          "required": [
+            "on",
+            "quoted",
+            "occurrence"
+          ],
+          "description": "A selection in a tour element's reading text: what the reader sees, as `diffle --skill` defines it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "element"
+            }
+          },
+          "required": [
+            "on"
+          ]
+        }
+      ],
+      "description": "The part of a tour element a new thread is on; the server labels an element."
+    },
+    "TourTextTarget": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string",
+          "const": "text"
+        },
+        "quoted": {
+          "type": "string",
+          "description": "The selected text, whitespace runs collapsed to one space."
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Which match of `quoted` in the element's reading text, 0-based, whitespace ignored."
+        }
+      },
+      "required": [
+        "on",
+        "quoted",
+        "occurrence"
+      ],
+      "description": "A selection in a tour element's reading text: what the reader sees, as `diffle --skill` defines it."
+    },
+    "TourThreadCreate": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "target": {
+          "$ref": "#/$defs/TourTargetRequest"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "node",
+        "target",
+        "body"
+      ],
+      "description": "`POST /api/tour/threads`: opens a thread on the review's tour as it is now. The server names the\nsection and the element, and an element's label, from the stored tour."
     },
     "TourTree": {
       "type": "object",
