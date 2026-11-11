@@ -134,6 +134,8 @@ test.describe('the tour', () => {
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
     await expect(view.locator('.tour-diagram-icon')).toHaveCount(3);
+    // The comment panel under the contents says how a comment starts in the tour.
+    await expect(page.getByText('Select words and press c to comment on them.')).toBeVisible();
     await expect(page).toHaveScreenshot('tour.png');
     const contents = page.getByRole('navigation', { name: 'Contents' });
     await expect(contents).toMatchAriaSnapshot({

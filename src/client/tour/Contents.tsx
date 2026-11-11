@@ -7,6 +7,10 @@ import { useTour } from './state.js';
 const ENTRY =
   'flex w-full cursor-pointer items-start gap-2 rounded-md border-0 bg-transparent px-2 text-left text-foreground hover:bg-hover';
 
+/** How a comment starts in the tour, which its empty comment panel says. */
+const TOUR_HINT =
+  'Select words and press c to comment on them. Hover a block for its Comment button, or click a box in a diagram.';
+
 /**
  * The tour's side panel: its contents as tall as they need, up to a share of the height, over the
  * diff view's comment panel, which lists every thread, the code's and the tour's. Each scrolls alone.
@@ -18,7 +22,7 @@ export function TourSide() {
         <TourContents />
       </div>
       <div className="flex min-h-0 flex-1 flex-col [&>aside]:flex-1">
-        <CommentPanel />
+        <CommentPanel hint={TOUR_HINT} />
       </div>
     </div>
   );

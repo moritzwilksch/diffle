@@ -16,7 +16,11 @@ import { IterationList } from './IterationList.js';
 import { ThreadRow } from './ThreadRow.js';
 import { anchorPath, compareThreads } from './threads.js';
 
-export function CommentPanel() {
+/** How a comment starts in the diff, which the empty panel says. */
+const DIFF_HINT = 'Click a line number to comment, drag across line numbers for a block, or press C for a whole file.';
+
+/** Every thread of the review, with its actions. `hint` says how a comment starts in the view showing it. */
+export function CommentPanel({ hint = DIFF_HINT }: { hint?: string }) {
   const threads = useStore((s) => s.threads);
   const showResolved = useStore((s) => s.showResolved);
   const setShowResolved = useStore((s) => s.setShowResolved);
@@ -168,10 +172,7 @@ export function CommentPanel() {
         {groups.length === 0 && (
           <div className="px-3 py-6 text-center text-muted [&>p]:mt-0 [&>p]:mr-0 [&>p]:mb-1.5 [&>p]:ml-0">
             <p>{threads.length ? 'Every thread is resolved.' : 'No comments yet.'}</p>
-            <p>
-              {off ??
-                'Click a line number to comment, drag across line numbers for a block, or press C for a whole file.'}
-            </p>
+            <p>{off ?? hint}</p>
           </div>
         )}
         {groups.map(([path, list]) => (
