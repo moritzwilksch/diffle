@@ -236,7 +236,7 @@ test.describe('the tour', () => {
     // A number in the header or on the gutter takes its note; h steps back, past the first to rest.
     await walk.getByRole('button', { name: /^Note 3/ }).click();
     await expect(note).toContainText('Keep the unmatched refunds');
-    await walk.locator('[data-column-number="14"]').click();
+    await walk.locator('[data-mark="1"]').click();
     await expect(note).toContainText('One set per account');
     await page.keyboard.press('h');
     await expect(note).toHaveCount(0);

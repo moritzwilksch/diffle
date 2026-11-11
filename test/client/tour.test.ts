@@ -4,7 +4,7 @@ import { readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
 import { selectionTarget, textRange } from '@/client/tour/anchor.js';
 import { freeSpot, placeCards } from '@/client/tour/placement.js';
-import { excerptRows, noteAt, noteRows } from '@/client/tour/steps/rows.js';
+import { excerptRows, noteRows } from '@/client/tour/steps/rows.js';
 import { keyTarget } from '@/client/tour/steps/steps.js';
 
 const PATCH = `diff --git a/app.py b/app.py
@@ -169,15 +169,6 @@ describe('a walk', () => {
     expect(noteRows(rows, 'new', { start: 2, end: 3 })).toEqual([0, 2]);
     expect(noteRows(rows, 'old', { start: 3, end: 3 })).toEqual([1, 1]);
     expect(noteRows(rows, 'new', { start: 9, end: 9 })).toBeNull();
-  });
-
-  it("finds the note whose marker sits on a row's gutter", () => {
-    const notes = [
-      { start: 2, end: 2 },
-      { start: 3, end: 5 },
-    ];
-    expect(noteAt(rows, 'new', notes, { side: 'additions', lineNumber: 3 })).toBe(1);
-    expect(noteAt(rows, 'new', notes, { side: 'deletions', lineNumber: 3 })).toBeNull();
   });
 });
 

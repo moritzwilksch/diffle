@@ -1,4 +1,4 @@
-import { type AnnotationSide, type DiffLineAnnotation, type FileDiffMetadata, parsePatchFiles } from '@pierre/diffs';
+import { type DiffLineAnnotation, type FileDiffMetadata, parsePatchFiles } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { FilePath } from '@/client/FilePath.js';
@@ -100,23 +100,17 @@ export function DiffRows<A = undefined>({
   css,
   annotations,
   renderAnnotation,
-  onLineNumberClick,
 }: {
   fileDiff: FileDiffMetadata;
   /** Styles for the rows, inside the diff's shadow root. */
   css?: string;
   annotations?: DiffLineAnnotation<A>[];
   renderAnnotation?: (annotation: DiffLineAnnotation<A>) => ReactNode;
-  onLineNumberClick?: (spot: { side: AnnotationSide; lineNumber: number }) => void;
 }) {
   const theme = useStore((s) => s.theme);
   const options = useMemo(
     () => ({
       unsafeCSS: css,
-      onLineNumberClick:
-        onLineNumberClick &&
-        ((p: { annotationSide: AnnotationSide; lineNumber: number }) =>
-          onLineNumberClick({ side: p.annotationSide, lineNumber: p.lineNumber })),
       theme: CODE_THEMES,
       preferredHighlighter: HIGHLIGHTER,
       themeType: theme,
@@ -126,7 +120,7 @@ export function DiffRows<A = undefined>({
       disableFileHeader: true,
       overflow: 'wrap' as const,
     }),
-    [theme, css, onLineNumberClick],
+    [theme, css],
   );
   const prime = useCallback((pool: WorkerPool) => pool.primeDiffHighlightCache(fileDiff), [fileDiff]);
   const primed = usePrimed(prime);

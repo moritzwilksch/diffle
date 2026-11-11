@@ -12,7 +12,7 @@ export function Stepper({ titles, label, steps }: { titles: readonly string[]; l
   const { active, take, step } = steps;
 
   const arrow =
-    'grid size-5 cursor-pointer place-items-center rounded-sm border-0 bg-transparent p-0 text-muted hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent';
+    'grid size-5 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-muted hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent';
   return (
     <div role="group" aria-label={`${label}s`} data-targeted={steps.targeted || undefined} className="tour-stepper">
       <button
@@ -50,6 +50,15 @@ export function Stepper({ titles, label, steps }: { titles: readonly string[]; l
   );
 }
 
+/** A step's number in a badge, filled in the accent while the step is taken, outlined otherwise. */
+export function StepBadge({ number, active }: { number: number; active: boolean }) {
+  return (
+    <span data-opaque="" className="tour-badge" data-active={active || undefined} aria-hidden>
+      {number}
+    </span>
+  );
+}
+
 /** A taken step's text in a compact full-width band: its number, its title when it has one, its sentence. */
 export function NoteBand({
   place,
@@ -64,9 +73,7 @@ export function NoteBand({
 }) {
   return (
     <div {...place} className="tour-note">
-      <span data-opaque="" className="tour-note-number" aria-hidden>
-        {number}
-      </span>
+      <StepBadge number={number} active />
       <div className="min-w-0">
         {title && <div className="tour-note-title">{title}</div>}
         <div>{children}</div>

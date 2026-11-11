@@ -66,33 +66,22 @@ export function rowSpot(row: WalkRow): RowSpot {
   return { side: 'additions', lineNumber: row.new!, type: row.kind === '+' ? 'change-addition' : 'context' };
 }
 
-/** The note whose marker sits on the gutter at `spot`: the note that starts on that row. */
-export function noteAt(
-  rows: readonly WalkRow[],
-  side: Side,
-  notes: readonly NoteSpan[],
-  spot: Pick<RowSpot, 'side' | 'lineNumber'>,
-): number | null {
-  const found = notes.findIndex((note) => {
-    const lit = noteRows(rows, side, note);
-    const first = lit && rowSpot(rows[lit[0]]!);
-    return first?.side === spot.side && first.lineNumber === spot.lineNumber;
-  });
-  return found < 0 ? null : found;
-}
-
 /** A row's text, as the diff renders it inside its shadow root. */
 export function lineSelector(spot: RowSpot): string {
   return `[data-line="${spot.lineNumber}"][data-line-type="${spot.type}"]`;
 }
 
-function gutterSelector(spot: RowSpot): string {
+/** A row's line number, as the diff renders it inside its shadow root. */
+export function gutterSelector(spot: RowSpot): string {
   return `[data-column-number="${spot.lineNumber}"][data-line-type="${spot.type}"]`;
 }
 
+/** The width of the lane left of a walk's line numbers where its notes' badges sit. */
+export const MARK_LANE = 24;
+
 /**
- * The stylesheet for a walk at `active` (null at rest): a numbered marker on the gutter of each
- * note's first row, and while a note is active, its rows lit and every other row dimmed.
+ * The stylesheet for a walk at `active` (null at rest): a lane left of the line numbers for the
+ * notes' badges, and while a note is active, its rows lit and every other row dimmed.
  */
 export function walkCss(
   rows: readonly WalkRow[],
@@ -100,22 +89,8 @@ export function walkCss(
   notes: readonly NoteSpan[],
   active: number | null,
 ): string {
-  const lit = active == null ? '' : litCss(rows, side, notes[active]!);
-  return `${markerCss(rows, side, notes, active)}\n${lit}`;
-}
-
-/** A numbered marker on the gutter of each note's first row, the active one filled. */
-function markerCss(rows: readonly WalkRow[], side: Side, notes: readonly NoteSpan[], active: number | null): string {
-  const rules: string[] = [];
-  notes.forEach((note, i) => {
-    const lit = noteRows(rows, side, note);
-    if (!lit) return;
-    const gutter = gutterSelector(rowSpot(rows[lit[0]]!));
-    const state = i === active ? 'active' : 'idle';
-    rules.push(`${gutter} { --walk-marker: '${i + 1}'; position: relative; cursor: pointer; }`);
-    rules.push(`${gutter}::before { ${MARKER} ${state === 'active' ? MARKER_ACTIVE : MARKER_IDLE} }`);
-  });
-  return rules.join('\n');
+  const lane = `[data-column-number] { border-left: ${MARK_LANE}px solid transparent; }`;
+  return active == null ? lane : `${lane}\n${litCss(rows, side, notes[active]!)}`;
 }
 
 /** The rows of `span` lit and every other row dimmed. */
@@ -133,9 +108,4 @@ export function litCss(rows: readonly WalkRow[], side: Side, span: NoteSpan): st
   ].join('\n');
 }
 
-const MARKER = `content: var(--walk-marker); position: absolute; left: 3px; top: 50%; translate: 0 -50%;
-  display: grid; place-items: center; width: 1.05em; height: 1.05em; border-radius: 999px;
-  font: 600 0.6875rem/1 var(--sans); opacity: 1;`;
-const MARKER_IDLE = `color: var(--accent); background: var(--bg-card); box-shadow: inset 0 0 0 1px var(--accent);`;
-const MARKER_ACTIVE = `color: var(--accent-fg); background: var(--accent);`;
 const LIT_FACE = 'color-mix(in srgb, var(--accent) 8%, transparent)';

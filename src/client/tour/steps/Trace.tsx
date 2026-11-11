@@ -6,7 +6,7 @@ import { DiffRows, ExcerptNotice, useExcerpt } from '@/client/tour/primitives/Di
 import { TourJump } from '@/client/tour/primitives/Jump.js';
 import type { Side } from '@/shared/protocol.js';
 import { excerptRows, lineSelector, litCss, noteRows, rowSpot } from './rows.js';
-import { NoteBand, Stepper } from './Stepper.js';
+import { NoteBand, StepBadge, Stepper } from './Stepper.js';
 import { reveal, useFocusedChild, useSteps } from './steps.js';
 
 /** Lines shown on each side of a stop's line. */
@@ -103,7 +103,7 @@ export function TourTrace({
               title={`${s.path}:${s.line}`}
               onClick={() => take(i)}
             >
-              <span className="tour-trace-number">{i + 1}</span>
+              <StepBadge number={i + 1} active={i === at} />
               {s.path.split('/').pop()}
             </button>
           ))}
