@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '@/client/api.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
@@ -22,18 +22,18 @@ export function TourCheck({
 }) {
   const checks = useTour((s) => (s.load.state === 'ready' ? s.load.checks : []));
   const { live } = useTourThreads();
-  // A tick shows at once; the server's answer replaces it when the tour is read again.
+  // A tick shows at once and holds until the tour read back agrees, or the tick fails.
   const [pending, setPending] = useState<ReadonlyMap<string, boolean>>(new Map());
   const ticked = (question: string, stored: boolean) => pending.get(question) ?? stored;
+  const settle = (keep: (question: string, on: boolean) => boolean) =>
+    setPending((prev) => {
+      const next = new Map([...prev].filter(([question, on]) => keep(question, on)));
+      return next.size === prev.size ? prev : next;
+    });
+  useEffect(() => settle((question, on) => checks.find((c) => c.question === question)?.ticked !== on), [checks]);
   const onTick = (question: string, on: boolean) => {
     setPending((prev) => new Map(prev).set(question, on));
-    void tick(question, on).finally(() =>
-      setPending((prev) => {
-        const next = new Map(prev);
-        next.delete(question);
-        return next;
-      }),
-    );
+    void tick(question, on).then((done) => done || settle((q) => q !== question));
   };
   const items = [...source.children].flatMap((el) => {
     const item = primitive(el);
@@ -92,11 +92,14 @@ export function TourCheck({
   );
 }
 
-async function tick(question: string, ticked: boolean): Promise<void> {
+/** Stores a tick and reads the tour back; false when it could not be stored. */
+async function tick(question: string, ticked: boolean): Promise<boolean> {
   try {
     await api.tick({ question, ticked });
-    await refreshTour();
   } catch (e) {
     useStore.getState().flash(`Cannot tick it: ${e instanceof Error ? e.message : String(e)}`);
+    return false;
   }
+  await refreshTour();
+  return true;
 }
