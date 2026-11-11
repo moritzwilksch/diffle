@@ -113,6 +113,27 @@ fn routes_vue_to_a_typescript_server_only_beside_the_plugin_vue_language_server_
 }
 
 #[test]
+fn serves_typescript_from_tsc_ahead_of_the_tsserver_clients_only_when_it_is_typescript_7() {
+    let older = resolve_servers([Typescript], &none(), &path(&["tsc", "typescript-language-server"]));
+    assert_eq!(older.servers, [server("typescript-language-server --stdio", &[Typescript], &[])]);
+    assert_eq!(
+        missing(&resolve_servers([Typescript], &none(), &path(&["tsc"])).missing),
+        json!([{ "language": "typescript", "tried": ["typescript-language-server", "vtsls"], "why": "tsc is on PATH but TypeScript 7 was not found beside it" }])
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let package = dir.path().join("node_modules").join("typescript");
+    std::fs::create_dir_all(package.join("bin")).unwrap();
+    std::fs::write(package.join("package.json"), json!({ "name": "typescript", "version": "7.0.2" }).to_string())
+        .unwrap();
+    std::fs::write(package.join("bin").join("tsc"), "").unwrap();
+    let tsc = package.join("bin").join("tsc");
+    let others = path(&["typescript-language-server"]);
+    let lookup: Lookup = Arc::new(move |c: &str| if c.starts_with("tsc") { Some(tsc.clone()) } else { others(c) });
+    let r = resolve_servers([Typescript, Javascript], &none(), &lookup);
+    assert_eq!(r.servers, [server("tsc --lsp --stdio", &[Javascript, Typescript], &[])]);
+}
+
+#[test]
 fn starts_a_joining_server_for_any_language_it_joins_joining_only_the_asked_ones() {
     let tailwind = "tailwindcss-language-server --stdio";
     let both = resolve_servers([Typescriptreact, Python], &none(), &path(&["vtsls", "tailwindcss-language-server"]));
