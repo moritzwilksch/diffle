@@ -5,12 +5,12 @@ import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
 import { TourCode } from './primitives/Code.js';
-import { TourDiagram } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
+import { TourDiagram } from './steps/StepDiagram.js';
 import { TourWalk } from './steps/Walk.js';
 
 /**
@@ -95,7 +95,7 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
         />
       );
     case 'diffle-diagram':
-      return <TourDiagram key={key} of={node} />;
+      return <TourDiagram key={key} of={node} renderNote={noteContent} />;
     case 'diffle-code':
       return (
         <TourCode

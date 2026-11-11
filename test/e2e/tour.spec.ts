@@ -68,6 +68,16 @@ tally/currency.py"></diffle-tree>
 <diffle-note lines="15-17" title="Record each sale">Every sale adds its <code>description</code> to its account's set.</diffle-note>
 <diffle-note lines="18-22" title="Keep the unmatched refunds">A refund stays when its account never sold that description.</diffle-note>
 </diffle-walk>
+<p>The same check, as data moves through it:</p>
+<diffle-diagram><svg viewBox="0 0 432 52">
+  <g step="1"><rect x="8" y="12" width="104" height="28"/><text x="16" y="26">Ledger entries</text></g>
+  <g step="2"><path d="M112 26 H144" class="arrow"/><rect x="144" y="12" width="120" height="28"/><text x="152" y="26">Sales by account</text></g>
+  <g step="3"><path d="M264 26 H296" class="arrow"/><rect x="296" y="12" width="128" height="28"/><text x="304" y="26">Unmatched refunds</text></g>
+</svg>
+<diffle-note title="Read every entry">The check reads the ledger's entries twice.</diffle-note>
+<diffle-note title="Collect the sales">Each account's sold descriptions go into one set.</diffle-note>
+<diffle-note title="Flag the refunds">A refund whose description is not in its account's set is flagged.</diffle-note>
+</diffle-diagram>
 `;
 
 /** Two walks, both in view on a laptop's screen. */
@@ -256,6 +266,31 @@ test.describe('the tour', () => {
     expect(await readPrompt(diffle.url)).toContain(
       '(tour) 4. Finding unmatched refunds, in the note "One set per account" in the walk of tally/refunds.py:12-22\n\n> starts with an empty set',
     );
+  });
+
+  test('a stepped diagram lights one step at a time, its note under the drawing', async ({ page, diffle }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    await page
+      .getByRole('navigation', { name: 'Contents' })
+      .getByRole('button', { name: /Finding unmatched/ })
+      .click();
+    const diagram = view.locator('figure[data-stepped]');
+    const note = diagram.locator('.tour-note');
+    await diagram.scrollIntoViewIfNeeded();
+    await expect(note).toHaveCount(0);
+    await expect(diagram).toHaveScreenshot('tour-diagram-steps.png');
+
+    await diagram.getByRole('button', { name: /^Step 2/ }).click();
+    await expect(note).toContainText('Collect the sales');
+    await expect(diagram.locator('g[data-lit]')).toHaveCount(1);
+    await page.mouse.move(0, 0);
+    await expect(diagram).toHaveScreenshot('tour-diagram-step.png');
+
+    // The taken number again returns the drawing to rest.
+    await diagram.getByRole('button', { name: /^Step 2/ }).click();
+    await expect(note).toHaveCount(0);
+    await expect(diagram.locator('svg[data-stepping]')).toHaveCount(0);
   });
 
   test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {

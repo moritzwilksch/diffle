@@ -202,6 +202,23 @@ diffle styles it from the classes below and the theme, and draws the arrowheads,
   right of a vertical one, never on it.
 - Name a region with a `frame` rect and an `eyebrow` text at (x+8, y+12).
 - Tone at most about a third of the nodes, and only those the point is about.
+
+Step through a diagram when its parts happen in an order the reader should follow: a request's
+trip, a pipeline's stages. Give each `<g>` a step lights `step=\"n\"`, numbered from 1 without a
+gap, and after the `<svg>` put one `diffle-note` per step, in order: a title and one sentence, held
+to the Writing rules. A step lights its groups and dims the others, and its note shows under the
+drawing. A diagram whose parts all matter at once needs no steps; one piece of code read in order
+is a walk.
+
+```html
+<diffle-diagram><svg viewBox=\"0 0 232 52\">
+  <g step=\"1\"><rect x=\"8\" y=\"12\" width=\"88\" height=\"28\"/><text x=\"16\" y=\"26\">Login</text></g>
+  <g step=\"2\"><path d=\"M96 26 H136\" class=\"arrow\"/><rect x=\"136\" y=\"12\" width=\"88\" height=\"28\"/><text x=\"144\" y=\"26\">Validate</text></g>
+</svg>
+<diffle-note title=\"Login issues a token\">The token carries its expiry.</diffle-note>
+<diffle-note title=\"Every request checks it\">An expired token is refused.</diffle-note>
+</diffle-diagram>
+```
 ";
 
 const DIAGRAM: &str = r#"<diffle-diagram><svg viewBox="0 0 360 52">
@@ -312,13 +329,14 @@ mod tests {
     fn the_interface_examples_are_ones_the_validator_accepts() {
         let blocks: Vec<&str> =
             super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        assert_eq!(blocks.len(), 4);
+        assert_eq!(blocks.len(), 5);
         let walk = format!("<h2>A</h2>{}", blocks[0]);
         let row = format!("<h2>A</h2>{}", blocks[1]);
         let example = format!("<h2>A</h2>{}", blocks[3]);
         let diagram =
             format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[2]);
-        for html in [walk, row, diagram, example] {
+        let steps = format!("<h2>A</h2>{}", blocks[4]);
+        for html in [walk, row, diagram, example, steps] {
             let errors = crate::tour::outline_errors(&html);
             assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
         }

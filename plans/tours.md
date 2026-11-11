@@ -77,7 +77,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-row`     | none; holds two or three columns                                        | blocks or short prose side by side, stacked in a narrow column                                                         |
   | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`)      | those diff lines, highlighted, with a jump to them                                                                     |
   | `diffle-walk`    | `path`, `side?`, `lines`; holds `diffle-note`s                          | those diff lines walked one note at a time (decision 21)                                                               |
-  | `diffle-note`    | `lines`, `title`; holds a sentence of inline prose                      | one step of a walk: its lines lit, its text under them                                                                 |
+  | `diffle-note`    | `lines?`, `title`; holds a sentence of inline prose                     | one step of a walk (its lines lit) or a stepped diagram (decision 22), its text under it                               |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                                    | a directory tree; changed files carry their status from the snapshot                                                   |
   | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
@@ -193,6 +193,12 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   - A numbered list of the notes in a side column, as in the presentation template the reviewer showed. It costs width on a laptop or beside other windows, and the reviewer asked for a walk that does not.
 - **Why:** A loop, a handler or a pipeline reads best in order; lighting one part at a time keeps the reader's eye on it, and the band keeps the explanation next to the lines at any width.
 
+### 22. A diagram steps through its groups with the walk's stepper and band
+
+- **Chosen:** A `<g>` in a `diffle-diagram`'s drawing takes `step="n"`, and the diagram holds one `diffle-note` (a title and a sentence, no `lines`) per step after its `<svg>`. A stepped diagram renders in a frame with the shared stepper in its header (`steps/StepDiagram.tsx`); a taken step lights its groups (edge, face, lines and arrowheads in the accent, through the drawing's `--edge`, `--face` and `--line`) and dims the other steps' groups, and its note shows under the drawing in the walk's band. The validator (`tour/stepped/diagram.rs`) refuses steps with a gap, a note count other than the step count, notes without stepped groups, and `lines` on a diagram's note; it warns as for a walk. A diagram without notes renders as before.
+- **Rejected:** A `step` attribute on the note instead of its order. Order already numbers the steps, as a walk's notes do, and one fewer attribute is one fewer mismatch.
+- **Why:** A request's trip or a pipeline's stages read in order; lighting one stage keeps the eye on it without a second diagram per stage.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -265,6 +271,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 9. Lucide icons in text, card titles and diagrams, with their name check and layout warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g tour`.
 10. Examples: `diffle-code example`, its label, refusals and warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 11. Walks: `diffle-walk` and `diffle-note`, the stepper, keys, refusals and warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
+12. Stepped diagrams: `step` on a diagram's groups, its notes. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

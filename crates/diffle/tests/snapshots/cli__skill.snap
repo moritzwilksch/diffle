@@ -196,12 +196,29 @@ diffle styles it from the classes below and the theme, and draws the arrowheads,
 - Name a region with a `frame` rect and an `eyebrow` text at (x+8, y+12).
 - Tone at most about a third of the nodes, and only those the point is about.
 
+Step through a diagram when its parts happen in an order the reader should follow: a request's
+trip, a pipeline's stages. Give each `<g>` a step lights `step="n"`, numbered from 1 without a
+gap, and after the `<svg>` put one `diffle-note` per step, in order: a title and one sentence, held
+to the Writing rules. A step lights its groups and dims the others, and its note shows under the
+drawing. A diagram whose parts all matter at once needs no steps; one piece of code read in order
+is a walk.
+
+```html
+<diffle-diagram><svg viewBox="0 0 232 52">
+  <g step="1"><rect x="8" y="12" width="88" height="28"/><text x="16" y="26">Login</text></g>
+  <g step="2"><path d="M96 26 H136" class="arrow"/><rect x="136" y="12" width="88" height="28"/><text x="144" y="26">Validate</text></g>
+</svg>
+<diffle-note title="Login issues a token">The token carries its expiry.</diffle-note>
+<diffle-note title="Every request checks it">An expired token is refused.</diffle-note>
+</diffle-diagram>
+```
+
 #### Diagram elements
 
 Each takes the attributes listed; `?` marks an optional one.
 
 - `svg`: `viewBox`
-- `g`: `class?`
+- `g`: `class?`, `step?`
 - `rect`: `x`, `y`, `width`, `height`, `class?`
 - `circle`: `cx`, `cy`, `r`, `class?`
 - `ellipse`: `cx`, `cy`, `rx`, `ry`, `class?`

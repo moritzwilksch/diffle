@@ -116,3 +116,22 @@
 .tour-diagram .tour-diagram-icon {
   color: var(--tone, var(--fg));
 }
+
+/* A stepped diagram: the taken step's groups lit in the accent, the other steps' groups dimmed. */
+.tour-diagram g[data-step] {
+  transition: opacity 150ms;
+}
+
+.tour-diagram[data-stepping] g[data-step]:not([data-lit]) {
+  opacity: 0.25;
+}
+
+.tour-diagram g[data-lit] {
+  --edge: var(--accent);
+  --face: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+  --line: var(--accent);
+}
+
+.tour-diagram g[data-lit] :is(rect, circle, ellipse, polygon, path, line, polyline):not(:where(.tour-diagram-icon *)) {
+  stroke-width: 2;
+}
