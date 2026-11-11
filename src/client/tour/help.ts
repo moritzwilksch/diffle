@@ -18,6 +18,7 @@ export const TOUR_HELP: HelpSection[][] = [
       rows: [
         ['select words, then c', 'comment on them'],
         ['Esc', 'close the comment being written'],
+        ['yy or Y', 'copy all comments'],
       ],
     },
   ],

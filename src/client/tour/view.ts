@@ -10,8 +10,11 @@ import { TourView } from './TourView.js';
 /** How far `j` and `k` scroll, as a share of the page's height. */
 const LINE = 0.1;
 
-/** Keys the tour leaves to the review: help, theme, the mode picker, the graph and `T` back to the diff. */
-const TOUR_PASSES = new Set(['?', 't', 'm', 'M', 'T', 'o']);
+/**
+ * Keys the tour leaves to the review: help, theme, the mode picker, the graph, `T` back to the diff,
+ * and `yy` / `Y`, which copy every comment as the prompt.
+ */
+const TOUR_PASSES = new Set(['?', 't', 'm', 'M', 'T', 'o', 'y', 'Y']);
 
 /** The agent's guided tour of the change, which exists once an agent pushed one (`diffle tour push`). */
 export const tourView: ViewDef = {

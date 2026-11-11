@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
 import { activePath } from './browser.js';
-import { pushTour, readPrompt, readThreads, REPO_ROOT, seedReply, waitForLsp } from './server.js';
+import { pushTour, readPrompt, readThreads, REPO_ROOT, seedReply, seedThreads, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
 const TOUR = `
@@ -172,7 +172,7 @@ test.describe('the tour', () => {
   });
 
   test.describe('in a wide window', () => {
-    test.use({ viewport: { width: 1680, height: 900 } });
+    test.use({ viewport: { width: 1680, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
 
     test('selected words take a comment in the margin; the agent answers, the prompt carries it, and a revision it loses keeps it below', async ({
       page,
@@ -216,6 +216,17 @@ test.describe('the tour', () => {
       expect(await readPrompt(diffle.url)).toContain(
         '(tour) 1. Entries learn their kind, in a <p>\n\n> a refund counts negative\n\nNegative in which total?\n\n(agent) In the account total.',
       );
+
+      // yy copies every comment, the code's and the tour's, as in the diff.
+      await seedThreads(diffle.url, [{ path: 'tally/ledger.py', startLine: 30, body: 'Why a blank line?' }]);
+      await expect(page.getByRole('navigation', { name: 'Contents' })).toBeVisible();
+      await page.keyboard.press('y');
+      await page.keyboard.press('y');
+      await expect(page.getByText('Copied all comments')).toBeVisible();
+      const copied = await page.evaluate(() => navigator.clipboard.readText());
+      expect(copied).toBe(await readPrompt(diffle.url));
+      expect(copied).toContain('tally/ledger.py:30');
+      expect(copied).toContain('(tour) 1. Entries learn their kind, in a <p>');
 
       // The comment panel opens the thread back in the tour.
       await page.keyboard.press('T');
