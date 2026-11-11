@@ -7,6 +7,7 @@ pub mod trace;
 pub mod walk;
 
 use super::anchor::reading;
+use super::code::holds_markup;
 use super::dom::{Dom, Node, NodeId};
 pub use super::element::Findings;
 use super::element::{label, short};
@@ -23,6 +24,10 @@ const INLINE: [&str; 4] = ["code", "strong", "em", "a"];
 
 /// Checks the walk, trace or checklist at `node`, named `element`, as the catalog read it (none when it did not fit).
 pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement>) -> Findings {
+    // A code block the parser cut short moved what follows; its own refusal names the cause.
+    if holds_markup(dom, node) {
+        return Default::default();
+    }
     match dom.node(node) {
         Node::Element { name, .. } if &*name.local == "diffle-trace" => trace::check(dom, node, element),
         Node::Element { name, .. } if &*name.local == "diffle-check" => check::check(dom, node, element),

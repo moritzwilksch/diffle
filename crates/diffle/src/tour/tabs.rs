@@ -1,4 +1,5 @@
 //! A `diffle-tabs`: two to four panes shown one at a time, each a `diffle-tab` with its title.
+use super::code::holds_markup;
 use super::dom::{Dom, Node, NodeId};
 use super::element::{Findings, label, short};
 
@@ -13,6 +14,10 @@ pub fn panes(dom: &Dom, node: NodeId) -> Vec<NodeId> {
 /// Why the `diffle-tabs` at `node`, named `element`, is refused: content other than tabs, or a
 /// count of tabs outside two to four.
 pub fn check(dom: &Dom, node: NodeId, element: &str) -> Findings {
+    // A code block the parser cut short moved what follows; its own refusal names the cause.
+    if holds_markup(dom, node) {
+        return Default::default();
+    }
     let mut found = Findings::default();
     for &child in dom.children(node) {
         match dom.node(child) {
@@ -38,4 +43,16 @@ pub fn check(dom: &Dom, node: NodeId, element: &str) -> Findings {
 
 fn is_tab(dom: &Dom, id: NodeId) -> bool {
     matches!(dom.node(id), Node::Element { name, .. } if &*name.local == "diffle-tab")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn leaves_a_code_block_cut_short_to_its_own_refusal() {
+        let html = r#"<h2>A</h2><diffle-tabs><diffle-tab title="A"><diffle-code lang="rust">a<p>b</diffle-code></diffle-tab><diffle-tab title="B"><p>b</p></diffle-tab></diffle-tabs>"#;
+
+        let messages: Vec<String> = crate::tour::outline_errors(html).into_iter().map(|e| e.message).collect();
+
+        assert_eq!(messages, ["diffle-code holds its code as text: write < as &lt; and & as &amp;"]);
+    }
 }

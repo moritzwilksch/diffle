@@ -2,7 +2,7 @@
 //! keep it to signatures, interfaces and short made-up examples rather than code the diff shows.
 use std::collections::HashSet;
 
-use super::dom::NodeId;
+use super::dom::{Dom, Node, NodeId};
 use super::files::column;
 use crate::protocol::TourError;
 
@@ -42,6 +42,18 @@ pub struct Code {
     /// Made up by the agent, not from the repository.
     pub example: bool,
     pub lines: Vec<String>,
+}
+
+/// Whether a `diffle-code` under `node` holds markup: a raw `<` the parser read as a tag, which may
+/// have cut the block short and moved what follows into or beside it.
+pub fn holds_markup(dom: &Dom, node: NodeId) -> bool {
+    dom.children(node).iter().any(|&c| match dom.node(c) {
+        Node::Element { name, .. } if &*name.local == "diffle-code" => {
+            dom.children(c).iter().any(|&g| matches!(dom.node(g), Node::Element { .. }))
+        }
+        Node::Element { .. } => holds_markup(dom, c),
+        _ => false,
+    })
 }
 
 /// Why a `diffle-code` with `attrs` is refused: attributes that do not go together.

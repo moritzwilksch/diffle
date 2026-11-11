@@ -1,4 +1,5 @@
 //! A `diffle-row`: two or three columns side by side, each a block or short prose.
+use super::code::holds_markup;
 use super::dom::{Dom, Node, NodeId};
 use super::element::{Findings, label, short};
 use super::placement::is_column;
@@ -7,6 +8,7 @@ use super::placement::is_column;
 /// `context` names what sits in it.
 pub fn check(dom: &Dom, node: NodeId, element: &str, context: &str) -> (usize, Findings) {
     let mut found = Findings::default();
+    let cut = holds_markup(dom, node);
     let mut columns = 0;
     for &child in dom.children(node) {
         match dom.node(child) {
@@ -23,6 +25,10 @@ pub fn check(dom: &Dom, node: NodeId, element: &str, context: &str) -> (usize, F
             }
             _ => {}
         }
+    }
+    // A code block the parser cut short moved what follows; its own refusal names the cause.
+    if cut {
+        return (columns, Findings::default());
     }
     if !(2..=3).contains(&columns) {
         found.error(node, element.into(), format!("a diffle-row holds two or three columns, not {columns}"));
