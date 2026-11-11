@@ -3202,7 +3202,7 @@
         "element",
         "message"
       ],
-      "description": "One reason a pushed tour was refused."
+      "description": "One reason a pushed tour was refused, or one warning about an accepted one."
     },
     "TourGroup": {
       "type": "object",
@@ -3264,6 +3264,25 @@
         "html"
       ],
       "description": "`PUT /api/tour`: replaces the review's tour."
+    },
+    "TourPushed": {
+      "type": "object",
+      "properties": {
+        "tour": {
+          "$ref": "#/$defs/Tour"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TourError"
+          }
+        }
+      },
+      "required": [
+        "tour",
+        "warnings"
+      ],
+      "description": "What `PUT /api/tour` answers for an accepted tour: the tour as stored, and warnings in document\norder. A warning is a judgment call, such as a diagram label that may run past its box; the\nagent fixes it or keeps it knowingly."
     },
     "TourRejection": {
       "type": "object",

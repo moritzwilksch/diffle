@@ -3,6 +3,7 @@ mod diagram;
 mod dom;
 mod element;
 mod files;
+mod layout;
 mod store;
 mod validate;
 
@@ -22,8 +23,16 @@ pub fn outline_errors(html: &str) -> Vec<TourError> {
     validate::outline(html).errors.into_iter().map(|(_, e)| e).collect()
 }
 
-/// Every reason to refuse `html` as a tour of `snap`, in document order; none when it is fine.
-pub async fn refusals(session: &Session, snap: &Arc<Snapshot>, html: &str) -> Result<Vec<TourError>> {
+/// What checking a document found, each list in document order.
+pub struct Verdict {
+    /// Reasons to refuse it; none when it is fine.
+    pub errors: Vec<TourError>,
+    /// Judgment calls the agent fixes or keeps knowingly.
+    pub warnings: Vec<TourError>,
+}
+
+/// Checks `html` as a tour of `snap`.
+pub async fn check(session: &Session, snap: &Arc<Snapshot>, html: &str) -> Result<Verdict> {
     let outline = validate::outline(html);
     let mut texts: HashMap<(&str, Side), Option<String>> = HashMap::new();
     for reference in &outline.references {
@@ -39,7 +48,10 @@ pub async fn refusals(session: &Session, snap: &Arc<Snapshot>, html: &str) -> Re
         let is_file = session.has_file(snap, &reference.path);
         errors.extend(files::refusal(reference, is_file, text).map(|e| (reference.node, e)));
     }
-    // Stable: one element's errors keep the order they were found in.
-    errors.sort_by_key(|(node, _)| *node);
-    Ok(errors.into_iter().map(|(_, e)| e).collect())
+    // Stable: one element's findings keep the order they were found in.
+    let ordered = |mut found: Vec<(usize, TourError)>| {
+        found.sort_by_key(|(node, _)| *node);
+        found.into_iter().map(|(_, e)| e).collect()
+    };
+    Ok(Verdict { errors: ordered(errors), warnings: ordered(outline.warnings) })
 }

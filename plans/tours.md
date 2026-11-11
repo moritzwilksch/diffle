@@ -98,6 +98,8 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
   Each error names the element and the reason. A refusal is a user error (`Error::is_user_error`), so `diffle tour push` exits 2 with the list, and the agent fixes the document and pushes again. The client still applies its own allowlist when rendering (decision 2).
 
+  An accepted push can carry warnings in the same `{element, message}` shape, which `diffle tour push` prints to stderr while it exits 0. They are judgment calls from a diagram's geometry (`tour/layout.rs`), against the layout rules `--skill` gives: a label that may be wider than its box or run past it (the per-character estimate, so the message says "may"), a lone label off its box's vertical middle, a rect off the 8-unit grid or past the drawing's edge, a drawing wider than the limit, more than about a third of the shapes toned. Refusing these was rejected: the estimate can be wrong, and the agent can judge.
+
 - **Rejected:** Storing any document and letting the client drop what it doesn't know. The agent would never learn that a card or a diagram vanished, and the reviewer would get a broken tour.
 - **Why:** The agent writes and pushes in a loop, so the CLI's exit status and stderr are its only feedback.
 - **Cost:** A new dependency, plus an allowlist on each side of the contract; decision 11 gives both one source.
@@ -143,7 +145,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 16. A tour travels as JSON in the generated contract
 
-- **Chosen:** `PUT /api/tour` takes `TourPush {html}` and answers `Tour {html, pushedAt, version}`, or 422 with `TourRejection {errors: [{element, message}]}`. `version` is the `Snapshot.version` the tour was pushed against. `element` names the culprit so the agent can find it in its document: its tag and attributes as written, after the card it sits in (`diffle-card#auth > diffle-diff path="a.rs" lines="3-9"`). `GET /api/tour` answers `TourResponse {tour: Tour | null}`. `DELETE /api/tour` answers 204. A new `ServerMessage {type: 'tour'}` tells clients to refetch, like `viewed`.
+- **Chosen:** `PUT /api/tour` takes `TourPush {html}` and answers `TourPushed {tour: Tour {html, pushedAt, version}, warnings}`, or 422 with `TourRejection {errors: [{element, message}]}`. `version` is the `Snapshot.version` the tour was pushed against. `element` names the culprit so the agent can find it in its document: its tag and attributes as written, after the card it sits in (`diffle-card#auth > diffle-diff path="a.rs" lines="3-9"`). `GET /api/tour` answers `TourResponse {tour: Tour | null}`. `DELETE /api/tour` answers 204. A new `ServerMessage {type: 'tour'}` tells clients to refetch, like `viewed`.
 - **Rejected:** A raw `text/html` body on `PUT`. It can be `curl`ed straight from a file, but `diffle tour push` already does that for the agent, and a raw body leaves the generated contract and leaves no room for fields later.
 - **Why:** Every cross-boundary shape lives in `protocol.ts`.
 

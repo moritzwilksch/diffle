@@ -64,6 +64,8 @@ async fn keeps_a_pushed_tour_under_the_comment_key_and_tells_clients() {
     let pushed = push(&s, TOUR).await;
     assert_eq!(pushed.status, 200, "{}", pushed.body);
     let pushed = pushed.json();
+    assert_eq!(pushed["warnings"], json!([]));
+    let pushed = pushed["tour"].clone();
     assert_eq!(pushed["html"], TOUR);
     assert_eq!(pushed["version"], s.get("/api/snapshot").await.json()["version"]);
     assert_eq!(tour(&s).await, pushed);
@@ -138,7 +140,7 @@ docs/readme.md"></diffle-tree></diffle-card>
 #[tokio::test]
 async fn keeps_the_tour_across_refreshes_until_cleared() {
     let s = server().await;
-    let pushed = push(&s, TOUR).await.json();
+    let pushed = push(&s, TOUR).await.json()["tour"].clone();
     // The card's lines leave the diff; the tour stays as pushed, and the client marks the card stale.
     s.repo.write("app.py", "import os\n");
     s.session.refresh().await;
@@ -151,6 +153,29 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
     assert!(told_of_tour(&mut ws).await);
     // Clearing nothing succeeds too.
     assert_eq!(s.send("DELETE", "/api/tour", &[], None).await.status, 204);
+    s.close().await;
+}
+
+/// The demo tour's first diagram, as an agent drew it before `--skill` said how text sits: labels on
+/// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
+const CROWDED: &str = r#"<diffle-card id="flow" title="Flow"><diffle-diagram><svg viewBox="0 0 1000 96">
+  <rect x="4" y="24" width="100" height="40" class="fill"></rect>
+  <text x="54" y="48" class="c small">agent</text>
+  <rect x="248" y="24" width="104" height="40" class="fill accent"></rect>
+  <text x="300" y="44" class="c mono">PUT /api/tour</text>
+  <g class="accent"><rect x="400" y="24" width="96" height="40"></rect><text x="412" y="44">tours.json and more</text></g>
+  <circle cx="600" cy="44" r="16" class="success"></circle>
+  <rect x="960" y="24" width="64" height="40"></rect>
+  <text x="990" y="88" class="small">ws: tour</text>
+</svg></diffle-diagram></diffle-card>"#;
+
+#[tokio::test]
+async fn shows_a_tour_whose_diagram_breaks_layout_rules_and_warns_of_each() {
+    let s = server().await;
+    let pushed = push(&s, CROWDED).await;
+    assert_eq!(pushed.status, 200, "{}", pushed.body);
+    insta::assert_json_snapshot!("warned", pushed.json()["warnings"]);
+    assert_eq!(tour(&s).await["html"], CROWDED);
     s.close().await;
 }
 
@@ -182,6 +207,16 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     assert!(pushed.status.success(), "{}", stderr(&pushed));
     let tour: Value = serde_json::from_str(&stdout(&pushed)).unwrap();
     assert_eq!(tour["html"], std::fs::read_to_string(&file).unwrap());
+    assert_eq!(stderr(&pushed), "");
+
+    let warned = tour_cli(&t.path, &["push", "-"], CROWDED);
+    assert!(warned.status.success(), "{}", stderr(&warned));
+    assert!(
+        stderr(&warned)
+            .starts_with("⚠ the tour was shown, with warnings to judge:\n  diffle-card#flow > diffle-diagram > <svg"),
+        "{}",
+        stderr(&warned)
+    );
 
     let refused = tour_cli(&t.path, &["push", "-"], r#"<diffle-card id="a" title="A"><diffle-edge></diffle-card>"#);
     assert_eq!(refused.status.code(), Some(2), "{}", stderr(&refused));

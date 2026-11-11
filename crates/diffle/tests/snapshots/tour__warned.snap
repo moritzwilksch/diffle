@@ -1,0 +1,38 @@
+---
+source: crates/diffle/tests/tour.rs
+expression: "pushed.json()[\"warnings\"]"
+---
+[
+  {
+    "element": "diffle-card#flow > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",
+    "message": "Is 1000 wide; keep a diagram 960 wide or less"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",
+    "message": "Tones 3 of 5 shapes; tone about a third at most, only those the point is about"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <rect x=\"4\" y=\"24\" width=\"100\" height=\"40\" class=\"fill\">",
+    "message": "Is off the 8-unit grid: x 4, width 100"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <text x=\"54\" y=\"48\" class=\"c small\">",
+    "message": "Sits 4 below its box's vertical middle: y is 48, the middle is 44; text centres on its y"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <text x=\"300\" y=\"44\" class=\"c mono\">",
+    "message": "May be wider than its box: about 130 wide in a 104-wide rect"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <text x=\"412\" y=\"44\">",
+    "message": "May be wider than its box: about 171 wide in a 96-wide rect"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <rect x=\"960\" y=\"24\" width=\"64\" height=\"40\">",
+    "message": "Runs past the drawing's edge: it spans 960-1024 across and 24-64 down a 1000 by 96 viewBox"
+  },
+  {
+    "element": "diffle-card#flow > diffle-diagram > <text x=\"990\" y=\"88\" class=\"small\">",
+    "message": "May run past the drawing's right edge"
+  }
+]

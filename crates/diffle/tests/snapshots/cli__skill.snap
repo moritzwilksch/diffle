@@ -26,6 +26,8 @@ with `n` and `p`. Each review has one tour.
   of the review's tour, and prints the stored tour as JSON. A refused document exits 2, lists
   every reason as `<element>: <reason>`, and leaves the previous tour in place; fix them all and
   push again.
+- An accepted push can come back with warnings on stderr, in the same form, such as a diagram
+  label that may run past its box. They are judgment calls: fix each, or keep it knowingly.
 - `diffle tour clear` removes the review's tour.
 - The reviewer answers in this chat. Revise the document and push it again; the open tour updates
   in place. Cards whose lines left the review since are marked stale.

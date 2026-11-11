@@ -8,12 +8,15 @@ use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
 use super::element::{label, parse, short};
 use super::files::{Need, Reference};
+use super::layout;
 use crate::protocol::{Side, TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
 pub struct Outline {
     /// Each with the node it is about, so errors sort into document order.
     pub errors: Vec<(NodeId, TourError)>,
+    /// Judgment calls about an accepted document, such as a diagram's layout.
+    pub warnings: Vec<(NodeId, TourError)>,
     pub references: Vec<Reference>,
 }
 
@@ -82,6 +85,7 @@ struct Card {
 #[derive(Default)]
 struct Walk {
     errors: Vec<(NodeId, TourError)>,
+    warnings: Vec<(NodeId, TourError)>,
     references: Vec<Reference>,
     cards: Vec<Card>,
 }
@@ -97,7 +101,7 @@ pub fn outline(html: &str) -> Outline {
         walk.visit(&dom, child, Place::Top, "");
     }
     walk.across();
-    Outline { errors: walk.errors, references: walk.references }
+    Outline { errors: walk.errors, warnings: walk.warnings, references: walk.references }
 }
 
 impl Walk {
@@ -191,7 +195,10 @@ impl Walk {
                     self.error(node, element.clone(), "diffle-jump holds only its label text");
                 }
             }
-            Rule::Diagram => self.errors.extend(diagram::check(dom, node, &element)),
+            Rule::Diagram => {
+                self.errors.extend(diagram::check(dom, node, &element));
+                self.warnings.extend(layout::warnings(dom, node, &element));
+            }
             Rule::Leaf => self.empty(dom, node, tag, &element),
         }
         if let (Some(parsed), true) = (parsed, fits) {

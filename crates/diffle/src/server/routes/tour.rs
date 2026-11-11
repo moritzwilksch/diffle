@@ -11,7 +11,7 @@ use axum::routing::get;
 
 use super::{ApiDeps, ApiResult, body};
 use crate::iterations::now_ms;
-use crate::protocol::{ServerMessage, Tour, TourPush, TourRejection, TourResponse};
+use crate::protocol::{ServerMessage, Tour, TourPush, TourPushed, TourRejection, TourResponse};
 use crate::session::Broadcaster;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
@@ -22,19 +22,20 @@ async fn tour(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     Ok(Json(TourResponse { tour: d.session.tour()?.get().await? }).into_response())
 }
 
-/// Checks the document against the current snapshot and files it under that snapshot's key; 422
-/// with every reason when it fails.
+/// Checks the document against the current snapshot and files it under that snapshot's key, with
+/// any warnings in the answer; 422 with every reason when it fails.
 async fn push(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: TourPush = body(&raw)?;
     let snap = d.session.snapshotter()?.current().await?;
-    let errors = crate::tour::refusals(&d.session, &snap, &req.html).await?;
-    if !errors.is_empty() {
-        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(TourRejection { errors })).into_response());
+    let verdict = crate::tour::check(&d.session, &snap, &req.html).await?;
+    if !verdict.errors.is_empty() {
+        let rejection = TourRejection { errors: verdict.errors };
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(rejection)).into_response());
     }
     let tour = Tour { html: req.html, pushed_at: now_ms(), version: snap.version };
     d.session.tour_for(&snap).put(tour.clone()).await?;
     d.hub.broadcast(ServerMessage::Tour);
-    Ok(Json(tour).into_response())
+    Ok(Json(TourPushed { tour, warnings: verdict.warnings }).into_response())
 }
 
 async fn clear(State(d): State<Arc<ApiDeps>>) -> ApiResult {
