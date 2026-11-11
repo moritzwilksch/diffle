@@ -82,6 +82,34 @@ no emoji. A section opens with a sentence or two on what it shows; a card is its
 two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
 unless the reviewer asks for them.
 
+### Interfaces
+
+Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
+definitions, the shape of an abstraction. Elide bodies (`;` or `{ … }`) and leave private details
+out. Code the change touches belongs in a `diffle-diff`; never repeat it in a code block. With
+`path` and `line`, point at where its first declaration sits on the new side; without `path`, give
+`lang`. Write `<` as `&lt;` and `&` as `&amp;`. diffle warns when a block repeats the diff, runs
+past about 12 lines, or does not match its line. Set collaborators side by side in a row:
+
+```html
+<diffle-row>
+<diffle-code path=\"src/auth.rs\" line=\"12\">pub fn validate(token: &amp;Token, now: Instant) -&gt; Result&lt;Claims&gt;;</diffle-code>
+<diffle-code lang=\"rust\">
+pub trait TokenStore {
+    fn get(&amp;self, id: &amp;str) -&gt; Option&lt;Token&gt;;
+}
+</diffle-code>
+</diffle-row>
+```
+
+A diagram box can carry code too: a `<text class=\"code\" lang=\"rust\">` with one `<tspan>` per
+line, 16 apart, each 6 units per character wide:
+
+```html
+<rect x=\"8\" y=\"8\" width=\"264\" height=\"44\"/>
+<text x=\"16\" y=\"22\" class=\"code\" lang=\"rust\"><tspan x=\"16\" dy=\"0\">trait TokenStore {</tspan><tspan x=\"16\" dy=\"16\">    fn get(&amp;self, id: &amp;str) -&gt; Token; }</tspan></text>
+```
+
 ### Diagrams and tables
 
 Draw a `diffle-diagram` to show how parts connect; use a table to compare options or map one thing
@@ -209,6 +237,20 @@ mod tests {
     #[test]
     fn the_example_is_a_tour_the_validator_accepts_apart_from_its_files() {
         assert!(crate::tour::outline_errors(super::EXAMPLE).is_empty());
+    }
+
+    #[test]
+    fn the_interface_examples_are_ones_the_validator_accepts() {
+        let blocks: Vec<&str> =
+            super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
+        assert_eq!(blocks.len(), 2);
+        let row = format!("<h2>A</h2>{}", blocks[0]);
+        let diagram =
+            format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[1]);
+        for html in [row, diagram] {
+            let errors = crate::tour::outline_errors(&html);
+            assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+        }
     }
 
     #[test]

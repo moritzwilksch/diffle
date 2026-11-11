@@ -75,6 +75,34 @@ no emoji. A section opens with a sentence or two on what it shows; a card is its
 two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
 unless the reviewer asks for them.
 
+### Interfaces
+
+Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
+definitions, the shape of an abstraction. Elide bodies (`;` or `{ … }`) and leave private details
+out. Code the change touches belongs in a `diffle-diff`; never repeat it in a code block. With
+`path` and `line`, point at where its first declaration sits on the new side; without `path`, give
+`lang`. Write `<` as `&lt;` and `&` as `&amp;`. diffle warns when a block repeats the diff, runs
+past about 12 lines, or does not match its line. Set collaborators side by side in a row:
+
+```html
+<diffle-row>
+<diffle-code path="src/auth.rs" line="12">pub fn validate(token: &amp;Token, now: Instant) -&gt; Result&lt;Claims&gt;;</diffle-code>
+<diffle-code lang="rust">
+pub trait TokenStore {
+    fn get(&amp;self, id: &amp;str) -&gt; Option&lt;Token&gt;;
+}
+</diffle-code>
+</diffle-row>
+```
+
+A diagram box can carry code too: a `<text class="code" lang="rust">` with one `<tspan>` per
+line, 16 apart, each 6 units per character wide:
+
+```html
+<rect x="8" y="8" width="264" height="44"/>
+<text x="16" y="22" class="code" lang="rust"><tspan x="16" dy="0">trait TokenStore {</tspan><tspan x="16" dy="16">    fn get(&amp;self, id: &amp;str) -&gt; Token; }</tspan></text>
+```
+
 ### Diagrams and tables
 
 Draw a `diffle-diagram` to show how parts connect; use a table to compare options or map one thing

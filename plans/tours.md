@@ -67,13 +67,14 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Dropping the tour, or marking all of it stale, once the snapshot moves past the version it was pushed against. Simpler, and it never shows outdated prose, but one fixup commit would wipe out a tour the reviewer was halfway through.
 - **Why:** The agent keeps editing code while the tour is open, and most diffs keep their lines. The stale count tells the reviewer when to ask for a fresh push.
 
-### 9. Eight primitives, all structure and no styling knobs
+### 9. Ten primitives, all structure and no styling knobs
 
 - **Chosen:**
 
   | Element          | Attributes                                                         | Shows                                                                                                                  |
   | ---------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
   | `diffle-card`    | `id`, `title`                                                      | a framed explainer for one part of the diff: its title, prose and `diffle-diff`s                                       |
+  | `diffle-code`    | `lang?`, `path?`, `line?`; holds its code as text                  | a signature or interface the agent writes, highlighted in the diff's frame                                             |
   | `diffle-row`     | none; holds two or three columns                                   | blocks or short prose side by side, stacked in a narrow column                                                         |
   | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`) | those diff lines, highlighted, with a jump to them                                                                     |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                               | a directory tree; changed files carry their status from the snapshot                                                   |
@@ -84,7 +85,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 - **Rejected:** Styling attributes (colours, sizes, widths). Theme tokens and the layout cover them, and every knob is one more thing the agent can get wrong.
 - **Why:** These answer "what changed, where, and how it connects", and a small catalog is one an agent learns reliably. Prose, callouts and blocks share one centred 920px column, as on a well-set page: wider than a prose measure, wide enough that a 100-character line in a card's diff doesn't wrap. A diagram shows at its own width up to the column's, never larger.
-- **Diagrams:** `TourSvgElementSchema` allows `svg` (`viewBox="0 0 <w> <h>"`), `g`, `rect`, `circle`, `ellipse`, `polygon`, `path`, `line`, `polyline`, `text` and `tspan`, each with its geometry and a `class`. `TourSvgClassSchema` is the vocabulary, a subset of the svg-diagram skill's: `arrow`, `arrows`, `dashed`; `bold`, `small`, `mono`, `c`, `e`, `eyebrow`; `fill`, `frame`; `accent`, `success`, `warning`, `error`. `src/client/styles/diagram.css` styles them from the theme tokens, and `src/client/tour/primitives/Diagram.tsx` redraws only what the catalog allows and adds arrowheads in each line's tone. A table compares or maps; a diagram shows how parts connect.
+- **Diagrams:** `TourSvgElementSchema` allows `svg` (`viewBox="0 0 <w> <h>"`), `g`, `rect`, `circle`, `ellipse`, `polygon`, `path`, `line`, `polyline`, `text` and `tspan`, each with its geometry and a `class`. `TourSvgClassSchema` is the vocabulary, a subset of the svg-diagram skill's: `arrow`, `arrows`, `dashed`; `bold`, `small`, `mono`, `c`, `e`, `eyebrow`; `fill`, `frame`; `accent`, `success`, `warning`, `error`. `src/client/styles/diagram.css` styles them from the theme tokens, and `src/client/tour/primitives/Diagram.tsx` redraws only what the catalog allows and adds arrowheads in each line's tone. A table compares or maps; a diagram shows how parts connect. A diagram's `text class="code" lang="…"` holds code lines, one `tspan` each, coloured by the diff's highlighter (`primitives/DiagramCode.tsx`).
 - **Constraint:** `diffle-symbol` takes its colour from `highlightLines` (`src/client/lsp/highlight.tsx`), the shared highlighter and theme that lists outside the diff use, over its line alone, so it needs no language server and works on the old side. Hover and references depend on the language servers. When `lspBlocker` (`src/shared/lsp.ts`) returns a reason, the chip stays coloured code without hover, and its tooltip gives that reason. Servers answer for the new side only, so a symbol on the old side never hovers. Hovering goes through the diff's own `hoverControl` and `HoverTooltip` (`src/client/lsp/HoverTooltip.tsx`) and the store's `requestHover`. A click finds the name on its line as a whole word, asks `POST /api/lsp/references`, and opens the references list the diff's `gA` opens. `diffle --skill` tells agents to mark every symbol their prose names this way and keep `<code>` for paths, commands and literals.
 
 ### 10. The server validates a pushed tour; a bad one fails the CLI with exit 2
@@ -103,7 +104,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
   Each error names the element and the reason. A refusal is a user error (`Error::is_user_error`), so `diffle tour push` exits 2 with the list, and the agent fixes the document and pushes again. The client still applies its own allowlist when rendering (decision 2).
 
-  An accepted push can carry warnings in the same `{element, message}` shape, which `diffle tour push` prints to stderr while it exits 0. They are judgment calls from a diagram's geometry (`tour/layout.rs`), against the layout rules `--skill` gives: a label that may be wider than its box or run past it (the per-character estimate, so the message says "may"), a lone label off its box's vertical middle, a rect off the 8-unit grid or past the drawing's edge, a drawing wider than the column it sits in, more than about a third of the shapes toned. A diff in a row also warns that its lines may wrap, with the column's width. Refusing these was rejected: the estimate can be wrong, and the agent can judge.
+  An accepted push can carry warnings in the same `{element, message}` shape, which `diffle tour push` prints to stderr while it exits 0. They are judgment calls from a diagram's geometry (`tour/layout.rs`), against the layout rules `--skill` gives: a label that may be wider than its box or run past it (the per-character estimate, so the message says "may"), a lone label off its box's vertical middle, a rect off the 8-unit grid or past the drawing's edge, a drawing wider than the column it sits in, more than about a third of the shapes toned. A diff in a row also warns that its lines may wrap, with the column's width. A `diffle-code` (`tour/code.rs`) warns when its first declaration is not within two lines of its `line`, when most of its lines are among the review's changed lines (from `Snapshotter::patch_all`), and past 12 lines; a code line in a diagram warns like a label wider than its box. Refusing these was rejected: the estimate can be wrong, and the agent can judge.
 
 - **Rejected:** Storing any document and letting the client drop what it doesn't know. The agent would never learn that a card or a diagram vanished, and the reviewer would get a broken tour.
 - **Why:** The agent writes and pushes in a loop, so the CLI's exit status and stderr are its only feedback.
@@ -160,7 +161,13 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Living under `comments/`. A tour isn't a comment, and the shared parts (key, lock, atomic write) are small.
 - **Why:** The comments module stays untouched and within the line caps.
 
-### 18. Ship in slices, the server first
+### 18. The agent writes the interfaces it shows; diffle never fills them from a language server
+
+- **Chosen:** `diffle-code` holds code the agent writes, for signatures, interfaces, type definitions and the shape of an abstraction: what a collaborator offers and takes, bodies elided, private details left out. diffle highlights it with the diff's highlighter (`highlightCode` in `src/client/lsp/highlight.tsx`) in the diff's frame, and warns when it repeats the diff, runs long, or misses its line (decision 10). Changed code stays in `diffle-diff`.
+- **Rejected:** Signatures filled from the language servers (hover or document symbols for a path and line). The reviewer's call: every tour feature must work without a language server, and the agent already knows which parts of an interface matter.
+- **Why:** A walk through collaborators needs more than a diagram's names and less than the whole diff; the agent can write exactly that.
+
+### 19. Ship in slices, the server first
 
 - **Chosen:** The order under **Delivery**.
 - **Rejected:** The UI first. Without the validator, nothing tells the agent what it got wrong.
@@ -192,6 +199,7 @@ crates/diffle/src/tour/dom.rs                  NEW       html5ever into an arena
 crates/diffle/src/tour/validate.rs             NEW       check against TourElement and TourTag, rows, cross-element rules (decision 10)
 crates/diffle/src/tour/placement.rs            NEW       where each element may sit in the article
 crates/diffle/src/tour/layout.rs               NEW       warnings from a diagram's geometry; the column's widths
+crates/diffle/src/tour/code.rs                 NEW       a diffle-code block's lines and its warnings
 crates/diffle/src/tour/files.rs                NEW       what elements ask of the review's files, checked against the snapshot
 crates/diffle/src/tour/element.rs              NEW       reads an element's attributes through the catalog; names it in errors
 crates/diffle/src/tour/diagram.rs              NEW       checks a diffle-diagram's svg against TourSvgElement and TourSvgClass
@@ -209,7 +217,7 @@ src/client/tour/document.ts                    NEW       DOMParser → title, h2
 src/client/tour/render.tsx                     NEW       the article → allowlisted React (decision 2)
 src/client/tour/excerpt.ts                     NEW       a diff primitive's lines as a one-hunk patch, numbered as in the file
 src/client/tour/state.ts                       NEW       the tour, the section read, stale sections, per-snapshot file reads
-src/client/tour/primitives/                    NEW       Card, Diff, Tree, Jump, Symbol, Callout, Diagram
+src/client/tour/primitives/                    NEW       Card, Code, Diff, Tree, Jump, Symbol, Callout, Diagram, DiagramCode
 src/client/styles/diagram.css                  NEW       a diagram's classes, from the theme tokens
 src/client/styles/tour.css                     NEW       the article: column, headings, rhythm, cards, rows
 src/client/tour/Contents.tsx                   NEW       side panel (decision 14)
@@ -228,6 +236,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 5. The page redesign: drop `diffle-edge`, the page in place of the canvas (the canvas refactor reverted), wide cards, tables, `diffle-diagram`. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 6. Warnings on an accepted push. Verify: `pixi run test-rust`.
 7. The article: headings as structure, cards as blocks, `diffle-row`, one centred column. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
+8. `diffle-code` and code in diagrams, with their warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 
