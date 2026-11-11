@@ -1,18 +1,6 @@
-/** What a layout needs of a node: its id. */
-export interface LayoutNode {
-  id: string;
-}
+import type { GraphEdge, GraphNode, GraphNodeStatus, GraphResponse } from '@/shared/protocol.js';
 
-/** `from` points at `to`. */
-export interface LayoutEdge {
-  from: string;
-  to: string;
-}
-
-export interface Graph<N extends LayoutNode = LayoutNode, E extends LayoutEdge = LayoutEdge> {
-  nodes: N[];
-  edges: E[];
-}
+export type Graph = Pick<GraphResponse, 'nodes' | 'edges'>;
 
 /** Where each node of a graph stands between the code nothing uses (entry) and the code using nothing (core). */
 export interface Ranked {
@@ -95,4 +83,46 @@ function stronglyConnected(ids: string[], uses: Map<string, string[]>): string[]
 }
 
 /** Names an edge, for selection and for what lies behind it. */
-export const edgeKey = (e: LayoutEdge): string => `${e.from}\0${e.to}`;
+export const edgeKey = (e: Pick<GraphEdge, 'from' | 'to'>): string => `${e.from}\0${e.to}`;
+
+/**
+ * The same graph with one node per file: changed when any symbol in it changed, edges merged.
+ * `via` keeps, per file edge, the symbol edges behind it.
+ */
+export function byFile(graph: GraphResponse): { graph: GraphResponse; via: Map<string, GraphEdge[]> } {
+  const files = new Map<string, GraphNode[]>();
+  for (const n of graph.nodes) files.set(n.path, [...(files.get(n.path) ?? []), n]);
+  const nodes = [...files].map(([path, members]): GraphNode => {
+    const more = members.reduce((sum, n) => sum + (n.moreConsumers ?? 0), 0);
+    return {
+      id: path,
+      name: path,
+      kind: 1,
+      path,
+      line: 1,
+      startLine: 1,
+      endLine: 1,
+      col: 0,
+      status: fileStatus(members.map((n) => n.status)),
+      ...(more ? { moreConsumers: more } : {}),
+    };
+  });
+  const pathOf = new Map(graph.nodes.map((n) => [n.id, n.path]));
+  const edges = new Map<string, GraphEdge>();
+  const via = new Map<string, GraphEdge[]>();
+  for (const e of graph.edges) {
+    const [from, to] = [pathOf.get(e.from)!, pathOf.get(e.to)!];
+    if (from === to) continue;
+    const key = edgeKey({ from, to });
+    const lines = new Set([...(edges.get(key)?.lines ?? []), ...e.lines]);
+    edges.set(key, { from, to, lines: [...lines].sort((a, b) => a - b) });
+    via.set(key, [...(via.get(key) ?? []), e]);
+  }
+  return { graph: { ...graph, nodes, edges: [...edges.values()] }, via };
+}
+
+function fileStatus(statuses: GraphNodeStatus[]): GraphNodeStatus {
+  const changed = statuses.filter((s) => s !== 'consumer');
+  if (!changed.length) return 'consumer';
+  return changed.every((s) => s === 'added') ? 'added' : 'modified';
+}

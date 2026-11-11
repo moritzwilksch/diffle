@@ -7,9 +7,9 @@ export const TOUR_HELP: HelpSection[][] = [
       title: 'Tour',
       rows: [
         ['n / p', 'next / previous step'],
-        ['click a card or a step', 'go to that step'],
-        ['0  + / -', 'fit the tour / zoom in / out'],
-        ['scroll / pinch', 'pan / zoom the tour'],
+        ['click a step', 'go to that step'],
+        ['j / k', 'scroll the page'],
+        ['d / u', 'scroll half a page'],
         ['click a line range or a file', 'open it in the diff'],
       ],
     },

@@ -8,7 +8,7 @@ export interface LineRange {
   end: number;
 }
 
-/** A card: a node on the canvas, a step of the walk when it has a number. */
+/** A card of the page, a step of the walk when it has a number. */
 export interface TourCard {
   id: string;
   title: string;
@@ -28,6 +28,32 @@ export interface TourDocument {
   groups: string[];
   /** The cards with a step, in walk order. */
   steps: TourCard[];
+}
+
+/** A run of the page: one card alone, or a `diffle-group`'s cards under its title. */
+export interface TourSection {
+  title: string | null;
+  cards: TourCard[];
+}
+
+/**
+ * The page in reading order: the walk's steps in order, then the cards without one in document
+ * order. A group stays one section, placed at its first step, its stepped cards before the rest.
+ */
+export function pageOrder(doc: TourDocument): TourSection[] {
+  const rank = (c: TourCard) => c.step ?? Infinity;
+  const sections: (TourSection & { at: number })[] = [];
+  for (const card of doc.cards) {
+    const open = card.group == null ? undefined : sections.find((s) => s.cards[0]!.group === card.group);
+    if (open) open.cards.push(card);
+    else sections.push({ title: card.group == null ? null : doc.groups[card.group]!, cards: [card], at: 0 });
+  }
+  for (const s of sections) {
+    s.cards.sort((a, b) => rank(a) - rank(b));
+    s.at = rank(s.cards[0]!);
+  }
+  // Stable: sections without a step keep document order.
+  return sections.sort((a, b) => a.at - b.at).map(({ title, cards }) => ({ title, cards }));
 }
 
 /**

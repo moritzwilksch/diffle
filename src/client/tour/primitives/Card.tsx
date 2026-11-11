@@ -2,37 +2,23 @@ import { twMerge } from 'tailwind-merge';
 import type { TourCard } from '@/client/tour/document.js';
 import { TourContent } from '@/client/tour/render.js';
 
-/** Every card's width: its prose wraps and its diff lines wrap to it, so only its height varies. */
+/** The page column's width, which every card takes. */
 export const CARD_W = 440;
 
 /**
- * A card on the canvas: its step number and title over its contents. The current step takes the
+ * A card of the page: its step number and title over its contents. The current step takes the
  * accent; a card whose lines left the review says so in its header.
  */
-export function Card({
-  card,
-  current,
-  stale,
-  at,
-  measure,
-}: {
-  card: TourCard;
-  current: boolean;
-  stale: boolean;
-  at: { x: number; y: number };
-  measure: (el: HTMLElement | null) => void;
-}) {
+export function Card({ card, current, stale }: { card: TourCard; current: boolean; stale: boolean }) {
   return (
     <article
-      ref={measure}
       data-card={card.id}
       aria-label={card.step == null ? card.title : `Step ${card.step}: ${card.title}`}
       aria-current={current ? 'step' : undefined}
       className={twMerge(
-        'absolute flex cursor-default flex-col rounded-lg border bg-canvas shadow-card',
+        'flex flex-col rounded-lg border bg-canvas shadow-card',
         current ? 'border-accent ring-2 ring-[color-mix(in_srgb,var(--accent)_30%,transparent)]' : 'border-border',
       )}
-      style={{ left: at.x, top: at.y, width: CARD_W }}
     >
       <header className="flex items-center gap-2 border-b border-border px-3 py-2">
         {card.step != null && (

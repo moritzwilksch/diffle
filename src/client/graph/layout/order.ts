@@ -1,10 +1,12 @@
-import type { Graph, LayoutNode, Ranked } from './rank.js';
+import { compareTreeOrder } from '@/client/model.js';
+import type { GraphNode } from '@/shared/protocol.js';
+import type { Graph, Ranked } from './rank.js';
 
-/** One block of a layer: a cluster's members in that layer, a lone node, or a waypoint of a long edge. */
+/** One block of a layer: a file's symbols in that layer, a lone node, or a waypoint of a long edge. */
 export interface Block {
   key: string;
-  /** The cluster it is; null for a lone node or a waypoint. */
-  cluster: string | null;
+  /** The file of a cluster; null for a lone node or a waypoint. */
+  path: string | null;
   /** Node ids, or the waypoint's own id, top to bottom. */
   members: string[];
   waypoint: boolean;
@@ -26,22 +28,24 @@ export interface Ordered {
 const SWEEPS = 16;
 
 /**
- * Orders each layer to cut edge crossings: barycenter sweeps over its blocks, keeping the best
- * order seen. Nodes of one cluster share a block per layer, in the reading order `graph.nodes` has.
+ * Source order, the graph's one order wherever it lists symbols: files as the diff and the tree
+ * list them, then the definition line.
  */
-export function order<N extends LayoutNode>(
-  graph: Graph<N>,
-  ranked: Ranked,
-  clusterOf: (n: N) => string | null,
-): Ordered {
+export const bySource = (a: GraphNode, b: GraphNode) => compareTreeOrder(a.path, b.path) || a.line - b.line;
+
+/**
+ * Orders each layer to cut edge crossings: barycenter sweeps over its blocks, keeping the best
+ * order seen. `clustered` groups a layer's symbols by file; a cluster keeps them in source order.
+ */
+export function order(graph: Graph, ranked: Ranked, clustered: boolean): Ordered {
   const layerOf = (id: string) => ranked.layer.get(id)!;
   const layers: Block[][] = Array.from({ length: ranked.layers }, () => []);
-  for (const n of graph.nodes) {
+  const sorted = [...graph.nodes].sort(bySource);
+  for (const n of sorted) {
     const layer = layers[layerOf(n.id)]!;
-    const name = clusterOf(n);
-    const cluster = name == null ? undefined : layer.find((b) => b.cluster === name);
+    const cluster = clustered ? layer.find((b) => b.path === n.path) : undefined;
     if (cluster) cluster.members.push(n.id);
-    else layer.push({ key: `${name ?? ''}#${n.id}`, cluster: name, members: [n.id], waypoint: false });
+    else layer.push({ key: `${n.path}#${n.id}`, path: clustered ? n.path : null, members: [n.id], waypoint: false });
   }
   const routes: Route[] = [];
   for (const e of graph.edges) {
@@ -51,7 +55,7 @@ export function order<N extends LayoutNode>(
     for (let c = a + 1; c < b; c++) {
       const id = `${e.from}>${e.to}@${c}`;
       stops.push(id);
-      layers[c]!.push({ key: id, cluster: null, members: [id], waypoint: true });
+      layers[c]!.push({ key: id, path: null, members: [id], waypoint: true });
     }
     routes.push({ from: e.from, to: e.to, stops });
   }

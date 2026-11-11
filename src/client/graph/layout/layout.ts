@@ -1,5 +1,6 @@
-import { type Block, order, type Route } from './order.js';
-import type { Graph, LayoutEdge, LayoutNode, Ranked } from './rank.js';
+import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
+import { type Block, bySource, order, type Route } from './order.js';
+import type { Graph, Ranked } from './rank.js';
 
 export interface Size {
   w: number;
@@ -11,25 +12,19 @@ export interface Box extends Size {
   y: number;
 }
 
-export interface PlacedNode<N extends LayoutNode = LayoutNode> extends Box {
-  node: N;
+export interface PlacedNode extends Box {
+  node: GraphNode;
 }
 
-/** One cluster's members within one layer, under its header. */
+/** A file's symbols within one layer. */
 export interface PlacedCluster extends Box {
-  cluster: string;
-  /** -1 on the shelf of unlinked nodes. */
+  path: string;
+  /** -1 on the shelf of unlinked symbols. */
   layer: number;
 }
 
-/** How a layout draws its nodes: each one's size, and the cluster it joins within its layer (null: none). */
-export interface Shape<N extends LayoutNode> {
-  size: (n: N) => Size;
-  cluster: (n: N) => string | null;
-}
-
-export interface PlacedEdge<E extends LayoutEdge = LayoutEdge> {
-  edge: E;
+export interface PlacedEdge {
+  edge: GraphEdge;
   /** SVG path data. */
   d: string;
   /** A point on the path, 0 to 1 along its segments; a label sits at 0.5 unless that is taken. */
@@ -38,10 +33,10 @@ export interface PlacedEdge<E extends LayoutEdge = LayoutEdge> {
   back: boolean;
 }
 
-export interface Placed<N extends LayoutNode = LayoutNode, E extends LayoutEdge = LayoutEdge> {
-  nodes: PlacedNode<N>[];
+export interface Placed {
+  nodes: PlacedNode[];
   clusters: PlacedCluster[];
-  edges: PlacedEdge<E>[];
+  edges: PlacedEdge[];
   /** One band per rank, entry at the top. */
   layers: { y: number; h: number }[];
   /** Top of the shelf below the layers holding the symbols with no links, when there are any. */
@@ -70,30 +65,25 @@ const SHELF_MIN_W = 960;
 /**
  * Places a ranked graph top to bottom: a band per rank, entry points first, blocks side by side in
  * the crossing-reduced order, each pulled toward the blocks it links to without changing the order
- * or overlapping. A cluster is its header over its members. `graph.nodes` come in reading order,
- * which breaks ties.
+ * or overlapping. A cluster is its file's header over its symbols.
  */
-export function layout<N extends LayoutNode, E extends LayoutEdge>(
-  graph: Graph<N, E>,
-  ranked: Ranked,
-  shape: Shape<N>,
-): Placed<N, E> {
-  // A node with no links has no rank to show; it waits on a shelf below instead of crowding the core.
+export function layout(graph: Graph, ranked: Ranked, size: (n: GraphNode) => Size, clustered: boolean): Placed {
+  // A symbol with no links has no rank to show; it waits on a shelf below instead of crowding the core.
   const linked = new Set(graph.edges.flatMap((e) => [e.from, e.to]));
-  const unlinked = graph.nodes.filter((n) => !linked.has(n.id));
+  const unlinked = graph.nodes.filter((n) => !linked.has(n.id)).sort(bySource);
   const { layers, routes } = order(
     { nodes: graph.nodes.filter((n) => linked.has(n.id)), edges: graph.edges },
     ranked,
-    shape.cluster,
+    clustered,
   );
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
-  const sizeOf = new Map(graph.nodes.map((n) => [n.id, shape.size(n)]));
+  const sizeOf = new Map(graph.nodes.map((n) => [n.id, size(n)]));
   const memberSize = (id: string): Size => sizeOf.get(id) ?? { w: WAYPOINT_W, h: 0 };
 
   // Each member's offset inside its block, and each block's size.
   const offset = new Map<string, { x: number; y: number }>();
   const dims = new Map<Block, Size>();
-  for (const b of layers.flat()) dims.set(b, arrange(b.cluster != null, b.members, memberSize, offset));
+  for (const b of layers.flat()) dims.set(b, arrange(b.path != null, b.members, memberSize, offset));
   const bands: { y: number; h: number }[] = [];
   let y = 0;
   for (const layer of layers) {
@@ -141,7 +131,7 @@ export function layout<N extends LayoutNode, E extends LayoutEdge>(
   const minLeft = Math.min(0, ...left.values());
   for (const [b, x] of left) left.set(b, x - minLeft);
 
-  const nodes: PlacedNode<N>[] = [];
+  const nodes: PlacedNode[] = [];
   const clusters: PlacedCluster[] = [];
   // Where arrows attach: a symbol's own column, but a cluster's top and bottom edge, so no arrow
   // crosses the file name heading the cluster or the symbols above its row.
@@ -150,11 +140,11 @@ export function layout<N extends LayoutNode, E extends LayoutEdge>(
     const top = bands[i]!.y;
     for (const b of layer) {
       const [x, d] = [left.get(b)!, dims.get(b)!];
-      if (b.cluster != null) clusters.push({ cluster: b.cluster, layer: i, x, y: top, ...d });
+      if (b.path != null) clusters.push({ path: b.path, layer: i, x, y: top, ...d });
       for (const id of b.members) {
         const box = { x: x + offset.get(id)!.x, y: top + offset.get(id)!.y, ...memberSize(id) };
         if (b.waypoint) box.h = d.h;
-        boxOf.set(id, b.cluster != null ? { ...box, y: top, h: d.h } : box);
+        boxOf.set(id, b.path != null ? { ...box, y: top, h: d.h } : box);
         if (!b.waypoint) nodes.push({ node: nodeById.get(id)!, ...box });
       }
     }
@@ -168,18 +158,15 @@ export function layout<N extends LayoutNode, E extends LayoutEdge>(
   const shelf = linked.size ? layersH + SHELF_GAP : 0;
   const shelfW = Math.max(width, SHELF_MIN_W);
   let [sx, sy, rowH, right] = [0, shelf, 0, width];
-  // A cluster's members share a block on the shelf too; any other node is a block of its own.
-  const blocks = new Map<string, { cluster: string | null; members: string[] }>();
+  const files = new Map<string, string[]>();
   for (const n of unlinked) {
-    const cluster = shape.cluster(n);
-    const key = cluster ?? `\0${n.id}`;
-    const block = blocks.get(key) ?? { cluster, members: [] };
-    blocks.set(key, { cluster, members: [...block.members, n.id] });
+    const key = clustered ? n.path : n.id;
+    files.set(key, [...(files.get(key) ?? []), n.id]);
   }
-  for (const { cluster, members } of blocks.values()) {
-    const d = arrange(cluster != null, members, memberSize, offset);
+  for (const [path, members] of files) {
+    const d = arrange(clustered, members, memberSize, offset);
     if (sx > 0 && sx + d.w > shelfW) [sx, sy, rowH] = [0, sy + rowH + BLOCK_GAP, 0];
-    if (cluster != null) clusters.push({ cluster, layer: -1, x: sx, y: sy, ...d });
+    if (clustered) clusters.push({ path, layer: -1, x: sx, y: sy, ...d });
     for (const id of members)
       nodes.push({ node: nodeById.get(id)!, x: sx + offset.get(id)!.x, y: sy + offset.get(id)!.y, ...memberSize(id) });
     right = Math.max(right, sx + d.w);
@@ -220,7 +207,7 @@ function arrange(
  * next from above, or a bow below for a cycle's edge. Edge ends sharing a side of a box spread
  * along it in the order of where they come from or go.
  */
-function route<E extends LayoutEdge>(edges: E[], routes: Route[], boxOf: Map<string, Box>): PlacedEdge<E>[] {
+function route(edges: GraphEdge[], routes: Route[], boxOf: Map<string, Box>): PlacedEdge[] {
   const routed = new Map(routes.map((r) => [`${r.from}>${r.to}`, r]));
   const mid = (b: Box): number => b.x + b.w / 2;
   const lines = edges.map((edge) => {

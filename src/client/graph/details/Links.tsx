@@ -3,9 +3,9 @@ import { type ComponentProps, useEffect, useMemo } from 'react';
 import { twMerge } from 'tailwind-merge';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { canvasControl } from '@/client/graph/GraphCanvas.js';
-import type { PlacedNode } from '@/client/canvas/layout/layout.js';
-import { bySource } from '@/client/graph/layout/source.js';
-import { edgeKey } from '@/client/canvas/layout/rank.js';
+import type { PlacedNode } from '@/client/graph/layout/layout.js';
+import { bySource } from '@/client/graph/layout/order.js';
+import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph } from '@/client/graph/state.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
@@ -126,8 +126,8 @@ export function Links({
  * Each box's place reading the graph as text: rows top to bottom, a box joining the row whose first
  * box it overlaps vertically, then left to right within a row.
  */
-function readingOrder(nodes: PlacedNode<GraphNode>[]): Map<string, number> {
-  const rows: PlacedNode<GraphNode>[][] = [];
+function readingOrder(nodes: PlacedNode[]): Map<string, number> {
+  const rows: PlacedNode[][] = [];
   for (const n of [...nodes].sort((a, b) => a.y - b.y)) {
     const row = rows[rows.length - 1];
     if (row && n.y < row[0]!.y + row[0]!.h) row.push(n);

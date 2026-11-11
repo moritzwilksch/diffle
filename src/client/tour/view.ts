@@ -1,11 +1,13 @@
 import { Route } from 'lucide-react';
-import { canvasKeys } from '@/client/canvas/keys.js';
 import type { ViewDef } from '@/client/views/state.js';
 import { TOUR_HELP } from './help.js';
 import { tourPlace, useTour } from './state.js';
 import { StepOutline } from './StepOutline.js';
-import { tourCanvas } from './TourCanvas.js';
+import { tourPage } from './TourPage.js';
 import { TourView } from './TourView.js';
+
+/** How far `j` and `k` scroll, as a share of the page's height. */
+const LINE = 0.1;
 
 /** Keys the tour leaves to the review: help, theme, the mode picker, the graph and `T` back to the diff. */
 const TOUR_PASSES = new Set(['?', 't', 'm', 'M', 'T', 'o']);
@@ -34,8 +36,22 @@ export const tourView: ViewDef = {
       case 'p':
         useTour.getState().move(-1);
         return true;
+      case 'j':
+      case 'ArrowDown':
+        tourPage.scroll(LINE);
+        return true;
+      case 'k':
+      case 'ArrowUp':
+        tourPage.scroll(-LINE);
+        return true;
+      case 'd':
+        tourPage.scroll(0.5);
+        return true;
+      case 'u':
+        tourPage.scroll(-0.5);
+        return true;
       default:
-        return canvasKeys(e, tourCanvas);
+        return false;
     }
   },
   passes: TOUR_PASSES,

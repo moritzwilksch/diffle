@@ -1,8 +1,8 @@
 import { LayerArrowDown, LayerArrowUp, Link2, MoveDown } from 'lucide-react';
 import { useMemo } from 'react';
 import { KIND_LABEL, kindGroup } from '@/client/lsp/symbolKind.js';
-import { bySource } from '@/client/graph/layout/source.js';
-import { edgeKey } from '@/client/canvas/layout/rank.js';
+import { bySource } from '@/client/graph/layout/order.js';
+import { edgeKey } from '@/client/graph/layout/rank.js';
 import { useGraph, type View } from '@/client/graph/state.js';
 import type { GraphEdge, GraphNode } from '@/shared/protocol.js';
 import { BODY, Code, ENTRY, Jumps, META, Name, SectionHeading, StatusWord, TITLE } from './GraphDetailParts.js';

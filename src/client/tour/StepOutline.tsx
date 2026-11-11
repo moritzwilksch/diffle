@@ -1,7 +1,7 @@
 import { twMerge } from 'tailwind-merge';
 import { useTour } from './state.js';
 
-/** The side panel: the walk's steps in order, the current one marked; a click glides to its card. */
+/** The side panel: the walk's steps in order, the current one marked; a click scrolls to its card. */
 export function StepOutline() {
   const load = useTour((s) => s.load);
   const step = useTour((s) => s.step);
@@ -11,7 +11,7 @@ export function StepOutline() {
     <nav className="flex h-full min-h-0 flex-col overflow-auto bg-surface p-3" aria-label="Steps">
       <h2 className="m-0 mb-2 text-[0.75rem] font-semibold tracking-wide text-muted uppercase">Steps</h2>
       {steps.length === 0 ? (
-        <p className="m-0 text-[0.8125rem] text-muted">This tour has no numbered steps; pan the canvas to read it.</p>
+        <p className="m-0 text-[0.8125rem] text-muted">This tour has no numbered steps; scroll the page to read it.</p>
       ) : (
         <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
           {steps.map((card, i) => (

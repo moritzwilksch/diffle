@@ -7,9 +7,8 @@ import { isTest, keepNodes } from './filters.js';
 import { hiddenReason } from './focus.js';
 import { nodeSize } from './labels.js';
 import { type Stacked, stack } from '@/client/graph/layout/components.js';
-import { type Direction, nearest, nearestToOrigin } from '@/client/canvas/layout/nearest.js';
-import { edgeKey } from '@/client/canvas/layout/rank.js';
-import { byFile } from '@/client/graph/layout/source.js';
+import { type Direction, nearest, nearestToOrigin } from '@/client/graph/layout/nearest.js';
+import { byFile, edgeKey } from '@/client/graph/layout/rank.js';
 
 export type Filter = 'symbols' | 'consumers' | 'tests';
 export type { Direction };

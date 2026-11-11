@@ -29,7 +29,7 @@ tally/currency.py"></diffle-tree>
 </diffle-group>
 `;
 
-/** The tour view once every card's lines rendered, fitted to the canvas. */
+/** The tour view once every card's lines rendered. */
 async function showTour(page: Page) {
   const view = page.getByRole('region', { name: 'Tour view' });
   // The push reaches the page over its socket; until then T says there is no tour.
@@ -38,7 +38,6 @@ async function showTour(page: Page) {
     await expect(view).toBeVisible({ timeout: 500 });
   }).toPass();
   await expect(view.getByText('Loading…')).toHaveCount(0);
-  await page.keyboard.press('0');
   return view;
 }
 
@@ -59,7 +58,7 @@ test.describe('the tour', () => {
     const steps = page.getByRole('navigation', { name: 'Steps' });
     await expect(steps).toMatchAriaSnapshot({ name: 'tour-steps.aria.yml' });
 
-    // n takes the first step and glides to its card; p does not go before it.
+    // n takes the first step and scrolls to its card; p does not go before it.
     await page.keyboard.press('n');
     await page.keyboard.press('n');
     await expect(view.getByText('Step 2 of 3')).toBeVisible();

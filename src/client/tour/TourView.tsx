@@ -2,9 +2,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { relativeTime } from '@/client/model.js';
 import { Button } from '@/client/ui/Button.js';
 import { useTour } from './state.js';
-import { TourCanvas } from './TourCanvas.js';
+import { TourPage } from './TourPage.js';
 
-/** The agent's tour in the diff's place: where the walk stands, how many cards went stale, and the canvas. */
+/** The agent's tour in the diff's place: where the walk stands, how many cards went stale, and the page. */
 export function TourView() {
   const load = useTour((s) => s.load);
   const step = useTour((s) => s.step);
@@ -59,7 +59,7 @@ export function TourView() {
         )}
       </div>
       <div className="min-h-0 flex-1">
-        <TourCanvas key={tour.pushedAt} doc={doc} />
+        <TourPage key={tour.pushedAt} doc={doc} />
       </div>
     </section>
   );

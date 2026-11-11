@@ -15,11 +15,11 @@ interface TourState {
   load: TourLoad;
   /** The step shown, an index into `doc.steps`; -1 before the first. */
   step: number;
-  /** A card to glide to, and a count that repeats the glide for the same card. */
+  /** A card to scroll to, and a count that repeats the scroll for the same card. */
   focus: { id: string; seq: number } | null;
   /** Cards whose lines left the review, in the current snapshot. */
   stale: ReadonlySet<string>;
-  /** Shows step `index` and glides to its card. */
+  /** Shows step `index` and scrolls to its card. */
   goTo(index: number): void;
   move(by: 1 | -1): void;
 }

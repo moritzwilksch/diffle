@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { readTour } from '@/client/tour/document.js';
+import { pageOrder, readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
 
 const PATCH = `diff --git a/app.py b/app.py
@@ -61,5 +61,24 @@ describe('readTour', () => {
     expect(tour.groups).toEqual(['Core']);
     expect(tour.steps.map((c) => c.id)).toEqual(['a', 'b']);
     expect(tour.cards[0]!.ranges).toEqual([{ path: 'a.py', side: 'new', start: 3, end: 4 }]);
+  });
+});
+
+describe('pageOrder', () => {
+  it('reads the steps in order, then the rest in document order, a group as one section at its first step', () => {
+    const tour = readTour(`
+      <diffle-card id="ctx" title="Context"></diffle-card>
+      <diffle-card id="three" step="3" title="Three"></diffle-card>
+      <diffle-group title="Core">
+        <diffle-card id="layout" title="Layout"></diffle-card>
+        <diffle-card id="two" step="2" title="Two"></diffle-card>
+      </diffle-group>
+      <diffle-card id="one" step="1" title="One"></diffle-card>`);
+    expect(pageOrder(tour).map((s) => [s.title, s.cards.map((c) => c.id)])).toEqual([
+      [null, ['one']],
+      ['Core', ['two', 'layout']],
+      [null, ['three']],
+      [null, ['ctx']],
+    ]);
   });
 });
