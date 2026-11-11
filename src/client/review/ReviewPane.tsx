@@ -68,6 +68,7 @@ import { focusToken, onSelectionChanged, setViewer, wordsIn } from '@/client/lsp
 import { charAtPoint, tokenRange } from '@/client/lsp/tokenText.js';
 import { installSearchHighlights } from '@/client/search/highlight.js';
 import { BLAME_CSS, installBlame } from './blame.js';
+import { BLAME_GUTTER_CSS, installBlameGutter } from './blameGutter.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { installWhitespaceMarks, WHITESPACE_CSS } from './whitespace.js';
 import { CommentCard } from './CommentCard.js';
@@ -320,6 +321,7 @@ export function ReviewPane() {
   const theme = useStore((s) => s.theme);
   const diffStyle = useStore((s) => s.diffStyle);
   const lineWrap = useStore((s) => s.config.lineWrap);
+  const blame = useStore((s) => s.config.blame);
 
   // CodeView re-renders an item only when its version changes, so each path's version is derived
   // here from what the item paints (its threads, draft, composers, collapsed state); no manual bump.
@@ -407,11 +409,12 @@ export function ReviewPane() {
     if (!scroller) return;
     return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
-  // And the cursor line's blame.
+  // And git blame, after the cursor's line or beside every line number.
   useEffect(() => {
-    if (!scroller) return;
-    return installBlame(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
-  }, [scroller]);
+    if (!scroller || blame === 'off') return;
+    const install = blame === 'inline' ? installBlame : installBlameGutter;
+    return install(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
+  }, [scroller, blame]);
   // And the visible spaces and tabs.
   useEffect(() => {
     if (!scroller) return;
@@ -854,7 +857,7 @@ export function ReviewPane() {
   const options = useMemo(
     () => ({
       ...codeViewOptions,
-      unsafeCSS: HEADER_CSS + WHITESPACE_CSS + BLAME_CSS + geometry.css,
+      unsafeCSS: HEADER_CSS + WHITESPACE_CSS + (blame === 'gutter' ? BLAME_GUTTER_CSS : BLAME_CSS) + geometry.css,
       layout: geometry.layout,
       itemMetrics: geometry.itemMetrics,
       hunkSeparators: 'line-info' as const,
@@ -941,7 +944,18 @@ export function ReviewPane() {
         void openSymbolMenu(target, event.clientX, event.clientY);
       },
     }),
-    [openDraft, goToDefinition, openSymbolMenu, setSelection, setActivePath, theme, diffStyle, lineWrap, geometry],
+    [
+      openDraft,
+      goToDefinition,
+      openSymbolMenu,
+      setSelection,
+      setActivePath,
+      theme,
+      diffStyle,
+      lineWrap,
+      blame,
+      geometry,
+    ],
   );
 
   const renderAnnotation = useCallback((...[annotation]: CodeViewAnnotationArgs<Annot>) => {

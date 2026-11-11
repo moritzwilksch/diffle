@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use diffle::protocol::{FollowRefs, LanguageId};
+use diffle::protocol::{BlameMode, FollowRefs, LanguageId};
 use diffle::user_config::{UserConfigPatch, UserConfigStore};
 use serde_json::{Value, json};
 
@@ -59,6 +59,18 @@ async fn wraps_lines_by_default_and_keeps_an_explicit_choice_across_reopening() 
     assert!(store.get().line_wrap);
     store.set(UserConfigPatch { line_wrap: Some(false), ..Default::default() }).await.unwrap();
     assert!(!UserConfigStore::open(store.file().to_owned()).await.get().line_wrap);
+}
+
+#[tokio::test]
+async fn blames_inline_by_default_and_keeps_an_explicit_choice_across_reopening() {
+    let dir = temp();
+    for stale in [json!("sideways"), json!(true)] {
+        assert_eq!(open_with(&dir, json!({ "blame": stale })).await.get().blame, BlameMode::Inline);
+    }
+    let store = open_with(&dir, json!({})).await;
+    store.set(UserConfigPatch { blame: Some(BlameMode::Gutter), ..Default::default() }).await.unwrap();
+    assert_eq!(on_disk(&store)["blame"], json!("gutter"));
+    assert_eq!(UserConfigStore::open(store.file().to_owned()).await.get().blame, BlameMode::Gutter);
 }
 
 #[tokio::test]

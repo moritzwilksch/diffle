@@ -619,6 +619,10 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 export const FollowRefsSchema = z.enum(['on', 'auto', 'off']);
 export type FollowRefs = z.infer<typeof FollowRefsSchema>;
 
+/** Where the viewer shows git blame: `inline` after the cursor's line, `gutter` beside every line number. */
+export const BlameModeSchema = z.enum(['off', 'inline', 'gutter']);
+export type BlameMode = z.infer<typeof BlameModeSchema>;
+
 export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),
@@ -628,6 +632,8 @@ export const UserConfigSchema = z.object({
   followRefs: FollowRefsSchema,
   /** Wrap long lines in the viewer instead of scrolling them sideways. Default true. */
   lineWrap: z.boolean(),
+  /** Where git blame shows; see `BlameModeSchema`. Default inline. */
+  blame: BlameModeSchema,
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set in the config file, whose path `diffle config` prints.
@@ -647,6 +653,7 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   contextLines: 5,
   followRefs: 'auto',
   lineWrap: true,
+  blame: 'inline',
   lspCommands: {},
   githubHosts: {},
 };
@@ -1012,6 +1019,7 @@ export const ConfigUpdateSchema = z.object({
   contextLines: z.number().int().min(0).max(10_000).optional(),
   followRefs: FollowRefsSchema.optional(),
   lineWrap: z.boolean().optional(),
+  blame: BlameModeSchema.optional(),
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({

@@ -2,7 +2,7 @@ import type { CodeViewHandle } from '@pierre/diffs/react';
 import { api } from '@/client/api.js';
 import { pathFromItemId, relativeTime } from '@/client/model.js';
 import { useStore, type ReviewState } from '@/client/store.js';
-import type { BlameResponse, Side } from '@/shared/protocol.js';
+import type { BlameResponse, Side, Snapshot } from '@/shared/protocol.js';
 import { rowOf, watchRenderedRows } from './rows.js';
 
 /**
@@ -23,6 +23,8 @@ const SUMMARY_MAX = 72;
 const GAP_CH = 4;
 /** Less room than this after the gap and the note is left out: a stub of a name says nothing. */
 const MIN_CH = 15;
+/** File sides kept, oldest dropped first. */
+const FILES_MAX = 200;
 
 export const BLAME_CSS = `
 /* The cursor line's blame (see blame.ts). A zero-width box that overflows: the note never wraps the
@@ -83,20 +85,47 @@ function chOf(el: HTMLElement): number {
   return ch;
 }
 
-/** One blamed line: where the cursor rests, on the snapshot it rests in. */
+type Viewer = () => CodeViewHandle<unknown, undefined> | null;
+
+/**
+ * Names what one side of `path` blames to: a commit's blame never changes, so it outlives
+ * snapshots; the worktree's holds for one snapshot only.
+ */
+export function sideKey(snap: Pick<Snapshot, 'oldSha' | 'newSha' | 'version'>, path: string, side: Side): string {
+  const rev = side === 'new' ? snap.newSha : snap.oldSha;
+  return `${rev === 'worktree' ? `worktree@${snap.version}` : rev}\0${path}`;
+}
+
+/** Drops `attr`, and `also` from the same elements, across the rendered items, when a blame mode is switched off. */
+export function clearRendered(viewer: Viewer, attr: string, also: string[] = []): void {
+  for (const item of viewer()?.getInstance()?.getRenderedItems() ?? []) {
+    const root = item.element.shadowRoot ?? item.element;
+    for (const el of root.querySelectorAll(`[${attr}]`)) for (const a of [attr, ...also]) el.removeAttribute(a);
+  }
+}
+
+/** Bounded insert: the map keeps insertion order, so the first key is the oldest. */
+export function remember<V>(map: Map<string, V>, key: string, value: V, max: number): void {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > max) map.delete(map.keys().next().value!);
+}
+
+/** One blamed line: where the cursor rests, and the file side it rests in. */
 interface Target {
   id: string;
   path: string;
   side: Side;
   line: number;
-  version: number;
+  key: string;
 }
 
 function targetOf(s: Pick<ReviewState, 'selection' | 'snapshot'>): Target | null {
   const sel = s.selection;
   if (!sel || !s.snapshot) return null;
   const side = (sel.range.endSide ?? sel.range.side) === 'deletions' ? 'old' : 'new';
-  return { id: sel.id, path: pathFromItemId(sel.id), side, line: sel.range.end, version: s.snapshot.version };
+  const path = pathFromItemId(sel.id);
+  return { id: sel.id, path, side, line: sel.range.end, key: sideKey(s.snapshot, path, side) };
 }
 
 /** "Ada Lovelace, 3 days ago · Fix the parser" for `line`, or null when the response does not cover it. */
@@ -110,35 +139,28 @@ export function blameNote(res: BlameResponse, line: number, now = Date.now()): s
   return `${commit.author}, ${relativeTime(commit.time * 1000, now)} · ${summary}`;
 }
 
-export function installBlame(
-  viewer: () => CodeViewHandle<unknown, undefined> | null,
-  scroller: HTMLElement,
-): () => void {
-  // Whole-file blames by side and path, for one snapshot: a new one (a worktree edit, another view)
-  // may blame differently. Null when that side has no blame to show.
+export function installBlame(viewer: Viewer, scroller: HTMLElement): () => void {
+  // Whole-file blames by `sideKey`; null when that side has no blame to show.
   const files = new Map<string, BlameResponse | null>();
-  let version = -1;
   let pending = '';
   let timer = 0;
   let repaint = () => {};
-  const keyOf = (t: Target) => `${t.side}\0${t.path}`;
 
-  const request = (t: Target, key: string) => {
-    if (pending === key) return;
-    pending = key;
+  const request = (t: Target) => {
+    if (pending === t.key) return;
+    pending = t.key;
     clearTimeout(timer);
     timer = window.setTimeout(() => {
       api.blame({ path: t.path, side: t.side }).then(
-        (res) => settle(t, key, res),
+        (res) => settle(t, res),
         // A side with no history, or a file the snapshot no longer has: nothing to say.
-        () => settle(t, key, null),
+        () => settle(t, null),
       );
     }, SETTLE_MS);
   };
-  const settle = (t: Target, key: string, res: BlameResponse | null) => {
-    if (pending === key) pending = '';
-    if (t.version !== version) return;
-    files.set(key, res);
+  const settle = (t: Target, res: BlameResponse | null) => {
+    if (pending === t.key) pending = '';
+    remember(files, t.key, res, FILES_MAX);
     repaint();
   };
 
@@ -173,13 +195,8 @@ export function installBlame(
     },
     (items) => {
       const t = targetOf(useStore.getState());
-      if (t && t.version !== version) {
-        files.clear();
-        version = t.version;
-      }
-      const key = t && keyOf(t);
-      const blame = key == null ? undefined : files.get(key);
-      if (t && key != null && blame === undefined) request(t, key);
+      const blame = t ? files.get(t.key) : undefined;
+      if (t && blame === undefined) request(t);
       const note = t && blame ? blameNote(blame, t.line) : null;
       let shown: HTMLElement | null = null;
       let target: HTMLElement | null = null;
@@ -213,5 +230,6 @@ export function installBlame(
     resized.disconnect();
     document.fonts.removeEventListener('loadingdone', onFonts);
     stop();
+    clearRendered(viewer, BLAME_ATTR, [EMPTY_ATTR]);
   };
 }
