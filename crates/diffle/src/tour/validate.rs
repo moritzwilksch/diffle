@@ -5,12 +5,14 @@ use serde_json::Value;
 use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
-use super::element::{is_count, label, parse, short};
+use super::element::{Findings, is_count, label, parse, short};
 use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
-use super::placement::{Place, Rule, is_column, misplaced};
+use super::placement::{Place, Rule, misplaced};
+use super::row;
 use super::stepped;
+use super::tabs;
 use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
@@ -39,8 +41,8 @@ struct Walk {
     row: usize,
     /// The card the walk is in, by its `id`.
     card: Option<String>,
-    /// The stepped block (a walk, a diagram) the walk is in, as errors name it.
-    stepped: Option<String>,
+    /// The block whose parts (steps, tabs) the walk is in, and the part, as errors name them.
+    parts: Option<String>,
     /// Each card's `id`, to find one taken twice.
     ids: Vec<(NodeId, String, String)>,
     /// Each `h1`, and whether an `h2` came before it.
@@ -71,8 +73,8 @@ impl Walk {
     fn context(&self) -> String {
         let section = self.section.as_ref().map_or_else(String::new, |title| format!("h2 \"{title}\" > "));
         let card = self.card.as_ref().map_or_else(String::new, |id| format!("diffle-card#{id} > "));
-        let stepped = self.stepped.as_ref().map_or_else(String::new, |block| format!("{block} > "));
-        format!("{section}{card}{stepped}")
+        let parts = self.parts.as_ref().map_or_else(String::new, |block| format!("{block} > "));
+        format!("{section}{card}{parts}")
     }
 
     fn visit(&mut self, dom: &Dom, node: NodeId, place: Place) {
@@ -140,8 +142,9 @@ impl Walk {
 
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
         let element = format!("{context}{}", label(tag, attrs));
-        let parsed = parse::<TourElement>(tag, attrs).map_err(|message| match attr(attrs, "title") {
-            None if tag == "diffle-note" => stepped::UNTITLED.into(),
+        let parsed = parse::<TourElement>(tag, attrs).map_err(|message| match (attr(attrs, "title"), tag) {
+            (None, "diffle-note") => stepped::UNTITLED.into(),
+            (None, "diffle-tab") => tabs::UNTITLED.into(),
             _ => message,
         });
         let Some(rule) = Rule::of(tag) else {
@@ -160,24 +163,29 @@ impl Walk {
                     self.ids.push((node, element.clone(), id.clone()));
                 }
                 let outer = std::mem::replace(&mut self.card, id.or_else(|| Some(String::new())));
-                self.children(dom, node, Place { top: false, in_card: true, ..place });
+                self.children(dom, node, rule.inner(place));
                 self.card = outer;
                 if !holds_diff(dom, node) {
-                    self.error(
-                        node,
-                        element.clone(),
-                        "a diffle-card explains part of the diff: it holds a diffle-diff",
-                    );
+                    let message = "a diffle-card explains part of the diff: it holds a diffle-diff";
+                    self.error(node, element.clone(), message);
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
             Rule::Walk | Rule::Trace => {
                 let found = stepped::check(dom, node, &element, parsed.as_ref());
-                self.notes(dom, node, place, label(tag, attrs), found);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
-            Rule::Note | Rule::Stop => {
-                self.children(dom, node, Place { top: false, in_text: true, in_steps: false, ..place })
+            Rule::Tabs => {
+                self.parts(dom, tabs::panes(dom, node), rule.inner(place), tag.into(), tabs::check(dom, node, &element))
             }
+            Rule::Tab => {
+                // Inside a tab, errors name its tabs and the tab itself.
+                let tabs = self.parts.clone().map_or_else(String::new, |tabs| format!("{tabs} > "));
+                let outer = self.parts.replace(format!("{tabs}{}", label(tag, attrs)));
+                self.children(dom, node, rule.inner(place));
+                self.parts = outer;
+            }
+            Rule::Callout | Rule::Note | Rule::Stop => self.children(dom, node, rule.inner(place)),
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
@@ -192,10 +200,6 @@ impl Walk {
                 let lines = code::lines(&dom.text(node));
                 self.codes.push(Code { node, element: element.clone(), path, line, example, lines });
             }
-            Rule::Callout => {
-                let inside = Place { top: false, in_callout: true, ..place };
-                self.children(dom, node, inside);
-            }
             Rule::Jump => {
                 if dom.children(node).iter().any(|&c| !matches!(dom.node(c), Node::Text(_) | Node::Ignored)) {
                     self.error(node, element.clone(), "diffle-jump holds only its label text");
@@ -204,7 +208,8 @@ impl Walk {
             Rule::Diagram => {
                 self.errors.extend(diagram::check(dom, node, &element));
                 self.warnings.extend(layout::warnings(dom, node, &element, self.row));
-                self.notes(dom, node, place, tag.into(), stepped::diagram::check(dom, node, &element));
+                let found = stepped::diagram::check(dom, node, &element);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), tag.into(), found);
             }
             Rule::Block | Rule::Symbol | Rule::Icon => {
                 self.empty(dom, node, tag, &element);
@@ -231,40 +236,22 @@ impl Walk {
         }
     }
 
-    /// Takes what checking a stepped block found, then checks its notes as prose under `name`.
-    fn notes(&mut self, dom: &Dom, node: NodeId, place: Place, name: String, found: stepped::Findings) {
+    /// Takes what checking a block of `parts` (steps, tabs) found, then checks each part, at
+    /// `inner`, under the block's `name`.
+    fn parts(&mut self, dom: &Dom, parts: Vec<NodeId>, inner: Place, name: String, found: Findings) {
         self.errors.extend(found.errors);
         self.warnings.extend(found.warnings);
-        let outer = self.stepped.replace(name);
-        for note in stepped::step_nodes(dom, node) {
-            self.visit(dom, note, Place { top: false, in_steps: true, ..place });
+        let outer = self.parts.replace(name);
+        for part in parts {
+            self.visit(dom, part, inner);
         }
-        self.stepped = outer;
+        self.parts = outer;
     }
 
     /// Checks a `diffle-row`'s columns, then what they hold.
     fn row(&mut self, dom: &Dom, node: NodeId, place: Place, element: &str) {
-        let context = self.context();
-        let mut columns = 0;
-        for &child in dom.children(node) {
-            match dom.node(child) {
-                Node::Text(text) if !text.trim().is_empty() => {
-                    let message = "text in a diffle-row belongs in a column: a <p> or a <div>";
-                    self.error(child, format!("{context}text \"{}\"", short(text.trim())), message);
-                }
-                Node::Element { name, attrs } => {
-                    columns += 1;
-                    if !is_column(&name.local) {
-                        let message = "a column of a diffle-row is a block, or prose in a <div>, <p>, <ul> or <ol>";
-                        self.error(child, format!("{context}{}", label(&name.local, attrs)), message);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if !(2..=3).contains(&columns) {
-            self.error(node, element.into(), format!("a diffle-row holds two or three columns, not {columns}"));
-        }
+        let (columns, found) = row::check(dom, node, element, &self.context());
+        self.errors.extend(found.errors);
         let outer = std::mem::replace(&mut self.row, columns);
         self.children(dom, node, Place { top: false, ..place });
         self.row = outer;

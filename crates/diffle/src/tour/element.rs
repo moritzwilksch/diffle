@@ -2,6 +2,9 @@
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
+use super::dom::NodeId;
+use crate::protocol::TourError;
+
 /// The element `tag` with `attrs`, as the catalog in `protocol.ts` reads it, or why it does not fit.
 pub fn parse<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {
     // The tag is no attribute, though a struct that names it lists it among the fields.
@@ -40,4 +43,21 @@ pub fn short(text: &str) -> String {
     let line = text.lines().next().unwrap_or_default();
     let cut: String = line.chars().take(40).collect();
     if cut.len() < text.len() { format!("{cut}…") } else { cut }
+}
+
+/// What is wrong with an element, and the judgment calls about it, each with the node it is about.
+#[derive(Default)]
+pub struct Findings {
+    pub errors: Vec<(NodeId, TourError)>,
+    pub warnings: Vec<(NodeId, TourError)>,
+}
+
+impl Findings {
+    pub fn error(&mut self, node: NodeId, element: String, message: impl Into<String>) {
+        self.errors.push((node, TourError { element, message: message.into() }));
+    }
+
+    pub fn warn(&mut self, node: NodeId, element: String, message: impl Into<String>) {
+        self.warnings.push((node, TourError { element, message: message.into() }));
+    }
 }

@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`"
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -283,6 +283,38 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > diffle-stop path=\"app.py\" line=\"2\"",
       "message": "diffle-stop belongs directly inside a diffle-trace"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs",
+      "message": "a diffle-tabs holds two to four diffle-tab panes, not 1"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs > text \"loose\"",
+      "message": "a diffle-tabs holds only its diffle-tab panes: text belongs in a tab"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs > diffle-tab",
+      "message": "a diffle-tab takes a title: what its pane shows, in a few words"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs > <p>",
+      "message": "a diffle-tabs holds only its diffle-tab panes: prose goes in a tab, or before or after it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs > diffle-tab title=\"A\" > diffle-tabs",
+      "message": "diffle-tabs belongs between paragraphs, outside cards, callouts and other tabs"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs > diffle-tab title=\"B\" kind=\"maybe\"",
+      "message": "unknown variant `maybe`, expected one of `chosen`, `rejected`, `example`"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tabs > diffle-tab title=\"B\" kind=\"maybe\" > <h2>",
+      "message": "a heading sits at the top level, where it starts a section"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tab title=\"Loose\"",
+      "message": "diffle-tab belongs directly inside a diffle-tabs"
     },
     {
       "element": "h2 \"A\" > <h1>",

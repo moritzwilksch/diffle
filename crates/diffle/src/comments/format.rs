@@ -5,7 +5,7 @@ use regex::Regex;
 
 use super::anchor::compare_threads;
 use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourTarget};
-use crate::tour::spoken;
+use crate::tour::tag_in;
 
 static SUGGESTION_FENCE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^```suggestion[^\n]*\n([\s\S]*?)\n?^```[ \t]*$").unwrap());
@@ -120,9 +120,74 @@ pub fn parse_suggestions(body: &str) -> Vec<BodySegment> {
     out
 }
 
+static ATTR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#" ([a-z][a-z-]*)="([^"]*)""#).unwrap());
+
+/// How the prompt names an anchor's `element`: its kind and the one handle an agent can search its
+/// document for, never its geometry or the text the quote already shows. `text` for a selection in it.
+fn spoken(element: &str, text: bool) -> String {
+    let segments: Vec<&str> = element.split(" > ").collect();
+    let last = segments.last().copied().unwrap_or_default();
+    let of = |segment: &str, key: &str| {
+        ATTR.captures_iter(segment).find(|c| &c[1] == key).map(|c| c[2].to_owned()).unwrap_or_default()
+    };
+    let attr = |key: &str| of(last, key);
+    let card = segments.iter().find_map(|s| s.strip_prefix("diffle-card#"));
+    let walk = segments.iter().find(|s| s.starts_with("diffle-walk "));
+    let tab = segments.iter().find(|s| s.starts_with("diffle-tab "));
+    let name = match tag_in(element) {
+        "diffle-card" => format!("the card #{}", attr("id")),
+        "diffle-diff" => format!("the diff of {}:{}", attr("path"), attr("lines")),
+        "diffle-walk" => format!("the walk of {}:{}", attr("path"), attr("lines")),
+        "diffle-note" => format!("the note \"{}\"", attr("title")),
+        "diffle-trace" => "the trace".into(),
+        "diffle-tabs" => "the tabs".into(),
+        "diffle-tab" => format!("the tab \"{}\"", attr("title")),
+        "diffle-stop" => format!("the stop at {}:{}", attr("path"), attr("line")),
+        "diffle-code" if !attr("path").is_empty() => format!("the code of {}:{}", attr("path"), attr("line")),
+        "diffle-code" => "a code block".into(),
+        "diffle-tree" => "the file tree".into(),
+        "diffle-callout" => format!("a {} callout", attr("kind")),
+        "diffle-diagram" => "a diagram".into(),
+        "rect" => "a box in the diagram".into(),
+        "text" => "a label in the diagram".into(),
+        tag => format!("a <{tag}>"),
+    };
+    let within = match (card, walk) {
+        (Some(id), _) if tag_in(element) != "diffle-card" => format!(" in the card #{id}"),
+        _ if tab.is_some() && tag_in(element) != "diffle-tab" => {
+            format!(" in the tab \"{}\"", of(tab.unwrap_or(&""), "title"))
+        }
+        (_, Some(walk)) if tag_in(element) != "diffle-walk" => {
+            format!(" in the walk of {}:{}", of(walk, "path"), of(walk, "lines"))
+        }
+        _ if tag_in(element) == "diffle-note" && segments.contains(&"diffle-diagram") => " in the diagram".into(),
+        _ => String::new(),
+    };
+    format!("{} {name}{within}", if text { "in" } else { "on" })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_an_element_by_its_kind_and_handle() {
+        assert_eq!(spoken(r#"diffle-card id="entry" title="The loader""#, false), "on the card #entry");
+        assert_eq!(spoken("diffle-card#entry > <p>", true), "in a <p> in the card #entry");
+        assert_eq!(
+            spoken(r#"diffle-card#entry > diffle-diff path="src/app.py" lines="12-20""#, false),
+            "on the diff of src/app.py:12-20 in the card #entry"
+        );
+        assert_eq!(
+            spoken(r#"diffle-diagram > <rect x="8" y="8" width="96" height="40">"#, false),
+            "on a box in the diagram"
+        );
+        assert_eq!(spoken(r#"diffle-tabs > diffle-tab title="Chosen" > <p>"#, true), "in a <p> in the tab \"Chosen\"");
+        assert_eq!(
+            spoken(r#"diffle-walk path="a.rs" lines="1-9" > diffle-note lines="2-4" title="Retry""#, true),
+            "in the note \"Retry\" in the walk of a.rs:1-9"
+        );
+    }
 
     fn seg(text: &str, code: Option<&str>) -> BodySegment {
         BodySegment { text: text.into(), code: code.map(Into::into) }

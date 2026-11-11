@@ -3470,6 +3470,44 @@
           ],
           "additionalProperties": false,
           "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-tabs"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "Two to four panes side by side in one block's width, one shown at a time: the chosen design next\nto one it rejected, a payload before and after. It holds only its `diffle-tab`s."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-tab"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What the pane shows, in a few words, on its tab."
+            },
+            "kind": {
+              "$ref": "#/$defs/TourTabKind",
+              "description": "A chip beside the title: `chosen`, `rejected` or `example`."
+            }
+          },
+          "required": [
+            "tag",
+            "title"
+          ],
+          "additionalProperties": false,
+          "description": "One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -4108,6 +4146,53 @@
       ],
       "additionalProperties": false,
       "description": "A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the\ndiff's hover card and a click that lists its references when a language server serves its file.\nIt holds nothing."
+    },
+    "TourTab": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-tab"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the pane shows, in a few words, on its tab."
+        },
+        "kind": {
+          "$ref": "#/$defs/TourTabKind",
+          "description": "A chip beside the title: `chosen`, `rejected` or `example`."
+        }
+      },
+      "required": [
+        "tag",
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
+    },
+    "TourTabKind": {
+      "type": "string",
+      "enum": [
+        "chosen",
+        "rejected",
+        "example"
+      ],
+      "description": "What a tab's pane is to the reader, shown as a chip beside its title."
+    },
+    "TourTabs": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-tabs"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "Two to four panes side by side in one block's width, one shown at a time: the chosen design next\nto one it rejected, a payload before and after. It holds only its `diffle-tab`s."
     },
     "TourTag": {
       "type": "string",

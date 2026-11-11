@@ -9,15 +9,17 @@ mod files;
 mod icon;
 mod layout;
 mod placement;
+mod row;
 mod stepped;
 mod store;
+mod tabs;
 mod validate;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-pub use anchor::{TourIndex, spoken};
+pub use anchor::{TourIndex, tag_in};
 pub use files::column;
 pub use store::TourStore;
 

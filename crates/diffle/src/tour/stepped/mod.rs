@@ -7,8 +7,9 @@ pub mod walk;
 
 use super::anchor::reading;
 use super::dom::{Dom, Node, NodeId};
+pub use super::element::Findings;
 use super::element::{label, short};
-use crate::protocol::{TourElement, TourError};
+use crate::protocol::TourElement;
 
 /// Why a `diffle-note` without a title is refused, in place of the catalog's "missing field".
 pub const UNTITLED: &str = "a diffle-note takes a title: what its step shows, in a few words";
@@ -18,23 +19,6 @@ const MANY: usize = 6;
 const LONG: usize = 2;
 /// The plain tags a step's sentence may use.
 const INLINE: [&str; 4] = ["code", "strong", "em", "a"];
-
-/// What is wrong with a block, and the judgment calls about it, each with the node it is about.
-#[derive(Default)]
-pub struct Findings {
-    pub errors: Vec<(NodeId, TourError)>,
-    pub warnings: Vec<(NodeId, TourError)>,
-}
-
-impl Findings {
-    pub fn error(&mut self, node: NodeId, element: String, message: impl Into<String>) {
-        self.errors.push((node, TourError { element, message: message.into() }));
-    }
-
-    pub fn warn(&mut self, node: NodeId, element: String, message: impl Into<String>) {
-        self.warnings.push((node, TourError { element, message: message.into() }));
-    }
-}
 
 /// Checks the walk or trace at `node`, named `element`, as the catalog read it (none when it did not fit).
 pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement>) -> Findings {

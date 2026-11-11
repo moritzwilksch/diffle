@@ -68,6 +68,10 @@ docs/readme.md"></diffle-tree>
 <diffle-note title="A request names an id">It carries the id <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes.</diffle-note>
 <diffle-note title="The loader answers">It returns the id.</diffle-note>
 </diffle-diagram>
+<diffle-tabs>
+  <diffle-tab title="The loader" kind="chosen"><p>It returns the id it takes.</p><diffle-diff path="app.py" lines="2-3"></diffle-diff></diffle-tab>
+  <diffle-tab title="A cache" kind="rejected"><p>A cache would serve stale users.</p></diffle-tab>
+</diffle-tabs>
 <diffle-trace>
   <diffle-stop path="app.py" line="2">A call enters <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol>.</diffle-stop>
   <diffle-stop path="app.py" line="3">It returns the id.</diffle-stop>
@@ -187,6 +191,9 @@ docs/readme.md"></diffle-tree>
 <diffle-diagram><svg viewBox="0 0 56 44"><rect x="8" y="8" width="40" height="28"/></svg><diffle-note title="Lost">No steps.</diffle-note></diffle-diagram>
 <diffle-trace><p>prose</p><diffle-stop path="app.py" line="9">Past the end.</diffle-stop><diffle-stop path="gone.py" line="1">Not in the review.</diffle-stop></diffle-trace>
 <p><diffle-stop path="app.py" line="2">Alone.</diffle-stop></p>
+<diffle-tabs>loose<diffle-tab><p>No title.</p></diffle-tab></diffle-tabs>
+<diffle-tabs><p>prose</p><diffle-tab title="A"><diffle-tabs><diffle-tab title="In">x</diffle-tab><diffle-tab title="Tabs">y</diffle-tab></diffle-tabs></diffle-tab><diffle-tab title="B" kind="maybe"><h2>Heading</h2></diffle-tab></diffle-tabs>
+<p><diffle-tab title="Loose">Alone.</diffle-tab></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;

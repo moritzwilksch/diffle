@@ -1076,6 +1076,31 @@ export const TourStopSchema = z
   })
   .strict();
 
+/**
+ * Two to four panes side by side in one block's width, one shown at a time: the chosen design next
+ * to one it rejected, a payload before and after. It holds only its `diffle-tab`s.
+ */
+export const TourTabsSchema = z
+  .object({
+    tag: z.literal('diffle-tabs'),
+  })
+  .strict();
+
+/** What a tab's pane is to the reader, shown as a chip beside its title. */
+export const TourTabKindSchema = z.enum(['chosen', 'rejected', 'example']);
+export type TourTabKind = z.infer<typeof TourTabKindSchema>;
+
+/** One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs. */
+export const TourTabSchema = z
+  .object({
+    tag: z.literal('diffle-tab'),
+    /** What the pane shows, in a few words, on its tab. */
+    title: z.string().min(1),
+    /** A chip beside the title: `chosen`, `rejected` or `example`. */
+    kind: TourTabKindSchema.optional(),
+  })
+  .strict();
+
 /** A language the highlighter knows, by its id: `rust`, `typescript`, `python`. */
 const tourLangSchema = z.string().regex(/^[a-z0-9][a-z0-9+#-]*$/);
 
@@ -1328,6 +1353,8 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourNoteSchema,
   TourTraceSchema,
   TourStopSchema,
+  TourTabsSchema,
+  TourTabSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
