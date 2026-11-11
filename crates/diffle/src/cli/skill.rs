@@ -57,8 +57,8 @@ their `<h3>` subsections. Each review has one tour.
   explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
   level of the document.
 - Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
-  `diffle-diagram`, a table, a `diffle-tree`, a `diffle-callout`. A block sits between paragraphs,
-  never inside one.
+  `diffle-walk`, a `diffle-diagram`, a table, a `diffle-tree`, a `diffle-callout`. A block sits
+  between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
   two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
   inside another, and a heading never goes inside a card.
@@ -93,6 +93,28 @@ and closing summaries. Skip stock phrasing such as \"delve\", \"robust\", \"seam
 no emoji. A section opens with a sentence or two on what it shows; a card is its title and one or
 two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
 unless the reviewer asks for them.
+
+### Walks
+
+Use a `diffle-walk` when one piece of code reads best part by part, in order: a loop, a request
+handler, a pipeline. The reader steps through its notes; each lights its lines, dims the rest, and
+shows its text under them. Use a `diffle-card` for a diff that a sentence or two explain, and prose
+for what spans several files.
+
+- Give the walk the lines of that one piece, 40 at most, and one `diffle-note` per step in reading
+  order, about 6 at most.
+- A note's `lines` lie within the walk's, count on its side, and share none with another note.
+- A note is a title of a few words and one sentence, held to the Writing rules: say what its lines
+  do or why, never read them back. It holds inline prose only: text, `<code>`, `diffle-symbol`,
+  `diffle-jump`, `diffle-icon`.
+
+```html
+<diffle-walk path=\"src/retry.rs\" lines=\"20-41\">
+<diffle-note lines=\"20-24\" title=\"Check the budget\">The loop stops once <diffle-symbol path=\"src/retry.rs\" line=\"21\" name=\"attempts\"></diffle-symbol> reaches the limit.</diffle-note>
+<diffle-note lines=\"26-33\" title=\"Back off\">Each failure doubles the wait, up to 30 seconds.</diffle-note>
+<diffle-note lines=\"35-41\" title=\"Give up\">The last error goes back to the caller unchanged.</diffle-note>
+</diffle-walk>
+```
 
 ### Icons
 
@@ -290,12 +312,13 @@ mod tests {
     fn the_interface_examples_are_ones_the_validator_accepts() {
         let blocks: Vec<&str> =
             super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        assert_eq!(blocks.len(), 3);
-        let row = format!("<h2>A</h2>{}", blocks[0]);
-        let example = format!("<h2>A</h2>{}", blocks[2]);
+        assert_eq!(blocks.len(), 4);
+        let walk = format!("<h2>A</h2>{}", blocks[0]);
+        let row = format!("<h2>A</h2>{}", blocks[1]);
+        let example = format!("<h2>A</h2>{}", blocks[3]);
         let diagram =
-            format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[1]);
-        for html in [row, diagram, example] {
+            format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{}</svg></diffle-diagram>", blocks[2]);
+        for html in [walk, row, diagram, example] {
             let errors = crate::tour::outline_errors(&html);
             assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
         }

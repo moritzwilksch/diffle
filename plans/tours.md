@@ -6,7 +6,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 1. Write a tour as an HTML article: headings for structure, blocks in the flow
 
-- **Chosen:** The agent writes one HTML document, read as an article. An optional `h1` titles it, each `h2` starts a section, and `h3` a subsection. Between headings sit prose (`p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `div`, `section`, `h4`) and blocks: `diffle-card`, `diffle-diff`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, and tables (`table`, `thead`, `tbody`, `tr`, `th`, `td`). Inline primitives (`diffle-symbol`, `diffle-jump`) sit in prose. Everything shares one centred column (decision 9).
+- **Chosen:** The agent writes one HTML document, read as an article. An optional `h1` titles it, each `h2` starts a section, and `h3` a subsection. Between headings sit prose (`p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `div`, `section`, `h4`) and blocks: `diffle-card`, `diffle-diff`, `diffle-walk`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, and tables (`table`, `thead`, `tbody`, `tr`, `th`, `td`). Inline primitives (`diffle-symbol`, `diffle-jump`) sit in prose. Everything shares one centred column (decision 9).
 - **Rejected:**
   - Markdown with primitive fences (` ```diffle-diff path=… `) through `src/client/Markdown.tsx`. It is safe already and agents write it reliably, but it carries no cards, diagrams or symbol chips.
   - A pannable, zoomable canvas of cards joined by arrows, as the graph view draws (`src/client/graph/GraphCanvas.tsx`). It was built first and dropped: the reviewer found it looked too much like the graph view and wanted a page, with cards wide enough that diff lines don't wrap. Arrows between cards also collided with group frames.
@@ -66,7 +66,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** Dropping the tour, or marking all of it stale, once the snapshot moves past the version it was pushed against. Simpler, and it never shows outdated prose, but one fixup commit would wipe out a tour the reviewer was halfway through.
 - **Why:** The agent keeps editing code while the tour is open, and most diffs keep their lines. The stale count tells the reviewer when to ask for a fresh push.
 
-### 9. Ten primitives, all structure and no styling knobs
+### 9. Twelve primitives, all structure and no styling knobs
 
 - **Chosen:**
 
@@ -76,6 +76,8 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   | `diffle-code`    | `lang?`, `path?`, `line?`, `example?`, `title?`; holds its code as text | a signature or interface the agent writes, or a made-up example, highlighted in the diff's frame                       |
   | `diffle-row`     | none; holds two or three columns                                        | blocks or short prose side by side, stacked in a narrow column                                                         |
   | `diffle-diff`    | `path`, `side?` (`old` \| `new`, default `new`), `lines` (`40-58`)      | those diff lines, highlighted, with a jump to them                                                                     |
+  | `diffle-walk`    | `path`, `side?`, `lines`; holds `diffle-note`s                          | those diff lines walked one note at a time (decision 21)                                                               |
+  | `diffle-note`    | `lines`, `title`; holds a sentence of inline prose                      | one step of a walk: its lines lit, its text under them                                                                 |
   | `diffle-tree`    | `paths` (newline-separated), `root?`                                    | a directory tree; changed files carry their status from the snapshot                                                   |
   | `diffle-jump`    | `path`, `line?`, `side?`                                                | a button into the diff view                                                                                            |
   | `diffle-symbol`  | `path`, `line`, `name`, `side?`                                         | the symbol `name`, coloured as the diff colours it on that line; it hovers and lists references like the diff's tokens |
@@ -123,7 +125,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 12. The tour is a third `ViewDef`, a page of its own; the graph view is untouched
 
-- **Chosen:** `src/client/tour/TourPage.tsx` renders the page. Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and the header's view switch lists it only while there is one (`ViewDef.useListed`), so reviews without tours look as before. Its `keys` take `n` and `p` for sections and `j`/`k`/`d`/`u` to scroll (decision 6). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph); in the graph view `T` stays the tests filter.
+- **Chosen:** `src/client/tour/TourPage.tsx` renders the page. Register `tourView` in `src/client/views/registry.ts` with `id: 'tour'`. Its `blocked` returns a reason while the review has no tour, and the header's view switch lists it only while there is one (`ViewDef.useListed`), so reviews without tours look as before. Its `keys` take `n` and `p` for sections, `j`/`k`/`d`/`u` to scroll (decision 6), and `l`/`h` for a walk's notes (decision 21). `T` toggles it (`toggleView('tour')` in `src/client/keyboard/useKeymap.ts`, next to `M` for the graph); in the graph view `T` stays the tests filter.
 - **Rejected:** Sharing the graph's canvas (`src/client/canvas/`, the viewport and a generalized layered layout). It was built for the canvas tour and reverted with it (decision 1); the graph's code is as on `main`.
 - **Why:** A page needs no viewport or layout, so the graph view has nothing to share.
 
@@ -181,6 +183,16 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Why:** An icon marks a kind of thing at a glance, as in the svg-diagram convention. Every name the validator accepts is one the client can load, and the client ships only the icons a tour names.
 - **Cost:** About 2,170 chunks of a few hundred bytes each in the client build (522 files grew to 2,336; 18.3 MB to 19.3 MB on disk).
 
+### 21. A walk explains one piece of code step by step, its note inline under the lit lines
+
+- **Chosen:** `<diffle-walk path side? lines>` holds ordered `<diffle-note lines title>` elements, each a title and a sentence of inline prose. It renders as a `diffle-diff` does (same excerpt, rows, stale notice and Open; `primitives/Walk.tsx` reuses `useExcerpt` and `DiffRows`), full width, one column. Its header carries a stepper: ‹, the note numbers, ›, always present at fixed places, so a click lands where it did on the step before; the active note's title is never in the header. At rest the diff shows plainly with each note's number on the gutter of its first line. Taking a note (its number in the header or on the gutter, or `l` / `h` and the arrow keys on the walk nearest the gaze line) lights its rows, dims the others, and hangs a compact full-width band under its last lit row: number, title, sentence. `h` from the first note returns to rest. Stepping scrolls the page only as far as the lit rows and the band need. The band is a `@pierre/diffs` line annotation, so it sits inside the diff without a second renderer; the marks and the dimming are `unsafeCSS` in the diff's shadow root, built from the excerpt's rows (`tour/walk.ts`).
+- **Validator (`tour/walk.rs`):** refuses a walk without notes, anything but notes in a walk, a note outside one, a note without `title`, a note whose lines leave the walk's, and block or paragraph content in a note. Warns past about 6 notes, past about 40 lines, a note of more than about two sentences ("may"), and notes that share lines.
+- **Comments:** a walk takes a thread as a whole like a diff (label `path lines`); a note's words take a text selection, its reading text its title then its sentence. A thread on a note the walk is not showing places its card at the walk, and focusing it takes that note.
+- **Rejected:**
+  - Callouts beside the lines, as comments hang in the diff. The reviewer expected them to look busy, worst in a narrow window.
+  - A numbered list of the notes in a side column, as in the presentation template the reviewer showed. It costs width on a laptop or beside other windows, and the reviewer asked for a walk that does not.
+- **Why:** A loop, a handler or a pipeline reads best in order; lighting one part at a time keeps the reader's eye on it, and the band keeps the explanation next to the lines at any width.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -211,6 +223,7 @@ crates/diffle/src/tour/drawing.rs              NEW       a diagram's boxes, labe
 crates/diffle/src/tour/icon.rs                 NEW       the Lucide names a tour may use, and the closest to a wrong one
 crates/diffle/lucide-icons.generated.txt       NEW       lucide-react's icon names (test/scripts/lucide-icons.test.ts -u)
 crates/diffle/src/tour/code.rs                 NEW       a diffle-code block's lines and its warnings
+crates/diffle/src/tour/walk.rs                 NEW       a diffle-walk's notes, refusals and warnings
 crates/diffle/src/tour/files.rs                NEW       what elements ask of the review's files, checked against the snapshot
 crates/diffle/src/tour/element.rs              NEW       reads an element's attributes through the catalog; names it in errors
 crates/diffle/src/tour/diagram.rs              NEW       checks a diffle-diagram's svg against TourSvgElement and TourSvgClass
@@ -228,7 +241,8 @@ src/client/tour/document.ts                    NEW       DOMParser → title, h2
 src/client/tour/render.tsx                     NEW       the article → allowlisted React (decision 2)
 src/client/tour/excerpt.ts                     NEW       a diff primitive's lines as a one-hunk patch, numbered as in the file
 src/client/tour/state.ts                       NEW       the tour, the section read, stale sections, per-snapshot file reads
-src/client/tour/primitives/                    NEW       Card, Code, Diff, Tree, Jump, Symbol, Callout, Diagram, DiagramCode, Icon
+src/client/tour/primitives/                    NEW       Card, Code, Diff, Walk, Tree, Jump, Symbol, Callout, Diagram, DiagramCode, Icon
+src/client/tour/walk.ts                        NEW       a walk's lit rows, gutter marks, band and the walk at the gaze line
 src/client/styles/diagram.css                  NEW       a diagram's classes, from the theme tokens
 src/client/styles/tour.css                     NEW       the article: column, headings, rhythm, cards, rows
 src/client/tour/Contents.tsx                   NEW       side panel (decision 14)
@@ -250,6 +264,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 8. `diffle-code` and code in diagrams, with their warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
 9. Lucide icons in text, card titles and diagrams, with their name check and layout warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g tour`.
 10. Examples: `diffle-code example`, its label, refusals and warnings. Verify: `pixi run test-rust`, `pixi run e2e -g tour`.
+11. Walks: `diffle-walk` and `diffle-note`, the stepper, keys, refusals and warnings. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 
