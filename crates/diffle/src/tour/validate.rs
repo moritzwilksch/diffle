@@ -1,7 +1,5 @@
 //! Checks a tour document against the catalog in `protocol.ts` (`TourElement`, `TourTag`) and the
-//! rules across elements: where each element may sit, unique card ids and steps.
-use std::collections::{HashMap, HashSet};
-
+//! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
 use super::diagram;
@@ -9,6 +7,7 @@ use super::dom::{self, Dom, Node, NodeId};
 use super::element::{label, parse, short};
 use super::files::{Need, Reference};
 use super::layout;
+use super::placement::{Place, Rule, misplaced};
 use crate::protocol::{Side, TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
@@ -20,74 +19,23 @@ pub struct Outline {
     pub references: Vec<Reference>,
 }
 
-/// Where an element sits, deciding what it may hold.
-#[derive(Clone, Copy, PartialEq)]
-enum Place {
-    Top,
-    Group,
-    Card { in_callout: bool },
-}
-
 /// An element's tag and attributes.
 type Tag<'a> = (&'a str, &'a [(String, String)]);
-
-/// What a `diffle-*` tag may hold and where it may sit.
-#[derive(Clone, Copy, PartialEq)]
-enum Rule {
-    Card,
-    Group,
-    Callout,
-    Diagram,
-    Jump,
-    /// `diffle-diff`, `diffle-tree`, `diffle-symbol`: inside a card, holding nothing.
-    Leaf,
-}
-
-impl Rule {
-    fn of(tag: &str) -> Option<Self> {
-        Some(match tag {
-            "diffle-card" => Self::Card,
-            "diffle-group" => Self::Group,
-            "diffle-callout" => Self::Callout,
-            "diffle-diagram" => Self::Diagram,
-            "diffle-jump" => Self::Jump,
-            "diffle-diff" | "diffle-tree" | "diffle-symbol" => Self::Leaf,
-            _ => return None,
-        })
-    }
-
-    fn fits(self, place: Place) -> bool {
-        match self {
-            Self::Card => matches!(place, Place::Top | Place::Group),
-            Self::Group => place == Place::Top,
-            Self::Callout => place == Place::Card { in_callout: false },
-            Self::Diagram | Self::Jump | Self::Leaf => matches!(place, Place::Card { .. }),
-        }
-    }
-
-    fn home(self) -> &'static str {
-        match self {
-            Self::Card => "at the top level or in a diffle-group",
-            Self::Group => "at the top level",
-            Self::Callout => "inside a diffle-card, outside other callouts",
-            Self::Diagram | Self::Jump | Self::Leaf => "inside a diffle-card",
-        }
-    }
-}
-
-struct Card {
-    node: NodeId,
-    element: String,
-    id: String,
-    step: Option<String>,
-}
 
 #[derive(Default)]
 struct Walk {
     errors: Vec<(NodeId, TourError)>,
     warnings: Vec<(NodeId, TourError)>,
     references: Vec<Reference>,
-    cards: Vec<Card>,
+    /// The `h2` the walk is in, which names what errors are about.
+    section: Option<String>,
+    /// The card the walk is in, by its `id`.
+    card: Option<String>,
+    /// Each card's `id`, to find one taken twice.
+    ids: Vec<(NodeId, String, String)>,
+    /// Each `h1`, and whether an `h2` came before it.
+    titles: Vec<(NodeId, String, bool)>,
+    sections: usize,
 }
 
 /// Parses `html` and checks everything that needs no file of the review.
@@ -95,10 +43,10 @@ pub fn outline(html: &str) -> Outline {
     let dom = dom::parse(html);
     let mut walk = Walk::default();
     for &child in dom.children(dom.section("head")) {
-        walk.visit(&dom, child, Place::Top, "");
+        walk.visit(&dom, child, Place::TOP);
     }
     for &child in dom.children(dom.section("body")) {
-        walk.visit(&dom, child, Place::Top, "");
+        walk.visit(&dom, child, Place::TOP);
     }
     walk.across();
     Outline { errors: walk.errors, warnings: walk.warnings, references: walk.references }
@@ -109,11 +57,19 @@ impl Walk {
         self.errors.push((node, TourError { element, message: message.into() }));
     }
 
-    fn visit(&mut self, dom: &Dom, node: NodeId, place: Place, context: &str) {
+    /// What errors name an element after: the section it is in.
+    fn context(&self) -> String {
+        let section = self.section.as_ref().map_or_else(String::new, |title| format!("h2 \"{title}\" > "));
+        let card = self.card.as_ref().map_or_else(String::new, |id| format!("diffle-card#{id} > "));
+        format!("{section}{card}")
+    }
+
+    fn visit(&mut self, dom: &Dom, node: NodeId, place: Place) {
+        let context = &self.context();
         match dom.node(node) {
-            Node::Text(text) if !text.trim().is_empty() && !matches!(place, Place::Card { .. }) => {
+            Node::Text(text) if !text.trim().is_empty() && place.top => {
                 let element = format!("{context}text \"{}\"", short(text.trim()));
-                self.error(node, element, "text belongs inside a diffle-card");
+                self.error(node, element, "text belongs in a <p>, a list or another block");
             }
             Node::Element { name, attrs } => {
                 let tag = name.local.to_string();
@@ -135,9 +91,9 @@ impl Walk {
         }
     }
 
-    fn children(&mut self, dom: &Dom, node: NodeId, place: Place, context: &str) {
+    fn children(&mut self, dom: &Dom, node: NodeId, place: Place) {
         for &child in dom.children(node) {
-            self.visit(dom, child, place, context);
+            self.visit(dom, child, place);
         }
     }
 
@@ -146,8 +102,16 @@ impl Walk {
         let Ok(known) = serde_json::from_value::<TourTag>(Value::String(tag.into())) else {
             return self.error(node, element, format!("<{tag}> is not allowed in a tour"));
         };
-        if !matches!(place, Place::Card { .. }) {
-            return self.error(node, element, format!("<{tag}> belongs inside a diffle-card"));
+        if let Some(message) = misplaced(tag, place) {
+            return self.error(node, element, message);
+        }
+        match tag {
+            "h1" => self.titles.push((node, element.clone(), self.sections > 0)),
+            "h2" => {
+                self.sections += 1;
+                self.section = Some(short(text_of(dom, node).trim()));
+            }
+            _ => {}
         }
         for (key, value) in attrs {
             let is_link = known == TourTag::A && key == "href";
@@ -160,7 +124,7 @@ impl Walk {
                 self.error(node, element.clone(), format!("<{tag}> takes no attribute {key}"));
             }
         }
-        self.children(dom, node, place, context);
+        self.children(dom, node, place.within(tag));
     }
 
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
@@ -177,18 +141,24 @@ impl Walk {
         // What it holds is checked whatever its attributes, so one typo does not hide the rest.
         match rule {
             Rule::Card => {
-                let id = attr(attrs, "id");
-                let named = id.map_or_else(|| element.clone(), |id| format!("diffle-card#{id}"));
-                if let Some(id) = id {
-                    let step = attr(attrs, "step").map(Into::into);
-                    self.cards.push(Card { node, element: element.clone(), id: id.into(), step });
+                let id = attr(attrs, "id").map(str::to_owned);
+                if let Some(id) = &id {
+                    self.ids.push((node, element.clone(), id.clone()));
                 }
-                self.children(dom, node, Place::Card { in_callout: false }, &format!("{named} > "));
+                let outer = std::mem::replace(&mut self.card, id.or_else(|| Some(String::new())));
+                self.children(dom, node, Place { top: false, in_card: true, ..place });
+                self.card = outer;
+                if !holds_diff(dom, node) {
+                    self.error(
+                        node,
+                        element.clone(),
+                        "a diffle-card explains part of the diff: it holds a diffle-diff",
+                    );
+                }
             }
-            Rule::Group => self.children(dom, node, Place::Group, &format!("{element} > ")),
             Rule::Callout => {
-                let card = element.rsplit_once(" > ").map_or(String::new(), |(card, _)| format!("{card} > "));
-                self.children(dom, node, Place::Card { in_callout: true }, &card);
+                let inside = Place { top: false, in_callout: true, ..place };
+                self.children(dom, node, inside);
             }
             Rule::Jump => {
                 if dom.children(node).iter().any(|&c| !matches!(dom.node(c), Node::Text(_) | Node::Ignored)) {
@@ -199,7 +169,7 @@ impl Walk {
                 self.errors.extend(diagram::check(dom, node, &element));
                 self.warnings.extend(layout::warnings(dom, node, &element));
             }
-            Rule::Leaf => self.empty(dom, node, tag, &element),
+            Rule::Block | Rule::Symbol => self.empty(dom, node, tag, &element),
         }
         if let (Some(parsed), true) = (parsed, fits) {
             self.refer(node, element, parsed);
@@ -247,10 +217,7 @@ impl Walk {
                 let need = Need::Name { side: side.unwrap_or(Side::New), line: number(&line), name: name.to_string() };
                 push(&path, need, element);
             }
-            TourElement::DiffleCard { .. }
-            | TourElement::DiffleGroup { .. }
-            | TourElement::DiffleCallout { .. }
-            | TourElement::DiffleDiagram => {}
+            TourElement::DiffleCard { .. } | TourElement::DiffleCallout { .. } | TourElement::DiffleDiagram => {}
         }
     }
 
@@ -267,29 +234,46 @@ impl Walk {
         }
     }
 
-    /// The rules across elements: unique ids and steps, at least one card.
+    /// The rules across elements: unique card ids, one `h1` before every section, at least one section.
     fn across(&mut self) {
-        let mut ids: HashSet<&str> = HashSet::new();
-        let mut steps: HashMap<&str, &str> = HashMap::new();
-        let mut found = Vec::new();
-        for card in &self.cards {
-            if !ids.insert(&card.id) {
-                found.push((card.node, card.element.clone(), format!("id {} is taken by an earlier card", card.id)));
-            }
-            if let Some(step) = card.step.as_deref()
-                && let Some(first) = steps.insert(step, &card.id)
-            {
-                found.push((card.node, card.element.clone(), format!("step {step} is taken by diffle-card#{first}")));
-                steps.insert(step, first);
+        let ids = std::mem::take(&mut self.ids);
+        for (i, (node, element, id)) in ids.iter().enumerate() {
+            if ids[..i].iter().any(|(_, _, earlier)| earlier == id) {
+                self.error(*node, element.clone(), format!("id {id} is taken by an earlier card"));
             }
         }
-        if self.cards.is_empty() {
-            found.push((0, "the document".into(), "a tour holds at least one diffle-card".into()));
+        let titles = std::mem::take(&mut self.titles);
+        for (i, (node, element, late)) in titles.into_iter().enumerate() {
+            if i > 0 {
+                self.error(node, element, "a tour has one <h1>, its title");
+            } else if late {
+                self.error(node, element, "<h1> comes before the first <h2>: it titles the tour");
+            }
         }
-        for (node, element, message) in found {
-            self.error(node, element, message);
+        if self.sections == 0 {
+            self.error(0, "the document".into(), "a tour holds at least one <h2>: each starts a step of the walk");
         }
     }
+}
+
+/// Whether a `diffle-diff` sits anywhere inside `node`.
+fn holds_diff(dom: &Dom, node: NodeId) -> bool {
+    dom.children(node).iter().any(|&c| match dom.node(c) {
+        Node::Element { name, .. } => &*name.local == "diffle-diff" || holds_diff(dom, c),
+        _ => false,
+    })
+}
+
+/// The text inside `node`, as a heading reads.
+fn text_of(dom: &Dom, node: NodeId) -> String {
+    dom.children(node)
+        .iter()
+        .map(|&c| match dom.node(c) {
+            Node::Text(text) => text.to_string(),
+            Node::Element { .. } => text_of(dom, c),
+            _ => String::new(),
+        })
+        .collect()
 }
 
 /// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.

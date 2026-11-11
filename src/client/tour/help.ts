@@ -6,8 +6,8 @@ export const TOUR_HELP: HelpSection[][] = [
     {
       title: 'Tour',
       rows: [
-        ['n / p', 'next / previous step'],
-        ['click a step', 'go to that step'],
+        ['n / p', 'next / previous section'],
+        ['click a heading in the contents', 'go to it'],
         ['j / k', 'scroll the page'],
         ['d / u', 'scroll half a page'],
         ['click a line range or a file', 'open it in the diff'],
@@ -21,7 +21,7 @@ export const TOUR_HELP: HelpSection[][] = [
         ['T', 'back to the diff'],
         ['M', 'the change graph'],
         ['Ctrl+o / Ctrl+i', 'jump back / forward in history'],
-        ['⌘/Ctrl+b', 'toggle the file tree (Shift: steps panel)'],
+        ['⌘/Ctrl+b', 'toggle the file tree (Shift: contents panel)'],
         ['t', 'cycle theme'],
         ['m, then 1–6', 'open the mode picker and choose an entry'],
       ],

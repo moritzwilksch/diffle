@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { pageOrder, readTour } from '@/client/tour/document.js';
+import { readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
 
 const PATCH = `diff --git a/app.py b/app.py
@@ -45,40 +45,27 @@ describe('excerpt', () => {
 });
 
 describe('readTour', () => {
-  it('reads cards, groups and the walk, leaving out what the catalog does not allow', () => {
+  it('reads the title, each h2 as a step with its h3s, and the diffs each section holds', () => {
     const tour = readTour(`
-      <diffle-card id="b" step="2" title="Second"><diffle-diff path="a.py" lines="3-4"></diffle-diff></diffle-card>
-      <diffle-group title="Core">
-        <diffle-card id="a" step="1" title="First"></diffle-card>
-        <diffle-card id="c" title="Context"></diffle-card>
-      </diffle-group>
-      <diffle-card id="bad" step="x" title="Dropped"></diffle-card>`);
-    expect(tour.cards.map((c) => [c.id, c.step, c.group])).toEqual([
-      ['b', 2, null],
-      ['a', 1, 0],
-      ['c', null, 0],
-    ]);
-    expect(tour.groups).toEqual(['Core']);
-    expect(tour.steps.map((c) => c.id)).toEqual(['a', 'b']);
-    expect(tour.cards[0]!.ranges).toEqual([{ path: 'a.py', side: 'new', start: 3, end: 4 }]);
-  });
-});
-
-describe('pageOrder', () => {
-  it('reads the steps in order, then the rest in document order, a group as one section at its first step', () => {
-    const tour = readTour(`
-      <diffle-card id="ctx" title="Context"></diffle-card>
-      <diffle-card id="three" step="3" title="Three"></diffle-card>
-      <diffle-group title="Core">
-        <diffle-card id="layout" title="Layout"></diffle-card>
-        <diffle-card id="two" step="2" title="Two"></diffle-card>
-      </diffle-group>
-      <diffle-card id="one" step="1" title="One"></diffle-card>`);
-    expect(pageOrder(tour).map((s) => [s.title, s.cards.map((c) => c.id)])).toEqual([
-      [null, ['one']],
-      ['Core', ['two', 'layout']],
-      [null, ['three']],
-      [null, ['ctx']],
+      <h1>Kinds</h1>
+      <p>Intro <diffle-diff path="a.py" lines="1"></diffle-diff></p>
+      <h2>Entries</h2>
+      <diffle-card id="c" title="Kind"><diffle-diff path="a.py" lines="3-4"></diffle-diff></diffle-card>
+      <h3>Parsing</h3>
+      <diffle-diff path="b.py" side="old" lines="7"></diffle-diff>
+      <h2>Refunds</h2>
+      <p>Prose only.</p>`);
+    expect(tour.title).toBe('Kinds');
+    expect(tour.sections.map((s) => [s.title, s.subsections.map((h) => h.title), s.ranges])).toEqual([
+      [
+        'Entries',
+        ['Parsing'],
+        [
+          { path: 'a.py', side: 'new', start: 3, end: 4 },
+          { path: 'b.py', side: 'old', start: 7, end: 7 },
+        ],
+      ],
+      ['Refunds', [], []],
     ]);
   });
 });

@@ -6,42 +6,40 @@ import { pushTour, REPO_ROOT, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
 const TOUR = `
-<diffle-card id="kind" step="1" title="Entries learn their kind">
-  <p>An <code>Entry</code> is a sale unless its <code>kind</code> says <strong>refund</strong>; a refund counts negative.</p>
-  <diffle-diff path="tally/ledger.py" lines="29-34"></diffle-diff>
-</diffle-card>
-<diffle-card id="parse" step="2" title="Parsing reads the kind column">
-  <p>A row defaults to a sale and refuses any other kind.</p>
+<h1>Refunds count against sales</h1>
+<p>Entries learn a kind, parsing reads it, and refunds that match no sale are reported.</p>
+<h2>Entries learn their kind</h2>
+<p>An <code>Entry</code> is a sale unless its <code>kind</code> says <strong>refund</strong>; a refund counts negative.</p>
+<diffle-diff path="tally/ledger.py" lines="29-34"></diffle-diff>
+<h2>Parsing reads the kind column</h2>
+<diffle-card id="parse" title="A row defaults to a sale">
+  <p>Any other kind is refused.</p>
   <diffle-diff path="tally/ledger.py" lines="76-79"></diffle-diff>
-  <diffle-callout kind="warning"><p>An unknown kind now fails the whole file.</p></diffle-callout>
 </diffle-card>
-<diffle-group title="Refunds">
-  <diffle-card id="unmatched" step="3" title="Unmatched refunds">
-    <p>Refunds of something the account never sold.</p>
-    <diffle-diff path="tally/refunds.py" lines="12-22"></diffle-diff>
-  </diffle-card>
-  <diffle-card id="layout" title="Where it lives">
-    <diffle-tree root="tally" paths="tally/ledger.py
+<diffle-callout kind="warning"><p>An unknown kind now fails the whole file.</p></diffle-callout>
+<h2>Unmatched refunds</h2>
+<p>Refunds of something the account never sold.</p>
+<diffle-diff path="tally/refunds.py" lines="12-22"></diffle-diff>
+<h3>Where it lives</h3>
+<diffle-tree root="tally" paths="tally/ledger.py
 tally/refunds.py
 tally/currency.py"></diffle-tree>
-    <p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
-    <table>
-      <thead><tr><th>Kind</th><th>Counts as</th></tr></thead>
-      <tbody><tr><td>sale</td><td>its amount</td></tr><tr><td>refund</td><td>minus its amount</td></tr>
-      <tr><td colspan="2">anything else fails the file</td></tr></tbody>
-    </table>
-    <p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
-    <diffle-diagram><svg viewBox="0 0 440 88">
-      <g><rect x="24" y="24" width="88" height="40"/><text x="36" y="44" class="bold">CLI</text></g>
-      <path d="M112 44 H176" class="arrow"/>
-      <text x="144" y="28" class="c small">reads</text>
-      <g><rect x="176" y="24" width="88" height="40"/><text x="188" y="44" class="bold">Ledger</text></g>
-      <path d="M264 44 H328" class="arrow"/>
-      <text x="296" y="28" class="c small">feeds</text>
-      <g class="accent"><rect x="328" y="24" width="88" height="40"/><text x="340" y="44" class="bold">Refunds</text></g>
-    </svg></diffle-diagram>
-  </diffle-card>
-</diffle-group>
+<p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
+<table>
+  <thead><tr><th>Kind</th><th>Counts as</th></tr></thead>
+  <tbody><tr><td>sale</td><td>its amount</td></tr><tr><td>refund</td><td>minus its amount</td></tr>
+  <tr><td colspan="2">anything else fails the file</td></tr></tbody>
+</table>
+<p>The CLI reads the ledger, and the ledger feeds the new refund check.</p>
+<diffle-diagram><svg viewBox="0 0 440 88">
+  <g><rect x="24" y="24" width="88" height="40"/><text x="36" y="44" class="bold">CLI</text></g>
+  <path d="M112 44 H176" class="arrow"/>
+  <text x="144" y="28" class="c small">reads</text>
+  <g><rect x="176" y="24" width="88" height="40"/><text x="188" y="44" class="bold">Ledger</text></g>
+  <path d="M264 44 H328" class="arrow"/>
+  <text x="296" y="28" class="c small">feeds</text>
+  <g class="accent"><rect x="328" y="24" width="88" height="40"/><text x="340" y="44" class="bold">Refunds</text></g>
+</svg></diffle-diagram>
 `;
 
 /** The tour view once every card's lines rendered. */
@@ -57,7 +55,7 @@ async function showTour(page: Page) {
 }
 
 test.describe('the tour', () => {
-  test('T shows a pushed tour; n / p walk its steps, a jump opens the diff and Ctrl+o returns', async ({
+  test('T shows a pushed tour; n / p walk its sections, a jump opens the diff and Ctrl+o returns', async ({
     page,
     diffle,
   }) => {
@@ -70,21 +68,22 @@ test.describe('the tour', () => {
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
     await expect(page).toHaveScreenshot('tour.png');
-    const steps = page.getByRole('navigation', { name: 'Steps' });
-    await expect(steps).toMatchAriaSnapshot({ name: 'tour-steps.aria.yml' });
+    const contents = page.getByRole('navigation', { name: 'Contents' });
+    await expect(contents).toMatchAriaSnapshot({ name: 'tour-contents.aria.yml' });
 
-    // n takes the first step and scrolls to its card; p does not go before it.
+    // n takes the first section and scrolls its heading to the gaze point; p does not go before it.
     await page.keyboard.press('n');
     await page.keyboard.press('n');
-    await expect(view.getByText('Step 2 of 3')).toBeVisible();
-    await expect(page.locator('[data-card="parse"]')).toHaveAttribute('aria-current', 'step');
+    await expect(view.getByText('Section 2 of 3')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Parsing reads/ })).toHaveAttribute('aria-current', 'step');
     await expect(page).toHaveScreenshot('tour-step.png');
     await page.keyboard.press('p');
     await page.keyboard.press('p');
-    await expect(view.getByText('Step 1 of 3')).toBeVisible();
-    await steps.getByRole('button', { name: /Unmatched refunds/ }).click();
-    await expect(page.locator('[data-card="unmatched"]')).toHaveAttribute('aria-current', 'step');
-    await expect(page.locator('[data-card="layout"]')).toHaveScreenshot('tour-context-card.png');
+    await expect(view.getByText('Section 1 of 3')).toBeVisible();
+    await contents.getByRole('button', { name: /Unmatched refunds/ }).click();
+    await expect(view.getByText('Section 3 of 3')).toBeVisible();
+    await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
+    await expect(view.locator('.tour-diagram')).toHaveScreenshot('tour-diagram.png');
 
     // A jump leaves for the diff at its line; Ctrl+o comes back to the step it left.
     await page.getByRole('button', { name: 'stops on an empty ledger' }).click();
@@ -92,7 +91,7 @@ test.describe('the tour', () => {
     await expect.poll(() => activePath(page)).toBe('tally/cli.py');
     await page.keyboard.press('Control+o');
     await expect(view).toBeVisible();
-    await expect(view.getByText('Step 3 of 3')).toBeVisible();
+    await expect(view.getByText('Section 3 of 3')).toBeVisible();
   });
 
   test.describe('over the working tree', () => {
@@ -105,10 +104,11 @@ test.describe('the tour', () => {
     }) => {
       await pushTour(
         diffle.url,
-        `<diffle-card id="sorted" step="1" title="Refunds come out sorted">
-          <diffle-diff path="tally/refunds.py" lines="18-25"></diffle-diff>
-        </diffle-card>
-        <diffle-card id="net" step="2" title="Net per account">
+        `<h2>Refunds come out sorted</h2>
+        <diffle-diff path="tally/refunds.py" lines="18-25"></diffle-diff>
+        <h2>Net per account</h2>
+        <diffle-card id="net" title="Net is sales minus refunds">
+          <p>Each account nets its refunds against its sales.</p>
           <diffle-diff path="tally/refunds.py" lines="28-30"></diffle-diff>
         </diffle-card>`,
       );
@@ -121,14 +121,16 @@ test.describe('the tour', () => {
       await writeFile(file, lines.slice(0, 26).join('\n'));
       const stale = page.locator('[data-card="net"]');
       await expect(stale.getByText('are no longer in the review')).toBeVisible({ timeout: 15000 });
-      await expect(view.getByText('1 stale card')).toBeVisible();
-      await expect(page.locator('[data-card="sorted"]').getByText('stale')).toHaveCount(0);
+      await expect(view.getByText('1 stale diff')).toBeVisible();
+      const contents = page.getByRole('navigation', { name: 'Contents' });
+      await expect(contents.getByRole('button', { name: /Net per account/ })).toContainText('stale');
+      await expect(contents.getByRole('button', { name: /Refunds come out sorted/ })).not.toContainText('stale');
       await expect(stale).toHaveScreenshot('tour-stale-card.png');
 
-      // A push replaces the tour in place; the steps panel follows.
-      await pushTour(diffle.url, '<diffle-card id="only" step="1" title="A fresh tour"><p>Revised.</p></diffle-card>');
-      await expect(page.getByRole('navigation', { name: 'Steps' }).getByRole('button')).toHaveText(['1A fresh tour']);
-      await expect(view.getByText('1 stale card')).toBeHidden();
+      // A push replaces the tour in place; the contents follow.
+      await pushTour(diffle.url, '<h2>A fresh tour</h2><p>Revised.</p>');
+      await expect(contents.getByRole('button')).toHaveText(['1A fresh tour']);
+      await expect(view.getByText('1 stale diff')).toBeHidden();
     });
   });
 
@@ -149,15 +151,14 @@ test.describe('the tour', () => {
       await waitForLsp(diffle.url);
       await pushTour(
         diffle.url,
-        `<diffle-card id="parse" step="1" title="Parsing reads the kind">
-          <p><diffle-symbol path="tally/ledger.py" line="75" name="parse_row"></diffle-symbol> turns a row into an
-          <diffle-symbol path="tally/ledger.py" line="15" name="Entry" side="old"></diffle-symbol>.</p>
-        </diffle-card>`,
+        `<h2>Parsing reads the kind</h2>
+        <p><diffle-symbol path="tally/ledger.py" line="75" name="parse_row"></diffle-symbol> turns a row into an
+        <diffle-symbol path="tally/ledger.py" line="15" name="Entry" side="old"></diffle-symbol>.</p>`,
       );
       const view = await showTour(page);
       await expect(view.locator('code[title^="References are asked of the new side"]')).toHaveText('Entry');
       // Both chips take the colours the highlighter gives them on their lines.
-      await expect(page.locator('[data-card="parse"]')).toHaveScreenshot('tour-symbols.png');
+      await expect(view.locator('article p')).toHaveScreenshot('tour-symbols.png');
 
       // Hovering the chip with a server shows the diff's hover card.
       await view.getByRole('button', { name: 'parse_row' }).hover();

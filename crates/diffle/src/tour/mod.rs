@@ -4,6 +4,7 @@ mod dom;
 mod element;
 mod files;
 mod layout;
+mod placement;
 mod store;
 mod validate;
 

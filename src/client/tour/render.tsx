@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react';
 import { TourTagSchema } from '@/shared/protocol.js';
 import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
+import { TourCard } from './primitives/Card.js';
 import { TourDiagram } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourJump } from './primitives/Jump.js';
@@ -9,7 +10,7 @@ import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
 
 /**
- * What a card holds, as React: the plain tags `TourTag` allows (an `a` only to an http(s) URL, a
+ * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to an http(s) URL, a
  * table cell with its spans),
  * the content primitives, and text. Everything else, its attributes included, is left out, so a
  * tour, written by an agent that read untrusted code, can do no more than the catalog says.
@@ -55,6 +56,12 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       );
     case 'diffle-diagram':
       return <TourDiagram key={key} of={node} />;
+    case 'diffle-card':
+      return (
+        <TourCard key={key} id={element.id} title={element.title}>
+          <TourContent of={node} inCallout={inCallout} />
+        </TourCard>
+      );
     case 'diffle-callout':
       return inCallout ? null : (
         <Callout key={key} kind={element.kind}>

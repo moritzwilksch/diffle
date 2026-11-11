@@ -917,27 +917,15 @@ const tourIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
 
 /**
- * A box of prose and primitives on the page. It sits at the top level or in a `diffle-group`, and
- * holds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`
- * and `diffle-diagram`. Keep it short: a title, a sentence or two, and one diff.
+ * A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence
+ * or two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards.
  */
 export const TourCardSchema = z
   .object({
     tag: z.literal('diffle-card'),
     /** Unique in the tour. Letters, digits, `-` and `_`, starting with a letter. */
     id: tourIdSchema,
-    /** Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context. */
-    step: tourNumberSchema.optional(),
-    /** The heading the card and the step outline show. */
-    title: z.string().min(1),
-  })
-  .strict();
-
-/** A titled section around related cards (a layer, a package), at the top level. It holds `diffle-card`s only. */
-export const TourGroupSchema = z
-  .object({
-    tag: z.literal('diffle-group'),
-    /** What the cards in it have in common. */
+    /** What this part of the diff does, as the card's heading. */
     title: z.string().min(1),
   })
   .strict();
@@ -1123,7 +1111,6 @@ export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
 /** A `diffle-*` element of a tour with its attributes, which are strings as in HTML. */
 export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCardSchema,
-  TourGroupSchema,
   TourDiffSchema,
   TourTreeSchema,
   TourJumpSchema,
@@ -1135,7 +1122,8 @@ export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
 
 /**
- * The plain tags a tour may use inside cards, for prose, structure and tables. They take no
+ * The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the
+ * walk, and `h3` a subsection; the rest carry prose, lists and tables. They take no
  * attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take
  * `colspan` and `rowspan` as positive numbers.
  */

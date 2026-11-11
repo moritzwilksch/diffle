@@ -2911,15 +2911,10 @@
           "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
           "description": "Unique in the tour. Letters, digits, `-` and `_`, starting with a letter."
         },
-        "step": {
-          "type": "string",
-          "pattern": "^[1-9][0-9]*$",
-          "description": "Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context."
-        },
         "title": {
           "type": "string",
           "minLength": 1,
-          "description": "The heading the card and the step outline show."
+          "description": "What this part of the diff does, as the card's heading."
         }
       },
       "required": [
@@ -2928,7 +2923,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "A box of prose and primitives on the page. It sits at the top level or in a `diffle-group`, and\nholds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`\nand `diffle-diagram`. Keep it short: a title, a sentence or two, and one diff."
+      "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
     },
     "TourDiagram": {
       "type": "object",
@@ -2988,15 +2983,10 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
               "description": "Unique in the tour. Letters, digits, `-` and `_`, starting with a letter."
             },
-            "step": {
-              "type": "string",
-              "pattern": "^[1-9][0-9]*$",
-              "description": "Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context."
-            },
             "title": {
               "type": "string",
               "minLength": 1,
-              "description": "The heading the card and the step outline show."
+              "description": "What this part of the diff does, as the card's heading."
             }
           },
           "required": [
@@ -3005,27 +2995,7 @@
             "title"
           ],
           "additionalProperties": false,
-          "description": "A box of prose and primitives on the page. It sits at the top level or in a `diffle-group`, and\nholds plain tags, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`\nand `diffle-diagram`. Keep it short: a title, a sentence or two, and one diff."
-        },
-        {
-          "type": "object",
-          "properties": {
-            "tag": {
-              "type": "string",
-              "const": "diffle-group"
-            },
-            "title": {
-              "type": "string",
-              "minLength": 1,
-              "description": "What the cards in it have in common."
-            }
-          },
-          "required": [
-            "tag",
-            "title"
-          ],
-          "additionalProperties": false,
-          "description": "A titled section around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
+          "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
         },
         {
           "type": "object",
@@ -3203,26 +3173,6 @@
         "message"
       ],
       "description": "One reason a pushed tour was refused, or one warning about an accepted one."
-    },
-    "TourGroup": {
-      "type": "object",
-      "properties": {
-        "tag": {
-          "type": "string",
-          "const": "diffle-group"
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "description": "What the cards in it have in common."
-        }
-      },
-      "required": [
-        "tag",
-        "title"
-      ],
-      "additionalProperties": false,
-      "description": "A titled section around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
     },
     "TourJump": {
       "type": "object",
@@ -3700,7 +3650,7 @@
         "th",
         "td"
       ],
-      "description": "The plain tags a tour may use inside cards, for prose, structure and tables. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
+      "description": "The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the\nwalk, and `h3` a subsection; the rest carry prose, lists and tables. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
     },
     "TourTree": {
       "type": "object",

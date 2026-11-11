@@ -24,27 +24,28 @@ async fn server() -> TestServer {
 }
 
 const TOUR: &str = r#"
-<diffle-card id="entry" step="1" title="Where it starts">
-  <p>The loader is <strong>new</strong>.</p>
-  <table><thead><tr><th>Before</th><th>After</th></tr></thead>
-  <tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
-  <diffle-diagram><svg viewBox="0 0 320 72">
-    <g class="accent"><rect x="8" y="16" width="120" height="40"/><text x="20" y="36" class="bold">Loader</text></g>
-    <path d="M128 36 H192" class="arrow"/>
-    <rect x="192" y="16" width="120" height="40" class="fill"/>
-    <text x="252" y="36" class="c">User <tspan class="mono">id</tspan></text>
-  </svg></diffle-diagram>
+<h1>Loading users</h1>
+<p>One change, read in two sections.</p>
+<h2>Where it starts</h2>
+<p>The loader is <strong>new</strong>: <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes an id
+(<diffle-jump path="app.py" line="2">see it</diffle-jump>).</p>
+<diffle-card id="entry" title="The loader returns the id">
+  <p>It replaces <code>old</code>.</p>
   <diffle-diff path="app.py" lines="2-3"></diffle-diff>
-  <diffle-jump path="app.py" line="2">see it</diffle-jump>
 </diffle-card>
-<diffle-group title="Docs">
-  <diffle-card id="docs" title="Docs">
-    <diffle-tree paths="app.py
+<table><thead><tr><th>Before</th><th>After</th></tr></thead>
+<tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
+<diffle-diagram><svg viewBox="0 0 320 72">
+  <g class="accent"><rect x="8" y="16" width="120" height="40"/><text x="20" y="36" class="bold">Loader</text></g>
+  <path d="M128 36 H192" class="arrow"/>
+  <rect x="192" y="16" width="120" height="40" class="fill"/>
+  <text x="252" y="36" class="c">User <tspan class="mono">id</tspan></text>
+</svg></diffle-diagram>
+<h2>Docs</h2>
+<h3>Layout</h3>
+<diffle-tree paths="app.py
 docs/readme.md"></diffle-tree>
-    <diffle-callout kind="note"><p>Unchanged.</p></diffle-callout>
-    <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol>
-  </diffle-card>
-</diffle-group>
+<diffle-callout kind="note"><p>Unchanged.</p></diffle-callout>
 "#;
 
 async fn push(s: &TestServer, html: &str) -> common::server::Res {
@@ -99,41 +100,44 @@ async fn refuses_a_tour_with_every_reason_in_document_order() {
     let html = r#"
 <style>p { color: red }</style>
 stray text
-<diffle-card id="a" step="1" title="A" color="red">
-  <img src="x.png">
-  <p onclick="steal()">Hi <a href="javascript:alert(1)">there</a></p>
-  <diffle-diff path="missing.py" lines="1-2"></diffle-diff>
-  <diffle-diff path="added.py" side="old" lines="1"></diffle-diff>
-  <table><tr><td rowspan="0" align="left">x</td></tr></table>
-  <diffle-diagram><svg viewBox="0 0 100 50">
-    <defs><marker id="m"></marker></defs>
-    <rect x="1" y="1" width="10" height="10" fill="red" class="box"/>
-    <tspan>loose</tspan>
-    <path d="M0 0 L10 10" class="arrow" marker-end="url(#m)"/>
-    <text x="1" y="1"><rect x="1" y="1" width="2" height="2"/></text>
-    <circle cx="5" cy="5"/>
-  </svg></diffle-diagram>
-  <p>A stray <svg viewBox="0 0 1 1"></svg> drawing.</p>
-  <diffle-diff path="app.py" lines="2-9"></diffle-diff>
-  <diffle-diff path="app.py" side="old" lines="3"></diffle-diff>
-  <diffle-diff path="app.py" lines="5-2"></diffle-diff>
-  <diffle-symbol path="app.py" line="2" name="load"></diffle-symbol>
-  <diffle-card id="nested" title="Nested"></diffle-card>
-  <diffle-callout kind="aside"></diffle-callout>
+<h2>A</h2>
+<h1>Late title</h1>
+<diffle-jump path="app.py">at the top</diffle-jump>
+<img src="x.png">
+<p onclick="steal()">Hi <a href="javascript:alert(1)">there</a> <diffle-diff path="app.py" lines="2"></diffle-diff></p>
+<diffle-diff path="missing.py" lines="1-2"></diffle-diff>
+<diffle-diff path="added.py" side="old" lines="1"></diffle-diff>
+<table><tr><td rowspan="0" align="left">x</td></tr></table>
+<diffle-diagram><svg viewBox="0 0 100 50">
+  <defs><marker id="m"></marker></defs>
+  <rect x="1" y="1" width="10" height="10" fill="red" class="box"/>
+  <tspan>loose</tspan>
+  <path d="M0 0 L10 10" class="arrow" marker-end="url(#m)"/>
+  <text x="1" y="1"><rect x="1" y="1" width="2" height="2"/></text>
+  <circle cx="5" cy="5"/>
+</svg></diffle-diagram>
+<p>A stray <svg viewBox="0 0 1 1"></svg> drawing.</p>
+<diffle-diff path="app.py" lines="2-9"></diffle-diff>
+<diffle-diff path="app.py" side="old" lines="3"></diffle-diff>
+<diffle-diff path="app.py" lines="5-2"></diffle-diff>
+<p><diffle-symbol path="app.py" line="2" name="load"></diffle-symbol></p>
+<diffle-card id="a" title="A" step="1" color="red">
+  <diffle-card id="nested" title="Nested"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
+  <diffle-callout kind="aside"><diffle-callout kind="note"></diffle-callout><h2>Inside</h2></diffle-callout>
 </diffle-card>
-<diffle-card id="a" step="1" title="Again"></diffle-card>
-<diffle-card id="b" step="x" title="B"><diffle-tree root="src" paths="src/a.py
-docs/readme.md"></diffle-tree></diffle-card>
-<diffle-card id="d" title="D"><diffle-tree paths="app.py"/><p>after</p></diffle-card>
-<diffle-card id="c" title="C"></diffle-card>
-<diffle-shape></diffle-shape>
+<diffle-card id="a" title="Again"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
+<diffle-tree root="src" paths="src/a.py
+docs/readme.md"></diffle-tree>
+<diffle-group title="G"></diffle-group>
+<h1>Second title</h1>
+<diffle-tree paths="app.py"/><p>after</p>
 "#;
     let refused = push(&s, html).await;
     assert_eq!(refused.status, 422, "{}", refused.body);
     insta::assert_json_snapshot!("refused", refused.json());
     assert_eq!(tour(&s).await, Value::Null);
-    let empty = push(&s, "<p>no cards</p>").await;
-    assert_eq!(empty.json()["errors"].as_array().unwrap().len(), 2, "{}", empty.body);
+    let empty = push(&s, "<p>no sections</p>").await;
+    assert_eq!(empty.json()["errors"].as_array().unwrap().len(), 1, "{}", empty.body);
     s.close().await;
 }
 
@@ -158,7 +162,7 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 
 /// The demo tour's first diagram, as an agent drew it before `--skill` said how text sits: labels on
 /// a baseline below their boxes' middles, mono labels wider than their boxes, off the grid.
-const CROWDED: &str = r#"<diffle-card id="flow" title="Flow"><diffle-diagram><svg viewBox="0 0 1000 96">
+const CROWDED: &str = r#"<h2>Flow</h2><diffle-diagram><svg viewBox="0 0 1000 96">
   <rect x="4" y="24" width="100" height="40" class="fill"></rect>
   <text x="54" y="48" class="c small">agent</text>
   <rect x="248" y="24" width="104" height="40" class="fill accent"></rect>
@@ -167,7 +171,7 @@ const CROWDED: &str = r#"<diffle-card id="flow" title="Flow"><diffle-diagram><sv
   <circle cx="600" cy="44" r="16" class="success"></circle>
   <rect x="960" y="24" width="64" height="40"></rect>
   <text x="990" y="88" class="small">ws: tour</text>
-</svg></diffle-diagram></diffle-card>"#;
+</svg></diffle-diagram>"#;
 
 #[tokio::test]
 async fn shows_a_tour_whose_diagram_breaks_layout_rules_and_warns_of_each() {
@@ -197,11 +201,7 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     let config = tempfile::tempdir().unwrap();
     let (mut child, url, _) = serve(config.path(), &t.path, &["--port", "0"]);
     let file = t.path.join("tour.html");
-    std::fs::write(
-        &file,
-        r#"<diffle-card id="a" title="A"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>"#,
-    )
-    .unwrap();
+    std::fs::write(&file, r#"<h2>A</h2><diffle-diff path="app.py" lines="2"></diffle-diff>"#).unwrap();
 
     let pushed = tour_cli(&t.path, &["push", file.to_str().unwrap()], "");
     assert!(pushed.status.success(), "{}", stderr(&pushed));
@@ -213,12 +213,12 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     assert!(warned.status.success(), "{}", stderr(&warned));
     assert!(
         stderr(&warned)
-            .starts_with("⚠ the tour was shown, with warnings to judge:\n  diffle-card#flow > diffle-diagram > <svg"),
+            .starts_with("⚠ the tour was shown, with warnings to judge:\n  h2 \"Flow\" > diffle-diagram > <svg"),
         "{}",
         stderr(&warned)
     );
 
-    let refused = tour_cli(&t.path, &["push", "-"], r#"<diffle-card id="a" title="A"><diffle-edge></diffle-card>"#);
+    let refused = tour_cli(&t.path, &["push", "-"], r#"<h2>A</h2><p><diffle-edge></diffle-edge></p>"#);
     assert_eq!(refused.status.code(), Some(2), "{}", stderr(&refused));
     assert_eq!(stdout(&refused), "");
     insta::assert_snapshot!("cli_refused", stderr(&refused));

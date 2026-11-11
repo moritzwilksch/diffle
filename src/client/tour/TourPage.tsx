@@ -1,61 +1,51 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { pageOrder, type TourDocument } from './document.js';
-import { Card, CARD_W } from './primitives/Card.js';
+import { useEffect, useRef } from 'react';
+import type { TourDocument } from './document.js';
+import { TourContent } from './render.js';
 import { useTour } from './state.js';
 
 /** What the keys do to the mounted page. */
 export const tourPage = { scroll: (_by: number) => {} };
 
-/** Room left above a card taller than the page when a step lands on it. */
-const TOP_MARGIN = 16;
+/** Where a heading lands when its section is taken, as a share of the page's height: the diff's gaze point. */
+const EYE_FRACTION = 0.5;
+/** The widest the article gets; prose inside it keeps its own measure. */
+export const PAGE_WIDTH = 1400;
 
 /**
- * The tour as one scrolling column: its cards in reading order, a group's cards in a titled
- * section. Taking a step scrolls its card to the gaze point, or to the top when it is taller.
+ * The tour as an article that scrolls. Taking a section scrolls its heading to the gaze point;
+ * scrolling the page makes the section at the gaze point the current one.
  */
 export function TourPage({ doc }: { doc: TourDocument }) {
   const ref = useRef<HTMLDivElement>(null);
-  const steps = useTour((s) => (s.load.state === 'ready' ? s.load.doc.steps : []));
-  const step = useTour((s) => s.step);
   const focus = useTour((s) => s.focus);
-  const stale = useTour((s) => s.stale);
-  const sections = useMemo(() => pageOrder(doc), [doc]);
-  const current = steps[step]?.id;
+  const headings = (level: 'h2' | 'h3') => [...(ref.current?.querySelectorAll(`article > ${level}`) ?? [])];
 
   useEffect(() => {
     const page = ref.current;
-    const card = focus && page?.querySelector(`[data-card="${CSS.escape(focus.id)}"]`);
-    if (!page || !card) return;
+    const heading = focus && headings(focus.sub == null ? 'h2' : 'h3')[focus.sub ?? focus.section];
+    if (!page || !heading) return;
     const view = page.getBoundingClientRect();
-    const box = card.getBoundingClientRect();
-    const above = box.height <= view.height ? (view.height - box.height) / 2 : TOP_MARGIN;
-    page.scrollTo({ top: page.scrollTop + box.top - view.top - above, behavior: 'smooth' });
+    const top = page.scrollTop + heading.getBoundingClientRect().top - view.top - view.height * EYE_FRACTION;
+    page.scrollTo({ top, behavior: 'smooth' });
   }, [focus]);
   useEffect(() => {
     tourPage.scroll = (by) => ref.current?.scrollBy({ top: by * (ref.current.clientHeight || 0) });
   });
 
-  const card = (c: TourDocument['cards'][number]) => (
-    <Card key={c.id} card={c} current={c.id === current} stale={stale.has(c.id)} />
-  );
+  const follow = () => {
+    const page = ref.current;
+    if (!page) return;
+    const eye = page.getBoundingClientRect().top + page.clientHeight * EYE_FRACTION;
+    const read = headings('h2').filter((h) => h.getBoundingClientRect().top <= eye + 1).length - 1;
+    if (read !== useTour.getState().step) useTour.setState({ step: read });
+  };
+
   return (
-    <div ref={ref} className="h-full overflow-auto">
-      <div className="mx-auto flex flex-col gap-4 px-4 py-6" style={{ maxWidth: CARD_W }}>
-        {sections.map((s, i) =>
-          s.title == null ? (
-            card(s.cards[0]!)
-          ) : (
-            <section
-              key={`group:${i}`}
-              aria-label={s.title}
-              className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3"
-            >
-              <h2 className="m-0 text-[0.8125rem] font-semibold text-muted">{s.title}</h2>
-              {s.cards.map(card)}
-            </section>
-          ),
-        )}
-      </div>
+    <div ref={ref} className="h-full overflow-auto" onScroll={follow}>
+      {/* Room below the last section, so its heading can reach the gaze point too. */}
+      <article className="tour-article markdown mx-auto px-6 pt-8 pb-[50vh]" style={{ maxWidth: PAGE_WIDTH + 48 }}>
+        <TourContent of={doc.body} />
+      </article>
     </div>
   );
 }

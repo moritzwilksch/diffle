@@ -10,123 +10,139 @@ expression: refused.json()
     },
     {
       "element": "text \"stray text\"",
-      "message": "text belongs inside a diffle-card"
+      "message": "text belongs in a <p>, a list or another block"
     },
     {
-      "element": "diffle-card id=\"a\" step=\"1\" title=\"A\" color=\"red\"",
-      "message": "unknown field `color`, expected one of `id`, `step`, `title`"
+      "element": "h2 \"A\" > <h1>",
+      "message": "<h1> comes before the first <h2>: it titles the tour"
     },
     {
-      "element": "diffle-card#a > <img src=\"x.png\">",
+      "element": "h2 \"A\" > diffle-jump path=\"app.py\"",
+      "message": "diffle-jump belongs inside a paragraph, a list item or other text"
+    },
+    {
+      "element": "h2 \"A\" > <img src=\"x.png\">",
       "message": "<img> is not allowed in a tour"
     },
     {
-      "element": "diffle-card#a > <p onclick=\"steal()\">",
+      "element": "h2 \"A\" > <p onclick=\"steal()\">",
       "message": "<p> takes no attribute onclick"
     },
     {
-      "element": "diffle-card#a > <a href=\"javascript:alert(1)\">",
+      "element": "h2 \"A\" > <a href=\"javascript:alert(1)\">",
       "message": "href must be an http(s) URL"
     },
     {
-      "element": "diffle-card#a > diffle-diff path=\"missing.py\" lines=\"1-2\"",
+      "element": "h2 \"A\" > diffle-diff path=\"app.py\" lines=\"2\"",
+      "message": "diffle-diff belongs between paragraphs: it is a block, not part of a line of text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diff path=\"missing.py\" lines=\"1-2\"",
       "message": "missing.py is not a file of the review"
     },
     {
-      "element": "diffle-card#a > diffle-diff path=\"added.py\" side=\"old\" lines=\"1\"",
+      "element": "h2 \"A\" > diffle-diff path=\"added.py\" side=\"old\" lines=\"1\"",
       "message": "added.py is not on the old side of the review"
     },
     {
-      "element": "diffle-card#a > <td rowspan=\"0\" align=\"left\">",
+      "element": "h2 \"A\" > <td rowspan=\"0\" align=\"left\">",
       "message": "rowspan must be a positive number"
     },
     {
-      "element": "diffle-card#a > <td rowspan=\"0\" align=\"left\">",
+      "element": "h2 \"A\" > <td rowspan=\"0\" align=\"left\">",
       "message": "<td> takes no attribute align"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <defs>",
+      "element": "h2 \"A\" > diffle-diagram > <defs>",
       "message": "diffle draws the arrowheads: give the line the class arrow or arrows"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"10\" height=\"10\" fill=\"red\" class=\"box\">",
+      "element": "h2 \"A\" > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"10\" height=\"10\" fill=\"red\" class=\"box\">",
       "message": "fill: diffle styles diagrams; use its classes instead"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"10\" height=\"10\" fill=\"red\" class=\"box\">",
+      "element": "h2 \"A\" > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"10\" height=\"10\" fill=\"red\" class=\"box\">",
       "message": "class box is not a diagram class"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <tspan>",
+      "element": "h2 \"A\" > diffle-diagram > <tspan>",
       "message": "<tspan> belongs in a <text>"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <path d=\"M0 0 L10 10\" class=\"arrow\" marker-end=\"url(#m)\">",
+      "element": "h2 \"A\" > diffle-diagram > <path d=\"M0 0 L10 10\" class=\"arrow\" marker-end=\"url(#m)\">",
       "message": "marker-end: diffle styles diagrams; use its classes instead"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"2\" height=\"2\">",
+      "element": "h2 \"A\" > diffle-diagram > <rect x=\"1\" y=\"1\" width=\"2\" height=\"2\">",
       "message": "<text> holds text and <tspan>s only"
     },
     {
-      "element": "diffle-card#a > diffle-diagram > <circle cx=\"5\" cy=\"5\">",
+      "element": "h2 \"A\" > diffle-diagram > <circle cx=\"5\" cy=\"5\">",
       "message": "missing field `r`"
     },
     {
-      "element": "diffle-card#a > <svg viewBox=\"0 0 1 1\">",
+      "element": "h2 \"A\" > <svg viewBox=\"0 0 1 1\">",
       "message": "<svg> belongs in a diffle-diagram"
     },
     {
-      "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"2-9\"",
+      "element": "h2 \"A\" > diffle-diff path=\"app.py\" lines=\"2-9\"",
       "message": "lines 2-9 are past the end of app.py, which has 3 lines on the new side"
     },
     {
-      "element": "diffle-card#a > diffle-diff path=\"app.py\" side=\"old\" lines=\"3\"",
+      "element": "h2 \"A\" > diffle-diff path=\"app.py\" side=\"old\" lines=\"3\"",
       "message": "line 3 is past the end of app.py, which has 2 lines on the old side"
     },
     {
-      "element": "diffle-card#a > diffle-diff path=\"app.py\" lines=\"5-2\"",
+      "element": "h2 \"A\" > diffle-diff path=\"app.py\" lines=\"5-2\"",
       "message": "lines 5-2 run backwards"
     },
     {
-      "element": "diffle-card#a > diffle-symbol path=\"app.py\" line=\"2\" name=\"load\"",
+      "element": "h2 \"A\" > diffle-symbol path=\"app.py\" line=\"2\" name=\"load\"",
       "message": "load is not on line 2 of app.py on the new side"
     },
     {
-      "element": "diffle-card#a > diffle-card id=\"nested\" title=\"Nested\"",
-      "message": "diffle-card belongs at the top level or in a diffle-group"
+      "element": "h2 \"A\" > diffle-card id=\"a\" title=\"A\" step=\"1\" color=\"red\"",
+      "message": "unknown field `color`, expected `id` or `title`"
     },
     {
-      "element": "diffle-card#a > diffle-callout kind=\"aside\"",
+      "element": "h2 \"A\" > diffle-card#a > diffle-card id=\"nested\" title=\"Nested\"",
+      "message": "diffle-card belongs between paragraphs, outside other cards and callouts"
+    },
+    {
+      "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"aside\"",
       "message": "unknown variant `aside`, expected `note` or `warning`"
     },
     {
-      "element": "diffle-card id=\"a\" step=\"1\" title=\"Again\"",
+      "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"note\"",
+      "message": "diffle-callout belongs between paragraphs, outside other callouts"
+    },
+    {
+      "element": "h2 \"A\" > diffle-card#a > <h2>",
+      "message": "a heading sits at the top level, where it starts a section"
+    },
+    {
+      "element": "h2 \"A\" > diffle-card id=\"a\" title=\"Again\"",
       "message": "id a is taken by an earlier card"
     },
     {
-      "element": "diffle-card id=\"a\" step=\"1\" title=\"Again\"",
-      "message": "step 1 is taken by diffle-card#a"
-    },
-    {
-      "element": "diffle-card id=\"b\" step=\"x\" title=\"B\"",
-      "message": "step: doesn't match pattern \"^[1-9][0-9]*$\""
-    },
-    {
-      "element": "diffle-card#b > diffle-tree root=\"src\" paths=\"src/a.py…\"",
+      "element": "h2 \"A\" > diffle-tree root=\"src\" paths=\"src/a.py…\"",
       "message": "docs/readme.md is not under the root src"
     },
     {
-      "element": "diffle-card#b > diffle-tree root=\"src\" paths=\"src/a.py…\"",
+      "element": "h2 \"A\" > diffle-tree root=\"src\" paths=\"src/a.py…\"",
       "message": "src/a.py is not a file of the review"
     },
     {
-      "element": "diffle-card#d > diffle-tree paths=\"app.py\"",
-      "message": "diffle-tree holds nothing; close it with </diffle-tree> right after it (HTML ignores />)"
+      "element": "h2 \"A\" > diffle-group title=\"G\"",
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`"
     },
     {
-      "element": "diffle-shape",
-      "message": "unknown variant `diffle-shape`, expected one of `diffle-card`, `diffle-group`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`"
+      "element": "h2 \"A\" > <h1>",
+      "message": "a tour has one <h1>, its title"
+    },
+    {
+      "element": "h2 \"A\" > diffle-tree paths=\"app.py\"",
+      "message": "diffle-tree holds nothing; close it with </diffle-tree> right after it (HTML ignores />)"
     }
   ]
 }

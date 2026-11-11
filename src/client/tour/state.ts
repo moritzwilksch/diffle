@@ -13,14 +13,16 @@ export type TourLoad =
 
 interface TourState {
   load: TourLoad;
-  /** The step shown, an index into `doc.steps`; -1 before the first. */
+  /** The section read, an index into `doc.sections`; -1 before the first. */
   step: number;
-  /** A card to scroll to, and a count that repeats the scroll for the same card. */
-  focus: { id: string; seq: number } | null;
-  /** Cards whose lines left the review, in the current snapshot. */
-  stale: ReadonlySet<string>;
-  /** Shows step `index` and scrolls to its card. */
-  goTo(index: number): void;
+  /** A heading to scroll to (an `h3` by its index when `sub` is set), and a count that repeats the scroll. */
+  focus: { section: number; sub: number | null; seq: number } | null;
+  /** Sections holding a `diffle-diff` whose lines left the review, in the current snapshot. */
+  stale: ReadonlySet<number>;
+  /** How many `diffle-diff`s went stale. */
+  staleDiffs: number;
+  /** Shows section `index`, or its subsection `sub`, and scrolls its heading to the gaze point. */
+  goTo(index: number, sub?: number): void;
   move(by: 1 | -1): void;
 }
 
@@ -29,16 +31,16 @@ export const useTour = create<TourState>((set, get) => ({
   step: -1,
   focus: null,
   stale: new Set(),
-  goTo(index) {
+  staleDiffs: 0,
+  goTo(index, sub) {
     const { load, focus } = get();
-    const card = load.state === 'ready' ? load.doc.steps[index] : undefined;
-    if (!card) return;
-    set({ step: index, focus: { id: card.id, seq: (focus?.seq ?? 0) + 1 } });
+    if (load.state !== 'ready' || !load.doc.sections[index]) return;
+    set({ step: index, focus: { section: index, sub: sub ?? null, seq: (focus?.seq ?? 0) + 1 } });
   },
   move(by) {
     const { load, step } = get();
-    if (load.state !== 'ready' || !load.doc.steps.length) return;
-    get().goTo(Math.max(0, Math.min(load.doc.steps.length - 1, step + by)));
+    if (load.state !== 'ready' || !load.doc.sections.length) return;
+    get().goTo(Math.max(0, Math.min(load.doc.sections.length - 1, step + by)));
   },
 }));
 
@@ -84,8 +86,8 @@ let checks = 0;
 let following = false;
 
 /**
- * Fetches the review's tour and which of its cards went stale. A shown step stays when the tour is
- * pushed again. The first call starts following the review: a new snapshot rechecks the cards,
+ * Fetches the review's tour and which of its diffs went stale. A shown section stays when the tour
+ * is pushed again. The first call starts following the review: a new snapshot rechecks the diffs,
  * and another comment key, another review's tour.
  */
 export async function refreshTour(): Promise<void> {
@@ -98,8 +100,8 @@ export async function refreshTour(): Promise<void> {
     const doc = readTour(tour.html);
     set({ state: 'ready', tour, doc });
     const c = ++checks;
-    const stale = await staleCards(doc);
-    if (g === generation && c === checks) useTour.setState({ stale });
+    const stale = await staleSections(doc);
+    if (g === generation && c === checks) useTour.setState(stale);
   } catch (e) {
     if (g === generation) set({ state: 'error', message: e instanceof Error ? e.message : String(e) });
   }
@@ -107,22 +109,25 @@ export async function refreshTour(): Promise<void> {
 
 function set(load: TourLoad): void {
   const { step } = useTour.getState();
-  const steps = load.state === 'ready' ? load.doc.steps.length : 0;
+  const steps = load.state === 'ready' ? load.doc.sections.length : 0;
   useTour.setState({ load, step: Math.min(step, steps - 1) });
   // A tour cleared while shown leaves its view for the diff.
   if (load.state !== 'ready' && useViews.getState().active === 'tour') showView('diff');
 }
 
-async function staleCards(doc: TourDocument): Promise<Set<string>> {
-  const stale = new Set<string>();
+async function staleSections(doc: TourDocument): Promise<{ stale: Set<number>; staleDiffs: number }> {
+  const stale = new Set<number>();
+  let staleDiffs = 0;
   await Promise.all(
-    doc.cards.flatMap((card) =>
-      card.ranges.map(async (range) => {
-        if ((await rangePatch(range)) == null) stale.add(card.id);
+    doc.sections.flatMap((section) =>
+      section.ranges.map(async (range) => {
+        if ((await rangePatch(range)) != null) return;
+        stale.add(section.index);
+        staleDiffs++;
       }),
     ),
   );
-  return stale;
+  return { stale, staleDiffs };
 }
 
 function follow(): void {
@@ -135,12 +140,12 @@ function follow(): void {
       const load = useTour.getState().load;
       if (load.state !== 'ready') return;
       const c = ++checks;
-      void staleCards(load.doc).then((stale) => c === checks && useTour.setState({ stale }));
+      void staleSections(load.doc).then((stale) => c === checks && useTour.setState(stale));
     }
   });
 }
 
-/** The step shown, for the jump list: Ctrl+o after a jump into the diff comes back to it. */
+/** The section read, for the jump list: Ctrl+o after a jump into the diff comes back to it. */
 export function tourPlace(): ViewPlace {
   const { step } = useTour.getState();
   return {
