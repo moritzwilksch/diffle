@@ -27,8 +27,6 @@ tally/currency.py"></diffle-tree>
     <p>The CLI now <diffle-jump path="tally/cli.py" line="26">stops on an empty ledger</diffle-jump>.</p>
   </diffle-card>
 </diffle-group>
-<diffle-edge from="kind" to="parse" label="read by"></diffle-edge>
-<diffle-edge from="parse" to="unmatched" label="feeds"></diffle-edge>
 `;
 
 /** The tour view once every card's lines rendered, fitted to the canvas. */
@@ -97,8 +95,7 @@ test.describe('the tour', () => {
         </diffle-card>
         <diffle-card id="net" step="2" title="Net per account">
           <diffle-diff path="tally/refunds.py" lines="28-30"></diffle-diff>
-        </diffle-card>
-        <diffle-edge from="sorted" to="net"></diffle-edge>`,
+        </diffle-card>`,
       );
       const view = await showTour(page);
       await expect(view.getByText('stale')).toHaveCount(0);

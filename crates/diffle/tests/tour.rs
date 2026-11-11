@@ -37,7 +37,6 @@ docs/readme.md"></diffle-tree>
     <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol>
   </diffle-card>
 </diffle-group>
-<diffle-edge from="entry" to="docs" label="documents"></diffle-edge>
 "#;
 
 async fn push(s: &TestServer, html: &str) -> common::server::Res {
@@ -105,7 +104,7 @@ stray text
 <diffle-card id="a" step="1" title="Again"></diffle-card>
 <diffle-card id="b" step="x" title="B"><diffle-tree root="src" paths="src/a.py
 docs/readme.md"></diffle-tree></diffle-card>
-<diffle-edge from="a" to="ghost"/>
+<diffle-card id="d" title="D"><diffle-tree paths="app.py"/><p>after</p></diffle-card>
 <diffle-card id="c" title="C"></diffle-card>
 <diffle-shape></diffle-shape>
 "#;

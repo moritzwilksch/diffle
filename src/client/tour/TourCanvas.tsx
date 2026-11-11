@@ -1,11 +1,10 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { arrowHead } from '@/client/canvas/arrows.js';
 import { CanvasSurface } from '@/client/canvas/CanvasSurface.js';
 import { CanvasToolbar } from '@/client/canvas/CanvasToolbar.js';
 import { CLUSTER_HEADER, layout, type Placed, type Size } from '@/client/canvas/layout/layout.js';
-import { rank, type Ranked } from '@/client/canvas/layout/rank.js';
+import { rank } from '@/client/canvas/layout/rank.js';
 import { attrOf, bounds, type CanvasControl, useViewport, zoomCentre } from '@/client/canvas/viewport.js';
-import type { TourArrow, TourCard, TourDocument } from './document.js';
+import type { TourCard, TourDocument } from './document.js';
 import { Card, CARD_W } from './primitives/Card.js';
 import { useTour } from './state.js';
 
@@ -19,7 +18,7 @@ const FIT_ZOOM = 1;
 const STEP_ZOOM = 1;
 
 /**
- * The tour's cards on the canvas, laid out in layers by their arrows, a group's cards side by side
+ * The tour's cards on the canvas in document order, a group's cards side by side
  * in one frame. Each card is measured once it renders, and the layout follows its size.
  */
 export function TourCanvas({ doc }: { doc: TourDocument }) {
@@ -89,7 +88,7 @@ export function TourCanvas({ doc }: { doc: TourDocument }) {
         label="Tour"
         onClick={onClick}
         onDoubleClick={fit}
-        svg={<Frames placed={placed} doc={doc} current={current} />}
+        svg={<Frames placed={placed} doc={doc} />}
         html={placed.nodes.map((p) => (
           <Card
             key={p.node.id}
@@ -106,16 +105,8 @@ export function TourCanvas({ doc }: { doc: TourDocument }) {
   );
 }
 
-/** The groups' frames with their titles, and the arrows with their labels; the current step's arrows lit. */
-function Frames({
-  placed,
-  doc,
-  current,
-}: {
-  placed: Placed<TourCard, TourArrow>;
-  doc: TourDocument;
-  current?: string;
-}) {
+/** The groups' frames with their titles. */
+function Frames({ placed, doc }: { placed: Placed<TourCard, Tie>; doc: TourDocument }) {
   return (
     <>
       {placed.clusters.map((c) => (
@@ -135,66 +126,26 @@ function Frames({
           </text>
         </g>
       ))}
-      {placed.edges.map((e) => {
-        const lit = e.edge.from === current || e.edge.to === current;
-        const mid = e.along(0.5);
-        return (
-          <g key={`${e.edge.from}>${e.edge.to}`}>
-            <path
-              d={e.d}
-              fill="none"
-              stroke={lit ? 'var(--accent)' : 'var(--fg-2)'}
-              strokeWidth={lit ? 2 : 1.5}
-              strokeDasharray={e.back ? '5 4' : undefined}
-              markerEnd={arrowHead(lit ? 2 : 1, lit)}
-            />
-            {e.edge.label && (
-              <text
-                x={mid.x}
-                y={mid.y + 4}
-                textAnchor="middle"
-                fontSize={12}
-                fill={lit ? 'var(--accent)' : 'var(--fg-2)'}
-                stroke="var(--bg)"
-                strokeWidth={4}
-                paintOrder="stroke"
-              >
-                {e.edge.label}
-              </text>
-            )}
-          </g>
-        );
-      })}
     </>
   );
 }
 
-/**
- * The cards placed in layers by their arrows, in document order where that leaves a choice. A group
- * ranks as one unit, so its cards share a layer and one frame; an arrow inside a group bows below it.
- */
-function place(doc: TourDocument, sizes: ReadonlyMap<string, Size>): Placed<TourCard, TourArrow> {
-  const unit = (c: TourCard) => (c.group == null ? `card:${c.id}` : `group:${c.group}`);
-  const unitOf = new Map(doc.cards.map((c) => [c.id, unit(c)]));
-  const units = [...new Set(unitOf.values())].map((id) => ({ id }));
-  const between = doc.arrows
-    .map((a) => ({ from: unitOf.get(a.from)!, to: unitOf.get(a.to)! }))
-    .filter((a) => a.from !== a.to);
-  const ranked = rank({ nodes: units, edges: between });
-  const byCard: Ranked = {
-    ...ranked,
-    layer: new Map(doc.cards.map((c) => [c.id, ranked.layer.get(unit(c))!])),
-  };
-  // A group's cards are tied to each other, so one without arrows of its own stays in its group's
-  // frame instead of on the shelf of unlinked cards; ties are never drawn.
+/** Ties a group's cards to each other; never drawn. */
+interface Tie {
+  from: string;
+  to: string;
+}
+
+/** The cards in document order, a group's cards tied so they share one frame. */
+function place(doc: TourDocument, sizes: ReadonlyMap<string, Size>): Placed<TourCard, Tie> {
   const ties = doc.groups.flatMap((_, g) => {
     const members = doc.cards.filter((c) => c.group === g);
-    return members.slice(1).map((c, i) => ({ from: members[i]!.id, to: c.id, label: null }));
+    return members.slice(1).map((c, i) => ({ from: members[i]!.id, to: c.id }));
   });
-  const placed = layout({ nodes: doc.cards, edges: [...doc.arrows, ...ties] }, byCard, {
+  const graph = { nodes: doc.cards, edges: ties };
+  const placed = layout(graph, rank(graph), {
     size: (c) => sizes.get(c.id) ?? UNMEASURED,
     cluster: (c) => (c.group == null ? null : String(c.group)),
   });
-  const tied = new Set<TourArrow>(ties);
-  return { ...placed, edges: placed.edges.filter((e) => !tied.has(e.edge)) };
+  return { ...placed, edges: [] };
 }

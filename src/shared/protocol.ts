@@ -911,7 +911,7 @@ export const GraphResponseSchema = z.object({
 });
 export type GraphResponse = z.infer<typeof GraphResponseSchema>;
 
-/** A card's `id`: what edges name. Letters, digits, `-` and `_`, starting with a letter. */
+/** A card's `id`. Letters, digits, `-` and `_`, starting with a letter. */
 const tourIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 /** A positive integer, as an HTML attribute spells it. */
 const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
@@ -924,7 +924,7 @@ const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
 export const TourCardSchema = z
   .object({
     tag: z.literal('diffle-card'),
-    /** Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter. */
+    /** Unique in the tour. Letters, digits, `-` and `_`, starting with a letter. */
     id: tourIdSchema,
     /** Its place in the walk (`1`, `2`, ...), unique; the reviewer steps through cards in this order. Without one, the card is context. */
     step: tourNumberSchema.optional(),
@@ -939,19 +939,6 @@ export const TourGroupSchema = z
     tag: z.literal('diffle-group'),
     /** What the cards in it have in common. */
     title: z.string().min(1),
-  })
-  .strict();
-
-/** An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`. */
-export const TourEdgeSchema = z
-  .object({
-    tag: z.literal('diffle-edge'),
-    /** The card the arrow leaves. */
-    from: tourIdSchema,
-    /** The card the arrow points at. */
-    to: tourIdSchema,
-    /** A few words on the arrow: what flows along it. */
-    label: z.string().min(1).optional(),
   })
   .strict();
 
@@ -1020,7 +1007,6 @@ export const TourCalloutSchema = z
 export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCardSchema,
   TourGroupSchema,
-  TourEdgeSchema,
   TourDiffSchema,
   TourTreeSchema,
   TourJumpSchema,

@@ -21,16 +21,9 @@ export interface TourCard {
   ranges: LineRange[];
 }
 
-export interface TourArrow {
-  from: string;
-  to: string;
-  label: string | null;
-}
-
 export interface TourDocument {
   /** In document order. */
   cards: TourCard[];
-  arrows: TourArrow[];
   /** Each group's title, by position. */
   groups: string[];
   /** The cards with a step, in walk order. */
@@ -44,7 +37,6 @@ export interface TourDocument {
 export function readTour(html: string): TourDocument {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
   const cards: TourCard[] = [];
-  const arrows: TourArrow[] = [];
   const groups: string[] = [];
   const addCard = (el: Element, group: number | null) => {
     const card = primitive(el);
@@ -55,16 +47,13 @@ export function readTour(html: string): TourDocument {
   for (const el of body.children) {
     const element = primitive(el);
     if (element?.tag === 'diffle-card') addCard(el, null);
-    else if (element?.tag === 'diffle-edge')
-      arrows.push({ from: element.from, to: element.to, label: element.label ?? null });
     else if (element?.tag === 'diffle-group') {
       groups.push(element.title);
       for (const child of el.children) addCard(child, groups.length - 1);
     }
   }
-  const ids = new Set(cards.map((c) => c.id));
   const steps = cards.filter((c) => c.step != null).sort((a, b) => a.step! - b.step!);
-  return { cards, arrows: arrows.filter((a) => ids.has(a.from) && ids.has(a.to)), groups, steps };
+  return { cards, groups, steps };
 }
 
 /** `el` as a `diffle-*` element of the catalog, or null when it is none or its attributes do not fit. */

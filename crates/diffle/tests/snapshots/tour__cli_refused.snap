@@ -3,5 +3,4 @@ source: crates/diffle/tests/tour.rs
 expression: stderr(&refused)
 ---
 ✖ the tour was refused:
-  diffle-card#a > diffle-edge: missing field `from`
-  diffle-card#a > diffle-edge: diffle-edge belongs at the top level
+  diffle-card#a > diffle-edge: unknown variant `diffle-edge`, expected one of `diffle-card`, `diffle-group`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`

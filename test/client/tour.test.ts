@@ -45,16 +45,14 @@ describe('excerpt', () => {
 });
 
 describe('readTour', () => {
-  it('reads cards, groups, arrows and the walk, leaving out what the catalog does not allow', () => {
+  it('reads cards, groups and the walk, leaving out what the catalog does not allow', () => {
     const tour = readTour(`
       <diffle-card id="b" step="2" title="Second"><diffle-diff path="a.py" lines="3-4"></diffle-diff></diffle-card>
       <diffle-group title="Core">
         <diffle-card id="a" step="1" title="First"></diffle-card>
         <diffle-card id="c" title="Context"></diffle-card>
       </diffle-group>
-      <diffle-card id="bad" step="x" title="Dropped"></diffle-card>
-      <diffle-edge from="a" to="b" label="calls"></diffle-edge>
-      <diffle-edge from="a" to="ghost"></diffle-edge>`);
+      <diffle-card id="bad" step="x" title="Dropped"></diffle-card>`);
     expect(tour.cards.map((c) => [c.id, c.step, c.group])).toEqual([
       ['b', 2, null],
       ['a', 1, 0],
@@ -62,7 +60,6 @@ describe('readTour', () => {
     ]);
     expect(tour.groups).toEqual(['Core']);
     expect(tour.steps.map((c) => c.id)).toEqual(['a', 'b']);
-    expect(tour.arrows).toEqual([{ from: 'a', to: 'b', label: 'calls' }]);
     expect(tour.cards[0]!.ranges).toEqual([{ path: 'a.py', side: 'new', start: 3, end: 4 }]);
   });
 });

@@ -2909,7 +2909,7 @@
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-          "description": "Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter."
+          "description": "Unique in the tour. Letters, digits, `-` and `_`, starting with a letter."
         },
         "step": {
           "type": "string",
@@ -2960,37 +2960,6 @@
       "additionalProperties": false,
       "description": "Lines of the review's diff, highlighted, with a jump to them. It holds nothing."
     },
-    "TourEdge": {
-      "type": "object",
-      "properties": {
-        "tag": {
-          "type": "string",
-          "const": "diffle-edge"
-        },
-        "from": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-          "description": "The card the arrow leaves."
-        },
-        "to": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-          "description": "The card the arrow points at."
-        },
-        "label": {
-          "type": "string",
-          "minLength": 1,
-          "description": "A few words on the arrow: what flows along it."
-        }
-      },
-      "required": [
-        "tag",
-        "from",
-        "to"
-      ],
-      "additionalProperties": false,
-      "description": "An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`."
-    },
     "TourElement": {
       "oneOf": [
         {
@@ -3003,7 +2972,7 @@
             "id": {
               "type": "string",
               "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-              "description": "Unique in the tour; edges name it. Letters, digits, `-` and `_`, starting with a letter."
+              "description": "Unique in the tour. Letters, digits, `-` and `_`, starting with a letter."
             },
             "step": {
               "type": "string",
@@ -3043,37 +3012,6 @@
           ],
           "additionalProperties": false,
           "description": "A frame around related cards (a layer, a package), at the top level. It holds `diffle-card`s only."
-        },
-        {
-          "type": "object",
-          "properties": {
-            "tag": {
-              "type": "string",
-              "const": "diffle-edge"
-            },
-            "from": {
-              "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-              "description": "The card the arrow leaves."
-            },
-            "to": {
-              "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-              "description": "The card the arrow points at."
-            },
-            "label": {
-              "type": "string",
-              "minLength": 1,
-              "description": "A few words on the arrow: what flows along it."
-            }
-          },
-          "required": [
-            "tag",
-            "from",
-            "to"
-          ],
-          "additionalProperties": false,
-          "description": "An arrow from one card to another, at the top level. It holds nothing: close it with `</diffle-edge>`."
         },
         {
           "type": "object",

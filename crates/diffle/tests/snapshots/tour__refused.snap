@@ -81,12 +81,12 @@ expression: refused.json()
       "message": "src/a.py is not a file of the review"
     },
     {
-      "element": "diffle-edge from=\"a\" to=\"ghost\"",
-      "message": "diffle-edge holds nothing; close it with </diffle-edge> right after it (HTML ignores />)"
+      "element": "diffle-card#d > diffle-tree paths=\"app.py\"",
+      "message": "diffle-tree holds nothing; close it with </diffle-tree> right after it (HTML ignores />)"
     },
     {
-      "element": "diffle-edge from=\"a\" to=\"ghost\"",
-      "message": "no diffle-card has the id ghost"
+      "element": "diffle-shape",
+      "message": "unknown variant `diffle-shape`, expected one of `diffle-card`, `diffle-group`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`"
     }
   ]
 }

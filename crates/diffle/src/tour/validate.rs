@@ -1,5 +1,5 @@
 //! Checks a tour document against the catalog in `protocol.ts` (`TourElement`, `TourTag`) and the
-//! rules across elements: where each element may sit, unique card ids and steps, edge targets.
+//! rules across elements: where each element may sit, unique card ids and steps.
 use std::collections::{HashMap, HashSet};
 
 use serde_json::{Map, Value};
@@ -31,7 +31,6 @@ type Tag<'a> = (&'a str, &'a [(String, String)]);
 enum Rule {
     Card,
     Group,
-    Edge,
     Callout,
     Jump,
     /// `diffle-diff`, `diffle-tree`, `diffle-symbol`: inside a card, holding nothing.
@@ -43,7 +42,6 @@ impl Rule {
         Some(match tag {
             "diffle-card" => Self::Card,
             "diffle-group" => Self::Group,
-            "diffle-edge" => Self::Edge,
             "diffle-callout" => Self::Callout,
             "diffle-jump" => Self::Jump,
             "diffle-diff" | "diffle-tree" | "diffle-symbol" => Self::Leaf,
@@ -54,7 +52,7 @@ impl Rule {
     fn fits(self, place: Place) -> bool {
         match self {
             Self::Card => matches!(place, Place::Top | Place::Group),
-            Self::Group | Self::Edge => place == Place::Top,
+            Self::Group => place == Place::Top,
             Self::Callout => place == Place::Card { in_callout: false },
             Self::Jump | Self::Leaf => matches!(place, Place::Card { .. }),
         }
@@ -63,7 +61,7 @@ impl Rule {
     fn home(self) -> &'static str {
         match self {
             Self::Card => "at the top level or in a diffle-group",
-            Self::Group | Self::Edge => "at the top level",
+            Self::Group => "at the top level",
             Self::Callout => "inside a diffle-card, outside other callouts",
             Self::Jump | Self::Leaf => "inside a diffle-card",
         }
@@ -82,7 +80,6 @@ struct Walk {
     errors: Vec<(NodeId, TourError)>,
     references: Vec<Reference>,
     cards: Vec<Card>,
-    edges: Vec<(NodeId, String, String, String)>,
 }
 
 /// Parses `html` and checks everything that needs no file of the review.
@@ -182,22 +179,19 @@ impl Walk {
                     self.error(node, element.clone(), "diffle-jump holds only its label text");
                 }
             }
-            Rule::Edge | Rule::Leaf => self.empty(dom, node, tag, &element),
+            Rule::Leaf => self.empty(dom, node, tag, &element),
         }
         if let (Some(parsed), true) = (parsed, fits) {
             self.refer(node, element, parsed);
         }
     }
 
-    /// Notes what a well-placed element asks of the review's files, and the edges to check.
+    /// Notes what a well-placed element asks of the review's files.
     fn refer(&mut self, node: NodeId, element: String, parsed: TourElement) {
         let mut push = |path: &str, need: Need, element: String| {
             self.references.push(Reference { node, element, path: path.into(), need });
         };
         match parsed {
-            TourElement::DiffleEdge { from, to, .. } => {
-                self.edges.push((node, element, from.to_string(), to.to_string()))
-            }
             TourElement::DiffleDiff { path, side, lines } => {
                 let (start, end) =
                     lines.split_once('-').map_or((number(&lines), number(&lines)), |(a, b)| (number(a), number(b)));
@@ -250,7 +244,7 @@ impl Walk {
         }
     }
 
-    /// The rules across elements: unique ids and steps, edges between cards, at least one card.
+    /// The rules across elements: unique ids and steps, at least one card.
     fn across(&mut self) {
         let mut ids: HashSet<&str> = HashSet::new();
         let mut steps: HashMap<&str, &str> = HashMap::new();
@@ -264,11 +258,6 @@ impl Walk {
             {
                 found.push((card.node, card.element.clone(), format!("step {step} is taken by diffle-card#{first}")));
                 steps.insert(step, first);
-            }
-        }
-        for (node, element, from, to) in &self.edges {
-            for end in [from, to].into_iter().filter(|end| !ids.contains(end.as_str())) {
-                found.push((*node, element.clone(), format!("no diffle-card has the id {end}")));
             }
         }
         if self.cards.is_empty() {

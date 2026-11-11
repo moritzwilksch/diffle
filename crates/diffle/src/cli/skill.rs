@@ -25,8 +25,8 @@ anchor (a path and a line range on the `old` or `new` side, or a whole file) and
 ## Give the reviewer a tour
 
 A tour is one HTML document that walks the reviewer through the change. diffle lays its cards out
-on a canvas, connected by the arrows you declare, and the reviewer steps through the numbered ones
-with `n` and `p`. Each review has one tour.
+on a canvas, and the reviewer steps through the numbered ones with `n` and `p`. Each review has one
+tour.
 
 - `diffle tour push [<file>|-]` checks the document (stdin without a file) and shows it in place
   of the review's tour, and prints the stored tour as JSON. A refused document exits 2, lists
@@ -41,8 +41,8 @@ with `n` and `p`. Each review has one tour.
 - The order is part of the explanation. Number the cards the reviewer should read, `step=\"1\"`
   on, in the order that explains the change best; leave context cards without a step.
 - Keep a card's diff to at most about 12 lines, and split a long story into more steps.
-- Cards sit at the top level or in a `diffle-group`; groups and edges sit at the top level; every
-  other element sits inside a card.
+- Cards sit at the top level or in a `diffle-group`; groups sit at the top level; every other
+  element sits inside a card.
 - Close every `diffle-*` element with its end tag: HTML ignores `/>` on them.
 - Paths are relative to the repository root and must be files of the review. Line numbers count on
   the side you name: `new`, the file after the change, by default.
@@ -77,8 +77,7 @@ const EXAMPLE: &str = r#"<diffle-card id="token" step="1" title="Tokens expire">
 src/login.rs"></diffle-tree>
     <p>The old check is gone: <diffle-jump path="src/auth.rs" line="30" side="old">see what it did</diffle-jump>.</p>
   </diffle-card>
-</diffle-group>
-<diffle-edge from="token" to="login" label="checked by"></diffle-edge>"#;
+</diffle-group>"#;
 
 /// The agent interface as Markdown.
 pub fn render() -> String {
