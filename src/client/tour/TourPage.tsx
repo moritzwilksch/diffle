@@ -163,7 +163,7 @@ export function TourPage({ doc }: { doc: TourDocument }) {
       onWheel={() => (landing.current = null)}
       onTouchStart={() => (landing.current = null)}
     >
-      <div className="tour-layout" style={{ gap: margin ? MARGIN_GAP : 0 }}>
+      <div className="tour-layout" style={{ gap: margin ? MARGIN_GAP : 0 }} onPointerLeave={hovering.release}>
         <div ref={columnRef} className="relative min-w-0" style={{ width: column + 2 * GUTTER, paddingInline: GUTTER }}>
           <article
             ref={setArticle}

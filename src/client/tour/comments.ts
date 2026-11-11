@@ -47,8 +47,10 @@ export function commentOnSelection(): boolean {
   const found = selectionTarget(document.getSelection(), article);
   if (!found) return false;
   const review = useStore.getState();
-  if ('refused' in found) review.flash(found.refused);
-  else review.openTourDraft(found.node, found.target);
+  if ('refused' in found) return (review.flash(found.refused), true);
+  review.openTourDraft(found.node, found.target);
+  // The draft's highlight marks the words now; a selection left behind would bring its button back.
+  document.getSelection()?.removeAllRanges();
   return true;
 }
 

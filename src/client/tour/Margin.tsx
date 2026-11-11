@@ -83,7 +83,11 @@ export function BlockComment({
       style={spot}
       onPointerEnter={hovering.hold}
       onPointerLeave={hovering.release}
-      onClick={() => useStore.getState().openTourDraft(block.node, { on: 'element' })}
+      onClick={() => {
+        // The button goes with the draft and takes no pointerleave with it: let the block go too.
+        hovering.release();
+        useStore.getState().openTourDraft(block.node, { on: 'element' });
+      }}
       title={`Comment on this ${kind}`}
     >
       <MessageSquarePlus size="0.875rem" /> Comment
