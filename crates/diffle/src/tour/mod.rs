@@ -1,5 +1,6 @@
 //! Tours: an agent's guided walk through the review, one HTML document per comment key.
 mod anchor;
+mod blocks;
 mod code;
 mod diagram;
 mod dom;
@@ -9,10 +10,8 @@ mod files;
 mod icon;
 mod layout;
 mod placement;
-mod row;
 mod stepped;
 mod store;
-mod tabs;
 mod validate;
 
 use std::collections::HashMap;

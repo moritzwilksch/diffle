@@ -2,6 +2,7 @@
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
+use super::blocks::{row, tabs};
 use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
@@ -10,9 +11,7 @@ use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
 use super::placement::{Place, Rule, misplaced};
-use super::row;
 use super::stepped;
-use super::tabs;
 use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.

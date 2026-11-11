@@ -1,8 +1,8 @@
 //! A `diffle-row`: two or three columns side by side, each a block or short prose.
-use super::code::holds_markup;
-use super::dom::{Dom, Node, NodeId};
-use super::element::{Findings, label, short};
-use super::placement::is_column;
+use crate::tour::code::holds_markup;
+use crate::tour::dom::{Dom, Node, NodeId};
+use crate::tour::element::{Findings, label, short};
+use crate::tour::placement::is_column;
 
 /// How many columns the `diffle-row` at `node`, named `element`, has, and what is wrong with them;
 /// `context` names what sits in it.
