@@ -196,8 +196,13 @@ test.describe('the tour', () => {
       await page.keyboard.press('Escape');
       await expect(list).toBeHidden();
       await expect(view).toBeVisible();
+      // The list opens once its request answers; Enter before that would reach nothing, and the open
+      // list would hide the tour from role queries, so the jump is checked where it lands.
       await view.getByRole('button', { name: 'parse_row' }).click();
+      await expect(list).toBeVisible();
       await page.keyboard.press('Enter');
+      await expect(list).toBeHidden();
+      await expect.poll(() => activePath(page)).toBe('tally/ledger.py');
       await expect(view).toBeHidden();
       await page.keyboard.press('Control+o');
       await expect(view).toBeVisible();
