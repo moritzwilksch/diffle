@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-pub use anchor::TourIndex;
+pub use anchor::{TourIndex, spoken};
 pub use files::column;
 pub use store::TourStore;
 

@@ -5,6 +5,7 @@ use regex::Regex;
 
 use super::anchor::compare_threads;
 use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourTarget};
+use crate::tour::spoken;
 
 static SUGGESTION_FENCE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^```suggestion[^\n]*\n([\s\S]*?)\n?^```[ \t]*$").unwrap());
@@ -12,8 +13,8 @@ static SUGGESTION_FENCE: LazyLock<Regex> =
 /// Agent-prompt format, one block per thread:
 ///
 ///   path:line            (or path:start-end; `(file) path` for a thread on the whole file;
-///                         `(tour) 2. Heading, in <p>` for a selection in the tour, `, on <element>`
-///                         for a tour element as a whole)
+///                         `(tour) 2. Heading, in a <p>` for a selection in the tour, `, on the card
+///                         #auth` for a tour element as a whole)
 ///
 ///   > quoted line        (absent for a file thread; a tour element's label)
 ///
@@ -41,11 +42,11 @@ fn format_one(t: &CommentThread) -> String {
         }
         CommentAnchor::Tour { step, section, element, target, .. } => {
             let at = step.map_or_else(|| "before the first section".to_owned(), |n| format!("{n}. {section}"));
-            let (relation, quoted) = match target {
-                TourTarget::Text { quoted, .. } => ("in", quoted),
-                TourTarget::Element { label } => ("on", label),
+            let (text, quoted) = match target {
+                TourTarget::Text { quoted, .. } => (true, quoted),
+                TourTarget::Element { label } => (false, label),
             };
-            let header = format!("(tour{}) {at}, {relation} {element}", if t.stale { ", stale" } else { "" });
+            let header = format!("(tour{}) {at}, {}", if t.stale { ", stale" } else { "" }, spoken(element, text));
             let quote = if quoted.is_empty() { String::new() } else { format!("{}\n\n", quote(quoted)) };
             let body: Vec<String> = t.messages.iter().map(|m| signed(m, m.body.trim().to_owned())).collect();
             return format!("{header}\n\n{quote}{}\n\n---\n", body.join("\n\n"));

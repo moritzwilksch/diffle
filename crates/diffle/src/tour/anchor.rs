@@ -1,5 +1,9 @@
 //! Where a thread sits in a tour: each element by its place, its reading text and its label, and
 //! the same passage found again in a revised tour.
+use std::sync::LazyLock;
+
+use regex::Regex;
+
 use super::dom::{self, Dom, Node, NodeId};
 use super::drawing::{Drawing, get};
 use super::element::{label, short};
@@ -100,6 +104,32 @@ impl Entry {
 fn tag_in(element: &str) -> &str {
     let last = element.rsplit(" > ").next().unwrap_or_default();
     last.trim_start_matches('<').split([' ', '>']).next().unwrap_or_default()
+}
+
+static ATTR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#" ([a-z][a-z-]*)="([^"]*)""#).unwrap());
+
+/// How the prompt names an anchor's `element`: its kind and the one handle an agent can search its
+/// document for, never its geometry or the text the quote already shows. `text` for a selection in it.
+pub fn spoken(element: &str, text: bool) -> String {
+    let segments: Vec<&str> = element.split(" > ").collect();
+    let last = segments.last().copied().unwrap_or_default();
+    let attr = |key: &str| ATTR.captures_iter(last).find(|c| &c[1] == key).map(|c| c[2].to_owned()).unwrap_or_default();
+    let card = segments.iter().find_map(|s| s.strip_prefix("diffle-card#"));
+    let name = match tag_in(element) {
+        "diffle-card" => format!("the card #{}", attr("id")),
+        "diffle-diff" => format!("the diff of {}:{}", attr("path"), attr("lines")),
+        "diffle-code" if !attr("path").is_empty() => format!("the code of {}:{}", attr("path"), attr("line")),
+        "diffle-code" => "a code block".into(),
+        "diffle-tree" => "the file tree".into(),
+        "diffle-callout" => format!("a {} callout", attr("kind")),
+        "diffle-diagram" => "a diagram".into(),
+        "rect" => "a box in the diagram".into(),
+        "text" => "a label in the diagram".into(),
+        tag => format!("a <{tag}>"),
+    };
+    let within =
+        card.filter(|_| tag_in(element) != "diffle-card").map_or_else(String::new, |id| format!(" in the card #{id}"));
+    format!("{} {name}{within}", if text { "in" } else { "on" })
 }
 
 struct Walk<'a> {
@@ -309,6 +339,20 @@ mod tests {
         let rect = whole(&[6, 0, 0]).unwrap();
         assert_eq!((&rect["step"], &rect["target"]["label"]), (&json!(2), &json!("Session")));
         assert_eq!(whole(&[3]).unwrap_err(), "<p> takes no comment as a whole");
+    }
+
+    #[test]
+    fn names_an_element_by_its_kind_and_handle() {
+        assert_eq!(spoken(r#"diffle-card id="entry" title="The loader""#, false), "on the card #entry");
+        assert_eq!(spoken("diffle-card#entry > <p>", true), "in a <p> in the card #entry");
+        assert_eq!(
+            spoken(r#"diffle-card#entry > diffle-diff path="src/app.py" lines="12-20""#, false),
+            "on the diff of src/app.py:12-20 in the card #entry"
+        );
+        assert_eq!(
+            spoken(r#"diffle-diagram > <rect x="8" y="8" width="96" height="40">"#, false),
+            "on a box in the diagram"
+        );
     }
 
     #[test]

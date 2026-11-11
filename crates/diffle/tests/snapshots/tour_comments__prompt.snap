@@ -10,7 +10,7 @@ Why the id?
 
 ---
 
-(tour) 1. The loader, in <p>
+(tour) 1. The loader, in a <p>
 
 > once per request
 
@@ -18,7 +18,7 @@ Per request?
 
 ---
 
-(tour) 1. The loader, on diffle-card id="entry" title="The loader returns the id"
+(tour) 1. The loader, on the card #entry
 
 > The loader returns the id
 
@@ -28,7 +28,7 @@ Name the caller.
 
 ---
 
-(tour) 2. Wiring, on diffle-diagram > <rect x="8" y="8" width="96" height="40">
+(tour) 2. Wiring, on a box in the diagram
 
 > Session
 

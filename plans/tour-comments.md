@@ -10,7 +10,7 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
 
   ```ts
   TourAnchorSchema = z.object({
-    kind: z.literal("tour"),
+    kind: z.literal('tour'),
     /** Child-element indices from <body> to the element, in the tour as last pushed. */
     node: z.number().int().array(),
     /** The h2 it sits under: its 1-based number and heading text; absent before the first. */
@@ -20,15 +20,15 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
     element: z.string(),
     target: TourTargetSchema,
   });
-  TourTargetSchema = z.discriminatedUnion("on", [
+  TourTargetSchema = z.discriminatedUnion('on', [
     /** A selection: its words, whitespace collapsed, and which match in the element's reading text. */
     z.object({
-      on: z.literal("text"),
+      on: z.literal('text'),
       quoted: z.string(),
       occurrence: z.number().int(),
     }),
     /** The element as a whole, with what finds it again: a card's title, a box's text; '' for none. */
-    z.object({ on: z.literal("element"), label: z.string() }),
+    z.object({ on: z.literal('element'), label: z.string() }),
   ]);
   ```
 
@@ -65,21 +65,21 @@ The reviewer comments on the tour as they comment on code: select a phrase or pi
 - **Chosen:** `format_prompt` writes a tour thread as:
 
   ```
-  (tour) 2. Session and refresh, in <p>
+  (tour) 2. Session and refresh, in a <p>
 
   > comment on the tour
 
   body
 
   ---
-  (tour, stale) 2. Session and refresh, on diffle-diagram > rect
+  (tour, stale) 2. Session and refresh, on a box in the diagram
 
   > Session
 
   ---
   ```
 
-  `in` for a selection inside the element, `on` for the element itself, `before the first section` when `step` is absent; the quote is the selection or the label, left out when empty. Tour threads follow the code threads, in document order (`node`). `diffle comments list` prints the anchor's JSON unchanged; `--path` matches code threads only. GitHub export skips tour threads ("a comment on the tour has no place in a pull request review"), and `CommentCard` hides its export button for them. `--skill` describes the anchor under "Read the review's comments" and tells the agent to find the passage by `section`, `element` and `quoted`.
+  `in` for a selection inside the element, `on` for the element itself. The prompt names the element by its kind and the one handle the agent can search its document for (`the card #entry`, `the diff of src/app.py:12-20`, `a box in the diagram`, `a <p> in the card #entry`), never its geometry or the text the quote already shows; the anchor's `element` keeps the full name a refused push would give. The section reads `before the first section` when `step` is absent; the quote is the selection or the label, left out when empty. Tour threads follow the code threads, in document order (`node`). `diffle comments list` prints the anchor's JSON unchanged; `--path` matches code threads only. GitHub export skips tour threads ("a comment on the tour has no place in a pull request review"), and `CommentCard` hides its export button for them. `--skill` describes the anchor under "Read the review's comments" and tells the agent to find the passage by `section`, `element` and `quoted`.
 
 - **Rejected:** Printing `node` in the prompt. The agent keeps its document as written, not as indices; heading, element and quote find the place with a search.
 - **Why:** The agent reads the prompt next to the document it wrote; the validator's element names are the ones its push errors already use.
