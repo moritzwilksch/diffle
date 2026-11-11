@@ -62,6 +62,10 @@ pub enum Rule {
     Tabs,
     /// `diffle-tab`: a pane of tabs, holding what a card holds.
     Tab,
+    /// `diffle-check`: a block holding its items.
+    Check,
+    /// `diffle-item`: a question of a checklist, holding a line of text.
+    Item,
     Diagram,
     Jump,
     /// `diffle-diff` and `diffle-tree`: blocks holding nothing.
@@ -85,6 +89,8 @@ impl Rule {
             "diffle-callout" => Self::Callout,
             "diffle-tabs" => Self::Tabs,
             "diffle-tab" => Self::Tab,
+            "diffle-check" => Self::Check,
+            "diffle-item" => Self::Item,
             "diffle-diagram" => Self::Diagram,
             "diffle-jump" => Self::Jump,
             "diffle-diff" | "diffle-tree" => Self::Block,
@@ -97,8 +103,10 @@ impl Rule {
     pub fn fits(self, place: Place) -> bool {
         match self {
             Self::Row => place.top,
-            Self::Card | Self::Walk | Self::Trace => !place.in_text && !place.in_card && !place.in_callout,
-            Self::Note | Self::Stop => place.in_steps,
+            Self::Card | Self::Walk | Self::Trace | Self::Check => {
+                !place.in_text && !place.in_card && !place.in_callout
+            }
+            Self::Note | Self::Stop | Self::Item => place.in_steps,
             Self::Tabs => !place.in_text && !place.in_card && !place.in_callout && !place.in_tab,
             Self::Tab => place.in_tabs,
             Self::Callout => !place.in_text && !place.in_callout,
@@ -111,9 +119,10 @@ impl Rule {
         match self {
             Self::Row => "at the top level, between paragraphs",
             Self::Card => "between paragraphs, outside other cards and callouts",
-            Self::Walk | Self::Trace => "between paragraphs, outside cards and callouts",
+            Self::Walk | Self::Trace | Self::Check => "between paragraphs, outside cards and callouts",
             Self::Note => "directly inside a diffle-walk, or a diffle-diagram after its <svg>",
             Self::Stop => "directly inside a diffle-trace",
+            Self::Item => "directly inside a diffle-check",
             Self::Tabs => "between paragraphs, outside cards, callouts and other tabs",
             Self::Tab => "directly inside a diffle-tabs",
             Self::Callout => "between paragraphs, outside other callouts",
@@ -130,8 +139,8 @@ impl Rule {
         match self {
             Self::Card => Place { in_card: true, ..inside },
             Self::Callout => Place { in_callout: true, ..inside },
-            Self::Note | Self::Stop => Place { in_text: true, ..inside },
-            Self::Walk | Self::Trace | Self::Diagram => Place { in_steps: true, ..inside },
+            Self::Note | Self::Stop | Self::Item => Place { in_text: true, ..inside },
+            Self::Walk | Self::Trace | Self::Diagram | Self::Check => Place { in_steps: true, ..inside },
             Self::Tabs => Place { in_tabs: true, ..inside },
             Self::Tab => Place { in_tab: true, ..inside },
             _ => inside,

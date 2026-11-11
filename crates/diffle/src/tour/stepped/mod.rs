@@ -1,6 +1,7 @@
 //! Stepped blocks: a walk, a trace and a stepped diagram each hold steps the reader takes one at a
 //! time, each a sentence of inline prose. What their steps share is checked here; each block's own
 //! rules sit in its module.
+pub mod check;
 pub mod diagram;
 pub mod trace;
 pub mod walk;
@@ -20,10 +21,11 @@ const LONG: usize = 2;
 /// The plain tags a step's sentence may use.
 const INLINE: [&str; 4] = ["code", "strong", "em", "a"];
 
-/// Checks the walk or trace at `node`, named `element`, as the catalog read it (none when it did not fit).
+/// Checks the walk, trace or checklist at `node`, named `element`, as the catalog read it (none when it did not fit).
 pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement>) -> Findings {
     match dom.node(node) {
         Node::Element { name, .. } if &*name.local == "diffle-trace" => trace::check(dom, node, element),
+        Node::Element { name, .. } if &*name.local == "diffle-check" => check::check(dom, node, element),
         _ => walk::check(dom, node, element, parsed),
     }
 }
@@ -87,7 +89,7 @@ pub fn steps<'a>(dom: &'a Dom, node: NodeId, element: &str, kind: &Kind, found: 
         found.error(node, element.into(), message);
     } else if count > MANY {
         let message =
-            format!("Has {count} {word}s; past about {MANY} a {noun} is hard to follow: split it, or merge steps");
+            format!("Has {count} {word}s; past about {MANY} a {noun} is hard to follow: split it, or merge {word}s");
         found.warn(node, element.into(), message);
     }
     steps
@@ -96,7 +98,7 @@ pub fn steps<'a>(dom: &'a Dom, node: NodeId, element: &str, kind: &Kind, found: 
 /// The steps of the block at `node`, its notes or stops; what else it holds `steps` refuses, and
 /// its content would only repeat that.
 pub fn step_nodes(dom: &Dom, node: NodeId) -> Vec<NodeId> {
-    let is_step = |&&c: &&NodeId| matches!(dom.node(c), Node::Element { name, .. } if matches!(&*name.local, "diffle-note" | "diffle-stop"));
+    let is_step = |&&c: &&NodeId| matches!(dom.node(c), Node::Element { name, .. } if matches!(&*name.local, "diffle-note" | "diffle-stop" | "diffle-item"));
     dom.children(node).iter().filter(is_step).copied().collect()
 }
 

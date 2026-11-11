@@ -30,13 +30,36 @@ impl TourStore {
         Ok(read(&self.file).await?.tours.remove(&self.key))
     }
 
-    /// Replaces this key's tour.
-    pub async fn put(&self, tour: Tour) -> Result<()> {
+    /// Replaces this key's tour, keeping the ticks of the replaced one whose question it still asks.
+    pub async fn put(&self, mut tour: Tour, questions: &[String]) -> Result<()> {
         self.mutate(|tours| {
+            let kept = tours.remove(&self.key).map(|old| old.ticked).unwrap_or_default();
+            tour.ticked = kept.into_iter().filter(|q| questions.contains(q)).collect();
             tours.insert(self.key.clone(), tour);
             true
         })
         .await
+    }
+
+    /// Ticks the checklist item asking `question` as decided, or unticks it; false when the key has
+    /// no tour.
+    pub async fn tick(&self, question: &str, ticked: bool) -> Result<bool> {
+        let mut found = false;
+        self.mutate(|tours| {
+            let Some(tour) = tours.get_mut(&self.key) else { return false };
+            found = true;
+            if tour.ticked.iter().any(|q| q == question) == ticked {
+                return false;
+            }
+            if ticked {
+                tour.ticked.push(question.to_owned());
+            } else {
+                tour.ticked.retain(|q| q != question);
+            }
+            true
+        })
+        .await?;
+        Ok(found)
     }
 
     /// Removes this key's tour; whether there was one.

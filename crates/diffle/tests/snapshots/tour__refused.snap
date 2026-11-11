@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`"
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`, `diffle-check`, `diffle-item`"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -323,6 +323,18 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > <summary>",
       "message": "<summary> sits first in a <details>, saying what opening it shows"
+    },
+    {
+      "element": "h2 \"A\" > diffle-check > diffle-item",
+      "message": "asks what item 1 asks: each item asks its own question"
+    },
+    {
+      "element": "h2 \"A\" > diffle-check > diffle-item context=\"x\"",
+      "message": "a diffle-item asks its question as its text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-item",
+      "message": "diffle-item belongs directly inside a diffle-check"
     },
     {
       "element": "h2 \"A\" > <h1>",

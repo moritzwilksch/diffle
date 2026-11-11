@@ -109,3 +109,50 @@ async fn refuses_a_thread_the_tour_cannot_hold() {
     let prose = s.json("POST", "/api/tour/threads", json!({ "node": [2], "target": target, "body": "x" })).await;
     assert_eq!(refused(prose), (400, json!("<p> takes no comment as a whole")));
 }
+
+const CHECKLIST: &str = r#"<h2>Decide</h2>
+<diffle-check>
+<diffle-item context="Callers send ids they read from the store.">Should <diffle-symbol path="app.py" line="1" name="load_user"></diffle-symbol> check the id?</diffle-item>
+<diffle-item>Is one request per user enough?</diffle-item>
+<diffle-item>Keep the old name as an alias?</diffle-item>
+<diffle-item>Ship it behind a flag?</diffle-item>
+</diffle-check>"#;
+
+#[tokio::test]
+async fn hands_the_checklist_to_the_agent_and_keeps_ticks_across_a_push() {
+    let s = server().await;
+    push(&s, CHECKLIST).await;
+    let tick = |question: &str| json!({ "question": question, "ticked": true });
+    for question in ["Is one request per user enough?", "Keep the old name as an alias?"] {
+        assert_eq!(s.json("PUT", "/api/tour/ticks", tick(question)).await.status, 204);
+    }
+    comment(&s, json!([1, 2]), json!({ "on": "element" }), "Yes, until the rename ships.").await;
+    comment(&s, json!([1, 0]), json!({ "on": "element" }), "No: the store already did.").await;
+
+    let prompt = s.get("/api/threads/export").await.body;
+    let checks = s.get("/api/threads").await.json()["checks"].clone();
+    // A revision that rewords one question keeps the other ticks and drops that one's.
+    push(&s, &CHECKLIST.replace("Keep the old name as an alias?", "Keep old as an alias?")).await;
+    let ticked: Vec<Value> = s.get("/api/tour").await.json()["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| json!([c["question"], c["ticked"]]))
+        .collect();
+
+    insta::assert_snapshot!("checklist_prompt", prompt);
+    assert_eq!(
+        checks.as_array().unwrap().iter().map(|c| c["thread"].is_string()).collect::<Vec<_>>(),
+        [true, false, true, false]
+    );
+    assert_eq!(
+        ticked,
+        [
+            json!(["Should load_user check the id?", false]),
+            json!(["Is one request per user enough?", true]),
+            json!(["Keep old as an alias?", false]),
+            json!(["Ship it behind a flag?", false])
+        ]
+    );
+    s.close().await;
+}

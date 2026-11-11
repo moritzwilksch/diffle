@@ -68,6 +68,7 @@ docs/readme.md"></diffle-tree>
 <diffle-note title="A request names an id">It carries the id <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes.</diffle-note>
 <diffle-note title="The loader answers">It returns the id.</diffle-note>
 </diffle-diagram>
+<diffle-check><diffle-item context="Callers pass ids from the store.">Should the loader check the id?</diffle-item></diffle-check>
 <details><summary>Why the id is not checked</summary><p>Callers pass ids they read from the store.</p><diffle-diff path="app.py" lines="3"></diffle-diff></details>
 <diffle-tabs>
   <diffle-tab title="The loader" kind="chosen"><p>It returns the id it takes.</p><diffle-diff path="app.py" lines="2-3"></diffle-diff></diffle-tab>
@@ -197,6 +198,8 @@ docs/readme.md"></diffle-tree>
 <p><diffle-tab title="Loose">Alone.</diffle-tab></p>
 <details><p>No summary.</p></details>
 <p><summary>Loose</summary></p>
+<diffle-check><diffle-item>Same?</diffle-item><diffle-item> Same? </diffle-item><diffle-item context="x"></diffle-item></diffle-check>
+<p><diffle-item>Alone?</diffle-item></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -360,7 +363,7 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     let cleared = tour_cli(&t.path, &["clear"], "");
     assert!(cleared.status.success(), "{}", stderr(&cleared));
     let (_, body) = common::cli::http(&url, "GET", "/api/tour", "");
-    assert_eq!(serde_json::from_str::<Value>(&body).unwrap(), json!({ "tour": null }));
+    assert_eq!(serde_json::from_str::<Value>(&body).unwrap(), json!({ "tour": null, "checks": [] }));
     let _ = child.kill();
     let _ = child.wait();
 }

@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use super::anchor::compare_threads;
-use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourTarget};
+use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourCheckItem, TourTarget};
 use crate::tour::tag_in;
 
 static SUGGESTION_FENCE: LazyLock<Regex> =
@@ -24,10 +24,33 @@ static SUGGESTION_FENCE: LazyLock<Regex> =
 ///
 /// A ```suggestion fence in a body expands to ORIGINAL / SUGGESTED fences; a file thread has no
 /// original, so its fences stay as written.
-pub fn format_prompt(threads: &[CommentThread]) -> String {
-    let mut sorted: Vec<&CommentThread> = threads.iter().collect();
+///
+/// After the threads come the tour's checklist items the reviewer has not settled by a tick alone,
+/// in document order: `(check) 4. Heading, open` (or `decided` when ticked), the question quoted,
+/// and the thread answering it, or `(no answer yet)`.
+pub fn format_prompt(threads: &[CommentThread], checks: &[TourCheckItem]) -> String {
+    let answers: Vec<&str> = checks.iter().filter_map(|c| c.thread.as_deref()).collect();
+    let mut sorted: Vec<&CommentThread> = threads.iter().filter(|t| !answers.contains(&t.id.as_str())).collect();
     sorted.sort_by(|a, b| compare_threads(a, b));
-    sorted.into_iter().map(format_one).collect::<Vec<_>>().join("\n")
+    let items = checks.iter().filter_map(|item| {
+        let thread = item.thread.as_deref().and_then(|id| threads.iter().find(|t| t.id == id));
+        format_check(item, thread)
+    });
+    sorted.into_iter().map(format_one).chain(items).collect::<Vec<_>>().join("\n")
+}
+
+/// A checklist item, or none when a tick settled it without an answer.
+fn format_check(item: &TourCheckItem, thread: Option<&CommentThread>) -> Option<String> {
+    if item.ticked && thread.is_none() {
+        return None;
+    }
+    let at = item.step.map_or_else(|| "before the first section".to_owned(), |n| format!("{n}. {}", item.section));
+    let state = if item.ticked { "decided" } else { "open" };
+    let body = thread.map_or_else(
+        || "(no answer yet)".to_owned(),
+        |t| t.messages.iter().map(|m| signed(m, m.body.trim().to_owned())).collect::<Vec<_>>().join("\n\n"),
+    );
+    Some(format!("(check) {at}, {state}\n\n{}\n\n{body}\n\n---\n", quote(&item.question)))
 }
 
 fn format_one(t: &CommentThread) -> String {
@@ -142,6 +165,8 @@ fn spoken(element: &str, text: bool) -> String {
         "diffle-trace" => "the trace".into(),
         "diffle-tabs" => "the tabs".into(),
         "diffle-tab" => format!("the tab \"{}\"", attr("title")),
+        "diffle-check" => "a checklist".into(),
+        "diffle-item" => "an item of a checklist".into(),
         "diffle-stop" => format!("the stop at {}:{}", attr("path"), attr("line")),
         "diffle-code" if !attr("path").is_empty() => format!("the code of {}:{}", attr("path"), attr("line")),
         "diffle-code" => "a code block".into(),

@@ -24,8 +24,23 @@ pub use files::column;
 pub use store::TourStore;
 
 use crate::error::Result;
-use crate::protocol::{Side, Snapshot, TourError};
+use crate::protocol::{CommentAnchor, CommentThread, Side, Snapshot, TourCheckItem, TourError, TourTarget};
 use crate::session::Session;
+
+/// The stored tour's checklist items in document order, each with its tick and the open thread
+/// among `threads` that answers it.
+pub async fn checklist(session: &Session, threads: &[CommentThread]) -> Result<Vec<TourCheckItem>> {
+    let Some(tour) = session.tour()?.get().await? else { return Ok(Vec::new()) };
+    let mut items = TourIndex::read(&tour.html).checks(&tour.ticked);
+    for item in &mut items {
+        let answers = |t: &&CommentThread| {
+            let on = matches!(&t.anchor, CommentAnchor::Tour { node, target: TourTarget::Element { .. }, .. } if *node == item.node);
+            on && !t.stale && !t.resolved
+        };
+        item.thread = threads.iter().find(answers).map(|t| t.id.clone());
+    }
+    Ok(items)
+}
 
 /// The reasons to refuse `html` that need no file of the review.
 pub fn outline_errors(html: &str) -> Vec<TourError> {

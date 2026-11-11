@@ -175,7 +175,7 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
-            Rule::Walk | Rule::Trace => {
+            Rule::Walk | Rule::Trace | Rule::Check => {
                 let found = stepped::check(dom, node, &element, parsed.as_ref());
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
@@ -189,7 +189,7 @@ impl Walk {
                 self.children(dom, node, rule.inner(place));
                 self.parts = outer;
             }
-            Rule::Callout | Rule::Note | Rule::Stop => self.children(dom, node, rule.inner(place)),
+            Rule::Callout | Rule::Note | Rule::Stop | Rule::Item => self.children(dom, node, rule.inner(place)),
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";

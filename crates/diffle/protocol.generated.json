@@ -2821,11 +2821,19 @@
           "items": {
             "$ref": "#/$defs/CommentThread"
           }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TourCheckItem"
+          },
+          "description": "The items of the tour's checklists, each with whether it is ticked and the thread answering it."
         }
       },
       "required": [
         "commentKey",
-        "threads"
+        "threads",
+        "checks"
       ],
       "description": "What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key."
     },
@@ -2910,6 +2918,13 @@
           "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "description": "The `Snapshot.version` the tour was checked against when pushed."
+        },
+        "ticked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The questions of its checklists the reviewer ticked as decided, each as `TourCheckItem.question`."
         }
       },
       "required": [
@@ -3016,6 +3031,62 @@
       ],
       "additionalProperties": false,
       "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
+    },
+    "TourCheck": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-check"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as\ndecided or answered in a thread the agent reads. It holds only its items."
+    },
+    "TourCheckItem": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "Child-element indices from `<body>` to the item, as a tour anchor's `node`."
+        },
+        "step": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "The `h2` it sits under: its 1-based number; absent before the first."
+        },
+        "section": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string",
+          "description": "Its reading text, whitespace collapsed: what finds it again in a revised tour."
+        },
+        "ticked": {
+          "type": "boolean",
+          "description": "Whether the reviewer ticked it as decided."
+        },
+        "thread": {
+          "type": "string",
+          "description": "The open thread that answers it, when there is one."
+        }
+      },
+      "required": [
+        "node",
+        "section",
+        "question",
+        "ticked"
+      ],
+      "description": "An item of a `diffle-check` in the stored tour, with what the reviewer did with it."
     },
     "TourCode": {
       "type": "object",
@@ -3508,6 +3579,39 @@
           ],
           "additionalProperties": false,
           "description": "One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-check"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as\ndecided or answered in a thread the agent reads. It holds only its items."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-item"
+            },
+            "context": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A sentence of context under the question: what the choice costs or what it rests on."
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3576,6 +3680,25 @@
       ],
       "additionalProperties": false,
       "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
+    },
+    "TourItem": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-item"
+        },
+        "context": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A sentence of context under the question: what the choice costs or what it rests on."
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
     },
     "TourJump": {
       "type": "object",
@@ -3689,10 +3812,18 @@
               "type": "null"
             }
           ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TourCheckItem"
+          },
+          "description": "Its checklists' items in document order."
         }
       },
       "required": [
-        "tour"
+        "tour",
+        "checks"
       ],
       "description": "`GET /api/tour`: the review's tour, or null without one."
     },
@@ -4362,6 +4493,22 @@
         "body"
       ],
       "description": "`POST /api/tour/threads`: opens a thread on the review's tour as it is now. The server names the\nsection and the element, and an element's label, from the stored tour."
+    },
+    "TourTick": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "ticked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "question",
+        "ticked"
+      ],
+      "description": "`PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it."
     },
     "TourTrace": {
       "type": "object",

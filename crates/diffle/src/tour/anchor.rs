@@ -3,12 +3,14 @@
 use super::dom::{self, Dom, Node, NodeId};
 use super::drawing::{Drawing, get};
 use super::element::{label, short};
-use crate::protocol::{CommentAnchor, TourTarget, TourTargetRequest};
+use crate::protocol::{CommentAnchor, TourCheckItem, TourTarget, TourTargetRequest};
 
 /// Blocks whose content is code or a drawing, not reading text: they take a thread as a whole.
 const OPAQUE: [&str; 4] = ["diffle-diff", "diffle-code", "diffle-tree", "diffle-diagram"];
 /// Elements a thread may sit on as a whole, besides a diagram's boxes and labels.
-const BLOCKS: [&str; 10] = [
+const BLOCKS: [&str; 12] = [
+    "diffle-check",
+    "diffle-item",
     "diffle-tabs",
     "diffle-card",
     "diffle-diff",
@@ -44,6 +46,24 @@ impl TourIndex {
         let mut walk = Walk { dom: &dom, entries: Vec::new(), step: None, section: String::new() };
         walk.children(dom.section("body"), &[], "");
         Self { entries: walk.entries }
+    }
+
+    /// The items of the tour's checklists in document order, each ticked when `ticked` holds its question.
+    pub fn checks(&self, ticked: &[String]) -> Vec<TourCheckItem> {
+        let items = self.entries.iter().filter(|e| e.tag == "diffle-item");
+        let item = |e: &Entry| {
+            let question = e.label.clone().unwrap_or_default();
+            let ticked = ticked.contains(&question);
+            TourCheckItem {
+                node: e.node.clone(),
+                step: e.step,
+                section: e.section.clone(),
+                question,
+                ticked,
+                thread: None,
+            }
+        };
+        items.map(item).collect()
     }
 
     /// The anchor a new thread on `node` gets, or why it cannot sit there.
@@ -238,6 +258,8 @@ impl Walk<'_> {
             "diffle-diff" | "diffle-walk" => format!("{} {}", attr("path"), attr("lines")),
             "diffle-trace" => self.first_stop(id),
             "diffle-tabs" => self.titles(id),
+            // An item's whole question: ticks and answers find it again by it.
+            "diffle-item" => collapse(&reading(self.dom, id)),
             "diffle-tree" => short(&attr("paths")),
             "diffle-code" if !attr("title").is_empty() => attr("title"),
             "diffle-code" if !attr("path").is_empty() => format!("{}:{}", attr("path"), attr("line")),

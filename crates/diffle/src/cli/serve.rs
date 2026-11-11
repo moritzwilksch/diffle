@@ -223,10 +223,11 @@ async fn shutdown(session: &Arc<Session>, server: &Mutex<Served>, repo: &GitRepo
     if let Ok(comments) = session.comments() {
         let open = ThreadQuery { path: None, state: Some(ThreadState::Open) };
         if let Ok(threads) = comments.threads(&open).await {
+            let checks = crate::tour::checklist(session, &threads).await.unwrap_or_default();
             // Ignored when stdout is gone too: the prompt has nowhere left to go.
             use std::io::Write as _;
             let mut out = std::io::stdout();
-            let _ = out.write_all(format_prompt(&threads).as_bytes()).and_then(|()| out.flush());
+            let _ = out.write_all(format_prompt(&threads, &checks).as_bytes()).and_then(|()| out.flush());
         }
     }
     dispose(session, server, repo, lsp).await;

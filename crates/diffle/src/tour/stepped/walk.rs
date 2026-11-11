@@ -77,6 +77,6 @@ mod tests {
 
         let found = warnings(&format!(r#"<diffle-walk path="a.py" lines="1-9">{notes}</diffle-walk>"#));
 
-        assert_eq!(found, ["Has 7 notes; past about 6 a walk is hard to follow: split it, or merge steps"]);
+        assert_eq!(found, ["Has 7 notes; past about 6 a walk is hard to follow: split it, or merge notes"]);
     }
 }

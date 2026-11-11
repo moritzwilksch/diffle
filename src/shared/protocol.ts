@@ -596,11 +596,29 @@ export const ThreadQuerySchema = z.object({
 });
 export type ThreadQuery = z.infer<typeof ThreadQuerySchema>;
 
+/** An item of a `diffle-check` in the stored tour, with what the reviewer did with it. */
+export const TourCheckItemSchema = z.object({
+  /** Child-element indices from `<body>` to the item, as a tour anchor's `node`. */
+  node: z.number().int().array(),
+  /** The `h2` it sits under: its 1-based number; absent before the first. */
+  step: z.number().int().optional(),
+  section: z.string(),
+  /** Its reading text, whitespace collapsed: what finds it again in a revised tour. */
+  question: z.string(),
+  /** Whether the reviewer ticked it as decided. */
+  ticked: z.boolean(),
+  /** The open thread that answers it, when there is one. */
+  thread: z.string().optional(),
+});
+export type TourCheckItem = z.infer<typeof TourCheckItemSchema>;
+
 /** What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key. */
 export const ThreadListSchema = z.object({
   /** The set the threads belong to: `Snapshot.commentKey` of the slice shown when they were read. */
   commentKey: z.string(),
   threads: CommentThreadSchema.array(),
+  /** The items of the tour's checklists, each with whether it is ticked and the thread answering it. */
+  checks: TourCheckItemSchema.array(),
 });
 export type ThreadList = z.infer<typeof ThreadListSchema>;
 
@@ -1101,6 +1119,25 @@ export const TourTabSchema = z
   })
   .strict();
 
+/**
+ * Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as
+ * decided or answered in a thread the agent reads. It holds only its items.
+ */
+export const TourCheckSchema = z
+  .object({
+    tag: z.literal('diffle-check'),
+  })
+  .strict();
+
+/** A question of a `diffle-check`, one line of inline prose: what the reviewer should decide. */
+export const TourItemSchema = z
+  .object({
+    tag: z.literal('diffle-item'),
+    /** A sentence of context under the question: what the choice costs or what it rests on. */
+    context: z.string().min(1).optional(),
+  })
+  .strict();
+
 /** A language the highlighter knows, by its id: `rust`, `typescript`, `python`. */
 const tourLangSchema = z.string().regex(/^[a-z0-9][a-z0-9+#-]*$/);
 
@@ -1355,6 +1392,8 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourStopSchema,
   TourTabsSchema,
   TourTabSchema,
+  TourCheckSchema,
+  TourItemSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
@@ -1400,15 +1439,25 @@ export const TourSchema = z.object({
   pushedAt: z.number().int(),
   /** The `Snapshot.version` the tour was checked against when pushed. */
   version: z.number().int(),
+  /** The questions of its checklists the reviewer ticked as decided, each as `TourCheckItem.question`. */
+  ticked: z.string().array().optional(),
 });
 export type Tour = z.infer<typeof TourSchema>;
+
+/** `PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it. */
+export const TourTickSchema = z.object({ question: z.string(), ticked: z.boolean() });
+export type TourTick = z.infer<typeof TourTickSchema>;
 
 /** `PUT /api/tour`: replaces the review's tour. */
 export const TourPushSchema = z.object({ html: z.string() });
 export type TourPush = z.infer<typeof TourPushSchema>;
 
 /** `GET /api/tour`: the review's tour, or null without one. */
-export const TourResponseSchema = z.object({ tour: TourSchema.nullable() });
+export const TourResponseSchema = z.object({
+  tour: TourSchema.nullable(),
+  /** Its checklists' items in document order. */
+  checks: TourCheckItemSchema.array(),
+});
 export type TourResponse = z.infer<typeof TourResponseSchema>;
 
 /** One reason a pushed tour was refused, or one warning about an accepted one. */

@@ -42,7 +42,7 @@ fn renders_ranges_multi_line_quotes_removed_side_and_stale_prefixes() {
         t.anchor = line("src/b.py", Side::New, 3, 3, "def foo():");
     });
     assert_eq!(
-        format_prompt(&[removed, stale]),
+        format_prompt(&[removed, stale], &[]),
         "(removed) src/a.py:3-4\n\n> a\n>\n> b\n\nRename this.\n\n---\n\n(stale, was line 9) src/b.py:3\n\n> def foo():\n\nRename this.\n\n---\n"
     );
 }
@@ -54,11 +54,11 @@ fn renders_a_thread_on_the_whole_file_with_a_file_prefix_and_no_quote_its_fences
         t.messages = vec![msg("m", "Split this module.", 1), msg("m", "```suggestion\nx\n```", 1)];
     });
     assert_eq!(
-        format_prompt(std::slice::from_ref(&file)),
+        format_prompt(std::slice::from_ref(&file), &[]),
         "(file) src/a.py\n\nSplit this module.\n\n```suggestion\nx\n```\n\n---\n"
     );
     let stale = CommentThread { stale: true, ..file };
-    assert!(format_prompt(&[stale]).starts_with("(file) (stale) src/a.py\n"));
+    assert!(format_prompt(&[stale], &[]).starts_with("(file) (stale) src/a.py\n"));
 }
 
 #[test]
@@ -122,5 +122,5 @@ fn reads_as_an_agent_would_receive_it() {
         ),
         stale,
     ];
-    insta::assert_snapshot!(format_prompt(&threads));
+    insta::assert_snapshot!(format_prompt(&threads, &[]));
 }

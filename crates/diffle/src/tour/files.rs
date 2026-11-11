@@ -85,7 +85,9 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
         | TourElement::DiffleNote { .. }
         | TourElement::DiffleTrace
         | TourElement::DiffleTabs
-        | TourElement::DiffleTab { .. } => {}
+        | TourElement::DiffleTab { .. }
+        | TourElement::DiffleCheck
+        | TourElement::DiffleItem { .. } => {}
     }
     (needs, errors)
 }

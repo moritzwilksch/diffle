@@ -3,6 +3,7 @@ source: crates/diffle/tests/agent.rs
 expression: masked(all)
 ---
 {
+  "checks": [],
   "commentKey": "[id]",
   "threads": [
     {
