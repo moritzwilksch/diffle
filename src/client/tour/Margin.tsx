@@ -4,11 +4,12 @@ import { elementKind, tourLabel } from '@/client/comments/threads.js';
 import { CommentCard } from '@/client/review/CommentCard.js';
 import { CommentComposer } from '@/client/review/CommentComposer.js';
 import { useStore, type TourDraft } from '@/client/store.js';
+import { remPx } from '@/client/scale.js';
 import { Button } from '@/client/ui/Button.js';
 import { anchorTop, selectionTarget } from './anchor.js';
 import { commentOnSelection, DRAFT, type TourThread, useActiveCard, useTourDraft, useTourThreads } from './comments.js';
 import { sourceAt, sourceLabel, type useHoveredBlock } from './blocks.js';
-import { placeCards } from './placement.js';
+import { freeSpot, placeCards, type Taken } from './placement.js';
 import { useTour } from './state.js';
 
 /** The composer's header: the words or the element the draft is on, read from the tour's `body`. */
@@ -57,10 +58,13 @@ export function BlockComment({
   hovering,
   container,
   at,
+  taken,
 }: {
   hovering: Hovering;
   container: RefObject<HTMLElement | null>;
   at: 'edge' | 'end';
+  /** The margin's cards, which the button never covers. */
+  taken?: readonly Taken[];
 }) {
   const { block } = hovering;
   const drafting = useTourDraft() != null;
@@ -71,7 +75,7 @@ export function BlockComment({
   const kind = elementKind(block.tag);
   const spot =
     at === 'edge'
-      ? { top: rect.top - box.top, left: 0 }
+      ? { top: clearOf(rect.top - box.top, taken), left: 0 }
       : { top: rect.bottom - box.top + 2, left: rect.right - box.left, transform: 'translateX(-100%)' };
   return (
     <Button
@@ -145,6 +149,7 @@ export function Margin({
     return () => observer.disconnect();
   }, [items.length, layout]);
 
+  const taken = [...tops].map(([id, top]) => ({ top, height: cards.current.get(id)?.offsetHeight ?? 0 }));
   return (
     <div ref={rail} className="tour-margin" aria-label="Comments">
       {items.map(({ id, thread }) => (
@@ -163,10 +168,18 @@ export function Margin({
           <Card id={id} thread={thread} draft={id === DRAFT ? (draft ?? undefined) : undefined} />
         </div>
       ))}
-      <SelectionComment article={article} container={rail} at="edge" />
-      <BlockComment hovering={hovering} container={rail} at="edge" />
+      <SelectionComment article={article} container={rail} at="edge" taken={taken} />
+      <BlockComment hovering={hovering} container={rail} at="edge" taken={taken} />
     </div>
   );
+}
+
+/** A Comment button's height: one line of the UI's text in a button. */
+const BUTTON_REM = 1.75;
+
+/** `top` for a Comment button, moved to the nearest free room when it would cover a card. */
+function clearOf(top: number, taken: readonly Taken[] | undefined): number {
+  return taken ? freeSpot(top, BUTTON_REM * remPx(), taken) : top;
 }
 
 function same(a: Map<string, number>, b: Map<string, number>): boolean {
@@ -181,10 +194,13 @@ export function SelectionComment({
   article,
   container,
   at,
+  taken,
 }: {
   article: HTMLElement | null;
   container: RefObject<HTMLElement | null>;
   at: 'edge' | 'end';
+  /** The margin's cards, which the button never covers. */
+  taken?: readonly Taken[];
 }) {
   const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
   const drafting = useTourDraft() != null;
@@ -208,7 +224,7 @@ export function SelectionComment({
   return (
     <Button
       className="tour-comment-button"
-      style={spot}
+      style={{ ...spot, top: clearOf(spot.top, taken) }}
       // Pressing the button would otherwise clear the selection it comments on.
       onPointerDown={(e) => e.preventDefault()}
       onClick={() => void commentOnSelection()}

@@ -27,3 +27,22 @@ export function placeCards(items: readonly MarginItem[], active: string | null):
   }
   return new Map(items.map((item, i) => [item.id, tops[i]!]));
 }
+
+/** Room a card takes in the margin, from its top. */
+export interface Taken {
+  top: number;
+  height: number;
+}
+
+/**
+ * The top nearest `want` where something `height` tall covers none of the cards: `want` itself, or
+ * just below or just above a card. The cards stay where they are.
+ */
+export function freeSpot(want: number, height: number, cards: readonly Taken[]): number {
+  const clear = (top: number) =>
+    top >= 0 && cards.every((c) => top + height + CARD_GAP <= c.top || top >= c.top + c.height + CARD_GAP);
+  const candidates = [want, ...cards.flatMap((c) => [c.top + c.height + CARD_GAP, c.top - CARD_GAP - height])].filter(
+    clear,
+  );
+  return candidates.reduce((best, top) => (Math.abs(top - want) < Math.abs(best - want) ? top : best), Infinity);
+}

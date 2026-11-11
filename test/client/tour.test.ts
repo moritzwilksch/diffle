@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
 import { selectionTarget, textRange } from '@/client/tour/anchor.js';
-import { placeCards } from '@/client/tour/placement.js';
+import { freeSpot, placeCards } from '@/client/tour/placement.js';
 
 const PATCH = `diff --git a/app.py b/app.py
 --- a/app.py
@@ -93,6 +93,23 @@ describe('placeCards', () => {
       ['b', 110],
       ['c', 300],
     ]);
+  });
+});
+
+describe('freeSpot', () => {
+  const cards = [
+    { top: 100, height: 80 },
+    { top: 188, height: 40 },
+  ];
+
+  it('stays at its anchor where the margin is free', () => {
+    expect(freeSpot(20, 28, cards)).toBe(20);
+  });
+
+  it('takes the free room nearest its anchor, never over a card', () => {
+    // At 110 it would cover the first card; above it (64) is nearer than below the second (236).
+    expect(freeSpot(110, 28, cards)).toBe(64);
+    expect(freeSpot(200, 28, cards)).toBe(236);
   });
 });
 

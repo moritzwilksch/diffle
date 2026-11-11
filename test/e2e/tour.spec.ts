@@ -234,6 +234,33 @@ test.describe('the tour', () => {
     });
   });
 
+  test.describe('in a wide window, a block with a thread at its top', () => {
+    test.use({ viewport: { width: 1680, height: 900 } });
+
+    test("a block's Comment button takes the free margin beside the thread, never covering it", async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, COMMENTED);
+      const view = await showTour(page);
+      const button = view.getByRole('button', { name: 'Comment', exact: true });
+      const diff = view.locator('figure').first();
+      await diff.hover();
+      await button.click();
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+      await page.keyboard.type('Which lines count?');
+      await page.keyboard.press('Control+Enter');
+      const card = view.locator('.tour-margin-card').filter({ hasText: 'Which lines count?' });
+      await expect(card).toBeVisible();
+
+      await diff.hover();
+      await expect(button).toBeVisible();
+      const [b, c] = [(await button.boundingBox())!, (await card.boundingBox())!];
+      expect(b.y >= c.y + c.height || b.y + b.height <= c.y).toBe(true);
+      await expect(page).toHaveScreenshot('tour-comment-button-clear.png');
+    });
+  });
+
   test('a diagram box takes a comment with a click and a card with its button; a narrow page shows them under their blocks', async ({
     page,
     diffle,
