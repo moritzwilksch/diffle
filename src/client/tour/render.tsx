@@ -11,6 +11,7 @@ import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
+import { TourWalk } from './primitives/Walk.js';
 
 /**
  * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to
@@ -71,6 +72,11 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
         />
       );
     }
+    case 'diffle-walk': {
+      const [start, end] = lineSpan(element.lines);
+      const range = { path: element.path, side: element.side ?? 'new', start, end };
+      return <TourWalk key={key} source={node} range={range} renderNote={noteContent} />;
+    }
     case 'diffle-tree':
       return <TourTree key={key} paths={element.paths} root={element.root ?? ''} place={placeOf(node)} />;
     case 'diffle-jump': {
@@ -126,6 +132,11 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     default:
       return null;
   }
+}
+
+/** A walk's note as inline prose; one function, so a walk reads its notes once per document. */
+function noteContent(note: Element): ReactNode {
+  return <TourContent of={note} />;
 }
 
 /** A cell's `colspan` or `rowspan` when it is a positive number. */

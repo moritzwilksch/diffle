@@ -115,11 +115,16 @@ export function textRange(root: ParentNode, anchor: Spot): Range | null {
   return range;
 }
 
-/** The top of what a thread is on, in client coordinates; null when the page no longer shows it. */
+/**
+ * The top of what a thread is on, in client coordinates: its words, or the element, or the nearest
+ * shown element around it, as a walk around a note it does not show; null when the page shows none.
+ */
 export function anchorTop(root: ParentNode, anchor: Spot): number | null {
-  if (anchor.target.on === 'text') {
-    const rect = textRange(root, anchor)?.getClientRects()[0];
-    return rect ? rect.top : null;
+  const rect = anchor.target.on === 'text' ? textRange(root, anchor)?.getClientRects()[0] : undefined;
+  if (rect) return rect.top;
+  for (let n = anchor.node.length; n > 0; n--) {
+    const el = elementAt(root, anchor.node.slice(0, n));
+    if (el) return el.getBoundingClientRect().top;
   }
-  return elementAt(root, anchor.node)?.getBoundingClientRect().top ?? null;
+  return null;
 }

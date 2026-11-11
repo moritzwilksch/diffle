@@ -8,6 +8,7 @@ import { elementAt, NODE_ATTR, type Spot } from './anchor.js';
 const BLOCKS = new Set([
   'diffle-card',
   'diffle-diff',
+  'diffle-walk',
   'diffle-code',
   'diffle-tree',
   'diffle-callout',
