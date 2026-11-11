@@ -4,7 +4,8 @@ use html5ever::ns;
 
 use super::dom::{Dom, Node, NodeId};
 use super::element::{label, parse};
-use crate::protocol::{TourError, TourSvgClass, TourSvgElement};
+use super::icon;
+use crate::protocol::{TourError, TourSvgClass, TourSvgElement, TourSvgIcon};
 
 /// Where an element of the drawing sits, deciding what it may hold.
 #[derive(Clone, Copy, PartialEq)]
@@ -55,14 +56,15 @@ impl Check<'_> {
         if !known {
             return self.error(node, element, refusal(tag));
         }
+        // An `<svg>` in the drawing is an icon.
+        let is_icon = tag == "svg" && place == Place::Drawing;
         let fits = match tag {
-            "svg" => place == Place::Root,
+            "svg" => place != Place::Text,
             "tspan" => place == Place::Text,
             _ => place == Place::Drawing,
         };
         if !fits {
             let home = match tag {
-                "svg" => "an <svg> holds no other <svg>",
                 "tspan" => "<tspan> belongs in a <text>",
                 _ if place == Place::Text => "<text> holds text and <tspan>s only",
                 _ => "a diagram draws inside its <svg>",
@@ -73,8 +75,21 @@ impl Check<'_> {
         for (key, _) in styling {
             self.error(node, element.clone(), format!("{key}: diffle styles diagrams; use its classes instead"));
         }
-        if let Err(message) = parse::<TourSvgElement>(tag, &geometry) {
-            self.error(node, element.clone(), message);
+        let parsed = if is_icon {
+            parse::<TourSvgIcon>(tag, &geometry).map(|icon| Some(icon.data_lucide.as_str().to_owned()))
+        } else {
+            parse::<TourSvgElement>(tag, &geometry).map(|_| None)
+        };
+        match parsed {
+            Err(message) => self.error(node, element.clone(), message),
+            Ok(name) => {
+                if let Some(message) = name.as_deref().and_then(icon::refusal) {
+                    self.error(node, element.clone(), message);
+                }
+            }
+        }
+        if is_icon && self.dom.children(node).iter().any(|&c| holds(self.dom.node(c))) {
+            self.error(node, element.clone(), "an icon's <svg> holds nothing");
         }
         let classes = geometry.iter().filter(|(key, _)| key == "class").flat_map(|(_, v)| v.split_whitespace());
         for word in classes {
@@ -83,7 +98,8 @@ impl Check<'_> {
             }
         }
         let inner = if matches!(tag, "text" | "tspan") { Place::Text } else { Place::Drawing };
-        for &child in self.dom.children(node) {
+        let children = if is_icon { &[][..] } else { self.dom.children(node) };
+        for &child in children {
             self.visit(child, inner);
         }
     }

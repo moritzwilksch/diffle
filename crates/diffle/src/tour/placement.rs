@@ -38,6 +38,8 @@ pub enum Rule {
     Block,
     /// `diffle-symbol`: a word of the prose, holding nothing.
     Symbol,
+    /// `diffle-icon`: a mark in a line of text, holding nothing.
+    Icon,
 }
 
 impl Rule {
@@ -51,6 +53,7 @@ impl Rule {
             "diffle-jump" => Self::Jump,
             "diffle-diff" | "diffle-tree" => Self::Block,
             "diffle-symbol" => Self::Symbol,
+            "diffle-icon" => Self::Icon,
             _ => return None,
         })
     }
@@ -61,7 +64,7 @@ impl Rule {
             Self::Card => !place.in_text && !place.in_card && !place.in_callout,
             Self::Callout => !place.in_text && !place.in_callout,
             Self::Code | Self::Diagram | Self::Block => !place.in_text,
-            Self::Jump | Self::Symbol => !place.top,
+            Self::Jump | Self::Symbol | Self::Icon => !place.top,
         }
     }
 
@@ -71,7 +74,7 @@ impl Rule {
             Self::Card => "between paragraphs, outside other cards and callouts",
             Self::Callout => "between paragraphs, outside other callouts",
             Self::Code | Self::Diagram | Self::Block => "between paragraphs: it is a block, not part of a line of text",
-            Self::Jump | Self::Symbol => "inside a paragraph, a list item or other text",
+            Self::Jump | Self::Symbol | Self::Icon => "inside a paragraph, a list item or other text",
         }
     }
 }

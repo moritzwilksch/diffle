@@ -26,23 +26,24 @@ async fn server() -> TestServer {
 const TOUR: &str = r#"
 <h1>Loading users</h1>
 <p>One change, read in two sections.</p>
-<h2>Where it starts</h2>
+<h2><diffle-icon name="log-in"></diffle-icon> Where it starts</h2>
 <p>The loader is <strong>new</strong>: <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes an id
 (<diffle-jump path="app.py" line="2">see it</diffle-jump>).</p>
-<diffle-card id="entry" title="The loader returns the id">
+<diffle-card id="entry" title="The loader returns the id" icon="user">
   <p>It replaces <code>old</code>.</p>
   <diffle-diff path="app.py" lines="2-3"></diffle-diff>
 </diffle-card>
 <diffle-row>
   <div><p>The name changes, the file stays.</p></div>
   <table><thead><tr><th>Before</th><th>After</th></tr></thead>
-  <tbody><tr><td>old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
+  <tbody><tr><td><diffle-icon name="x" tone="error"></diffle-icon> old</td><td>load_user</td></tr><tr><td colspan="2">same file</td></tr></tbody></table>
 </diffle-row>
 <diffle-diagram><svg viewBox="0 0 320 72">
-  <g class="accent"><rect x="8" y="16" width="120" height="40"/><text x="20" y="36" class="bold">Loader</text></g>
+  <g class="accent"><rect x="8" y="16" width="120" height="40"/><svg data-lucide="user" x="16" y="29"/><text x="36" y="30" class="bold">Loader</text><text x="36" y="44" class="small">by id</text></g>
   <path d="M128 36 H192" class="arrow"/>
   <rect x="192" y="16" width="120" height="40" class="fill"/>
-  <text x="252" y="36" class="c">User <tspan class="mono">id</tspan></text>
+  <svg data-lucide="id-card" x="200" y="29"/>
+  <text x="220" y="36">User <tspan class="mono">id</tspan></text>
 </svg></diffle-diagram>
 <diffle-row>
 <diffle-code path="app.py" line="2">def load_user(id) -&gt; int: ...</diffle-code>
@@ -56,7 +57,7 @@ const TOUR: &str = r#"
 <h3>Layout</h3>
 <diffle-tree paths="app.py
 docs/readme.md"></diffle-tree>
-<diffle-callout kind="info"><p>Unchanged.</p></diffle-callout>
+<diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
 "#;
 
@@ -147,6 +148,13 @@ docs/readme.md"></diffle-tree>
 <p><diffle-code lang="rust">fn b()</diffle-code></p>
 <diffle-row><p>alone</p></diffle-row>
 <diffle-row>loose text<h2>In a row</h2><img src="x.png"><diffle-row><p>a</p><p>b</p></diffle-row></diffle-row>
+<diffle-icon name="user"></diffle-icon>
+<p><diffle-icon name="databse"></diffle-icon> <diffle-icon name="Database" tone="red"></diffle-icon></p>
+<diffle-card id="iconic" title="I" icon="usr"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
+<diffle-diagram><svg viewBox="0 0 100 50">
+  <svg data-lucide="user-icon" x="1" y="1"></svg>
+  <svg data-lucide="user" x="1" y="1" width="9"><path d="M0 0 H1"/></svg>
+</svg></diffle-diagram>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -216,6 +224,11 @@ m = 13
   <circle cx="600" cy="44" r="16" class="success"></circle>
   <rect x="960" y="24" width="64" height="40"></rect>
   <text x="990" y="88" class="small">ws: tour</text>
+</svg></diffle-diagram>
+<diffle-diagram><svg viewBox="0 0 368 60">
+  <rect x="8" y="16" width="96" height="28"/><svg data-lucide="user" x="16" y="20"/><text x="24" y="30">Overlaps</text>
+  <rect x="136" y="16" width="96" height="28"/><svg data-lucide="user" x="220" y="22"/><text x="144" y="30">Past</text>
+  <rect x="264" y="16" width="96" height="28"/><text x="272" y="30">Bare</text>
 </svg></diffle-diagram>"#;
 
 #[tokio::test]

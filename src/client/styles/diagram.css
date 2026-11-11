@@ -13,17 +13,18 @@
   --line: var(--fg-2);
 }
 
-.tour-diagram :is(rect, circle, ellipse, polygon) {
+/* An icon's own shapes keep Lucide's look: these rules skip them, at no cost in specificity. */
+.tour-diagram :is(rect, circle, ellipse, polygon):not(:where(.tour-diagram-icon *)) {
   fill: var(--face);
   stroke: var(--edge);
   stroke-width: 1.25;
 }
 
-.tour-diagram rect {
+.tour-diagram rect:not(:where(.tour-diagram-icon *)) {
   rx: 4px;
 }
 
-.tour-diagram :is(path, line, polyline) {
+.tour-diagram :is(path, line, polyline):not(:where(.tour-diagram-icon *)) {
   fill: none;
   stroke: var(--line);
   stroke-width: 1.25;
@@ -109,4 +110,9 @@
 
 .tour-diagram :is(text, tspan):is(.accent, .success, .warning, .error) {
   fill: var(--tone);
+}
+
+/* An icon takes the text's colour, or the tone of its group or its own class. */
+.tour-diagram .tour-diagram-icon {
+  color: var(--tone, var(--fg));
 }

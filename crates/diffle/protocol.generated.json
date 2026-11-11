@@ -2916,6 +2916,11 @@
           "type": "string",
           "minLength": 1,
           "description": "What this part of the diff does, as the card's heading."
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "A Lucide icon before the title, by its name on lucide.dev."
         }
       },
       "required": [
@@ -3017,6 +3022,11 @@
               "type": "string",
               "minLength": 1,
               "description": "What this part of the diff does, as the card's heading."
+            },
+            "icon": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+              "description": "A Lucide icon before the title, by its name on lucide.dev."
             }
           },
           "required": [
@@ -3227,6 +3237,36 @@
           ],
           "additionalProperties": false,
           "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. It holds its code as text, `<` written `&lt;`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-icon"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+              "description": "Its name on lucide.dev: `database`, `shield-check`."
+            },
+            "tone": {
+              "type": "string",
+              "enum": [
+                "accent",
+                "success",
+                "warning",
+                "error"
+              ],
+              "description": "A colour in place of the text's: `accent`, or `success`, `warning` and `error` for status."
+            }
+          },
+          "required": [
+            "tag",
+            "name"
+          ],
+          "additionalProperties": false,
+          "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3247,6 +3287,36 @@
         "message"
       ],
       "description": "One reason a pushed tour was refused, or one warning about an accepted one."
+    },
+    "TourIcon": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-icon"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Its name on lucide.dev: `database`, `shield-check`."
+        },
+        "tone": {
+          "type": "string",
+          "enum": [
+            "accent",
+            "success",
+            "warning",
+            "error"
+          ],
+          "description": "A colour in place of the text's: `accent`, or `success`, `warning` and `error` for status."
+        }
+      },
+      "required": [
+        "tag",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
     },
     "TourJump": {
       "type": "object",
@@ -3682,6 +3752,45 @@
         }
       ],
       "description": "An element of a diagram's `<svg>`, with its geometry. diffle styles each from its classes and the\ntheme and draws the arrowheads, so none takes `style`, `fill`, `stroke`, fonts or markers."
+    },
+    "TourSvgIcon": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "svg"
+        },
+        "data-lucide": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Its name on lucide.dev: `database`, `shield-check`."
+        },
+        "x": {
+          "type": "string",
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$",
+          "description": "Its top-left corner."
+        },
+        "y": {
+          "type": "string",
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+        },
+        "size": {
+          "type": "string",
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$",
+          "description": "Its width and height; 14 by default."
+        },
+        "class": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag",
+        "data-lucide",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false,
+      "description": "A Lucide icon in a diagram: an `<svg>` nested in the drawing, holding nothing. It takes its text's\ncolour, or the tone of its group or its own class."
     },
     "TourSymbol": {
       "type": "object",

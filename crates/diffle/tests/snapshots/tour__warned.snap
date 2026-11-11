@@ -50,5 +50,25 @@ expression: "pushed.json()[\"warnings\"]"
   {
     "element": "h2 \"Flow\" > diffle-diagram > <text x=\"990\" y=\"88\" class=\"small\">",
     "message": "May run past the drawing's right edge"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 368 60\">",
+    "message": "2 of 3 labelled boxes 28 tall carry an icon: give each one an icon, or none"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <svg data-lucide=\"user\" x=\"16\" y=\"20\">",
+    "message": "Sits 3 above its box's vertical middle: at y 20 it centres at 27, the middle is 30; set y to 23"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <text x=\"24\" y=\"30\">",
+    "message": "May overlap the icon at x 16: start the text at x 36, 6 after it"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <svg data-lucide=\"user\" x=\"220\" y=\"22\">",
+    "message": "Runs past its box: it spans 220-234 across and 22-36 down, the box 136-232 and 16-44"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <svg data-lucide=\"user\" x=\"220\" y=\"22\">",
+    "message": "Sits 1 above its box's vertical middle: at y 22 it centres at 29, the middle is 30; set y to 23"
   }
 ]

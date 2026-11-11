@@ -4,7 +4,8 @@ use serde_json::{Map, Value};
 
 /// The element `tag` with `attrs`, as the catalog in `protocol.ts` reads it, or why it does not fit.
 pub fn parse<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {
-    read::<T>(tag, attrs).map_err(|message| explain::<T>(tag, attrs, message))
+    // The tag is no attribute, though a struct that names it lists it among the fields.
+    read::<T>(tag, attrs).map_err(|message| explain::<T>(tag, attrs, message).replace("`tag`, ", ""))
 }
 
 fn read<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {

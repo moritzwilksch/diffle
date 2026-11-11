@@ -6,6 +6,7 @@ import { TourCard } from './primitives/Card.js';
 import { TourCode } from './primitives/Code.js';
 import { TourDiagram } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
+import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
@@ -85,10 +86,12 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       );
     case 'diffle-card':
       return (
-        <TourCard key={key} id={element.id} title={element.title}>
+        <TourCard key={key} id={element.id} title={element.title} icon={element.icon}>
           <TourContent of={node} inCallout={inCallout} />
         </TourCard>
       );
+    case 'diffle-icon':
+      return <TourIcon key={key} name={element.name} tone={element.tone} />;
     case 'diffle-callout':
       return inCallout ? null : (
         <Callout key={key} kind={element.kind}>

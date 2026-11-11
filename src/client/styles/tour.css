@@ -125,3 +125,36 @@
 .tour-article :is(.tour-card-body, .tour-row > div, aside .markdown) > :last-child {
   margin-bottom: 0;
 }
+
+/* A `diffle-icon`: one em square on the text's middle, in its colour or a tone. The box holds the
+   place while the icon loads. */
+.tour-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+
+.tour-icon > svg {
+  display: block;
+}
+
+.tour-icon[data-tone='accent'] {
+  color: var(--accent);
+}
+
+.tour-icon[data-tone='success'] {
+  color: var(--add);
+}
+
+.tour-icon[data-tone='warning'] {
+  color: var(--warn);
+}
+
+.tour-icon[data-tone='error'] {
+  color: var(--danger);
+}
+
+.tour-card-title .tour-icon {
+  margin-right: 0.4em;
+}

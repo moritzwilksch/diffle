@@ -1,8 +1,10 @@
 //! Warnings about a diagram's layout, checked from its geometry against the rules `--skill` gives:
 //! a label inside its box and on its middle, boxes on the grid and inside the drawing, the canvas
-//! width, and the share of toned shapes. What rests on the per-character estimate says "may"; a
+//! width, the share of toned shapes, and icons inside their boxes, clear of their text and on all
+//! sibling boxes or none. What rests on the per-character estimate says "may"; a
 //! geometric fact is said plainly.
 use super::dom::{Dom, Node, NodeId};
+use super::drawing::{Drawing, Rect, get};
 use super::element::label;
 use crate::protocol::TourError;
 
@@ -17,38 +19,8 @@ pub fn column_width(columns: usize) -> f64 {
     (PAGE_WIDTH - ROW_GAP * (n - 1.0)) / n
 }
 const GRID: f64 = 4.0;
-const TONES: [&str; 4] = ["accent", "success", "warning", "error"];
-
-struct Rect {
-    node: NodeId,
-    element: String,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    frame: bool,
-}
-
-struct Label {
-    node: NodeId,
-    element: String,
-    x: f64,
-    y: f64,
-    /// Its estimated extent, left to right, from its anchor and the per-character widths.
-    left: f64,
-    right: f64,
-    /// Whether it sits where its box's middle is: not an `eyebrow`, nor lines of `code`.
-    centred: bool,
-}
-
-#[derive(Default)]
-struct Drawing {
-    rects: Vec<Rect>,
-    labels: Vec<Label>,
-    /// Shapes that are nodes (not frames), and how many of them carry a tone.
-    shapes: usize,
-    toned: usize,
-}
+/// The room between an icon and the text after it.
+const ICON_GAP: f64 = 6.0;
 
 /// Every layout warning about the `diffle-diagram` at `node`, which warnings name as `element`;
 /// `columns` is the size of the row it sits in, 0 outside one.
@@ -62,10 +34,7 @@ pub fn warnings(dom: &Dom, node: NodeId, element: &str, columns: usize) -> Vec<(
     let view: Vec<f64> = get(attrs, "viewBox").split_whitespace().filter_map(|n| n.parse().ok()).collect();
     let [_, _, width, height] = view[..] else { return Vec::new() };
     let context = format!("{element} > ");
-    let mut drawing = Drawing::default();
-    for &child in dom.children(svg) {
-        drawing.visit(dom, child, false, &context);
-    }
+    let drawing = Drawing::read(dom, svg, &context);
     let mut found = Vec::new();
     let mut warn = |node: NodeId, element: &str, message: String| {
         found.push((node, TourError { element: element.into(), message }));
@@ -144,89 +113,82 @@ pub fn warnings(dom: &Dom, node: NodeId, element: &str, columns: usize) -> Vec<(
             warn(text.node, &text.element, message);
         }
     }
+    found.extend(icon_warnings(&drawing, svg, &svg_element));
     found
 }
 
-impl Drawing {
-    fn visit(&mut self, dom: &Dom, node: NodeId, toned: bool, context: &str) {
-        let Node::Element { name, attrs } = dom.node(node) else { return };
-        let tag = &*name.local;
-        let classes: Vec<&str> = get(attrs, "class").split_whitespace().collect();
-        let toned = toned || classes.iter().any(|c| TONES.contains(c));
-        let element = format!("{context}{}", label(tag, attrs));
-        let num = |key: &str| get(attrs, key).parse::<f64>().unwrap_or(0.0);
-        let frame = classes.contains(&"frame");
-        if matches!(tag, "rect" | "circle" | "ellipse" | "polygon") && !frame {
-            self.shapes += 1;
-            self.toned += usize::from(toned);
+/// Warnings about icons: each inside its box, on its middle and clear of its text, and either
+/// every labelled box of a height carrying one or none.
+fn icon_warnings(drawing: &Drawing, svg: NodeId, svg_element: &str) -> Vec<(NodeId, TourError)> {
+    let mut found = Vec::new();
+    let mut warn = |node: NodeId, element: &str, message: String| {
+        found.push((node, TourError { element: element.into(), message }));
+    };
+    for icon in &drawing.icons {
+        let Some(home) = drawing.icon_box(icon) else { continue };
+        let (right, bottom) = (icon.x + icon.size, icon.y + icon.size);
+        if icon.x < home.x || icon.y < home.y || right > home.x + home.w || bottom > home.y + home.h {
+            let message = format!(
+                "Runs past its box: it spans {}-{} across and {}-{} down, the box {}-{} and {}-{}",
+                n(icon.x),
+                n(right),
+                n(icon.y),
+                n(bottom),
+                n(home.x),
+                n(home.x + home.w),
+                n(home.y),
+                n(home.y + home.h)
+            );
+            warn(icon.node, &icon.element, message);
         }
-        match tag {
-            "rect" => {
-                let (x, y, w, h) = (num("x"), num("y"), num("width"), num("height"));
-                self.rects.push(Rect { node, element, x, y, w, h, frame });
-            }
-            "text" => {
-                let code = classes.contains(&"code");
-                // Lines of code are one `tspan` each: the widest line is the label's width.
-                let wide = if code {
-                    let lines = dom.children(node).iter().filter(|&&c| matches!(dom.node(c), Node::Element { .. }));
-                    lines.map(|&c| width(dom, c, &classes)).fold(0.0, f64::max)
-                } else {
-                    width(dom, node, &classes)
-                };
-                let (x, y) = (num("x"), num("y"));
-                let left = if classes.contains(&"c") {
-                    x - wide / 2.0
-                } else if classes.contains(&"e") {
-                    x - wide
-                } else {
-                    x
-                };
-                let centred = !code && !classes.contains(&"eyebrow");
-                self.labels.push(Label { node, element, x, y, left, right: left + wide, centred });
-            }
-            "g" => {
-                for &child in dom.children(node) {
-                    self.visit(dom, child, toned, context);
-                }
-            }
-            _ => {}
+        let (middle, centre) = (home.y + home.h / 2.0, icon.y + icon.size / 2.0);
+        if centre != middle {
+            let side = if centre > middle { "below" } else { "above" };
+            let message = format!(
+                "Sits {} {side} its box's vertical middle: at y {} it centres at {}, the middle is {}; set y to {}",
+                n((centre - middle).abs()),
+                n(icon.y),
+                n(centre),
+                n(middle),
+                n(middle - icon.size / 2.0)
+            );
+            warn(icon.node, &icon.element, message);
         }
-    }
-
-    /// The smallest box, not a frame, whose area holds the label's anchor.
-    fn box_of(&self, text: &Label) -> Option<&Rect> {
-        let holds = |r: &&Rect| !r.frame && (r.x..=r.x + r.w).contains(&text.x) && (r.y..=r.y + r.h).contains(&text.y);
-        self.rects.iter().filter(holds).min_by(|a, b| (a.w * a.h).total_cmp(&(b.w * b.h)))
-    }
-}
-
-/// A label's width by the `--skill` estimate, measured from Chromium's rendering of the UI fonts:
-/// per character 6 units, 5.5 in `small` and `eyebrow`; a `tspan` adds its own classes to its text's.
-fn width(dom: &Dom, node: NodeId, classes: &[&str]) -> f64 {
-    let per = if classes.iter().any(|c| matches!(*c, "small" | "eyebrow")) { 5.5 } else { 6.0 };
-    let mut total = 0.0;
-    for &child in dom.children(node) {
-        match dom.node(child) {
-            Node::Text(text) => {
-                let words: Vec<&str> = text.split_whitespace().collect();
-                let chars = words.iter().map(|w| w.chars().count()).sum::<usize>() + words.len().saturating_sub(1);
-                total += chars as f64 * per;
-            }
-            Node::Element { attrs, .. } => {
-                let mut inner = classes.to_vec();
-                inner.extend(get(attrs, "class").split_whitespace());
-                // Words in separate nodes are separated by a space the browser keeps.
-                total += width(dom, child, &inner) + per;
-            }
-            _ => {}
+        let beside = drawing.labels.iter().filter(|l| drawing.box_of(l).is_some_and(|b| b.node == home.node));
+        for text in beside.filter(|l| l.left < right + ICON_GAP && l.right > icon.x - ICON_GAP) {
+            let message = format!(
+                "May overlap the icon at x {}: start the text at x {}, {} after it",
+                n(icon.x),
+                n(right + ICON_GAP),
+                n(ICON_GAP)
+            );
+            warn(text.node, &text.element, message);
         }
     }
-    total
-}
-
-fn get<'a>(attrs: &'a [(String, String)], key: &str) -> &'a str {
-    attrs.iter().find(|(k, _)| k == key).map_or("", |(_, v)| v.as_str())
+    let labelled: Vec<&Rect> = drawing
+        .rects
+        .iter()
+        .filter(|r| drawing.labels.iter().any(|l| drawing.box_of(l).is_some_and(|b| b.node == r.node)))
+        .collect();
+    let mut heights: Vec<f64> = labelled.iter().map(|r| r.h).collect();
+    heights.sort_by(f64::total_cmp);
+    heights.dedup();
+    for height in heights {
+        let boxes: Vec<&&Rect> = labelled.iter().filter(|r| r.h == height).collect();
+        let marked = boxes
+            .iter()
+            .filter(|r| drawing.icons.iter().any(|i| drawing.icon_box(i).is_some_and(|b| b.node == r.node)));
+        let marked = marked.count();
+        if marked > 0 && marked < boxes.len() {
+            let message = format!(
+                "{marked} of {} labelled boxes {} tall carry an icon: give each one an icon, or none",
+                boxes.len(),
+                n(height)
+            );
+            warn(svg, svg_element, message);
+        }
+    }
+    found
 }
 
 /// A number as a diagram spells it: whole units without a fraction.

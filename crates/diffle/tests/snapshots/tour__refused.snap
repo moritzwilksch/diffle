@@ -102,7 +102,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-card id=\"a\" title=\"A\" step=\"1\" color=\"red\"",
-      "message": "unknown field `color`, expected `id` or `title`"
+      "message": "unknown field `color`, expected one of `icon`, `id`, `title`"
     },
     {
       "element": "h2 \"A\" > diffle-card#a > diffle-card id=\"nested\" title=\"Nested\"",
@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`"
+      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -183,6 +183,34 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > diffle-row",
       "message": "diffle-row belongs at the top level, between paragraphs"
+    },
+    {
+      "element": "h2 \"A\" > diffle-icon name=\"user\"",
+      "message": "diffle-icon belongs inside a paragraph, a list item or other text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-icon name=\"databse\"",
+      "message": "databse is not a Lucide icon; the closest are `database`, `database-x`, `table`. Find names at lucide.dev/icons"
+    },
+    {
+      "element": "h2 \"A\" > diffle-icon name=\"Database\" tone=\"red\"",
+      "message": "unknown variant `red`, expected one of `accent`, `success`, `warning`, `error`"
+    },
+    {
+      "element": "h2 \"A\" > diffle-card id=\"iconic\" title=\"I\" icon=\"usr\"",
+      "message": "usr is not a Lucide icon; the closest are `usb`, `user`, `bus`. Find names at lucide.dev/icons"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user-icon\" x=\"1\" y=\"1\">",
+      "message": "user-icon is not a Lucide icon; the closest are `user`, `user-cog`, `user-pen`. Find names at lucide.dev/icons"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user\" x=\"1\" y=\"1\" width=\"9\">",
+      "message": "unknown field `width`, expected one of `class`, `data-lucide`, `size`, `x`, `y`"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user\" x=\"1\" y=\"1\" width=\"9\">",
+      "message": "an icon's <svg> holds nothing"
     },
     {
       "element": "h2 \"A\" > <h1>",

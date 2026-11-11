@@ -7,6 +7,7 @@ use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
 use super::element::{label, parse, short};
 use super::files::{Reference, asks};
+use super::icon;
 use super::layout;
 use super::placement::{Place, Rule, is_column, misplaced};
 use crate::protocol::{TourElement, TourError, TourTag};
@@ -192,7 +193,7 @@ impl Walk {
                 self.errors.extend(diagram::check(dom, node, &element));
                 self.warnings.extend(layout::warnings(dom, node, &element, self.row));
             }
-            Rule::Block | Rule::Symbol => {
+            Rule::Block | Rule::Symbol | Rule::Icon => {
                 self.empty(dom, node, tag, &element);
                 if tag == "diffle-diff" && self.row > 0 {
                     let message = format!(
@@ -203,6 +204,14 @@ impl Walk {
                     self.warnings.push((node, TourError { element: element.clone(), message }));
                 }
             }
+        }
+        let named = match &parsed {
+            Some(TourElement::DiffleIcon { name, .. }) => Some(name.as_str()),
+            Some(TourElement::DiffleCard { icon, .. }) => icon.as_ref().map(|icon| icon.as_str()),
+            _ => None,
+        };
+        if let Some(message) = named.and_then(icon::refusal) {
+            self.error(node, element.clone(), message);
         }
         if let (Some(parsed), true) = (parsed, fits) {
             self.refer(node, element, parsed);

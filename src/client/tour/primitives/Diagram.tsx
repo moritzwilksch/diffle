@@ -1,6 +1,7 @@
 import { createElement, type ReactNode, useId } from 'react';
-import { type TourSvgClass, TourSvgClassSchema, TourSvgElementSchema } from '@/shared/protocol.js';
+import { type TourSvgClass, TourSvgClassSchema, TourSvgElementSchema, TourSvgIconSchema } from '@/shared/protocol.js';
 import { DiagramCode } from './DiagramCode.js';
+import { LucideIcon } from './Icon.js';
 
 type Tone = 'accent' | 'success' | 'warning' | 'error';
 const TONES: ReadonlySet<TourSvgClass> = new Set<Tone>(['accent', 'success', 'warning', 'error']);
@@ -13,6 +14,8 @@ const HEAD: Record<Tone | 'ink', string> = {
   error: 'var(--danger)',
 };
 const LINES = new Set(['path', 'line', 'polyline']);
+/** An icon's width and height without `size`; `ICON_SIZE` in crates/diffle/src/tour/layout.rs checks with it. */
+const ICON_SIZE = '14';
 
 /**
  * A card's diagram, drawn again from what `TourSvgElement` and `TourSvgClass` allow, so styles,
@@ -60,6 +63,7 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: (tone: Tone
     return inText ? node.textContent : null;
   }
   if (!(node instanceof Element)) return null;
+  if (node.localName === 'svg') return icon(node, key);
   const element = read(node);
   if (!element || element.tag === 'svg') return null;
   const { tag, class: words = '', ...rest } = element;
@@ -84,6 +88,18 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: (tone: Tone
     return <DiagramCode key={key} props={props} lines={lines} lang={lang ?? 'text'} />;
   }
   return createElement(tag, props, ...[...node.childNodes].map((child, i) => draw(child, i, own, head)));
+}
+
+/** An `<svg data-lucide>` in the drawing: the icon, in its text's colour or its tone. */
+function icon(node: Element, key: number): ReactNode {
+  const attrs = Object.fromEntries([...node.attributes].map((a) => [a.name, a.value]));
+  const parsed = TourSvgIconSchema.safeParse({ ...attrs, tag: 'svg' });
+  if (!parsed.success) return null;
+  const { 'data-lucide': name, x, y, size = ICON_SIZE, class: words = '' } = parsed.data;
+  const tones = words.split(/\s+/).filter((w) => TONES.has(w as TourSvgClass));
+  return (
+    <LucideIcon key={key} name={name} x={x} y={y} size={size} className={['tour-diagram-icon', ...tones].join(' ')} />
+  );
 }
 
 /** `el` as an element of the diagram catalog, or null when it is none or its attributes do not fit. */

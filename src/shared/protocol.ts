@@ -915,6 +915,8 @@ export type GraphResponse = z.infer<typeof GraphResponseSchema>;
 const tourIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 /** A positive integer, as an HTML attribute spells it. */
 const tourNumberSchema = z.string().regex(/^[1-9][0-9]*$/);
+/** A Lucide icon by its name on lucide.dev: `database`, `shield-check`. */
+const tourIconNameSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 
 /**
  * A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence
@@ -927,6 +929,22 @@ export const TourCardSchema = z
     id: tourIdSchema,
     /** What this part of the diff does, as the card's heading. */
     title: z.string().min(1),
+    /** A Lucide icon before the title, by its name on lucide.dev. */
+    icon: tourIconNameSchema.optional(),
+  })
+  .strict();
+
+/**
+ * A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and
+ * colour. It marks one kind of thing the same way throughout the tour. It holds nothing.
+ */
+export const TourIconSchema = z
+  .object({
+    tag: z.literal('diffle-icon'),
+    /** Its name on lucide.dev: `database`, `shield-check`. */
+    name: tourIconNameSchema,
+    /** A colour in place of the text's: `accent`, or `success`, `warning` and `error` for status. */
+    tone: z.enum(['accent', 'success', 'warning', 'error']).optional(),
   })
   .strict();
 
@@ -1110,6 +1128,25 @@ export const TourSvgElementSchema = z.discriminatedUnion('tag', [
 export type TourSvgElement = z.infer<typeof TourSvgElementSchema>;
 
 /**
+ * A Lucide icon in a diagram: an `<svg>` nested in the drawing, holding nothing. It takes its text's
+ * colour, or the tone of its group or its own class.
+ */
+export const TourSvgIconSchema = z
+  .object({
+    tag: z.literal('svg'),
+    /** Its name on lucide.dev: `database`, `shield-check`. */
+    'data-lucide': tourIconNameSchema,
+    /** Its top-left corner. */
+    x: svgNumberSchema,
+    y: svgNumberSchema,
+    /** Its width and height; 14 by default. */
+    size: svgNumberSchema.optional(),
+    class: svgClassSchema.optional(),
+  })
+  .strict();
+export type TourSvgIcon = z.infer<typeof TourSvgIconSchema>;
+
+/**
  * The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),
  * `dashed`. Text: `bold`, `small`, `mono`, `code` (lines of code in its `lang`, one `tspan` each,
  * highlighted), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).
@@ -1158,6 +1195,7 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourDiagramSchema,
   TourRowSchema,
   TourCodeSchema,
+  TourIconSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
