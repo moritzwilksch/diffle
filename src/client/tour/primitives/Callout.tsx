@@ -7,7 +7,7 @@ export function Callout({ kind, children }: { kind: 'note' | 'warning'; children
   const Icon = kind === 'warning' ? TriangleAlert : Info;
   return (
     <aside
-      className="my-1.5 flex gap-2 rounded-r-md border-l-3 px-2.5 py-1.5"
+      className="tour-block flex gap-2 rounded-r-md border-l-3 px-3 py-2"
       style={{ borderColor: color, background: `color-mix(in srgb, ${color} 8%, var(--bg))` }}
       aria-label={kind}
     >

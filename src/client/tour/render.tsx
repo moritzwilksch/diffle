@@ -10,13 +10,23 @@ import { TourSymbol } from './primitives/Symbol.js';
 import { TourTree } from './primitives/Tree.js';
 
 /**
- * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to an http(s) URL, a
- * table cell with its spans),
- * the content primitives, and text. Everything else, its attributes included, is left out, so a
- * tour, written by an agent that read untrusted code, can do no more than the catalog says.
+ * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to
+ * an http(s) URL, a table cell with its spans), the content primitives, and text. Everything else,
+ * its attributes included, is left out, so a tour, written by an agent that read untrusted code,
+ * can do no more than the catalog says.
  */
 export function TourContent({ of, inCallout = false }: { of: Element; inCallout?: boolean }): ReactNode {
   return [...of.childNodes].map((node, i) => contentNode(node, i, inCallout));
+}
+
+/** The article itself: as `TourContent`, with each `h2` carrying its step number in `data-step`. */
+export function TourArticle({ of }: { of: Element }): ReactNode {
+  let step = 0;
+  return [...of.childNodes].map((node, i) =>
+    node instanceof Element && node.localName === 'h2'
+      ? createElement('h2', { key: i, 'data-step': ++step }, <TourContent of={node} />)
+      : contentNode(node, i, false),
+  );
 }
 
 function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNode {

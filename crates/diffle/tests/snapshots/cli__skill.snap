@@ -83,7 +83,7 @@ one pixel. diffle styles it from the classes below and the theme, and draws the 
 write no `style`, `fill`, `stroke`, font or marker attributes and no `<defs>`.
 
 - Make one point per diagram, and draw only the parts it needs. It shows at its own width and
-  never larger; keep it 1400 wide or less, the page at its widest, or a row's column width, or it
+  never larger; keep it 920 wide or less, the page's column, or a row's column width, or it
   shrinks, text and all.
 - Place parts on a grid: snap to 8, keep one column and row pitch, and give the boxes in a row the
   same height and gaps.

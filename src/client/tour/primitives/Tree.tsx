@@ -59,7 +59,7 @@ export function TourTree({ paths, root }: { paths: string; root: string }) {
     </ul>
   );
   return (
-    <div className="my-1.5 rounded-md border border-border bg-canvas py-1 pr-2 font-mono text-[0.75rem] [&>ul]:pl-2">
+    <div className="tour-block rounded-md border border-border bg-canvas py-1.5 pr-2 font-mono text-[0.75rem] [&>ul]:pl-2">
       {root && <div className="pl-2 text-muted">{root}/</div>}
       {level(top)}
     </div>

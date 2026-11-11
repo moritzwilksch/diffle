@@ -61,7 +61,7 @@ export function TourDiff({ range }: { range: LineRange }) {
   const primed = usePrimed(prime);
   const lines = start === end ? `${start}` : `${start}-${end}`;
   return (
-    <figure className="mx-0 my-1.5 overflow-hidden rounded-md border border-border bg-canvas">
+    <figure className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas">
       <figcaption className="flex items-center gap-1.5 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
         <FilePath path={path} className="min-w-0 flex-1" nowrap />
         <span className="shrink-0 font-mono text-muted">

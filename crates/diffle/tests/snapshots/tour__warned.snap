@@ -5,11 +5,15 @@ expression: "pushed.json()[\"warnings\"]"
 [
   {
     "element": "h2 \"Flow\" > diffle-diff path=\"app.py\" lines=\"2\"",
-    "message": "Lines in this diff may wrap: a column in a row of two is about 688 wide"
+    "message": "Lines in this diff may wrap: a column in a row of two is about 448 wide"
   },
   {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 720 40\">",
-    "message": "Is 720 wide; a column in a row of two is about 688, so it shrinks, text and all"
+    "message": "Is 720 wide; a column in a row of two is about 448, so it shrinks, text and all"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",
+    "message": "Is 1000 wide; the page is at most 920, so it shrinks, text and all"
   },
   {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 1000 96\">",

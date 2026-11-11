@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { TourDocument } from './document.js';
-import { TourContent } from './render.js';
+import { TourArticle } from './render.js';
 import { useTour } from './state.js';
 
 /** What the keys do to the mounted page. */
@@ -8,8 +8,13 @@ export const tourPage = { scroll: (_by: number) => {} };
 
 /** Where a heading lands when its section is taken, as a share of the page's height: the diff's gaze point. */
 const EYE_FRACTION = 0.5;
-/** The widest the article gets; prose inside it keeps its own measure. */
-export const PAGE_WIDTH = 1400;
+/**
+ * The article's one column: a card's diff shows a 100-character line unwrapped. `PAGE_WIDTH` in
+ * crates/diffle/src/tour/layout.rs words the warnings with it.
+ */
+export const PAGE_WIDTH = 920;
+/** Room on each side of the column, in pixels so the column is exactly `PAGE_WIDTH`. */
+const GUTTER = 24;
 
 /**
  * The tour as an article that scrolls. Taking a section scrolls its heading to the gaze point;
@@ -43,8 +48,11 @@ export function TourPage({ doc }: { doc: TourDocument }) {
   return (
     <div ref={ref} className="h-full overflow-auto" onScroll={follow}>
       {/* Room below the last section, so its heading can reach the gaze point too. */}
-      <article className="tour-article markdown mx-auto px-6 pt-8 pb-[50vh]" style={{ maxWidth: PAGE_WIDTH + 48 }}>
-        <TourContent of={doc.body} />
+      <article
+        className="tour-article markdown mx-auto pt-8 pb-[50vh]"
+        style={{ maxWidth: PAGE_WIDTH + 2 * GUTTER, paddingInline: GUTTER }}
+      >
+        <TourArticle of={doc.body} />
       </article>
     </div>
   );

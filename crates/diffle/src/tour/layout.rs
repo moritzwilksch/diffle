@@ -6,9 +6,9 @@ use super::dom::{Dom, Node, NodeId};
 use super::element::label;
 use crate::protocol::TourError;
 
-/// The article's width at its widest, and the gap between a row's columns, as `TourPage.tsx` and
+/// The article's column, and the gap between a row's columns, as `TourPage.tsx` and
 /// `styles/tour.css` lay them out.
-const PAGE_WIDTH: f64 = 1400.0;
+const PAGE_WIDTH: f64 = 920.0;
 const ROW_GAP: f64 = 24.0;
 
 /// How wide a column of a row of `columns` is when the page is at its widest.
