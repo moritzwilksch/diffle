@@ -91,6 +91,10 @@ tally/currency.py"></diffle-tree>
 <diffle-tab title="One pass" kind="rejected"><p>One pass flags a refund whose sale comes later in the file.</p></diffle-tab>
 <diffle-tab title="A flagged refund" kind="example"><diffle-code lang="json" example>{ "account": "acme", "description": "gadget", "kind": "refund" }</diffle-code></diffle-tab>
 </diffle-tabs>
+<details><summary>Refunds in another currency</summary>
+<p>A refund matches a sale by account and description alone; the currency plays no part.</p>
+<diffle-diff path="tally/refunds.py" lines="21"></diffle-diff>
+</details>
 `;
 
 /** Two walks, both in view on a laptop's screen. */
@@ -349,6 +353,20 @@ test.describe('the tour', () => {
     await expect(tabs.getByRole('tab', { name: /One pass/ })).toHaveAttribute('aria-selected', 'true');
     await expect(tabs.getByRole('tabpanel')).toContainText('flags a refund whose sale comes later');
     await expect(tabs.getByRole('tabpanel')).not.toContainText('Sales first');
+  });
+
+  test('details fold away what the main path can do without', async ({ page, diffle }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    const details = view.locator('details');
+    await details.scrollIntoViewIfNeeded();
+    await expect(details.getByText('the currency plays no part')).toBeHidden();
+    await expect(details).toHaveScreenshot('tour-details.png');
+    await details.getByText('Refunds in another currency').click();
+    await expect(details.getByText('the currency plays no part')).toBeVisible();
+    await expect(details.getByText('Loading…')).toHaveCount(0);
+    await page.mouse.move(0, 0);
+    await expect(details).toHaveScreenshot('tour-details-open.png');
   });
 
   test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {

@@ -9,6 +9,7 @@
 @import './styles/diagram.css' layer(components);
 @import './styles/tour.css' layer(components);
 @import './styles/steps.css' layer(components);
+@import './styles/panes.css' layer(components);
 
 @theme inline {
   --color-canvas: var(--bg);

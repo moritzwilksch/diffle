@@ -6,7 +6,7 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 
 ### 1. Write a tour as an HTML article: headings for structure, blocks in the flow
 
-- **Chosen:** The agent writes one HTML document, read as an article. An optional `h1` titles it, each `h2` starts a section, and `h3` a subsection. Between headings sit prose (`p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `div`, `section`, `h4`) and blocks: `diffle-card`, `diffle-diff`, `diffle-walk`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, and tables (`table`, `thead`, `tbody`, `tr`, `th`, `td`). Inline primitives (`diffle-symbol`, `diffle-jump`) sit in prose. Everything shares one centred column (decision 9).
+- **Chosen:** The agent writes one HTML document, read as an article. An optional `h1` titles it, each `h2` starts a section, and `h3` a subsection. Between headings sit prose (`p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `div`, `section`, `h4`, `details` with its `summary`) and blocks: `diffle-card`, `diffle-diff`, `diffle-walk`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, and tables (`table`, `thead`, `tbody`, `tr`, `th`, `td`). Inline primitives (`diffle-symbol`, `diffle-jump`) sit in prose. Everything shares one centred column (decision 9).
 - **Rejected:**
   - Markdown with primitive fences (` ```diffle-diff path=… `) through `src/client/Markdown.tsx`. It is safe already and agents write it reliably, but it carries no cards, diagrams or symbol chips.
   - A pannable, zoomable canvas of cards joined by arrows, as the graph view draws (`src/client/graph/GraphCanvas.tsx`). It was built first and dropped: the reviewer found it looked too much like the graph view and wanted a page, with cards wide enough that diff lines don't wrap. Arrows between cards also collided with group frames.
@@ -215,6 +215,12 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** A `diffle-row` of the alternatives. It halves each one's width, and a diff in it wraps.
 - **Why:** A design next to the one it beat, or a payload before and after, reads best in one place, at full width.
 
+### 25. `<details>` folds away what the main path can do without
+
+- **Chosen:** `details` and `summary` are plain tags. A `<details>` is a block that opens with one `<summary>` (a line of text) and holds what a card holds; the validator refuses one without a summary first, a summary elsewhere, and a `<details>` in a line of text. Its frame, the turning chevron and the open border come from `tour.css`. `--skill` limits it to what the main path can do without: an edge case, a long aside.
+- **Rejected:** A `diffle-aside` element. The platform's own element opens and closes without script and is one an agent already writes.
+- **Why:** Some explanations matter to one reviewer in five; folded, they cost the others one line.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -290,6 +296,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 12. Stepped diagrams: `step` on a diagram's groups, its notes. Verify: `pixi run test-rust`, `pixi run test-node`, `pixi run e2e -g 'the tour'`.
 13. Traces: `diffle-trace` and `diffle-stop`. Verify: as slice 12.
 14. Tabs: `diffle-tabs` and `diffle-tab`. Verify: as slice 12.
+15. Details: `<details>` and `<summary>`. Verify: as slice 12.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 

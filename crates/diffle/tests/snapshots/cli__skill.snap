@@ -61,6 +61,9 @@ their `<h3>` subsections. Each review has one tour.
   diffs and cards with diffs full width: in a row their lines may wrap. A narrow window stacks a
   row's columns.
 - Keep a diff to at most about 12 lines, and split a long story into more sections.
+- Fold what the main path can do without into a `<details>` that opens with its `<summary>`: an
+  edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
+  the reviewer needs to follow the change.
 - Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
   `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
   bug or breaking change, and only where the diff supports it.
@@ -415,7 +418,7 @@ One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no he
 
 ### Plain tags
 
-The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the walk, and `h3` a subsection; the rest carry prose, lists and tables. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take `colspan` and `rowspan` as positive numbers. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`, `table`, `thead`, `tbody`, `tr`, `th`, `td`
+The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the walk, and `h3` a subsection; the rest carry prose, lists and tables, and `details` folds away what the main path can do without, opening with its `summary`. They take no attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take `colspan` and `rowspan` as positive numbers. `h1`, `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `code`, `pre`, `strong`, `em`, `a`, `section`, `div`, `details`, `summary`, `table`, `thead`, `tbody`, `tr`, `th`, `td`
 
 ### Example
 
