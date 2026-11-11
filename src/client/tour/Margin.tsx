@@ -142,6 +142,11 @@ export function Margin({
     // `items` follows `live` and `draft`; `layout` and `heights` count what moved without a render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article, live, draft, active, layout, heights]);
+  // The draft, once level with its anchor, scrolls into view only as far as it has to.
+  const draftTop = tops.get(DRAFT);
+  useEffect(() => {
+    if (draftTop != null) cards.current.get(DRAFT)?.scrollIntoView({ block: 'nearest' });
+  }, [draftTop, draft]);
   // A card that grows (a reply opened, a message edited) moves the cards below it.
   useEffect(() => {
     const observer = new ResizeObserver(() => setHeights((n) => n + 1));
@@ -247,7 +252,12 @@ export function InlineThreads({ index }: { index: number }) {
       {mine.map((t) => (
         <Card key={t.id} id={t.id} thread={t} />
       ))}
-      {drafted && <Card id={DRAFT} draft={draft} />}
+      {drafted && (
+        // In the flow under its block from the start: it scrolls into view only as far as it has to.
+        <div ref={(el) => el?.scrollIntoView({ block: 'nearest' })}>
+          <Card id={DRAFT} draft={draft} />
+        </div>
+      )}
     </div>
   );
 }

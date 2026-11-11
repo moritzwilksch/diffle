@@ -39,15 +39,16 @@ export function CommentComposer({ label, className }: { label: string; className
   }, [text]);
 
   // Focus on every open, not just on mount. The viewer lays out only rows near the viewport: a composer
-  // off screen has no box to take focus until the jump to it renders it.
+  // off screen has no box to take focus until the jump to it renders it. Focus never scrolls: where the
+  // composer shows is its host's to place (the diff's jump, the tour's margin), and it may not be placed yet.
   useEffect(() => {
     const textarea = ref.current;
     if (!textarea) return;
-    if (textarea.getClientRects().length > 0) return textarea.focus();
+    if (textarea.getClientRects().length > 0) return textarea.focus({ preventScroll: true });
     const observer = new ResizeObserver(() => {
       if (textarea.getClientRects().length === 0) return;
       observer.disconnect();
-      textarea.focus();
+      textarea.focus({ preventScroll: true });
     });
     observer.observe(textarea);
     return () => observer.disconnect();

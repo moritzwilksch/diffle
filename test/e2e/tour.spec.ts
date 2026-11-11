@@ -234,7 +234,7 @@ test.describe('the tour', () => {
     });
   });
 
-  test.describe('in a wide window, a block with a thread at its top', () => {
+  test.describe("in a wide window, a block's Comment button", () => {
     test.use({ viewport: { width: 1680, height: 900 } });
 
     test("a block's Comment button takes the free margin beside the thread, never covering it", async ({
@@ -258,6 +258,35 @@ test.describe('the tour', () => {
       const [b, c] = [(await button.boundingBox())!, (await card.boundingBox())!];
       expect(b.y >= c.y + c.height || b.y + b.height <= c.y).toBe(true);
       await expect(page).toHaveScreenshot('tour-comment-button-clear.png');
+    });
+
+    test("a deep block's Comment button opens the composer level with it, without moving the page", async ({
+      page,
+      diffle,
+    }) => {
+      const filler = Array.from(
+        { length: 6 },
+        (_, i) => `<h2>Step ${i + 1}</h2><p>${'Context the reader needs first. '.repeat(30)}</p>`,
+      ).join('');
+      await pushTour(
+        diffle.url,
+        `${filler}<h2>Parsing</h2>${BLOCKS}`.replace('<h2>Parsing reads the kind column</h2>', ''),
+      );
+      const view = await showTour(page);
+      const card = view.locator('[data-card="parse"]');
+      await card.scrollIntoViewIfNeeded();
+      const scroller = view.locator('.tour-layout').locator('..');
+      const before = await scroller.evaluate((el) => el.scrollTop);
+      expect(before).toBeGreaterThan(500);
+      await card.locator('p').hover();
+      await view.getByRole('button', { name: 'Comment', exact: true }).click();
+
+      const composer = view.getByPlaceholder('Leave a comment…');
+      await expect(composer).toBeFocused();
+      await expect(composer).toBeInViewport();
+      const top = async (el: typeof card) => (await el.boundingBox())!.y;
+      expect(Math.abs((await top(view.locator('.tour-margin-card'))) - (await top(card)))).toBeLessThanOrEqual(1);
+      expect(Math.abs((await scroller.evaluate((el) => el.scrollTop)) - before)).toBeLessThanOrEqual(1);
     });
   });
 
