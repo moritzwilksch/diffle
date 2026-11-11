@@ -322,6 +322,20 @@ async fn reports_websocket_clients_joining_and_leaving() {
 }
 
 #[tokio::test]
+async fn shutdown_sends_a_going_away_close_frame() {
+    let s = TestServer::start().await;
+    let mut ws = connect(&s, &[]).await.unwrap();
+    clients(&s, 1).await;
+    s.close().await;
+    let message = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
+    let tokio_tungstenite::tungstenite::Message::Close(Some(frame)) = message else {
+        panic!("expected a shutdown close frame, got {message:?}");
+    };
+    assert_eq!(frame.code, tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Away);
+    assert_eq!(frame.reason, "diffle shutting down");
+}
+
+#[tokio::test]
 async fn survives_a_malformed_websocket_frame_and_keeps_serving() {
     let s = TestServer::start().await;
     let mut sock = tokio::net::TcpStream::connect(s.host()).await.unwrap();

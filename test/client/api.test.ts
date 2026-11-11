@@ -5,12 +5,12 @@ class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
   onopen: (() => void) | null = null;
   onmessage: ((e: { data: string }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((e: { code: number }) => void) | null = null;
   constructor(readonly url: string) {
     FakeWebSocket.instances.push(this);
   }
   close(): void {
-    this.onclose?.();
+    this.onclose?.({ code: 1006 });
   }
 }
 
@@ -45,12 +45,12 @@ describe('connectWs', () => {
 
     // The server goes away; the repository and comments change meanwhile; no push can arrive.
     expect(onLost).not.toHaveBeenCalled();
-    FakeWebSocket.instances[0]!.onclose?.();
+    FakeWebSocket.instances[0]!.onclose?.({ code: 1006 });
     expect(onLost).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(500);
     expect(FakeWebSocket.instances).toHaveLength(2);
     // A failed retry is the same outage, not a new one.
-    FakeWebSocket.instances[1]!.onclose?.();
+    FakeWebSocket.instances[1]!.onclose?.({ code: 1006 });
     vi.advanceTimersByTime(1000);
     expect(FakeWebSocket.instances).toHaveLength(3);
     expect(onLost).toHaveBeenCalledTimes(1);
@@ -107,7 +107,7 @@ describe('proxy paths', () => {
     expect(fetch.mock.calls[2]![1]).toMatchObject({ method: 'DELETE' });
     const stop = connectWs(vi.fn(), vi.fn(), vi.fn());
     expect(FakeWebSocket.instances[0]!.url).toBe(socket);
-    FakeWebSocket.instances[0]!.onclose?.();
+    FakeWebSocket.instances[0]!.onclose?.({ code: 1006 });
     vi.advanceTimersByTime(500);
     expect(FakeWebSocket.instances[1]!.url).toBe(socket);
     stop();
