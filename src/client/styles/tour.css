@@ -158,3 +158,68 @@
 .tour-card-title .tour-icon {
   margin-right: 0.4em;
 }
+
+/* The article's column and, while it fits, the margin of comments beside it, centred as a pair. */
+.tour-layout {
+  display: flex;
+  justify-content: center;
+  padding-block: 2rem;
+}
+
+/* Each card hangs level with what it is on (`placeCards` in tour/placement.ts). */
+.tour-margin {
+  position: relative;
+  height: 100%;
+}
+
+.tour-margin-card {
+  position: absolute;
+  inset-inline: 0;
+  transition: top 120ms ease;
+}
+
+.tour-margin .tour-margin-card > *,
+.tour-inline-threads > * {
+  margin-inline: 0;
+}
+
+.tour-comment-button {
+  position: absolute;
+  left: 0;
+  z-index: 1;
+}
+
+/* The words a thread is on, through the CSS Custom Highlight API; the active thread's stronger. */
+::highlight(tour-comment) {
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+::highlight(tour-comment-active) {
+  background-color: color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+.tour-inline-threads {
+  margin: -0.75rem 0 1.5rem;
+}
+
+.tour-stale-threads {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.tour-stale-threads > h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.tour-stale-threads > p {
+  margin: 0 0 0.75rem;
+  color: var(--fg-2);
+  font-size: 0.8125rem;
+}
+
+.tour-stale-threads > div > * {
+  margin-inline: 0;
+}

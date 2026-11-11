@@ -54,12 +54,11 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
   - A `step` attribute on cards. A page reads top to bottom, so document order is the walk.
 - **Why:** A tour exists to give the reviewer a high-level walk through the change. The order the agent picks is part of the explanation.
 
-### 7. The reviewer's feedback goes to the agent's own chat in v1
+### 7. The reviewer comments on the tour in diffle
 
-- **Chosen:** A tour is not a comment anchor. The reviewer tells their agent what to change or asks it questions in the agent's own session, and the agent pushes a revised tour (decision 3). Comments on the actual lines still go through the diff view and the existing threads.
-- **Rejected:** Comments on tour cards as threads the agent reads through `/api/threads/activity`. They would keep the conversation in diffle, but need a `tour` anchor in `CommentAnchorSchema` that GitHub export and the prompt format must skip.
-- **Why:** No new anchor kind, and nothing changes for export.
-- **Revisit when:** reviewers want to ask questions about a card without leaving diffle (Follow-ups).
+- **Chosen:** Superseded by `plans/tour-comments.md`: a tour thread is a comment thread on a passage or an element of the tour, shown in a margin beside the article, read through `diffle comments list` and the prompt, and answered with `diffle comments reply`. The reviewer can still answer in the agent's own chat.
+- **Rejected:** Feedback only in the agent's chat (this decision's first version). It needed no anchor, but a question about one paragraph left diffle, and the agent had to guess which passage it was about.
+- **Why:** Reviewers wanted to ask about a card or a sentence where they read it.
 
 ### 8. A tour survives refreshes; a diff whose lines left the review says so in place
 
@@ -260,4 +259,4 @@ None.
 
 ## Follow-ups
 
-- Comments on a tour's sections that reach the agent through diffle, for when reviewers want answers without leaving diffle (decision 7).
+None.

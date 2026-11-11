@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { relativeTime } from '@/client/model.js';
 import { Button } from '@/client/ui/Button.js';
+import { useTourThreads } from './comments.js';
 import { useTour } from './state.js';
 import { TourPage } from './TourPage.js';
 
@@ -9,6 +10,7 @@ export function TourView() {
   const load = useTour((s) => s.load);
   const step = useTour((s) => s.step);
   const staleDiffs = useTour((s) => s.staleDiffs);
+  const lost = useTourThreads().stale.length;
   if (load.state !== 'ready')
     return (
       <section className="flex h-full items-center justify-center bg-canvas text-muted" aria-label="Tour view">
@@ -26,6 +28,11 @@ export function TourView() {
         {staleDiffs > 0 && (
           <span className="text-warn" title="Their lines left the review since the tour was pushed">
             {staleDiffs} stale {staleDiffs === 1 ? 'diff' : 'diffs'}
+          </span>
+        )}
+        {lost > 0 && (
+          <span className="text-warn" title="The last push no longer holds what they are on; they are after the tour">
+            {lost} {lost === 1 ? 'comment' : 'comments'} not in this tour
           </span>
         )}
         <span className="flex-1" />

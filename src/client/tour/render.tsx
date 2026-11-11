@@ -1,5 +1,6 @@
-import { createElement, type ReactNode } from 'react';
+import { createElement, Fragment, type ReactNode } from 'react';
 import { TourTagSchema } from '@/shared/protocol.js';
+import { placeOf } from './anchor.js';
 import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
@@ -21,14 +22,20 @@ export function TourContent({ of, inCallout = false }: { of: Element; inCallout?
   return [...of.childNodes].map((node, i) => contentNode(node, i, inCallout));
 }
 
-/** The article itself: as `TourContent`, with each `h2` carrying its step number in `data-step`. */
-export function TourArticle({ of }: { of: Element }): ReactNode {
+/**
+ * The article itself: as `TourContent`, with each `h2` carrying its step number in `data-step`, and
+ * what `after` gives for each top-level element, by its place, after it.
+ */
+export function TourArticle({ of, after }: { of: Element; after?: (index: number) => ReactNode }): ReactNode {
   let step = 0;
-  return [...of.childNodes].map((node, i) =>
-    node instanceof Element && node.localName === 'h2'
-      ? createElement('h2', { key: i, 'data-step': ++step }, <TourContent of={node} />)
-      : contentNode(node, i, false),
-  );
+  return [...of.children].map((node, i) => (
+    <Fragment key={i}>
+      {node.localName === 'h2'
+        ? createElement('h2', { 'data-step': ++step, ...placeOf(node) }, <TourContent of={node} />)
+        : contentNode(node, i, false)}
+      {after?.(i)}
+    </Fragment>
+  ));
 }
 
 function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNode {
@@ -41,16 +48,31 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       tag.data === 'a' && href && /^https?:\/\//.test(href) ? { href, target: '_blank', rel: 'noreferrer' } : {};
     const spans =
       tag.data === 'th' || tag.data === 'td' ? { colSpan: span(node, 'colspan'), rowSpan: span(node, 'rowspan') } : {};
-    return createElement(tag.data, { key, ...link, ...spans }, <TourContent of={node} inCallout={inCallout} />);
+    return createElement(
+      tag.data,
+      { key, ...link, ...spans, ...placeOf(node) },
+      <TourContent of={node} inCallout={inCallout} />,
+    );
   }
   const element = primitive(node);
   switch (element?.tag) {
     case 'diffle-diff': {
       const [start, end] = lineSpan(element.lines);
-      return <TourDiff key={key} range={{ path: element.path, side: element.side ?? 'new', start, end }} />;
+      return (
+        <TourDiff
+          key={key}
+          range={{
+            path: element.path,
+            side: element.side ?? 'new',
+            start,
+            end,
+          }}
+          place={placeOf(node)}
+        />
+      );
     }
     case 'diffle-tree':
-      return <TourTree key={key} paths={element.paths} root={element.root ?? ''} />;
+      return <TourTree key={key} paths={element.paths} root={element.root ?? ''} place={placeOf(node)} />;
     case 'diffle-jump': {
       const line = element.line == null ? undefined : Number(element.line);
       const label = node.textContent?.trim() || (line == null ? element.path : `${element.path}:${line}`);
@@ -72,6 +94,7 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       return (
         <TourCode
           key={key}
+          place={placeOf(node)}
           code={node.textContent ?? ''}
           lang={element.lang}
           path={element.path}
@@ -82,13 +105,13 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       );
     case 'diffle-row':
       return (
-        <div key={key} className="tour-row" data-columns={node.children.length}>
+        <div key={key} className="tour-row" data-columns={node.children.length} {...placeOf(node)}>
           {[...node.children].map((column, i) => contentNode(column, i, inCallout))}
         </div>
       );
     case 'diffle-card':
       return (
-        <TourCard key={key} id={element.id} title={element.title} icon={element.icon}>
+        <TourCard key={key} id={element.id} title={element.title} icon={element.icon} place={placeOf(node)}>
           <TourContent of={node} inCallout={inCallout} />
         </TourCard>
       );
@@ -96,7 +119,7 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       return <TourIcon key={key} name={element.name} tone={element.tone} />;
     case 'diffle-callout':
       return inCallout ? null : (
-        <Callout key={key} kind={element.kind}>
+        <Callout key={key} kind={element.kind} place={placeOf(node)}>
           <TourContent of={node} inCallout />
         </Callout>
       );

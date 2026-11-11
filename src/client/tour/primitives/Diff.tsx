@@ -8,6 +8,7 @@ import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import type { LineRange } from '@/client/tour/document.js';
 import { rangePatch } from '@/client/tour/state.js';
 import { TourJump } from './Jump.js';
+import type { Place } from '@/client/tour/anchor.js';
 
 type Shown =
   | { state: 'loading' }
@@ -19,7 +20,7 @@ type Shown =
  * The lines `range` names, cut from the review's diff when the card renders and highlighted like it.
  * When they left the review, a notice stands in their place and the jump still opens the file.
  */
-export function TourDiff({ range }: { range: LineRange }) {
+export function TourDiff({ range, place }: { range: LineRange; place?: Place }) {
   const { path, side, start, end } = range;
   const version = useStore((s) => s.snapshot?.version);
   const theme = useStore((s) => s.theme);
@@ -61,7 +62,11 @@ export function TourDiff({ range }: { range: LineRange }) {
   const primed = usePrimed(prime);
   const lines = start === end ? `${start}` : `${start}-${end}`;
   return (
-    <figure className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas">
+    <figure
+      {...place}
+      data-opaque=""
+      className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
+    >
       <figcaption className="flex items-center gap-1.5 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
         <FilePath path={path} className="min-w-0 flex-1" nowrap />
         <span className="shrink-0 font-mono text-muted">

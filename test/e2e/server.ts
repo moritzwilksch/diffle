@@ -148,7 +148,7 @@ export async function pushTour(url: string, html: string): Promise<void> {
   if (!response.ok) throw new Error(`pushing a tour failed: HTTP ${response.status} ${await response.text()}`);
 }
 
-/** Reply to a seeded thread directly, as `diffle comments reply` will. */
+/** Reply to a seeded thread directly, as `diffle comments reply` does. */
 export async function seedReply(url: string, threadId: string, reply: ReplyCreate): Promise<CommentThread> {
   const response = await fetch(new URL(`api/threads/${encodeURIComponent(threadId)}/replies`, url), {
     method: 'POST',

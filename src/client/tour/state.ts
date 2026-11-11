@@ -17,6 +17,8 @@ interface TourState {
   step: number;
   /** A heading to scroll to (an `h3` by its index when `sub` is set), and a count that repeats the scroll. */
   focus: { section: number; sub: number | null; seq: number } | null;
+  /** A thread to scroll to, and a count that repeats the scroll. */
+  reveal: { id: string; seq: number } | null;
   /** Sections holding a `diffle-diff` whose lines left the review, in the current snapshot. */
   stale: ReadonlySet<number>;
   /** How many `diffle-diff`s went stale. */
@@ -24,18 +26,26 @@ interface TourState {
   /** Shows section `index`, or its subsection `sub`, and scrolls its heading near the page's top. */
   goTo(index: number, sub?: number): void;
   move(by: 1 | -1): void;
+  /** Shows the tour with thread `id` focused, scrolled to what it is on. */
+  revealThread(id: string): void;
 }
 
 export const useTour = create<TourState>((set, get) => ({
   load: { state: 'none' },
   step: -1,
   focus: null,
+  reveal: null,
   stale: new Set(),
   staleDiffs: 0,
   goTo(index, sub) {
     const { load, focus } = get();
     if (load.state !== 'ready' || !load.doc.sections[index]) return;
     set({ step: index, focus: { section: index, sub: sub ?? null, seq: (focus?.seq ?? 0) + 1 } });
+  },
+  revealThread(id) {
+    showView('tour');
+    useStore.getState().focusThread(id);
+    set({ reveal: { id, seq: (get().reveal?.seq ?? 0) + 1 } });
   },
   move(by) {
     const { load, step } = get();

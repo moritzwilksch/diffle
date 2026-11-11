@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
 import { activePath } from './browser.js';
-import { pushTour, REPO_ROOT, waitForLsp } from './server.js';
+import { pushTour, readPrompt, readThreads, REPO_ROOT, seedReply, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
 const TOUR = `
@@ -63,6 +63,35 @@ tally/currency.py"></diffle-tree>
 </diffle-row>
 `;
 
+/** A short tour to comment on. */
+const COMMENTED = `
+<h1>Refunds count against sales</h1>
+<h2>Entries learn their kind</h2>
+<p>An <code>Entry</code> is a sale unless its <code>kind</code> says <strong>refund</strong>; a refund counts negative.</p>
+<diffle-diff path="tally/ledger.py" lines="29-34"></diffle-diff>
+<h2>Parsing reads the kind column</h2>
+<p>Any other kind is refused.</p>
+`;
+
+/** Selects `words` in the tour's article, as a reader dragging across them would. */
+async function select(page: Page, words: string) {
+  await page.evaluate((words) => {
+    const article = document.querySelector('.tour-article')!;
+    const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const at = n.textContent!.indexOf(words);
+      if (at < 0) continue;
+      const range = document.createRange();
+      range.setStart(n, at);
+      range.setEnd(n, at + words.length);
+      document.getSelection()!.removeAllRanges();
+      document.getSelection()!.addRange(range);
+      return;
+    }
+    throw new Error(`"${words}" is not in the tour`);
+  }, words);
+}
+
 /** The tour view once every card's lines rendered. */
 async function showTour(page: Page) {
   const view = page.getByRole('region', { name: 'Tour view' });
@@ -93,7 +122,9 @@ test.describe('the tour', () => {
     await expect(view.locator('.tour-diagram-icon')).toHaveCount(3);
     await expect(page).toHaveScreenshot('tour.png');
     const contents = page.getByRole('navigation', { name: 'Contents' });
-    await expect(contents).toMatchAriaSnapshot({ name: 'tour-contents.aria.yml' });
+    await expect(contents).toMatchAriaSnapshot({
+      name: 'tour-contents.aria.yml',
+    });
 
     // n takes the first section and scrolls its heading near the top; p does not go before it.
     await page.keyboard.press('n');
@@ -126,6 +157,56 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 3')).toBeVisible();
   });
 
+  test.describe('in a wide window', () => {
+    test.use({ viewport: { width: 1680, height: 900 } });
+
+    test('selected words take a comment in the margin; the agent answers, the prompt carries it, and a revision it loses keeps it below', async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, COMMENTED);
+      const view = await showTour(page);
+      await select(page, 'a refund counts negative');
+      const margin = view.getByLabel('Comments');
+      await expect(view.getByRole('button', { name: 'Comment' })).toBeVisible();
+      await page.keyboard.press('c');
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+      await page.keyboard.type('Negative in which total?');
+      await page.keyboard.press('Control+Enter');
+      const card = margin.locator('.tour-margin-card').filter({ hasText: 'Negative in which total?' });
+      await expect(card).toBeVisible();
+      await expect(card).toContainText('"a refund counts negative"');
+
+      // The agent answers from its own session; the reply shows on the card, marked as the agent's.
+      const [thread] = await readThreads(diffle.url);
+      await seedReply(diffle.url, thread!.id, {
+        body: 'In the account total.',
+        author: 'agent',
+      });
+      await expect(card).toContainText('In the account total.');
+      await page.mouse.click(1, 1);
+      await expect(page).toHaveScreenshot('tour-comment.png');
+      expect(await readPrompt(diffle.url)).toContain(
+        '(tour) 1. Entries learn their kind, in a <p>\n\n> a refund counts negative\n\nNegative in which total?\n\n(agent) In the account total.',
+      );
+
+      // The comment panel opens the thread back in the tour.
+      await page.keyboard.press('T');
+      await page.getByRole('complementary').getByText('Negative in which total?').click();
+      await expect(view).toBeVisible();
+
+      // A revision that drops the words keeps the thread, below the tour.
+      await pushTour(diffle.url, COMMENTED.replace('a refund counts negative', 'refunds subtract'));
+      const lost = view.getByRole('region', {
+        name: 'Comments not in this tour',
+      });
+      await expect(lost).toContainText('Negative in which total?');
+      await expect(view.getByText('1 comment not in this tour')).toBeVisible();
+      await expect(lost).toHaveScreenshot('tour-comment-lost.png');
+      await expect(margin.locator('.tour-margin-card')).toHaveCount(0);
+    });
+  });
+
   test.describe('over the working tree', () => {
     test.use({ revs: ['working'], args: ['--watch'] });
 
@@ -152,7 +233,9 @@ test.describe('the tour', () => {
       const lines = (await readFile(file, 'utf8')).split('\n');
       await writeFile(file, lines.slice(0, 26).join('\n'));
       const stale = page.locator('[data-card="net"]');
-      await expect(stale.getByText('are no longer in the review')).toBeVisible({ timeout: 15000 });
+      await expect(stale.getByText('are no longer in the review')).toBeVisible({
+        timeout: 15000,
+      });
       await expect(view.getByText('1 stale diff')).toBeVisible();
       const contents = page.getByRole('navigation', { name: 'Contents' });
       await expect(contents.getByRole('button', { name: /Net per account/ })).toContainText('stale');
@@ -199,7 +282,9 @@ test.describe('the tour', () => {
       await view.getByRole('button', { name: 'parse_row' }).click();
       const list = page.getByRole('dialog', { name: 'References' });
       await expect(list).toBeVisible();
-      await expect(list).toMatchAriaSnapshot({ name: 'tour-references.aria.yml' });
+      await expect(list).toMatchAriaSnapshot({
+        name: 'tour-references.aria.yml',
+      });
 
       // Esc returns to the tour; Enter jumps to the diff, and Ctrl+o comes back.
       await page.keyboard.press('Escape');

@@ -3,6 +3,7 @@ import { FilePath } from '@/client/FilePath.js';
 import { HighlightedCode } from '@/client/lsp/highlight.js';
 import { useStore } from '@/client/store.js';
 import { TourJump } from './Jump.js';
+import type { Place } from '@/client/tour/anchor.js';
 
 /**
  * Code the agent wrote, such as an interface or a signature, highlighted like the diff and in its
@@ -16,6 +17,7 @@ export function TourCode({
   line,
   example = false,
   title,
+  place,
 }: {
   code: string;
   lang?: string;
@@ -23,11 +25,16 @@ export function TourCode({
   line?: number;
   example?: boolean;
   title?: string;
+  place?: Place;
 }) {
   const theme = useStore((s) => s.theme);
   const language = lang ?? (path ? getFiletypeFromFileName(path) : 'text');
   return (
-    <figure className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas">
+    <figure
+      {...place}
+      data-opaque=""
+      className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
+    >
       {example && (
         <figcaption className="flex items-center gap-2 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
           <span className="shrink-0 rounded-sm bg-hover px-1.5 font-medium text-muted">Example</span>

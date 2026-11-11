@@ -61,14 +61,21 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <ThreadIcon thread={thread} />
-        <span className="font-mono font-semibold text-foreground">{anchorLabel(a)}</span>
+        {/* Lines are code; a tour's words are prose, cut to one line in the narrow margin. */}
+        <span
+          className={`font-semibold text-foreground ${a.kind === 'tour' ? 'min-w-0 truncate font-sans' : 'font-mono'}`}
+        >
+          {anchorLabel(a)}
+        </span>
         {thread.stale && (
           <span
             className="inline-flex items-center gap-0.75 text-warn"
             title={
-              a.kind === 'file'
-                ? 'Not in the current diff: the file left the review'
-                : 'Not found in the current diff: the text changed or left the changed lines'
+              a.kind === 'tour'
+                ? "Not in the tour: the agent's last push no longer holds it"
+                : a.kind === 'file'
+                  ? 'Not in the current diff: the file left the review'
+                  : 'Not found in the current diff: the text changed or left the changed lines'
             }
           >
             <AlertTriangle size="0.75rem" /> stale

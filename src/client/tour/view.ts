@@ -4,6 +4,7 @@ import { TOUR_HELP } from './help.js';
 import { tourPlace, useTour } from './state.js';
 import { TourContents } from './Contents.js';
 import { tourPage } from './TourPage.js';
+import { commentOnSelection } from './comments.js';
 import { TourView } from './TourView.js';
 
 /** How far `j` and `k` scroll, as a share of the page's height. */
@@ -36,6 +37,8 @@ export const tourView: ViewDef = {
       case 'p':
         useTour.getState().move(-1);
         return true;
+      case 'c':
+        return commentOnSelection();
       case 'j':
       case 'ArrowDown':
         tourPage.scroll(LINE);

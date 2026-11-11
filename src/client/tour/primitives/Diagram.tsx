@@ -2,6 +2,7 @@ import { createElement, type ReactNode, useId } from 'react';
 import { type TourSvgClass, TourSvgClassSchema, TourSvgElementSchema, TourSvgIconSchema } from '@/shared/protocol.js';
 import { DiagramCode } from './DiagramCode.js';
 import { LucideIcon } from './Icon.js';
+import { placeOf } from '@/client/tour/anchor.js';
 
 type Tone = 'accent' | 'success' | 'warning' | 'error';
 const TONES: ReadonlySet<TourSvgClass> = new Set<Tone>(['accent', 'success', 'warning', 'error']);
@@ -23,6 +24,7 @@ const ICON_SIZE = '14';
  * theme, and each arrow gets a head in its line's tone.
  */
 export function TourDiagram({ of }: { of: Element }) {
+  const place = placeOf(of);
   const id = useId();
   const svg = [...of.children].find((c) => c.localName === 'svg');
   const root = svg ? read(svg) : null;
@@ -31,6 +33,8 @@ export function TourDiagram({ of }: { of: Element }) {
   const head = (tone: Tone | 'ink') => `url(#${CSS.escape(`${id}-${tone}`)})`;
   return (
     <svg
+      {...place}
+      data-opaque=""
       viewBox={root.viewBox}
       className="tour-diagram"
       style={{ width: `calc(${width}px * var(--diffle-text-scale, 1))` }}
@@ -73,6 +77,7 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: (tone: Tone
   const arrow = LINES.has(tag) && (classes.includes('arrow') || classes.includes('arrows'));
   const props = {
     key,
+    ...placeOf(node),
     ...geometry,
     className: classes.join(' ') || undefined,
     markerEnd: arrow ? head(own ?? 'ink') : undefined,
