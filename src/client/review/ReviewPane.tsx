@@ -501,12 +501,12 @@ export function ReviewPane() {
     };
   }, [scroller, geometry, items, workerPool, theme]);
 
-  // A display toggle re-lays the rows out (split / unified, wrap, text size, the pane resizing as the tree or
-  // the side panel hides, or as a view with another panel shows) or remounts the viewer (theme). Neither is
-  // navigation, so the viewport holds: the row under the pane's top edge is measured here, before React
-  // renders the change, and the request to land it at the same pixel goes out in the same update, so the
-  // jump effect below places it before anything paints. No row on screen means nothing to hold. A drag
-  // moves the panes' edge every frame and is left alone.
+  // A display toggle re-lays the rows out (split / unified, wrap, text size, the blame gutter narrowing the code,
+  // the pane resizing as the tree or the side panel hides, or as a view with another panel shows) or remounts
+  // the viewer (theme). Neither is navigation, so the viewport holds: the row under the pane's top edge is
+  // measured here, before React renders the change, and the request to land it at the same pixel goes out in
+  // the same update, so the jump effect below places it before anything paints. No row on screen means
+  // nothing to hold. A drag moves the panes' edge every frame and is left alone.
   useEffect(() => {
     const hold = () => {
       const scroller = containerRef.current;
@@ -539,7 +539,8 @@ export function ReviewPane() {
         resized() ||
         s.theme !== prev.theme ||
         s.diffStyle !== prev.diffStyle ||
-        s.config.lineWrap !== prev.config.lineWrap
+        s.config.lineWrap !== prev.config.lineWrap ||
+        (s.config.blame !== prev.config.blame && [s.config.blame, prev.config.blame].includes('gutter'))
       )
         hold();
     });
