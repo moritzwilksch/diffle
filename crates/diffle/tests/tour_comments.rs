@@ -4,7 +4,7 @@ mod common;
 
 use common::TestRepo;
 use common::server::TestServer;
-use diffle::protocol::EnterRequest;
+use diffle::protocol::{EnterRequest, Tour};
 use serde_json::{Value, json};
 
 async fn server() -> TestServer {
@@ -87,6 +87,35 @@ async fn follows_threads_into_a_revised_tour_and_marks_the_lost_ones_stale() {
     let res = s.send("DELETE", "/api/tour", &[], None).await;
     assert_eq!(res.status, 204);
     assert_eq!(places(&threads(&s).await), [json!([[4], 2, true]), json!([[7, 0, 0], 3, true])]);
+}
+
+/// A push checked against one set lands there with its threads moved, whichever set is shown when it
+/// writes: the tour and its threads are one write of one set.
+#[tokio::test]
+async fn files_a_push_and_moves_its_threads_in_the_set_it_was_checked_against() {
+    let s = server().await;
+    push(&s, TOUR).await;
+    comment(&s, json!([2]), json!({ "on": "text", "quoted": "once per request", "occurrence": 0 }), "a").await;
+    let checked = s.session.snapshotter().unwrap().current().await.unwrap();
+
+    // Another review is shown by the time the push writes.
+    let entered = s.json("POST", "/api/review", json!({ "kind": "revspec", "args": ["HEAD"] })).await;
+    assert_eq!(entered.status, 200, "{}", entered.body);
+    let shown = s.get("/api/snapshot").await.json()["commentKey"].as_str().unwrap().to_owned();
+    assert_ne!(shown, checked.comment_key);
+    let revised = TOUR.replace("<h2>The loader</h2>", "<h2>Setup</h2><p>New.</p><h2>The loader</h2>");
+    let tour = Tour { html: revised.clone(), pushed_at: 0, version: checked.version, ticked: Vec::new() };
+    let moved = s.session.comments_for(&checked).push_tour(tour).await.unwrap();
+
+    assert_eq!(moved.len(), 1);
+    let stored: Value =
+        serde_json::from_str(&std::fs::read_to_string(s.repo.path.join(".git/diffle/comments.json")).unwrap()).unwrap();
+    let set = &stored["sets"][&checked.comment_key];
+    assert_eq!(set["tour"]["html"], revised.as_str());
+    assert_eq!(places(set["threads"].as_array().unwrap()), [json!([[4], 2, false])]);
+    assert!(stored["sets"][&shown].get("tour").is_none());
+    assert_eq!(s.get("/api/tour").await.json()["tour"], Value::Null);
+    assert_eq!(threads(&s).await, Vec::<Value>::new());
 }
 
 #[tokio::test]

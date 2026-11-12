@@ -108,8 +108,8 @@ async fn keeps_a_pushed_tour_under_the_comment_key_and_tells_clients() {
     assert_eq!(tour(&s).await, pushed);
     let key = s.get("/api/snapshot").await.json()["commentKey"].as_str().unwrap().to_owned();
     let stored: Value =
-        serde_json::from_str(&std::fs::read_to_string(s.repo.path.join(".git/diffle/tours.json")).unwrap()).unwrap();
-    assert_eq!(stored["tours"][&key], pushed);
+        serde_json::from_str(&std::fs::read_to_string(s.repo.path.join(".git/diffle/comments.json")).unwrap()).unwrap();
+    assert_eq!(stored["sets"][&key]["tour"], pushed);
     assert!(told_of_tour(&mut ws).await);
     s.close().await;
 }

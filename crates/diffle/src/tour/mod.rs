@@ -1,4 +1,4 @@
-//! Tours: an agent's guided walk through the review, one HTML document per comment key.
+//! Tours: an agent's guided walk through the review, one HTML document per comment set.
 mod anchor;
 mod blocks;
 mod code;
@@ -11,7 +11,6 @@ mod icon;
 mod layout;
 mod placement;
 mod stepped;
-mod store;
 mod validate;
 
 use std::collections::HashMap;
@@ -20,16 +19,15 @@ use std::sync::Arc;
 
 pub use anchor::{TourIndex, tag_in};
 pub use files::column;
-pub use store::TourStore;
 
 use crate::error::Result;
 use crate::protocol::{CommentAnchor, CommentThread, Side, Snapshot, TourCheckItem, TourError, TourTarget};
 use crate::session::Session;
 
-/// The stored tour's checklist items in document order, each with its tick and the open thread
+/// The shown set's tour's checklist items in document order, each with its tick and the open thread
 /// among `threads` that answers it.
 pub async fn checklist(session: &Session, threads: &[CommentThread]) -> Result<Vec<TourCheckItem>> {
-    let Some(tour) = session.tour()?.get().await? else { return Ok(Vec::new()) };
+    let Some(tour) = session.comments()?.tour().await? else { return Ok(Vec::new()) };
     let mut items = TourIndex::read(&tour.html).checks(&tour.ticked);
     for item in &mut items {
         let answers = |t: &&CommentThread| {

@@ -1,4 +1,4 @@
-//! This mode's threads and viewed marks in `<gitDir>/diffle/comments.json`.
+//! This mode's threads, viewed marks and tour in `<gitDir>/diffle/comments.json`.
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -9,7 +9,7 @@ use crate::error::{Error, Result};
 use crate::iterations::now_ms;
 use crate::persist::{with_file_lock, write_file_atomic};
 use crate::protocol::{
-    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, ThreadQuery, ThreadState, ViewedEntry,
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, ThreadQuery, ThreadState, Tour, ViewedEntry,
 };
 
 /// Viewed marks kept per path: the current one plus the newest previous, so `restale` is derivable.
@@ -21,6 +21,9 @@ pub(super) struct SetData {
     pub(super) threads: Vec<CommentThread>,
     #[serde(default)]
     pub(super) viewed: Vec<ViewedEntry>,
+    /// The agent's tour, beside the threads on it (`comments/tour.rs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) tour: Option<Tour>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,7 +43,12 @@ pub struct CommentStore {
 
 impl CommentStore {
     pub async fn open(git_dir: &Path, key: &str) -> Result<Self> {
-        Ok(Self { file: git_dir.join("diffle").join("comments.json"), key: key.to_owned() })
+        Ok(Self::at(git_dir, key))
+    }
+
+    /// The store of `key`'s set, whichever set the session shows.
+    pub fn at(git_dir: &Path, key: &str) -> Self {
+        Self { file: git_dir.join("diffle").join("comments.json"), key: key.to_owned() }
     }
 
     pub fn key(&self) -> &str {
@@ -195,7 +203,7 @@ impl CommentStore {
     }
 
     /// This key's set as on disk right now; empty when the file is absent. Malformed JSON fails.
-    async fn read(&self) -> Result<SetData> {
+    pub(super) async fn read(&self) -> Result<SetData> {
         Ok(read_store_file(&self.file).await?.sets.remove(&self.key).unwrap_or_default())
     }
 

@@ -1,5 +1,5 @@
 //! The review's tour: read, replaced by a push the validator accepts, cleared, and commented on.
-//! Each change tells clients; a push or a clear moves the threads on the tour.
+//! Each change tells clients; a push or a clear moves the threads on the tour in the same write.
 use std::sync::Arc;
 
 use axum::Json;
@@ -18,7 +18,6 @@ use crate::protocol::{
     CommentAuthor, ServerMessage, Tour, TourPush, TourPushed, TourRejection, TourResponse, TourThreadCreate, TourTick,
 };
 use crate::session::Broadcaster;
-use crate::tour::TourIndex;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
@@ -29,11 +28,12 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
 
 async fn tour(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     let checks = crate::tour::checklist(&d.session, &[]).await?;
-    Ok(Json(TourResponse { tour: d.session.tour()?.get().await?, checks }).into_response())
+    Ok(Json(TourResponse { tour: d.session.comments()?.tour().await?, checks }).into_response())
 }
 
-/// Checks the document against the current snapshot and files it under that snapshot's key, with
-/// any warnings in the answer; 422 with every reason when it fails.
+/// Checks the document against the current snapshot and files it in that snapshot's set, moving the
+/// set's threads on the tour in the same write; warnings in the answer, 422 with every reason when
+/// it fails.
 async fn push(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: TourPush = body(&raw)?;
     let snap = d.session.snapshotter()?.current().await?;
@@ -43,24 +43,16 @@ async fn push(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(rejection)).into_response());
     }
     let tour = Tour { html: req.html, pushed_at: now_ms(), version: snap.version, ticked: Vec::new() };
-    let index = TourIndex::read(&tour.html);
-    let questions: Vec<String> = index.checks(&[]).into_iter().map(|item| item.question).collect();
-    d.session.tour_for(&snap).put(tour.clone(), &questions).await?;
+    let moved = d.session.comments_for(&snap).push_tour(tour.clone()).await?;
     d.hub.broadcast(ServerMessage::Tour);
-    let comments = d.session.comments()?;
-    // A mode switch meanwhile shows another set, whose threads are on another tour.
-    if comments.key() == snap.comment_key {
-        let moved =
-            comments.relocate_tour(|node, section, element, target| index.relocate(node, section, element, target));
-        record(&d, moved.await?);
-    }
+    record(&d, moved);
     Ok(Json(TourPushed { tour, warnings: verdict.warnings }).into_response())
 }
 
 async fn clear(State(d): State<Arc<ApiDeps>>) -> ApiResult {
-    if d.session.tour()?.clear().await? {
+    if let Some(moved) = d.session.comments()?.clear_tour().await? {
         d.hub.broadcast(ServerMessage::Tour);
-        record(&d, d.session.comments()?.relocate_tour(|_, _, _, _| None).await?);
+        record(&d, moved);
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }
@@ -72,11 +64,7 @@ async fn open_thread(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     if req.body.trim().is_empty() {
         return Err(ApiError::bad_request("body: body required"));
     }
-    let Some(tour) = d.session.tour()?.get().await? else {
-        return Err(Error::Invalid("the review has no tour".into()).into());
-    };
-    let anchor = TourIndex::read(&tour.html).place(&req.node, &req.target).map_err(Error::Unquotable)?;
-    let thread = d.session.comments()?.add_thread(anchor, req.body).await?;
+    let thread = d.session.comments()?.add_tour_thread(&req.node, &req.target, req.body).await?;
     d.session.record([(None, Change::Thread(thread.id.clone()))]);
     Ok((StatusCode::CREATED, Json(thread)).into_response())
 }
@@ -84,7 +72,7 @@ async fn open_thread(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
 /// Ticks a checklist item of the review's tour, or unticks it; 400 when the review has no tour.
 async fn tick(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: TourTick = body(&raw)?;
-    if !d.session.tour()?.tick(&req.question, req.ticked).await? {
+    if !d.session.comments()?.tick(&req.question, req.ticked).await? {
         return Err(Error::Invalid("the review has no tour".into()).into());
     }
     d.hub.broadcast(ServerMessage::Tour);
