@@ -4,12 +4,18 @@ import { TextArea } from '@/client/ui/TextArea.js';
 import { useEffect, useRef, useState } from 'react';
 import { applyTextSize, readTextSize, storeTextSize, TEXT_SIZES, type TextSize } from '@/client/scale.js';
 import { useStore } from '@/client/store.js';
-import type { FollowRefs } from '@/shared/protocol.js';
+import type { BlameMode, FollowRefs } from '@/shared/protocol.js';
 
 const FOLLOW_REFS: [FollowRefs, string][] = [
   ['on', 'Always'],
   ['auto', 'Auto (not on branches)'],
   ['off', 'Never'],
+];
+
+const BLAME: [BlameMode, string][] = [
+  ['inline', 'After the current line'],
+  ['gutter', 'Beside every line number'],
+  ['off', 'Off'],
 ];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
@@ -19,6 +25,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [context, setContext] = useState(String(config.contextLines));
   const [followRefs, setFollowRefs] = useState(config.followRefs);
   const [lineWrap, setLineWrap] = useState(config.lineWrap);
+  const [blame, setBlame] = useState(config.blame);
   const [textSize, setTextSize] = useState(readTextSize);
   const [saving, setSaving] = useState(false);
   const overrides = Object.entries(config.lspCommands).sort(([a], [b]) => a.localeCompare(b));
@@ -35,6 +42,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       contextLines: Math.max(0, Number.parseInt(context, 10) || 0),
       followRefs,
       lineWrap,
+      blame,
     });
     setSaving(false);
     onClose();
@@ -100,6 +108,24 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             (toggle with <code>zw</code>)
           </span>
         </label>
+        <h3 className="m-0 mt-[14px] mb-2">Git blame</h3>
+        <p className="m-0 mb-2 text-muted">
+          Who last changed a line (cycle with <code>gb</code>).
+        </p>
+        <div role="radiogroup" aria-label="Git blame" className="flex flex-col gap-1">
+          {BLAME.map(([value, label]) => (
+            <label key={value} className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="radio"
+                name="blame"
+                value={value}
+                checked={blame === value}
+                onChange={() => setBlame(value)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
         <h3 className="m-0 mt-[14px] mb-2">Text size</h3>
         <p className="m-0 mb-2 text-muted">Scales the whole app. Kept in this browser.</p>
         <select

@@ -101,6 +101,7 @@ the running one's URL.
 - `Ctrl+o`: go back
 - `yy`: copy all comments
 - `yl`: copy a GitHub permalink to the current line or selection, once its commit is pushed
+- `gb`: show git blame after the current line, beside every line number, or not at all
 
 Press `?` for the full list.
 

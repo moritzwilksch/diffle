@@ -62,6 +62,7 @@ const api = {
     contextLines: 5,
     followRefs: 'off',
     lineWrap: true,
+    blame: 'inline',
     lspCommands: { python: 'pyrefly lsp' },
     githubHosts: {},
   })),
@@ -821,6 +822,7 @@ describe('client transitions', () => {
         contextLines: 5,
         followRefs: 'off' as const,
         lineWrap: true,
+        blame: 'inline',
         lspCommands: {},
         githubHosts: {},
       },
@@ -833,6 +835,7 @@ describe('client transitions', () => {
       contextLines: 9,
       followRefs: 'off' as const,
       lineWrap: true,
+      blame: 'inline',
       lspCommands: {},
       githubHosts: {},
     });
@@ -1930,6 +1933,7 @@ describe('request ownership', () => {
       contextLines,
       followRefs: 'off',
       lineWrap: true,
+      blame: 'inline',
       lspCommands: {},
       githubHosts: {},
     });

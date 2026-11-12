@@ -145,6 +145,15 @@
       ],
       "description": "Consecutive lines one commit last changed."
     },
+    "BlameMode": {
+      "type": "string",
+      "enum": [
+        "off",
+        "inline",
+        "gutter"
+      ],
+      "description": "Where the viewer shows git blame: `inline` after the cursor's line, `gutter` beside every line number."
+    },
     "BlameRequest": {
       "type": "object",
       "properties": {
@@ -475,6 +484,9 @@
         },
         "lineWrap": {
           "type": "boolean"
+        },
+        "blame": {
+          "$ref": "#/$defs/BlameMode"
         }
       },
       "description": "Writable HTTP config fields; unknown keys, including CLI-only lspCommands and githubHosts, are stripped."
@@ -2862,6 +2874,10 @@
           "type": "boolean",
           "description": "Wrap long lines in the viewer instead of scrolling them sideways. Default true."
         },
+        "blame": {
+          "$ref": "#/$defs/BlameMode",
+          "description": "Where git blame shows; see `BlameModeSchema`. Default inline."
+        },
         "lspCommands": {
           "type": "object",
           "propertyNames": {
@@ -2888,6 +2904,7 @@
         "contextLines",
         "followRefs",
         "lineWrap",
+        "blame",
         "lspCommands",
         "githubHosts"
       ]

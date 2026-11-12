@@ -9,6 +9,7 @@ import { activeView, panelOf, toggleView, useViews } from '@/client/views/state.
 import { copyCursorPermalink } from '@/client/review/permalink.js';
 import { useStore, type ReviewState } from '@/client/store.js';
 import { nextTheme } from '@/client/theme.js';
+import type { BlameMode } from '@/shared/protocol.js';
 
 const CHORD_MS = 800;
 const PREFIXES = new Set(['g', 'd', 'y', 'z', 'i']);
@@ -27,6 +28,9 @@ const COUNTED: Record<string, (s: ReviewState, count: number) => unknown> = {
   j: (s, n) => s.moveCursorBy(n),
   k: (s, n) => s.moveCursorBy(-n),
 };
+
+/** `gb` cycles where blame shows. */
+const NEXT_BLAME: Record<BlameMode, BlameMode> = { off: 'inline', inline: 'gutter', gutter: 'off' };
 
 /** Single keys and two-key chords, by the key string(s) of the keydown events. */
 const KEYMAP: Record<string, Action> = {
@@ -65,6 +69,7 @@ const KEYMAP: Record<string, Action> = {
   zb: (s) => s.scrollCursorTo('bottom'),
   zz: (s) => s.scrollCursorTo('eye'),
   zw: (s) => s.saveConfig({ lineWrap: !s.config.lineWrap }),
+  gb: (s) => s.saveConfig({ blame: NEXT_BLAME[s.config.blame] }),
   zh: () => scrollCursorInline(-1),
   zl: () => scrollCursorInline(1),
   s: (s) => s.setDiffStyle(s.diffStyle === 'split' ? 'unified' : 'split'),

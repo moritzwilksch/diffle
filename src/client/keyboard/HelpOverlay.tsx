@@ -55,6 +55,7 @@ export const DIFF_HELP: HelpSection[][] = [
         ['zt / zb', 'scroll the current line to the top / bottom'],
         ['s', 'toggle split / unified'],
         ['zw', 'toggle line wrapping'],
+        ['gb', 'git blame: after the line / in the gutter / off'],
         ['zh / zl', 'scroll long lines left / right; hold z to repeat'],
         ['t', 'cycle theme'],
         ['⌘/Ctrl+b', 'toggle the file tree (Shift: comments panel)'],

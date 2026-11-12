@@ -11,8 +11,8 @@ use serde::Deserialize;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::protocol::{
-    EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerInfo, ServerMessage, UserConfig,
-    comparison_label,
+    BlameMode, EnterRequest, FollowRefs, LastCommitsQuery, PermalinkRequest, RangeView, ServerInfo, ServerMessage,
+    UserConfig, comparison_label,
 };
 use crate::session::Broadcaster;
 use crate::user_config::UserConfigPatch;
@@ -120,6 +120,7 @@ struct ConfigUpdate {
     context_lines: Option<i64>,
     follow_refs: Option<FollowRefs>,
     line_wrap: Option<bool>,
+    blame: Option<BlameMode>,
 }
 
 async fn set_config(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
@@ -132,6 +133,7 @@ async fn set_config(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
         context_lines: update.context_lines,
         follow_refs: update.follow_refs,
         line_wrap: update.line_wrap,
+        blame: update.blame,
     };
     let saved = d.config.set(patch).await?;
     d.hub.broadcast(ServerMessage::Config);

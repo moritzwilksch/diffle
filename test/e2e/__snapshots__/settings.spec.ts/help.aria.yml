@@ -12,7 +12,7 @@
   - heading "Comments" [level=4]
   - text: c comment on the current line or selection C comment on the current file as a whole e edit the newest message of the thread under the cursor dd delete the thread under the cursor R resolve / reopen the thread under the cursor yy or Y copy all comments yp copy the current file’s path yl copy a GitHub link to the line or selection
   - heading "View" [level=4]
-  - text: "zz scroll the current line to eye level zt / zb scroll the current line to the top / bottom s toggle split / unified zw toggle line wrapping zh / zl scroll long lines left / right; hold z to repeat t cycle theme ⌘/Ctrl+b toggle the file tree (Shift: comments panel) o GitHub repository and pull request m, then 1–6 open the mode picker and choose an entry < / > older / newer commit or range-diff pair"
+  - text: "zz scroll the current line to eye level zt / zb scroll the current line to the top / bottom s toggle split / unified zw toggle line wrapping gb git blame: after the line / in the gutter / off zh / zl scroll long lines left / right; hold z to repeat t cycle theme ⌘/Ctrl+b toggle the file tree (Shift: comments panel) o GitHub repository and pull request m, then 1–6 open the mode picker and choose an entry < / > older / newer commit or range-diff pair"
   - heading "Search" [level=4]
   - text: "/ search the current file, then n / N between matches g/ search changed files (toggle: diff + context / full file) ⌘/Ctrl+p or gf search files by name w / b focus the next / previous symbol on the line 0 / $ focus the first / last symbol on the line * / # next / previous occurrence of the focused word"
   - heading "Code intelligence (language server)" [level=4]

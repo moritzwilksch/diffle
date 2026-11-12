@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde_json::{Map, Value};
 
 use crate::persist::{user_config_dir, write_file_atomic};
-use crate::protocol::{FollowRefs, LanguageId, UserConfig, language_ids};
+use crate::protocol::{BlameMode, FollowRefs, LanguageId, UserConfig, language_ids};
 
 /// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/githubHosts).
 #[derive(Default, Clone, Debug)]
@@ -15,6 +15,7 @@ pub struct UserConfigPatch {
     pub context_lines: Option<i64>,
     pub follow_refs: Option<FollowRefs>,
     pub line_wrap: Option<bool>,
+    pub blame: Option<BlameMode>,
 }
 
 impl Default for UserConfig {
@@ -24,6 +25,7 @@ impl Default for UserConfig {
             context_lines: 5,
             follow_refs: FollowRefs::Auto,
             line_wrap: true,
+            blame: BlameMode::Inline,
             lsp_commands: HashMap::new(),
             github_hosts: HashMap::new(),
         }
@@ -83,6 +85,7 @@ impl UserConfigStore {
         put("contextLines", next.context_lines.map(Value::from));
         put("followRefs", next.follow_refs.map(|f| Value::from(f.to_string())));
         put("lineWrap", next.line_wrap.map(Value::from));
+        put("blame", next.blame.map(|b| Value::from(b.to_string())));
         let config = normalize(&merged);
         // May hold a shell command: the write is owner-only.
         write_file_atomic(&self.file, &(serde_json::to_string_pretty(&config)? + "\n")).await?;
@@ -110,11 +113,13 @@ fn normalize(value: &Value) -> UserConfig {
     let follow_refs =
         c.get("followRefs").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or(defaults.follow_refs);
     let line_wrap = c.get("lineWrap").and_then(Value::as_bool).unwrap_or(defaults.line_wrap);
+    let blame = c.get("blame").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or(defaults.blame);
     UserConfig {
         auto_viewed,
         context_lines,
         follow_refs,
         line_wrap,
+        blame,
         lsp_commands: lsp_commands(c.get("lspCommands")),
         github_hosts: github_hosts(c.get("githubHosts")),
     }
