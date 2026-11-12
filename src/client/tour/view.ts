@@ -2,15 +2,19 @@ import { Route } from 'lucide-react';
 import type { ViewDef } from '@/client/views/state.js';
 import { TOUR_HELP } from './help.js';
 import { tourPlace, useTour } from './state.js';
-import { TourContents } from './Contents.js';
+import { TourSide } from './Contents.js';
 import { tourPage } from './TourPage.js';
+import { commentOnSelection } from './margin/tourThreads.js';
 import { TourView } from './TourView.js';
 
 /** How far `j` and `k` scroll, as a share of the page's height. */
 const LINE = 0.1;
 
-/** Keys the tour leaves to the review: help, theme, the mode picker, the graph, and `T` back to the diff. */
-const TOUR_PASSES = new Set(['?', 't', 'm', 'M', 'T', 'o']);
+/**
+ * Keys the tour leaves to the review: help, theme, the mode picker, the graph, `T` back to the diff,
+ * and `yy` / `Y`, which copy every comment as the prompt.
+ */
+const TOUR_PASSES = new Set(['?', 't', 'm', 'M', 'T', 'o', 'y', 'Y']);
 
 /** The agent's guided tour of the change, which exists once an agent pushed one (`diffle tour push`). */
 export const tourView: ViewDef = {
@@ -19,9 +23,9 @@ export const tourView: ViewDef = {
   icon: Route,
   title: "The agent's guided tour of the change (T)",
   Main: TourView,
-  Side: TourContents,
+  Side: TourSide,
   help: TOUR_HELP,
-  panelLabel: 'contents panel',
+  panelLabel: 'contents and comments panel',
   panelWidth: '17.5rem',
   blocked: () =>
     useTour.getState().load.state === 'ready' ? null : 'No tour yet: an agent pushes one with `diffle tour push`',
@@ -36,6 +40,8 @@ export const tourView: ViewDef = {
       case 'p':
         useTour.getState().move(-1);
         return true;
+      case 'c':
+        return commentOnSelection();
       case 'j':
       case 'ArrowDown':
         tourPage.scroll(LINE);

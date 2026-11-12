@@ -13,6 +13,14 @@ export const TOUR_HELP: HelpSection[][] = [
         ['click a line range or a file', 'open it in the diff'],
       ],
     },
+    {
+      title: 'Comments',
+      rows: [
+        ['select words, then c', 'comment on them'],
+        ['Esc', 'close the comment being written'],
+        ['yy or Y', 'copy all comments'],
+      ],
+    },
   ],
   [
     {

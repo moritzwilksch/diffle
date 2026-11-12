@@ -1,6 +1,7 @@
 // Shared contract between server and client. Types are inferred from the wire schemas.
 import { z } from 'zod';
 import { type Side, SideSchema } from './side.js';
+import { TourAnchorSchema, TourCheckItemSchema } from './tour.js';
 
 /**
  * A language diffle can start a server for. The value is the LSP `languageId` the
@@ -437,7 +438,7 @@ export const FileAnchorSchema = z.object({
 });
 export type FileAnchor = z.infer<typeof FileAnchorSchema>;
 
-export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema]);
+export const CommentAnchorSchema = z.discriminatedUnion('kind', [LineAnchorSchema, FileAnchorSchema, TourAnchorSchema]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
 /** Who wrote a message that the reviewer did not: only `diffle comments` sends it, never the browser. */
@@ -454,7 +455,7 @@ export const CommentMessageSchema = z.object({
 });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
-/** A conversation anchored to a line range or a whole file. The thread owns the anchor; replies follow it. */
+/** A conversation anchored to a line range, a whole file, or a part of the tour. The thread owns the anchor; replies follow it. */
 export const CommentThreadSchema = z.object({
   id: z.string(),
   anchor: CommentAnchorSchema,
@@ -462,7 +463,7 @@ export const CommentThreadSchema = z.object({
   messages: CommentMessageSchema.array().min(1),
   resolved: z.boolean(),
   resolvedAt: z.number().int().optional(),
-  /** Relocation failed after a snapshot refresh: the lines left the diff, or the file left the review. */
+  /** Relocation failed: the lines left the diff, the file left the review, or the tour lost the passage. */
   stale: z.boolean(),
   /** Original startLine of a line thread, shown in export when stale. */
   staleFromLine: z.number().int().optional(),
@@ -544,6 +545,8 @@ export const ThreadListSchema = z.object({
   /** The set the threads belong to: `Snapshot.commentKey` of the slice shown when they were read. */
   commentKey: z.string(),
   threads: CommentThreadSchema.array(),
+  /** The items of the tour's checklists, each with whether it is ticked and the thread answering it. */
+  checks: TourCheckItemSchema.array(),
 });
 export type ThreadList = z.infer<typeof ThreadListSchema>;
 

@@ -60,12 +60,16 @@ async fn threads(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiR
     let q = thread_query(raw.as_deref(), ThreadState::All)?;
     let comments = d.session.comments()?;
     let threads = comments.threads(&q).await?;
-    Ok(Json(ThreadList { comment_key: comments.key().to_owned(), threads }).into_response())
+    let checks = crate::tour::checklist(&d.session, &threads).await?;
+    Ok(Json(ThreadList { comment_key: comments.key().to_owned(), threads, checks }).into_response())
 }
 
 async fn export(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
     let q = thread_query(raw.as_deref(), ThreadState::Open)?;
-    Ok(text(format_prompt(&d.session.comments()?.threads(&q).await?)))
+    let threads = d.session.comments()?.threads(&q).await?;
+    // A prompt for one path is about its code; the checklist is about the tour.
+    let checks = if q.path.is_some() { Vec::new() } else { crate::tour::checklist(&d.session, &threads).await? };
+    Ok(text(format_prompt(&threads, &checks)))
 }
 
 async fn export_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(String, String)>) -> ApiResult {
@@ -74,7 +78,7 @@ async fn export_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(St
         return Err(Error::NotFound(mid).into());
     };
     thread.messages = vec![message];
-    Ok(text(format_prompt(&[thread])))
+    Ok(text(format_prompt(&[thread], &[])))
 }
 
 /// One object or an array. Answers what was created; open duplicates are skipped.

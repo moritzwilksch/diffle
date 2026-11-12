@@ -1,8 +1,10 @@
 //! Tours: an agent's guided walk through the review, one HTML document per comment set.
+mod anchor;
 mod blocks;
 mod code;
 mod diagram;
 mod dom;
+mod drawing;
 mod element;
 mod files;
 mod placement;
@@ -13,11 +15,27 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+pub use anchor::TourIndex;
 pub use files::column;
 
 use crate::error::Result;
-use crate::protocol::{Side, Snapshot, TourError};
+use crate::protocol::{CommentAnchor, CommentThread, Side, Snapshot, TourCheckItem, TourError, TourTarget};
 use crate::session::Session;
+
+/// The shown set's tour's checklist items in document order, each with its tick and the open thread
+/// among `threads` that answers it.
+pub async fn checklist(session: &Session, threads: &[CommentThread]) -> Result<Vec<TourCheckItem>> {
+    let Some(tour) = session.comments()?.tour().await? else { return Ok(Vec::new()) };
+    let mut items = TourIndex::read(&tour.tour.html).checks(tour.ticked());
+    for item in &mut items {
+        let answers = |t: &&CommentThread| {
+            let on = matches!(&t.anchor, CommentAnchor::Tour { node, target: TourTarget::Element { .. }, .. } if *node == item.node);
+            on && !t.stale && !t.resolved
+        };
+        item.thread = threads.iter().find(answers).map(|t| t.id.clone());
+    }
+    Ok(items)
+}
 
 /// The reasons to refuse `html` that need no file of the review.
 pub fn outline_errors(html: &str) -> Vec<TourError> {

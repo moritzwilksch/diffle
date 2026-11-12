@@ -120,7 +120,7 @@ mod tests {
     fn the_interface_examples_are_ones_the_validator_accepts() {
         let blocks: Vec<&str> =
             super::INTRO.split("```html\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        assert_eq!(blocks.len(), 4);
+        assert_eq!(blocks.len(), 5);
         let diagram =
             |b: &str| format!("<h2>A</h2><diffle-diagram><svg viewBox=\"0 0 280 60\">{b}</svg></diffle-diagram>");
         let whole = |b: &str| format!("<h2>A</h2>{b}");

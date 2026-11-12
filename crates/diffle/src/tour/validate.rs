@@ -2,7 +2,7 @@
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
-use super::blocks::{row, tabs, tree};
+use super::blocks::{checklist, row, tabs, tree};
 use super::code;
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
@@ -32,7 +32,7 @@ struct Walk {
     section: Option<String>,
     /// The card the walk is in, by its `id`.
     card: Option<String>,
-    /// The block whose parts (a tree's notes, tabs) the walk is in, and the part, as errors name them.
+    /// The block whose parts (items, tabs) the walk is in, and the part, as errors name them.
     parts: Option<String>,
     /// How many columns the row the walk is in has; 0 outside a row.
     columns: usize,
@@ -177,6 +177,10 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
+            Rule::Check => {
+                let found = checklist::check(dom, node, &element);
+                self.parts(dom, checklist::parts(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
             Rule::Tree => {
                 let found = tree::check(dom, node, &element, parsed.as_ref());
                 self.parts(dom, tree::files(dom, node), rule.inner(place), label(tag, attrs), found);
@@ -192,7 +196,7 @@ impl Walk {
                 self.framed(code::Frame::Tab, |walk| walk.children(dom, node, rule.inner(place)));
                 self.parts = outer;
             }
-            Rule::Callout | Rule::File => self.children(dom, node, rule.inner(place)),
+            Rule::Callout | Rule::Item | Rule::File => self.children(dom, node, rule.inner(place)),
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";

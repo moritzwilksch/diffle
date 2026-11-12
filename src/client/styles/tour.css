@@ -177,11 +177,95 @@
   margin-right: 0.4em;
 }
 
-/* The article's column, centred. */
+/* The article's column and, while it fits, the margin of comments beside it, centred as a pair. */
 .tour-layout {
   display: flex;
   justify-content: center;
   padding-block: 2rem;
+}
+
+/* Each card hangs level with what it is on (`placeCards` in tour/margin/cards.ts). It moves without a
+   transition: a new card gliding down from the margin's top would be measured, focused and scrolled to
+   where it starts, not where it lands. */
+.tour-margin {
+  position: relative;
+  height: 100%;
+}
+
+.tour-margin-card {
+  position: absolute;
+  inset-inline: 0;
+}
+
+.tour-comment-button {
+  position: absolute;
+  left: 0;
+  z-index: 1;
+}
+
+/* The words a thread is on, through the CSS Custom Highlight API; the active thread's stronger. */
+::highlight(tour-comment) {
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+::highlight(tour-comment-active) {
+  background-color: color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+.tour-inline-threads {
+  margin: -0.75rem 0 1.5rem;
+}
+
+.tour-stale-threads {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.tour-stale-threads > h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.tour-stale-threads > p {
+  margin: 0 0 0.75rem;
+  color: var(--fg-2);
+  font-size: 0.8125rem;
+}
+
+/* An element a thread is on as a whole: a block ringed, a diagram's box outlined and its label
+   coloured; the active thread's stronger. A diagram's boxes and labels take a comment with a click. */
+.tour-article [data-comment]:not(rect, text, svg) {
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.tour-article [data-comment-active]:not(rect, text, svg) {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.tour-article svg.tour-diagram[data-comment] {
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  outline-offset: 4px;
+  border-radius: 0.25rem;
+}
+
+.tour-article .tour-diagram :is(rect, text)[data-node] {
+  cursor: pointer;
+}
+
+.tour-article .tour-diagram rect[data-node]:hover,
+.tour-article .tour-diagram rect[data-comment] {
+  stroke: var(--accent);
+}
+
+.tour-article .tour-diagram rect[data-comment-active] {
+  stroke-width: 2;
+}
+
+.tour-article .tour-diagram text[data-comment] {
+  fill: var(--accent);
 }
 
 /* A code block's header: the file it cites, or that it is an example. Lighter than a diff's, so the

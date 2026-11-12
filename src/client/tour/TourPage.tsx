@@ -1,7 +1,27 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { reviewGeometry } from '@/client/review/geometry.js';
 import { remPx } from '@/client/scale.js';
+import { useStore } from '@/client/store.js';
+import { anchorTop } from './anchor.js';
+import {
+  DRAFT,
+  threadAt,
+  tourArticle,
+  useActiveCard,
+  useTextHighlights,
+  useTourDraft,
+  useTourThreads,
+} from './margin/tourThreads.js';
 import type { TourDocument } from './document.js';
+import { blockAround, shapeAt, useElementMarks, useHoveredBlock } from './margin/targets.js';
+import {
+  BlockComment,
+  type HoveredBlock,
+  InlineThreads,
+  Margin,
+  SelectionComment,
+  StaleThreads,
+} from './margin/Margin.js';
 import { TourArticle } from './render.js';
 import { useTour } from './state.js';
 
@@ -19,6 +39,20 @@ export const PAGE_WIDTH = 920;
 const GLIDE_MS = 1000;
 /** Room on each side of the column, in pixels so the column is exactly `PAGE_WIDTH`. */
 const GUTTER = 24;
+/** The narrowest column the margin leaves; narrower, the threads go inline. */
+const MIN_COLUMN = 680;
+/** The margin's width, in rem, and the gap before it, in pixels. */
+const MARGIN_REM = 18;
+const MARGIN_GAP = 24;
+/** Where a revealed thread's anchor lands: the diff's gaze point (`EYE_FRACTION` in ReviewPane.tsx). */
+const EYE_FRACTION = 0.5;
+
+/** The column's width, and whether the margin fits beside it, on a page `width` pixels wide. */
+export function tourLayout(width: number, rem: number): { column: number; margin: boolean } {
+  const beside = Math.min(PAGE_WIDTH, width - 2 * GUTTER - MARGIN_GAP - MARGIN_REM * rem);
+  if (beside >= MIN_COLUMN) return { column: beside, margin: true };
+  return { column: Math.min(PAGE_WIDTH, width - 2 * GUTTER), margin: false };
+}
 
 /**
  * The tour as an article that scrolls. Taking a section scrolls its heading to the top, or the page
@@ -29,6 +63,59 @@ export function TourPage({ doc }: { doc: TourDocument }) {
   const ref = useRef<HTMLDivElement>(null);
   /** Where a taken section's glide ends; null once it got there or the reader took over. */
   const landing = useRef<number | null>(null);
+  const [article, setArticle] = useState<HTMLElement | null>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  /** Counts the article's resizes: a diff that loads moves what the threads are on. */
+  const [layout, setLayout] = useState(0);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hovering = useHoveredBlock<HoveredBlock>();
+  const { live } = useTourThreads();
+  const draft = useTourDraft();
+  const active = useActiveCard(hovered);
+  const reveal = useTour((s) => s.reveal);
+  const { column, margin } = tourLayout(width, remPx());
+  const anchors = useMemo(
+    () => [...live.map((t) => ({ id: t.id, anchor: t.anchor })), ...(draft ? [{ id: DRAFT, anchor: draft }] : [])],
+    [live, draft],
+  );
+  useTextHighlights(article, anchors, active, layout);
+  useElementMarks(article, anchors, active, layout);
+
+  useLayoutEffect(() => {
+    const page = ref.current;
+    if (!page || !article) return;
+    tourArticle.current = article;
+    setWidth(page.clientWidth);
+    const observer = new ResizeObserver(() => {
+      setWidth(page.clientWidth);
+      setLayout((n) => n + 1);
+    });
+    observer.observe(page);
+    observer.observe(article);
+    return () => {
+      observer.disconnect();
+      if (tourArticle.current === article) tourArticle.current = null;
+    };
+  }, [article]);
+
+  // A thread opened from elsewhere: its anchor at the gaze point, or its card among the lost ones.
+  useEffect(() => {
+    const page = ref.current;
+    if (!page || !article || !reveal) return;
+    const thread = useStore.getState().threads.find((t) => t.id === reveal.id);
+    if (thread?.anchor.kind !== 'tour') return;
+    const top = thread.stale
+      ? page.querySelector(`[data-thread="${CSS.escape(thread.id)}"]`)?.getBoundingClientRect().top
+      : anchorTop(article, thread.anchor);
+    if (top == null) return;
+    const view = page.getBoundingClientRect();
+    landing.current = null;
+    page.scrollTo({
+      top: page.scrollTop + top - view.top - page.clientHeight * EYE_FRACTION,
+      behavior: 'smooth',
+    });
+  }, [reveal, article]);
   const focus = useTour((s) => s.focus);
   const headings = (level: 'h2' | 'h3') => [...(ref.current?.querySelectorAll(`article > ${level}`) ?? [])];
 
@@ -80,12 +167,35 @@ export function TourPage({ doc }: { doc: TourDocument }) {
       onWheel={() => (landing.current = null)}
       onTouchStart={() => (landing.current = null)}
     >
-      <div className="tour-layout">
-        <div className="w-full min-w-0" style={{ maxWidth: PAGE_WIDTH + 2 * GUTTER, paddingInline: GUTTER }}>
-          <article className="tour-article markdown">
-            <TourArticle of={doc.body} />
+      <div className="tour-layout" style={{ gap: margin ? MARGIN_GAP : 0 }} onPointerLeave={hovering.release}>
+        <div ref={columnRef} className="relative min-w-0" style={{ width: column + 2 * GUTTER, paddingInline: GUTTER }}>
+          <article
+            ref={setArticle}
+            className="tour-article markdown"
+            onPointerMove={(e) => hovering.enter(blockAround(e.target as Element, doc.body))}
+            onPointerLeave={hovering.release}
+            onClick={(e) => {
+              if (!article || !document.getSelection()?.isCollapsed) return;
+              const target = e.target as Element;
+              // A diagram's box or label takes a comment with a click; the words a thread is on focus it.
+              const svg = target.closest('.tour-diagram');
+              const shape = svg && shapeAt(svg, target, e.clientX, e.clientY);
+              if (shape) return useStore.getState().openTourDraft(shape, { on: 'element' });
+              const id = threadAt(article, live, e.clientX, e.clientY);
+              if (id) useStore.getState().focusThread(id);
+            }}
+          >
+            <TourArticle of={doc.body} after={margin ? undefined : (i) => <InlineThreads index={i} />} />
           </article>
+          <StaleThreads />
+          {!margin && <SelectionComment article={article} container={columnRef} at="end" />}
+          {!margin && <BlockComment hovering={hovering} container={columnRef} at="end" />}
         </div>
+        {margin && (
+          <div style={{ width: `${MARGIN_REM}rem` }} className="shrink-0">
+            <Margin article={article} hovering={hovering} layout={layout} onHover={setHovered} hovered={hovered} />
+          </div>
+        )}
       </div>
     </div>
   );

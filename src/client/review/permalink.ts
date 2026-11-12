@@ -1,7 +1,7 @@
 import type { CodeViewLineSelection } from '@pierre/diffs';
 import { api } from '@/client/api.js';
 import { copyText } from '@/client/clipboard.js';
-import { pathFromItemId, selectionRange } from '@/client/model.js';
+import { codeDraft, pathFromItemId, selectionRange } from '@/client/model.js';
 import { useStore, type ReviewState } from '@/client/store.js';
 import type { Permalink, Snapshot } from '@/shared/protocol.js';
 
@@ -20,7 +20,7 @@ async function linkTo(
  * lines the forge cannot show, or a failed lookup.
  */
 export async function draftPermalink(s: ReviewState): Promise<string | null> {
-  const d = s.draft;
+  const d = codeDraft(s.draft);
   if (!s.snapshot || !d?.selection || s.fileView?.external) return null;
   const link = await linkTo(s, s.snapshot, d.path, d.selection).catch(() => null);
   return link?.url ?? null;

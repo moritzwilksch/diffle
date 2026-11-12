@@ -15,7 +15,13 @@ this repository"; ask the reviewer to start one (`diffle` in the repository).
 `diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
 is shown as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its
 `id`, its anchor and its messages. A message you wrote carries `"author": "agent"`. An anchor
-is on code: `line`, a path and a line range on the `old` or `new` side; `file`, a whole file.
+is on code (`line`: a path and a line range on the `old` or `new` side; `file`: a whole file) or on
+your tour (`tour`). A tour anchor names the section by `step` and `section`, its heading; the
+`element` by its `tag` and `handle` (a card's `id`, a diff's `path:lines`, a tab's `title`); and,
+in `within`, the card or tab holding it. Its `target` is a selection in that element's text
+(`on: "text"`, the words in `quoted`) or the element as a whole (`on: "element"`, with its
+`label`: a card's title, a box's text). Find the passage in your document by these. A tour thread is
+`stale` when your last push no longer holds its passage.
 
 `diffle comments reply <thread-id> <body|->` adds your reply to a thread, in Markdown (stdin with
 `-`), and prints the thread as JSON. The reviewer sees it marked as yours. Reply to answer a
@@ -35,8 +41,10 @@ their `<h3>` subsections. Each review has one tour.
 - An accepted push can come back with warnings on stderr, in the same form, such as a file note
   that may be long. They are judgment calls: fix each, or keep it knowingly.
 - `diffle tour clear` removes the review's tour.
-- The reviewer answers in this chat; revise the document and push it again for a change. The open
-  tour updates in place. A diff whose lines left the review since says so in place.
+- The reviewer answers in this chat, or comments on the tour in diffle: list the threads, reply to
+  a question, and revise the document and push it again for a change. The open tour updates in
+  place, and each thread follows its passage into it. A diff whose lines left the review since says
+  so in place.
 
 ### Structure
 
@@ -44,8 +52,8 @@ their `<h3>` subsections. Each review has one tour.
   explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
   level of the document.
 - Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
-  `diffle-tabs`, a `diffle-diagram`, a table, a `diffle-tree`, a `diffle-callout`. A block sits
-  between paragraphs, never inside one.
+  `diffle-tabs`, a `diffle-check`, a `diffle-diagram`, a table, a `diffle-tree`, a
+  `diffle-callout`. A block sits between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
   two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
   inside another, and a heading never goes inside a card.
@@ -106,6 +114,24 @@ the tabs a reader may never open; a single alternative is a sentence of prose.
 <diffle-tab title="Expire on the server" kind="chosen"><p>Every check compares the expiry with the clock.</p></diffle-tab>
 <diffle-tab title="Expire in the client" kind="rejected"><p>A client with a wrong clock would keep old tokens.</p></diffle-tab>
 </diffle-tabs>
+```
+
+### Checklists
+
+Use a `diffle-check` for what you need the reviewer to decide before the change can land: a
+behaviour you chose that they may not want, a trade-off you could not settle from the code. Each
+`diffle-item` asks one question in one line of inline prose; give it `context` for the one fact the
+answer rests on. Ask only real questions, a handful at most, and never one the diff already
+answers. The reviewer ticks an item as decided or answers it. `diffle comments list` reports each
+item under `checks`, with `ticked` and the `thread` that answers it; the prompt carries every item
+still open and every answer. Reply to an answer with `diffle comments reply`. A tour asks each
+question once, and a push that keeps an item's question keeps its tick.
+
+```html
+<diffle-check>
+<diffle-item context="Sessions issued before the deploy expire at once.">Should old sessions get a grace period?</diffle-item>
+<diffle-item>Is one hour the right lifetime for a token?</diffle-item>
+</diffle-check>
 ```
 
 ### Icons

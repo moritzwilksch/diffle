@@ -24,14 +24,17 @@ import {
   type SearchScope,
   type SearchContent,
   type Snapshot,
+  type ThreadList,
   type UserConfig,
   type ViewedEntry,
   type LspLogEntry,
 } from '@/shared/protocol.js';
 import { type Side } from '@/shared/side.js';
+import { type TourCheckItem, type TourTargetRequest } from '@/shared/tour.js';
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api, isNotFound } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
+import { anchorPath } from './comments/threads.js';
 import {
   buildNav,
   cursorFromSelection,
@@ -65,6 +68,7 @@ import {
   reuseThreads,
   selectionRange,
   visibleThreads,
+  codeDraft,
   commentsOff,
   iterationPick,
   iterationStep,
@@ -82,11 +86,22 @@ export type Loaded =
   /** Not fetched yet: the review pane's header-only placeholder. The store never records this kind. */
   | { kind: 'loading' };
 
-/** The comment being composed: on a line selection, or on the file as a whole when `selection` is null. */
-export interface Draft {
+/** A comment being composed on code: on a line selection, or on the file as a whole when `selection` is null. */
+export interface CodeDraft {
+  kind: 'code';
   path: string;
   selection: CodeViewLineSelection | null;
 }
+
+/** A comment being composed on the tour: on the element `node` names, or a selection in it. */
+export interface TourDraft {
+  kind: 'tour';
+  node: number[];
+  target: TourTargetRequest;
+}
+
+/** The comment being composed. */
+export type Draft = CodeDraft | TourDraft;
 
 export type DiffStyle = 'split' | 'unified';
 const DIFF_STYLE_KEY = 'diffle:diffStyle';
@@ -459,6 +474,8 @@ export interface ReviewState {
   deleteIteration(n: number): Promise<void>;
   error: string | null;
   threads: CommentThread[];
+  /** The tour's checklist items, each with its tick and the thread answering it, read with the threads. */
+  checks: TourCheckItem[];
   /** Resolved threads stay hidden unless the user turns them on. */
   showResolved: boolean;
   setShowResolved(on: boolean): void;
@@ -549,6 +566,8 @@ export interface ReviewState {
   /** Back to the diff list, at the position the file view was entered from. */
   closeFullFile(): void;
   setSelection(sel: CodeViewLineSelection | null): void;
+  /** Compose a comment on a tour element, or on a selection in its text. */
+  openTourDraft(node: number[], target: TourTargetRequest): void;
   /** Compose a comment on the selected lines. */
   openDraft(sel: CodeViewLineSelection): Promise<void>;
   /** Compose a comment on `path` as a whole; the composer sits above the file's first line. */
@@ -798,10 +817,10 @@ export const useStore = create<ReviewState>((set, get) => {
       gens,
       selection: s.selection && moved(s.selection),
       // An unmoved draft keeps its identity: a new one is an open request and refocuses the composer.
-      draft:
-        s.draft && paths.includes(s.draft.path)
-          ? { ...s.draft, selection: s.draft.selection && moved(s.draft.selection) }
-          : s.draft,
+      draft: (() => {
+        const d = codeDraft(s.draft);
+        return d && paths.includes(d.path) ? { ...d, selection: d.selection && moved(d.selection) } : s.draft;
+      })(),
       // A new object re-runs the scroll effect, so a jump in flight lands on the fresh renderer.
       scrollTarget: s.scrollTarget && moved(s.scrollTarget),
       reveal: s.reveal && moved(s.reveal),
@@ -1074,7 +1093,10 @@ export const useStore = create<ReviewState>((set, get) => {
     }
     // A watcher refresh must not take the comment being typed with it; only a new mode or a vanished file does.
     const draft = get().draft;
-    const keepDraft = draft != null && !modeChanged && (nextChanged.has(draft.path) || fileView?.path === draft.path);
+    const keepDraft =
+      draft != null &&
+      !modeChanged &&
+      (draft.kind === 'tour' || nextChanged.has(draft.path) || fileView?.path === draft.path);
     resyncing = false;
     set((s) => ({
       snapshot: next,
@@ -1485,7 +1507,8 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   /** The authoritative list replaces the store's; threads that did not change keep their objects. */
-  const acceptThreads = (next: CommentThread[]) => set({ threads: reuseThreads(get().threads, next) });
+  const acceptThreads = (next: ThreadList) =>
+    set({ threads: reuseThreads(get().threads, next.threads), checks: next.checks });
 
   /** A thread mutation, then the authoritative list; a failure becomes a toast. */
   const mutateThreads = async (what: string, call: () => Promise<unknown>) => {
@@ -1566,7 +1589,7 @@ export const useStore = create<ReviewState>((set, get) => {
     openReply(threadId) {
       const t = get().threads.find((x) => x.id === threadId);
       if (!t) return;
-      set({ replyTo: threadId, draft: null, activePath: t.anchor.path });
+      set({ replyTo: threadId, draft: null, activePath: anchorPath(t.anchor) ?? get().activePath });
     },
     closeReply() {
       if (get().replyTo) set({ replyTo: null });
@@ -2326,6 +2349,7 @@ export const useStore = create<ReviewState>((set, get) => {
     snapshot: null,
     error: null,
     threads: [],
+    checks: [],
     showResolved: false,
     setShowResolved(on) {
       set({ showResolved: on });
@@ -2416,8 +2440,8 @@ export const useStore = create<ReviewState>((set, get) => {
       const g = generation;
       const t = threadsSeq.start();
       try {
-        const threads = await api.threads();
-        if (current(g) && threadsSeq.latest(t)) acceptThreads(threads);
+        const list = await api.threads();
+        if (current(g) && threadsSeq.latest(t)) acceptThreads(list);
       } catch (e) {
         if (current(g) && threadsSeq.latest(t)) report('Loading threads', e);
       }
@@ -2598,7 +2622,7 @@ export const useStore = create<ReviewState>((set, get) => {
     setSelection(sel) {
       set({ selection: sel, visualAnchor: null, focusedThread: null });
       // A line draft goes with its selection; a file draft has none to lose.
-      if (sel == null && get().draft?.selection) set({ draft: null });
+      if (sel == null && codeDraft(get().draft)?.selection) set({ draft: null });
     },
 
     async openDraft(sel) {
@@ -2606,7 +2630,7 @@ export const useStore = create<ReviewState>((set, get) => {
       if (off) return get().flash(off);
       if (get().fileView?.external) return get().flash('Comments go on repository files only');
       const path = pathFromItemId(sel.id);
-      set({ draft: { path, selection: sel }, selection: sel, activePath: path, replyTo: null });
+      set({ draft: { kind: 'code', path, selection: sel }, selection: sel, activePath: path, replyTo: null });
     },
 
     openFileDraft(path) {
@@ -2619,7 +2643,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const kept = sel && pathFromItemId(sel.id) === path ? sel : null;
       // The composer sits above the first line, so it is off screen once the reader has scrolled into the file.
       set((s) => ({
-        draft: { path, selection: null },
+        draft: { kind: 'code', path, selection: null },
         selection: kept,
         visualAnchor: null,
         activePath: path,
@@ -2639,8 +2663,14 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ draft: null });
     },
 
+    openTourDraft(node, target) {
+      const off = get().snapshot && commentsOff(get().snapshot!.review);
+      if (off) return get().flash(off);
+      set({ draft: { kind: 'tour', node, target }, replyTo: null });
+    },
+
     async draftQuote() {
-      const d = get().draft;
+      const d = codeDraft(get().draft);
       if (!d?.selection) return '';
       const range = selectionRange(get(), d.path, d.selection);
       const contents = await ensureContents(d.path, range.side);
@@ -2652,6 +2682,17 @@ export const useStore = create<ReviewState>((set, get) => {
       const d = get().draft;
       if (!d || !body.trim()) return;
       const key = composerKey(get(), { kind: 'draft' });
+      if (d.kind === 'tour') {
+        try {
+          await api.addTourThread({ node: d.node, target: d.target, body });
+        } catch (e) {
+          return report('Posting the comment', e);
+        }
+        if (key) get().setUnsent(key, '');
+        set({ draft: null });
+        await get().refreshThreads();
+        return;
+      }
       if (!d.selection) {
         try {
           await api.addThread({ path: d.path, body });

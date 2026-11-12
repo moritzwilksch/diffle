@@ -1,6 +1,7 @@
 import { Info, OctagonAlert, TriangleAlert } from 'lucide-react';
 import type { TourElement } from '@/shared/tour-catalog.js';
 import type { ReactNode } from 'react';
+import type { Place } from '@/client/tour/anchor.js';
 
 type Kind = Extract<TourElement, { tag: 'diffle-callout' }>['kind'];
 
@@ -11,10 +12,11 @@ const LOOK = {
 } satisfies Record<Kind, unknown>;
 
 /** A highlighted aside behind a straight left rule, coloured and marked by its kind. */
-export function Callout({ kind, children }: { kind: Kind; children: ReactNode }) {
+export function Callout({ kind, children, place }: { kind: Kind; children: ReactNode; place?: Place }) {
   const { color, Icon } = LOOK[kind];
   return (
     <aside
+      {...place}
       className="tour-block flex gap-2 rounded-r-md border-l-3 px-3 py-2"
       style={{ borderColor: color, background: `color-mix(in srgb, ${color} 8%, var(--bg))` }}
       aria-label={kind}

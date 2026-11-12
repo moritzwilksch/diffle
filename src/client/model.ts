@@ -19,7 +19,8 @@ import {
 import { type Side } from '@/shared/side.js';
 import { fuzzyFilter } from '@/shared/fuzzy.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
-import type { ReviewState } from './store.js';
+import { tourLabel } from './comments/threads.js';
+import type { CodeDraft, Draft, ReviewState } from './store.js';
 
 // Pure functions over store state. No effects, no store import at runtime, so
 // every module (the store included) can use them without a cycle.
@@ -225,8 +226,9 @@ export function visibleThreads(state: Pick<ReviewState, 'threads' | 'showResolve
   return state.showResolved ? state.threads : state.threads.filter((t) => !t.resolved);
 }
 
-/** The header label of a thread: its line range and side, or the whole file. */
+/** The header label of a thread: its line range and side, the whole file, or its place in the tour. */
 export function anchorLabel(a: CommentAnchor): string {
+  if (a.kind === 'tour') return tourLabel(a.element.tag, a.target);
   return a.kind === 'file' ? 'whole file' : rangeLabel(a);
 }
 
@@ -251,8 +253,13 @@ export function selectionRange(
  * composer's label and the line tint show what the saved comment will say. Null for a file draft.
  */
 export function draftRange(state: Pick<ReviewState, 'draft' | 'loaded'>): ResolvedRange | null {
-  const d = state.draft;
+  const d = codeDraft(state.draft);
   return d?.selection ? selectionRange(state, d.path, d.selection) : null;
+}
+
+/** The draft when it is on code; null for none, or one on the tour. */
+export function codeDraft(draft: Draft | null): CodeDraft | null {
+  return draft?.kind === 'code' ? draft : null;
 }
 
 /** A comment editor whose unsent text the store keeps: the open draft, a reply, or an edit. */
@@ -274,10 +281,15 @@ export function composerKey(
   const review = state.snapshot.commentKey;
   if (target.kind === 'reply') return `${review}\0reply\0${target.threadId}`;
   if (target.kind === 'edit') return `${review}\0edit\0${target.messageId}`;
-  if (!state.draft) return null;
+  const d = state.draft;
+  if (!d) return null;
+  if (d.kind === 'tour') {
+    const at = d.target.on === 'text' ? `${d.target.occurrence}\0${d.target.quoted}` : 'element';
+    return `${review}\0draft\0tour\0${d.node.join('.')}\0${at}`;
+  }
   const r = draftRange(state);
   const at = r ? `${r.side}\0${r.startLine}\0${r.endLine}` : 'file';
-  return `${review}\0draft\0${state.draft.path}\0${at}`;
+  return `${review}\0draft\0${d.path}\0${at}`;
 }
 
 export function threadOfMessage(threads: CommentThread[], messageId: string): CommentThread | undefined {
@@ -310,7 +322,7 @@ export function itemDeps(
 ): unknown[] {
   const reply = state.replyTo != null && mine.some((t) => t.id === state.replyTo) ? state.replyTo : null;
   const editing = state.editingId != null && threadOfMessage(mine, state.editingId) ? state.editingId : null;
-  return [...mine, state.draft?.path === path ? state.draft : null, collapsed, reply, editing];
+  return [...mine, codeDraft(state.draft)?.path === path ? state.draft : null, collapsed, reply, editing];
 }
 
 export interface ItemVersion {

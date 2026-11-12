@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { TourIcon } from './Icon.js';
+import type { Place } from '@/client/tour/anchor.js';
 
 /** A framed explainer for one part of the diff: its title, after its icon, over its prose and the diffs it explains. */
 export function TourCard({
@@ -7,14 +8,16 @@ export function TourCard({
   title,
   icon,
   children,
+  place,
 }: {
   id: string;
   title: string;
   icon?: string;
   children: ReactNode;
+  place?: Place;
 }) {
   return (
-    <section data-card={id} aria-label={title} className="tour-card">
+    <section {...place} data-card={id} aria-label={title} className="tour-card">
       <h4 className="tour-card-title">
         {icon && <TourIcon name={icon} />}
         {title}

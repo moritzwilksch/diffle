@@ -1,5 +1,6 @@
 import { getFiletypeFromFileName } from '@pierre/diffs';
 import { FilePath } from '@/client/FilePath.js';
+import type { Place } from '@/client/tour/anchor.js';
 import { TourJump } from './Jump.js';
 import { Rows } from './Rows.js';
 
@@ -17,6 +18,7 @@ export function TourCode({
   line,
   example = false,
   title,
+  place,
 }: {
   code: string;
   lang?: string;
@@ -24,9 +26,14 @@ export function TourCode({
   line?: number;
   example?: boolean;
   title?: string;
+  place?: Place;
 }) {
   return (
-    <figure className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas">
+    <figure
+      {...place}
+      data-opaque=""
+      className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
+    >
       {(example || path) && (
         <figcaption className="tour-code-head">
           {example && <span className="tour-code-example">Example</span>}

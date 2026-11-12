@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FilePath } from '@/client/FilePath.js';
 import { useStore } from '@/client/store.js';
+import type { Place } from '@/client/tour/anchor.js';
 import type { LineRange } from '@/client/tour/document.js';
 import { rangePatch } from '@/client/tour/state.js';
 import { TourJump } from './Jump.js';
@@ -42,7 +43,10 @@ export function linesLabel({ start, end }: LineRange): string {
 /** What stands in for an excerpt's rows while they load, or once they are gone. */
 export function ExcerptNotice({ shown, range }: { shown: Exclude<Shown, { state: 'ready' }>; range: LineRange }) {
   return (
-    <p className={`m-0 px-2.5 py-2 text-[0.75rem] ${shown.state === 'loading' ? 'text-muted' : 'text-warn'}`}>
+    <p
+      data-opaque=""
+      className={`m-0 px-2.5 py-2 text-[0.75rem] ${shown.state === 'loading' ? 'text-muted' : 'text-warn'}`}
+    >
       {shown.state === 'loading'
         ? 'Loading…'
         : shown.state === 'error'
@@ -56,10 +60,14 @@ export function ExcerptNotice({ shown, range }: { shown: Exclude<Shown, { state:
  * The lines `range` names, cut from the review's diff when the card renders and highlighted like it.
  * When they left the review, a notice stands in their place and the jump still opens the file.
  */
-export function TourDiff({ range }: { range: LineRange }) {
+export function TourDiff({ range, place }: { range: LineRange; place?: Place }) {
   const shown = useExcerpt(range);
   return (
-    <figure className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas">
+    <figure
+      {...place}
+      data-opaque=""
+      className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
+    >
       <figcaption className="flex items-center gap-1.5 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
         <FilePath path={range.path} className="min-w-0 flex-1" nowrap />
         <span className="shrink-0 font-mono text-muted">

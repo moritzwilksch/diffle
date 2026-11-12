@@ -6,6 +6,8 @@ import type { CommentThread } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
 import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
 import { anchorLabel } from '@/client/model.js';
+import { showView } from '@/client/views/state.js';
+import { anchorPath } from './threads.js';
 import { Markdown } from '@/client/Markdown.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
@@ -19,18 +21,24 @@ export const ThreadRow = memo(function ThreadRow({
   openFile,
   focusThread,
   deleteThread,
+  openTourThread,
 }: {
   thread: CommentThread;
   openFile: (path: string, line?: number, side?: Side) => Promise<void>;
   focusThread: (id: string | null) => void;
   deleteThread: (id: string) => Promise<void>;
+  /** Shows the tour with thread `id` on it focused; the tour, not the comments, knows how. */
+  openTourThread: (id: string) => void;
 }) {
   const first = t.messages[0];
   const del = useConfirm(() => void deleteThread(t.id));
   const open = () => {
     // A file thread's card sits above the file's first line, where opening the file lands.
+    if (t.anchor.kind === 'tour') return openTourThread(t.id);
     if (t.anchor.kind === 'line') void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
     else void openFile(t.anchor.path);
+    // From the tour's panel too, a thread on code opens in the diff.
+    showView('diff');
     // Set after the jump: moving the cursor or selecting lines clears the ring again.
     focusThread(t.id);
   };
@@ -53,9 +61,14 @@ export const ThreadRow = memo(function ThreadRow({
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <ThreadIcon thread={t} />
-        <span className="font-mono font-semibold text-foreground">{anchorLabel(t.anchor)}</span>
+        {/* Lines are code; a tour's words are prose, cut to one line. */}
+        <span
+          className={`font-semibold text-foreground ${t.anchor.kind === 'tour' ? 'min-w-0 truncate font-sans' : 'font-mono'}`}
+        >
+          {anchorLabel(t.anchor)}
+        </span>
         {t.messages.length > 1 && (
-          <span className="text-muted">
+          <span className="shrink-0 whitespace-nowrap text-muted">
             {t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}
           </span>
         )}
@@ -97,7 +110,7 @@ export const ThreadRow = memo(function ThreadRow({
         )}
         <Markdown
           text={first?.body ?? ''}
-          path={t.anchor.path}
+          path={anchorPath(t.anchor) ?? undefined}
           quoted={t.anchor.kind === 'line' ? t.anchor.quoted : undefined}
         />
       </div>

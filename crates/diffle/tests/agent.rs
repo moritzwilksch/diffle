@@ -147,7 +147,7 @@ fn lists_the_shown_threads_by_state_and_path() {
     };
 
     let all = json_out(&comments(&t.path, &["list"]));
-    assert_eq!(all.as_object().unwrap().keys().collect::<Vec<_>>(), ["commentKey", "threads"]);
+    assert_eq!(all.as_object().unwrap().keys().collect::<Vec<_>>(), ["checks", "commentKey", "threads"]);
     assert_eq!(all["commentKey"], key);
     assert_eq!(bodies(&all), ["rename y", "why 2?"]);
     // What an agent reads, one line on stdout; pretty here, with ids and times masked.

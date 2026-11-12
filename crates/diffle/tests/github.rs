@@ -10,7 +10,7 @@ use diffle::github::pulls::repo_of_pr_url;
 use diffle::github::review::{ExportInput, GithubExporter, build_review, format_body};
 use diffle::protocol::{
     CommentAnchor, CommentAuthor, CommentMessage, CommentThread, GithubExportResponse, GithubPullRequest,
-    GithubPullRequestState, Side,
+    GithubPullRequestState, Side, TourCommentTag, TourPart, TourTarget,
 };
 use serde_json::{Value, json};
 
@@ -137,6 +137,18 @@ fn build_review_skips_stale_threads_and_without_ids_resolved_ones() {
     let built = build_review(&[t("s").stale().build(), t("r").resolved().build(), t("k").build()], None);
     assert_eq!(built.comments.iter().map(|c| c.body.as_str()).collect::<Vec<_>>(), ["hi"]);
     assert_eq!(json_of(&built.skipped), json!([{ "id": "s", "reason": "stale" }]));
+}
+
+#[test]
+fn build_review_skips_threads_on_the_tour() {
+    let target = TourTarget::Element { label: "Session".into() };
+    let element = TourPart { tag: TourCommentTag::P, handle: None };
+    let anchor =
+        CommentAnchor::Tour { node: vec![3], step: Some(1), section: "S".into(), element, within: None, target };
+    let built = build_review(&[thread_with("tour", anchor, "why?", false, false), t("k").build()], None);
+    assert_eq!(built.ids, ["k"]);
+    let skipped = json!([{ "id": "tour", "reason": "a comment on the tour has no place in a pull request review" }]);
+    assert_eq!(json_of(&built.skipped), skipped);
 }
 
 #[test]

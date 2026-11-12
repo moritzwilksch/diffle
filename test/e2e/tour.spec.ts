@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
 import { activePath } from './browser.js';
-import { pushTour, REPO_ROOT, waitForLsp } from './server.js';
+import { pushTour, readPrompt, readThreads, REPO_ROOT, seedReply, seedThreads, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
 const TOUR = `
@@ -74,7 +74,73 @@ tally/currency.py"><diffle-file path="tally/refunds.py">start here: <diffle-symb
 <p>A refund matches a sale by account and description alone; the currency plays no part.</p>
 <diffle-diff path="tally/refunds.py" lines="21"></diffle-diff>
 </details>
+<p>Before this merges:</p>
+<diffle-check>
+<diffle-item context="An unknown kind now stops the whole file.">Should a bad row fail the file, or be skipped?</diffle-item>
+<diffle-item>Is matching by description strict enough?</diffle-item>
+<diffle-item context="The CLI exits 1 on an empty ledger.">Is exit code 1 right for an empty ledger?</diffle-item>
+</diffle-check>
 `;
+
+/** A short tour to comment on. */
+const COMMENTED = `
+<h1>Refunds count against sales</h1>
+<h2>Entries learn their kind</h2>
+<p>An <code>Entry</code> is a sale unless its <code>kind</code> says <strong>refund</strong>; a refund counts negative.</p>
+<diffle-diff path="tally/ledger.py" lines="29-34"></diffle-diff>
+<h2>Parsing reads the kind column</h2>
+<p>Any other kind is refused.</p>
+`;
+
+/** A card and a diagram to comment on as a whole. */
+const BLOCKS = `
+<h2>Parsing reads the kind column</h2>
+<diffle-card id="parse" title="A row defaults to a sale">
+  <p>Any other kind is refused.</p>
+  <diffle-diff path="tally/ledger.py" lines="76-79"></diffle-diff>
+</diffle-card>
+<diffle-diagram><svg viewBox="0 0 216 52">
+  <rect x="8" y="16" width="80" height="28"/><text x="48" y="30" class="c">CLI</text>
+  <path d="M88 30 H128" class="arrow"/>
+  <rect x="128" y="16" width="80" height="28"/><text x="168" y="30" class="c">Ledger</text>
+</svg></diffle-diagram>
+`;
+
+/**
+ * A card whose reading text holds "refused. A refund" twice, across two paragraph breaks, and whose
+ * code block holds it once more: code and trees are no reading text, on the server or the page.
+ */
+const OPAQUE = `
+<h2>Parsing reads the kind column</h2>
+<diffle-card id="kind" title="A row knows its kind">
+  <p>Unknown kinds are refused.</p>
+  <p>A refund is no sale.</p>
+  <diffle-tree title="Where it lives" paths="tally/ledger.py"></diffle-tree>
+  <diffle-code lang="python">raise ValueError("refused. A refund")</diffle-code>
+  <diffle-diff path="tally/ledger.py" lines="76-79"></diffle-diff>
+  <p>Anything else is refused.</p>
+  <p>A refund counts negative.</p>
+</diffle-card>
+`;
+
+/** Selects `words` in the tour's article, as a reader dragging across them would. */
+async function select(page: Page, words: string) {
+  await page.evaluate((words) => {
+    const article = document.querySelector('.tour-article')!;
+    const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const at = n.textContent!.indexOf(words);
+      if (at < 0) continue;
+      const range = document.createRange();
+      range.setStart(n, at);
+      range.setEnd(n, at + words.length);
+      document.getSelection()!.removeAllRanges();
+      document.getSelection()!.addRange(range);
+      return;
+    }
+    throw new Error(`"${words}" is not in the tour`);
+  }, words);
+}
 
 /** The tour view once every card's lines rendered. */
 async function showTour(page: Page) {
@@ -104,6 +170,8 @@ test.describe('the tour', () => {
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
     await expect(view.locator('.tour-diagram-icon')).toHaveCount(3);
+    // The comment panel under the contents says how a comment starts in the tour.
+    await expect(page.getByText('Select words and press c to comment on them.')).toBeVisible();
     await expect(page).toHaveScreenshot('tour.png');
     const contents = page.getByRole('navigation', { name: 'Contents' });
     await expect(contents).toMatchAriaSnapshot({
@@ -199,6 +267,247 @@ test.describe('the tour', () => {
     await expect(details.getByText('Loading…')).toHaveCount(0);
     await page.mouse.move(0, 0);
     await expect(details).toHaveScreenshot('tour-details-open.png');
+  });
+
+  test('a checklist takes ticks and answers, and the prompt carries what is open or answered', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    const check = view.getByRole('region', { name: 'Checklist' });
+    await check.scrollIntoViewIfNeeded();
+    await expect(check.getByText('0 of 3 decided')).toBeVisible();
+    await expect(check).toHaveScreenshot('tour-check.png');
+
+    await check.getByRole('checkbox', { name: /strict enough/ }).check();
+    await expect(check.getByText('1 of 3 decided')).toBeVisible();
+    await check
+      .getByRole('listitem')
+      .filter({ hasText: 'empty ledger' })
+      .getByRole('button', { name: 'Answer' })
+      .click();
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Yes: scripts treat it as a failure.');
+    await page.keyboard.press('Control+Enter');
+    await expect(check.getByRole('button', { name: 'Show answer' })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(check).toHaveScreenshot('tour-check-answered.png');
+
+    const prompt = await readPrompt(diffle.url);
+    expect(prompt).toContain(
+      '(check) 4. Finding unmatched refunds, open\n\n> Should a bad row fail the file, or be skipped?\n\n(no answer yet)',
+    );
+    expect(prompt).toContain('> Is exit code 1 right for an empty ledger?\n\nYes: scripts treat it as a failure.');
+    expect(prompt).not.toContain('strict enough');
+  });
+
+  test.describe('in a wide window', () => {
+    test.use({ viewport: { width: 1680, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+
+    test('selected words take a comment in the margin; the agent answers, the prompt carries it, and a revision it loses keeps it below', async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, COMMENTED);
+      const view = await showTour(page);
+      const button = view.getByRole('button', { name: 'Comment', exact: true });
+      // A block's button leaves with the pointer, and waits for a pointer on its way to it.
+      const diff = view.locator('figure').first();
+      await diff.hover();
+      await expect(button).toBeVisible();
+      await view.getByText('Any other kind is refused.').hover();
+      await expect(button).toBeHidden();
+      await diff.hover();
+      await button.click();
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeHidden();
+
+      await select(page, 'a refund counts negative');
+      const margin = view.getByLabel('Comments');
+      await expect(view.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
+      await page.keyboard.press('c');
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+      await page.keyboard.type('Negative in which total?');
+      await page.keyboard.press('Control+Enter');
+      const card = margin.locator('.tour-margin-card').filter({ hasText: 'Negative in which total?' });
+      await expect(card).toBeVisible();
+      await expect(card).toContainText('"a refund counts negative"');
+
+      // The agent answers from its own session; the reply shows on the card, marked as the agent's.
+      const [thread] = await readThreads(diffle.url);
+      await seedReply(diffle.url, thread!.id, {
+        body: 'In the account total.',
+        author: 'agent',
+      });
+      await expect(card).toContainText('In the account total.');
+      await page.mouse.click(1, 1);
+      await expect(page).toHaveScreenshot('tour-comment.png');
+      expect(await readPrompt(diffle.url)).toContain(
+        '(tour) 1. Entries learn their kind, in a <p>\n\n> a refund counts negative\n\nNegative in which total?\n\n(agent) In the account total.',
+      );
+
+      // yy copies every comment, the code's and the tour's, as in the diff.
+      await seedThreads(diffle.url, [{ path: 'tally/ledger.py', startLine: 30, body: 'Why a blank line?' }]);
+      await expect(page.getByRole('navigation', { name: 'Contents' })).toBeVisible();
+      await page.keyboard.press('y');
+      await page.keyboard.press('y');
+      await expect(page.getByText('Copied all comments')).toBeVisible();
+      const copied = await page.evaluate(() => navigator.clipboard.readText());
+      expect(copied).toBe(await readPrompt(diffle.url));
+      expect(copied).toContain('tally/ledger.py:30');
+      expect(copied).toContain('(tour) 1. Entries learn their kind, in a <p>');
+
+      // The tour's side panel lists every thread under the contents, as the diff's does.
+      const side = page.getByRole('complementary').filter({ hasText: 'Negative in which total?' });
+      await expect(side).toContainText('Why a blank line?');
+      await expect(page.getByText('Copied all comments')).toBeHidden();
+      await expect(page).toHaveScreenshot('tour-side.png');
+      await side.getByText('Negative in which total?').click();
+      await expect(margin.locator('.tour-margin-card[data-active]')).toContainText('Negative in which total?');
+      await side.getByText('Why a blank line?').click();
+      await expect(view).toBeHidden();
+      await expect.poll(() => activePath(page)).toBe('tally/ledger.py');
+      await page.keyboard.press('T');
+      await expect(view).toBeVisible();
+
+      // The comment panel opens the thread back in the tour.
+      await page.keyboard.press('T');
+      await page.getByRole('complementary').getByText('Negative in which total?').click();
+      await expect(view).toBeVisible();
+
+      // A revision that drops the words keeps the thread, below the tour.
+      await pushTour(diffle.url, COMMENTED.replace('a refund counts negative', 'refunds subtract'));
+      const lost = view.getByRole('region', {
+        name: 'Comments not in this tour',
+      });
+      await expect(lost).toContainText('Negative in which total?');
+      await expect(view.getByText('1 comment not in this tour')).toBeVisible();
+      await expect(lost).toHaveScreenshot('tour-comment-lost.png');
+      await expect(margin.locator('.tour-margin-card')).toHaveCount(0);
+    });
+
+    test('a selection across a card that holds a tree and code lands where the server reads it', async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, OPAQUE);
+      const view = await showTour(page);
+      // From the last paragraph but one into the last: the card holds the selection.
+      await page.evaluate(() => {
+        const article = document.querySelector('.tour-article')!;
+        const text = (words: string) => {
+          const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+          for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.textContent!.includes(words)) return n;
+          throw new Error(`"${words}" is not in the tour`);
+        };
+        const [from, to] = [text('Anything else is refused.'), text('A refund counts negative.')];
+        const range = document.createRange();
+        range.setStart(from, from.textContent!.indexOf('refused.'));
+        range.setEnd(to, 'A refund'.length);
+        document.getSelection()!.removeAllRanges();
+        document.getSelection()!.addRange(range);
+      });
+      await page.keyboard.press('c');
+      await page.keyboard.type('Refused how?');
+      await page.keyboard.press('Control+Enter');
+      await expect(view.locator('.tour-margin-card').filter({ hasText: 'Refused how?' })).toBeVisible();
+
+      const [thread] = await readThreads(diffle.url);
+      expect(thread!.stale).toBe(false);
+      expect(thread!.anchor).toMatchObject({
+        element: { tag: 'diffle-card', handle: 'kind' },
+        target: { on: 'text', quoted: 'refused. A refund', occurrence: 1 },
+      });
+    });
+  });
+
+  test.describe("in a wide window, a block's Comment button", () => {
+    test.use({ viewport: { width: 1680, height: 900 } });
+
+    test("a block's Comment button takes the free margin beside the thread, never covering it", async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, COMMENTED);
+      const view = await showTour(page);
+      const button = view.getByRole('button', { name: 'Comment', exact: true });
+      const diff = view.locator('figure').first();
+      await diff.hover();
+      await button.click();
+      await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+      await page.keyboard.type('Which lines count?');
+      await page.keyboard.press('Control+Enter');
+      const card = view.locator('.tour-margin-card').filter({ hasText: 'Which lines count?' });
+      await expect(card).toBeVisible();
+
+      await diff.hover();
+      await expect(button).toBeVisible();
+      const [b, c] = [(await button.boundingBox())!, (await card.boundingBox())!];
+      expect(b.y >= c.y + c.height || b.y + b.height <= c.y).toBe(true);
+      await expect(page).toHaveScreenshot('tour-comment-button-clear.png');
+    });
+
+    test("a deep block's Comment button opens the composer level with it, without moving the page", async ({
+      page,
+      diffle,
+    }) => {
+      const filler = Array.from(
+        { length: 6 },
+        (_, i) => `<h2>Step ${i + 1}</h2><p>${'Context the reader needs first. '.repeat(30)}</p>`,
+      ).join('');
+      await pushTour(
+        diffle.url,
+        `${filler}<h2>Parsing</h2>${BLOCKS}`.replace('<h2>Parsing reads the kind column</h2>', ''),
+      );
+      const view = await showTour(page);
+      const card = view.locator('[data-card="parse"]');
+      await card.scrollIntoViewIfNeeded();
+      const scroller = view.locator('.tour-layout').locator('..');
+      const before = await scroller.evaluate((el) => el.scrollTop);
+      expect(before).toBeGreaterThan(500);
+      await card.locator('p').hover();
+      await view.getByRole('button', { name: 'Comment', exact: true }).click();
+
+      const composer = view.getByPlaceholder('Leave a comment…');
+      await expect(composer).toBeFocused();
+      await expect(composer).toBeInViewport();
+      const top = async (el: typeof card) => (await el.boundingBox())!.y;
+      expect(Math.abs((await top(view.locator('.tour-margin-card'))) - (await top(card)))).toBeLessThanOrEqual(1);
+      expect(Math.abs((await scroller.evaluate((el) => el.scrollTop)) - before)).toBeLessThanOrEqual(1);
+    });
+  });
+
+  test('a diagram box takes a comment with a click and a card with its button; a narrow page shows them under their blocks', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, BLOCKS);
+    const view = await showTour(page);
+    await view.locator('.tour-diagram').getByText('Ledger').click();
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Does the ledger check this?');
+    await page.keyboard.press('Control+Enter');
+    await view.locator('[data-card="parse"] p').hover();
+    await view.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Why a sale by default?');
+    await page.keyboard.press('Control+Enter');
+
+    const threads = view.locator('.tour-inline-threads');
+    await expect(threads).toHaveCount(2);
+    await expect(threads.first()).toContainText('card "A row defaults to a sale"');
+    await expect(threads.last()).toContainText('box "Ledger"');
+    const contents = page.getByRole('navigation', { name: 'Contents' });
+    await expect(contents.getByRole('button', { name: /Parsing reads/ })).toContainText('2');
+    await page.mouse.move(1, 1);
+    await expect(page).toHaveScreenshot('tour-comment-inline.png');
+    const prompt = await readPrompt(diffle.url);
+    expect(prompt).toContain(
+      '(tour) 1. Parsing reads the kind column, on the card #parse\n\n> A row defaults to a sale',
+    );
+    expect(prompt).toContain('(tour) 1. Parsing reads the kind column, on a box in the diagram\n\n> Ledger');
   });
 
   test.describe('over the working tree', () => {

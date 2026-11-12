@@ -61,6 +61,7 @@ const TOUR: &str = r#"
 docs/readme.md"><diffle-file path="app.py">start at <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol></diffle-file></diffle-tree>
 <diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
+<diffle-check><diffle-item context="Callers pass ids from the store.">Should the loader check the id?</diffle-item></diffle-check>
 <details><summary>Why the id is not checked</summary><p>Callers pass ids they read from the store.</p><diffle-diff path="app.py" lines="3"></diffle-diff></details>
 <diffle-tabs>
   <diffle-tab title="The loader" kind="chosen"><p>It returns the id it takes.</p><diffle-diff path="app.py" lines="2-3"></diffle-diff></diffle-tab>
@@ -169,6 +170,9 @@ docs/readme.md"></diffle-tree>
 <p><summary>Loose</summary></p>
 <diffle-tree title="Notes" paths="app.py"><p>prose</p><diffle-file path="gone.py">Not listed.</diffle-file><diffle-file path="app.py"> </diffle-file></diffle-tree>
 <p><diffle-file path="app.py">Loose.</diffle-file></p>
+<diffle-check><diffle-item>Same?</diffle-item><diffle-item> Same? </diffle-item><diffle-item context="x"></diffle-item></diffle-check>
+<diffle-check><diffle-item>Same?</diffle-item><diffle-item>Other?</diffle-item></diffle-check>
+<p><diffle-item>Alone?</diffle-item></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;

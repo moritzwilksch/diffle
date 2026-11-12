@@ -1,6 +1,6 @@
 // The elements a tour document is written in: every `diffle-*` element and its attributes, the plain
-// tags, and a diagram's drawing. `diffle skill` prints it, the validator and the client both read
-// it, so it is one cohesive catalog.
+// tags, a diagram's drawing, and which tags a thread can sit on. `diffle skill` prints it, the
+// validator and the client both read it, so it is one cohesive catalog.
 import { z } from 'zod';
 import { SideSchema } from './side.js';
 
@@ -78,6 +78,25 @@ export const TourTabSchema = z
     title: z.string().min(1),
     /** A chip beside the title: `chosen`, `rejected` or `example`. */
     kind: TourTabKindSchema.optional(),
+  })
+  .strict();
+
+/**
+ * Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as
+ * decided or answered in a thread the agent reads. It holds only its items.
+ */
+export const TourCheckSchema = z
+  .object({
+    tag: z.literal('diffle-check'),
+  })
+  .strict();
+
+/** A question of a `diffle-check`, one line of inline prose: what the reviewer should decide. */
+export const TourItemSchema = z
+  .object({
+    tag: z.literal('diffle-item'),
+    /** A sentence of context under the question: what the choice costs or what it rests on. */
+    context: z.string().min(1).optional(),
   })
   .strict();
 
@@ -356,6 +375,8 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourIconSchema,
   TourTabsSchema,
   TourTabSchema,
+  TourCheckSchema,
+  TourItemSchema,
   TourFileSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
@@ -394,3 +415,43 @@ export const TourTagSchema = z.enum([
   'td',
 ]);
 export type TourTag = z.infer<typeof TourTagSchema>;
+
+/**
+ * Every tag a thread on the tour can name: a plain tag or a `diffle-*` element holding the words it
+ * quotes, a block it is on as a whole, or a diagram's box (`rect`) or label (`text`).
+ */
+export const TourCommentTagSchema = z.enum([
+  ...new Set([
+    ...TourTagSchema.options,
+    ...TourElementSchema.options.map((element) => element.shape.tag.value),
+    'rect' as const,
+    'text' as const,
+  ]),
+] as [TourTag | TourElementTag | 'rect' | 'text', ...(TourTag | TourElementTag | 'rect' | 'text')[]]);
+export type TourCommentTag = z.infer<typeof TourCommentTagSchema>;
+
+/** The tags a thread may sit on as a whole: blocks, and a diagram's boxes and labels. */
+export const TourWholeTagSchema = TourCommentTagSchema.extract([
+  'diffle-card',
+  'diffle-diff',
+  'diffle-tabs',
+  'diffle-check',
+  'diffle-item',
+  'diffle-code',
+  'diffle-tree',
+  'diffle-callout',
+  'diffle-diagram',
+  'table',
+  'rect',
+  'text',
+]);
+export type TourWholeTag = z.infer<typeof TourWholeTagSchema>;
+
+/** The blocks whose content is code or a drawing, not reading text: a selection in them quotes nothing. */
+export const TourOpaqueTagSchema = TourWholeTagSchema.extract([
+  'diffle-diff',
+  'diffle-code',
+  'diffle-tree',
+  'diffle-diagram',
+]);
+export type TourOpaqueTag = z.infer<typeof TourOpaqueTagSchema>;

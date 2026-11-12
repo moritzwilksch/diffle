@@ -10,7 +10,7 @@ pub enum Parent {
     Top,
     /// Anything else: a paragraph, a list, a card, a callout, a row's column.
     Flow,
-    /// A tree, where its notes sit.
+    /// A block of parts (a checklist, a tree), where its parts sit.
     Parts,
     /// A `diffle-tabs`, where its tabs sit.
     Tabs,
@@ -34,7 +34,7 @@ pub enum Inside {
 pub struct Place {
     pub parent: Parent,
     pub inside: Inside,
-    /// Inside a line of text (a paragraph, a heading, a link, code, a tree's note), where no
+    /// Inside a line of text (a paragraph, a heading, a link, code, a checklist item), where no
     /// block fits. Apart from `inside`: text sits in cards and callouts alike.
     pub in_text: bool,
 }
@@ -67,6 +67,10 @@ pub enum Rule {
     Tabs,
     /// `diffle-tab`: a pane of tabs, holding what a card holds.
     Tab,
+    /// `diffle-check`: a block holding its items.
+    Check,
+    /// `diffle-item`: a question of a checklist, holding a line of text.
+    Item,
     Diagram,
     Jump,
     /// `diffle-diff`: a block holding nothing.
@@ -90,6 +94,8 @@ impl Rule {
             "diffle-callout" => Self::Callout,
             "diffle-tabs" => Self::Tabs,
             "diffle-tab" => Self::Tab,
+            "diffle-check" => Self::Check,
+            "diffle-item" => Self::Item,
             "diffle-diagram" => Self::Diagram,
             "diffle-jump" => Self::Jump,
             "diffle-diff" => Self::Block,
@@ -104,8 +110,8 @@ impl Rule {
     pub fn fits(self, place: Place) -> bool {
         match self {
             Self::Row => place.parent == Parent::Top,
-            Self::Card => !place.in_text && place.inside < Inside::Card,
-            Self::File => place.parent == Parent::Parts,
+            Self::Card | Self::Check => !place.in_text && place.inside < Inside::Card,
+            Self::Item | Self::File => place.parent == Parent::Parts,
             Self::Tabs => !place.in_text && place.inside == Inside::Article,
             Self::Tab => place.parent == Parent::Tabs,
             Self::Callout => !place.in_text && place.inside < Inside::Callout,
@@ -118,6 +124,8 @@ impl Rule {
         match self {
             Self::Row => "at the top level, between paragraphs",
             Self::Card => "between paragraphs, outside other cards and callouts",
+            Self::Check => "between paragraphs, outside cards and callouts",
+            Self::Item => "directly inside a diffle-check",
             Self::File => "directly inside a diffle-tree",
             Self::Tabs => "between paragraphs, outside cards, callouts and other tabs",
             Self::Tab => "directly inside a diffle-tabs",
@@ -139,8 +147,8 @@ impl Rule {
             Self::Card => enclosed(Inside::Card),
             Self::Callout => enclosed(Inside::Callout),
             Self::Tab => enclosed(Inside::Tab),
-            Self::File => Place { in_text: true, ..flow },
-            Self::Tree => Place { parent: Parent::Parts, ..flow },
+            Self::Item | Self::File => Place { in_text: true, ..flow },
+            Self::Check | Self::Tree => Place { parent: Parent::Parts, ..flow },
             Self::Tabs => Place { parent: Parent::Tabs, ..flow },
             _ => flow,
         }
@@ -178,6 +186,11 @@ pub fn is_column(tag: &str) -> bool {
             | "ul"
             | "ol"
     )
+}
+
+/// Whether a checklist item may hold `tag`: inline prose and the inline primitives.
+pub fn fits_sentence(tag: &str) -> bool {
+    tag.starts_with("diffle-") || matches!(tag, "code" | "strong" | "em" | "a")
 }
 
 /// Whether the `<details>` at `node` holds one `<summary>`, as its first element.

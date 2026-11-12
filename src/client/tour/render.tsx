@@ -1,8 +1,10 @@
-import { createElement, type ReactNode } from 'react';
+import { createElement, Fragment, type ReactNode } from 'react';
 import { TourTagSchema } from '@/shared/tour-catalog.js';
+import { placeOf } from './anchor.js';
 import { lineSpan, primitive } from './document.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
+import { TourCheck } from './primitives/Check.js';
 import { TourCode } from './primitives/Code.js';
 import { TourDrawing } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
@@ -22,14 +24,20 @@ export function TourContent({ of }: { of: Element }): ReactNode {
   return [...of.childNodes].map((node, i) => contentNode(node, i));
 }
 
-/** The article itself: as `TourContent`, with each `h2` carrying its step number in `data-step`. */
-export function TourArticle({ of }: { of: Element }): ReactNode {
+/**
+ * The article itself: as `TourContent`, with each `h2` carrying its step number in `data-step`, and
+ * what `after` gives for each top-level element, by its place, after it.
+ */
+export function TourArticle({ of, after }: { of: Element; after?: (index: number) => ReactNode }): ReactNode {
   let step = 0;
-  return [...of.children].map((node, i) =>
-    node.localName === 'h2'
-      ? createElement('h2', { key: i, 'data-step': ++step }, <TourContent of={node} />)
-      : contentNode(node, i),
-  );
+  return [...of.children].map((node, i) => (
+    <Fragment key={i}>
+      {node.localName === 'h2'
+        ? createElement('h2', { 'data-step': ++step, ...placeOf(node) }, <TourContent of={node} />)
+        : contentNode(node, i)}
+      {after?.(i)}
+    </Fragment>
+  ));
 }
 
 function contentNode(node: ChildNode, key: number): ReactNode {
@@ -42,7 +50,7 @@ function contentNode(node: ChildNode, key: number): ReactNode {
       tag.data === 'a' && href && /^https?:\/\//.test(href) ? { href, target: '_blank', rel: 'noreferrer' } : {};
     const spans =
       tag.data === 'th' || tag.data === 'td' ? { colSpan: span(node, 'colspan'), rowSpan: span(node, 'rowspan') } : {};
-    return createElement(tag.data, { key, ...link, ...spans }, <TourContent of={node} />);
+    return createElement(tag.data, { key, ...link, ...spans, ...placeOf(node) }, <TourContent of={node} />);
   }
   const element = primitive(node);
   switch (element?.tag) {
@@ -57,9 +65,12 @@ function contentNode(node: ChildNode, key: number): ReactNode {
             start,
             end,
           }}
+          place={placeOf(node)}
         />
       );
     }
+    case 'diffle-check':
+      return <TourCheck key={key} source={node} renderItem={partContent} />;
     case 'diffle-tabs':
       return <TourTabs key={key} source={node} renderPane={partContent} />;
     case 'diffle-tree':
@@ -71,6 +82,7 @@ function contentNode(node: ChildNode, key: number): ReactNode {
           title={element.title}
           icon={element.icon}
           notes={treeNotes(node)}
+          place={placeOf(node)}
         />
       );
     case 'diffle-jump': {
@@ -89,11 +101,12 @@ function contentNode(node: ChildNode, key: number): ReactNode {
         />
       );
     case 'diffle-diagram':
-      return <TourDrawing key={key} of={node} />;
+      return <TourDrawing key={key} of={node} place={placeOf(node)} />;
     case 'diffle-code':
       return (
         <TourCode
           key={key}
+          place={placeOf(node)}
           code={node.textContent ?? ''}
           lang={element.lang}
           path={element.path}
@@ -104,13 +117,13 @@ function contentNode(node: ChildNode, key: number): ReactNode {
       );
     case 'diffle-row':
       return (
-        <div key={key} className="tour-row" data-columns={node.children.length}>
+        <div key={key} className="tour-row" data-columns={node.children.length} {...placeOf(node)}>
           {[...node.children].map((column, i) => contentNode(column, i))}
         </div>
       );
     case 'diffle-card':
       return (
-        <TourCard key={key} id={element.id} title={element.title} icon={element.icon}>
+        <TourCard key={key} id={element.id} title={element.title} icon={element.icon} place={placeOf(node)}>
           <TourContent of={node} />
         </TourCard>
       );
@@ -118,7 +131,7 @@ function contentNode(node: ChildNode, key: number): ReactNode {
       return <TourIcon key={key} name={element.name} tone={element.tone} />;
     case 'diffle-callout':
       return (
-        <Callout key={key} kind={element.kind}>
+        <Callout key={key} kind={element.kind} place={placeOf(node)}>
           <TourContent of={node} />
         </Callout>
       );
@@ -128,8 +141,8 @@ function contentNode(node: ChildNode, key: number): ReactNode {
 }
 
 /**
- * What a tab's pane holds, rendered as the article renders it; one function, so a block reads its
- * parts once per document.
+ * What a checklist item or a tab's pane holds, rendered as the article renders it; one function, so
+ * a block reads its parts once per document.
  */
 function partContent(part: Element): ReactNode {
   return <TourContent of={part} />;

@@ -1,9 +1,16 @@
-//! What a reader sees of a tour element: the words a tree's note counts.
+//! What a reader sees of a tour element, defined once on the server: threads quote it, and a
+//! selection matches it with whitespace ignored. `src/client/tour/anchor.ts` reads the rendered page alike.
 use super::dom::{Dom, Node, NodeId};
 use super::element::attr;
+use crate::protocol::TourOpaqueTag;
+
+/// Whether `tag`'s content is code or a drawing, not reading text (`TourOpaqueTag`).
+pub fn is_opaque(tag: &str) -> bool {
+    tag.parse::<TourOpaqueTag>().is_ok()
+}
 
 /// What a reader sees of `id`: its text, a symbol's name, a jump's label, a card's title before its
-/// content.
+/// content; code and drawings add nothing. `src/client/tour/anchor.ts` reads the rendered page alike.
 pub fn reading(dom: &Dom, id: NodeId) -> String {
     match dom.node(id) {
         Node::Text(t) => t.clone(),
@@ -21,7 +28,7 @@ pub fn reading(dom: &Dom, id: NodeId) -> String {
                     format!("{}:{line}", attr(attrs, "path").unwrap_or_default())
                 }
             }
-            "diffle-icon" => String::new(),
+            tag if is_opaque(tag) || tag == "diffle-icon" => String::new(),
             tag => {
                 let inner: String = dom.children(id).iter().map(|&c| reading(dom, c)).collect();
                 let titled = matches!(tag, "diffle-card" | "diffle-tab");
@@ -30,4 +37,23 @@ pub fn reading(dom: &Dom, id: NodeId) -> String {
         },
         _ => String::new(),
     }
+}
+
+/// `text` with each whitespace run one space, trimmed.
+pub fn collapse(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `text` without whitespace: a selection and the element's text agree on everything else.
+pub fn squash(text: &str) -> String {
+    text.split_whitespace().collect()
+}
+
+/// How many times `quoted` occurs in `reading`, whitespace ignored, overlaps included.
+pub fn matches(reading: &str, quoted: &str) -> usize {
+    let quoted = squash(quoted);
+    if quoted.is_empty() {
+        return 0;
+    }
+    (0..reading.len()).filter(|&i| reading.is_char_boundary(i) && reading[i..].starts_with(&quoted)).count()
 }

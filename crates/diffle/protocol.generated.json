@@ -352,6 +352,53 @@
             "path"
           ],
           "description": "A thread on a file as a whole, with no line: GitHub's file-level comment."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tour"
+            },
+            "node": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "description": "Child-element indices from the document's `<body>` to the element, in the tour as last pushed."
+            },
+            "step": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "The 1-based number of the `h2` section it sits in; absent before the first."
+            },
+            "section": {
+              "type": "string",
+              "description": "That section's heading text; '' before the first."
+            },
+            "element": {
+              "$ref": "#/$defs/TourPart",
+              "description": "The element the thread is on."
+            },
+            "within": {
+              "$ref": "#/$defs/TourPart",
+              "description": "The innermost card or tab holding it."
+            },
+            "target": {
+              "$ref": "#/$defs/TourTarget"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "section",
+            "element",
+            "target"
+          ],
+          "description": "A thread on the review's tour, at the element `node` names and the part of it `target` names."
         }
       ]
     },
@@ -420,7 +467,7 @@
         },
         "stale": {
           "type": "boolean",
-          "description": "Relocation failed after a snapshot refresh: the lines left the diff, or the file left the review."
+          "description": "Relocation failed: the lines left the diff, the file left the review, or the tour lost the passage."
         },
         "staleFromLine": {
           "type": "integer",
@@ -436,7 +483,7 @@
         "resolved",
         "stale"
       ],
-      "description": "A conversation anchored to a line range or a whole file. The thread owns the anchor; replies follow it."
+      "description": "A conversation anchored to a line range, a whole file, or a part of the tour. The thread owns the anchor; replies follow it."
     },
     "CommitInfo": {
       "type": "object",
@@ -2790,11 +2837,19 @@
           "items": {
             "$ref": "#/$defs/CommentThread"
           }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TourCheckItem"
+          },
+          "description": "The items of the tour's checklists, each with whether it is ticked and the thread answering it."
         }
       },
       "required": [
         "commentKey",
-        "threads"
+        "threads",
+        "checks"
       ],
       "description": "What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key."
     },
@@ -2881,6 +2936,53 @@
       ],
       "description": "The review's tour: one HTML document, as the agent last pushed it."
     },
+    "TourAnchor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "tour"
+        },
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "Child-element indices from the document's `<body>` to the element, in the tour as last pushed."
+        },
+        "step": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "The 1-based number of the `h2` section it sits in; absent before the first."
+        },
+        "section": {
+          "type": "string",
+          "description": "That section's heading text; '' before the first."
+        },
+        "element": {
+          "$ref": "#/$defs/TourPart",
+          "description": "The element the thread is on."
+        },
+        "within": {
+          "$ref": "#/$defs/TourPart",
+          "description": "The innermost card or tab holding it."
+        },
+        "target": {
+          "$ref": "#/$defs/TourTarget"
+        }
+      },
+      "required": [
+        "kind",
+        "node",
+        "section",
+        "element",
+        "target"
+      ],
+      "description": "A thread on the review's tour, at the element `node` names and the part of it `target` names."
+    },
     "TourCallout": {
       "type": "object",
       "properties": {
@@ -2936,6 +3038,62 @@
       "additionalProperties": false,
       "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
     },
+    "TourCheck": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-check"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as\ndecided or answered in a thread the agent reads. It holds only its items."
+    },
+    "TourCheckItem": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "Child-element indices from `<body>` to the item, as a tour anchor's `node`."
+        },
+        "step": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "The `h2` it sits under: its 1-based number; absent before the first."
+        },
+        "section": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string",
+          "description": "Its reading text, whitespace collapsed: what finds it again in a revised tour."
+        },
+        "ticked": {
+          "type": "boolean",
+          "description": "Whether the reviewer ticked it as decided."
+        },
+        "thread": {
+          "type": "string",
+          "description": "The open thread that answers it, when there is one."
+        }
+      },
+      "required": [
+        "node",
+        "section",
+        "question",
+        "ticked"
+      ],
+      "description": "An item of a `diffle-check` in the stored tour, with what the reviewer did with it."
+    },
     "TourCode": {
       "type": "object",
       "properties": {
@@ -2973,6 +3131,51 @@
       ],
       "additionalProperties": false,
       "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. With `example`, a snippet the agent made up to show how something works\n(data as it flows, a simplified spike, an alternative design), labelled as an example. It holds\nits code as text, `<` written `&lt;`."
+    },
+    "TourCommentTag": {
+      "type": "string",
+      "enum": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "p",
+        "ul",
+        "ol",
+        "li",
+        "code",
+        "pre",
+        "strong",
+        "em",
+        "a",
+        "div",
+        "details",
+        "summary",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "diffle-card",
+        "diffle-diff",
+        "diffle-tree",
+        "diffle-jump",
+        "diffle-symbol",
+        "diffle-callout",
+        "diffle-diagram",
+        "diffle-row",
+        "diffle-code",
+        "diffle-icon",
+        "diffle-tabs",
+        "diffle-tab",
+        "diffle-check",
+        "diffle-item",
+        "diffle-file",
+        "rect",
+        "text"
+      ],
+      "description": "Every tag a thread on the tour can name: a plain tag or a `diffle-*` element holding the words it\nquotes, a block it is on as a whole, or a diagram's box (`rect`) or label (`text`)."
     },
     "TourDiagram": {
       "type": "object",
@@ -3345,6 +3548,39 @@
           "properties": {
             "tag": {
               "type": "string",
+              "const": "diffle-check"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as\ndecided or answered in a thread the agent reads. It holds only its items."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-item"
+            },
+            "context": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A sentence of context under the question: what the choice costs or what it rests on."
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
               "const": "diffle-file"
             },
             "path": {
@@ -3362,6 +3598,24 @@
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
+    },
+    "TourElementTarget": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string",
+          "const": "element"
+        },
+        "label": {
+          "type": "string",
+          "description": "What finds it again: a card's title, a box's text, a diff's path and lines; '' for none."
+        }
+      },
+      "required": [
+        "on",
+        "label"
+      ],
+      "description": "A tour element as a whole: a block, a diagram box or a diagram label."
     },
     "TourError": {
       "type": "object",
@@ -3430,6 +3684,25 @@
       "additionalProperties": false,
       "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
     },
+    "TourItem": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-item"
+        },
+        "context": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A sentence of context under the question: what the choice costs or what it rests on."
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
+    },
     "TourJump": {
       "type": "object",
       "properties": {
@@ -3458,6 +3731,33 @@
       ],
       "additionalProperties": false,
       "description": "A button that opens the diff view at a file or a line. Its text is the label, plain text: markup\ninside it is refused. Empty, it shows `path:line`."
+    },
+    "TourOpaqueTag": {
+      "type": "string",
+      "enum": [
+        "diffle-diff",
+        "diffle-code",
+        "diffle-tree",
+        "diffle-diagram"
+      ],
+      "description": "The blocks whose content is code or a drawing, not reading text: a selection in them quotes nothing."
+    },
+    "TourPart": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "$ref": "#/$defs/TourCommentTag",
+          "description": "Its tag: `diffle-card`, `p`, a diagram's `rect`."
+        },
+        "handle": {
+          "type": "string",
+          "description": "What names it: a card's `id`; a diff's `path:lines`; a code block's `path:line`; a tab's or a\ntree's `title`; a callout's `kind`. Absent when it has none."
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "description": "A tour element by its tag and the one handle an agent can search its document for, in full."
     },
     "TourPush": {
       "type": "object",
@@ -3522,7 +3822,7 @@
       "required": [
         "tour"
       ],
-      "description": "`GET /api/tour`: the review's tour, or null without one."
+      "description": "`GET /api/tour`: the review's tour, or null without one. Its checklist items come with the\nthreads (`ThreadList.checks`), paired there with their ticks and answers."
     },
     "TourRow": {
       "type": "object",
@@ -4015,6 +4315,162 @@
       ],
       "description": "The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the\nwalk, and `h3` a subsection; `h4` is a small heading inside a card, a tab, a callout or a\n`details`, where those cannot go. The rest carry prose, lists and tables, and `details` folds away\nwhat the main path can do without, opening with its `summary`. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
     },
+    "TourTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "text"
+            },
+            "quoted": {
+              "type": "string",
+              "description": "The selected text, whitespace runs collapsed to one space."
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Which match of `quoted` in the element's reading text, 0-based, whitespace ignored."
+            }
+          },
+          "required": [
+            "on",
+            "quoted",
+            "occurrence"
+          ],
+          "description": "A selection in a tour element's reading text: what the reader sees, as `diffle skill` defines it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "element"
+            },
+            "label": {
+              "type": "string",
+              "description": "What finds it again: a card's title, a box's text, a diff's path and lines; '' for none."
+            }
+          },
+          "required": [
+            "on",
+            "label"
+          ],
+          "description": "A tour element as a whole: a block, a diagram box or a diagram label."
+        }
+      ],
+      "description": "The part of a tour element a thread is on."
+    },
+    "TourTargetRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "text"
+            },
+            "quoted": {
+              "type": "string",
+              "description": "The selected text, whitespace runs collapsed to one space."
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Which match of `quoted` in the element's reading text, 0-based, whitespace ignored."
+            }
+          },
+          "required": [
+            "on",
+            "quoted",
+            "occurrence"
+          ],
+          "description": "A selection in a tour element's reading text: what the reader sees, as `diffle skill` defines it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "string",
+              "const": "element"
+            }
+          },
+          "required": [
+            "on"
+          ]
+        }
+      ],
+      "description": "The part of a tour element a new thread is on; the server labels an element."
+    },
+    "TourTextTarget": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string",
+          "const": "text"
+        },
+        "quoted": {
+          "type": "string",
+          "description": "The selected text, whitespace runs collapsed to one space."
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Which match of `quoted` in the element's reading text, 0-based, whitespace ignored."
+        }
+      },
+      "required": [
+        "on",
+        "quoted",
+        "occurrence"
+      ],
+      "description": "A selection in a tour element's reading text: what the reader sees, as `diffle skill` defines it."
+    },
+    "TourThreadCreate": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "target": {
+          "$ref": "#/$defs/TourTargetRequest"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "node",
+        "target",
+        "body"
+      ],
+      "description": "`POST /api/tour/threads`: opens a thread on the review's tour as it is now. The server names the\nsection and the element, and an element's label, from the stored tour."
+    },
+    "TourTick": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "ticked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "question",
+        "ticked"
+      ],
+      "description": "`PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it. An item is named by its\n`TourCheckItem.question`, which a tour asks once, so a tick outlives a push that still asks it."
+    },
     "TourTree": {
       "type": "object",
       "properties": {
@@ -4050,6 +4506,24 @@
       ],
       "additionalProperties": false,
       "description": "A directory tree of some files under a title; changed ones show their status and line counts. It\nholds only `diffle-file` notes, on a few of its files."
+    },
+    "TourWholeTag": {
+      "type": "string",
+      "enum": [
+        "diffle-card",
+        "diffle-diff",
+        "diffle-tabs",
+        "diffle-check",
+        "diffle-item",
+        "diffle-code",
+        "diffle-tree",
+        "diffle-callout",
+        "diffle-diagram",
+        "table",
+        "rect",
+        "text"
+      ],
+      "description": "The tags a thread may sit on as a whole: blocks, and a diagram's boxes and labels."
     },
     "UserConfig": {
       "type": "object",

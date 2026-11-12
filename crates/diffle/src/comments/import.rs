@@ -154,7 +154,7 @@ pub fn is_duplicate(existing: &[CommentThread], t: &ThreadCreate) -> bool {
     let body = t.body.trim();
     let mut open = existing.iter().filter(|e| {
         !e.resolved
-            && anchor_path(&e.anchor) == t.path.as_str()
+            && anchor_path(&e.anchor) == Some(t.path.as_str())
             && e.messages.first().is_some_and(|m| m.body.trim() == body)
     });
     let Some(start) = t.start_line else {

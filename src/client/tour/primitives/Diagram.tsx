@@ -7,6 +7,7 @@ import {
 } from '@/shared/tour-catalog.js';
 import { DiagramCode } from './DiagramCode.js';
 import { LucideIcon } from './Icon.js';
+import { type Place, placeOf } from '@/client/tour/anchor.js';
 
 type Tone = 'accent' | 'success' | 'warning' | 'error';
 const TONES: ReadonlySet<TourSvgClass> = new Set<Tone>(['accent', 'success', 'warning', 'error']);
@@ -25,9 +26,9 @@ const ICON_SIZE = '14';
 /**
  * A diagram, drawn again from what `TourSvgElement` and `TourSvgClass` allow, so styles, scripts
  * and links the agent wrote never reach the page. diffle's stylesheet styles it from the theme,
- * and each arrow gets a head in its line's tone.
+ * and each arrow gets a head in its line's tone. `place` names the diagram the drawing stands for.
  */
-export function TourDrawing({ of }: { of: Element }) {
+export function TourDrawing({ of, place }: { of: Element; place: Place }) {
   const id = useId();
   const svg = [...of.children].find((c) => c.localName === 'svg');
   const root = svg ? read(svg) : null;
@@ -36,6 +37,8 @@ export function TourDrawing({ of }: { of: Element }) {
   const head = (tone: Tone | 'ink') => `url(#${CSS.escape(`${id}-${tone}`)})`;
   return (
     <svg
+      {...place}
+      data-opaque=""
       viewBox={root.viewBox}
       className="tour-diagram"
       style={{ width: `calc(${width}px * var(--diffle-text-scale, 1))` }}
@@ -81,6 +84,7 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: Head): Reac
   const arrow = LINES.has(tag) && (classes.includes('arrow') || classes.includes('arrows'));
   const props = {
     key,
+    ...placeOf(node),
     ...geometry,
     className: classes.join(' ') || undefined,
     markerEnd: arrow ? head(own ?? 'ink') : undefined,

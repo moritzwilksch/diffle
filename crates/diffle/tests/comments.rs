@@ -27,7 +27,7 @@ fn imports(value: Value) -> Vec<ThreadCreate> {
 fn start(t: &CommentThread) -> i64 {
     match t.anchor {
         CommentAnchor::Line { start_line, .. } => start_line,
-        CommentAnchor::File { .. } => 0,
+        CommentAnchor::File { .. } | CommentAnchor::Tour { .. } => 0,
     }
 }
 

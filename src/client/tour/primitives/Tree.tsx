@@ -3,6 +3,7 @@ import { type ReactNode, useMemo } from 'react';
 import { useStore } from '@/client/store.js';
 import { jump } from '@/client/tour/state.js';
 import type { ChangeStatus } from '@/shared/protocol.js';
+import type { Place } from '@/client/tour/anchor.js';
 import { TourIcon } from './Icon.js';
 
 interface Dir {
@@ -24,6 +25,7 @@ export function TourTree({
   title,
   icon,
   notes,
+  place,
 }: {
   paths: string;
   root: string;
@@ -31,6 +33,7 @@ export function TourTree({
   icon?: string;
   /** A few words beside some files, by path. */
   notes: ReadonlyMap<string, ReactNode>;
+  place?: Place;
 }) {
   const changed = useStore((s) => s.snapshot?.changed);
   const files = useMemo(() => new Map(changed?.map((f) => [f.path, f])), [changed]);
@@ -90,7 +93,7 @@ export function TourTree({
     </ul>
   );
   return (
-    <div className="tour-block overflow-hidden rounded-md border border-border bg-canvas">
+    <div {...place} data-opaque="" className="tour-block overflow-hidden rounded-md border border-border bg-canvas">
       <div className="tour-tree-title">
         {icon && <TourIcon name={icon} />}
         {title}
