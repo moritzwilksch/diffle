@@ -1,0 +1,6 @@
+---
+source: crates/diffle/tests/tour.rs
+expression: stderr(&refused)
+---
+✖ the tour was refused:
+  h2 "A" > diffle-edge: diffle-edge is not an element a tour may use; use diffle-card, diffle-diff, diffle-tree, diffle-jump, diffle-symbol, diffle-callout, diffle-diagram, diffle-row, diffle-code, diffle-icon, diffle-tabs, diffle-tab or diffle-file

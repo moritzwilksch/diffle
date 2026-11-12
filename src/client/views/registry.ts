@@ -5,6 +5,7 @@ import { DiffStyleSwitch } from '@/client/header/DiffStyleSwitch.js';
 import { DIFF_HELP } from '@/client/keyboard/HelpOverlay.js';
 import { ReviewPane } from '@/client/review/ReviewPane.js';
 import { useStore } from '@/client/store.js';
+import { tourView } from '@/client/tour/view.js';
 import { activeView, defineViews, showView, type ViewDef } from './state.js';
 
 /** The diff and its comments: the base view, laid out under any other so it keeps its scroll. */
@@ -21,7 +22,7 @@ const diffView: ViewDef = {
   panelWidth: '21.25rem',
 };
 
-defineViews([diffView, graphView]);
+defineViews([diffView, graphView, tourView]);
 useStore.getState().registerView({
   here: () => activeView().place?.() ?? null,
   leave: () => showView('diff'),

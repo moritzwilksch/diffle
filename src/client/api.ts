@@ -38,6 +38,7 @@ import {
   UserConfigSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
+import { TourResponseSchema } from '@/shared/tour.js';
 import type {
   BlameRequest,
   GraphQuery,
@@ -51,13 +52,13 @@ import type {
   SearchScope,
   SearchContent,
   ServerMessage,
-  Side,
   ThreadCreate,
   ThreadQuery,
   ViewedEntry,
   ConfigUpdate,
   SymbolsQuery,
 } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
 
@@ -96,6 +97,11 @@ class ApiError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Whether `e` is the server answering that what was asked for does not exist. */
+export function isNotFound(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 404;
 }
 
 const q = (params: Record<string, string | undefined>) =>
@@ -227,6 +233,7 @@ export const api = {
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  tour: () => json(TourResponseSchema, 'api/tour'),
   /** The snapshot's changed symbols and the code using them. */
   lspGraph: (query: GraphQuery) => json(GraphResponseSchema, `api/lsp/graph?${q(query)}`),
   lspOccurrences: (pos: LspPosition) =>

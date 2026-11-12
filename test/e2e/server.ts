@@ -138,6 +138,16 @@ export async function seedThreads(url: string, threads: ThreadCreate[]): Promise
   return (await response.json()) as CommentThread[];
 }
 
+/** Push a tour as `diffle tour push` does; fails on a refusal, naming its reasons. */
+export async function pushTour(url: string, html: string): Promise<void> {
+  const response = await fetch(new URL('api/tour', url), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ html }),
+  });
+  if (!response.ok) throw new Error(`pushing a tour failed: HTTP ${response.status} ${await response.text()}`);
+}
+
 /** Reply to a seeded thread directly, as `diffle comments reply` does. */
 export async function seedReply(url: string, threadId: string, reply: ReplyCreate): Promise<CommentThread> {
   const response = await fetch(new URL(`api/threads/${encodeURIComponent(threadId)}/replies`, url), {

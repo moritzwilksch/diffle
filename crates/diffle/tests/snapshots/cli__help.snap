@@ -8,6 +8,7 @@ Usage: diffle [OPTIONS] [revs]... [COMMAND]
 
 Commands:
   comments    read and answer the comments of the review running for this repository, as an agent
+  tour        show a guided tour of the review diffle is running for this repository, as an agent
   config      print the config file path and contents
   lsp         show the language server each language would get, and what is missing from PATH
   completion  print a shell completion script
@@ -18,6 +19,8 @@ Arguments:
 Options:
   -v, --version                  print the version and exit
   -h, --help                     display help for command
+      --skill                    print what diffle offers a coding agent, as Markdown to install as
+                                 a skill
   -C <path>                      run as if started in <path> (any directory inside a git worktree)
   -p, --port <port>              port to listen on (default: 4966, or the next free one; 0 = random)
   -H, --host <host>              address to bind; use 0.0.0.0 to expose on the network (default:

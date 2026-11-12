@@ -54,6 +54,7 @@ gix = { version = "0.90", default-features = false, features = [
 # Pack generation for fetching from a repository on disk; the `gix` version's own gix-pack.
 gix-pack = { version = "0.77", default-features = false, features = ["generate"] }
 hex = "0.4"
+html5ever = "0.40"
 http = "1"
 indexmap = "2"
 http-body-util = "0.1"

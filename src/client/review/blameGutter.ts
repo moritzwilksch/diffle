@@ -2,7 +2,8 @@ import type { CodeViewHandle } from '@pierre/diffs/react';
 import { api } from '@/client/api.js';
 import { pathFromItemId, relativeTime } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
-import type { BlameHunk, BlameResponse, Side } from '@/shared/protocol.js';
+import type { BlameHunk, BlameResponse } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 import { clearRendered, remember, sideKey } from './blame.js';
 import { isDeletionRow, watchRenderedRows } from './rows.js';
 

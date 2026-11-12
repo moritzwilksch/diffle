@@ -13,6 +13,7 @@
   // Snapshots and generated files are test output, byte for byte; reformatting one would fail its test.
   // Lockfiles belong to their package managers, which rewrite them in their own layout; the
   // notices file is generated, and its cargo-about template is Markdown the formatter would reflow.
+  // The agent's skill text holds HTML examples agents copy as written; the formatter would respace their tags.
   "ignorePatterns": [
     "**/*.yml",
     "**/*.yaml",
@@ -22,6 +23,7 @@
     "**/*.lock",
     "**/package-lock.json",
     "THIRD_PARTY_NOTICES.md",
-    "about.hbs"
+    "about.hbs",
+    "crates/diffle/src/cli/skill.md"
   ]
 }

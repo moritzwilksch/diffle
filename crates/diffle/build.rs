@@ -1,4 +1,4 @@
-// Generates the wire types from the JSON Schema that `protocol.ts` exports.
+// Generates the wire types from the JSON Schema that `scripts/protocol-schema.ts` exports from `src/shared/`.
 use std::{env, fs, path::Path};
 
 fn main() {

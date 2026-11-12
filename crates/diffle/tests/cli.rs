@@ -17,6 +17,20 @@ fn prints_the_bare_version() {
     }
 }
 
+/// `diffle --skill`, what an agent learns diffle offers it: the commands and the tour catalog.
+#[test]
+fn prints_the_agent_interface_and_takes_nothing_else() {
+    let config = tempfile::tempdir().unwrap();
+    let out = run(config.path(), &["--skill"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    insta::assert_snapshot!("skill", stdout(&out));
+    for args in [&["main", "--skill"][..], &["--skill", "-C", "."], &["--skill", "comments", "list"]] {
+        let out = run(config.path(), args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
+        assert_eq!(stdout(&out), "", "{args:?}");
+    }
+}
+
 #[test]
 fn help_is_the_committed_text_and_keeps_the_shorthands_in_a_section_of_their_own() {
     let config = tempfile::tempdir().unwrap();

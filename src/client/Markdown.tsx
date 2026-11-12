@@ -158,13 +158,13 @@ function SuggestedChange({ path, quoted, source }: { path: string; quoted: strin
   return <FileDiff key={usePrimed(prime)} fileDiff={fileDiff} options={options} />;
 }
 
-type WorkerPool = NonNullable<ReturnType<typeof useWorkerPool>>;
+export type WorkerPool = NonNullable<ReturnType<typeof useWorkerPool>>;
 
 /**
  * A key that changes once `prime` has filled the pool's highlight cache: the File and FileDiff
  * components paint nothing until a highlight exists, so they remount on it.
  */
-function usePrimed(prime: (pool: WorkerPool) => Promise<void>): string {
+export function usePrimed(prime: (pool: WorkerPool) => Promise<void>): string {
   const theme = useStore((s) => s.theme);
   const pool = useWorkerPool();
   const [primed, setPrimed] = useState(0);

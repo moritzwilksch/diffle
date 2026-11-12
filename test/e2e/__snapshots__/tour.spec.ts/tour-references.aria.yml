@@ -1,0 +1,5 @@
+- dialog "References":
+  - heading "5 references to parse_row" [level=3]:
+    - text: ""
+    - code: parse_row
+  - text: "/j k move · Space peek · Enter jump · Esc close tally\\/ledger\\.py 2 \\d+ def parse_row\\(row: dict\\[str, str\\]\\) -> Entry: \\d+ ledger\\.add\\(parse_row\\(row\\)\\) tests\\/test_ledger\\.py 3 6 from tally\\.ledger import Entry, Ledger, parse_row, read_ledger \\d+ entry = parse_row\\(\\{\"account\": \"travel\", \"description\": \"train\", \"quantity\": \"2\", \"unit_price\": \"\\d+\\.\\d+\"\\}\\) \\d+ parse_row\\(row\\)/"

@@ -1,5 +1,6 @@
 // Shared contract between server and client. Types are inferred from the wire schemas.
 import { z } from 'zod';
+import { type Side, SideSchema } from './side.js';
 
 /**
  * A language diffle can start a server for. The value is the LSP `languageId` the
@@ -37,9 +38,6 @@ export const LanguageIdSchema = z.enum([
   'zig',
 ]);
 export type LanguageId = z.infer<typeof LanguageIdSchema>;
-
-export const SideSchema = z.enum(['old', 'new']);
-export type Side = z.infer<typeof SideSchema>;
 
 /**
  * What the CLI and the picker enter a review with: the words, parsed and resolved by the server
@@ -942,6 +940,10 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('config'),
+  }),
+  /** The review's tour was pushed or cleared; `GET /api/tour` answers the new one. */
+  z.object({
+    type: z.literal('tour'),
   }),
   z.object({
     type: z.literal('lsp'),

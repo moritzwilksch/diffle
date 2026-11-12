@@ -1,0 +1,192 @@
+# diffle
+
+diffle is the reviewer's diff viewer, running in the browser beside you. The commands below talk
+to the diffle serving the repository you are in, or the one `-C <path>` names: a run announces
+itself in `<git-dir>/diffle/server.json`. Without a run they exit 2 with "no diffle is running for
+this repository"; ask the reviewer to start one (`diffle` in the repository).
+
+## Read and answer the review's comments
+
+`diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
+is shown as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its
+`id`, its anchor and its messages. A message you wrote carries `"author": "agent"`. An anchor
+is on code: `line`, a path and a line range on the `old` or `new` side; `file`, a whole file.
+
+`diffle comments reply <thread-id> <body|->` adds your reply to a thread, in Markdown (stdin with
+`-`), and prints the thread as JSON. The reviewer sees it marked as yours. Reply to answer a
+question or to say what you changed; when the answer is a change, make it first, then reply.
+
+## Give the reviewer a tour
+
+A tour is one HTML document that walks the reviewer through the change, read as an article: an
+optional `<h1>` title, then sections. Each `<h2>` starts a section, and the sections are the steps
+of the walk: the reviewer moves between them with `n` and `p`, and the side panel lists them with
+their `<h3>` subsections. Each review has one tour.
+
+- `diffle tour push [<file>|-]` checks the document (stdin without a file) and shows it in place
+  of the review's tour, and prints the stored tour as JSON. A refused document exits 2, lists
+  every reason as `<element>: <reason>`, and leaves the previous tour in place; fix them all and
+  push again.
+- An accepted push can come back with warnings on stderr, in the same form, such as a file note
+  that may be long. They are judgment calls: fix each, or keep it knowingly.
+- `diffle tour clear` removes the review's tour.
+- The reviewer answers in this chat; revise the document and push it again for a change. The open
+  tour updates in place. A diff whose lines left the review since says so in place.
+
+### Structure
+
+- The order is part of the explanation. Give each step of the walk an `<h2>`, in the order that
+  explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
+  level of the document.
+- Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
+  `diffle-tabs`, a `diffle-diagram`, a table, a `diffle-tree`, a `diffle-callout`. A block sits
+  between paragraphs, never inside one.
+- Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
+  two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
+  inside another, and a heading never goes inside a card.
+- Put two or three blocks or short prose columns side by side in a `diffle-row` when they belong
+  together: a table beside the prose about it, or two small diagrams to compare. Each column is a
+  block, or prose in a `<div>`, `<p>`, `<ul>` or `<ol>`, and a row sits at the top level. Keep
+  diffs and cards with diffs full width: in a row their lines may wrap. A narrow window stacks a
+  row's columns.
+- Keep a diff to at most about 12 lines, and split a long story into more sections.
+- Inside a card, a tab, a callout or a `<details>`, where `<h2>` and `<h3>` cannot go, use `<h4>`
+  for a small heading. Group prose with `<div>` only to make one column of a row.
+- Fold what the main path can do without into a `<details>` that opens with its `<summary>`: an
+  edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
+  the reviewer needs to follow the change.
+- A list of files is always a `diffle-tree`, never a `diffle-code`, a table or a list. diffle
+  shows each changed file's status and line counts, so the tree needs no column for them. Give it
+  a `title` that says what its files are, such as `Server · Rust`, so two trees side by side read
+  apart at a glance. Mark where to start or what surprises with a `<diffle-file path>` note inside
+  the tree, a few words of inline prose, on three files at most; a note never restates the file's
+  name. To say what every file does, split the files into one tree per role, each titled with it,
+  and say the rest in the prose around them.
+- Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
+  `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
+  bug or breaking change, and only where the diff supports it.
+- Close every `diffle-*` element with its end tag: HTML ignores `/>` on them.
+- Paths are relative to the repository root and must be files of the review. Line numbers count on
+  the side you name: `new`, the file after the change, by default.
+- diffle styles the tour: no `style`, scripts or images, and `class` only inside a diagram.
+- Mark every code symbol your prose names with a `diffle-symbol` when it has a line in the review
+  to point at: the reviewer sees it coloured as in the diff, hovers it for its signature, and
+  clicks it for its references. Keep `<code>` for what is not a symbol: paths, commands, literals.
+- Hover and references need the language server for the symbol's file, and the `new` side. Without
+  them the chip is coloured code only. Run `diffle lsp` to see which languages have a server.
+
+### Writing
+
+The reviewer reads your words inside diffle, so hold them to its bar as a product. Write like a
+senior colleague explaining the change across a table: lead with the point, use plain and exact
+words, and keep sentences short and active. Name what the diff shows, such as names, numbers and
+consequences, instead of adjectives. State only what the diff supports, and never invent a
+rationale. Cut filler, stacked hedges, reflexive triads, windups such as "Here's the thing:",
+and closing summaries. Skip stock phrasing such as "delve", "robust", "seamless",
+"crucial", "leverage" and "it's worth noting". Use straight quotes, no em dashes, and
+no emoji. A section opens with a sentence or two on what it shows; a card is its title and one or
+two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
+unless the reviewer asks for them.
+
+### Tabs
+
+Use a `diffle-tabs` to set two to four alternatives in one block's width, one shown at a time: the
+design you chose next to one you rejected, a payload before and after. Each `diffle-tab` takes a
+`title` of a few words and holds what a card holds: prose and blocks, no headings or other tabs.
+Mark a pane with `kind`: `chosen`, `rejected` or `example`. Keep what every reader needs out of
+the tabs a reader may never open; a single alternative is a sentence of prose.
+
+```html
+<diffle-tabs>
+<diffle-tab title="Expire on the server" kind="chosen"><p>Every check compares the expiry with the clock.</p></diffle-tab>
+<diffle-tab title="Expire in the client" kind="rejected"><p>A client with a wrong clock would keep old tokens.</p></diffle-tab>
+</diffle-tabs>
+```
+
+### Icons
+
+Use a Lucide icon to mark one kind of thing the same way throughout the tour, such as a database
+or a network call; never as decoration. Find names at lucide.dev/icons; a name Lucide does not
+have shows a question-mark placeholder. In text, `<diffle-icon name="database"></diffle-icon>`
+sits at the text's size and colour: in prose, a heading, a table cell or a callout. `tone` colours
+it. A card takes one before its title with `icon`. A diagram takes them too, below.
+
+### Interfaces
+
+Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
+definitions, the shape of an abstraction. It holds code only, never a list of files. Elide bodies
+(`;` or `{ … }`) and leave private details out. Code the change touches belongs in a
+`diffle-diff`; never repeat it in a code block. A block that cites real code gives `path`, so the
+reader sees which file it comes from: diffle names the file over it. Give `line` too, the new
+side's line of its first declaration: diffle checks the file has it and opens the file there.
+Code that exists nowhere gives `lang` instead and shows no file. Write `<` as `&lt;` and `&` as
+`&amp;`. Set collaborators side by side in a row:
+
+```html
+<diffle-row>
+<diffle-code path="src/auth.rs" line="12">pub fn validate(token: &amp;Token, now: Instant) -&gt; Result&lt;Claims&gt;;</diffle-code>
+<diffle-code lang="rust">
+pub trait TokenStore {
+    fn get(&amp;self, id: &amp;str) -&gt; Option&lt;Token&gt;;
+}
+</diffle-code>
+</diffle-row>
+```
+
+A diagram box can carry code too: a `<text class="code" lang="rust">` with one `<tspan>` per
+line, 16 apart, each 6 units per character wide:
+
+```html
+<rect x="8" y="8" width="264" height="44"/>
+<text x="16" y="22" class="code" lang="rust"><tspan x="16" dy="0">trait TokenStore {</tspan><tspan x="16" dy="16">    fn get(&amp;self, id: &amp;str) -&gt; Token; }</tspan></text>
+```
+
+### Examples
+
+Add `example` to a `diffle-code` for a snippet you make up, never code from the repository. Use one
+for three things: data as it flows through the system (a request, a response, a token, a config,
+the order of calls), a simplified spike of an idea, or an alternative design the reviewer could
+weigh. diffle labels it as an example, beside its `title`. Changed code always goes in a
+`diffle-diff`, never re-typed in an example; signatures stay a plain `diffle-code`. Keep an example
+minimal and realistic: the fields the point needs, with plain placeholder values, and never a real
+secret. An example takes `lang` and no `path` or `line`.
+
+```html
+<p>A login answers with a token the next request carries:</p>
+<diffle-code lang="json" example title="Response to POST /login">
+{ "token": "eyJhbGciOi...", "expiresAt": "2026-01-01T12:00:00Z" }
+</diffle-code>
+```
+
+### Diagrams and tables
+
+Draw a `diffle-diagram` to show how parts connect; use a table to compare options or map one thing
+to another. Put its caption in the prose before it. A table is plain HTML:
+`table`, `thead`, `tbody`, `tr`, `th` and `td`, with `colspan` and `rowspan` on a cell.
+
+A diagram holds one `<svg viewBox="0 0 <width> <height>">` that you draw by hand; one unit is
+one pixel, and the text takes the UI's own fonts and sizes, small enough to fit many parts across.
+diffle styles it from the classes below and the theme, and draws the arrowheads, so write no
+`style`, `fill`, `stroke`, font or marker attributes and no `<defs>`.
+
+- Make one point per diagram, and draw only the parts it needs. It shows at its own width and
+  never larger; keep it 920 wide or less, the page's column, or a row's column width, or it
+  shrinks, text and all. 920 holds seven 96-wide boxes with 32 between them.
+- Place parts on a grid: snap to 4, keep one column and row pitch, and give the boxes in a row the
+  same height and gaps; 24 to 40 between boxes reads well.
+- Text is centred vertically on its `y`, not set on a baseline. Lay out a node from its corner
+  (x, y): a lone name at (x+8, y+14) in a box 28 tall, the box's middle; with a detail line, the
+  name at (x+8, y+12) and the detail at (x+8, y+28) in a box 40 tall. Make the box 16 wide plus 6
+  per character of its longest line (5.5 in `small`), so 8 units of padding stay on each side.
+  Names are regular weight unless you add `bold`. Keep names to three words or fewer, in sentence
+  case, without a period.
+- Put a box and its text in a `<g>`, so a tone on the group colors all of it.
+- Draw an icon in a node as `<svg data-lucide="database" x="…" y="…"/>`, 14 square: at (x+8, y+7)
+  beside a lone name in a box 28 tall, or (x+8, y+13) beside a name and detail in a box 40 tall,
+  with the text at x+28 and the box 20 wider. Give every sibling box an icon, or none. It takes
+  its text's colour, or its group's tone.
+- Keep one main direction of flow. Start and end each line at the middle of a box side, square to
+  it, with at most two bends and no crossings. Put a line's label 10 above a horizontal line or 8
+  right of a vertical one, never on it.
+- Name a region with a `frame` rect and an `eyebrow` text at (x+8, y+12).
+- Tone at most about a third of the nodes, and only those the point is about.

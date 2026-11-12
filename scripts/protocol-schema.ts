@@ -1,5 +1,5 @@
 // The wire contract as one JSON Schema document, for the Rust server's generated types. The JSDoc
-// of `protocol.ts` rides along as `description`, which typify turns into doc comments, so the
+// of its modules rides along as `description`, which typify turns into doc comments, so the
 // contract is documented once.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -13,15 +13,26 @@ import {
 } from 'oxc-parser';
 import { z } from 'zod';
 import * as protocol from '@/shared/protocol.js';
+import * as side from '@/shared/side.js';
+import * as tour from '@/shared/tour.js';
+import * as tourCatalog from '@/shared/tour-catalog.js';
 
-const SOURCE = fileURLToPath(new URL('../src/shared/protocol.ts', import.meta.url));
+/** The contract's modules, each with its source for the JSDoc. */
+const MODULES: [exports: object, file: string][] = [
+  [protocol, 'protocol.ts'],
+  [side, 'side.ts'],
+  [tour, 'tour.ts'],
+  [tourCatalog, 'tour-catalog.ts'],
+];
 
-/** Every `*Schema` export of `protocol.ts` under `$defs`, named without the suffix; request schemas as the client sends them. */
+/** Every `*Schema` export of the contract's modules under `$defs`, named without the suffix; request schemas as the client sends them. */
 export function protocolJsonSchema(): object {
   const registry = z.registry<{ id: string }>();
-  for (const [name, schema] of Object.entries(protocol)) {
-    if (name.endsWith('Schema') && schema instanceof z.ZodType)
-      registry.add(schema, { id: name.slice(0, -'Schema'.length) });
+  for (const [exports] of MODULES) {
+    for (const [name, schema] of Object.entries(exports)) {
+      if (name.endsWith('Schema') && schema instanceof z.ZodType)
+        registry.add(schema, { id: name.slice(0, -'Schema'.length) });
+    }
   }
   const { schemas } = z.toJSONSchema(registry, { io: 'input', unrepresentable: 'any', uri: (id) => `#/$defs/${id}` });
   const defs: Record<string, JsonSchema> = Object.fromEntries(
@@ -31,7 +42,11 @@ export function protocolJsonSchema(): object {
   );
   for (const schema of Object.values(defs)) inlineVariants(schema, defs);
   // A Windows checkout may hold CRLF; the descriptions must not depend on it.
-  const docs = jsDocs(readFileSync(SOURCE, 'utf8').replaceAll('\r\n', '\n'));
+  const docs = new Map<string, Doc>();
+  for (const [, file] of MODULES) {
+    const source = readFileSync(fileURLToPath(new URL(`../src/shared/${file}`, import.meta.url)), 'utf8');
+    for (const [name, doc] of jsDocs(file, source.replaceAll('\r\n', '\n'))) docs.set(name, doc);
+  }
   for (const [id, schema] of Object.entries(defs)) describe(schema, docs.get(`${id}Schema`), docs);
   return { $schema: 'https://json-schema.org/draft/2020-12/schema', $defs: defs };
 }
@@ -78,8 +93,8 @@ function describe(schema: JsonSchema, doc: Doc | undefined, docs: Map<string, Do
 }
 
 /** The JSDoc of every `*Schema` declaration in `source`, as `Doc`s by declaration name. */
-function jsDocs(source: string): Map<string, Doc> {
-  const { program, comments } = parseSync('protocol.ts', source, { lang: 'ts', sourceType: 'module' });
+function jsDocs(file: string, source: string): Map<string, Doc> {
+  const { program, comments } = parseSync(file, source, { lang: 'ts', sourceType: 'module' });
   const docOf = jsDocReader(source, comments);
   const out = new Map<string, Doc>();
   for (const statement of program.body) {

@@ -1,38 +1,61 @@
-//! `diffle comments`: an agent's client of the diffle serving its repository. Every subcommand
-//! prints one JSON document on stdout.
+//! `diffle comments` and `diffle tour`: an agent's client of the diffle serving its repository.
+//! Every subcommand that answers prints one JSON document on stdout.
 mod comments;
 mod server;
+mod tour;
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use serde::Serialize;
 
-use super::args::{CommentsCommand, RepoOpts};
+use super::args::{CommentsCommand, RepoOpts, TourCommand};
 use crate::error::Error;
 use crate::git::GitRepo;
 use server::{Diffle, reach};
 
 /// Runs `command`; `dir` is a `-C` given before `comments`, which one after it overrides.
-pub async fn run(command: CommentsCommand, dir: Option<PathBuf>) -> anyhow::Result<()> {
+pub async fn comments(command: CommentsCommand, dir: Option<PathBuf>) -> anyhow::Result<()> {
     match command {
         CommentsCommand::List { state, path, repo } => {
             let diffle = connect(repo, dir).await?;
             print(&comments::list(&diffle, state.as_deref(), path.as_deref()).await?)
         }
         CommentsCommand::Reply { thread, body, repo } => {
-            let body = if body == "-" { read_stdin()? } else { body };
+            let body = if body == "-" { read_document(None)? } else { body };
             let diffle = connect(repo, dir).await?;
             print(&comments::reply(&diffle, &thread, body).await?)
         }
     }
 }
 
-/// What stdin holds, to its end.
-fn read_stdin() -> anyhow::Result<String> {
-    let mut text = String::new();
-    std::io::stdin().read_to_string(&mut text).map_err(|e| Error::Invalid(format!("cannot read stdin: {e}")))?;
-    Ok(text)
+/// Runs `command`; `dir` is a `-C` given before `tour`, which one after it overrides.
+pub async fn tour(command: TourCommand, dir: Option<PathBuf>) -> anyhow::Result<()> {
+    match command {
+        TourCommand::Push { file, repo } => {
+            let html = read_document(file)?;
+            let diffle = connect(repo, dir).await?;
+            print(&tour::push(&diffle, html).await?)
+        }
+        TourCommand::Clear { repo } => tour::clear(&connect(repo, dir).await?).await,
+    }
+}
+
+/// The text in `file`, or on stdin for none or `-`.
+fn read_document(file: Option<PathBuf>) -> anyhow::Result<String> {
+    let mut html = String::new();
+    match file.filter(|f| f.as_os_str() != "-") {
+        Some(file) => {
+            html = std::fs::read_to_string(&file)
+                .map_err(|e| Error::Invalid(format!("cannot read {}: {e}", file.display())))?;
+        }
+        None => {
+            std::io::stdin()
+                .read_to_string(&mut html)
+                .map_err(|e| Error::Invalid(format!("cannot read stdin: {e}")))?;
+        }
+    }
+    Ok(html)
 }
 
 /// The diffle serving the repository `opts` (or `dir`, or the working directory) is in.

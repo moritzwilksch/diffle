@@ -211,6 +211,12 @@ impl Session {
         Ok(self.active()?.comments.clone())
     }
 
+    /// The comment set `snap` shows, whichever review is active now: a request checked against
+    /// `snap` writes there.
+    pub fn comments_for(&self, snap: &Snapshot) -> CommentStore {
+        CommentStore::at(&self.repo.git_dir, &snap.comment_key)
+    }
+
     /// The comment changes of this run, the shown set's key switches among them.
     pub fn activity(&self) -> &ActivityLog {
         &self.activity

@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import { create } from 'zustand';
 import { type LayoutState, type ReviewState, useStore, type ViewPlace } from '@/client/store.js';
 
-export type ViewId = 'diff' | 'graph';
+export type ViewId = 'diff' | 'graph' | 'tour';
 
 type HelpRow = [keys: string, action: string];
 export type HelpSection = { title: string; rows: HelpRow[] };
@@ -34,6 +34,8 @@ export interface ViewDef {
   panelWidth: string;
   /** Why the view cannot be shown now, or null. */
   blocked?(s: ReviewState): string | null;
+  /** Whether the switch offers the view now, as a hook; without one, always. */
+  useListed?(): boolean;
   enter?(): void;
   leave?(): void;
   /** Where the reader is in the view, for the jump list; Ctrl+o after a jump into the diff restores it. */

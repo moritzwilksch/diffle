@@ -10,6 +10,7 @@ pub mod paint;
 mod parse;
 pub mod repository;
 mod serve;
+mod skill;
 mod timing;
 
 use std::process::ExitCode;
@@ -34,6 +35,14 @@ pub fn main() -> ExitCode {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
     }
+    if cli.skill {
+        // `exclusive` refuses any other argument, but not a subcommand.
+        if cli.command.is_some() {
+            Cli::command().error(clap::error::ErrorKind::ArgumentConflict, "--skill takes no command").exit();
+        }
+        print!("{}", skill::render());
+        return ExitCode::SUCCESS;
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
     match runtime.block_on(dispatch(cli)) {
         Ok(()) => ExitCode::SUCCESS,
@@ -49,7 +58,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Some(Command::Config) => return config::run().await,
         Some(Command::Lsp) => return lsp::list().await,
         // `diffle -C <path> comments ...` names the repository as well as `comments ... -C <path>`.
-        Some(Command::Comments { command }) => return agent::run(command, cli.global.dir).await,
+        Some(Command::Comments { command }) => return agent::comments(command, cli.global.dir).await,
+        Some(Command::Tour { command }) => return agent::tour(command, cli.global.dir).await,
         Some(Command::Completion { shell }) => {
             completion::print(shell);
             return Ok(());
