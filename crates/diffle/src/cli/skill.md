@@ -178,10 +178,11 @@ it. A card takes one before its title with `icon`. A diagram takes them too, bel
 Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
 definitions, the shape of an abstraction. It holds code only, never a list of files. Elide bodies
 (`;` or `{ … }`) and leave private details out. Code the change touches belongs in a
-`diffle-diff`; never repeat it in a code block. With `path` and `line`, point at where its first
-declaration sits on the new side; without `path`, give `lang`. Write `<` as `&lt;` and `&` as
-`&amp;`. diffle warns when a block repeats the diff, runs past about 12 lines, lists files, or
-does not match its line. Set collaborators side by side in a row:
+`diffle-diff`; never repeat it in a code block. A block that cites real code gives `path` and
+`line`, the new side's line of its first declaration, so the reader sees where it lives: diffle
+names the file over it. Code that exists nowhere gives `lang` instead and shows no file. Write `<`
+as `&lt;` and `&` as `&amp;`. diffle warns when a block repeats the diff, runs past about 12
+lines, lists files, or does not match its line. Set collaborators side by side in a row:
 
 ```html
 <diffle-row>

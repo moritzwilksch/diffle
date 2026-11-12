@@ -57,6 +57,7 @@ export function ExportPage({ data }: { data: BakedTour }) {
     else if (e.key === 'n') take(Math.min(current + 1, doc.sections.length - 1));
     else if (e.key === 'p') take(Math.max(current - 1, 0));
   };
+  useEffect(() => quietTitles(), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => keys.current(e);
     document.addEventListener('keydown', onKey);
@@ -92,4 +93,20 @@ function Brand() {
       <span className="tour-export-repo">GitHub ↗</span>
     </a>
   );
+}
+
+/**
+ * Keeps the browser's tip off a `title` that repeats its element's text shown whole, as diffle's
+ * tooltips do: a path names itself on hover only when it is cut short. Returns the cleanup.
+ */
+function quietTitles(): () => void {
+  const over = (e: PointerEvent) => {
+    const el = (e.target as Element).closest<HTMLElement>('[title]');
+    const text = el?.getAttribute('title');
+    if (!el || !text || text !== el.textContent?.trim() || el.scrollWidth > el.clientWidth) return;
+    el.removeAttribute('title');
+    el.addEventListener('pointerleave', () => el.setAttribute('title', text), { once: true });
+  };
+  document.addEventListener('pointerover', over);
+  return () => document.removeEventListener('pointerover', over);
 }

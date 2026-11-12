@@ -6,9 +6,10 @@ import { TourJump } from './Jump.js';
 
 /**
  * Code the agent wrote, such as an interface or a signature, in the diff's frame and rows: the same
- * gutter, numbered from `line` (else 1), and long lines wrapped. With `path`, under the file's path,
- * its line and a jump there. An example the agent made up says so in its header, beside its title,
- * so it never passes for the repository's code.
+ * gutter, numbered from `line` (else 1), and long lines wrapped. Code from the repository (`path`)
+ * sits under a quiet header naming its file, its line and a jump there; an example the agent made up
+ * says so in the same header, beside its title, so it never passes for the repository's code. Other
+ * made-up code has no header.
  */
 export function TourCode({
   code,
@@ -34,17 +35,13 @@ export function TourCode({
       data-opaque=""
       className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
     >
-      {example && (
-        <figcaption className="flex items-center gap-2 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
-          <span className="shrink-0 rounded-sm bg-hover px-1.5 font-medium text-muted">Example</span>
+      {(example || path) && (
+        <figcaption className="tour-code-head">
+          {example && <span className="tour-code-example">Example</span>}
           {title && <span className="min-w-0 truncate">{title}</span>}
-        </figcaption>
-      )}
-      {path && (
-        <figcaption className="flex items-center gap-1.5 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
-          <FilePath path={path} className="min-w-0 flex-1" nowrap />
-          {line != null && <span className="shrink-0 font-mono text-muted">{line}</span>}
-          <TourJump path={path} line={line} side="new" label="Open" placed />
+          {path && <FilePath path={path} className="min-w-0 flex-1" nowrap />}
+          {line != null && <span className="shrink-0 font-mono">{line}</span>}
+          {path && <TourJump path={path} line={line} side="new" label="Open" placed />}
         </figcaption>
       )}
       <Rows patch={codePatch(code, line)} lang={codeLang(lang, path)} />
