@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.1](https://github.com/moritzwilksch/diffle/compare/v0.5.0...v0.5.1) - 2026-11-12
+
+### Features
+
+- _(lsp)_ Serve TypeScript 7 through tsc --lsp ([#451](https://github.com/moritzwilksch/diffle/pull/451))
+- Close the tab when the server shuts down cleanly ([#455](https://github.com/moritzwilksch/diffle/pull/455))
+- Show the cursor line's git blame at the end of the line ([#452](https://github.com/moritzwilksch/diffle/pull/452))
+- Show git blame beside every line number, toggled with gb ([#453](https://github.com/moritzwilksch/diffle/pull/453))
+
+### Bug fixes
+
+- _(review)_ Hold the viewport when the blame gutter toggles ([#456](https://github.com/moritzwilksch/diffle/pull/456))
+
+### Performance
+
+- Embed the client gzipped, share its grammars with the workers, link with fat LTO ([#449](https://github.com/moritzwilksch/diffle/pull/449))
+
 ## [0.5.0](https://github.com/moritzwilksch/diffle/compare/v0.4.0...v0.5.0) - 2026-11-10
 
 ### Features
