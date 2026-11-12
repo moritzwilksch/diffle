@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
-import { useFocusedChild } from '@/client/tour/margin/tourThreads.js';
+import { useHost } from '@/client/tour/host/host.js';
 import { TourDrawing } from '@/client/tour/primitives/Diagram.js';
 import { NoteBand, Stepper } from './Stepper.js';
 import { reveal, useSteps } from './steps.js';
@@ -35,6 +35,7 @@ export function TourDiagram({ of, renderNote }: { of: Element; renderNote: (note
 }
 
 function SteppedDiagram({ of, notes }: { of: Element; notes: readonly DiagramNote[] }) {
+  const { useFocusedChild } = useHost();
   const place = placeOf(of);
   const frame = useRef<HTMLElement>(null);
   const steps = useSteps(frame, notes.length, 'rest');

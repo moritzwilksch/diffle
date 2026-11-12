@@ -1,7 +1,7 @@
 import * as lucide from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-// Every icon lucide-react exports, in the one chunk a tour imports on its first icon.
+// Every icon lucide-react exports, in the one chunk the live host imports on a tour's first icon.
 // The namespace holds the aliases of renamed icons too (`Home` is `House`), which `icons` lacks.
 const exported: Readonly<Record<string, unknown>> = lucide;
 // Only real icons draw: the namespace also exports `Icon`, `createLucideIcon` and the like.

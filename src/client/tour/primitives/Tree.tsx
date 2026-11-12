@@ -1,7 +1,6 @@
 import { File, Folder } from 'lucide-react';
-import { type ReactNode, useMemo } from 'react';
-import { useStore } from '@/client/store.js';
-import { jump } from '@/client/tour/state.js';
+import type { ReactNode } from 'react';
+import { useHost } from '@/client/tour/host/host.js';
 import type { ChangeStatus } from '@/shared/protocol.js';
 import type { Place } from '@/client/tour/anchor.js';
 import { TourIcon } from './Icon.js';
@@ -35,8 +34,8 @@ export function TourTree({
   notes: ReadonlyMap<string, ReactNode>;
   place?: Place;
 }) {
-  const changed = useStore((s) => s.snapshot?.changed);
-  const files = useMemo(() => new Map(changed?.map((f) => [f.path, f])), [changed]);
+  const { open, useChanged } = useHost();
+  const files = useChanged();
   const top: Dir = { dirs: new Map(), files: [] };
   const prefix = root ? `${root}/` : '';
   for (const path of paths.split('\n').map((p) => p.trim())) {
@@ -83,7 +82,7 @@ export function TourTree({
         );
         return (
           <li key={path} className="flex items-baseline gap-2">
-            <button type="button" className={`${FILE} cursor-pointer hover:underline`} onClick={() => void jump(path)}>
+            <button type="button" className={`${FILE} cursor-pointer hover:underline`} onClick={() => open(path)}>
               {name}
             </button>
             {note && <span className="tour-tree-note">{note}</span>}

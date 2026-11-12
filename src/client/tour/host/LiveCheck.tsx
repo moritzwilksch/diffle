@@ -1,23 +1,17 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/client/api.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 import { nodeKey, nodePath, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
+import type { CheckProps } from './host.js';
 
 /**
  * Questions the reviewer decides: each item ticks as decided, or takes an answer, a thread on the
  * item the agent reads with the prompt and `diffle comments list`. The server pairs each item with
  * its tick and answer, read with the threads; until it has, an item cannot be ticked.
  */
-export function TourCheck({
-  source,
-  renderItem,
-}: {
-  source: Element;
-  /** An item's question as the article renders inline prose. */
-  renderItem: (item: Element) => ReactNode;
-}) {
+export function LiveCheck({ source, renderItem }: CheckProps) {
   const checks = useStore((s) => s.checks);
   // A tick shows at once and holds until the tour read back agrees, or the tick fails.
   const [pending, setPending] = useState<ReadonlyMap<string, boolean>>(new Map());

@@ -2,10 +2,9 @@ import { type ReactNode, useEffect, useMemo, useRef } from 'react';
 import { FilePath } from '@/client/FilePath.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
-import { useFocusedChild } from '@/client/tour/margin/tourThreads.js';
+import { useHost } from '@/client/tour/host/host.js';
 import { ExcerptNotice, useExcerpt } from '@/client/tour/primitives/Diff.js';
 import { TourJump } from '@/client/tour/primitives/Jump.js';
-import { Rows } from '@/client/tour/primitives/Rows.js';
 import type { Side } from '@/shared/side.js';
 import { excerptRows, lineSelector, litCss, noteRows, rowSpot } from './rows.js';
 import { NoteBand, StepBadge, Stepper } from './Stepper.js';
@@ -46,6 +45,7 @@ export function TourTrace({
   /** A stop's sentence as the article renders inline prose; the same function on every render. */
   renderNote: (stop: Element) => ReactNode;
 }) {
+  const { Rows, useFocusedChild } = useHost();
   const place = placeOf(source);
   const stops = useMemo(() => readStops(source, renderNote), [source, renderNote]);
   const frame = useRef<HTMLElement>(null);

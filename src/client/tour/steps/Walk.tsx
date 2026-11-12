@@ -3,10 +3,9 @@ import type { Side } from '@/shared/side.js';
 import { FilePath } from '@/client/FilePath.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { type LineRange, lineSpan, primitive } from '@/client/tour/document.js';
-import { useFocusedChild } from '@/client/tour/margin/tourThreads.js';
+import { useHost } from '@/client/tour/host/host.js';
 import { ExcerptNotice, linesLabel, useExcerpt } from '@/client/tour/primitives/Diff.js';
 import { TourJump } from '@/client/tour/primitives/Jump.js';
-import { Rows } from '@/client/tour/primitives/Rows.js';
 import {
   excerptRows,
   gutterSelector,
@@ -54,6 +53,7 @@ export function TourWalk({
   /** A note's sentence as the article renders inline prose; the same function on every render. */
   renderNote: (note: Element) => ReactNode;
 }) {
+  const { Rows, useFocusedChild } = useHost();
   const place = placeOf(source);
   const notes = useMemo(() => readNotes(source, renderNote), [source, renderNote]);
   const shown = useExcerpt(range);

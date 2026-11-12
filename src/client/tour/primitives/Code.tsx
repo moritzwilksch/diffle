@@ -1,8 +1,8 @@
 import { getFiletypeFromFileName } from '@pierre/diffs';
 import { FilePath } from '@/client/FilePath.js';
 import type { Place } from '@/client/tour/anchor.js';
+import { useHost } from '@/client/tour/host/host.js';
 import { TourJump } from './Jump.js';
-import { Rows } from './Rows.js';
 
 /**
  * Code the agent wrote, such as an interface or a signature, in the diff's frame and rows, long lines
@@ -28,6 +28,7 @@ export function TourCode({
   title?: string;
   place?: Place;
 }) {
+  const { Rows } = useHost();
   return (
     <figure
       {...place}

@@ -4,7 +4,7 @@ import { visibleThreads } from '@/client/model.js';
 import { useStore, type TourDraft } from '@/client/store.js';
 import type { CommentThread } from '@/shared/protocol.js';
 import type { TourAnchor } from '@/shared/tour.js';
-import { type Place, selectionTarget, type Spot, textRange } from '@/client/tour/anchor.js';
+import { selectionTarget, type Spot, textRange } from '@/client/tour/anchor.js';
 
 /** A thread on the tour, its anchor narrowed. */
 export type TourThread = CommentThread & { anchor: TourAnchor };
@@ -93,21 +93,4 @@ export function threadAt(article: HTMLElement, threads: readonly TourThread[], x
     if ([...rects].some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) return t.id;
   }
   return null;
-}
-
-/**
- * Calls `onFocus` with the index, among the child elements of the block at `place`, of the one
- * the focused thread is on, so the block shows it.
- */
-export function useFocusedChild(place: Place, onFocus: (child: number) => void): void {
-  const block = place['data-node'];
-  const child = useStore((s) => {
-    const thread = s.focusedThread == null ? undefined : s.threads.find((t) => t.id === s.focusedThread);
-    if (thread?.anchor.kind !== 'tour') return null;
-    const node = thread.anchor.node.join('.');
-    return node.startsWith(`${block}.`) ? Number(node.slice(block.length + 1).split('.')[0]) : null;
-  });
-  useEffect(() => {
-    if (child != null) onFocus(child);
-  }, [child, onFocus]);
 }
