@@ -24,7 +24,7 @@ pre-commit:
     - name: version
       run: npm run check-version
     - name: licenses
-      glob: "{Cargo.lock,package-lock.json,about.toml,about.hbs,vite.config.ts,scripts/licenses*}"
+      glob: "{Cargo.lock,package-lock.json,about.toml,about.hbs,vite.config.ts,vite.licenses.ts,scripts/licenses*}"
       run: pixi run licenses
     - name: zizmor
       glob: "*.{yml,yaml}"

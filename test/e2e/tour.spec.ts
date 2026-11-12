@@ -685,6 +685,10 @@ test.describe('the tour', () => {
       await diffle.stop();
 
       const html = await readFile(saved, 'utf8');
+      // It opens by naming the packages its script bundles, as the export build lists them.
+      expect(html).toMatch(
+        /^<!doctype html>\n<!--\nThis page was exported from diffle\.[^]*\nreact-dom \d+\.\d+\.\d+ \(MIT\)\n/,
+      );
       // Nothing in it names a place to load from.
       expect(html).not.toMatch(/\b(?:src|href|action)\s*=\s*["']?(?:https?:|\/\/)/i);
       expect(html).not.toMatch(/url\(\s*["']?(?:https?:|\/\/)/i);

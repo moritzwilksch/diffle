@@ -22,11 +22,16 @@ export async function exportTour(load: Extract<TourLoad, { state: 'ready' }>): P
 }
 
 /** The exported file: a page holding the tour's data, the script that draws it, and its styles. */
-export function tourFile(baked: BakedTour, title: string, { js, css }: { js: string; css: string }): string {
+export function tourFile(
+  baked: BakedTour,
+  title: string,
+  { js, css, notices }: { js: string; css: string; notices: string },
+): string {
   // Nothing in a script or style element may close it early.
   const inline = (text: string) => text.replace(/<\/(script|style)/gi, '<\\/$1');
   const data = JSON.stringify(baked).replace(/</g, '\\u003c');
   return `<!doctype html>
+${noticeComment(notices)}
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -43,6 +48,20 @@ export function tourFile(baked: BakedTour, title: string, { js, css }: { js: str
 </body>
 </html>
 `;
+}
+
+/**
+ * The comment that opens the file: the packages its script bundles, one per line as the export
+ * build lists them, and the fonts its styles embed.
+ */
+function noticeComment(notices: string): string {
+  const lines = [
+    'This page was exported from diffle. Its script bundles these packages, each under its licence:',
+    ...notices.trim().split('\n'),
+    'Its styles embed the fonts Inter and JetBrains Mono, from Fontsource, under the SIL Open Font License 1.1.',
+  ];
+  // Nothing in it may close the comment.
+  return `<!--\n${lines.join('\n').replaceAll('--', '- -')}\n-->`;
 }
 
 function escapeHtml(text: string): string {
