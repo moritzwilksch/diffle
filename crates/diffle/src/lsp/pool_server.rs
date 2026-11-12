@@ -119,7 +119,7 @@ impl PoolServer {
         }
         let now = self.definition.projects.map(|projects| projects(&ctx));
         let mut current = self.projects.lock().unwrap();
-        if serde_json::to_value(&now).ok() == serde_json::to_value(&*current).ok() {
+        if now == *current {
             return;
         }
         *current = now;

@@ -104,7 +104,7 @@ fn relocate(threads: &mut [CommentThread], index: Option<&TourIndex>) -> Vec<Str
         let found = index.and_then(|index| index.relocate(node, section, element.tag, target));
         let moved = match found {
             Some(anchor) => {
-                let moved = t.stale || !same(&anchor, &t.anchor);
+                let moved = t.stale || anchor != t.anchor;
                 (t.anchor, t.stale) = (anchor, false);
                 moved
             }
@@ -115,9 +115,4 @@ fn relocate(threads: &mut [CommentThread], index: Option<&TourIndex>) -> Vec<Str
         }
     }
     changed
-}
-
-/// Whether two anchors name the same place; the generated types carry no `PartialEq`.
-fn same(a: &CommentAnchor, b: &CommentAnchor) -> bool {
-    serde_json::to_value(a).ok() == serde_json::to_value(b).ok()
 }
