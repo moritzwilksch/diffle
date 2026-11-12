@@ -1,23 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { TourWholeTagSchema } from '@/shared/protocol.js';
 import { elementAt, NODE_ATTR, type Spot } from './anchor.js';
 
 /**
- * The blocks a thread may sit on as a whole, as `crates/diffle/src/tour/anchor.rs` allows; a
- * diagram's boxes and labels take one too (`shapeAt`).
+ * The blocks whose Comment button the pointer brings up: every one a thread may sit on as a whole,
+ * but a diagram's boxes and labels, which a click takes (`shapeAt`), and a checklist's items, which
+ * take theirs through their Answer button.
  */
-const BLOCKS = new Set([
-  'diffle-card',
-  'diffle-diff',
-  'diffle-walk',
-  'diffle-trace',
-  'diffle-tabs',
-  'diffle-check',
-  'diffle-code',
-  'diffle-tree',
-  'diffle-callout',
-  'diffle-diagram',
-  'table',
-]);
+const BLOCKS: ReadonlySet<string> = new Set(TourWholeTagSchema.exclude(['rect', 'text', 'diffle-item']).options);
 
 /** The source element at `node` in the tour's document `body`. */
 export function sourceAt(body: Element, node: readonly number[]): Element | null {

@@ -2,9 +2,12 @@
 //! selection matches it with whitespace ignored. `src/client/tour/anchor.ts` reads the rendered page alike.
 use super::dom::{Dom, Node, NodeId};
 use super::drawing::get;
+use crate::protocol::TourOpaqueTag;
 
-/// Blocks whose content is code or a drawing, not reading text: they take a thread as a whole.
-pub const OPAQUE: [&str; 4] = ["diffle-diff", "diffle-code", "diffle-tree", "diffle-diagram"];
+/// Whether `tag`'s content is code or a drawing, not reading text (`TourOpaqueTag`).
+pub fn is_opaque(tag: &str) -> bool {
+    tag.parse::<TourOpaqueTag>().is_ok()
+}
 
 /// What a reader sees of `id`: its text, a symbol's name, a jump's label, a card's title before its
 /// content; code and drawings add nothing. `src/client/tour/anchor.ts` reads the rendered page alike.
@@ -21,7 +24,7 @@ pub fn reading(dom: &Dom, id: NodeId) -> String {
                 let line = get(attrs, "line");
                 if line.is_empty() { get(attrs, "path").to_owned() } else { format!("{}:{line}", get(attrs, "path")) }
             }
-            tag if OPAQUE.contains(&tag) || tag == "diffle-icon" => String::new(),
+            tag if is_opaque(tag) || tag == "diffle-icon" => String::new(),
             tag => {
                 let inner: String = dom.children(id).iter().map(|&c| reading(dom, c)).collect();
                 let titled = matches!(tag, "diffle-card" | "diffle-note" | "diffle-tab");

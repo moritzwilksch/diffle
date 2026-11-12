@@ -113,15 +113,15 @@ describe('anchorLabel', () => {
   });
 
   it('names a tour thread by the words it is on, or an element by its kind and label', () => {
-    const tour = { kind: 'tour' as const, node: [3], step: 1, section: 'S', element: { tag: 'p' } };
+    const tour = { kind: 'tour' as const, node: [3], step: 1, section: 'S', element: { tag: 'p' as const } };
     expect(anchorLabel({ ...tour, target: { on: 'text', quoted: 'once per request', occurrence: 0 } })).toBe(
       '"once per request"',
     );
-    const rect = { tag: 'rect' };
+    const rect = { tag: 'rect' as const };
     expect(anchorLabel({ ...tour, element: rect, target: { on: 'element', label: 'Session' } })).toBe('box "Session"');
-    const card = { tag: 'diffle-card', handle: 'a' };
+    const card = { tag: 'diffle-card' as const, handle: 'a' };
     expect(anchorLabel({ ...tour, element: card, target: { on: 'element', label: 'T' } })).toBe('card "T"');
-    const diagram = { tag: 'diffle-diagram' };
+    const diagram = { tag: 'diffle-diagram' as const };
     expect(anchorLabel({ ...tour, element: diagram, target: { on: 'element', label: '' } })).toBe('diagram');
   });
 });

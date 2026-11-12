@@ -3,24 +3,10 @@
 use super::dom::{self, Dom, Node, NodeId};
 use super::drawing::{Drawing, get};
 use super::element::{label, short};
-use super::reading::{OPAQUE, collapse, matches, reading, squash};
-use crate::protocol::{CommentAnchor, TourCheckItem, TourPart, TourTarget, TourTargetRequest};
-
-/// Elements a thread may sit on as a whole, besides a diagram's boxes and labels.
-const BLOCKS: [&str; 12] = [
-    "diffle-check",
-    "diffle-item",
-    "diffle-tabs",
-    "diffle-card",
-    "diffle-diff",
-    "diffle-walk",
-    "diffle-trace",
-    "diffle-code",
-    "diffle-tree",
-    "diffle-callout",
-    "diffle-diagram",
-    "table",
-];
+use super::reading::{collapse, is_opaque, matches, reading, squash};
+use crate::protocol::{
+    CommentAnchor, TourCheckItem, TourCommentTag, TourPart, TourTarget, TourTargetRequest, TourWholeTag,
+};
 
 /// A tour as threads find their place in it.
 pub struct TourIndex {
@@ -51,7 +37,7 @@ impl TourIndex {
 
     /// The items of the tour's checklists in document order, each ticked when `ticked` holds its question.
     pub fn checks(&self, ticked: &[String]) -> Vec<TourCheckItem> {
-        let items = self.entries.iter().filter(|e| e.part.tag == "diffle-item");
+        let items = self.entries.iter().filter(|e| e.part.tag == TourCommentTag::DiffleItem);
         let item = |e: &Entry| {
             let question = e.label.clone().unwrap_or_default();
             let ticked = ticked.contains(&question);
@@ -90,7 +76,13 @@ impl TourIndex {
     /// `anchor`'s passage in this tour, or none when it is gone: the same text in the innermost
     /// element holding it, or an element of the same `tag` with the same label, preferring the
     /// element at the old place, then the old section.
-    pub fn relocate(&self, node: &[i64], section: &str, tag: &str, target: &TourTarget) -> Option<CommentAnchor> {
+    pub fn relocate(
+        &self,
+        node: &[i64],
+        section: &str,
+        tag: TourCommentTag,
+        target: &TourTarget,
+    ) -> Option<CommentAnchor> {
         let rank = |e: &&Entry| (e.node != node, e.section != section);
         match target {
             TourTarget::Text { quoted, occurrence } => {
@@ -158,9 +150,12 @@ impl Walk<'_> {
             self.diagram(id, &node, element);
             return;
         }
-        let text = (!OPAQUE.contains(&tag.as_str())).then(|| squash(&reading(self.dom, id))).filter(|t| !t.is_empty());
-        let block = BLOCKS.contains(&tag.as_str()).then(|| self.label(id, &tag, attrs));
-        let part = part(&tag, attrs);
+        let Some(part) = part(&tag, attrs) else {
+            // No tag a thread can name; a checked tour holds none outside a diagram.
+            return self.children(id, &node, context, within);
+        };
+        let text = (!is_opaque(&tag)).then(|| squash(&reading(self.dom, id))).filter(|t| !t.is_empty());
+        let block = tag.parse::<TourWholeTag>().is_ok().then(|| self.label(id, &tag, attrs));
         self.push(&node, element, part.clone(), within.cloned(), text, block);
         let inner = match tag.as_str() {
             "diffle-card" => format!("{context}diffle-card#{} > ", get(attrs, "id")),
@@ -170,14 +165,14 @@ impl Walk<'_> {
             _ => context.to_owned(),
         };
         let holder = matches!(tag.as_str(), "diffle-card" | "diffle-tab" | "diffle-walk");
-        if !OPAQUE.contains(&tag.as_str()) {
+        if !is_opaque(&tag) {
             self.children(id, &node, &inner, if holder { Some(&part) } else { within });
         }
     }
 
     /// A diagram, and each box and label in it, which take threads as a whole.
     fn diagram(&mut self, id: NodeId, node: &[i64], element: String) {
-        let diagram = TourPart { tag: "diffle-diagram".into(), handle: None };
+        let diagram = TourPart { tag: TourCommentTag::DiffleDiagram, handle: None };
         self.push(node, element, diagram.clone(), None, None, Some(String::new()));
         let elements: Vec<NodeId> = self
             .dom
@@ -210,7 +205,8 @@ impl Walk<'_> {
             };
             let element = format!("diffle-diagram > {}", self::label(&name.local, attrs));
             // A box or a label names its diagram itself.
-            self.push(&at, element, part(&name.local, attrs), None, None, Some(label));
+            let Some(part) = part(&name.local, attrs) else { continue };
+            self.push(&at, element, part, None, None, Some(label));
         }
     }
 
@@ -277,8 +273,9 @@ impl Walk<'_> {
     }
 }
 
-/// The element `tag` with `attrs` by its handle, in full: what an agent searches its document for.
-fn part(tag: &str, attrs: &[(String, String)]) -> TourPart {
+/// The element `tag` with `attrs` by its handle, in full: what an agent searches its document for;
+/// none for a tag no thread can name.
+fn part(tag: &str, attrs: &[(String, String)]) -> Option<TourPart> {
     let attr = |key: &str| Some(get(attrs, key)).filter(|v| !v.is_empty());
     let at = |line: &str| attr("path").map(|path| format!("{path}:{}", get(attrs, line)));
     let handle = match tag {
@@ -289,7 +286,7 @@ fn part(tag: &str, attrs: &[(String, String)]) -> TourPart {
         "diffle-callout" => attr("kind").map(str::to_owned),
         _ => None,
     };
-    TourPart { tag: tag.into(), handle }
+    Some(TourPart { tag: tag.parse().ok()?, handle })
 }
 
 #[cfg(test)]
@@ -313,7 +310,7 @@ mod tests {
 
     fn relocate(tour: &TourIndex, anchor: &CommentAnchor) -> Option<Value> {
         let CommentAnchor::Tour { node, section, element, target, .. } = anchor else { panic!("a tour anchor") };
-        tour.relocate(node, section, &element.tag, target).as_ref().map(json)
+        tour.relocate(node, section, element.tag, target).as_ref().map(json)
     }
 
     #[test]

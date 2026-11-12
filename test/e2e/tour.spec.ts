@@ -140,6 +140,23 @@ const BLOCKS = `
 </svg></diffle-diagram>
 `;
 
+/**
+ * A card whose reading text holds "refused. A refund" twice, across two paragraph breaks, and whose
+ * code block holds it once more: code and trees are no reading text, on the server or the page.
+ */
+const OPAQUE = `
+<h2>Parsing reads the kind column</h2>
+<diffle-card id="kind" title="A row knows its kind">
+  <p>Unknown kinds are refused.</p>
+  <p>A refund is no sale.</p>
+  <diffle-tree title="Where it lives" paths="tally/ledger.py"></diffle-tree>
+  <diffle-code lang="python">raise ValueError("refused. A refund")</diffle-code>
+  <diffle-diff path="tally/ledger.py" lines="76-79"></diffle-diff>
+  <p>Anything else is refused.</p>
+  <p>A refund counts negative.</p>
+</diffle-card>
+`;
+
 /** Selects `words` in the tour's article, as a reader dragging across them would. */
 async function select(page: Page, words: string) {
   await page.evaluate((words) => {
@@ -519,6 +536,40 @@ test.describe('the tour', () => {
       await expect(view.getByText('1 comment not in this tour')).toBeVisible();
       await expect(lost).toHaveScreenshot('tour-comment-lost.png');
       await expect(margin.locator('.tour-margin-card')).toHaveCount(0);
+    });
+
+    test('a selection across a card that holds a tree and code lands where the server reads it', async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, OPAQUE);
+      const view = await showTour(page);
+      // From the last paragraph but one into the last: the card holds the selection.
+      await page.evaluate(() => {
+        const article = document.querySelector('.tour-article')!;
+        const text = (words: string) => {
+          const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+          for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.textContent!.includes(words)) return n;
+          throw new Error(`"${words}" is not in the tour`);
+        };
+        const [from, to] = [text('Anything else is refused.'), text('A refund counts negative.')];
+        const range = document.createRange();
+        range.setStart(from, from.textContent!.indexOf('refused.'));
+        range.setEnd(to, 'A refund'.length);
+        document.getSelection()!.removeAllRanges();
+        document.getSelection()!.addRange(range);
+      });
+      await page.keyboard.press('c');
+      await page.keyboard.type('Refused how?');
+      await page.keyboard.press('Control+Enter');
+      await expect(view.locator('.tour-margin-card').filter({ hasText: 'Refused how?' })).toBeVisible();
+
+      const [thread] = await readThreads(diffle.url);
+      expect(thread!.stale).toBe(false);
+      expect(thread!.anchor).toMatchObject({
+        element: { tag: 'diffle-card', handle: 'kind' },
+        target: { on: 'text', quoted: 'refused. A refund', occurrence: 1 },
+      });
     });
   });
 

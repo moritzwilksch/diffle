@@ -5,7 +5,8 @@ use regex::Regex;
 
 use super::anchor::compare_threads;
 use crate::protocol::{
-    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourCheckItem, TourPart, TourTarget,
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourCheckItem, TourCommentTag, TourPart,
+    TourTarget,
 };
 
 static SUGGESTION_FENCE: LazyLock<Regex> =
@@ -152,33 +153,62 @@ pub fn parse_suggestions(body: &str) -> Vec<BodySegment> {
 /// search its document for, never its geometry or the text the quote already shows; then the card,
 /// tab, walk or diagram holding it. `text` for a selection in it.
 fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
+    use TourCommentTag as T;
     let handle = element.handle.as_deref().unwrap_or_default();
-    let name = match element.tag.as_str() {
-        "diffle-card" => format!("the card #{handle}"),
-        "diffle-diff" => format!("the diff of {handle}"),
-        "diffle-walk" => format!("the walk of {handle}"),
-        "diffle-note" => format!("the note \"{handle}\""),
-        "diffle-trace" => "the trace".into(),
-        "diffle-tabs" => "the tabs".into(),
-        "diffle-tab" => format!("the tab \"{handle}\""),
-        "diffle-check" => "a checklist".into(),
-        "diffle-item" => "an item of a checklist".into(),
-        "diffle-stop" => format!("the stop at {handle}"),
-        "diffle-code" if element.handle.is_some() => format!("the code of {handle}"),
-        "diffle-code" => "a code block".into(),
-        "diffle-tree" => format!("the tree \"{handle}\""),
-        "diffle-callout" => format!("a {handle} callout"),
-        "diffle-diagram" => "a diagram".into(),
-        "rect" => "a box in the diagram".into(),
-        "text" => "a label in the diagram".into(),
-        tag => format!("a <{tag}>"),
+    // Every tag: one a thread can newly sit on must be given its words here.
+    let name = match element.tag {
+        T::DiffleCard => format!("the card #{handle}"),
+        T::DiffleDiff => format!("the diff of {handle}"),
+        T::DiffleWalk => format!("the walk of {handle}"),
+        T::DiffleNote => format!("the note \"{handle}\""),
+        T::DiffleTrace => "the trace".into(),
+        T::DiffleTabs => "the tabs".into(),
+        T::DiffleTab => format!("the tab \"{handle}\""),
+        T::DiffleCheck => "a checklist".into(),
+        T::DiffleItem => "an item of a checklist".into(),
+        T::DiffleStop => format!("the stop at {handle}"),
+        T::DiffleCode if element.handle.is_some() => format!("the code of {handle}"),
+        T::DiffleCode => "a code block".into(),
+        T::DiffleTree => format!("the tree \"{handle}\""),
+        T::DiffleCallout => format!("a {handle} callout"),
+        T::DiffleDiagram => "a diagram".into(),
+        T::Rect => "a box in the diagram".into(),
+        T::Text => "a label in the diagram".into(),
+        T::H1
+        | T::H2
+        | T::H3
+        | T::H4
+        | T::P
+        | T::Ul
+        | T::Ol
+        | T::Li
+        | T::Code
+        | T::Pre
+        | T::Strong
+        | T::Em
+        | T::A
+        | T::Div
+        | T::Details
+        | T::Summary
+        | T::Table
+        | T::Thead
+        | T::Tbody
+        | T::Tr
+        | T::Th
+        | T::Td
+        | T::DiffleJump
+        | T::DiffleSymbol
+        | T::DiffleRow
+        | T::DiffleIcon
+        | T::DiffleFile => format!("a <{}>", element.tag),
     };
     let within = within.map_or_else(String::new, |w| {
         let handle = w.handle.as_deref().unwrap_or_default();
-        match w.tag.as_str() {
-            "diffle-card" => format!(" in the card #{handle}"),
-            "diffle-tab" => format!(" in the tab \"{handle}\""),
-            "diffle-walk" => format!(" in the walk of {handle}"),
+        match w.tag {
+            T::DiffleCard => format!(" in the card #{handle}"),
+            T::DiffleTab => format!(" in the tab \"{handle}\""),
+            T::DiffleWalk => format!(" in the walk of {handle}"),
+            // The holders `TourIndex` names are the three above and a diagram.
             _ => " in the diagram".into(),
         }
     });
@@ -190,7 +220,7 @@ mod tests {
     use super::*;
 
     fn part(tag: &str, handle: Option<&str>) -> TourPart {
-        TourPart { tag: tag.into(), handle: handle.map(Into::into) }
+        TourPart { tag: tag.parse().unwrap(), handle: handle.map(Into::into) }
     }
 
     #[test]

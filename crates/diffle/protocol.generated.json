@@ -3134,6 +3134,55 @@
       "additionalProperties": false,
       "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. With `example`, a snippet the agent made up to show how something works\n(data as it flows, a simplified spike, an alternative design), labelled as an example. It holds\nits code as text, `<` written `&lt;`."
     },
+    "TourCommentTag": {
+      "type": "string",
+      "enum": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "p",
+        "ul",
+        "ol",
+        "li",
+        "code",
+        "pre",
+        "strong",
+        "em",
+        "a",
+        "div",
+        "details",
+        "summary",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "diffle-card",
+        "diffle-diff",
+        "diffle-tree",
+        "diffle-jump",
+        "diffle-symbol",
+        "diffle-callout",
+        "diffle-diagram",
+        "diffle-row",
+        "diffle-code",
+        "diffle-icon",
+        "diffle-walk",
+        "diffle-note",
+        "diffle-trace",
+        "diffle-stop",
+        "diffle-tabs",
+        "diffle-tab",
+        "diffle-check",
+        "diffle-item",
+        "diffle-file",
+        "rect",
+        "text"
+      ],
+      "description": "Every tag a thread on the tour can name: a plain tag or a `diffle-*` element holding the words it\nquotes, a block it is on as a whole, or a diagram's box (`rect`) or label (`text`)."
+    },
     "TourDiagram": {
       "type": "object",
       "properties": {
@@ -3813,11 +3862,21 @@
       "additionalProperties": false,
       "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
     },
+    "TourOpaqueTag": {
+      "type": "string",
+      "enum": [
+        "diffle-diff",
+        "diffle-code",
+        "diffle-tree",
+        "diffle-diagram"
+      ],
+      "description": "The blocks whose content is code or a drawing, not reading text: a selection in them quotes nothing."
+    },
     "TourPart": {
       "type": "object",
       "properties": {
         "tag": {
-          "type": "string",
+          "$ref": "#/$defs/TourCommentTag",
           "description": "Its tag: `diffle-card`, `p`, a diagram's `rect`."
         },
         "handle": {
@@ -4664,6 +4723,26 @@
       ],
       "additionalProperties": false,
       "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
+    },
+    "TourWholeTag": {
+      "type": "string",
+      "enum": [
+        "diffle-card",
+        "diffle-diff",
+        "diffle-walk",
+        "diffle-trace",
+        "diffle-tabs",
+        "diffle-check",
+        "diffle-item",
+        "diffle-code",
+        "diffle-tree",
+        "diffle-callout",
+        "diffle-diagram",
+        "table",
+        "rect",
+        "text"
+      ],
+      "description": "The tags a thread may sit on as a whole: blocks, and a diagram's boxes and labels."
     },
     "UserConfig": {
       "type": "object",

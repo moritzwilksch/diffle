@@ -1,4 +1,10 @@
-import type { CommentAnchor, CommentThread, TourTarget } from '@/shared/protocol.js';
+import {
+  type CommentAnchor,
+  type CommentThread,
+  type TourTarget,
+  type TourWholeTag,
+  TourWholeTagSchema,
+} from '@/shared/protocol.js';
 
 /** The file a thread is on; null for one on the tour. */
 export function anchorPath(anchor: CommentAnchor): string | null {
@@ -30,8 +36,8 @@ export function compareNodes(a: readonly number[], b: readonly number[]): number
   return a.length - b.length;
 }
 
-/** What a tour element is to a reader, by the tag its anchor names. */
-const KINDS: Record<string, string> = {
+/** What a tour element a thread sits on as a whole is to a reader, by its tag. */
+const KINDS: Record<TourWholeTag, string> = {
   rect: 'box',
   text: 'label',
   'diffle-card': 'card',
@@ -50,7 +56,8 @@ const KINDS: Record<string, string> = {
 
 /** What a tour element is to a reader, by its tag: `box`, `card`, `diff`. */
 export function elementKind(tag: string): string {
-  return KINDS[tag] ?? 'element';
+  const whole = TourWholeTagSchema.safeParse(tag);
+  return whole.success ? KINDS[whole.data] : 'element';
 }
 
 /** A tour thread's header: the words it is on, or the element with tag `tag` by its kind and label. */

@@ -10,7 +10,7 @@ use diffle::github::pulls::repo_of_pr_url;
 use diffle::github::review::{ExportInput, GithubExporter, build_review, format_body};
 use diffle::protocol::{
     CommentAnchor, CommentAuthor, CommentMessage, CommentThread, GithubExportResponse, GithubPullRequest,
-    GithubPullRequestState, Side, TourPart, TourTarget,
+    GithubPullRequestState, Side, TourCommentTag, TourPart, TourTarget,
 };
 use serde_json::{Value, json};
 
@@ -142,7 +142,7 @@ fn build_review_skips_stale_threads_and_without_ids_resolved_ones() {
 #[test]
 fn build_review_skips_threads_on_the_tour() {
     let target = TourTarget::Element { label: "Session".into() };
-    let element = TourPart { tag: "p".into(), handle: None };
+    let element = TourPart { tag: TourCommentTag::P, handle: None };
     let anchor =
         CommentAnchor::Tour { node: vec![3], step: Some(1), section: "S".into(), element, within: None, target };
     let built = build_review(&[thread_with("tour", anchor, "why?", false, false), t("k").build()], None);
