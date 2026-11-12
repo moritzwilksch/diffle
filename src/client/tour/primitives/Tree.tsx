@@ -82,9 +82,13 @@ export function TourTree({
         );
         return (
           <li key={path} className="flex items-baseline gap-2">
-            <button type="button" className={`${FILE} cursor-pointer hover:underline`} onClick={() => open(path)}>
-              {name}
-            </button>
+            {open ? (
+              <button type="button" className={`${FILE} cursor-pointer hover:underline`} onClick={() => open(path)}>
+                {name}
+              </button>
+            ) : (
+              <span className={FILE}>{name}</span>
+            )}
             {note && <span className="tour-tree-note">{note}</span>}
           </li>
         );

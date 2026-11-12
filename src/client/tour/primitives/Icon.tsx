@@ -9,7 +9,8 @@ export function LucideIcon({ name, ...props }: { name: string } & LucideProps) {
   const draw = useHost().useIcon(name);
   if (draw === undefined) return null;
   if (draw) return draw(props);
-  // An SVG `<title>`, not a `title` attribute: an icon in a diagram is SVG, which shows only the child.
+  // An SVG `<title>`, not a `title` attribute: an icon in a diagram is SVG, which shows only the
+  // child, and an exported tour has no tooltip host to read the attribute.
   return (
     <CircleQuestionMark {...props}>
       <title>{`Unknown icon "${name}"`}</title>

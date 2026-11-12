@@ -4,7 +4,8 @@ import { useHost } from '@/client/tour/host/host.js';
 
 /**
  * A button into the diff view at `path`, on `line` of `side` when given. Its tip names the place
- * unless the label or, with `placed`, the text beside it already shows it.
+ * unless the label or, with `placed`, the text beside it already shows it. With no diff to open,
+ * a jump in the text is its label alone, and a placed one is nothing.
  */
 export function TourJump({
   path,
@@ -20,6 +21,7 @@ export function TourJump({
   placed?: boolean;
 }) {
   const { open } = useHost();
+  if (!open) return placed ? null : label;
   const where = line == null ? path : `${path}:${line}${side === 'old' ? ' (before)' : ''}`;
   return (
     <button

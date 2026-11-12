@@ -217,7 +217,8 @@ diffle tour clear               # remove it
 A tour is one HTML document of cards, each showing lines of the diff, a table or a small
 diagram, read as one page and walked in steps. diffle checks it against the review and refuses
 it with every reason when it names a file, line, or symbol the review lacks. Press `T` to open
-the tour and `n` / `p` to step through it. Each review keeps its own tour.
+the tour and `n` / `p` to step through it. Each review keeps its own tour. **Export** saves it as one
+HTML file that opens offline, to share with your team.
 
 `diffle skill` prints all of this for the agent, the tour's elements included, as a skill to
 install as is: save it as `SKILL.md` in a `diffle` folder among your agent's skills, such as

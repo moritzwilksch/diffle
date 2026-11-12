@@ -258,10 +258,11 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
   });
 
-  test('an icon draws by its name, an alias as its icon; a name Lucide lacks shows a placeholder naming it', async ({
+  test('an icon draws the same live and in an export, an alias as its icon; a name Lucide lacks shows a placeholder naming it', async ({
     page,
     diffle,
-  }) => {
+    browser,
+  }, testInfo) => {
     await pushTour(
       diffle.url,
       `<h2>Icons</h2>
@@ -275,11 +276,36 @@ test.describe('the tour', () => {
     const unknown = view.locator('svg:has(> title)');
     await expect(unknown.locator('title')).toHaveText(['Unknown icon "databse"', 'Unknown icon "no-such-icon"']);
     await expect(view.locator('article p').first()).toHaveScreenshot('tour-icon-unknown.png');
+    const known = await view.locator('svg.lucide-database').evaluate((svg) => svg.outerHTML);
     // An alias Lucide keeps for a renamed icon draws that icon.
     const aliased = view.locator('article p').nth(1).locator('svg');
     const house = await aliased.evaluateAll((svgs) => svgs.map((svg) => svg.outerHTML));
     expect(house).toHaveLength(2);
     expect(house[0]).toBe(house[1]);
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Export' }).click(),
+    ]);
+    const saved = testInfo.outputPath('icons.html');
+    await download.saveAs(saved);
+    const context = await browser.newContext();
+    const file = await context.newPage();
+    await file.setContent(await readFile(saved, 'utf8'));
+    await expect(file.locator('svg:has(> title) title')).toHaveText([
+      'Unknown icon "databse"',
+      'Unknown icon "no-such-icon"',
+    ]);
+    // The file draws a known icon from the markup it baked, exactly as the review drew it.
+    expect(await file.locator('svg.lucide-database').evaluate((svg) => svg.outerHTML)).toBe(known);
+    expect(
+      await file
+        .locator('p')
+        .nth(1)
+        .locator('svg')
+        .evaluateAll((svgs) => svgs.map((svg) => svg.outerHTML)),
+    ).toEqual(house);
+    await context.close();
   });
 
   test('a walk lights one note at a time: l / h, its numbers and its gutter markers step through it; a note takes a comment', async ({
@@ -746,6 +772,92 @@ test.describe('the tour', () => {
         `python=${JSON.stringify(process.execPath)} ${JSON.stringify(join(REPO_ROOT, 'test/lsp/fake-lsp.mjs'))}`,
       ],
       env: { PATH: '/usr/bin:/bin', FAKE_LSP_GRAPH: '1' },
+    });
+
+    test('Export saves the tour as one file that reads offline: its rows coloured, its blocks stepping, nothing that needs diffle', async ({
+      page,
+      diffle,
+      browser,
+    }, testInfo) => {
+      await waitForLsp(diffle.url);
+      await pushTour(diffle.url, TOUR);
+      const view = await showTour(page);
+      const decided = view.getByRole('checkbox', { name: 'Decided: Should a bad row fail the file, or be skipped?' });
+      // The export bakes the ticks the page read back.
+      const readBack = page.waitForResponse((r) => r.url().endsWith('/api/tour') && r.request().method() === 'GET');
+      await decided.check();
+      await readBack;
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Export' }).click(),
+      ]);
+      expect(download.suggestedFilename()).toBe('Refunds count against sales.html');
+      const saved = testInfo.outputPath('tour.html');
+      await download.saveAs(saved);
+      await expect(view).toBeVisible();
+      await diffle.stop();
+
+      const html = await readFile(saved, 'utf8');
+      // It opens by naming the packages its script bundles, as the export build lists them.
+      expect(html).toMatch(
+        /^<!doctype html>\n<!--\nThis page was exported from diffle\.[^]*\nreact-dom \d+\.\d+\.\d+ \(MIT\)\n/,
+      );
+      // It closes with every licence that list owes, in full, each text once; no `--` ends a comment early.
+      const [, opening, closing] = /^<!doctype html>\n(<!--\n[^]*?\n-->)\n[^]*\n(<!--\n[^]*\n-->)\n$/.exec(html) ?? [];
+      for (const notice of [opening, closing]) expect(notice?.slice(4, -3)).not.toContain('--');
+      expect(`${opening}\n\n${closing}`).toMatchSnapshot('tour-export-licences.txt');
+      // Nothing in it names a place to load from.
+      expect(html).not.toMatch(/\b(?:src|href|action)\s*=\s*["']?(?:https?:|\/\/)/i);
+      expect(html).not.toMatch(/url\(\s*["']?(?:https?:|\/\/)/i);
+      const context = await browser.newContext({ viewport: page.viewportSize() });
+      const requests: string[] = [];
+      await context.route('**/*', (route) => {
+        requests.push(route.request().url());
+        return route.abort();
+      });
+      const file = await context.newPage();
+      await file.setContent(html);
+      await file.evaluate(() => document.fonts.ready);
+      await expect(file.locator('diffs-container').first()).toBeVisible();
+
+      // Every control steps a block or takes a section; nothing opens a diff, comments or ticks.
+      expect(await file.locator('input, textarea').count()).toBe(0);
+      // The one link names who made the file: diffle's repository, in a tab of its own.
+      const links = await file
+        .locator('a')
+        .evaluateAll((all) =>
+          all.map((a) => [a.getAttribute('href'), a.getAttribute('target'), a.getAttribute('rel')]),
+        );
+      expect(links).toEqual([['https://github.com/moritzwilksch/diffle', '_blank', 'noopener']]);
+      const buttons = await file
+        .locator('button')
+        .evaluateAll((all) => all.map((b) => b.getAttribute('aria-label') ?? b.getAttribute('title') ?? b.textContent));
+      expect(buttons.join('\n')).toMatchSnapshot('tour-export-buttons.txt');
+      await expect(file).toHaveScreenshot('tour-export.png');
+
+      // The walk lights its first note, its sentence under its lines.
+      const walk = file.locator('[data-walk]');
+      await walk.scrollIntoViewIfNeeded();
+      await file.keyboard.press('l');
+      await expect(walk.locator('.tour-note')).toContainText('One set per account');
+      await expect(walk).toHaveScreenshot('tour-export-walk.png');
+      await file.emulateMedia({ colorScheme: 'dark' });
+      await expect(walk).toHaveScreenshot('tour-export-walk-dark.png');
+      await file.emulateMedia({ colorScheme: 'light' });
+
+      // A symbol chip keeps the hover its language server gave at export.
+      const chip = file.locator('.tour-chip');
+      await chip.scrollIntoViewIfNeeded();
+      await chip.hover();
+      await expect(chip.getByRole('tooltip')).toContainText('def f() -> None');
+      await expect(file).toHaveScreenshot('tour-export-hover.png');
+
+      // The checklist shows what was decided at export, as marks.
+      const check = file.getByRole('region', { name: 'Checklist' });
+      await check.scrollIntoViewIfNeeded();
+      await expect(check).toHaveScreenshot('tour-export-check.png');
+      expect(requests).toEqual([]);
+      await context.close();
     });
 
     test('a symbol chip is coloured as in the diff, hovers, and lists its references; on the old side it only shows', async ({

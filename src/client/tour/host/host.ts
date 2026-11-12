@@ -8,15 +8,16 @@ import type { Side } from '@/shared/side.js';
 
 /**
  * What a tour's blocks take from outside the document: the review's lines and how they are drawn,
- * the language servers, the reviewer's ticks, and the diff to open.
+ * the language servers, the reviewer's ticks, and the diff to open. The review in diffle is one
+ * host; a tour exported as a file is another, holding what it showed when it was exported.
  */
 export interface TourHost {
   /** The patch showing `range` and `context` lines around it, cut again whenever the review moves. */
   useExcerpt(range: LineRange, context: number): Shown;
   /** A patch's rows, unified, numbered and highlighted like the diff; `lang` overrides its file's. */
   Rows: <A>(props: RowsProps<A>) => ReactNode;
-  /** Opens a place of the review in the diff. */
-  open: (path: string, line?: number, side?: Side) => void;
+  /** Opens a place of the review in the diff; null where no diff stands behind the tour. */
+  open: ((path: string, line?: number, side?: Side) => void) | null;
   /** A `diffle-symbol`. */
   Symbol: ComponentType<SymbolProps>;
   /** A `diffle-check`. */
@@ -82,7 +83,7 @@ export function useHost(): TourHost {
   return host;
 }
 
-/** A short key naming `patch`'s rows in `lang`: what a highlight is cached under. */
+/** A short key naming `patch`'s rows in `lang`: what a highlight is cached and an export keeps them under. */
 export function rowsKey(patch: string, lang = ''): string {
   const text = `${lang}\n${patch}`;
   let h = 5381;
