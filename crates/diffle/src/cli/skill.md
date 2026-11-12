@@ -62,10 +62,13 @@ their `<h3>` subsections. Each review has one tour.
 - Fold what the main path can do without into a `<details>` that opens with its `<summary>`: an
   edge case, a long aside. The summary says in a few words what opening it shows. Never fold what
   the reviewer needs to follow the change.
-- Give a `diffle-tree` a `title` that says what its files are, such as `Server · Rust`, so two trees
-  side by side read apart at a glance. diffle shows each changed file's status and line counts.
-  Mark where to start or what surprises with a `<diffle-file path>` note inside the tree, a few
-  words of inline prose, on three files at most; a note never restates the file's name.
+- A list of files is always a `diffle-tree`, never a `diffle-code`, a table or a list. diffle
+  shows each changed file's status and line counts, so the tree needs no column for them. Give it
+  a `title` that says what its files are, such as `Server · Rust`, so two trees side by side read
+  apart at a glance. Mark where to start or what surprises with a `<diffle-file path>` note inside
+  the tree, a few words of inline prose, on three files at most; a note never restates the file's
+  name. To say what every file does, split the files into one tree per role, each titled with it,
+  and say the rest in the prose around them.
 - Use a `diffle-callout` for what the reviewer should not miss; it holds prose, not headings. Pick
   `info` for context, `warning` for something the reviewer should check, and `danger` for a likely
   bug or breaking change, and only where the diff supports it.
@@ -173,11 +176,12 @@ it. A card takes one before its title with `icon`. A diagram takes them too, bel
 ### Interfaces
 
 Use a `diffle-code` to show what a collaborator offers and takes: signatures, interfaces, type
-definitions, the shape of an abstraction. Elide bodies (`;` or `{ … }`) and leave private details
-out. Code the change touches belongs in a `diffle-diff`; never repeat it in a code block. With
-`path` and `line`, point at where its first declaration sits on the new side; without `path`, give
-`lang`. Write `<` as `&lt;` and `&` as `&amp;`. diffle warns when a block repeats the diff, runs
-past about 12 lines, or does not match its line. Set collaborators side by side in a row:
+definitions, the shape of an abstraction. It holds code only, never a list of files. Elide bodies
+(`;` or `{ … }`) and leave private details out. Code the change touches belongs in a
+`diffle-diff`; never repeat it in a code block. With `path` and `line`, point at where its first
+declaration sits on the new side; without `path`, give `lang`. Write `<` as `&lt;` and `&` as
+`&amp;`. diffle warns when a block repeats the diff, runs past about 12 lines, lists files, or
+does not match its line. Set collaborators side by side in a row:
 
 ```html
 <diffle-row>

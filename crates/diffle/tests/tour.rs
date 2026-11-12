@@ -308,6 +308,14 @@ def load_user( id ):
   "k21": 21,
 }
 </diffle-code>
+<diffle-code lang="text" example title="Files">
+src/auth.rs     NEW  validates tokens
+src/store.rs    MOD  keeps ticks
+README.md       MOD  documents login
+</diffle-code>
+<pre>- src/auth.rs
+- src/store.rs
+- README.md</pre>
 <diffle-diagram><svg viewBox="0 0 368 60">
   <rect x="8" y="16" width="96" height="28"/><svg data-lucide="user" x="16" y="20"/><text x="24" y="30">Overlaps</text>
   <rect x="136" y="16" width="96" height="28"/><svg data-lucide="user" x="220" y="22"/><text x="144" y="30">Past</text>

@@ -76,6 +76,14 @@ expression: "pushed.json()[\"warnings\"]"
     "message": "Long for an example, at 24 lines: keep only what shows the point"
   },
   {
+    "element": "h2 \"Flow\" > diffle-code lang=\"text\" example=\"\" title=\"Files\"",
+    "message": "Lists files: use a diffle-tree, which shows each file's status and line counts"
+  },
+  {
+    "element": "h2 \"Flow\" > <pre>",
+    "message": "Lists files: use a diffle-tree, which shows each file's status and line counts"
+  },
+  {
     "element": "h2 \"Flow\" > diffle-diagram > <svg viewBox=\"0 0 368 60\">",
     "message": "2 of 3 labelled boxes 28 tall carry an icon: give each one an icon, or none"
   },

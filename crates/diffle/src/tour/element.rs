@@ -27,6 +27,11 @@ fn explain<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)], message: 
     culprit.map_or(message.clone(), |(name, _)| format!("{name}: {message}"))
 }
 
+/// The value of the attribute `name` in `attrs`.
+pub fn attr<'a>(attrs: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    attrs.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+}
+
 /// Whether `value` spells a positive number, as `colspan` and `rowspan` take one.
 pub fn is_count(value: &str) -> bool {
     value.parse::<u16>().is_ok_and(|n| n > 0) && !value.starts_with('0')

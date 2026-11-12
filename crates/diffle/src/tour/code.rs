@@ -10,6 +10,10 @@ use crate::protocol::TourError;
 const LONG: usize = 12;
 /// Past this many lines an example shows more than the point needs.
 const LONG_EXAMPLE: usize = 20;
+/// Lines led by a file path, from which a block lists files.
+const LISTED: usize = 3;
+/// The warning on a block that lists files.
+pub const LISTS_FILES: &str = "Lists files: use a diffle-tree, which shows each file's status and line counts";
 /// Keywords after which a declaration names what it declares.
 const DECLARES: &[&str] = &[
     "fn",
@@ -125,6 +129,9 @@ pub fn warnings(code: &Code, text: Option<&str>, changed: &HashSet<String>) -> V
             telling.len()
         ));
     }
+    if lists_files(&code.lines) {
+        warn(LISTS_FILES.into());
+    }
     let n = code.lines.len();
     if code.example && n > LONG_EXAMPLE {
         warn(format!("Long for an example, at {n} lines: keep only what shows the point"));
@@ -132,6 +139,26 @@ pub fn warnings(code: &Code, text: Option<&str>, changed: &HashSet<String>) -> V
         warn(format!("Long for a signature block, at {n} lines: show only the interface"));
     }
     found
+}
+
+/// Whether `lines` list files: at least three lines, and most of them, start with a file path once
+/// list or tree marks such as `- ` or `├── ` are cut.
+pub fn lists_files(lines: &[String]) -> bool {
+    let lines: Vec<&str> = lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    let paths = lines.iter().filter(|l| leads_with_path(l)).count();
+    paths >= LISTED && paths * 2 > lines.len()
+}
+
+/// Whether `line`'s first word, past any list or tree marks, is a file path: it holds a `/` or ends
+/// in an extension, and nothing a line of code would (no call, no operator).
+fn leads_with_path(line: &str) -> bool {
+    let line = line.trim_start_matches(|c: char| !(c.is_alphanumeric() || "._/@~".contains(c)));
+    let word = line.split_whitespace().next().unwrap_or_default().trim_end_matches([':', ',']);
+    let plain = |c: char| c.is_alphanumeric() || "._/-@~".contains(c);
+    let extension = word.rsplit_once('.').is_some_and(|(stem, ext)| {
+        !stem.is_empty() && (1..=4).contains(&ext.len()) && ext.chars().all(|c| c.is_ascii_alphanumeric())
+    });
+    !word.is_empty() && word.chars().all(plain) && !word.starts_with("//") && (word.contains('/') || extension)
 }
 
 /// `line` without its whitespace and trailing `,` or `;`.
@@ -147,4 +174,29 @@ fn declared(lines: &[String]) -> Option<&str> {
         words.find(|w| DECLARES.contains(w))?;
         words.next()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lists_files;
+
+    fn listing(text: &str) -> bool {
+        lists_files(&text.lines().map(str::to_owned).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn a_column_of_paths_lists_files() {
+        assert!(listing("src/auth.rs        NEW  validate tokens\nsrc/store.rs   MOD  keeps ticks\nREADME.md  MOD"));
+        assert!(listing("- crates/a.rs\n- crates/b.rs\n- package.json"));
+        assert!(listing("├── src/main.rs\n├── src/lib.rs\n└── Cargo.toml"));
+    }
+
+    #[test]
+    fn code_does_not() {
+        assert!(!listing("import { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';"));
+        assert!(!listing("self.store.get(id)\nconfig.load()\nx.len()"));
+        assert!(!listing("// see src/a.rs\n// and src/b.rs\n// and src/c.rs"));
+        assert!(!listing("src/a.rs\nsrc/b.rs"));
+        assert!(!listing("fn a();\nfn b();\nsrc/a.rs\nsrc/b.rs\nsrc/c.rs\nfn c();\nfn d();"));
+    }
 }

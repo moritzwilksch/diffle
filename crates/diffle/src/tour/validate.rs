@@ -6,7 +6,7 @@ use super::blocks::{row, tabs, tree};
 use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
-use super::element::{Findings, is_count, label, parse, short};
+use super::element::{Findings, attr, is_count, label, parse, short};
 use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
@@ -122,6 +122,9 @@ impl Walk {
             "details" if !opens_with_summary(dom, node) => {
                 let message = "a <details> opens with one <summary>: what opening it shows, in a few words";
                 self.error(node, element.clone(), message);
+            }
+            "pre" if code::lists_files(&code::lines(&dom.text(node))) => {
+                self.warnings.push((node, TourError { element: element.clone(), message: code::LISTS_FILES.into() }));
             }
             "h2" => {
                 self.sections += 1;
@@ -323,8 +326,4 @@ fn holds_diff(dom: &Dom, node: NodeId) -> bool {
         Node::Element { name, .. } => &*name.local == "diffle-diff" || holds_diff(dom, c),
         _ => false,
     })
-}
-
-fn attr<'a>(attrs: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    attrs.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
 }
