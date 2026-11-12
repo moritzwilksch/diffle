@@ -237,6 +237,15 @@ A tour is a guided walkthrough of the reviewer's diff, written by their coding a
 - **Rejected:** A description on every file. The reviewer called it overwhelming: notes stand out only where few files carry one.
 - **Why:** The reviewer found trees bare and, side by side, hard to tell apart.
 
+### 28. A tour exports as one HTML file, drawn by the tour's own components from what the review showed
+
+- **Chosen:** **Export** in the tour view's bar saves `<title>.html`: the tour as the review shows it at that moment, for a reviewer to share with their team. The browser bakes it (`tour/export/bake.ts`): each excerpt's patch and its rows, rendered by `@pierre/diffs` (`preloadDiffHTML`) with both themes' colours as CSS variables, each token's colours a shared class; each symbol chip's colour and its hover, asked of the language server; each diagram's code coloured; the icons the tour names; the files its trees list; the ticks. A second Vite build (`vite.export.config.ts`, entry `tour/export/main.tsx`) makes one script and one stylesheet with the Latin cuts of Inter and JetBrains Mono inlined; the client fetches them (`api.tourRuntime`) and inlines them with the baked data into the file, under a policy that loads nothing. The blocks reach the review through a `TourHost` in context (`tour/host/`): the live host fetches, highlights and asks the servers; the baked one (`tour/export/baked.tsx`) reads the file's data, draws rows into a shadow root and adds a walk's or a trace's note row under its line as the diff does. Nothing dead stays: a jump is its text, the `Open` buttons and comments are gone, a checklist shows its ticks as marks, and a chip without a hover is coloured code.
+- **Rejected:**
+  - A `diffle tour export` command. The rows the tour shows are highlighted in the browser; the server has no highlighter.
+  - Rewriting the blocks in plain script for the file. Two implementations of the walk, the trace and the stepper would drift.
+  - Shipping the highlighter and its grammars. They outweigh the rest of the file several times over.
+- **Why:** A reviewer wants to hand the tour to people without diffle, as a file that opens anywhere and keeps working.
+
 ## Context for the implementer
 
 - The agent runs in the reviewer's worktree, next to a running diffle. It reaches the server the way `diffle comments` does (`crates/diffle/src/cli/agent/server.rs`, `reach`).
@@ -290,6 +299,10 @@ src/client/tour/steps/                         NEW       the shared stepper, ban
 src/client/styles/diagram.css                  NEW       a diagram's classes, from the theme tokens
 src/client/styles/tour.css                     NEW       the article: column, headings, rhythm, cards, rows
 src/client/tour/Contents.tsx                   NEW       side panel (decision 14)
+src/client/tour/Outline.tsx                    NEW       the table of contents, shared by the side panel and an exported tour
+src/client/tour/host/                          NEW       TourHost (host.ts); the review's host (live.tsx, LiveSymbol, LiveCheck)
+src/client/tour/export/                        NEW       bake (bake.ts, markup.ts), the file (file.ts, data.ts), its page (main.tsx, ExportPage.tsx, baked.tsx, parts.tsx, export.css)
+vite.export.config.ts                          NEW       an exported tour's script and stylesheet, built after the client
 src/client/views/registry.ts, state.ts         MODIFIED  register 'tour'; ViewId gains 'tour'; ViewDef.useListed
 src/client/views/ViewSwitch.tsx                MODIFIED  leaves out a view its useListed declines
 src/client/keyboard/useKeymap.ts, HelpOverlay  MODIFIED  T toggles the tour view; help rows
@@ -315,6 +328,7 @@ test/e2e/tour.spec.ts                          NEW       pushes a tour over the 
 15. Details: `<details>` and `<summary>`. Verify: as slice 12.
 16. Checklists: `diffle-check`, `diffle-item`, ticks, answers, the prompt and the list. Verify: as slice 12.
 17. Trees: a title, line counts, notes. Verify: as slice 12.
+18. Export: the host seam, the bake, the file and its page. Verify: `pixi run test-node`, `pixi run e2e -g tour`.
 
 Each slice ends with `pixi run lefthook-run` and `pixi run build-release`.
 
