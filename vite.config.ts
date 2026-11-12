@@ -1,13 +1,10 @@
-import { readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { constants, gzipSync } from 'node:zlib';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import { chunkUrl } from './scripts/lib/vite-chunk-url.js';
 import pkg from './package.json' with { type: 'json' };
-import { licenses } from './vite.licenses.js';
+import { gzipAssets, licenses } from './vite.plugins.js';
 
 const clientRoot = fileURLToPath(new URL('./src/client', import.meta.url));
 // Mirrors `paths` in the tsconfigs: vite's own tsconfig lookup skips files a config excludes.
@@ -31,26 +28,10 @@ const licensesJson = () =>
     ),
   );
 
-// The binary embeds the client as gzip, which every browser accepts over plain HTTP (brotli only over
-// HTTPS): `x.js` becomes `x.js.gz` and the server sends it encoded. Fonts are compressed already.
-const COMPRESSIBLE = /\.(?:html|js|css|svg|json|wasm|txt)$/;
-const gzipAssets = (): Plugin => ({
-  name: 'diffle:gzip-assets',
-  apply: 'build',
-  closeBundle() {
-    for (const name of readdirSync(outDir, { recursive: true, encoding: 'utf8' })) {
-      if (!COMPRESSIBLE.test(name)) continue;
-      const path = join(outDir, name);
-      writeFileSync(`${path}.gz`, gzipSync(readFileSync(path), { level: constants.Z_BEST_COMPRESSION }));
-      unlinkSync(path);
-    }
-  },
-});
-
 export default defineConfig({
   root: clientRoot,
   base: './',
-  plugins: [react(), tailwindcss(), chunkUrl(), licensesJson(), gzipAssets()],
+  plugins: [react(), tailwindcss(), chunkUrl(), licensesJson(), gzipAssets(outDir)],
   resolve: { alias: { '@': srcRoot } },
   appType: 'spa',
   // The binary embeds the client it was built with, so the build-time version is the running one.

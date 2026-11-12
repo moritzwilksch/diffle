@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
-import { licenses } from './vite.licenses.js';
+import { gzipAssets, licenses } from './vite.plugins.js';
 
 // An exported tour's script and styles, which the client inlines into the file it saves: one script,
 // one stylesheet with its fonts inlined, and no chunks, so the file asks for nothing. Built after
@@ -19,6 +19,7 @@ export default defineConfig({
     licenses(`${outDir}/notices.txt`, (dependencies) =>
       dependencies.map((d) => `${d.name} ${d.version} (${d.license ?? 'unknown'})`).join('\n'),
     ),
+    gzipAssets(outDir),
   ],
   publicDir: false,
   resolve: { alias: { '@': srcRoot } },
