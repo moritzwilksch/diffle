@@ -1,7 +1,7 @@
 import { type FileDiffMetadata, parsePatchFiles, type SupportedLanguages } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
-import type { IconNode } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { createElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { highlightCode } from '@/client/lsp/highlight.js';
 import { usePrimed, type WorkerPool } from '@/client/Markdown.js';
 import { useStore } from '@/client/store.js';
@@ -9,7 +9,7 @@ import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import type { Place } from '@/client/tour/anchor.js';
 import type { LineRange } from '@/client/tour/document.js';
 import { jump, rangePatch } from '@/client/tour/state.js';
-import { type RowsProps, rowsKey, type Shown, type Token, type TourHost } from './host.js';
+import { type DrawIcon, type RowsProps, rowsKey, type Shown, type Token, type TourHost } from './host.js';
 import { LiveCheck } from './LiveCheck.js';
 import { LiveSymbol } from './LiveSymbol.js';
 
@@ -103,29 +103,29 @@ function useTokens(lines: readonly string[], lang: string): Token[][] | null {
 }
 
 /** Each name looked up so far, null when no icon has it, so a later mount draws it at once. */
-const loaded = new Map<string, IconNode | null>();
+const loaded = new Map<string, LucideIcon | null>();
 
-/** An icon's drawing, from the one chunk holding every icon's; null when no icon has the name. */
-export async function loadIcon(name: string): Promise<IconNode | null> {
+/** The icon `name`, from the one chunk holding every icon; null when no icon has the name. */
+export async function loadIcon(name: string): Promise<LucideIcon | null> {
   const known = loaded.get(name);
   if (known !== undefined) return known;
-  const { ICON_NODES } = await import('./iconNodes.js');
-  const node = ICON_NODES.get(name) ?? null;
-  loaded.set(name, node);
-  return node;
+  const { iconNamed } = await import('./icons.js');
+  const icon = iconNamed(name);
+  loaded.set(name, icon);
+  return icon;
 }
 
 /** An icon loaded on first use, so the main bundle carries none. */
-function useIcon(name: string): IconNode | null | undefined {
-  const [node, setNode] = useState(() => loaded.get(name));
+function useIcon(name: string): DrawIcon | null | undefined {
+  const [icon, setIcon] = useState(() => loaded.get(name));
   useEffect(() => {
     let current = true;
-    void loadIcon(name).then((node) => current && setNode(node));
+    void loadIcon(name).then((icon) => current && setIcon(icon));
     return () => {
       current = false;
     };
   }, [name]);
-  return node;
+  return icon && ((props) => createElement(icon, props));
 }
 
 function useFocusedChild(place: Place, onFocus: (child: number) => void): void {

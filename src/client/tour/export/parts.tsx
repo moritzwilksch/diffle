@@ -1,10 +1,10 @@
-import { Circle, CircleCheck } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Circle, CircleCheck, type LucideProps } from 'lucide-react';
+import { createElement, type ReactNode } from 'react';
 import { nodeKey, nodePath, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
 import type { CheckProps, SymbolProps } from '@/client/tour/host/host.js';
 import type { TourCheckItem } from '@/shared/tour.js';
-import type { BakedTour } from './data.js';
+import type { BakedIcon, BakedTour } from './data.js';
 
 /**
  * A symbol chip as it was exported: coloured as in the diff, with its hover from the language
@@ -66,4 +66,25 @@ export function BakedCheck({ source, renderItem, checks }: CheckProps & { checks
       </ul>
     </section>
   );
+}
+
+/** An icon as it was exported, at the size, place and class the page asks for, as lucide-react draws it live. */
+export function BakedLucide({ icon, size, className, ...props }: { icon: BakedIcon } & LucideProps) {
+  // In the baked order, so the file's markup matches the review's attribute for attribute.
+  const attrs = Object.entries(icon.attrs).map(([name, value]) => {
+    if (name === 'width' || name === 'height') return [name, size ?? value];
+    if (name === 'class') return ['className', [value, className].filter(Boolean).join(' ')];
+    return [reactName(name), value];
+  });
+  return createElement('svg', {
+    ...Object.fromEntries(attrs),
+    ...props,
+    // lucide-react's own markup, drawn by diffle when it exported the tour, never the tour's HTML.
+    dangerouslySetInnerHTML: { __html: icon.body },
+  });
+}
+
+/** An SVG attribute as React names it: `stroke-width` is `strokeWidth`; `aria-` and `data-` stay. */
+function reactName(name: string): string {
+  return /^(aria|data)-/.test(name) ? name : name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 }

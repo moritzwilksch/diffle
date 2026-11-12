@@ -1,5 +1,5 @@
 import type { DiffLineAnnotation } from '@pierre/diffs';
-import type { IconNode } from 'lucide-react';
+import type { LucideProps } from 'lucide-react';
 import { type ComponentType, createContext, type ReactNode, useContext } from 'react';
 import type { Place } from '@/client/tour/anchor.js';
 import type { LineRange } from '@/client/tour/document.js';
@@ -27,13 +27,16 @@ export interface TourHost {
   /** `lines` of `lang`, coloured token by token as the diff colours them; null until known. */
   useTokens(lines: readonly string[], lang: string): Token[][] | null;
   /** The Lucide icon `name`: undefined while it loads, null when no icon has the name. */
-  useIcon(name: string): IconNode | null | undefined;
+  useIcon(name: string): DrawIcon | null | undefined;
   /**
    * Calls `onFocus` with the index, among the child elements of the block at `place`, of the one
    * the focused thread is on, so the block shows it.
    */
   useFocusedChild(place: Place, onFocus: (child: number) => void): void;
 }
+
+/** Draws one icon with the props its place gives it: a size, a position in a diagram, a class. */
+export type DrawIcon = (props: LucideProps) => ReactNode;
 
 /** What an excerpt shows: its patch once cut, or why it shows none. */
 export type Shown =

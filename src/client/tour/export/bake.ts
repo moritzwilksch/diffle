@@ -1,4 +1,8 @@
 import type { SupportedLanguages } from '@pierre/diffs';
+import type { LucideIcon } from 'lucide-react';
+import { createElement } from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { api } from '@/client/api.js';
 import { highlightCode, highlightLines, type HlToken } from '@/client/lsp/highlight.js';
 import { useStore } from '@/client/store.js';
@@ -9,7 +13,7 @@ import { lineSpan, type LineRange, primitive } from '@/client/tour/document.js';
 import { codeLang, codePatch } from '@/client/tour/primitives/Code.js';
 import { rangePatch, type TourLoad } from '@/client/tour/state.js';
 import { AROUND } from '@/client/tour/steps/Trace.js';
-import { type BakedTour, excerptKey, symbolKey, tokensKey } from './data.js';
+import { type BakedIcon, type BakedTour, excerptKey, symbolKey, tokensKey } from './data.js';
 import { bakeRows, type RowsWanted } from './markup.js';
 
 type Ready = Extract<TourLoad, { state: 'ready' }>;
@@ -89,9 +93,20 @@ export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
     baked.tokens[tokensKey(lines, lang)] = bothThemes(light!, dark!);
   }
   for (const name of icons) {
-    const node = await loadIcon(name);
-    if (node) baked.icons[name] = node;
+    const icon = await loadIcon(name);
+    if (icon) baked.icons[name] = drawn(icon);
   }
+  return baked;
+}
+
+/** `icon` as lucide-react renders it, read off a detached render, so the file draws it without lucide. */
+function drawn(icon: LucideIcon): BakedIcon {
+  const box = document.createElement('div');
+  const root = createRoot(box);
+  flushSync(() => root.render(createElement(icon)));
+  const svg = box.firstElementChild!;
+  const baked = { attrs: Object.fromEntries([...svg.attributes].map((a) => [a.name, a.value])), body: svg.innerHTML };
+  root.unmount();
   return baked;
 }
 

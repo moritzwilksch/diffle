@@ -2,7 +2,7 @@ import type { DiffLineAnnotation } from '@pierre/diffs';
 import { createElement, type ReactNode, useLayoutEffect, useRef } from 'react';
 import { type RowsProps, rowsKey, type TourHost } from '@/client/tour/host/host.js';
 import { type BakedTour, excerptKey, symbolKey, tokensKey } from './data.js';
-import { BakedCheck, BakedSymbol } from './parts.js';
+import { BakedCheck, BakedLucide, BakedSymbol } from './parts.js';
 
 /**
  * The tour as it was exported: every block reads what the export kept, and nothing opens a diff,
@@ -24,7 +24,10 @@ export function bakedHost(data: BakedTour): TourHost {
     useChanged: () => changed,
     useTokens: (lines, lang) => data.tokens[tokensKey(lines, lang)] ?? null,
     // The bake keeps every icon the tour names that exists, so any other name is unknown.
-    useIcon: (name) => data.icons[name] ?? null,
+    useIcon: (name) => {
+      const icon = data.icons[name];
+      return icon ? (props) => <BakedLucide icon={icon} {...props} /> : null;
+    },
     useFocusedChild: () => {},
   };
 }

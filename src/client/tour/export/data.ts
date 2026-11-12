@@ -1,4 +1,3 @@
-import type { IconNode } from 'lucide-react';
 import type { LineRange } from '@/client/tour/document.js';
 import { rowsKey, type SymbolProps, type Token } from '@/client/tour/host/host.js';
 import type { ChangedFile } from '@/shared/protocol.js';
@@ -21,11 +20,18 @@ export interface BakedTour {
   symbols: Record<string, { color?: string; hover?: string }>;
   /** Each diagram's code by `tokensKey`, coloured token by token. */
   tokens: Record<string, Token[][]>;
-  icons: Record<string, IconNode>;
+  /** Each icon the tour names that lucide-react has, by name, as lucide-react drew it. */
+  icons: Record<string, BakedIcon>;
   /** The changed files the tour's trees list. */
   changed: ChangedFile[];
   /** The checklists' items as the server named them, each with its tick. */
   checks: TourCheckItem[];
+}
+
+/** An icon as lucide-react renders it at its default size: its `<svg>`'s attributes and its markup. */
+export interface BakedIcon {
+  attrs: Record<string, string>;
+  body: string;
 }
 
 /** The id of the `<script type="application/json">` the file keeps a `BakedTour` in. */

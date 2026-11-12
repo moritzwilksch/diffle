@@ -246,7 +246,7 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
   });
 
-  test('an icon name Lucide lacks shows a placeholder naming it, live and in an export', async ({
+  test('an icon draws the same live and in an export; a name Lucide lacks shows a placeholder naming it', async ({
     page,
     diffle,
     browser,
@@ -263,6 +263,7 @@ test.describe('the tour', () => {
     const unknown = view.locator('svg:has(> title)');
     await expect(unknown.locator('title')).toHaveText(['Unknown icon "databse"', 'Unknown icon "no-such-icon"']);
     await expect(view.locator('article p')).toHaveScreenshot('tour-icon-unknown.png');
+    const known = await view.locator('svg.lucide-database').evaluate((svg) => svg.outerHTML);
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -277,6 +278,8 @@ test.describe('the tour', () => {
       'Unknown icon "databse"',
       'Unknown icon "no-such-icon"',
     ]);
+    // The file draws a known icon from the markup it baked, exactly as the review drew it.
+    expect(await file.locator('svg.lucide-database').evaluate((svg) => svg.outerHTML)).toBe(known);
     await context.close();
   });
 
