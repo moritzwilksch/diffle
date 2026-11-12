@@ -80,7 +80,8 @@ impl TourIndex {
 
     /// `anchor`'s passage in this tour, or none when it is gone: the same text in the innermost
     /// element holding it, or an element of the same `tag` with the same label, preferring the
-    /// element at the old place, then the old section.
+    /// element at the old place, then the old section. Text moves only within its section, or to an
+    /// element of its tag at its old place: a phrase found in another section is another passage.
     pub fn relocate(
         &self,
         node: &[i64],
@@ -91,8 +92,12 @@ impl TourIndex {
         let rank = |e: &&Entry| (e.node != node, e.section != section);
         match target {
             TourTarget::Text { quoted, occurrence } => {
-                let holding =
-                    self.entries.iter().filter(|e| e.reading.as_deref().is_some_and(|t| matches(t, quoted) > 0));
+                let nearby = |e: &&Entry| e.section == section || (e.part.tag == tag && e.node == node);
+                let holding = self
+                    .entries
+                    .iter()
+                    .filter(nearby)
+                    .filter(|e| e.reading.as_deref().is_some_and(|t| matches(t, quoted) > 0));
                 let entry = holding.min_by_key(|e| (rank(e), e.reading.as_ref().map_or(0, String::len)))?;
                 let found = matches(entry.reading.as_deref().unwrap_or_default(), quoted) as i64;
                 let target = TourTarget::Text { quoted: quoted.clone(), occurrence: (*occurrence).min(found - 1) };
@@ -384,5 +389,15 @@ mod tests {
         assert_eq!(relocate(&new, &rect).unwrap()["node"], json!([9, 0, 0]));
         assert_eq!(relocate(&TourIndex::read(&TOUR.replace("calls", "invokes")), &passage), None);
         assert_eq!(relocate(&TourIndex::read(&TOUR.replace(">Session<", ">Store<")), &rect), None);
+    }
+
+    #[test]
+    fn loses_a_passage_reworded_away_though_another_section_says_the_same() {
+        let tour = TOUR.replace("<h2>Wiring</h2>", "<h2>Wiring</h2><p>Nothing here calls fetch.</p>");
+        let passage = TourIndex::read(&tour).place(&[3], &text("calls fetch", 0)).unwrap();
+
+        let reworded = TourIndex::read(&tour.replace("It calls", "It invokes"));
+
+        assert_eq!(relocate(&reworded, &passage), None);
     }
 }
