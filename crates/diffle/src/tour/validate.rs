@@ -2,7 +2,7 @@
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
-use super::blocks::{row, tabs, tree};
+use super::blocks::{checklist, row, tabs, tree};
 use super::code::{self, Code};
 use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
@@ -10,7 +10,7 @@ use super::element::{Findings, attr, is_count, label, parse, short};
 use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
-use super::placement::{Parent, Place, Rule, misplaced};
+use super::placement::{Parent, Place, Rule, holds_diff, misplaced, opens_with_summary};
 use super::stepped;
 use crate::protocol::{TourElement, TourError, TourTag};
 
@@ -178,8 +178,16 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
-            Rule::Walk | Rule::Trace | Rule::Check => {
-                let found = stepped::check(dom, node, &element, parsed.as_ref());
+            Rule::Walk => {
+                let found = stepped::walk::check(dom, node, &element, parsed.as_ref());
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
+            Rule::Trace => {
+                let found = stepped::trace::check(dom, node, &element);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
+            Rule::Check => {
+                let found = checklist::check(dom, node, &element);
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
             Rule::Tree => {
@@ -310,20 +318,4 @@ impl Walk {
             self.error(0, "the document".into(), "a tour holds at least one <h2>: each starts a step of the walk");
         }
     }
-}
-
-/// Whether the `<details>` at `node` holds one `<summary>`, as its first element.
-fn opens_with_summary(dom: &Dom, node: NodeId) -> bool {
-    let is_summary = |&c: &NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "summary");
-    let elements: Vec<NodeId> =
-        dom.children(node).iter().copied().filter(|&c| matches!(dom.node(c), Node::Element { .. })).collect();
-    elements.first().is_some_and(is_summary) && elements.iter().filter(|c| is_summary(c)).count() == 1
-}
-
-/// Whether a `diffle-diff` sits anywhere inside `node`.
-fn holds_diff(dom: &Dom, node: NodeId) -> bool {
-    dom.children(node).iter().any(|&c| match dom.node(c) {
-        Node::Element { name, .. } => &*name.local == "diffle-diff" || holds_diff(dom, c),
-        _ => false,
-    })
 }

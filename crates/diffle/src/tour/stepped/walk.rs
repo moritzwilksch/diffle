@@ -1,6 +1,7 @@
 //! A `diffle-walk`: where its notes' lines lie, and the warning that keeps it to one piece of code.
 use super::{Findings, Kind, Others, spell, steps};
 use crate::protocol::TourElement;
+use crate::tour::code::holds_markup;
 use crate::tour::dom::{Dom, NodeId};
 use crate::tour::element::parse;
 use crate::tour::files::span;
@@ -17,6 +18,10 @@ pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement
         _ => None,
     };
     let mut found = Findings::default();
+    // A code block the parser cut short moved what follows; its own refusal names the cause.
+    if holds_markup(dom, node) {
+        return found;
+    }
     let notes = steps(dom, node, element, &KIND, &mut found);
     if let Some((start, end)) = lines.filter(|(start, end)| end - start + 1 > LONG_WALK) {
         let message = format!("Long for a walk, at {} lines: walk one piece of code, or split it", end - start + 1);

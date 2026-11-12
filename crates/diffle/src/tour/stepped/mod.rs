@@ -1,18 +1,15 @@
 //! Stepped blocks: a walk, a trace and a stepped diagram each hold steps the reader takes one at a
-//! time, each a sentence of inline prose. What their steps share is checked here; each block's own
-//! rules sit in its module.
-pub mod check;
+//! time, each a sentence of inline prose. What their steps share is checked here, a checklist's
+//! items included; each block's own rules sit in its module.
 pub mod diagram;
 pub mod trace;
 pub mod walk;
 
-use super::code::holds_markup;
 use super::dom::{Dom, Node, NodeId};
 pub use super::element::Findings;
 use super::element::{label, short};
 use super::placement::fits_sentence;
 use super::reading::reading;
-use crate::protocol::TourElement;
 
 /// Why a `diffle-note` without a title is refused, in place of the catalog's "missing field".
 pub const UNTITLED: &str = "a diffle-note takes a title: what its step shows, in a few words";
@@ -20,19 +17,6 @@ pub const UNTITLED: &str = "a diffle-note takes a title: what its step shows, in
 const MANY: usize = 6;
 /// Past this many sentences a step's text stops being a caption.
 const LONG: usize = 2;
-
-/// Checks the walk, trace or checklist at `node`, named `element`, as the catalog read it (none when it did not fit).
-pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement>) -> Findings {
-    // A code block the parser cut short moved what follows; its own refusal names the cause.
-    if holds_markup(dom, node) {
-        return Default::default();
-    }
-    match dom.node(node) {
-        Node::Element { name, .. } if &*name.local == "diffle-trace" => trace::check(dom, node, element),
-        Node::Element { name, .. } if &*name.local == "diffle-check" => check::check(dom, node, element),
-        _ => walk::check(dom, node, element, parsed),
-    }
-}
 
 /// One step of a block, as its element is named in errors.
 pub struct Step<'a> {

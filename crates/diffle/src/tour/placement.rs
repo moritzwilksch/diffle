@@ -1,5 +1,7 @@
-//! Where each element of a tour may sit. A tour is an article: headings, prose and blocks at its
-//! top level, inline primitives inside prose, and no block inside a line of text.
+//! Where each element of a tour may sit, and what a block must hold. A tour is an article: headings,
+//! prose and blocks at its top level, inline primitives inside prose, and no block inside a line of
+//! text.
+use super::dom::{Dom, Node, NodeId};
 
 /// What directly holds an element: some elements sit in one of these alone.
 #[derive(Clone, Copy, PartialEq)]
@@ -205,4 +207,20 @@ pub fn is_column(tag: &str) -> bool {
 /// Whether a step's sentence may hold `tag`: inline prose and the inline primitives.
 pub fn fits_sentence(tag: &str) -> bool {
     tag.starts_with("diffle-") || matches!(tag, "code" | "strong" | "em" | "a")
+}
+
+/// Whether the `<details>` at `node` holds one `<summary>`, as its first element.
+pub fn opens_with_summary(dom: &Dom, node: NodeId) -> bool {
+    let is_summary = |&c: &NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "summary");
+    let elements: Vec<NodeId> =
+        dom.children(node).iter().copied().filter(|&c| matches!(dom.node(c), Node::Element { .. })).collect();
+    elements.first().is_some_and(is_summary) && elements.iter().filter(|c| is_summary(c)).count() == 1
+}
+
+/// Whether a `diffle-diff` sits anywhere inside `node`.
+pub fn holds_diff(dom: &Dom, node: NodeId) -> bool {
+    dom.children(node).iter().any(|&c| match dom.node(c) {
+        Node::Element { name, .. } => &*name.local == "diffle-diff" || holds_diff(dom, c),
+        _ => false,
+    })
 }
