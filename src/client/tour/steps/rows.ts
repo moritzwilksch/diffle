@@ -1,4 +1,4 @@
-import type { Side } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 
 /**
  * Rows of an excerpt a stepped block lights: which rows each note lights, where the taken note's

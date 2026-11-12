@@ -1,5 +1,5 @@
 import { Info, OctagonAlert, TriangleAlert } from 'lucide-react';
-import type { TourElement } from '@/shared/protocol.js';
+import type { TourElement } from '@/shared/tour.js';
 import type { ReactNode } from 'react';
 import type { Place } from '@/client/tour/anchor.js';
 

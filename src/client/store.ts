@@ -10,7 +10,6 @@ import {
   type GithubMetadata,
   type ChangedFile,
   type CommentThread,
-  type TourTargetRequest,
   type FileResponse,
   type LspFeature,
   type LspLocation,
@@ -24,12 +23,13 @@ import {
   type SearchMatch,
   type SearchScope,
   type SearchContent,
-  type Side,
   type Snapshot,
   type UserConfig,
   type ViewedEntry,
   type LspLogEntry,
 } from '@/shared/protocol.js';
+import { type Side } from '@/shared/side.js';
+import { type TourTargetRequest } from '@/shared/tour.js';
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';

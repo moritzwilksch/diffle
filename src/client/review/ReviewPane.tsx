@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '@/shared/protocol.js';
+import { comparisonLabel, languageOf, type ChangedFile, type CommentThread } from '@/shared/protocol.js';
+import { type Side } from '@/shared/side.js';
 import { hoverOnly, serversFor } from '@/shared/lsp.js';
 import { useCopied } from '@/client/clipboard.js';
 import { FilePath } from '@/client/FilePath.js';

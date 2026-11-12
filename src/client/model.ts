@@ -12,11 +12,11 @@ import {
   type EnterRequest,
   type Review,
   type Moved,
-  type Side,
   type Snapshot,
   type UserConfig,
   type ViewedState,
 } from '@/shared/protocol.js';
+import { type Side } from '@/shared/side.js';
 import { fuzzyFilter } from '@/shared/fuzzy.js';
 import { resolveRange, type ResolvedRange } from './comments/anchor.js';
 import { tourLabel } from './comments/threads.js';

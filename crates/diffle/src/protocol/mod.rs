@@ -1,4 +1,4 @@
-//! The wire contract, generated from `src/shared/protocol.ts`, and the pure helpers both sides share.
+//! The wire contract, generated from `src/shared/` (`protocol.ts`, `tour.ts`, `side.ts`), and the pure helpers both sides share.
 
 #[allow(clippy::all, dead_code, unused_qualifications)]
 mod generated {

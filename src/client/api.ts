@@ -13,8 +13,6 @@ import {
   ReplyCreateSchema,
   ResolvedRequestSchema,
   ThreadCreateSchema,
-  TourThreadCreateSchema,
-  type TourThreadCreate,
   ViewedBulkRequestSchema,
   ApiErrorSchema,
   CommentThreadSchema,
@@ -37,12 +35,16 @@ import {
   ServerMessageSchema,
   SnapshotSchema,
   ThreadListSchema,
-  TourResponseSchema,
-  TourTickSchema,
-  type TourTick,
   UserConfigSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
+import {
+  TourThreadCreateSchema,
+  type TourThreadCreate,
+  TourResponseSchema,
+  TourTickSchema,
+  type TourTick,
+} from '@/shared/tour.js';
 import type {
   BlameRequest,
   GraphQuery,
@@ -56,13 +58,13 @@ import type {
   SearchScope,
   SearchContent,
   ServerMessage,
-  Side,
   ThreadCreate,
   ThreadQuery,
   ViewedEntry,
   ConfigUpdate,
   SymbolsQuery,
 } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
 

@@ -12,3 +12,4 @@ src/client/comments/CommitNavigator.tsx # TODO: split (525 lines)
 src/client/model.ts # TODO: split (503 lines)
 src/client/keyboard/useKeymap.ts # TODO: split (458 lines)
 src/client/header/ModePicker.tsx # TODO: split (427 lines)
+src/shared/tour.ts # a data catalog: every element and attribute a tour may use, with the docs --skill prints

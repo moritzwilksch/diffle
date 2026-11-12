@@ -1,4 +1,4 @@
-//! Checks a tour document against the catalog in `protocol.ts` (`TourElement`, `TourTag`) and the
+//! Checks a tour document against the catalog in `src/shared/tour.ts` (`TourElement`, `TourTag`) and the
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 

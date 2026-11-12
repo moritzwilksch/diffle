@@ -1,4 +1,5 @@
-import { type Side, type TourElement, TourElementSchema } from '@/shared/protocol.js';
+import { type Side } from '@/shared/side.js';
+import { type TourElement, TourElementSchema } from '@/shared/tour.js';
 
 /** Lines of one side of a file, as a `diffle-diff` names them. */
 export interface LineRange {
@@ -33,7 +34,7 @@ export interface TourDocument {
 
 /**
  * The tour in `html`, read as the server checked it: an article whose `h2`s are the walk's steps.
- * What the catalog in `protocol.ts` does not allow is left out when it renders.
+ * What the catalog in `tour.ts` does not allow is left out when it renders.
  */
 export function readTour(html: string): TourDocument {
   const body = new DOMParser().parseFromString(html, 'text/html').body;

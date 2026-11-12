@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { imageKey, type Side } from '@/shared/protocol.js';
+import { imageKey } from '@/shared/protocol.js';
+import { type Side } from '@/shared/side.js';
 import { api } from '@/client/api.js';
 import type { ImageSides } from '@/client/model.js';
 import { useStore, type ImageCompare, IMAGE_COMPARES } from '@/client/store.js';

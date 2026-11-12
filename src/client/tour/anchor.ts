@@ -1,4 +1,4 @@
-import type { TourTargetRequest } from '@/shared/protocol.js';
+import type { TourTargetRequest } from '@/shared/tour.js';
 
 /**
  * Where a thread sits on the rendered tour. Each rendered element the source document holds carries

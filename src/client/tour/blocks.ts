@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { TourWholeTagSchema } from '@/shared/protocol.js';
+import { TourWholeTagSchema } from '@/shared/tour.js';
 import { elementAt, NODE_ATTR, type Spot } from './anchor.js';
 
 /**

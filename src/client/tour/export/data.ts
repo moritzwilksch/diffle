@@ -1,7 +1,8 @@
 import type { IconNode } from 'lucide-react';
 import type { LineRange } from '@/client/tour/document.js';
 import { rowsKey, type SymbolProps, type Token } from '@/client/tour/host/host.js';
-import type { ChangedFile, TourCheckItem } from '@/shared/protocol.js';
+import type { ChangedFile } from '@/shared/protocol.js';
+import type { TourCheckItem } from '@/shared/tour.js';
 
 /**
  * A tour exported as one file: its document, and everything its blocks showed when it was

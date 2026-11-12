@@ -1,11 +1,11 @@
-//! Reads an element's attributes as the catalog in `protocol.ts` does, and names the element in errors.
+//! Reads an element's attributes as the catalog in `src/shared/tour.ts` does, and names the element in errors.
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
 use super::dom::NodeId;
 use crate::protocol::TourError;
 
-/// The element `tag` with `attrs`, as the catalog in `protocol.ts` reads it, or why it does not fit.
+/// The element `tag` with `attrs`, as the catalog in `tour.ts` reads it, or why it does not fit.
 pub fn parse<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {
     // The tag is no attribute, though a struct that names it lists it among the fields.
     read::<T>(tag, attrs).map_err(|message| explain::<T>(tag, attrs, message).replace("`tag`, ", ""))

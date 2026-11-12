@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { nodeKey, nodePath, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
 import type { CheckProps, SymbolProps } from '@/client/tour/host/host.js';
-import type { TourCheckItem } from '@/shared/protocol.js';
+import type { TourCheckItem } from '@/shared/tour.js';
 import type { BakedTour } from './data.js';
 
 /**

@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { api, isNotFound } from '@/client/api.js';
 import { useStore, type ViewPlace } from '@/client/store.js';
 import { showView, useViews } from '@/client/views/state.js';
-import type { Side, Snapshot, Tour, TourCheckItem } from '@/shared/protocol.js';
+import type { Snapshot } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
+import type { Tour, TourCheckItem } from '@/shared/tour.js';
 import { readTour, type LineRange, type TourDocument } from './document.js';
 import { excerpt } from './excerpt.js';
 

@@ -3,7 +3,8 @@ import type { IconNode } from 'lucide-react';
 import { type ComponentType, createContext, type ReactNode, useContext } from 'react';
 import type { Place } from '@/client/tour/anchor.js';
 import type { LineRange } from '@/client/tour/document.js';
-import type { ChangedFile, Side } from '@/shared/protocol.js';
+import type { ChangedFile } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 
 /**
  * What a tour's blocks take from outside the document: the review's lines and how they are drawn,

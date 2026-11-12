@@ -5,7 +5,7 @@ import { primitive } from '@/client/tour/document.js';
 import { useHost } from '@/client/tour/host/host.js';
 import { ExcerptNotice, useExcerpt } from '@/client/tour/primitives/Diff.js';
 import { TourJump } from '@/client/tour/primitives/Jump.js';
-import type { Side } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 import { excerptRows, lineSelector, litCss, noteRows, rowSpot } from './rows.js';
 import { NoteBand, StepBadge, Stepper } from './Stepper.js';
 import { reveal, useSteps } from './steps.js';

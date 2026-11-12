@@ -1,5 +1,5 @@
 import { createElement, Fragment, type ReactNode } from 'react';
-import { TourTagSchema } from '@/shared/protocol.js';
+import { TourTagSchema } from '@/shared/tour.js';
 import { placeOf } from './anchor.js';
 import { lineSpan, primitive } from './document.js';
 import { type CheckProps, type SymbolProps, useHost } from './host/host.js';

@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Side } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 import { FilePath } from '@/client/FilePath.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { type LineRange, lineSpan, primitive } from '@/client/tour/document.js';

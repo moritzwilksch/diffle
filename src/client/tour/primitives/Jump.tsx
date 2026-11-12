@@ -1,5 +1,5 @@
 import { CornerDownRight } from 'lucide-react';
-import type { Side } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 import { useHost } from '@/client/tour/host/host.js';
 
 /**

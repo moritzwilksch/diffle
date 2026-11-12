@@ -1,5 +1,5 @@
 import { createElement, type ReactNode, useId } from 'react';
-import { type TourSvgClass, TourSvgClassSchema, TourSvgElementSchema, TourSvgIconSchema } from '@/shared/protocol.js';
+import { type TourSvgClass, TourSvgClassSchema, TourSvgElementSchema, TourSvgIconSchema } from '@/shared/tour.js';
 import { DiagramCode } from './DiagramCode.js';
 import { LucideIcon } from './Icon.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';

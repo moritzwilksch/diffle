@@ -5,7 +5,7 @@ import { hoverControl } from '@/client/lsp/HoverTooltip.js';
 import { useStore } from '@/client/store.js';
 import { source } from '@/client/tour/state.js';
 import { lspBlocker } from '@/shared/lsp.js';
-import type { Side } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 import type { SymbolProps } from './host.js';
 
 /**

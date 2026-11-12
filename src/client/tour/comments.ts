@@ -2,7 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { compareThreads } from '@/client/comments/threads.js';
 import { visibleThreads } from '@/client/model.js';
 import { useStore, type TourDraft } from '@/client/store.js';
-import type { CommentThread, TourAnchor } from '@/shared/protocol.js';
+import type { CommentThread } from '@/shared/protocol.js';
+import type { TourAnchor } from '@/shared/tour.js';
 import { selectionTarget, type Spot, textRange } from './anchor.js';
 
 /** A thread on the tour, its anchor narrowed. */

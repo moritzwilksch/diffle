@@ -1,10 +1,5 @@
-import {
-  type CommentAnchor,
-  type CommentThread,
-  type TourTarget,
-  type TourWholeTag,
-  TourWholeTagSchema,
-} from '@/shared/protocol.js';
+import { type CommentAnchor, type CommentThread } from '@/shared/protocol.js';
+import { type TourTarget, type TourWholeTag, TourWholeTagSchema } from '@/shared/tour.js';
 
 /** The file a thread is on; null for one on the tour. */
 export function anchorPath(anchor: CommentAnchor): string | null {

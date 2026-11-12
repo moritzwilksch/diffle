@@ -2,7 +2,8 @@ import type { CodeViewHandle } from '@pierre/diffs/react';
 import { api } from '@/client/api.js';
 import { pathFromItemId, relativeTime } from '@/client/model.js';
 import { useStore, type ReviewState } from '@/client/store.js';
-import type { BlameResponse, Side } from '@/shared/protocol.js';
+import type { BlameResponse } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 import { rowOf, watchRenderedRows } from './rows.js';
 
 /**
