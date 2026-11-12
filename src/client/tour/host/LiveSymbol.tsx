@@ -3,7 +3,6 @@ import { api } from '@/client/api.js';
 import { highlightLines } from '@/client/lsp/highlight.js';
 import { hoverControl } from '@/client/lsp/HoverTooltip.js';
 import { useStore } from '@/client/store.js';
-import { source } from '@/client/tour/state.js';
 import { lspBlocker } from '@/shared/lsp.js';
 import type { Side } from '@/shared/side.js';
 import type { SymbolProps } from './host.js';
@@ -50,7 +49,7 @@ function useToken(path: string, side: Side, line: number, name: string): { col: 
   useEffect(() => {
     let live = true;
     void (async () => {
-      const { text } = await source(path, side);
+      const text = await useStore.getState().readSide(path, side);
       const lineText = text?.split('\n')[line - 1] ?? '';
       const col = wordColumn(lineText, name);
       if (!live) return;

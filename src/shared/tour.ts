@@ -107,12 +107,11 @@ export type TourTick = z.infer<typeof TourTickSchema>;
 export const TourPushSchema = z.object({ html: z.string() });
 export type TourPush = z.infer<typeof TourPushSchema>;
 
-/** `GET /api/tour`: the review's tour, or null without one. */
-export const TourResponseSchema = z.object({
-  tour: TourSchema.nullable(),
-  /** Its checklists' items in document order. */
-  checks: TourCheckItemSchema.array(),
-});
+/**
+ * `GET /api/tour`: the review's tour, or null without one. Its checklist items come with the
+ * threads (`ThreadList.checks`), paired there with their ticks and answers.
+ */
+export const TourResponseSchema = z.object({ tour: TourSchema.nullable() });
 export type TourResponse = z.infer<typeof TourResponseSchema>;
 
 /** One reason a pushed tour was refused, or one warning about an accepted one. */

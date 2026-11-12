@@ -26,9 +26,8 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
 }
 
 async fn tour(State(d): State<Arc<ApiDeps>>) -> ApiResult {
-    let checks = crate::tour::checklist(&d.session, &[]).await?;
     let tour = d.session.comments()?.tour().await?.map(|stored| stored.tour);
-    Ok(Json(TourResponse { tour, checks }).into_response())
+    Ok(Json(TourResponse { tour }).into_response())
 }
 
 /// Checks the document against the current snapshot and files it in that snapshot's set, moving the

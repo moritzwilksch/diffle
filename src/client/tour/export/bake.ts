@@ -7,7 +7,7 @@ import { wordColumn } from '@/client/tour/host/LiveSymbol.js';
 import { loadIcon } from '@/client/tour/host/live.js';
 import { lineSpan, type LineRange, primitive } from '@/client/tour/document.js';
 import { codeLang, codePatch } from '@/client/tour/primitives/Code.js';
-import { rangePatch, source, type TourLoad } from '@/client/tour/state.js';
+import { rangePatch, type TourLoad } from '@/client/tour/state.js';
 import { AROUND } from '@/client/tour/steps/Trace.js';
 import { type BakedTour, excerptKey, symbolKey, tokensKey } from './data.js';
 import { bakeRows, type RowsWanted } from './markup.js';
@@ -20,7 +20,7 @@ type Ready = Extract<TourLoad, { state: 'ready' }>;
  * ticks. Comments stay out: they are the reviewer's conversation with their agent. The browser bakes
  * it, not a server command: only the client has the highlighter.
  */
-export async function bakeTour({ tour, doc, checks }: Ready): Promise<BakedTour> {
+export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
   const excerpts: [LineRange, number][] = [];
   const codes: RowsWanted[] = [];
   const symbols: SymbolProps[] = [];
@@ -79,7 +79,7 @@ export async function bakeTour({ tour, doc, checks }: Ready): Promise<BakedTour>
     tokens: {},
     icons: {},
     changed: (useStore.getState().snapshot?.changed ?? []).filter((f) => listed.has(f.path)),
-    checks,
+    checks: useStore.getState().checks,
   };
   for (const symbol of symbols) baked.symbols[symbolKey(symbol)] = await bakeSymbol(symbol);
   for (const { lines, lang } of diagrams) {
@@ -97,7 +97,7 @@ export async function bakeTour({ tour, doc, checks }: Ready): Promise<BakedTour>
 
 /** A symbol chip's colour in both themes, and its hover when its language server has one. */
 async function bakeSymbol({ path, line, name, side }: SymbolProps): Promise<BakedTour['symbols'][string]> {
-  const { text } = await source(path, side);
+  const text = await useStore.getState().readSide(path, side);
   const lineText = text?.split('\n')[line - 1] ?? '';
   const col = wordColumn(lineText, name);
   if (col == null) return {};

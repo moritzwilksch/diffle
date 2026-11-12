@@ -10,6 +10,7 @@ import type {
   LspStatus,
   Moved,
   Snapshot,
+  ThreadList,
   UserConfig,
   ViewedEntry,
 } from '@/shared/protocol.js';
@@ -53,10 +54,13 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
+/** What `GET /api/threads` answers: `threads`, and no checklist. */
+const list = (threads: CommentThread[] = []): ThreadList => ({ commentKey: 'k', threads, checks: [] });
+
 const api = {
   github: vi.fn(),
   snapshot: vi.fn(),
-  threads: vi.fn(async (): Promise<CommentThread[]> => []),
+  threads: vi.fn(async (): Promise<ThreadList> => list()),
   viewed: vi.fn(async (): Promise<ViewedEntry[]> => []),
   config: vi.fn(async (): Promise<UserConfig> => ({
     autoViewed: [],
@@ -934,7 +938,7 @@ describe('client transitions', () => {
 
     // While the socket was down: a save, a new thread and a viewed mark, with no push to announce them.
     api.snapshot.mockResolvedValueOnce({ ...snap(3, 'working'), changed: [{ ...changed[0]!, blob: 'b2' }] });
-    api.threads.mockResolvedValueOnce([thread({ id: 'missed' })]);
+    api.threads.mockResolvedValueOnce(list([thread({ id: 'missed' })]));
     api.viewed.mockResolvedValueOnce([{ path: 'b.txt', blob: 'bb', viewed: true }]);
     await useStore.getState().boot();
     const s = useStore.getState();
@@ -970,12 +974,12 @@ describe('client transitions', () => {
 
   it('a pushed thread refresh that raced a mode switch is dropped', async () => {
     useStore.setState({ snapshot: snap(1, 'working') });
-    const stale = deferred<CommentThread[]>();
+    const stale = deferred<ThreadList>();
     api.threads.mockReturnValueOnce(stale.promise);
     const refresh = useStore.getState().refreshThreads();
     api.enter.mockResolvedValueOnce(snap(2, 'pr:abc', ['c.txt']));
     await useStore.getState().enter({ kind: 'pr' });
-    stale.resolve([thread({ id: 'old-mode' })]);
+    stale.resolve(list([thread({ id: 'old-mode' })]));
     await refresh;
     expect(useStore.getState().threads).toEqual([]);
   });
@@ -1882,14 +1886,14 @@ describe('request ownership', () => {
 
   it('two thread refreshes of one transition commit in request order', async () => {
     useStore.setState({ snapshot: snap(1, 'working') });
-    const first = deferred<CommentThread[]>();
-    const second = deferred<CommentThread[]>();
+    const first = deferred<ThreadList>();
+    const second = deferred<ThreadList>();
     api.threads.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const a = useStore.getState().refreshThreads();
     const b = useStore.getState().refreshThreads();
-    second.resolve([thread({ id: 'newer' })]);
+    second.resolve(list([thread({ id: 'newer' })]));
     await b;
-    first.resolve([thread({ id: 'older' })]);
+    first.resolve(list([thread({ id: 'older' })]));
     await a;
     expect(useStore.getState().threads.map((t) => t.id)).toEqual(['newer']);
   });
@@ -1910,15 +1914,15 @@ describe('request ownership', () => {
 
   it("a snapshot refresh's lists lose to a list refresh that started later", async () => {
     useStore.setState({ snapshot: snap(1, 'working') });
-    const early = deferred<CommentThread[]>();
-    const late = deferred<CommentThread[]>();
+    const early = deferred<ThreadList>();
+    const late = deferred<ThreadList>();
     api.threads.mockReturnValueOnce(early.promise).mockReturnValueOnce(late.promise);
     api.snapshot.mockResolvedValueOnce(snap(2, 'working'));
     const refresh = useStore.getState().refreshSnapshot();
     const pushed = useStore.getState().refreshThreads();
-    late.resolve([thread({ id: 'newer' })]);
+    late.resolve(list([thread({ id: 'newer' })]));
     await pushed;
-    early.resolve([thread({ id: 'older' })]);
+    early.resolve(list([thread({ id: 'older' })]));
     await refresh;
     expect(useStore.getState().snapshot?.version).toBe(2);
     expect(useStore.getState().threads.map((t) => t.id)).toEqual(['newer']);
@@ -1970,10 +1974,12 @@ describe('threads', () => {
       selection: { id: 'diff:a.py@0', range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } },
     });
     api.setResolved.mockResolvedValue({});
-    api.threads.mockResolvedValueOnce([
-      thread({ id: 'open', resolved: true }),
-      thread({ id: 'done', resolved: true, anchor: { startLine: 5, endLine: 5 } }),
-    ]);
+    api.threads.mockResolvedValueOnce(
+      list([
+        thread({ id: 'open', resolved: true }),
+        thread({ id: 'done', resolved: true, anchor: { startLine: 5, endLine: 5 } }),
+      ]),
+    );
     await useStore.getState().toggleResolvedAtCursor();
     expect(api.setResolved).toHaveBeenCalledWith('open', true);
     expect(useStore.getState().threads.every((t) => t.resolved)).toBe(true);
@@ -2002,7 +2008,7 @@ describe('threads', () => {
 
     api.reply.mockResolvedValue({});
     const replied = { ...a, messages: [...a.messages, { id: 'm2', body: 'r', createdAt: 2, updatedAt: 2 }] };
-    api.threads.mockResolvedValueOnce([replied, { ...b }]);
+    api.threads.mockResolvedValueOnce(list([replied, { ...b }]));
     await useStore.getState().submitReply('a', 'r');
     const s = useStore.getState();
     // The fetched copy of b is the same content, so the store keeps the object it had.
@@ -2067,7 +2073,7 @@ describe('threads', () => {
     const open = version();
     expect(await useStore.getState().draftQuote()).toBe('');
     api.addThread.mockResolvedValue([]);
-    api.threads.mockResolvedValueOnce([thread({ id: 'f', anchor: { kind: 'file', path: 'a.py' } as never })]);
+    api.threads.mockResolvedValueOnce(list([thread({ id: 'f', anchor: { kind: 'file', path: 'a.py' } as never })]));
     await useStore.getState().submitDraft('Split this module.');
     expect(api.addThread).toHaveBeenCalledWith({ path: 'a.py', body: 'Split this module.' });
     s = useStore.getState();

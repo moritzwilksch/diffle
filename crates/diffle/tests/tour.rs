@@ -374,7 +374,7 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     let cleared = tour_cli(&t.path, &["clear"], "");
     assert!(cleared.status.success(), "{}", stderr(&cleared));
     let (_, body) = common::cli::http(&url, "GET", "/api/tour", "");
-    assert_eq!(serde_json::from_str::<Value>(&body).unwrap(), json!({ "tour": null, "checks": [] }));
+    assert_eq!(serde_json::from_str::<Value>(&body).unwrap(), json!({ "tour": null }));
     let _ = child.kill();
     let _ = child.wait();
 }

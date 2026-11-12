@@ -3,19 +3,16 @@ import { api } from '@/client/api.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 import { nodeKey, nodePath, placeOf } from '@/client/tour/anchor.js';
-import { useTourThreads } from '@/client/tour/comments.js';
 import { primitive } from '@/client/tour/document.js';
-import { refreshTour, useTour } from '@/client/tour/state.js';
 import type { CheckProps } from './host.js';
 
 /**
  * Questions the reviewer decides: each item ticks as decided, or takes an answer, a thread on the
- * item the agent reads with the prompt and `diffle comments list`. The server names each item's
- * question, which ticks are kept under; until it has, an item cannot be ticked.
+ * item the agent reads with the prompt and `diffle comments list`. The server pairs each item with
+ * its tick and answer, read with the threads; until it has, an item cannot be ticked.
  */
 export function LiveCheck({ source, renderItem }: CheckProps) {
-  const checks = useTour((s) => (s.load.state === 'ready' ? s.load.checks : []));
-  const { live } = useTourThreads();
+  const checks = useStore((s) => s.checks);
   // A tick shows at once and holds until the tour read back agrees, or the tick fails.
   const [pending, setPending] = useState<ReadonlyMap<string, boolean>>(new Map());
   const ticked = (question: string, stored: boolean) => pending.get(question) ?? stored;
@@ -34,8 +31,7 @@ export function LiveCheck({ source, renderItem }: CheckProps) {
     if (item?.tag !== 'diffle-item') return [];
     const key = nodeKey(nodePath(el));
     const check = checks.find((c) => nodeKey(c.node) === key);
-    const answer = live.find((t) => t.anchor.target.on === 'element' && nodeKey(t.anchor.node) === key);
-    return [{ el, key, context: item.context, check, answer }];
+    return [{ el, key, context: item.context, check, answer: check?.thread }];
   });
   const decided = items.filter((i) => i.check && ticked(i.check.question, i.check.ticked)).length;
   return (
@@ -73,7 +69,7 @@ export function LiveCheck({ source, renderItem }: CheckProps) {
               className="text-[0.75rem]"
               onClick={() =>
                 answer
-                  ? useStore.getState().focusThread(answer.id)
+                  ? useStore.getState().focusThread(answer)
                   : useStore.getState().openTourDraft(nodePath(el), { on: 'element' })
               }
             >
@@ -86,7 +82,7 @@ export function LiveCheck({ source, renderItem }: CheckProps) {
   );
 }
 
-/** Stores a tick and reads the tour back; false when it could not be stored. */
+/** Stores a tick and reads the items back; false when it could not be stored. */
 async function tick(question: string, ticked: boolean): Promise<boolean> {
   try {
     await api.tick({ question, ticked });
@@ -94,6 +90,6 @@ async function tick(question: string, ticked: boolean): Promise<boolean> {
     useStore.getState().flash(`Cannot tick it: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
-  await refreshTour();
+  await useStore.getState().refreshThreads();
   return true;
 }

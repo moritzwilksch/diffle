@@ -187,7 +187,7 @@ async fn hands_the_checklist_to_the_agent_and_keeps_ticks_across_a_push() {
     let checks = s.get("/api/threads").await.json()["checks"].clone();
     // A revision that rewords one question keeps the other ticks and drops that one's.
     push(&s, &CHECKLIST.replace("Keep the old name as an alias?", "Keep old as an alias?")).await;
-    let ticked: Vec<Value> = s.get("/api/tour").await.json()["checks"]
+    let ticked: Vec<Value> = s.get("/api/threads").await.json()["checks"]
         .as_array()
         .unwrap()
         .iter()

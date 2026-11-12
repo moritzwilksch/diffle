@@ -1,16 +1,15 @@
 import { create } from 'zustand';
-import { api, isNotFound } from '@/client/api.js';
+import { api } from '@/client/api.js';
 import { useStore, type ViewPlace } from '@/client/store.js';
 import { showView, useViews } from '@/client/views/state.js';
-import type { Snapshot } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
-import type { Tour, TourCheckItem } from '@/shared/tour.js';
+import type { Tour } from '@/shared/tour.js';
 import { readTour, type LineRange, type TourDocument } from './document.js';
 import { excerpt } from './excerpt.js';
 
 export type TourLoad =
   | { state: 'none' }
-  | { state: 'ready'; tour: Tour; doc: TourDocument; checks: TourCheckItem[] }
+  | { state: 'ready'; tour: Tour; doc: TourDocument }
   | { state: 'error'; message: string };
 
 interface TourState {
@@ -56,42 +55,13 @@ export const useTour = create<TourState>((set, get) => ({
   },
 }));
 
-/** One side of a file as the shown snapshot has it, and its patch in the review. */
-export interface Source {
-  /** Null when the file is absent on that side. */
-  text: string | null;
-  patch: string;
-}
-
-let sources = new Map<string, Promise<Source>>();
-let sourcesOf: Snapshot | null = null;
-
-/** `path` on `side` in the shown snapshot, fetched once per snapshot. */
-export function source(path: string, side: Side): Promise<Source> {
-  const snap = useStore.getState().snapshot;
-  if (snap !== sourcesOf) [sources, sourcesOf] = [new Map(), snap];
-  const key = `${side}:${path}`;
-  let found = sources.get(key);
-  if (!found) {
-    const changed = snap?.changed.some((f) => f.path === path) ?? false;
-    found = Promise.all([
-      api.file(path, side).then(
-        (f) => (f.binary ? null : f.contents),
-        (e: unknown) => (isNotFound(e) ? null : Promise.reject(e)),
-      ),
-      changed ? api.patch(path) : '',
-    ]).then(([text, patch]) => ({ text, patch }));
-    sources.set(key, found);
-  }
-  return found;
-}
-
 /**
  * The patch showing `range` and `context` lines on each side of it as far as the file goes, or
  * null when its lines left the review.
  */
 export async function rangePatch(range: LineRange, context = 0): Promise<string | null> {
-  const { text, patch } = await source(range.path, range.side);
+  const review = useStore.getState();
+  const [text, patch] = await Promise.all([review.readSide(range.path, range.side), review.readPatch(range.path)]);
   if (text == null) return null;
   const count = text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length;
   if (range.end > count) return null;
@@ -116,11 +86,11 @@ export async function refreshTour(): Promise<void> {
   follow();
   const g = ++generation;
   try {
-    const { tour, checks: items } = await api.tour();
+    const { tour } = await api.tour();
     if (g !== generation) return;
     if (!tour) return set({ state: 'none' });
     const doc = readTour(tour.html);
-    set({ state: 'ready', tour, doc, checks: items });
+    set({ state: 'ready', tour, doc });
     const c = ++checks;
     const stale = await staleSections(doc);
     if (g === generation && c === checks) useTour.setState(stale);

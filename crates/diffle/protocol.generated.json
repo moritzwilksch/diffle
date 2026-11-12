@@ -3933,20 +3933,12 @@
               "type": "null"
             }
           ]
-        },
-        "checks": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/TourCheckItem"
-          },
-          "description": "Its checklists' items in document order."
         }
       },
       "required": [
-        "tour",
-        "checks"
+        "tour"
       ],
-      "description": "`GET /api/tour`: the review's tour, or null without one."
+      "description": "`GET /api/tour`: the review's tour, or null without one. Its checklist items come with the\nthreads (`ThreadList.checks`), paired there with their ticks and answers."
     },
     "TourRow": {
       "type": "object",

@@ -97,7 +97,9 @@ export function App() {
             void refreshConfig();
             break;
           case 'tour':
+            // A push or a tick also changes the checklist items read with the threads.
             void refreshTour();
+            void refreshThreads();
             break;
           case 'lsp':
             setLspStatus(msg.payload);

@@ -24,14 +24,15 @@ import {
   type SearchScope,
   type SearchContent,
   type Snapshot,
+  type ThreadList,
   type UserConfig,
   type ViewedEntry,
   type LspLogEntry,
 } from '@/shared/protocol.js';
 import { type Side } from '@/shared/side.js';
-import { type TourTargetRequest } from '@/shared/tour.js';
+import { type TourCheckItem, type TourTargetRequest } from '@/shared/tour.js';
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
-import { api } from './api.js';
+import { api, isNotFound } from './api.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
 import { anchorPath } from './comments/threads.js';
 import {
@@ -473,6 +474,8 @@ export interface ReviewState {
   deleteIteration(n: number): Promise<void>;
   error: string | null;
   threads: CommentThread[];
+  /** The tour's checklist items, each with its tick and the thread answering it, read with the threads. */
+  checks: TourCheckItem[];
   /** Resolved threads stay hidden unless the user turns them on. */
   showResolved: boolean;
   setShowResolved(on: boolean): void;
@@ -487,6 +490,10 @@ export interface ReviewState {
    */
   gens: Record<string, number>;
   contents: Record<string, { old?: string; new?: string }>;
+  /** One side of a file in the shown snapshot, read through `contents`; null when it is absent there. */
+  readSide(path: string, side: Side): Promise<string | null>;
+  /** A changed file's patch in the shown snapshot; empty for an unchanged file. */
+  readPatch(path: string): Promise<string>;
   collapsed: Record<string, boolean>;
   selection: CodeViewLineSelection | null;
   draft: Draft | null;
@@ -628,10 +635,13 @@ export const useStore = create<ReviewState>((set, get) => {
    * next consumer retries; the map is cleared with its transition.
    */
   const loads = new Map<string, Promise<FileResponse>>();
+  /** Patch texts of changed files, as the tour cuts excerpts from them; dropped with `contents`. */
+  const patchTexts = new Map<string, Promise<string>>();
   const begin = () => {
     aborter.abort();
     aborter = new AbortController();
     loads.clear();
+    patchTexts.clear();
     return ++generation;
   };
   /**
@@ -773,6 +783,18 @@ export const useStore = create<ReviewState>((set, get) => {
     if (current(g))
       set((s) => ({ contents: { ...s.contents, [path]: { ...s.contents[path], [side]: res.contents } } }));
     return res.contents;
+  };
+
+  /** See `ReviewState.readPatch`. A rejected load is dropped so the next caller retries. */
+  const readPatch = (path: string): Promise<string> => {
+    if (!get().snapshot?.changed.some((f) => f.path === path)) return Promise.resolve('');
+    let p = patchTexts.get(path);
+    if (!p) {
+      p = api.patch(path);
+      patchTexts.set(path, p);
+      p.catch(() => patchTexts.delete(path));
+    }
+    return p;
   };
 
   /**
@@ -1023,6 +1045,7 @@ export const useStore = create<ReviewState>((set, get) => {
     const loaded: Record<string, Loaded> = modeChanged ? {} : { ...get().loaded };
     // Cached sides of any path are stale once either side moved.
     const contents = modeChanged || sidesMoved ? {} : { ...get().contents };
+    if (modeChanged) patchTexts.clear();
     const reload: string[] = [];
     for (const f of next.changed) {
       const p = prevChanged.get(f.path);
@@ -1033,6 +1056,7 @@ export const useStore = create<ReviewState>((set, get) => {
         const stale = loaded[f.path];
         if (stale) loaded[f.path] = { ...stale };
         delete contents[f.path];
+        patchTexts.delete(f.path);
         reload.push(f.path);
       }
     }
@@ -1041,6 +1065,7 @@ export const useStore = create<ReviewState>((set, get) => {
       if (!nextChanged.has(path)) {
         delete loaded[path];
         delete contents[path];
+        patchTexts.delete(path);
       }
     }
     // The file view closes with its mode or its file; it refetches when the file's change moved
@@ -1482,7 +1507,8 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   /** The authoritative list replaces the store's; threads that did not change keep their objects. */
-  const acceptThreads = (next: CommentThread[]) => set({ threads: reuseThreads(get().threads, next) });
+  const acceptThreads = (next: ThreadList) =>
+    set({ threads: reuseThreads(get().threads, next.threads), checks: next.checks });
 
   /** A thread mutation, then the authoritative list; a failure becomes a toast. */
   const mutateThreads = async (what: string, call: () => Promise<unknown>) => {
@@ -2323,6 +2349,7 @@ export const useStore = create<ReviewState>((set, get) => {
     snapshot: null,
     error: null,
     threads: [],
+    checks: [],
     showResolved: false,
     setShowResolved(on) {
       set({ showResolved: on });
@@ -2333,6 +2360,15 @@ export const useStore = create<ReviewState>((set, get) => {
     loaded: {},
     gens: {},
     contents: {},
+    async readSide(path, side) {
+      try {
+        return await ensureContents(path, side);
+      } catch (e) {
+        if (isNotFound(e)) return null;
+        throw e;
+      }
+    },
+    readPatch,
     collapsed: {},
     selection: null,
     draft: null,
@@ -2404,8 +2440,8 @@ export const useStore = create<ReviewState>((set, get) => {
       const g = generation;
       const t = threadsSeq.start();
       try {
-        const threads = await api.threads();
-        if (current(g) && threadsSeq.latest(t)) acceptThreads(threads);
+        const list = await api.threads();
+        if (current(g) && threadsSeq.latest(t)) acceptThreads(list);
       } catch (e) {
         if (current(g) && threadsSeq.latest(t)) report('Loading threads', e);
       }

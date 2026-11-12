@@ -168,8 +168,9 @@ export const api = {
       SearchResponseSchema,
       `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, content: opts.content, path: opts.path })}`,
     ),
+  /** The shown set's threads, and its tour's checklist items each paired with its tick and answer. */
   threads: (query: ThreadQuery = {}) =>
-    json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`).then((list) => list.threads),
+    json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`api/threads/export?${q({ state: 'open' })}`),
   /** One message, with its thread's location and quote, as an agent prompt. */
