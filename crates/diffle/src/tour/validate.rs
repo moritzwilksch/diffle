@@ -8,7 +8,6 @@ use super::diagram;
 use super::dom::{self, Dom, Node, NodeId};
 use super::element::{Findings, attr, is_count, label, parse, short};
 use super::files::{Reference, asks};
-use super::icon;
 use super::layout;
 use super::placement::{Parent, Place, Rule, holds_diff, misplaced, opens_with_summary};
 use super::stepped;
@@ -239,9 +238,6 @@ impl Walk {
                     self.warnings.push((node, TourError { element: element.clone(), message }));
                 }
             }
-        }
-        if let Some(message) = parsed.as_ref().and_then(icon::named).and_then(icon::refusal) {
-            self.error(node, element.clone(), message);
         }
         if let (Some(parsed), true) = (parsed, fits) {
             self.refer(node, element, parsed);

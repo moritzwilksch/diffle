@@ -185,7 +185,7 @@ async function showTour(page: Page) {
     await expect(view).toBeVisible({ timeout: 500 });
   }).toPass();
   await expect(view.getByText('Loading…')).toHaveCount(0);
-  // Each icon loads its own chunk; until then its place is empty.
+  // The icon map loads on a tour's first icon; until then an icon's place is empty.
   await expect(view.locator('.tour-icon:not(:has(svg))')).toHaveCount(0);
   return view;
 }
@@ -244,6 +244,40 @@ test.describe('the tour', () => {
     await page.keyboard.press('Control+o');
     await expect(view).toBeVisible();
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
+  });
+
+  test('an icon name Lucide lacks shows a placeholder naming it, live and in an export', async ({
+    page,
+    diffle,
+    browser,
+  }, testInfo) => {
+    await pushTour(
+      diffle.url,
+      `<h2>Icons</h2>
+<p><diffle-icon name="database"></diffle-icon> stores, <diffle-icon name="databse"></diffle-icon> was misspelt.</p>
+<diffle-diagram><svg viewBox="0 0 120 44">
+  <g><rect x="8" y="8" width="104" height="28"/><svg data-lucide="no-such-icon" x="16" y="15"/><text x="36" y="22">Store</text></g>
+</svg></diffle-diagram>`,
+    );
+    const view = await showTour(page);
+    const unknown = view.locator('svg:has(> title)');
+    await expect(unknown.locator('title')).toHaveText(['Unknown icon "databse"', 'Unknown icon "no-such-icon"']);
+    await expect(view.locator('article p')).toHaveScreenshot('tour-icon-unknown.png');
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Export' }).click(),
+    ]);
+    const saved = testInfo.outputPath('icons.html');
+    await download.saveAs(saved);
+    const context = await browser.newContext();
+    const file = await context.newPage();
+    await file.setContent(await readFile(saved, 'utf8'));
+    await expect(file.locator('svg:has(> title) title')).toHaveText([
+      'Unknown icon "databse"',
+      'Unknown icon "no-such-icon"',
+    ]);
+    await context.close();
   });
 
   test('a walk lights one note at a time: l / h, its numbers and its gutter markers step through it; a note takes a comment', async ({

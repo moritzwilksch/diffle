@@ -13,7 +13,7 @@ const modules = import.meta.glob<IconModule>(
   { eager: true },
 );
 
-/** Each icon's drawing by its name on lucide.dev, aliases included: the names the server accepts. */
+/** Each icon's drawing by its name on lucide.dev, aliases included. */
 export const ICON_NODES: ReadonlyMap<string, IconNode> = (() => {
   // An alias's file holds no drawing; it re-exports its icon's component.
   const byComponent = new Map<unknown, IconNode>();

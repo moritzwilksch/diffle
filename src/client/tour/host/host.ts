@@ -26,8 +26,8 @@ export interface TourHost {
   useChanged(): ReadonlyMap<string, ChangedFile>;
   /** `lines` of `lang`, coloured token by token as the diff colours them; null until known. */
   useTokens(lines: readonly string[], lang: string): Token[][] | null;
-  /** The Lucide icon `name`; undefined while it loads or when no icon has the name. */
-  useIcon(name: string): IconNode | undefined;
+  /** The Lucide icon `name`: undefined while it loads, null when no icon has the name. */
+  useIcon(name: string): IconNode | null | undefined;
   /**
    * Calls `onFocus` with the index, among the child elements of the block at `place`, of the one
    * the focused thread is on, so the block shows it.

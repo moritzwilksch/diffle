@@ -4,7 +4,6 @@ use html5ever::ns;
 
 use super::dom::{Dom, Node, NodeId};
 use super::element::{knows, label, parse};
-use super::icon;
 use crate::protocol::{TourError, TourSvgClass, TourSvgElement, TourSvgIcon};
 
 /// Where an element of the drawing sits, deciding what it may hold.
@@ -79,17 +78,12 @@ impl Check<'_> {
             self.error(node, element.clone(), format!("{key}: diffle styles diagrams; use its classes instead"));
         }
         let parsed = if is_icon {
-            parse::<TourSvgIcon>(tag, &geometry).map(|icon| Some(icon.data_lucide.as_str().to_owned()))
+            parse::<TourSvgIcon>(tag, &geometry).map(drop)
         } else {
-            parse::<TourSvgElement>(tag, &geometry).map(|_| None)
+            parse::<TourSvgElement>(tag, &geometry).map(drop)
         };
-        match parsed {
-            Err(message) => self.error(node, element.clone(), message),
-            Ok(name) => {
-                if let Some(message) = name.as_deref().and_then(icon::refusal) {
-                    self.error(node, element.clone(), message);
-                }
-            }
+        if let Err(message) = parsed {
+            self.error(node, element.clone(), message);
         }
         if is_icon && self.dom.children(node).iter().any(|&c| holds(self.dom.node(c))) {
             self.error(node, element.clone(), "an icon's <svg> holds nothing");

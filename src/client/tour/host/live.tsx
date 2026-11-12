@@ -102,21 +102,21 @@ function useTokens(lines: readonly string[], lang: string): Token[][] | null {
   return tokens;
 }
 
-/** Each icon drawn so far, so a later mount draws it at once. */
-const loaded = new Map<string, IconNode>();
+/** Each name looked up so far, null when no icon has it, so a later mount draws it at once. */
+const loaded = new Map<string, IconNode | null>();
 
-/** An icon's drawing, from the one chunk holding every icon's; none when no icon has the name. */
-export async function loadIcon(name: string): Promise<IconNode | undefined> {
+/** An icon's drawing, from the one chunk holding every icon's; null when no icon has the name. */
+export async function loadIcon(name: string): Promise<IconNode | null> {
   const known = loaded.get(name);
-  if (known) return known;
+  if (known !== undefined) return known;
   const { ICON_NODES } = await import('./iconNodes.js');
-  const node = ICON_NODES.get(name);
-  if (node) loaded.set(name, node);
+  const node = ICON_NODES.get(name) ?? null;
+  loaded.set(name, node);
   return node;
 }
 
 /** An icon loaded on first use, so the main bundle carries none. */
-function useIcon(name: string): IconNode | undefined {
+function useIcon(name: string): IconNode | null | undefined {
   const [node, setNode] = useState(() => loaded.get(name));
   useEffect(() => {
     let current = true;

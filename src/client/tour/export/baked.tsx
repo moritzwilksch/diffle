@@ -23,7 +23,8 @@ export function bakedHost(data: BakedTour): TourHost {
     Check: (props) => <BakedCheck {...props} checks={data.checks} />,
     useChanged: () => changed,
     useTokens: (lines, lang) => data.tokens[tokensKey(lines, lang)] ?? null,
-    useIcon: (name) => data.icons[name],
+    // The bake keeps every icon the tour names that exists, so any other name is unknown.
+    useIcon: (name) => data.icons[name] ?? null,
     useFocusedChild: () => {},
   };
 }

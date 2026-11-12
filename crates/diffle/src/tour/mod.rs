@@ -7,7 +7,6 @@ mod dom;
 mod drawing;
 mod element;
 mod files;
-mod icon;
 mod layout;
 mod placement;
 mod reading;

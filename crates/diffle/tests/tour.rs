@@ -171,10 +171,8 @@ docs/readme.md"></diffle-tree>
 <diffle-row><p>alone</p></diffle-row>
 <diffle-row>loose text<h2>In a row</h2><img src="x.png"><diffle-row><p>a</p><p>b</p></diffle-row></diffle-row>
 <diffle-icon name="user"></diffle-icon>
-<p><diffle-icon name="databse"></diffle-icon> <diffle-icon name="Database" tone="red"></diffle-icon></p>
-<diffle-card id="iconic" title="I" icon="usr"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
+<p><diffle-icon name="Database" tone="red"></diffle-icon></p>
 <diffle-diagram><svg viewBox="0 0 100 50">
-  <svg data-lucide="user-icon" x="1" y="1"></svg>
   <svg data-lucide="user" x="1" y="1" width="9"><path d="M0 0 H1"/></svg>
 </svg></diffle-diagram>
 <diffle-code lang="json" example path="app.py" line="2">{}</diffle-code>

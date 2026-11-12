@@ -189,20 +189,8 @@ expression: refused.json()
       "message": "diffle-icon belongs inside a paragraph, a list item or other text"
     },
     {
-      "element": "h2 \"A\" > diffle-icon name=\"databse\"",
-      "message": "databse is not a Lucide icon; the closest are `database`, `database-x`, `table`. Find names at lucide.dev/icons"
-    },
-    {
       "element": "h2 \"A\" > diffle-icon name=\"Database\" tone=\"red\"",
       "message": "name=\"Database\" does not fit: its name on lucide.dev: `database`, `shield-check`; tone is accent, success, warning or error, not red"
-    },
-    {
-      "element": "h2 \"A\" > diffle-card id=\"iconic\" title=\"I\" icon=\"usr\"",
-      "message": "usr is not a Lucide icon; the closest are `usb`, `user`, `bus`. Find names at lucide.dev/icons"
-    },
-    {
-      "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user-icon\" x=\"1\" y=\"1\">",
-      "message": "user-icon is not a Lucide icon; the closest are `user`, `user-cog`, `user-pen`. Find names at lucide.dev/icons"
     },
     {
       "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user\" x=\"1\" y=\"1\" width=\"9\">",

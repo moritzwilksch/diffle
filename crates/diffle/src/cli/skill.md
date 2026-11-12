@@ -169,8 +169,8 @@ question once, and a push that keeps an item's question keeps its tick.
 ### Icons
 
 Use a Lucide icon to mark one kind of thing the same way throughout the tour, such as a database
-or a network call; never as decoration. Find names at lucide.dev/icons; a push refuses a name
-diffle does not know and suggests the closest. In text, `<diffle-icon name="database"></diffle-icon>`
+or a network call; never as decoration. Find names at lucide.dev/icons; a name Lucide does not
+have shows a question-mark placeholder. In text, `<diffle-icon name="database"></diffle-icon>`
 sits at the text's size and colour: in prose, a heading, a table cell or a callout. `tone` colours
 it. A card takes one before its title with `icon`. A diagram takes them too, below.
 

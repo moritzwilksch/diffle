@@ -744,7 +744,6 @@ dependencies = [
  "serde_json",
  "sha1 0.11.0",
  "shlex",
- "strsim",
  "syn 3.0.10",
  "syntect",
  "tempfile",
