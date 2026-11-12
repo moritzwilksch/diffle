@@ -1,9 +1,9 @@
 //! A `diffle-tree`'s notes: a few words beside a few of its files, on where to start or what
 //! surprises.
 use crate::protocol::TourElement;
-use crate::tour::anchor::reading;
 use crate::tour::dom::{Dom, Node, NodeId};
 use crate::tour::element::{Findings, label, short};
+use crate::tour::reading::reading;
 
 /// Past this many noted files, or a third of the tree, the notes stop standing out.
 const MANY: usize = 3;

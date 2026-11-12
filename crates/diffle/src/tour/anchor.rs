@@ -3,10 +3,9 @@
 use super::dom::{self, Dom, Node, NodeId};
 use super::drawing::{Drawing, get};
 use super::element::{label, short};
-use crate::protocol::{CommentAnchor, TourCheckItem, TourTarget, TourTargetRequest};
+use super::reading::{OPAQUE, collapse, matches, reading, squash};
+use crate::protocol::{CommentAnchor, TourCheckItem, TourPart, TourTarget, TourTargetRequest};
 
-/// Blocks whose content is code or a drawing, not reading text: they take a thread as a whole.
-const OPAQUE: [&str; 4] = ["diffle-diff", "diffle-code", "diffle-tree", "diffle-diagram"];
 /// Elements a thread may sit on as a whole, besides a diagram's boxes and labels.
 const BLOCKS: [&str; 12] = [
     "diffle-check",
@@ -32,8 +31,10 @@ struct Entry {
     node: Vec<i64>,
     step: Option<i64>,
     section: String,
+    /** How refusals name it, as a refused push does. */
     element: String,
-    tag: String,
+    part: TourPart,
+    within: Option<TourPart>,
     /// Whitespace-free, as selections match it; none for an element without reading text.
     reading: Option<String>,
     /// Some for an element a thread may sit on as a whole.
@@ -44,13 +45,13 @@ impl TourIndex {
     pub fn read(html: &str) -> Self {
         let dom = dom::parse(html);
         let mut walk = Walk { dom: &dom, entries: Vec::new(), step: None, section: String::new() };
-        walk.children(dom.section("body"), &[], "");
+        walk.children(dom.section("body"), &[], "", None);
         Self { entries: walk.entries }
     }
 
     /// The items of the tour's checklists in document order, each ticked when `ticked` holds its question.
     pub fn checks(&self, ticked: &[String]) -> Vec<TourCheckItem> {
-        let items = self.entries.iter().filter(|e| e.tag == "diffle-item");
+        let items = self.entries.iter().filter(|e| e.part.tag == "diffle-item");
         let item = |e: &Entry| {
             let question = e.label.clone().unwrap_or_default();
             let ticked = ticked.contains(&question);
@@ -87,9 +88,9 @@ impl TourIndex {
     }
 
     /// `anchor`'s passage in this tour, or none when it is gone: the same text in the innermost
-    /// element holding it, or an element of the same kind with the same label, preferring the
+    /// element holding it, or an element of the same `tag` with the same label, preferring the
     /// element at the old place, then the old section.
-    pub fn relocate(&self, node: &[i64], section: &str, element: &str, target: &TourTarget) -> Option<CommentAnchor> {
+    pub fn relocate(&self, node: &[i64], section: &str, tag: &str, target: &TourTarget) -> Option<CommentAnchor> {
         let rank = |e: &&Entry| (e.node != node, e.section != section);
         match target {
             TourTarget::Text { quoted, occurrence } => {
@@ -101,9 +102,8 @@ impl TourIndex {
                 Some(entry.anchor(target))
             }
             TourTarget::Element { label } => {
-                let tag = tag_in(element);
                 let same = |e: &&Entry| {
-                    e.tag == tag
+                    e.part.tag == tag
                         && e.label.as_deref() == Some(label.as_str())
                         && (!label.is_empty() || e.section == section)
                 };
@@ -120,16 +120,11 @@ impl Entry {
             node: self.node.clone(),
             step: self.step,
             section: self.section.clone(),
-            element: self.element.clone(),
+            element: self.part.clone(),
+            within: self.within.clone(),
             target,
         }
     }
-}
-
-/// The tag an anchor's `element` ends with, as `Walk` names it.
-pub fn tag_in(element: &str) -> &str {
-    let last = element.rsplit(" > ").next().unwrap_or_default();
-    last.trim_start_matches('<').split([' ', '>']).next().unwrap_or_default()
 }
 
 struct Walk<'a> {
@@ -140,17 +135,18 @@ struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    /// The elements under `parent`, each at `node` plus its place, named after `context`.
-    fn children(&mut self, parent: NodeId, node: &[i64], context: &str) {
+    /// The elements under `parent`, each at `node` plus its place, named after `context`, inside
+    /// the card, tab or walk `within`.
+    fn children(&mut self, parent: NodeId, node: &[i64], context: &str, within: Option<&TourPart>) {
         let elements = self.dom.children(parent).iter().filter(|&&c| matches!(self.dom.node(c), Node::Element { .. }));
         for (i, &child) in elements.enumerate() {
             let mut at = node.to_vec();
             at.push(i as i64);
-            self.visit(child, at, context);
+            self.visit(child, at, context, within);
         }
     }
 
-    fn visit(&mut self, id: NodeId, node: Vec<i64>, context: &str) {
+    fn visit(&mut self, id: NodeId, node: Vec<i64>, context: &str, within: Option<&TourPart>) {
         let Node::Element { name, attrs } = self.dom.node(id) else { return };
         let tag = name.local.to_string();
         if node.len() == 1 && tag == "h2" {
@@ -164,7 +160,8 @@ impl Walk<'_> {
         }
         let text = (!OPAQUE.contains(&tag.as_str())).then(|| squash(&reading(self.dom, id))).filter(|t| !t.is_empty());
         let block = BLOCKS.contains(&tag.as_str()).then(|| self.label(id, &tag, attrs));
-        self.push(&node, element, &tag, text, block);
+        let part = part(&tag, attrs);
+        self.push(&node, element, part.clone(), within.cloned(), text, block);
         let inner = match tag.as_str() {
             "diffle-card" => format!("{context}diffle-card#{} > ", get(attrs, "id")),
             "diffle-walk" | "diffle-trace" | "diffle-tabs" | "diffle-tab" => {
@@ -172,14 +169,16 @@ impl Walk<'_> {
             }
             _ => context.to_owned(),
         };
+        let holder = matches!(tag.as_str(), "diffle-card" | "diffle-tab" | "diffle-walk");
         if !OPAQUE.contains(&tag.as_str()) {
-            self.children(id, &node, &inner);
+            self.children(id, &node, &inner, if holder { Some(&part) } else { within });
         }
     }
 
     /// A diagram, and each box and label in it, which take threads as a whole.
     fn diagram(&mut self, id: NodeId, node: &[i64], element: String) {
-        self.push(node, element, "diffle-diagram", None, Some(String::new()));
+        let diagram = TourPart { tag: "diffle-diagram".into(), handle: None };
+        self.push(node, element, diagram.clone(), None, None, Some(String::new()));
         let elements: Vec<NodeId> = self
             .dom
             .children(id)
@@ -191,7 +190,7 @@ impl Walk<'_> {
         let is = |c: NodeId, tag: &str| matches!(self.dom.node(c), Node::Element { name, .. } if &*name.local == tag);
         for (i, &child) in elements.iter().enumerate() {
             if is(child, "diffle-note") {
-                self.visit(child, [node, &[i as i64]].concat(), "diffle-diagram > ");
+                self.visit(child, [node, &[i as i64]].concat(), "diffle-diagram > ", Some(&diagram));
             }
         }
         let Some(at) = elements.iter().position(|&c| is(c, "svg")) else { return };
@@ -210,7 +209,8 @@ impl Walk<'_> {
                 _ => continue,
             };
             let element = format!("diffle-diagram > {}", self::label(&name.local, attrs));
-            self.push(&at, element, &name.local, None, Some(label));
+            // A box or a label names its diagram itself.
+            self.push(&at, element, part(&name.local, attrs), None, None, Some(label));
         }
     }
 
@@ -242,12 +242,20 @@ impl Walk<'_> {
         }
     }
 
-    fn push(&mut self, node: &[i64], element: String, tag: &str, reading: Option<String>, label: Option<String>) {
+    fn push(
+        &mut self,
+        node: &[i64],
+        element: String,
+        part: TourPart,
+        within: Option<TourPart>,
+        reading: Option<String>,
+        label: Option<String>,
+    ) {
         if reading.is_none() && label.is_none() {
             return;
         }
-        let (step, section) = (self.step, self.section.clone());
-        self.entries.push(Entry { node: node.to_vec(), step, section, element, tag: tag.into(), reading, label });
+        let (step, section, node) = (self.step, self.section.clone(), node.to_vec());
+        self.entries.push(Entry { node, step, section, element, part, within, reading, label });
     }
 
     /// What finds a block again: its title, its file and lines, or the start of its text.
@@ -269,49 +277,19 @@ impl Walk<'_> {
     }
 }
 
-/// What a reader sees of `id`: its text, a symbol's name, a jump's label, a card's title before its
-/// content; code and drawings add nothing. `src/client/tour/anchor.ts` reads the rendered page alike.
-pub fn reading(dom: &Dom, id: NodeId) -> String {
-    match dom.node(id) {
-        Node::Text(t) => t.clone(),
-        Node::Element { name, attrs } => match &*name.local {
-            "diffle-symbol" => get(attrs, "name").to_owned(),
-            "diffle-jump" => {
-                let own = dom.text(id);
-                if !own.trim().is_empty() {
-                    return own;
-                }
-                let line = get(attrs, "line");
-                if line.is_empty() { get(attrs, "path").to_owned() } else { format!("{}:{line}", get(attrs, "path")) }
-            }
-            tag if OPAQUE.contains(&tag) || tag == "diffle-icon" => String::new(),
-            tag => {
-                let inner: String = dom.children(id).iter().map(|&c| reading(dom, c)).collect();
-                let titled = matches!(tag, "diffle-card" | "diffle-note" | "diffle-tab");
-                if titled { format!("{} {inner}", get(attrs, "title")) } else { inner }
-            }
-        },
-        _ => String::new(),
-    }
-}
-
-/// `text` with each whitespace run one space, trimmed.
-fn collapse(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// `text` without whitespace: a selection and the element's text agree on everything else.
-fn squash(text: &str) -> String {
-    text.split_whitespace().collect()
-}
-
-/// How many times `quoted` occurs in `reading`, whitespace ignored, overlaps included.
-fn matches(reading: &str, quoted: &str) -> usize {
-    let quoted = squash(quoted);
-    if quoted.is_empty() {
-        return 0;
-    }
-    (0..reading.len()).filter(|&i| reading.is_char_boundary(i) && reading[i..].starts_with(&quoted)).count()
+/// The element `tag` with `attrs` by its handle, in full: what an agent searches its document for.
+fn part(tag: &str, attrs: &[(String, String)]) -> TourPart {
+    let attr = |key: &str| Some(get(attrs, key)).filter(|v| !v.is_empty());
+    let at = |line: &str| attr("path").map(|path| format!("{path}:{}", get(attrs, line)));
+    let handle = match tag {
+        "diffle-card" => attr("id").map(str::to_owned),
+        "diffle-diff" | "diffle-walk" => at("lines"),
+        "diffle-stop" | "diffle-code" => at("line"),
+        "diffle-note" | "diffle-tab" | "diffle-tree" => attr("title").map(str::to_owned),
+        "diffle-callout" => attr("kind").map(str::to_owned),
+        _ => None,
+    };
+    TourPart { tag: tag.into(), handle }
 }
 
 #[cfg(test)]
@@ -335,7 +313,7 @@ mod tests {
 
     fn relocate(tour: &TourIndex, anchor: &CommentAnchor) -> Option<Value> {
         let CommentAnchor::Tour { node, section, element, target, .. } = anchor else { panic!("a tour anchor") };
-        tour.relocate(node, section, element, target).as_ref().map(json)
+        tour.relocate(node, section, &element.tag, target).as_ref().map(json)
     }
 
     #[test]
@@ -346,7 +324,7 @@ mod tests {
 
         assert_eq!(
             json(&anchor),
-            json!({"kind": "tour", "node": [3], "step": 1, "section": "The loop", "element": "<p>",
+            json!({"kind": "tour", "node": [3], "step": 1, "section": "The loop", "element": {"tag": "p"},
                    "target": {"on": "text", "quoted": "calls fetch again", "occurrence": 0}})
         );
         assert!(tour.place(&[3], &text("again", 1)).is_ok());
@@ -360,7 +338,10 @@ mod tests {
 
         assert_eq!(whole(&[4]).unwrap()["target"], json!({"on": "element", "label": "The loop"}));
         let diff = whole(&[4, 1]).unwrap();
-        assert_eq!(diff["element"], r#"diffle-card#loop > diffle-diff path="a.rs" lines="1-4""#);
+        assert_eq!(
+            (&diff["element"], &diff["within"]),
+            (&json!({"tag": "diffle-diff", "handle": "a.rs:1-4"}), &json!({"tag": "diffle-card", "handle": "loop"}))
+        );
         assert_eq!(diff["target"]["label"], "a.rs 1-4");
         let rect = whole(&[6, 0, 0]).unwrap();
         assert_eq!((&rect["step"], &rect["target"]["label"]), (&json!(2), &json!("Session")));
@@ -377,7 +358,10 @@ mod tests {
         let note = json(&tour.place(&[7, 1], &text("Retry Calls fetch", 0)).unwrap());
 
         assert_eq!(whole["target"], json!({"on": "element", "label": "a.rs 1-4"}));
-        assert_eq!(note["element"], r#"diffle-walk path="a.rs" lines="1-4" > diffle-note lines="3-4" title="Retry""#);
+        assert_eq!(
+            (&note["element"], &note["within"]),
+            (&json!({"tag": "diffle-note", "handle": "Retry"}), &json!({"tag": "diffle-walk", "handle": "a.rs:1-4"}))
+        );
     }
 
     #[test]

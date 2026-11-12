@@ -78,7 +78,7 @@ fn relocate(threads: &mut [CommentThread], index: Option<&TourIndex>) -> Vec<Str
     let mut changed = Vec::new();
     for t in threads {
         let CommentAnchor::Tour { node, section, element, target, .. } = &t.anchor else { continue };
-        let found = index.and_then(|index| index.relocate(node, section, element, target));
+        let found = index.and_then(|index| index.relocate(node, section, &element.tag, target));
         let moved = match found {
             Some(anchor) => {
                 let moved = t.stale || !same(&anchor, &t.anchor);

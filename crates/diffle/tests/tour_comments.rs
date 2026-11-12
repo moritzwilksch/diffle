@@ -66,6 +66,26 @@ async fn hands_tour_threads_to_the_agent_after_the_code_threads() {
     insta::assert_snapshot!("prompt", prompt);
 }
 
+/// A handle longer than an error's 40-character cut reaches the agent whole.
+#[tokio::test]
+async fn names_a_diff_on_a_long_path_in_full() {
+    let repo = TestRepo::new();
+    let path = "crates/diffle/src/server/routes/comments/handlers.rs";
+    repo.write(path, "fn old() {}\n");
+    repo.commit("base");
+    repo.write(path, "fn list() {}\nfn reply() {}\n");
+    let s = TestServer::over(repo, EnterRequest::Working).await;
+    let html = format!(
+        r#"<h2>Routes</h2><diffle-card id="routes" title="The routes"><diffle-diff path="{path}" lines="1-2"></diffle-diff></diffle-card>"#
+    );
+    push(&s, &html).await;
+    comment(&s, json!([1, 0]), json!({ "on": "element" }), "Why both?").await;
+
+    let prompt = s.get("/api/threads/export").await.body;
+
+    insta::assert_snapshot!("long_path_prompt", prompt);
+}
+
 #[tokio::test]
 async fn follows_threads_into_a_revised_tour_and_marks_the_lost_ones_stale() {
     let s = server().await;

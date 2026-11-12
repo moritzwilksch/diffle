@@ -10,6 +10,7 @@ mod files;
 mod icon;
 mod layout;
 mod placement;
+mod reading;
 mod stepped;
 mod validate;
 
@@ -17,7 +18,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-pub use anchor::{TourIndex, tag_in};
+pub use anchor::TourIndex;
 pub use files::column;
 
 use crate::error::Result;

@@ -6,11 +6,11 @@ pub mod diagram;
 pub mod trace;
 pub mod walk;
 
-use super::anchor::reading;
 use super::code::holds_markup;
 use super::dom::{Dom, Node, NodeId};
 pub use super::element::Findings;
 use super::element::{label, short};
+use super::reading::reading;
 use crate::protocol::TourElement;
 
 /// Why a `diffle-note` without a title is refused, in place of the catalog's "missing field".

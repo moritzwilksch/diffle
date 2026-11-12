@@ -371,8 +371,12 @@
               "description": "That section's heading text; '' before the first."
             },
             "element": {
-              "type": "string",
-              "description": "The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`."
+              "$ref": "#/$defs/TourPart",
+              "description": "The element the thread is on."
+            },
+            "within": {
+              "$ref": "#/$defs/TourPart",
+              "description": "The innermost card, tab or walk holding it, or the diagram holding a diagram's note."
             },
             "target": {
               "$ref": "#/$defs/TourTarget"
@@ -2961,8 +2965,12 @@
           "description": "That section's heading text; '' before the first."
         },
         "element": {
-          "type": "string",
-          "description": "The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`."
+          "$ref": "#/$defs/TourPart",
+          "description": "The element the thread is on."
+        },
+        "within": {
+          "$ref": "#/$defs/TourPart",
+          "description": "The innermost card, tab or walk holding it, or the diagram holding a diagram's note."
         },
         "target": {
           "$ref": "#/$defs/TourTarget"
@@ -3804,6 +3812,23 @@
       ],
       "additionalProperties": false,
       "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+    },
+    "TourPart": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Its tag: `diffle-card`, `p`, a diagram's `rect`."
+        },
+        "handle": {
+          "type": "string",
+          "description": "What names it: a card's `id`; a diff's or a walk's `path:lines`; a stop's or a code block's\n`path:line`; a note's, a tab's or a tree's `title`; a callout's `kind`. Absent when it has none."
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "description": "A tour element by its tag and the one handle an agent can search its document for, in full."
     },
     "TourPush": {
       "type": "object",

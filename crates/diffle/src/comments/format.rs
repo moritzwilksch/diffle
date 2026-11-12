@@ -4,8 +4,9 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use super::anchor::compare_threads;
-use crate::protocol::{CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourCheckItem, TourTarget};
-use crate::tour::tag_in;
+use crate::protocol::{
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, Side, TourCheckItem, TourPart, TourTarget,
+};
 
 static SUGGESTION_FENCE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^```suggestion[^\n]*\n([\s\S]*?)\n?^```[ \t]*$").unwrap());
@@ -63,13 +64,17 @@ fn format_one(t: &CommentThread) -> String {
         CommentAnchor::Line { path, side, start_line, end_line, quoted } => {
             (path, side, *start_line, *end_line, quoted)
         }
-        CommentAnchor::Tour { step, section, element, target, .. } => {
+        CommentAnchor::Tour { step, section, element, within, target, .. } => {
             let at = step.map_or_else(|| "before the first section".to_owned(), |n| format!("{n}. {section}"));
             let (text, quoted) = match target {
                 TourTarget::Text { quoted, .. } => (true, quoted),
                 TourTarget::Element { label } => (false, label),
             };
-            let header = format!("(tour{}) {at}, {}", if t.stale { ", stale" } else { "" }, spoken(element, text));
+            let header = format!(
+                "(tour{}) {at}, {}",
+                if t.stale { ", stale" } else { "" },
+                spoken(element, within.as_ref(), text)
+            );
             let quote = if quoted.is_empty() { String::new() } else { format!("{}\n\n", quote(quoted)) };
             let body: Vec<String> = t.messages.iter().map(|m| signed(m, m.body.trim().to_owned())).collect();
             return format!("{header}\n\n{quote}{}\n\n---\n", body.join("\n\n"));
@@ -143,51 +148,40 @@ pub fn parse_suggestions(body: &str) -> Vec<BodySegment> {
     out
 }
 
-static ATTR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#" ([a-z][a-z-]*)="([^"]*)""#).unwrap());
-
-/// How the prompt names an anchor's `element`: its kind and the one handle an agent can search its
-/// document for, never its geometry or the text the quote already shows. `text` for a selection in it.
-fn spoken(element: &str, text: bool) -> String {
-    let segments: Vec<&str> = element.split(" > ").collect();
-    let last = segments.last().copied().unwrap_or_default();
-    let of = |segment: &str, key: &str| {
-        ATTR.captures_iter(segment).find(|c| &c[1] == key).map(|c| c[2].to_owned()).unwrap_or_default()
-    };
-    let attr = |key: &str| of(last, key);
-    let card = segments.iter().find_map(|s| s.strip_prefix("diffle-card#"));
-    let walk = segments.iter().find(|s| s.starts_with("diffle-walk "));
-    let tab = segments.iter().find(|s| s.starts_with("diffle-tab "));
-    let name = match tag_in(element) {
-        "diffle-card" => format!("the card #{}", attr("id")),
-        "diffle-diff" => format!("the diff of {}:{}", attr("path"), attr("lines")),
-        "diffle-walk" => format!("the walk of {}:{}", attr("path"), attr("lines")),
-        "diffle-note" => format!("the note \"{}\"", attr("title")),
+/// How the prompt names the tour element a thread is on: its kind and the one handle an agent can
+/// search its document for, never its geometry or the text the quote already shows; then the card,
+/// tab, walk or diagram holding it. `text` for a selection in it.
+fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
+    let handle = element.handle.as_deref().unwrap_or_default();
+    let name = match element.tag.as_str() {
+        "diffle-card" => format!("the card #{handle}"),
+        "diffle-diff" => format!("the diff of {handle}"),
+        "diffle-walk" => format!("the walk of {handle}"),
+        "diffle-note" => format!("the note \"{handle}\""),
         "diffle-trace" => "the trace".into(),
         "diffle-tabs" => "the tabs".into(),
-        "diffle-tab" => format!("the tab \"{}\"", attr("title")),
+        "diffle-tab" => format!("the tab \"{handle}\""),
         "diffle-check" => "a checklist".into(),
         "diffle-item" => "an item of a checklist".into(),
-        "diffle-stop" => format!("the stop at {}:{}", attr("path"), attr("line")),
-        "diffle-code" if !attr("path").is_empty() => format!("the code of {}:{}", attr("path"), attr("line")),
+        "diffle-stop" => format!("the stop at {handle}"),
+        "diffle-code" if element.handle.is_some() => format!("the code of {handle}"),
         "diffle-code" => "a code block".into(),
-        "diffle-tree" => format!("the tree \"{}\"", attr("title")),
-        "diffle-callout" => format!("a {} callout", attr("kind")),
+        "diffle-tree" => format!("the tree \"{handle}\""),
+        "diffle-callout" => format!("a {handle} callout"),
         "diffle-diagram" => "a diagram".into(),
         "rect" => "a box in the diagram".into(),
         "text" => "a label in the diagram".into(),
         tag => format!("a <{tag}>"),
     };
-    let within = match (card, walk) {
-        (Some(id), _) if tag_in(element) != "diffle-card" => format!(" in the card #{id}"),
-        _ if tab.is_some() && tag_in(element) != "diffle-tab" => {
-            format!(" in the tab \"{}\"", of(tab.unwrap_or(&""), "title"))
+    let within = within.map_or_else(String::new, |w| {
+        let handle = w.handle.as_deref().unwrap_or_default();
+        match w.tag.as_str() {
+            "diffle-card" => format!(" in the card #{handle}"),
+            "diffle-tab" => format!(" in the tab \"{handle}\""),
+            "diffle-walk" => format!(" in the walk of {handle}"),
+            _ => " in the diagram".into(),
         }
-        (_, Some(walk)) if tag_in(element) != "diffle-walk" => {
-            format!(" in the walk of {}:{}", of(walk, "path"), of(walk, "lines"))
-        }
-        _ if tag_in(element) == "diffle-note" && segments.contains(&"diffle-diagram") => " in the diagram".into(),
-        _ => String::new(),
-    };
+    });
     format!("{} {name}{within}", if text { "in" } else { "on" })
 }
 
@@ -195,21 +189,24 @@ fn spoken(element: &str, text: bool) -> String {
 mod tests {
     use super::*;
 
+    fn part(tag: &str, handle: Option<&str>) -> TourPart {
+        TourPart { tag: tag.into(), handle: handle.map(Into::into) }
+    }
+
     #[test]
     fn names_an_element_by_its_kind_and_handle() {
-        assert_eq!(spoken(r#"diffle-card id="entry" title="The loader""#, false), "on the card #entry");
-        assert_eq!(spoken("diffle-card#entry > <p>", true), "in a <p> in the card #entry");
+        let card = part("diffle-card", Some("entry"));
+        assert_eq!(spoken(&card, None, false), "on the card #entry");
+        assert_eq!(spoken(&part("p", None), Some(&card), true), "in a <p> in the card #entry");
         assert_eq!(
-            spoken(r#"diffle-card#entry > diffle-diff path="src/app.py" lines="12-20""#, false),
+            spoken(&part("diffle-diff", Some("src/app.py:12-20")), Some(&card), false),
             "on the diff of src/app.py:12-20 in the card #entry"
         );
+        assert_eq!(spoken(&part("rect", None), None, false), "on a box in the diagram");
+        let tab = part("diffle-tab", Some("Chosen \"A\" > B"));
+        assert_eq!(spoken(&part("p", None), Some(&tab), true), "in a <p> in the tab \"Chosen \"A\" > B\"");
         assert_eq!(
-            spoken(r#"diffle-diagram > <rect x="8" y="8" width="96" height="40">"#, false),
-            "on a box in the diagram"
-        );
-        assert_eq!(spoken(r#"diffle-tabs > diffle-tab title="Chosen" > <p>"#, true), "in a <p> in the tab \"Chosen\"");
-        assert_eq!(
-            spoken(r#"diffle-walk path="a.rs" lines="1-9" > diffle-note lines="2-4" title="Retry""#, true),
+            spoken(&part("diffle-note", Some("Retry")), Some(&part("diffle-walk", Some("a.rs:1-9"))), true),
             "in the note \"Retry\" in the walk of a.rs:1-9"
         );
     }

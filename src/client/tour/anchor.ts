@@ -4,7 +4,7 @@ import type { TourTargetRequest } from '@/shared/protocol.js';
  * Where a thread sits on the rendered tour. Each rendered element the source document holds carries
  * its place in `data-node` (child-element indices from `<body>`, dot-joined); blocks whose content is
  * code or a drawing carry `data-opaque` and add nothing to the reading text. The reading text is the
- * one `crates/diffle/src/tour/anchor.rs` defines on the source; both ignore whitespace.
+ * one `crates/diffle/src/tour/reading.rs` defines on the source; both ignore whitespace.
  */
 export const NODE_ATTR = 'data-node';
 export const OPAQUE_ATTR = 'data-opaque';

@@ -11,8 +11,9 @@ this repository"; ask the reviewer to start one (`diffle` in the repository).
 is shown as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its
 `id`, its anchor and its messages. A message you wrote carries `"author": "agent"`. An anchor
 is on code (`line`: a path and a line range on the `old` or `new` side; `file`: a whole file) or on
-your tour (`tour`). A tour anchor names the section by `step` and `section`, its heading, and the
-element as a refused push names it. Its `target` is a selection in that element's text
+your tour (`tour`). A tour anchor names the section by `step` and `section`, its heading; the
+`element` by its `tag` and `handle` (a card's `id`, a diff's `path:lines`, a note's `title`); and,
+in `within`, the card, tab or walk holding it. Its `target` is a selection in that element's text
 (`on: "text"`, the words in `quoted`) or the element as a whole (`on: "element"`, with its
 `label`: a card's title, a box's text). Find the passage in your document by these. A tour thread is
 `stale` when your last push no longer holds its passage.

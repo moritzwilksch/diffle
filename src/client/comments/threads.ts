@@ -1,4 +1,4 @@
-import type { CommentAnchor, CommentThread, TourAnchor } from '@/shared/protocol.js';
+import type { CommentAnchor, CommentThread, TourTarget } from '@/shared/protocol.js';
 
 /** The file a thread is on; null for one on the tour. */
 export function anchorPath(anchor: CommentAnchor): string | null {
@@ -53,11 +53,11 @@ export function elementKind(tag: string): string {
   return KINDS[tag] ?? 'element';
 }
 
-/** A tour thread's header: the words it is on, or the element by its kind and label. */
-export function tourLabel(a: TourAnchor): string {
-  if (a.target.on === 'text') return `"${cut(a.target.quoted)}"`;
-  const kind = elementKind((a.element.split(' > ').pop() ?? '').replace(/^</, '').split(/[ >]/)[0] ?? '');
-  return a.target.label ? `${kind} "${cut(a.target.label)}"` : kind;
+/** A tour thread's header: the words it is on, or the element with tag `tag` by its kind and label. */
+export function tourLabel(tag: string, target: TourTarget): string {
+  if (target.on === 'text') return `"${cut(target.quoted)}"`;
+  const kind = elementKind(tag);
+  return target.label ? `${kind} "${cut(target.label)}"` : kind;
 }
 
 function cut(text: string): string {

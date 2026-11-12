@@ -2,8 +2,8 @@
 //! block's steps, each a line of inline prose, and each asks its own question: ticks and answers
 //! find an item again by its question.
 use super::{Findings, Kind, Others, steps};
-use crate::tour::anchor::reading;
 use crate::tour::dom::{Dom, NodeId};
+use crate::tour::reading::reading;
 
 const KIND: Kind =
     Kind { block: "diffle-check", step: "diffle-item", noun: "checklist", word: "item", others: Others::Refused };

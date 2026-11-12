@@ -228,7 +228,7 @@ export function visibleThreads(state: Pick<ReviewState, 'threads' | 'showResolve
 
 /** The header label of a thread: its line range and side, the whole file, or its place in the tour. */
 export function anchorLabel(a: CommentAnchor): string {
-  if (a.kind === 'tour') return tourLabel(a);
+  if (a.kind === 'tour') return tourLabel(a.element.tag, a.target);
   return a.kind === 'file' ? 'whole file' : rangeLabel(a);
 }
 

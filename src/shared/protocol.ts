@@ -468,6 +468,18 @@ export const TourTargetRequestSchema = z.discriminatedUnion('on', [
 ]);
 export type TourTargetRequest = z.infer<typeof TourTargetRequestSchema>;
 
+/** A tour element by its tag and the one handle an agent can search its document for, in full. */
+export const TourPartSchema = z.object({
+  /** Its tag: `diffle-card`, `p`, a diagram's `rect`. */
+  tag: z.string(),
+  /**
+   * What names it: a card's `id`; a diff's or a walk's `path:lines`; a stop's or a code block's
+   * `path:line`; a note's, a tab's or a tree's `title`; a callout's `kind`. Absent when it has none.
+   */
+  handle: z.string().optional(),
+});
+export type TourPart = z.infer<typeof TourPartSchema>;
+
 /** A thread on the review's tour, at the element `node` names and the part of it `target` names. */
 export const TourAnchorSchema = z.object({
   kind: z.literal('tour'),
@@ -477,8 +489,10 @@ export const TourAnchorSchema = z.object({
   step: z.number().int().optional(),
   /** That section's heading text; '' before the first. */
   section: z.string(),
-  /** The element as a refused push names it, after its diagram or card: `diffle-card#auth > <p>`. */
-  element: z.string(),
+  /** The element the thread is on. */
+  element: TourPartSchema,
+  /** The innermost card, tab or walk holding it, or the diagram holding a diagram's note. */
+  within: TourPartSchema.optional(),
   target: TourTargetSchema,
 });
 export type TourAnchor = z.infer<typeof TourAnchorSchema>;

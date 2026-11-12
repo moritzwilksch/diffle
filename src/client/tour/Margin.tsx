@@ -17,7 +17,7 @@ function draftLabel(draft: TourDraft, body: Element | null): string {
   const source = body && sourceAt(body, draft.node);
   const target =
     draft.target.on === 'text' ? draft.target : { on: 'element' as const, label: source ? sourceLabel(source) : '' };
-  return tourLabel({ kind: 'tour', node: draft.node, section: '', element: source?.localName ?? '', target });
+  return tourLabel(source?.localName ?? '', target);
 }
 
 /** One card in the margin or inline: a thread, or the draft. */
