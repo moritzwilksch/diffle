@@ -124,7 +124,7 @@ async fn files_a_push_and_moves_its_threads_in_the_set_it_was_checked_against() 
     let shown = s.get("/api/snapshot").await.json()["commentKey"].as_str().unwrap().to_owned();
     assert_ne!(shown, checked.comment_key);
     let revised = TOUR.replace("<h2>The loader</h2>", "<h2>Setup</h2><p>New.</p><h2>The loader</h2>");
-    let tour = Tour { html: revised.clone(), pushed_at: 0, version: checked.version, ticked: Vec::new() };
+    let tour = Tour { html: revised.clone(), pushed_at: 0 };
     let moved = s.session.comments_for(&checked).push_tour(tour).await.unwrap();
 
     assert_eq!(moved.len(), 1);
@@ -175,6 +175,11 @@ async fn hands_the_checklist_to_the_agent_and_keeps_ticks_across_a_push() {
     for question in ["Is one request per user enough?", "Keep the old name as an alias?"] {
         assert_eq!(s.json("PUT", "/api/tour/ticks", tick(question)).await.status, 204);
     }
+    let unknown = s.json("PUT", "/api/tour/ticks", tick("Is it fast?")).await;
+    assert_eq!(
+        (unknown.status, unknown.json()["error"].clone()),
+        (400, json!("the tour asks no question \"Is it fast?\""))
+    );
     comment(&s, json!([1, 2]), json!({ "on": "element" }), "Yes, until the rename ships.").await;
     comment(&s, json!([1, 0]), json!({ "on": "element" }), "No: the store already did.").await;
 

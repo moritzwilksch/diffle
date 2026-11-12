@@ -1,7 +1,7 @@
 import type { IconNode } from 'lucide-react';
 import type { LineRange } from '@/client/tour/document.js';
 import { rowsKey, type SymbolProps, type Token } from '@/client/tour/host/host.js';
-import type { ChangedFile } from '@/shared/protocol.js';
+import type { ChangedFile, TourCheckItem } from '@/shared/protocol.js';
 
 /**
  * A tour exported as one file: its document, and everything its blocks showed when it was
@@ -23,8 +23,8 @@ export interface BakedTour {
   icons: Record<string, IconNode>;
   /** The changed files the tour's trees list. */
   changed: ChangedFile[];
-  /** The checklist items ticked, by their `nodeKey`. */
-  ticked: string[];
+  /** The checklists' items as the server named them, each with its tick. */
+  checks: TourCheckItem[];
 }
 
 /** The id of the `<script type="application/json">` the file keeps a `BakedTour` in. */

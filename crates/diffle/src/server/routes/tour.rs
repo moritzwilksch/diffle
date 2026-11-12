@@ -12,7 +12,6 @@ use axum::routing::{get, post, put};
 
 use super::{ApiDeps, ApiError, ApiResult, body};
 use crate::comments::activity::Change;
-use crate::error::Error;
 use crate::iterations::now_ms;
 use crate::protocol::{
     CommentAuthor, ServerMessage, Tour, TourPush, TourPushed, TourRejection, TourResponse, TourThreadCreate, TourTick,
@@ -28,7 +27,8 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
 
 async fn tour(State(d): State<Arc<ApiDeps>>) -> ApiResult {
     let checks = crate::tour::checklist(&d.session, &[]).await?;
-    Ok(Json(TourResponse { tour: d.session.comments()?.tour().await?, checks }).into_response())
+    let tour = d.session.comments()?.tour().await?.map(|stored| stored.tour);
+    Ok(Json(TourResponse { tour, checks }).into_response())
 }
 
 /// Checks the document against the current snapshot and files it in that snapshot's set, moving the
@@ -42,7 +42,7 @@ async fn push(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
         let rejection = TourRejection { errors: verdict.errors };
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(rejection)).into_response());
     }
-    let tour = Tour { html: req.html, pushed_at: now_ms(), version: snap.version, ticked: Vec::new() };
+    let tour = Tour { html: req.html, pushed_at: now_ms() };
     let moved = d.session.comments_for(&snap).push_tour(tour.clone()).await?;
     d.hub.broadcast(ServerMessage::Tour);
     record(&d, moved);
@@ -69,12 +69,11 @@ async fn open_thread(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     Ok((StatusCode::CREATED, Json(thread)).into_response())
 }
 
-/// Ticks a checklist item of the review's tour, or unticks it; 400 when the review has no tour.
+/// Ticks a checklist item of the review's tour, or unticks it; 400 when the review has no tour or
+/// its tour asks no such question.
 async fn tick(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: TourTick = body(&raw)?;
-    if !d.session.comments()?.tick(&req.question, req.ticked).await? {
-        return Err(Error::Invalid("the review has no tour".into()).into());
-    }
+    d.session.comments()?.tick(&req.question, req.ticked).await?;
     d.hub.broadcast(ServerMessage::Tour);
     Ok(StatusCode::NO_CONTENT.into_response())
 }

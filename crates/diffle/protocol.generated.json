@@ -2916,25 +2916,11 @@
           "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "description": "Milliseconds since the epoch."
-        },
-        "version": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "description": "The `Snapshot.version` the tour was checked against when pushed."
-        },
-        "ticked": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "The questions of its checklists the reviewer ticked as decided, each as `TourCheckItem.question`."
         }
       },
       "required": [
         "html",
-        "pushedAt",
-        "version"
+        "pushedAt"
       ],
       "description": "The review's tour: one HTML document, as the agent last pushed it."
     },
@@ -4642,7 +4628,7 @@
         "question",
         "ticked"
       ],
-      "description": "`PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it."
+      "description": "`PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it. An item is named by its\n`TourCheckItem.question`, which a tour asks once, so a tick outlives a push that still asks it."
     },
     "TourTrace": {
       "type": "object",

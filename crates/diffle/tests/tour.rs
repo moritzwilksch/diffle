@@ -104,7 +104,6 @@ async fn keeps_a_pushed_tour_under_the_comment_key_and_tells_clients() {
     assert_eq!(pushed["warnings"], json!([]));
     let pushed = pushed["tour"].clone();
     assert_eq!(pushed["html"], TOUR);
-    assert_eq!(pushed["version"], s.get("/api/snapshot").await.json()["version"]);
     assert_eq!(tour(&s).await, pushed);
     let key = s.get("/api/snapshot").await.json()["commentKey"].as_str().unwrap().to_owned();
     let stored: Value =
@@ -201,6 +200,7 @@ docs/readme.md"></diffle-tree>
 <diffle-tree title="Notes" paths="app.py"><p>prose</p><diffle-file path="gone.py">Not listed.</diffle-file><diffle-file path="app.py"> </diffle-file></diffle-tree>
 <p><diffle-file path="app.py">Loose.</diffle-file></p>
 <diffle-check><diffle-item>Same?</diffle-item><diffle-item> Same? </diffle-item><diffle-item context="x"></diffle-item></diffle-check>
+<diffle-check><diffle-item>Same?</diffle-item><diffle-item>Other?</diffle-item></diffle-check>
 <p><diffle-item>Alone?</diffle-item></p>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>

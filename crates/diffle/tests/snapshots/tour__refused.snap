@@ -342,11 +342,15 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-check > diffle-item",
-      "message": "asks what item 1 asks: each item asks its own question"
+      "message": "asks what an earlier item asks: a tick names an item by its question"
     },
     {
       "element": "h2 \"A\" > diffle-check > diffle-item context=\"x\"",
       "message": "a diffle-item asks its question as its text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-check > diffle-item",
+      "message": "asks what an earlier item asks: a tick names an item by its question"
     },
     {
       "element": "h2 \"A\" > diffle-item",

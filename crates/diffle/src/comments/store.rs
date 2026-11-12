@@ -5,11 +5,12 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::anchor::{anchor_path, compare_threads};
+use super::tour::StoredTour;
 use crate::error::{Error, Result};
 use crate::iterations::now_ms;
 use crate::persist::{with_file_lock, write_file_atomic};
 use crate::protocol::{
-    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, ThreadQuery, ThreadState, Tour, ViewedEntry,
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, ThreadQuery, ThreadState, ViewedEntry,
 };
 
 /// Viewed marks kept per path: the current one plus the newest previous, so `restale` is derivable.
@@ -23,7 +24,7 @@ pub(super) struct SetData {
     pub(super) viewed: Vec<ViewedEntry>,
     /// The agent's tour, beside the threads on it (`comments/tour.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(super) tour: Option<Tour>,
+    pub(super) tour: Option<StoredTour>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -35,6 +35,11 @@ impl TourIndex {
         Self { entries: walk.entries }
     }
 
+    /// The questions of the tour's checklists, in document order: what a tick names an item by.
+    pub fn questions(&self) -> Vec<String> {
+        self.checks(&[]).into_iter().map(|item| item.question).collect()
+    }
+
     /// The items of the tour's checklists in document order, each ticked when `ticked` holds its question.
     pub fn checks(&self, ticked: &[String]) -> Vec<TourCheckItem> {
         let items = self.entries.iter().filter(|e| e.part.tag == TourCommentTag::DiffleItem);

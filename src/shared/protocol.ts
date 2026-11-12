@@ -1521,14 +1521,13 @@ export const TourSchema = z.object({
   html: z.string(),
   /** Milliseconds since the epoch. */
   pushedAt: z.number().int(),
-  /** The `Snapshot.version` the tour was checked against when pushed. */
-  version: z.number().int(),
-  /** The questions of its checklists the reviewer ticked as decided, each as `TourCheckItem.question`. */
-  ticked: z.string().array().optional(),
 });
 export type Tour = z.infer<typeof TourSchema>;
 
-/** `PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it. */
+/**
+ * `PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it. An item is named by its
+ * `TourCheckItem.question`, which a tour asks once, so a tick outlives a push that still asks it.
+ */
 export const TourTickSchema = z.object({ question: z.string(), ticked: z.boolean() });
 export type TourTick = z.infer<typeof TourTickSchema>;
 

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { nodeKey, nodePath, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
 import type { CheckProps, SymbolProps } from '@/client/tour/host/host.js';
+import type { TourCheckItem } from '@/shared/protocol.js';
 import type { BakedTour } from './data.js';
 
 /**
@@ -38,11 +39,12 @@ function inlineCode(text: string): ReactNode[] {
 }
 
 /** A checklist as it stood when the tour was exported: each item marked decided or open. */
-export function BakedCheck({ source, renderItem, ticked }: CheckProps & { ticked: ReadonlySet<string> }) {
+export function BakedCheck({ source, renderItem, checks }: CheckProps & { checks: readonly TourCheckItem[] }) {
   const items = [...source.children].flatMap((el) => {
     const item = primitive(el);
     if (item?.tag !== 'diffle-item') return [];
-    return [{ el, context: item.context, decided: ticked.has(nodeKey(nodePath(el))) }];
+    const key = nodeKey(nodePath(el));
+    return [{ el, context: item.context, decided: checks.find((c) => nodeKey(c.node) === key)?.ticked ?? false }];
   });
   return (
     <section {...placeOf(source)} aria-label="Checklist" className="tour-check tour-block">

@@ -1,9 +1,9 @@
 //! A `diffle-check`: questions the reviewer ticks or answers. Its items are parts like a stepped
-//! block's steps, each a line of inline prose, and each asks its own question: ticks and answers
-//! find an item again by its question.
+//! block's steps, each a line of inline prose, and each asks its own question across the tour: ticks
+//! and answers find an item again by its question.
 use super::{Findings, Kind, Others, steps};
-use crate::tour::dom::{Dom, NodeId};
-use crate::tour::reading::reading;
+use crate::tour::dom::{Dom, Node, NodeId};
+use crate::tour::reading::{collapse, reading};
 
 const KIND: Kind =
     Kind { block: "diffle-check", step: "diffle-item", noun: "checklist", word: "item", others: Others::Refused };
@@ -11,16 +11,27 @@ const KIND: Kind =
 /// Checks the checklist at `node`, named `element`.
 pub fn check(dom: &Dom, node: NodeId, element: &str) -> Findings {
     let mut found = Findings::default();
-    let items = steps(dom, node, element, &KIND, &mut found);
-    let questions: Vec<String> =
-        items.iter().map(|item| reading(dom, item.node).split_whitespace().collect::<Vec<_>>().join(" ")).collect();
-    for (i, item) in items.iter().enumerate() {
-        if questions[i].is_empty() {
+    let earlier = items(dom, dom.section("body"));
+    for item in steps(dom, node, element, &KIND, &mut found) {
+        let question = collapse(&reading(dom, item.node));
+        if question.is_empty() {
             found.error(item.node, item.element.clone(), "a diffle-item asks its question as its text");
-        } else if let Some(j) = questions[..i].iter().position(|q| *q == questions[i]) {
-            let message = format!("asks what item {} asks: each item asks its own question", j + 1);
+        } else if earlier.iter().any(|&(at, ref asked)| at < item.node && *asked == question) {
+            let message = "asks what an earlier item asks: a tick names an item by its question";
             found.error(item.node, item.element.clone(), message);
         }
     }
     found
+}
+
+/// Every checklist item under `node` with its question; node ids follow document order.
+fn items(dom: &Dom, node: NodeId) -> Vec<(NodeId, String)> {
+    dom.children(node)
+        .iter()
+        .flat_map(|&c| match dom.node(c) {
+            Node::Element { name, .. } if &*name.local == "diffle-item" => vec![(c, collapse(&reading(dom, c)))],
+            Node::Element { .. } => items(dom, c),
+            _ => Vec::new(),
+        })
+        .collect()
 }

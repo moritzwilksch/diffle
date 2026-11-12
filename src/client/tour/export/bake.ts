@@ -5,7 +5,6 @@ import { useStore } from '@/client/store.js';
 import type { SymbolProps, Token } from '@/client/tour/host/host.js';
 import { wordColumn } from '@/client/tour/host/LiveSymbol.js';
 import { loadIcon } from '@/client/tour/host/live.js';
-import { nodeKey } from '@/client/tour/anchor.js';
 import { lineSpan, type LineRange, primitive } from '@/client/tour/document.js';
 import { codeLang, codePatch } from '@/client/tour/primitives/Code.js';
 import { rangePatch, source, type TourLoad } from '@/client/tour/state.js';
@@ -80,7 +79,7 @@ export async function bakeTour({ tour, doc, checks }: Ready): Promise<BakedTour>
     tokens: {},
     icons: {},
     changed: (useStore.getState().snapshot?.changed ?? []).filter((f) => listed.has(f.path)),
-    ticked: checks.filter((c) => c.ticked).map((c) => nodeKey(c.node)),
+    checks,
   };
   for (const symbol of symbols) baked.symbols[symbolKey(symbol)] = await bakeSymbol(symbol);
   for (const { lines, lang } of diagrams) {

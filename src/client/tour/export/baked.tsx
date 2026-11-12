@@ -10,7 +10,6 @@ import { BakedCheck, BakedSymbol } from './parts.js';
  */
 export function bakedHost(data: BakedTour): TourHost {
   const changed = new Map(data.changed.map((f) => [f.path, f]));
-  const ticked = new Set(data.ticked);
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(data.rowsCss);
   return {
@@ -21,7 +20,7 @@ export function bakedHost(data: BakedTour): TourHost {
     Rows: (props) => <BakedRows {...props} markup={data.rows[rowsKey(props.patch, props.lang)]} sheet={sheet} />,
     open: null,
     Symbol: (props) => <BakedSymbol {...props} baked={data.symbols[symbolKey(props)]} />,
-    Check: (props) => <BakedCheck {...props} ticked={ticked} />,
+    Check: (props) => <BakedCheck {...props} checks={data.checks} />,
     useChanged: () => changed,
     useTokens: (lines, lang) => data.tokens[tokensKey(lines, lang)] ?? null,
     useIcon: (name) => data.icons[name],

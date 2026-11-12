@@ -160,8 +160,8 @@ behaviour you chose that they may not want, a trade-off you could not settle fro
 answer rests on. Ask only real questions, a handful at most, and never one the diff already
 answers. The reviewer ticks an item as decided or answers it. `diffle comments list` reports each
 item under `checks`, with `ticked` and the `thread` that answers it; the prompt carries every item
-still open and every answer. Reply to an answer with `diffle comments reply`. A push that keeps an
-item's question keeps its tick.
+still open and every answer. Reply to an answer with `diffle comments reply`. A tour asks each
+question once, and a push that keeps an item's question keeps its tick.
 
 ```html
 <diffle-check>
