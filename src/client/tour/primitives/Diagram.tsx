@@ -26,9 +26,11 @@ const ICON_SIZE = '14';
 /**
  * A diagram, drawn again from what `TourSvgElement` and `TourSvgClass` allow, so styles, scripts
  * and links the agent wrote never reach the page. diffle's stylesheet styles it from the theme,
- * and each arrow gets a head in its line's tone. `place` names the diagram the drawing stands for.
+ * and each arrow gets a head in its line's tone. In a stepped diagram, `active` names the step
+ * whose groups are lit; the other steps' groups dim. `place` names the diagram where the drawing
+ * stands for it; a stepped diagram's frame carries it instead.
  */
-export function TourDrawing({ of, place }: { of: Element; place: Place }) {
+export function TourDrawing({ of, place, active = null }: { of: Element; place?: Place; active?: number | null }) {
   const id = useId();
   const svg = [...of.children].find((c) => c.localName === 'svg');
   const root = svg ? read(svg) : null;
@@ -39,6 +41,7 @@ export function TourDrawing({ of, place }: { of: Element; place: Place }) {
     <svg
       {...place}
       data-opaque=""
+      data-stepping={active != null || undefined}
       viewBox={root.viewBox}
       className="tour-diagram"
       style={{ width: `calc(${width}px * var(--diffle-text-scale, 1))` }}
@@ -60,15 +63,18 @@ export function TourDrawing({ of, place }: { of: Element; place: Place }) {
           </marker>
         ))}
       </defs>
-      {[...svg.childNodes].map((node, i) => draw(node, i, null, head))}
+      {[...svg.childNodes].map((node, i) => draw(node, i, null, { head, active }))}
     </svg>
   );
 }
 
-/** What every element of a drawing is drawn with: an arrowhead in a tone. */
-type Head = (tone: Tone | 'ink') => string;
+/** What every element of a drawing is drawn with: its arrowheads, and the step lit, if any. */
+interface Drawn {
+  head: (tone: Tone | 'ink') => string;
+  active: number | null;
+}
 
-function draw(node: ChildNode, key: number, tone: Tone | null, head: Head): ReactNode {
+function draw(node: ChildNode, key: number, tone: Tone | null, drawn: Drawn): ReactNode {
   if (node.nodeType === Node.TEXT_NODE) {
     const inText = node.parentElement?.localName === 'text' || node.parentElement?.localName === 'tspan';
     return inText ? node.textContent : null;
@@ -78,17 +84,21 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: Head): Reac
   const element = read(node);
   if (!element || element.tag === 'svg') return null;
   const { tag, class: words = '', ...rest } = element;
-  const { lang, ...geometry } = { lang: undefined, ...rest };
+  const { lang, step, ...geometry } = { lang: undefined, step: undefined, ...rest };
+  const lit = step != null && Number(step) === drawn.active;
   const classes = words.split(/\s+/).filter((w) => TourSvgClassSchema.safeParse(w).success) as TourSvgClass[];
-  const own = (classes.find((c) => TONES.has(c)) as Tone | undefined) ?? tone;
+  // A lit step's arrows take the accent with its lines.
+  const own = (classes.find((c) => TONES.has(c)) as Tone | undefined) ?? (lit ? 'accent' : tone);
   const arrow = LINES.has(tag) && (classes.includes('arrow') || classes.includes('arrows'));
   const props = {
     key,
     ...placeOf(node),
     ...geometry,
     className: classes.join(' ') || undefined,
-    markerEnd: arrow ? head(own ?? 'ink') : undefined,
-    markerStart: arrow && classes.includes('arrows') ? head(own ?? 'ink') : undefined,
+    'data-step': step,
+    'data-lit': lit || undefined,
+    markerEnd: arrow ? drawn.head(own ?? 'ink') : undefined,
+    markerStart: arrow && classes.includes('arrows') ? drawn.head(own ?? 'ink') : undefined,
   };
   if (tag === 'text' && classes.includes('code')) {
     const lines = [...node.children].flatMap((child) => {
@@ -99,7 +109,7 @@ function draw(node: ChildNode, key: number, tone: Tone | null, head: Head): Reac
     });
     return <DiagramCode key={key} props={props} lines={lines} lang={lang ?? 'text'} />;
   }
-  return createElement(tag, props, ...[...node.childNodes].map((child, i) => draw(child, i, own, head)));
+  return createElement(tag, props, ...[...node.childNodes].map((child, i) => draw(child, i, own, drawn)));
 }
 
 /** An `<svg data-lucide>` in the drawing: the icon, in its text's colour or its tone. */

@@ -150,8 +150,8 @@ pub fn parse_suggestions(body: &str) -> Vec<BodySegment> {
 }
 
 /// How the prompt names the tour element a thread is on: its kind and the one handle an agent can
-/// search its document for, never its geometry or the text the quote already shows; then the card
-/// or tab holding it. `text` for a selection in it.
+/// search its document for, never its geometry or the text the quote already shows; then the card,
+/// tab, walk or diagram holding it. `text` for a selection in it.
 fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
     use TourCommentTag as T;
     let handle = element.handle.as_deref().unwrap_or_default();
@@ -159,10 +159,14 @@ fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
     let name = match element.tag {
         T::DiffleCard => format!("the card #{handle}"),
         T::DiffleDiff => format!("the diff of {handle}"),
+        T::DiffleWalk => format!("the walk of {handle}"),
+        T::DiffleNote => format!("the note \"{handle}\""),
+        T::DiffleTrace => "the trace".into(),
         T::DiffleTabs => "the tabs".into(),
         T::DiffleTab => format!("the tab \"{handle}\""),
         T::DiffleCheck => "a checklist".into(),
         T::DiffleItem => "an item of a checklist".into(),
+        T::DiffleStop => format!("the stop at {handle}"),
         T::DiffleCode if element.handle.is_some() => format!("the code of {handle}"),
         T::DiffleCode => "a code block".into(),
         T::DiffleTree => format!("the tree \"{handle}\""),
@@ -202,8 +206,10 @@ fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
         let handle = w.handle.as_deref().unwrap_or_default();
         match w.tag {
             T::DiffleCard => format!(" in the card #{handle}"),
-            // The holders `TourIndex` names are a card and a tab.
-            _ => format!(" in the tab \"{handle}\""),
+            T::DiffleTab => format!(" in the tab \"{handle}\""),
+            T::DiffleWalk => format!(" in the walk of {handle}"),
+            // The holders `TourIndex` names are the three above and a diagram.
+            _ => " in the diagram".into(),
         }
     });
     format!("{} {name}{within}", if text { "in" } else { "on" })
@@ -229,6 +235,10 @@ mod tests {
         assert_eq!(spoken(&part("rect", None), None, false), "on a box in the diagram");
         let tab = part("diffle-tab", Some("Chosen \"A\" > B"));
         assert_eq!(spoken(&part("p", None), Some(&tab), true), "in a <p> in the tab \"Chosen \"A\" > B\"");
+        assert_eq!(
+            spoken(&part("diffle-note", Some("Retry")), Some(&part("diffle-walk", Some("a.rs:1-9"))), true),
+            "in the note \"Retry\" in the walk of a.rs:1-9"
+        );
     }
 
     fn seg(text: &str, code: Option<&str>) -> BodySegment {

@@ -385,7 +385,7 @@
             },
             "within": {
               "$ref": "#/$defs/TourPart",
-              "description": "The innermost card or tab holding it."
+              "description": "The innermost card, tab or walk holding it, or the diagram holding a diagram's note."
             },
             "target": {
               "$ref": "#/$defs/TourTarget"
@@ -2968,7 +2968,7 @@
         },
         "within": {
           "$ref": "#/$defs/TourPart",
-          "description": "The innermost card or tab holding it."
+          "description": "The innermost card, tab or walk holding it, or the diagram holding a diagram's note."
         },
         "target": {
           "$ref": "#/$defs/TourTarget"
@@ -3167,6 +3167,10 @@
         "diffle-row",
         "diffle-code",
         "diffle-icon",
+        "diffle-walk",
+        "diffle-note",
+        "diffle-trace",
+        "diffle-stop",
         "diffle-tabs",
         "diffle-tab",
         "diffle-check",
@@ -3189,7 +3193,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand."
+      "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it."
     },
     "TourDiff": {
       "type": "object",
@@ -3421,7 +3425,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand."
+          "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it."
         },
         {
           "type": "object",
@@ -3504,6 +3508,105 @@
           ],
           "additionalProperties": false,
           "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-walk"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root; a renamed file by its new path."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default)."
+            },
+            "lines": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+              "description": "The line range the walk shows, `12-30`."
+            }
+          },
+          "required": [
+            "tag",
+            "path",
+            "lines"
+          ],
+          "additionalProperties": false,
+          "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-note"
+            },
+            "lines": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+              "description": "In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What these lines do, in a few words: `Record each sale`."
+            }
+          },
+          "required": [
+            "tag",
+            "title"
+          ],
+          "additionalProperties": false,
+          "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-trace"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A path through the code in call order, a block in the article's flow: the reader steps through\nits `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds\nonly its stops."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-stop"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root."
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "The line the stop lights; a few lines around it show too."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side `line` counts on: `old` or `new` (the default)."
+            }
+          },
+          "required": [
+            "tag",
+            "path",
+            "line"
+          ],
+          "additionalProperties": false,
+          "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
         },
         {
           "type": "object",
@@ -3732,6 +3835,31 @@
       "additionalProperties": false,
       "description": "A button that opens the diff view at a file or a line. Its text is the label, plain text: markup\ninside it is refused. Empty, it shows `path:line`."
     },
+    "TourNote": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-note"
+        },
+        "lines": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+          "description": "In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What these lines do, in a few words: `Record each sale`."
+        }
+      },
+      "required": [
+        "tag",
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+    },
     "TourOpaqueTag": {
       "type": "string",
       "enum": [
@@ -3751,7 +3879,7 @@
         },
         "handle": {
           "type": "string",
-          "description": "What names it: a card's `id`; a diff's `path:lines`; a code block's `path:line`; a tab's or a\ntree's `title`; a callout's `kind`. Absent when it has none."
+          "description": "What names it: a card's `id`; a diff's or a walk's `path:lines`; a stop's or a code block's\n`path:line`; a note's, a tab's or a tree's `title`; a callout's `kind`. Absent when it has none."
         }
       },
       "required": [
@@ -3838,6 +3966,36 @@
       "additionalProperties": false,
       "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
     },
+    "TourStop": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-stop"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root."
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "The line the stop lights; a few lines around it show too."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side `line` counts on: `old` or `new` (the default)."
+        }
+      },
+      "required": [
+        "tag",
+        "path",
+        "line"
+      ],
+      "additionalProperties": false,
+      "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+    },
     "TourSvgClass": {
       "type": "string",
       "enum": [
@@ -3890,6 +4048,11 @@
             },
             "class": {
               "type": "string"
+            },
+            "step": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "The step of a stepped diagram that lights this group; the diagram holds one `diffle-note` per step."
             }
           },
           "required": [
@@ -4471,6 +4634,20 @@
       ],
       "description": "`PUT /api/tour/ticks`: ticks a checklist item as decided, or unticks it. An item is named by its\n`TourCheckItem.question`, which a tour asks once, so a tick outlives a push that still asks it."
     },
+    "TourTrace": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-trace"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A path through the code in call order, a block in the article's flow: the reader steps through\nits `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds\nonly its stops."
+    },
     "TourTree": {
       "type": "object",
       "properties": {
@@ -4507,11 +4684,43 @@
       "additionalProperties": false,
       "description": "A directory tree of some files under a title; changed ones show their status and line counts. It\nholds only `diffle-file` notes, on a few of its files."
     },
+    "TourWalk": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-walk"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root; a renamed file by its new path."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default)."
+        },
+        "lines": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
+          "description": "The line range the walk shows, `12-30`."
+        }
+      },
+      "required": [
+        "tag",
+        "path",
+        "lines"
+      ],
+      "additionalProperties": false,
+      "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
+    },
     "TourWholeTag": {
       "type": "string",
       "enum": [
         "diffle-card",
         "diffle-diff",
+        "diffle-walk",
+        "diffle-trace",
         "diffle-tabs",
         "diffle-check",
         "diffle-item",

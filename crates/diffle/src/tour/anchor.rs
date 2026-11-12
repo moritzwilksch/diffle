@@ -138,7 +138,7 @@ struct Walk<'a> {
 
 impl Walk<'_> {
     /// The elements under `parent`, each at `node` plus its place, named after `context`, inside
-    /// the card or tab `within`.
+    /// the card, tab or walk `within`.
     fn children(&mut self, parent: NodeId, node: &[i64], context: &str, within: Option<&TourPart>) {
         let elements = self.dom.children(parent).iter().filter(|&&c| matches!(self.dom.node(c), Node::Element { .. }));
         for (i, &child) in elements.enumerate() {
@@ -169,10 +169,12 @@ impl Walk<'_> {
         self.push(&node, element, part.clone(), within.cloned(), text, block);
         let inner = match tag.as_str() {
             "diffle-card" => format!("{context}diffle-card#{} > ", attr(attrs, "id").unwrap_or_default()),
-            "diffle-tabs" | "diffle-tab" => format!("{context}{} > ", label(&tag, attrs)),
+            "diffle-walk" | "diffle-trace" | "diffle-tabs" | "diffle-tab" => {
+                format!("{context}{} > ", label(&tag, attrs))
+            }
             _ => context.to_owned(),
         };
-        let holder = matches!(tag.as_str(), "diffle-card" | "diffle-tab");
+        let holder = matches!(tag.as_str(), "diffle-card" | "diffle-tab" | "diffle-walk");
         if !is_opaque(&tag) {
             self.children(id, &node, &inner, if holder { Some(&part) } else { within });
         }
@@ -181,7 +183,7 @@ impl Walk<'_> {
     /// A diagram, and each box and label in it, which take threads as a whole.
     fn diagram(&mut self, id: NodeId, node: &[i64], element: String) {
         let diagram = TourPart { tag: TourCommentTag::DiffleDiagram, handle: None };
-        self.push(node, element, diagram, None, None, Some(String::new()));
+        self.push(node, element, diagram.clone(), None, None, Some(String::new()));
         let elements: Vec<NodeId> = self
             .dom
             .children(id)
@@ -189,7 +191,13 @@ impl Walk<'_> {
             .copied()
             .filter(|&c| matches!(self.dom.node(c), Node::Element { .. }))
             .collect();
+        // Its notes, when it steps, read as prose.
         let is = |c: NodeId, tag: &str| matches!(self.dom.node(c), Node::Element { name, .. } if &*name.local == tag);
+        for (i, &child) in elements.iter().enumerate() {
+            if is(child, "diffle-note") {
+                self.visit(child, [node, &[i as i64]].concat(), "diffle-diagram > ", Some(&diagram));
+            }
+        }
         let Some(at) = elements.iter().position(|&c| is(c, "svg")) else { return };
         let svg = elements[at];
         let drawing = Drawing::read(self.dom, svg);
@@ -223,6 +231,17 @@ impl Walk<'_> {
         titles.collect::<Vec<_>>().join(" / ")
     }
 
+    /// What finds a trace again: its first stop's place.
+    fn first_stop(&self, id: NodeId) -> String {
+        let stop = self.dom.children(id).iter().find_map(|&c| match self.dom.node(c) {
+            Node::Element { name, attrs } if &*name.local == "diffle-stop" => Some(attrs),
+            _ => None,
+        });
+        stop.map_or_else(String::new, |attrs| {
+            format!("{}:{}", attr(attrs, "path").unwrap_or_default(), attr(attrs, "line").unwrap_or_default())
+        })
+    }
+
     /// Every element under `parent` with its place.
     fn places(&self, parent: NodeId, node: &[i64], out: &mut Vec<(NodeId, Vec<i64>)>) {
         let elements = self.dom.children(parent).iter().filter(|&&c| matches!(self.dom.node(c), Node::Element { .. }));
@@ -254,7 +273,8 @@ impl Walk<'_> {
         let value = |key: &str| attr(attrs, key).unwrap_or_default().to_owned();
         match tag {
             "diffle-card" => value("title"),
-            "diffle-diff" => format!("{} {}", value("path"), value("lines")),
+            "diffle-diff" | "diffle-walk" => format!("{} {}", value("path"), value("lines")),
+            "diffle-trace" => self.first_stop(id),
             "diffle-tabs" => self.titles(id),
             // An item's whole question: ticks and answers find it again by it.
             "diffle-item" => collapse(&reading(self.dom, id)),
@@ -274,9 +294,9 @@ fn part(tag: &str, attrs: &[(String, String)]) -> Option<TourPart> {
     let at = |line: &str| value("path").map(|path| format!("{path}:{}", attr(attrs, line).unwrap_or_default()));
     let handle = match tag {
         "diffle-card" => value("id").map(str::to_owned),
-        "diffle-diff" => at("lines"),
-        "diffle-code" => at("line"),
-        "diffle-tab" | "diffle-tree" => value("title").map(str::to_owned),
+        "diffle-diff" | "diffle-walk" => at("lines"),
+        "diffle-stop" | "diffle-code" => at("line"),
+        "diffle-note" | "diffle-tab" | "diffle-tree" => value("title").map(str::to_owned),
         "diffle-callout" => value("kind").map(str::to_owned),
         _ => None,
     };
@@ -337,6 +357,22 @@ mod tests {
         let rect = whole(&[6, 0, 0]).unwrap();
         assert_eq!((&rect["step"], &rect["target"]["label"]), (&json!(2), &json!("Session")));
         assert_eq!(whole(&[3]).unwrap_err(), "<p> takes no comment as a whole");
+    }
+
+    #[test]
+    fn a_walk_takes_a_thread_as_a_whole_and_its_notes_take_selections() {
+        let walk = r#"<diffle-walk path="a.rs" lines="1-4"><diffle-note lines="1-2" title="Setup">Opens it.</diffle-note>
+<diffle-note lines="3-4" title="Retry">Calls <diffle-symbol path="a.rs" line="3" name="fetch"></diffle-symbol> again.</diffle-note></diffle-walk>"#;
+        let tour = TourIndex::read(&format!("{TOUR}{walk}"));
+
+        let whole = json(&tour.place(&[7], &TourTargetRequest::Element).unwrap());
+        let note = json(&tour.place(&[7, 1], &text("Retry Calls fetch", 0)).unwrap());
+
+        assert_eq!(whole["target"], json!({"on": "element", "label": "a.rs 1-4"}));
+        assert_eq!(
+            (&note["element"], &note["within"]),
+            (&json!({"tag": "diffle-note", "handle": "Retry"}), &json!({"tag": "diffle-walk", "handle": "a.rs:1-4"}))
+        );
     }
 
     #[test]

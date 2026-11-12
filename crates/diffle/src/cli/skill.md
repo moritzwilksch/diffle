@@ -17,8 +17,8 @@ is shown as one JSON document: `commentKey`, the set they belong to, and `thread
 `id`, its anchor and its messages. A message you wrote carries `"author": "agent"`. An anchor
 is on code (`line`: a path and a line range on the `old` or `new` side; `file`: a whole file) or on
 your tour (`tour`). A tour anchor names the section by `step` and `section`, its heading; the
-`element` by its `tag` and `handle` (a card's `id`, a diff's `path:lines`, a tab's `title`); and,
-in `within`, the card or tab holding it. Its `target` is a selection in that element's text
+`element` by its `tag` and `handle` (a card's `id`, a diff's `path:lines`, a note's `title`); and,
+in `within`, the card, tab or walk holding it. Its `target` is a selection in that element's text
 (`on: "text"`, the words in `quoted`) or the element as a whole (`on: "element"`, with its
 `label`: a card's title, a box's text). Find the passage in your document by these. A tour thread is
 `stale` when your last push no longer holds its passage.
@@ -52,8 +52,8 @@ their `<h3>` subsections. Each review has one tour.
   explains the change best, and use `<h3>` for parts of a long section. Headings sit at the top
   level of the document.
 - Between headings, write prose and lists, and place blocks: a `diffle-card`, a `diffle-diff`, a
-  `diffle-tabs`, a `diffle-check`, a `diffle-diagram`, a table, a `diffle-tree`, a
-  `diffle-callout`. A block sits between paragraphs, never inside one.
+  `diffle-walk`, a `diffle-trace`, a `diffle-tabs`, a `diffle-check`, a `diffle-diagram`, a table,
+  a `diffle-tree`, a `diffle-callout`. A block sits between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff next to its code: a title, a sentence or
   two, and its `diffle-diff`s. Use plain prose and the other blocks for the rest. No card goes
   inside another, and a heading never goes inside a card.
@@ -100,6 +100,43 @@ and closing summaries. Skip stock phrasing such as "delve", "robust", "seamless"
 no emoji. A section opens with a sentence or two on what it shows; a card is its title and one or
 two sentences. Let the diff show the code. A tour walks the change itself: leave its tests out
 unless the reviewer asks for them.
+
+### Walks
+
+Use a `diffle-walk` when one piece of code reads best part by part, in order: a loop, a request
+handler, a pipeline. The reader steps through its notes; each lights its lines, dims the rest, and
+shows its text under them. Use a `diffle-card` for a diff that a sentence or two explain, and prose
+for what spans several files.
+
+- Give the walk the lines of that one piece, 40 at most, and one `diffle-note` per step in reading
+  order, about 6 at most.
+- A note's `lines` lie within the walk's, count on its side, and share none with another note.
+- A note is a title of a few words and one sentence, held to the Writing rules: say what its lines
+  do or why, never read them back. It holds inline prose only: text, `<code>`, `diffle-symbol`,
+  `diffle-jump`, `diffle-icon`.
+
+```html
+<diffle-walk path="src/retry.rs" lines="20-41">
+<diffle-note lines="20-24" title="Check the budget">The loop stops once <diffle-symbol path="src/retry.rs" line="21" name="attempts"></diffle-symbol> reaches the limit.</diffle-note>
+<diffle-note lines="26-33" title="Back off">Each failure doubles the wait, up to 30 seconds.</diffle-note>
+<diffle-note lines="35-41" title="Give up">The last error goes back to the caller unchanged.</diffle-note>
+</diffle-walk>
+```
+
+### Traces
+
+Use a `diffle-trace` to follow one request or call through several places in call order: a
+handler, the function it calls, where the result lands. Each `diffle-stop` names a `path` and a
+`line` the review has, and holds one sentence on what happens there; diffle shows a few lines
+around it with the line lit, and the reader steps from stop to stop. Keep to the places the point
+needs, about 6 at most. One place read part by part is a walk; one place with a sentence is a card.
+
+```html
+<diffle-trace>
+<diffle-stop path="src/routes.rs" line="40">The route reads the token from the header.</diffle-stop>
+<diffle-stop path="src/auth.rs" line="12">Validation compares its expiry with the clock.</diffle-stop>
+</diffle-trace>
+```
 
 ### Tabs
 
@@ -233,3 +270,20 @@ diffle styles it from the classes below and the theme, and draws the arrowheads,
   right of a vertical one, never on it.
 - Name a region with a `frame` rect and an `eyebrow` text at (x+8, y+12).
 - Tone at most about a third of the nodes, and only those the point is about.
+
+Step through a diagram when its parts happen in an order the reader should follow: a request's
+trip, a pipeline's stages. Give each `<g>` a step lights `step="n"`, numbered from 1 without a
+gap, and after the `<svg>` put one `diffle-note` per step, in order: a title and one sentence, held
+to the Writing rules. A step lights its groups and dims the others, and its note shows under the
+drawing. A diagram whose parts all matter at once needs no steps; one piece of code read in order
+is a walk.
+
+```html
+<diffle-diagram><svg viewBox="0 0 232 52">
+  <g step="1"><rect x="8" y="12" width="88" height="28"/><text x="16" y="26">Login</text></g>
+  <g step="2"><path d="M96 26 H136" class="arrow"/><rect x="136" y="12" width="88" height="28"/><text x="144" y="26">Validate</text></g>
+</svg>
+<diffle-note title="Login issues a token">The token carries its expiry.</diffle-note>
+<diffle-note title="Every request checks it">An expired token is refused.</diffle-note>
+</diffle-diagram>
+```

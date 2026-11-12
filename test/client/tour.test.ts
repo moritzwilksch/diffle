@@ -4,6 +4,8 @@ import { readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
 import { selectionTarget, textRange } from '@/client/tour/anchor.js';
 import { freeSpot, placeCards } from '@/client/tour/margin/cards.js';
+import { excerptRows, noteRows } from '@/client/tour/steps/rows.js';
+import { keyTarget } from '@/client/tour/steps/steps.js';
 
 const PATCH = `diff --git a/app.py b/app.py
 --- a/app.py
@@ -156,5 +158,38 @@ describe('a selection in the tour', () => {
     expect(selectionTarget(document.getSelection(), root)).toEqual({
       refused: 'Comment on a diff, code or a diagram as a whole',
     });
+  });
+});
+
+describe('a walk', () => {
+  // New lines 2-5: a, B, C, d; old line 3 (b) removed between a and B.
+  const rows = excerptRows('@@ -2,3 +2,4 @@\n a\n-b\n+B\n+C\n d\n');
+
+  it("lights a note's lines with the other side's rows between them", () => {
+    expect(noteRows(rows, 'new', { start: 2, end: 3 })).toEqual([0, 2]);
+    expect(noteRows(rows, 'old', { start: 3, end: 3 })).toEqual([1, 1]);
+    expect(noteRows(rows, 'new', { start: 9, end: 9 })).toBeNull();
+  });
+});
+
+describe('the block the keys step', () => {
+  const view = [100, 700] as const;
+
+  it('is the topmost block wholly in view', () => {
+    const blocks = [
+      { block: 'cut off above', top: 50, bottom: 300 },
+      { block: 'lower', top: 450, bottom: 650 },
+      { block: 'upper', top: 320, bottom: 440 },
+    ];
+    expect(keyTarget(blocks, ...view)).toBe('upper');
+  });
+
+  it('is the one covering most of the view when none fits whole', () => {
+    const blocks = [
+      { block: 'tall', top: 0, bottom: 1200 },
+      { block: 'cut off below', top: 600, bottom: 900 },
+    ];
+    expect(keyTarget(blocks, ...view)).toBe('tall');
+    expect(keyTarget([{ block: 'away', top: 800, bottom: 900 }], ...view)).toBeNull();
   });
 });

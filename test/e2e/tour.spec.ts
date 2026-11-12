@@ -63,6 +63,27 @@ tally/currency.py"><diffle-file path="tally/refunds.py">start here: <diffle-symb
 </diffle-row>
 <h2>Finding unmatched refunds</h2>
 <p>The check reads the ledger twice: once for sales, once for refunds.</p>
+<diffle-walk path="tally/refunds.py" lines="12-22">
+<diffle-note lines="14" title="One set per account">A missing account starts with an empty set.</diffle-note>
+<diffle-note lines="15-17" title="Record each sale">Every sale adds its <code>description</code> to its account's set.</diffle-note>
+<diffle-note lines="18-22" title="Keep the unmatched refunds">A refund stays when its account never sold that description.</diffle-note>
+</diffle-walk>
+<p>The same check, as data moves through it:</p>
+<diffle-diagram><svg viewBox="0 0 432 52">
+  <g step="1"><rect x="8" y="12" width="104" height="28"/><text x="16" y="26">Ledger entries</text></g>
+  <g step="2"><path d="M112 26 H144" class="arrow"/><rect x="144" y="12" width="120" height="28"/><text x="152" y="26">Sales by account</text></g>
+  <g step="3"><path d="M264 26 H296" class="arrow"/><rect x="296" y="12" width="128" height="28"/><text x="304" y="26">Unmatched refunds</text></g>
+</svg>
+<diffle-note title="Read every entry">The check reads the ledger's entries twice.</diffle-note>
+<diffle-note title="Collect the sales">Each account's sold descriptions go into one set.</diffle-note>
+<diffle-note title="Flag the refunds">A refund whose description is not in its account's set is flagged.</diffle-note>
+</diffle-diagram>
+<p>Before the check runs, the CLI reads each ledger:</p>
+<diffle-trace>
+<diffle-stop path="tally/cli.py" line="25">The CLI merges one ledger per file it is given.</diffle-stop>
+<diffle-stop path="tally/ledger.py" line="95">Reading a file parses each CSV row into an entry.</diffle-stop>
+<diffle-stop path="tally/ledger.py" line="77">A row without a <code>kind</code> counts as a sale.</diffle-stop>
+</diffle-trace>
 <p>The check could have read the ledger once:</p>
 <diffle-tabs>
 <diffle-tab title="Two passes" kind="chosen"><p>Sales first, then refunds, so a refund listed before its sale still matches.</p>
@@ -80,6 +101,19 @@ tally/currency.py"><diffle-file path="tally/refunds.py">start here: <diffle-symb
 <diffle-item>Is matching by description strict enough?</diffle-item>
 <diffle-item context="The CLI exits 1 on an empty ledger.">Is exit code 1 right for an empty ledger?</diffle-item>
 </diffle-check>
+`;
+
+/** Two walks, both in view on a laptop's screen. */
+const TWO_WALKS = `
+<h2>Refunds, in two parts</h2>
+<diffle-walk path="tally/refunds.py" lines="14-17">
+<diffle-note lines="14" title="One set per account">A missing account starts with an empty set.</diffle-note>
+<diffle-note lines="15-17" title="Record each sale">Every sale adds its description.</diffle-note>
+</diffle-walk>
+<diffle-walk path="tally/refunds.py" lines="18-22">
+<diffle-note lines="18-22" title="Keep the unmatched refunds">A refund stays when no sale matches it.</diffle-note>
+</diffle-walk>
+${'<p>Room to scroll the lower walk to the top.</p>'.repeat(30)}
 `;
 
 /** A short tour to comment on. */
@@ -236,6 +270,122 @@ test.describe('the tour', () => {
     expect(house[0]).toBe(house[1]);
   });
 
+  test('a walk lights one note at a time: l / h, its numbers and its gutter markers step through it; a note takes a comment', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    const walk = view.locator('figure[data-walk]');
+    await page
+      .getByRole('navigation', { name: 'Contents' })
+      .getByRole('button', { name: /Finding unmatched/ })
+      .click();
+    await expect(view.getByText('Section 4 of 4')).toBeVisible();
+    const note = walk.locator('.tour-note');
+    // At rest the diff shows plainly, each note's number on the gutter of its first line.
+    await expect(note).toHaveCount(0);
+    await expect(walk).toHaveScreenshot('tour-walk.png');
+
+    // l takes the walk's first note, then its second: its lines lit, its text under them.
+    await page.keyboard.press('l');
+    await page.keyboard.press('l');
+    await expect(walk.getByRole('button', { name: /^Note 2/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(note).toContainText('Record each sale');
+    await expect(walk).toHaveScreenshot('tour-walk-note.png');
+
+    // A number in the header or on the gutter takes its note; h steps back, past the first to rest.
+    await walk.getByRole('button', { name: /^Note 3/ }).click();
+    await expect(note).toContainText('Keep the unmatched refunds');
+    await walk.locator('[data-mark="1"]').click();
+    await expect(note).toContainText('One set per account');
+    await page.keyboard.press('h');
+    await expect(note).toHaveCount(0);
+
+    // The stepper's controls stay where they are on every step: predictable places to click.
+    const controls = walk.getByRole('group', { name: 'Notes' }).getByRole('button');
+    // Measured from the walk's corner: a step may scroll the page.
+    const boxes = () =>
+      controls.evaluateAll((els) =>
+        els.map((el) => {
+          const [box, walk] = [el.getBoundingClientRect(), el.closest('figure')!.getBoundingClientRect()];
+          return [box.left - walk.left, box.top - walk.top, box.width, box.height];
+        }),
+      );
+    const atRest = await boxes();
+    expect(atRest).toHaveLength(5);
+    for (const n of [1, 2, 3]) {
+      await walk.getByRole('button', { name: new RegExp(`^Note ${n}`) }).click();
+      await expect(note).toHaveCount(1);
+      expect(await boxes()).toEqual(atRest);
+    }
+    await walk.getByRole('button', { name: /^Note 3/ }).click();
+    await expect(note).toHaveCount(0);
+
+    // A note's words take a comment like prose.
+    await page.keyboard.press('l');
+    await select(page, 'starts with an empty set');
+    await page.keyboard.press('c');
+    await expect(view.getByPlaceholder('Leave a comment…')).toBeFocused();
+    await page.keyboard.type('Why a set?');
+    await page.keyboard.press('Control+Enter');
+    await expect(view.getByText('Why a set?')).toBeVisible();
+    expect(await readPrompt(diffle.url)).toContain(
+      '(tour) 4. Finding unmatched refunds, in the note "One set per account" in the walk of tally/refunds.py:12-22\n\n> starts with an empty set',
+    );
+  });
+
+  test('a stepped diagram lights one step at a time, its note under the drawing', async ({ page, diffle }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    await page
+      .getByRole('navigation', { name: 'Contents' })
+      .getByRole('button', { name: /Finding unmatched/ })
+      .click();
+    const diagram = view.locator('figure[data-stepped]');
+    const note = diagram.locator('.tour-note');
+    await diagram.scrollIntoViewIfNeeded();
+    await expect(note).toHaveCount(0);
+    await expect(diagram).toHaveScreenshot('tour-diagram-steps.png');
+
+    await diagram.getByRole('button', { name: /^Step 2/ }).click();
+    await expect(note).toContainText('Collect the sales');
+    await expect(diagram.locator('g[data-lit]')).toHaveCount(1);
+    await page.mouse.move(0, 0);
+    await expect(diagram).toHaveScreenshot('tour-diagram-step.png');
+
+    // The taken number again returns the drawing to rest.
+    await diagram.getByRole('button', { name: /^Step 2/ }).click();
+    await expect(note).toHaveCount(0);
+    await expect(diagram.locator('svg[data-stepping]')).toHaveCount(0);
+  });
+
+  test('a trace shows one stop at a time: its tabs, its numbers and its line lit among its neighbours', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, TOUR);
+    const view = await showTour(page);
+    await page
+      .getByRole('navigation', { name: 'Contents' })
+      .getByRole('button', { name: /Finding unmatched/ })
+      .click();
+    const trace = view.locator('figure[data-trace]');
+    const note = trace.locator('.tour-note');
+    await trace.scrollIntoViewIfNeeded();
+    // It starts on its first stop.
+    await expect(note).toContainText('merges one ledger per file');
+    await expect(trace.getByRole('button', { name: /^Stop 1/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await trace.getByRole('button', { name: 'ledger.py' }).first().click();
+    await expect(note).toContainText('parses each CSV row');
+    await expect(trace.locator('figcaption')).toContainText('95');
+    await page.mouse.move(0, 0);
+    await expect(trace).toHaveScreenshot('tour-trace.png');
+    await trace.getByRole('button', { name: /^Stop 3/ }).click();
+    await expect(note).toContainText('counts as a sale');
+  });
+
   test('tabs show one pane at a time, each titled and marked with what it is', async ({ page, diffle }) => {
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
@@ -300,6 +450,30 @@ test.describe('the tour', () => {
     );
     expect(prompt).toContain('> Is exit code 1 right for an empty ledger?\n\nYes: scripts treat it as a failure.');
     expect(prompt).not.toContain('strict enough');
+  });
+
+  test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {
+    await pushTour(diffle.url, TWO_WALKS);
+    const view = await showTour(page);
+    const [upper, lower] = [view.locator('figure[data-walk]').first(), view.locator('figure[data-walk]').last()];
+    const stepper = (walk: typeof upper) => walk.getByRole('group', { name: 'Notes' });
+    await expect(stepper(upper)).toHaveAttribute('data-targeted');
+    await expect(stepper(lower)).not.toHaveAttribute('data-targeted');
+
+    await page.keyboard.press('l');
+    await expect(upper.locator('.tour-note')).toContainText('One set per account');
+    await expect(lower.locator('.tour-note')).toHaveCount(0);
+
+    // Scrolled past the upper walk, the lower one takes the keys.
+    await page.keyboard.press('h');
+    await lower.evaluate((el) => {
+      const page = el.closest('.overflow-auto')!;
+      page.scrollTop += el.getBoundingClientRect().top - page.getBoundingClientRect().top - 8;
+    });
+    await expect(stepper(lower)).toHaveAttribute('data-targeted');
+    await page.keyboard.press('l');
+    await expect(lower.locator('.tour-note')).toContainText('Keep the unmatched refunds');
+    await expect(upper.locator('.tour-note')).toHaveCount(0);
   });
 
   test.describe('in a wide window', () => {

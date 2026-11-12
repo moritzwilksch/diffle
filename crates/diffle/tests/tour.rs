@@ -61,12 +61,27 @@ const TOUR: &str = r#"
 docs/readme.md"><diffle-file path="app.py">start at <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol></diffle-file></diffle-tree>
 <diffle-callout kind="info"><p><diffle-icon name="file-text"></diffle-icon> Unchanged.</p></diffle-callout>
 <diffle-callout kind="danger"><p>Callers of <code>old</code> break.</p></diffle-callout>
+<diffle-diagram><svg viewBox="0 0 216 52">
+  <g step="1"><rect x="8" y="16" width="80" height="28"/><text x="16" y="30">Request</text></g>
+  <g step="2"><path d="M88 30 H128" class="arrow"/><rect x="128" y="16" width="80" height="28"/><text x="136" y="30">Loader</text></g>
+</svg>
+<diffle-note title="A request names an id">It carries the id <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol> takes.</diffle-note>
+<diffle-note title="The loader answers">It returns the id.</diffle-note>
+</diffle-diagram>
 <diffle-check><diffle-item context="Callers pass ids from the store.">Should the loader check the id?</diffle-item></diffle-check>
 <details><summary>Why the id is not checked</summary><p>Callers pass ids they read from the store.</p><diffle-diff path="app.py" lines="3"></diffle-diff></details>
 <diffle-tabs>
   <diffle-tab title="The loader" kind="chosen"><p>It returns the id it takes.</p><diffle-diff path="app.py" lines="2-3"></diffle-diff></diffle-tab>
   <diffle-tab title="A cache" kind="rejected"><p>A cache would serve stale users.</p></diffle-tab>
 </diffle-tabs>
+<diffle-trace>
+  <diffle-stop path="app.py" line="2">A call enters <diffle-symbol path="app.py" line="2" name="load_user"></diffle-symbol>.</diffle-stop>
+  <diffle-stop path="app.py" line="3">It returns the id.</diffle-stop>
+</diffle-trace>
+<diffle-walk path="app.py" lines="1-3">
+  <diffle-note lines="1" title="Imports">It imports <code>os</code>.</diffle-note>
+  <diffle-note lines="2-3" title="The loader">Takes an id and returns it.</diffle-note>
+</diffle-walk>
 "#;
 
 async fn push(s: &TestServer, html: &str) -> common::server::Res {
@@ -163,6 +178,18 @@ docs/readme.md"></diffle-tree>
 <diffle-code lang="json" example path="app.py" line="2">{}</diffle-code>
 <diffle-code example>{}</diffle-code>
 <diffle-code lang="rust" title="Shape">fn a()</diffle-code>
+<diffle-walk path="app.py" lines="1-3"></diffle-walk>
+<diffle-walk path="app.py" lines="2-3">stray<p>prose</p>
+  <diffle-note lines="1-3" title="Out">Leaves the walk.</diffle-note>
+  <diffle-note lines="2">Has no title.</diffle-note>
+  <diffle-note lines="3" title="Block"><p>A paragraph.</p></diffle-note>
+</diffle-walk>
+<p><diffle-note lines="2" title="Loose">Alone.</diffle-note></p>
+<diffle-diagram><svg viewBox="0 0 104 44"><g step="1"><rect x="8" y="8" width="40" height="28"/></g><g step="3"><rect x="56" y="8" width="40" height="28"/></g></svg>
+<diffle-note title="One">First.</diffle-note><diffle-note lines="2" title="Two">Second.</diffle-note></diffle-diagram>
+<diffle-diagram><svg viewBox="0 0 56 44"><rect x="8" y="8" width="40" height="28"/></svg><diffle-note title="Lost">No steps.</diffle-note></diffle-diagram>
+<diffle-trace><p>prose</p><diffle-stop path="app.py" line="9">Past the end.</diffle-stop><diffle-stop path="gone.py" line="1">Not in the review.</diffle-stop></diffle-trace>
+<p><diffle-stop path="app.py" line="2">Alone.</diffle-stop></p>
 <diffle-tabs>loose<diffle-tab><p>No title.</p></diffle-tab></diffle-tabs>
 <diffle-tabs><p>prose</p><diffle-tab title="A"><diffle-tabs><diffle-tab title="In">x</diffle-tab><diffle-tab title="Tabs">y</diffle-tab></diffle-tabs></diffle-tab><diffle-tab title="B" kind="maybe"><h2>Heading</h2></diffle-tab></diffle-tabs>
 <p><diffle-tab title="Loose">Alone.</diffle-tab></p>
@@ -204,10 +231,16 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
     s.close().await;
 }
 
-/// A tour that holds every judgment call diffle warns of: a long file note, a code line that wraps.
+/// A tour that holds every judgment call diffle warns of: a long file note, a code line that wraps,
+/// a one-stop trace, and a walk whose long note shares a line with the one before it.
 const CROWDED: &str = r#"<h2>Flow</h2>
 <diffle-tree title="Loader" paths="app.py"><diffle-file path="app.py">the one file that holds every change here</diffle-file></diffle-tree>
-<diffle-row><diffle-code lang="python">def load(path: str, encoding: str = "utf-8") -&gt; list[str]: ...</diffle-code><diffle-code lang="python">x = 1</diffle-code></diffle-row>"#;
+<diffle-row><diffle-code lang="python">def load(path: str, encoding: str = "utf-8") -&gt; list[str]: ...</diffle-code><diffle-code lang="python">x = 1</diffle-code></diffle-row>
+<diffle-trace><diffle-stop path="app.py" line="2">The one place.</diffle-stop></diffle-trace>
+<diffle-walk path="app.py" lines="1-2">
+  <diffle-note lines="1" title="Imports">It imports os.</diffle-note>
+  <diffle-note lines="1-2" title="The loader">It defines the loader. It takes an id. It returns it.</diffle-note>
+</diffle-walk>"#;
 
 #[tokio::test]
 async fn shows_a_tour_with_judgment_calls_and_warns_of_each() {

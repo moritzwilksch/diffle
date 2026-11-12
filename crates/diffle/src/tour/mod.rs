@@ -9,6 +9,7 @@ mod element;
 mod files;
 mod placement;
 mod reading;
+mod stepped;
 mod validate;
 
 use std::collections::HashMap;

@@ -117,7 +117,7 @@ export function textRange(root: ParentNode, anchor: Spot): Range | null {
 
 /**
  * The top of what a thread is on, in client coordinates: its words, or the element, or the nearest
- * shown element around it, as tabs around a pane they do not show; null when the page shows none.
+ * shown element around it, as a walk around a note it does not show; null when the page shows none.
  */
 export function anchorTop(root: ParentNode, anchor: Spot): number | null {
   const rect = anchor.target.on === 'text' ? textRange(root, anchor)?.getClientRects()[0] : undefined;

@@ -42,6 +42,12 @@ export const tourView: ViewDef = {
         return true;
       case 'c':
         return commentOnSelection();
+      case 'l':
+      case 'ArrowRight':
+        return tourPage.step(1);
+      case 'h':
+      case 'ArrowLeft':
+        return tourPage.step(-1);
       case 'j':
       case 'ArrowDown':
         tourPage.scroll(LINE);

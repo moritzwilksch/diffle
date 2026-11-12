@@ -6,13 +6,15 @@ import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
 import { TourCheck } from './primitives/Check.js';
 import { TourCode } from './primitives/Code.js';
-import { TourDrawing } from './primitives/Diagram.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourSymbol } from './primitives/Symbol.js';
 import { TourTabs } from './primitives/Tabs.js';
 import { TourTree } from './primitives/Tree.js';
+import { TourDiagram } from './steps/StepDiagram.js';
+import { TourTrace } from './steps/Trace.js';
+import { TourWalk } from './steps/Walk.js';
 
 /**
  * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to
@@ -69,6 +71,13 @@ function contentNode(node: ChildNode, key: number): ReactNode {
         />
       );
     }
+    case 'diffle-walk': {
+      const [start, end] = lineSpan(element.lines);
+      const range = { path: element.path, side: element.side ?? 'new', start, end };
+      return <TourWalk key={key} source={node} range={range} renderNote={partContent} />;
+    }
+    case 'diffle-trace':
+      return <TourTrace key={key} source={node} renderNote={partContent} />;
     case 'diffle-check':
       return <TourCheck key={key} source={node} renderItem={partContent} />;
     case 'diffle-tabs':
@@ -101,7 +110,7 @@ function contentNode(node: ChildNode, key: number): ReactNode {
         />
       );
     case 'diffle-diagram':
-      return <TourDrawing key={key} of={node} place={placeOf(node)} />;
+      return <TourDiagram key={key} of={node} renderNote={partContent} />;
     case 'diffle-code':
       return (
         <TourCode
@@ -141,8 +150,8 @@ function contentNode(node: ChildNode, key: number): ReactNode {
 }
 
 /**
- * What a checklist item or a tab's pane holds, rendered as the article renders it; one function, so
- * a block reads its parts once per document.
+ * What a note, a checklist item or a tab's pane holds, rendered as the article renders it; one
+ * function, so a block reads its parts once per document.
  */
 function partContent(part: Element): ReactNode {
   return <TourContent of={part} />;

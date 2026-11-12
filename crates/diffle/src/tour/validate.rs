@@ -9,6 +9,7 @@ use super::dom::{self, Dom, Node, NodeId};
 use super::element::{Findings, attr, is_count, label, parse, short};
 use super::files::{Reference, asks};
 use super::placement::{Parent, Place, Rule, holds_diff, misplaced, opens_with_summary};
+use super::stepped;
 use crate::protocol::{TourElement, TourError, TourTag};
 
 /// What a document asks of the snapshot, and what is wrong with it regardless.
@@ -32,7 +33,7 @@ struct Walk {
     section: Option<String>,
     /// The card the walk is in, by its `id`.
     card: Option<String>,
-    /// The block whose parts (items, tabs) the walk is in, and the part, as errors name them.
+    /// The block whose parts (steps, tabs) the walk is in, and the part, as errors name them.
     parts: Option<String>,
     /// How many columns the row the walk is in has; 0 outside a row.
     columns: usize,
@@ -177,9 +178,17 @@ impl Walk {
                 }
             }
             Rule::Row => self.row(dom, node, place, &element),
+            Rule::Walk => {
+                let found = stepped::walk::check(dom, node, &element, parsed.as_ref());
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
+            Rule::Trace => {
+                let found = stepped::trace::check(dom, node, &element);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
             Rule::Check => {
                 let found = checklist::check(dom, node, &element);
-                self.parts(dom, checklist::parts(dom, node), rule.inner(place), label(tag, attrs), found);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
             Rule::Tree => {
                 let found = tree::check(dom, node, &element, parsed.as_ref());
@@ -196,7 +205,9 @@ impl Walk {
                 self.framed(code::Frame::Tab, |walk| walk.children(dom, node, rule.inner(place)));
                 self.parts = outer;
             }
-            Rule::Callout | Rule::Item | Rule::File => self.children(dom, node, rule.inner(place)),
+            Rule::Callout | Rule::Note | Rule::Stop | Rule::Item | Rule::File => {
+                self.children(dom, node, rule.inner(place))
+            }
             Rule::Code => {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
@@ -216,7 +227,11 @@ impl Walk {
                     self.error(node, element.clone(), "diffle-jump holds only its label text");
                 }
             }
-            Rule::Diagram => self.errors.extend(diagram::check(dom, node, &element)),
+            Rule::Diagram => {
+                self.errors.extend(diagram::check(dom, node, &element));
+                let found = stepped::diagram::check(dom, node, &element);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), tag.into(), found);
+            }
             Rule::Block | Rule::Symbol | Rule::Icon => self.empty(dom, node, tag, &element),
         }
         if let (Some(parsed), true) = (parsed, fits) {

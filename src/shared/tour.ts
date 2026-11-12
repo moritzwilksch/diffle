@@ -37,8 +37,8 @@ export const TourPartSchema = z.object({
   /** Its tag: `diffle-card`, `p`, a diagram's `rect`. */
   tag: TourCommentTagSchema,
   /**
-   * What names it: a card's `id`; a diff's `path:lines`; a code block's `path:line`; a tab's or a
-   * tree's `title`; a callout's `kind`. Absent when it has none.
+   * What names it: a card's `id`; a diff's or a walk's `path:lines`; a stop's or a code block's
+   * `path:line`; a note's, a tab's or a tree's `title`; a callout's `kind`. Absent when it has none.
    */
   handle: z.string().optional(),
 });
@@ -55,7 +55,7 @@ export const TourAnchorSchema = z.object({
   section: z.string(),
   /** The element the thread is on. */
   element: TourPartSchema,
-  /** The innermost card or tab holding it. */
+  /** The innermost card, tab or walk holding it, or the diagram holding a diagram's note. */
   within: TourPartSchema.optional(),
   target: TourTargetSchema,
 });

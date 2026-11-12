@@ -38,6 +38,8 @@ const KINDS: Record<TourWholeTag, string> = {
   text: 'label',
   'diffle-card': 'card',
   'diffle-diff': 'diff',
+  'diffle-walk': 'walk',
+  'diffle-trace': 'trace',
   'diffle-tabs': 'tabs',
   'diffle-check': 'checklist',
   'diffle-item': 'item',

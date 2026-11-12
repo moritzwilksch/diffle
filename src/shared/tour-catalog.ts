@@ -57,6 +57,64 @@ export const TourDiffSchema = z
   .strict();
 
 /**
+ * Lines of the review's diff walked one note at a time, a block in the article's flow: the reader
+ * steps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds
+ * only its notes.
+ */
+export const TourWalkSchema = z
+  .object({
+    tag: z.literal('diffle-walk'),
+    /** A file of the review, relative to the repository root; a renamed file by its new path. */
+    path: z.string().min(1),
+    /** Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+    /** The line range the walk shows, `12-30`. */
+    lines: tourLinesSchema,
+  })
+  .strict();
+
+/**
+ * One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in
+ * inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ */
+export const TourNoteSchema = z
+  .object({
+    tag: z.literal('diffle-note'),
+    /** In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number. */
+    lines: tourLinesSchema.optional(),
+    /** What these lines do, in a few words: `Record each sale`. */
+    title: z.string().min(1),
+  })
+  .strict();
+
+/**
+ * A path through the code in call order, a block in the article's flow: the reader steps through
+ * its `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds
+ * only its stops.
+ */
+export const TourTraceSchema = z
+  .object({
+    tag: z.literal('diffle-trace'),
+  })
+  .strict();
+
+/**
+ * One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens
+ * there, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ */
+export const TourStopSchema = z
+  .object({
+    tag: z.literal('diffle-stop'),
+    /** A file of the review, relative to the repository root. */
+    path: z.string().min(1),
+    /** The line the stop lights; a few lines around it show too. */
+    line: tourNumberSchema,
+    /** Which side `line` counts on: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+  })
+  .strict();
+
+/**
  * Two to four panes side by side in one block's width, one shown at a time: the chosen design next
  * to one it rejected, a payload before and after. It holds only its `diffle-tab`s.
  */
@@ -202,7 +260,7 @@ export const TourCalloutSchema = z
 
 /**
  * A simple architecture diagram, a block in the article's flow: one inline `<svg>` of
- * `TourSvgElement`s, drawn by hand.
+ * `TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it.
  */
 export const TourDiagramSchema = z
   .object({
@@ -235,6 +293,8 @@ export const TourSvgElementSchema = z.discriminatedUnion('tag', [
     .object({
       tag: z.literal('g'),
       class: svgClassSchema.optional(),
+      /** The step of a stepped diagram that lights this group; the diagram holds one `diffle-note` per step. */
+      step: tourNumberSchema.optional(),
     })
     .strict(),
   z
@@ -373,6 +433,10 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourRowSchema,
   TourCodeSchema,
   TourIconSchema,
+  TourWalkSchema,
+  TourNoteSchema,
+  TourTraceSchema,
+  TourStopSchema,
   TourTabsSchema,
   TourTabSchema,
   TourCheckSchema,
@@ -434,6 +498,8 @@ export type TourCommentTag = z.infer<typeof TourCommentTagSchema>;
 export const TourWholeTagSchema = TourCommentTagSchema.extract([
   'diffle-card',
   'diffle-diff',
+  'diffle-walk',
+  'diffle-trace',
   'diffle-tabs',
   'diffle-check',
   'diffle-item',

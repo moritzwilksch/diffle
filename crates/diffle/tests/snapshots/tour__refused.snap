@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "diffle-group is not an element a tour may use; use diffle-card, diffle-diff, diffle-tree, diffle-jump, diffle-symbol, diffle-callout, diffle-diagram, diffle-row, diffle-code, diffle-icon, diffle-tabs, diffle-tab, diffle-check, diffle-item or diffle-file"
+      "message": "diffle-group is not an element a tour may use; use diffle-card, diffle-diff, diffle-tree, diffle-jump, diffle-symbol, diffle-callout, diffle-diagram, diffle-row, diffle-code, diffle-icon, diffle-walk, diffle-note, diffle-trace, diffle-stop, diffle-tabs, diffle-tab, diffle-check, diffle-item or diffle-file"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -211,6 +211,66 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > diffle-code lang=\"rust\" title=\"Shape\"",
       "message": "title names an example: add example, or drop title"
+    },
+    {
+      "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"1-3\"",
+      "message": "a diffle-walk holds at least one diffle-note: one per step, in reading order"
+    },
+    {
+      "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > text \"stray\"",
+      "message": "a diffle-walk holds only diffle-notes: text belongs in a note"
+    },
+    {
+      "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > <p>",
+      "message": "a diffle-walk holds only diffle-notes: prose goes before or after it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"1-3\" title=\"Out\"",
+      "message": "lines 1-3 leave the walk's lines 2-3: a note explains lines of its walk"
+    },
+    {
+      "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"2\"",
+      "message": "a diffle-note takes title=\"…\": what these lines do, in a few words: `Record each sale`"
+    },
+    {
+      "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"3\" title=\"Block\" > <p>",
+      "message": "a note holds a sentence or two: text, <code>, <strong>, <em>, <a> and inline primitives"
+    },
+    {
+      "element": "h2 \"A\" > diffle-note lines=\"2\" title=\"Loose\"",
+      "message": "diffle-note belongs directly inside a diffle-walk, or a diffle-diagram after its <svg>"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram",
+      "message": "steps run 1 to 3 without a gap: no <g> takes step=\"2\""
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram",
+      "message": "has 3 steps and 2 notes: one diffle-note per step, in order"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram > diffle-note lines=\"2\" title=\"Two\"",
+      "message": "a diagram's note takes no lines: it explains the step of its number"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram",
+      "message": "a diagram's notes step through its groups: give each <g> a note lights step=\"n\""
+    },
+    {
+      "element": "h2 \"A\" > diffle-trace > <p>",
+      "message": "a diffle-trace holds only diffle-stops: prose goes before or after it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-trace > diffle-stop path=\"app.py\" line=\"9\"",
+      "message": "line 9 is past the end of app.py, which has 3 lines on the new side"
+    },
+    {
+      "element": "h2 \"A\" > diffle-trace > diffle-stop path=\"gone.py\" line=\"1\"",
+      "message": "gone.py is not a file of the review"
+    },
+    {
+      "element": "h2 \"A\" > diffle-stop path=\"app.py\" line=\"2\"",
+      "message": "diffle-stop belongs directly inside a diffle-trace"
     },
     {
       "element": "h2 \"A\" > diffle-tabs",

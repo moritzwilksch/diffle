@@ -31,7 +31,7 @@ pub fn reading(dom: &Dom, id: NodeId) -> String {
             tag if is_opaque(tag) || tag == "diffle-icon" => String::new(),
             tag => {
                 let inner: String = dom.children(id).iter().map(|&c| reading(dom, c)).collect();
-                let titled = matches!(tag, "diffle-card" | "diffle-tab");
+                let titled = matches!(tag, "diffle-card" | "diffle-note" | "diffle-tab");
                 if titled { format!("{} {inner}", attr(attrs, "title").unwrap_or_default()) } else { inner }
             }
         },
