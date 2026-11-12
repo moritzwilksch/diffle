@@ -11,10 +11,17 @@ import {
   useTextHighlights,
   useTourDraft,
   useTourThreads,
-} from './comments.js';
+} from './margin/tourThreads.js';
 import type { TourDocument } from './document.js';
-import { blockAround, shapeAt, useElementMarks, useHoveredBlock } from './blocks.js';
-import { BlockComment, type HoveredBlock, InlineThreads, Margin, SelectionComment, StaleThreads } from './Margin.js';
+import { blockAround, shapeAt, useElementMarks, useHoveredBlock } from './margin/targets.js';
+import {
+  BlockComment,
+  type HoveredBlock,
+  InlineThreads,
+  Margin,
+  SelectionComment,
+  StaleThreads,
+} from './margin/Margin.js';
 import { TourHostContext } from './host/host.js';
 import { liveHost } from './host/live.js';
 import { TourArticle } from './render.js';

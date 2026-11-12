@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
 import { selectionTarget, textRange } from '@/client/tour/anchor.js';
-import { freeSpot, placeCards } from '@/client/tour/placement.js';
+import { freeSpot, placeCards } from '@/client/tour/margin/cards.js';
 import { excerptRows, noteRows } from '@/client/tour/steps/rows.js';
 import { keyTarget } from '@/client/tour/steps/steps.js';
 

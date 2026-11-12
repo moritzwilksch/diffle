@@ -187,7 +187,7 @@
   padding-block: 2rem;
 }
 
-/* Each card hangs level with what it is on (`placeCards` in tour/placement.ts). It moves without a
+/* Each card hangs level with what it is on (`placeCards` in tour/margin/cards.ts). It moves without a
    transition: a new card gliding down from the margin's top would be measured, focused and scrolled to
    where it starts, not where it lands. */
 .tour-margin {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { TourWholeTagSchema } from '@/shared/tour-catalog.js';
-import { elementAt, NODE_ATTR, type Spot } from './anchor.js';
+import { elementAt, NODE_ATTR, type Spot } from '@/client/tour/anchor.js';
 
 /**
  * The blocks whose Comment button the pointer brings up: every one a thread may sit on as a whole,

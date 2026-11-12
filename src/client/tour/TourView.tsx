@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { relativeTime } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
-import { useTourThreads } from './comments.js';
+import { useTourThreads } from './margin/tourThreads.js';
 import { type TourLoad, useTour } from './state.js';
 import { TourPage } from './TourPage.js';
 

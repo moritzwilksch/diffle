@@ -6,7 +6,6 @@ import type { CommentThread } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
 import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
 import { anchorLabel } from '@/client/model.js';
-import { useTour } from '@/client/tour/state.js';
 import { showView } from '@/client/views/state.js';
 import { anchorPath } from './threads.js';
 import { Markdown } from '@/client/Markdown.js';
@@ -22,17 +21,20 @@ export const ThreadRow = memo(function ThreadRow({
   openFile,
   focusThread,
   deleteThread,
+  openTourThread,
 }: {
   thread: CommentThread;
   openFile: (path: string, line?: number, side?: Side) => Promise<void>;
   focusThread: (id: string | null) => void;
   deleteThread: (id: string) => Promise<void>;
+  /** Shows the tour with thread `id` on it focused; the tour, not the comments, knows how. */
+  openTourThread: (id: string) => void;
 }) {
   const first = t.messages[0];
   const del = useConfirm(() => void deleteThread(t.id));
   const open = () => {
     // A file thread's card sits above the file's first line, where opening the file lands.
-    if (t.anchor.kind === 'tour') return useTour.getState().revealThread(t.id);
+    if (t.anchor.kind === 'tour') return openTourThread(t.id);
     if (t.anchor.kind === 'line') void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
     else void openFile(t.anchor.path);
     // From the tour's panel too, a thread on code opens in the diff.

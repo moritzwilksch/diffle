@@ -1,6 +1,6 @@
 import { MessageSquare } from 'lucide-react';
 import { CommentPanel } from '@/client/comments/CommentPanel.js';
-import { useTourThreads } from './comments.js';
+import { useTourThreads } from './margin/tourThreads.js';
 import { Outline } from './Outline.js';
 import { useTour } from './state.js';
 
@@ -19,7 +19,7 @@ export function TourSide() {
         <TourContents />
       </div>
       <div className="flex min-h-0 flex-1 flex-col [&>aside]:flex-1">
-        <CommentPanel hint={TOUR_HINT} />
+        <CommentPanel hint={TOUR_HINT} openTourThread={useTour.getState().revealThread} />
       </div>
     </div>
   );

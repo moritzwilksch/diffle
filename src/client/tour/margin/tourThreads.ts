@@ -4,7 +4,7 @@ import { visibleThreads } from '@/client/model.js';
 import { useStore, type TourDraft } from '@/client/store.js';
 import type { CommentThread } from '@/shared/protocol.js';
 import type { TourAnchor } from '@/shared/tour.js';
-import { selectionTarget, type Spot, textRange } from './anchor.js';
+import { selectionTarget, type Spot, textRange } from '@/client/tour/anchor.js';
 
 /** A thread on the tour, its anchor narrowed. */
 export type TourThread = CommentThread & { anchor: TourAnchor };

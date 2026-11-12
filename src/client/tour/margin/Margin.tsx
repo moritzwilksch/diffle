@@ -6,11 +6,18 @@ import { CommentComposer } from '@/client/review/CommentComposer.js';
 import { useStore, type TourDraft } from '@/client/store.js';
 import { remPx } from '@/client/scale.js';
 import { Button } from '@/client/ui/Button.js';
-import { anchorTop, selectionTarget } from './anchor.js';
-import { commentOnSelection, DRAFT, type TourThread, useActiveCard, useTourDraft, useTourThreads } from './comments.js';
-import { sourceAt, sourceLabel, type useHoveredBlock } from './blocks.js';
-import { freeSpot, placeCards, type Taken } from './placement.js';
-import { useTour } from './state.js';
+import { anchorTop, selectionTarget } from '@/client/tour/anchor.js';
+import {
+  commentOnSelection,
+  DRAFT,
+  type TourThread,
+  useActiveCard,
+  useTourDraft,
+  useTourThreads,
+} from './tourThreads.js';
+import { sourceAt, sourceLabel, type useHoveredBlock } from './targets.js';
+import { freeSpot, placeCards, type Taken } from './cards.js';
+import { useTour } from '@/client/tour/state.js';
 
 /** The composer's header: the words or the element the draft is on, read from the tour's `body`. */
 function draftLabel(draft: TourDraft, body: Element | null): string {
