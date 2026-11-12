@@ -243,12 +243,12 @@ export const api = {
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   tour: () => json(TourResponseSchema, 'api/tour'),
-  /** The script and the stylesheet an exported tour runs on, built with the client, and the packages the script bundles. */
+  /** The script and the stylesheet an exported tour runs on, built with the client, and what they bundle with its licences (`ExportNotices` as JSON). */
   tourRuntime: async () => {
     const [js, css, notices] = await Promise.all([
       text('export/tour.js'),
       text('export/tour.css'),
-      text('export/notices.txt'),
+      text('export/notices.json'),
     ]);
     return { js, css, notices };
   },

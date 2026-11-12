@@ -1,4 +1,5 @@
 import { api } from '@/client/api.js';
+import type { ExportNotices } from '@/shared/notices.js';
 import type { TourLoad } from '@/client/tour/state.js';
 import { bakeTour } from './bake.js';
 import { type BakedTour, DATA_ID } from './data.js';
@@ -13,7 +14,8 @@ export async function exportTour(load: Extract<TourLoad, { state: 'ready' }>): P
   // A client built without the export answers with its page instead.
   if (runtime.js.trimStart().startsWith('<')) throw new Error('this build of diffle cannot export tours');
   const title = load.doc.title ?? 'Tour';
-  const file = new Blob([tourFile(baked, title, runtime)], { type: 'text/html' });
+  const notices = JSON.parse(runtime.notices) as ExportNotices;
+  const file = new Blob([tourFile(baked, title, { ...runtime, notices })], { type: 'text/html' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(file);
   link.download = `${title.replace(/[\\/:*?"<>|]+/g, '-').trim()}.html`;
@@ -21,17 +23,20 @@ export async function exportTour(load: Extract<TourLoad, { state: 'ready' }>): P
   URL.revokeObjectURL(link.href);
 }
 
-/** The exported file: a page holding the tour's data, the script that draws it, and its styles. */
+/**
+ * The exported file: a page holding the tour's data, the script that draws it, and its styles,
+ * opened by a list of what they bundle and closed by the full licence texts that list owes.
+ */
 export function tourFile(
   baked: BakedTour,
   title: string,
-  { js, css, notices }: { js: string; css: string; notices: string },
+  { js, css, notices }: { js: string; css: string; notices: ExportNotices },
 ): string {
   // Nothing in a script or style element may close it early.
   const inline = (text: string) => text.replace(/<\/(script|style)/gi, '<\\/$1');
   const data = JSON.stringify(baked).replace(/</g, '\\u003c');
   return `<!doctype html>
-${noticeComment(notices)}
+${comment(['This page was exported from diffle. It bundles these, each under its licence, given in full at the end:', ...notices.bundled])}
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -47,21 +52,15 @@ ${noticeComment(notices)}
 <script>${inline(js)}</script>
 </body>
 </html>
+${comment(notices.licences.flatMap(({ covers, text }, i) => [...(i ? ['', '='.repeat(72), ''] : []), ...covers, '', text]))}
 `;
 }
 
-/**
- * The comment that opens the file: the packages its script bundles, one per line as the export
- * build lists them, and the fonts its styles embed.
- */
-function noticeComment(notices: string): string {
-  const lines = [
-    'This page was exported from diffle. Its script bundles these packages, each under its licence:',
-    ...notices.trim().split('\n'),
-    'Its styles embed the fonts Inter and JetBrains Mono, from Fontsource, under the SIL Open Font License 1.1.',
-  ];
-  // Nothing in it may close the comment.
-  return `<!--\n${lines.join('\n').replaceAll('--', '- -')}\n-->`;
+/** `lines` as an HTML comment. */
+function comment(lines: string[]): string {
+  // Nothing in it may close the comment, and HTML forbids `--` inside one: split every pair of
+  // dashes, so a rule of them (the OFL opens with one) keeps none.
+  return `<!--\n${lines.join('\n').replace(/-(?=-)/g, '- ')}\n-->`;
 }
 
 function escapeHtml(text: string): string {

@@ -777,6 +777,10 @@ test.describe('the tour', () => {
       expect(html).toMatch(
         /^<!doctype html>\n<!--\nThis page was exported from diffle\.[^]*\nreact-dom \d+\.\d+\.\d+ \(MIT\)\n/,
       );
+      // It closes with every licence that list owes, in full, each text once; no `--` ends a comment early.
+      const [, opening, closing] = /^<!doctype html>\n(<!--\n[^]*?\n-->)\n[^]*\n(<!--\n[^]*\n-->)\n$/.exec(html) ?? [];
+      for (const notice of [opening, closing]) expect(notice?.slice(4, -3)).not.toContain('--');
+      expect(`${opening}\n\n${closing}`).toMatchSnapshot('tour-export-licences.txt');
       // Nothing in it names a place to load from.
       expect(html).not.toMatch(/\b(?:src|href|action)\s*=\s*["']?(?:https?:|\/\/)/i);
       expect(html).not.toMatch(/url\(\s*["']?(?:https?:|\/\/)/i);
