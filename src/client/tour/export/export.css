@@ -1,0 +1,114 @@
+/* An exported tour's styles: the tour's own, in the app's theme, with the Latin cuts of its type. Only
+   what the tour's components use becomes a utility. */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@import '../../styles/fonts-latin.css' layer(base);
+@import '../../styles/theme.css' layer(base);
+@import '../../styles/base.css' layer(base);
+@import '../../styles/markdown.css' layer(components);
+@import '../../styles/diagram.css' layer(components);
+@import '../../styles/tour.css' layer(components);
+@import '../../styles/steps.css' layer(components);
+@import '../../styles/panes.css' layer(components);
+@import '../../styles/tokens.css';
+
+@source '../';
+@source '../../FilePath.tsx';
+
+@layer components {
+  .tour-export {
+    display: grid;
+    grid-template-columns: 16rem minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .tour-export-outline {
+    overflow: auto;
+    border-right: 1px solid var(--border);
+    background: var(--bg-2);
+  }
+
+  .tour-export-page {
+    overflow: auto;
+    outline: none;
+  }
+
+  /* The column diffle shows a tour in (`PAGE_WIDTH` in TourPage.tsx), and the room around it. */
+  .tour-export-page > .tour-article {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 2rem 24px 4rem;
+  }
+
+  /* Narrow, the contents sit over the article. */
+  @media (width < 56rem) {
+    .tour-export {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .tour-export-outline {
+      max-height: 30vh;
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+  }
+
+  /* A symbol chip's hover, under it while the pointer or the focus is on it. */
+  .tour-chip {
+    position: relative;
+    border-radius: 0.25rem;
+    outline-offset: 1px;
+  }
+
+  .tour-chip > code {
+    text-decoration: underline dotted var(--fg-2);
+    text-underline-offset: 0.2em;
+  }
+
+  .tour-chip-tip {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    z-index: 10;
+    display: none;
+    width: max-content;
+    max-width: min(32rem, 80vw);
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--bg-raised);
+    box-shadow: var(--review-card-shadow);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    white-space: normal;
+  }
+
+  .tour-chip:is(:hover, :focus-visible) > .tour-chip-tip {
+    display: block;
+  }
+
+  /* Not the `font` shorthand: it would turn the ligatures base.css turns off back on. */
+  .tour-chip-tip > pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .tour-chip-tip > p {
+    margin: 0.375rem 0 0;
+  }
+
+  .tour-check-mark {
+    display: flex;
+    margin-top: 0.25rem;
+    color: var(--fg-2);
+  }
+
+  [data-ticked] > .tour-check-mark {
+    color: var(--add);
+  }
+}

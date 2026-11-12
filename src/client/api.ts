@@ -240,6 +240,11 @@ export const api = {
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
   tour: () => json(TourResponseSchema, 'api/tour'),
+  /** The script and the stylesheet an exported tour runs on, built with the client. */
+  tourRuntime: async () => {
+    const [js, css] = await Promise.all([text('export/tour.js'), text('export/tour.css')]);
+    return { js, css };
+  },
   /** Ticks a checklist item of the review's tour as decided, or unticks it. */
   tick: (t: TourTick) => json(z.undefined(), 'api/tour/ticks', { method: 'PUT', body: encode(TourTickSchema, t) }),
   /** The snapshot's changed symbols and the code using them. */

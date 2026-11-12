@@ -1,0 +1,29 @@
+1Entries learn their kind
+2Parsing reads the kind column
+3Unmatched refunds
+Where it lives
+4Finding unmatched refunds
+Previous note (h)
+Note 1: One set per account
+Note 2: Record each sale
+Note 3: Keep the unmatched refunds
+Next note (l)
+One set per account
+Record each sale
+Keep the unmatched refunds
+Previous step (h)
+Step 1: Read every entry
+Step 2: Collect the sales
+Step 3: Flag the refunds
+Next step (l)
+tally/cli.py:25
+tally/ledger.py:95
+tally/ledger.py:77
+Previous stop (h)
+Stop 1: tally/cli.py:25
+Stop 2: tally/ledger.py:95
+Stop 3: tally/ledger.py:77
+Next stop (l)
+Two passeschosen
+One passrejected
+A flagged refundexample

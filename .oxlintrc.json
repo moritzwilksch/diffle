@@ -32,6 +32,16 @@
   },
   "overrides": [
     {
+      // An exported tour's page has its own stylesheet.
+      "files": ["src/client/tour/export/**"],
+      "rules": {
+        "better-tailwindcss/no-unknown-classes": [
+          "error",
+          { "entryPoint": "./src/client/tour/export/export.css", "detectComponentClasses": true }
+        ]
+      }
+    },
+    {
       "files": ["src/**"],
       "rules": {
         "no-restricted-imports": [

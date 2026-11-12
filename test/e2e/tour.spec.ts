@@ -661,6 +661,77 @@ test.describe('the tour', () => {
       env: { PATH: '/usr/bin:/bin', FAKE_LSP_GRAPH: '1' },
     });
 
+    test('Export saves the tour as one file that reads offline: its rows coloured, its blocks stepping, nothing that needs diffle', async ({
+      page,
+      diffle,
+      browser,
+    }, testInfo) => {
+      await waitForLsp(diffle.url);
+      await pushTour(diffle.url, TOUR);
+      const view = await showTour(page);
+      const decided = view.getByRole('checkbox', { name: 'Decided: Should a bad row fail the file, or be skipped?' });
+      // The export bakes the ticks the page read back.
+      const readBack = page.waitForResponse((r) => r.url().endsWith('/api/tour') && r.request().method() === 'GET');
+      await decided.check();
+      await readBack;
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Export' }).click(),
+      ]);
+      expect(download.suggestedFilename()).toBe('Refunds count against sales.html');
+      const saved = testInfo.outputPath('tour.html');
+      await download.saveAs(saved);
+      await expect(view).toBeVisible();
+      await diffle.stop();
+
+      const html = await readFile(saved, 'utf8');
+      // Nothing in it names a place to load from.
+      expect(html).not.toMatch(/\b(?:src|href|action)\s*=\s*["']?(?:https?:|\/\/)/i);
+      expect(html).not.toMatch(/url\(\s*["']?(?:https?:|\/\/)/i);
+      const context = await browser.newContext({ viewport: page.viewportSize() });
+      const requests: string[] = [];
+      await context.route('**/*', (route) => {
+        requests.push(route.request().url());
+        return route.abort();
+      });
+      const file = await context.newPage();
+      await file.setContent(html);
+      await file.evaluate(() => document.fonts.ready);
+      await expect(file.locator('diffs-container').first()).toBeVisible();
+
+      // Every control steps a block or takes a section; nothing opens a diff, comments or ticks.
+      expect(await file.locator('input, textarea, a').count()).toBe(0);
+      const buttons = await file
+        .locator('button')
+        .evaluateAll((all) => all.map((b) => b.getAttribute('aria-label') ?? b.getAttribute('title') ?? b.textContent));
+      expect(buttons.join('\n')).toMatchSnapshot('tour-export-buttons.txt');
+      await expect(file).toHaveScreenshot('tour-export.png');
+
+      // The walk lights its first note, its sentence under its lines.
+      const walk = file.locator('[data-walk]');
+      await walk.scrollIntoViewIfNeeded();
+      await file.keyboard.press('l');
+      await expect(walk.locator('.tour-note')).toContainText('One set per account');
+      await expect(walk).toHaveScreenshot('tour-export-walk.png');
+      await file.emulateMedia({ colorScheme: 'dark' });
+      await expect(walk).toHaveScreenshot('tour-export-walk-dark.png');
+      await file.emulateMedia({ colorScheme: 'light' });
+
+      // A symbol chip keeps the hover its language server gave at export.
+      const chip = file.locator('.tour-chip');
+      await chip.scrollIntoViewIfNeeded();
+      await chip.hover();
+      await expect(chip.getByRole('tooltip')).toContainText('def f() -> None');
+      await expect(file).toHaveScreenshot('tour-export-hover.png');
+
+      // The checklist shows what was decided at export, as marks.
+      const check = file.getByRole('region', { name: 'Checklist' });
+      await check.scrollIntoViewIfNeeded();
+      await expect(check).toHaveScreenshot('tour-export-check.png');
+      expect(requests).toEqual([]);
+      await context.close();
+    });
+
     test('a symbol chip is coloured as in the diff, hovers, and lists its references; on the old side it only shows', async ({
       page,
       diffle,

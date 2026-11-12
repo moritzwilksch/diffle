@@ -23,7 +23,7 @@
   "type": "module",
   "scripts": {
     "fixture": "tsx scripts/fixture-repo.ts",
-    "build": "vite build",
+    "build": "vite build && vite build -c vite.export.config.ts",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
     "lint": "oxlint",
     "format": "oxfmt",

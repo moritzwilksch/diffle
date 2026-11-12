@@ -11,7 +11,7 @@ import { NoteBand, StepBadge, Stepper } from './Stepper.js';
 import { reveal, useSteps } from './steps.js';
 
 /** Lines shown on each side of a stop's line. */
-const AROUND = 3;
+export const AROUND = 3;
 
 /** One stop of a trace, as the article renders it. */
 interface Stop {

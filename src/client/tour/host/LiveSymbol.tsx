@@ -81,7 +81,7 @@ async function references(path: string, line: number, name: string, col: number 
 }
 
 /** Where `name` first occurs in `line` as a whole word, as the server checked it when the tour was pushed. */
-function wordColumn(line: string, name: string): number | null {
+export function wordColumn(line: string, name: string): number | null {
   const word = /[\p{L}\p{N}_]/u;
   for (let at = line.indexOf(name); at >= 0; at = line.indexOf(name, at + 1)) {
     const [before, after] = [line[at - 1], line[at + name.length]];
