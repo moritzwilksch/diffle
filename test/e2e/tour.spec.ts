@@ -246,7 +246,7 @@ test.describe('the tour', () => {
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
   });
 
-  test('an icon draws the same live and in an export; a name Lucide lacks shows a placeholder naming it', async ({
+  test('an icon draws the same live and in an export, an alias as its icon; a name Lucide lacks shows a placeholder naming it', async ({
     page,
     diffle,
     browser,
@@ -255,6 +255,7 @@ test.describe('the tour', () => {
       diffle.url,
       `<h2>Icons</h2>
 <p><diffle-icon name="database"></diffle-icon> stores, <diffle-icon name="databse"></diffle-icon> was misspelt.</p>
+<p><diffle-icon name="home"></diffle-icon> is an old name for <diffle-icon name="house"></diffle-icon>.</p>
 <diffle-diagram><svg viewBox="0 0 120 44">
   <g><rect x="8" y="8" width="104" height="28"/><svg data-lucide="no-such-icon" x="16" y="15"/><text x="36" y="22">Store</text></g>
 </svg></diffle-diagram>`,
@@ -262,8 +263,13 @@ test.describe('the tour', () => {
     const view = await showTour(page);
     const unknown = view.locator('svg:has(> title)');
     await expect(unknown.locator('title')).toHaveText(['Unknown icon "databse"', 'Unknown icon "no-such-icon"']);
-    await expect(view.locator('article p')).toHaveScreenshot('tour-icon-unknown.png');
+    await expect(view.locator('article p').first()).toHaveScreenshot('tour-icon-unknown.png');
     const known = await view.locator('svg.lucide-database').evaluate((svg) => svg.outerHTML);
+    // An alias Lucide keeps for a renamed icon draws that icon.
+    const aliased = view.locator('article p').nth(1).locator('svg');
+    const house = await aliased.evaluateAll((svgs) => svgs.map((svg) => svg.outerHTML));
+    expect(house).toHaveLength(2);
+    expect(house[0]).toBe(house[1]);
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -280,6 +286,13 @@ test.describe('the tour', () => {
     ]);
     // The file draws a known icon from the markup it baked, exactly as the review drew it.
     expect(await file.locator('svg.lucide-database').evaluate((svg) => svg.outerHTML)).toBe(known);
+    expect(
+      await file
+        .locator('p')
+        .nth(1)
+        .locator('svg')
+        .evaluateAll((svgs) => svgs.map((svg) => svg.outerHTML)),
+    ).toEqual(house);
     await context.close();
   });
 
