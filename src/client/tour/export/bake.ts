@@ -48,8 +48,7 @@ export async function bakeTour({ tour, doc, checks }: Ready): Promise<BakedTour>
         break;
       }
       case 'diffle-code': {
-        const line = element.line == null ? undefined : Number(element.line);
-        codes.push({ patch: codePatch(el.textContent ?? '', line), lang: codeLang(element.lang, element.path) });
+        codes.push({ patch: codePatch(el.textContent ?? ''), lang: codeLang(element.lang, element.path) });
         break;
       }
       case 'diffle-symbol':
