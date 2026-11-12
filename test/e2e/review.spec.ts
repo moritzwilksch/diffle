@@ -190,6 +190,38 @@ test('switches to the unified layout', async ({ page }) => {
   await expect(page).toHaveScreenshot('unified.png');
 });
 
+// ledger.py's lines come from four commits by two authors; the split layout blames both sides.
+test('shows git blame beside every line number in the gutter', async ({ page }) => {
+  const path = 'tally/ledger.py';
+  const card = page.locator('diffs-container').filter({ has: page.locator(`[data-path="${path}"]`) });
+  // Per column, each number cell's line, label and commit (the hover text's short sha): a run's
+  // later lines carry an empty label but still name their commit.
+  const labels = () =>
+    card.evaluate((el) =>
+      [...el.shadowRoot!.querySelectorAll('code')]
+        .map((code) =>
+          [...code.querySelectorAll<HTMLElement>('[data-column-number]')]
+            .map((cell) =>
+              [
+                cell.dataset.columnNumber,
+                cell.getAttribute('title')?.split(' ')[0] ?? '-',
+                cell.getAttribute('data-blame-gutter') ?? '(none)',
+              ].join('\t'),
+            )
+            .join('\n'),
+        )
+        .join('\n---\n'),
+    );
+  await gotoFile(page, path);
+  // `gb` cycles inline → gutter → off; inline is the default.
+  await page.keyboard.press('g');
+  await page.keyboard.press('b');
+  await expect.poll(labels).toContain('Ada');
+  await expect.poll(labels).not.toMatch(/\t(…|\(none\))$/m);
+  expect(await labels()).toMatchSnapshot('blame-gutter.txt');
+  await expect(page).toHaveScreenshot('blame-gutter.png');
+});
+
 test('hides the tree and the panel for a wide diff', async ({ page }) => {
   await gotoFile(page, 'tally/ledger.py');
   await page.keyboard.press('Control+b');
