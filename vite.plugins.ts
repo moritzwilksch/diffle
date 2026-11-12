@@ -33,7 +33,8 @@ const COMPRESSIBLE = /\.(?:html|js|css|svg|json|wasm|txt)$/;
 export const gzipAssets = (outDir: string): Plugin => ({
   name: 'diffle:gzip-assets',
   apply: 'build',
-  closeBundle() {
+  // Not `closeBundle`: it also runs after a failed build, and would hide that build's error.
+  writeBundle() {
     for (const name of readdirSync(outDir, { recursive: true, encoding: 'utf8' })) {
       if (!COMPRESSIBLE.test(name)) continue;
       const path = join(outDir, name);
