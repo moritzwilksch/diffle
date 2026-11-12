@@ -4205,7 +4205,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The binary links the crates below, grouped by licence. Each licence's text follows the crates
 that use it.
 
-- MIT License: 338
+- MIT License: 339
 - Unicode License v3: 20
 - Apache License 2.0: 8
 - ISC License: 6
@@ -9069,6 +9069,7 @@ Used by:
 - gix-actor 0.44.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-attributes 0.37.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-bitmap 0.6.1 (https://github.com/GitoxideLabs/gitoxide)
+- gix-blame 0.20.0 (https://github.com/GitoxideLabs/gitoxide)
 - gix-chunk 0.10.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-command 0.12.1 (https://github.com/GitoxideLabs/gitoxide)
 - gix-commitgraph 0.42.0 (https://github.com/GitoxideLabs/gitoxide)

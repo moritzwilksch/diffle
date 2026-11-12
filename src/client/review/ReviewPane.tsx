@@ -67,6 +67,7 @@ import { installOccurrenceHighlights, occurrenceControl } from '@/client/lsp/occ
 import { focusToken, onSelectionChanged, setViewer, wordsIn } from '@/client/lsp/wordNav.js';
 import { charAtPoint, tokenRange } from '@/client/lsp/tokenText.js';
 import { installSearchHighlights } from '@/client/search/highlight.js';
+import { BLAME_CSS, installBlame } from './blame.js';
 import { installCommentHighlights } from './commentHighlights.js';
 import { installWhitespaceMarks, WHITESPACE_CSS } from './whitespace.js';
 import { CommentCard } from './CommentCard.js';
@@ -405,6 +406,11 @@ export function ReviewPane() {
   useEffect(() => {
     if (!scroller) return;
     return installCommentHighlights(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
+  }, [scroller]);
+  // And the cursor line's blame.
+  useEffect(() => {
+    if (!scroller) return;
+    return installBlame(() => viewerRef.current as CodeViewHandle<unknown, undefined> | null, scroller);
   }, [scroller]);
   // And the visible spaces and tabs.
   useEffect(() => {
@@ -848,7 +854,7 @@ export function ReviewPane() {
   const options = useMemo(
     () => ({
       ...codeViewOptions,
-      unsafeCSS: HEADER_CSS + WHITESPACE_CSS + geometry.css,
+      unsafeCSS: HEADER_CSS + WHITESPACE_CSS + BLAME_CSS + geometry.css,
       layout: geometry.layout,
       itemMetrics: geometry.itemMetrics,
       hunkSeparators: 'line-info' as const,
