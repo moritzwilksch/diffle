@@ -7,7 +7,7 @@ Review a git diff in the browser and export line comments as an agent prompt.
 Usage: diffle [OPTIONS] [revs]... [COMMAND]
 
 Commands:
-  comments    read the comments of the review diffle is running for this repository, as an agent
+  comments    read and answer the comments of the review running for this repository, as an agent
   config      print the config file path and contents
   lsp         show the language server each language would get, and what is missing from PATH
   completion  print a shell completion script

@@ -173,7 +173,7 @@ pub enum Command {
         #[command(flatten)]
         opts: GlobalOpts,
     },
-    /// read the comments of the review diffle is running for this repository, as an agent
+    /// read and answer the comments of the review running for this repository, as an agent
     Comments {
         #[command(subcommand)]
         command: CommentsCommand,
@@ -201,6 +201,17 @@ pub enum CommentsCommand {
         /// only the threads on this file, relative to the repository root
         #[arg(long, value_name = "path")]
         path: Option<String>,
+        #[command(flatten)]
+        repo: RepoOpts,
+    },
+    /// reply to a thread as the agent; prints the thread as JSON
+    Reply {
+        /// the thread's id, as `diffle comments list` prints it
+        #[arg(value_name = "thread-id")]
+        thread: String,
+        /// the reply, in Markdown (`-`: stdin)
+        #[arg(value_name = "body|-")]
+        body: String,
         #[command(flatten)]
         repo: RepoOpts,
     },
