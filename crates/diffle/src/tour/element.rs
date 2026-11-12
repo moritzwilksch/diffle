@@ -3,28 +3,126 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
 use super::dom::NodeId;
-use crate::protocol::TourError;
+use crate::protocol::{TourElement, TourError, TourSvgElement, TourSvgIcon};
+
+/// A catalog type and the `$defs` entry of the contract that describes it.
+pub trait Catalogued: DeserializeOwned {
+    const DEF: &'static str;
+}
+
+impl Catalogued for TourElement {
+    const DEF: &'static str = "TourElement";
+}
+
+impl Catalogued for TourSvgElement {
+    const DEF: &'static str = "TourSvgElement";
+}
+
+impl Catalogued for TourSvgIcon {
+    const DEF: &'static str = "TourSvgIcon";
+}
 
 /// The element `tag` with `attrs`, as the catalog in `tour-catalog.ts` reads it, or why it does not fit.
-pub fn parse<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {
-    // The tag is no attribute, though a struct that names it lists it among the fields.
-    read::<T>(tag, attrs).map_err(|message| explain::<T>(tag, attrs, message).replace("`tag`, ", ""))
-}
-
-fn read<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {
+/// The attributes are checked against the contract's schema first, so every reason is worded here and
+/// deserializing only ever sees attributes that fit.
+pub fn parse<T: Catalogued>(tag: &str, attrs: &[(String, String)]) -> Result<T, String> {
+    let Some(schema) = schema(T::DEF, tag) else {
+        let tags = union(T::DEF).filter_map(|member| member["properties"]["tag"]["const"].as_str());
+        return Err(format!("{tag} is not an element a tour may use; use {}", listed(tags, "or")));
+    };
+    check(&named(tag), schema, attrs)?;
     let mut fields: Map<String, Value> = attrs.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
     fields.insert("tag".into(), Value::String(tag.into()));
-    serde_json::from_value(Value::Object(fields)).map_err(|e| e.to_string())
+    // Unreachable for attributes the schema accepts: the generated type is that schema.
+    serde_json::from_value(Value::Object(fields)).map_err(|e| format!("{tag} does not fit the catalog: {e}"))
 }
 
-/// `message` naming the attribute whose value failed its pattern, which serde's message leaves out.
-fn explain<T: DeserializeOwned>(tag: &str, attrs: &[(String, String)], message: String) -> String {
-    if !message.starts_with("doesn't match pattern") {
-        return message;
+/// Whether the catalog type at `def` has an element `tag`.
+pub fn knows(def: &str, tag: &str) -> bool {
+    schema(def, tag).is_some()
+}
+
+/// The schema of the element `tag` in the contract's `def`: one member of a union, or the object itself.
+fn schema(def: &str, tag: &str) -> Option<&'static Value> {
+    union(def).find(|member| member["properties"]["tag"]["const"] == tag)
+}
+
+fn union(def: &str) -> impl Iterator<Item = &'static Value> {
+    let def = &crate::protocol::contract()["$defs"][def];
+    def["oneOf"].as_array().map_or_else(|| std::slice::from_ref(def), Vec::as_slice).iter()
+}
+
+/// Why `attrs` do not fit `schema`, naming each attribute at fault: those it does not take, values
+/// outside their enum or pattern, and those it needs. Every reason at once, so one fix does not
+/// uncover the next.
+fn check(name: &str, schema: &'static Value, attrs: &[(String, String)]) -> Result<(), String> {
+    let properties = schema["properties"].as_object().map(|p| p.iter().filter(|(key, _)| *key != "tag"));
+    let known: Vec<&str> = properties.into_iter().flatten().map(|(key, _)| key.as_str()).collect();
+    let mut reasons = Vec::new();
+    let unknown: Vec<&str> = attrs.iter().map(|(k, _)| k.as_str()).filter(|k| !known.contains(k)).collect();
+    if !unknown.is_empty() {
+        let unknown = listed(unknown.into_iter(), "or");
+        reasons.push(format!("{name} takes no attribute {unknown}: it takes {}", listed(known.iter().copied(), "and")));
     }
-    // Alone, a bad value fails on its pattern before any missing attribute is noticed.
-    let culprit = attrs.iter().find(|a| read::<T>(tag, std::slice::from_ref(a)).is_err_and(|m| m == message));
-    culprit.map_or(message.clone(), |(name, _)| format!("{name}: {message}"))
+    for (key, value) in attrs.iter().filter(|(k, _)| known.contains(&k.as_str())) {
+        reasons.extend(misfit(key, value, resolve(&schema["properties"][key])));
+    }
+    let required = schema["required"].as_array().into_iter().flatten().filter_map(Value::as_str);
+    for missing in required.filter(|key| *key != "tag" && !attrs.iter().any(|(k, _)| k == key)) {
+        let meaning = described(&schema["properties"][missing]).map_or_else(String::new, |m| format!(": {m}"));
+        reasons.push(format!("{name} takes {missing}=\"…\"{meaning}"));
+    }
+    if reasons.is_empty() { Ok(()) } else { Err(reasons.join("; ")) }
+}
+
+/// Why `value` does not fit the attribute `key`'s schema `property`.
+fn misfit(key: &str, value: &str, property: &Value) -> Option<String> {
+    if let Some(allowed) = property["enum"].as_array() {
+        let fits = allowed.iter().any(|v| v == value);
+        return (!fits)
+            .then(|| format!("{key} is {}, not {value}", listed(allowed.iter().filter_map(Value::as_str), "or")));
+    }
+    if let Some(pattern) = property["pattern"].as_str() {
+        let fits = regex::Regex::new(pattern).expect("the catalog's patterns compile").is_match(value);
+        return (!fits).then(|| match described(property) {
+            Some(meaning) => format!("{key}=\"{value}\" does not fit: {meaning}"),
+            None => format!("{key}=\"{value}\" does not fit the form {pattern}"),
+        });
+    }
+    let short = property["minLength"].as_u64().is_some_and(|min| value.chars().count() < min as usize);
+    short.then(|| format!("{key} is empty"))
+}
+
+/// A property's schema, through the `$ref` that shared types such as `Side` take.
+fn resolve(property: &'static Value) -> &'static Value {
+    match property["$ref"].as_str().and_then(|r| r.strip_prefix("#/$defs/")) {
+        Some(def) => &crate::protocol::contract()["$defs"][def],
+        None => property,
+    }
+}
+
+/// A property's description as the rest of a sentence: its first letter lowered, no closing period.
+fn described(property: &Value) -> Option<String> {
+    let text = property["description"].as_str()?.trim().trim_end_matches('.');
+    let mut chars = text.chars();
+    let first = chars.next()?;
+    let first = if first == '`' { first.to_string() } else { first.to_lowercase().to_string() };
+    Some(format!("{first}{}", chars.as_str()))
+}
+
+/// How a message names an element by its tag: bare for a `diffle-*` element, else in brackets.
+fn named(tag: &str) -> String {
+    if tag.starts_with("diffle-") { format!("a {tag}") } else { format!("a <{tag}>") }
+}
+
+/// `items` as prose: `a, b and c`.
+fn listed<'a>(items: impl Iterator<Item = &'a str>, last: &str) -> String {
+    let items: Vec<&str> = items.collect();
+    match items.split_last() {
+        Some((tail, [])) => (*tail).to_owned(),
+        Some((tail, rest)) => format!("{} {last} {tail}", rest.join(", ")),
+        None => "nothing".to_owned(),
+    }
 }
 
 /// The value of the attribute `name` in `attrs`.

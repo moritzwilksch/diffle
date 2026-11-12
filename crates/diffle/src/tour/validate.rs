@@ -148,12 +148,7 @@ impl Walk {
 
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
         let element = format!("{context}{}", label(tag, attrs));
-        let parsed = parse::<TourElement>(tag, attrs).map_err(|message| match (attr(attrs, "title"), tag) {
-            (None, "diffle-note") => stepped::UNTITLED.into(),
-            (None, "diffle-tab") => tabs::UNTITLED.into(),
-            (None, "diffle-tree") => "a diffle-tree takes a title: what its files are, such as Server · Rust".into(),
-            _ => message,
-        });
+        let parsed = parse::<TourElement>(tag, attrs);
         let Some(rule) = Rule::of(tag) else {
             return self.error(node, element, parsed.err().unwrap_or_default());
         };

@@ -17,5 +17,14 @@ pub use language::*;
 pub use lsp::*;
 pub use snapshot::*;
 
+/// The wire contract as JSON Schema: the catalog's attributes and their documentation, which the
+/// tour validator checks attributes against and `--skill` prints.
+pub fn contract() -> &'static serde_json::Value {
+    static CONTRACT: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
+        serde_json::from_str(include_str!("../../protocol.generated.json")).expect("the embedded contract is JSON")
+    });
+    &CONTRACT
+}
+
 /** Mirrors `MAX_RANGE_COMMITS`: the commits a snapshot lists, and the most a range-diff takes. */
 pub const MAX_RANGE_COMMITS: usize = 250;

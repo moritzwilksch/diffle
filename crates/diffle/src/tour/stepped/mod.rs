@@ -11,8 +11,6 @@ use super::element::{label, short};
 use super::placement::fits_sentence;
 use super::reading::reading;
 
-/// Why a `diffle-note` without a title is refused, in place of the catalog's "missing field".
-pub const UNTITLED: &str = "a diffle-note takes a title: what its step shows, in a few words";
 /// Past this many steps a block is hard to keep in mind.
 const MANY: usize = 6;
 /// Past this many sentences a step's text stops being a caption.

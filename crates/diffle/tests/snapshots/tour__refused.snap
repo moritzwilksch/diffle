@@ -78,7 +78,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-diagram > <circle cx=\"5\" cy=\"5\">",
-      "message": "missing field `r`"
+      "message": "a <circle> takes r=\"…\""
     },
     {
       "element": "h2 \"A\" > <svg viewBox=\"0 0 1 1\">",
@@ -102,7 +102,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-card id=\"a\" title=\"A\" step=\"1\" color=\"red\"",
-      "message": "unknown field `color`, expected one of `icon`, `id`, `title`"
+      "message": "a diffle-card takes no attribute step or color: it takes icon, id and title"
     },
     {
       "element": "h2 \"A\" > diffle-card#a > diffle-card id=\"nested\" title=\"Nested\"",
@@ -110,7 +110,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"note\"",
-      "message": "unknown variant `note`, expected one of `info`, `warning`, `danger`"
+      "message": "kind is info, warning or danger, not note"
     },
     {
       "element": "h2 \"A\" > diffle-card#a > diffle-callout kind=\"info\"",
@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "unknown variant `diffle-group`, expected one of `diffle-card`, `diffle-diff`, `diffle-tree`, `diffle-jump`, `diffle-symbol`, `diffle-callout`, `diffle-diagram`, `diffle-row`, `diffle-code`, `diffle-icon`, `diffle-walk`, `diffle-note`, `diffle-trace`, `diffle-stop`, `diffle-tabs`, `diffle-tab`, `diffle-check`, `diffle-item`, `diffle-file`"
+      "message": "diffle-group is not an element a tour may use; use diffle-card, diffle-diff, diffle-tree, diffle-jump, diffle-symbol, diffle-callout, diffle-diagram, diffle-row, diffle-code, diffle-icon, diffle-walk, diffle-note, diffle-trace, diffle-stop, diffle-tabs, diffle-tab, diffle-check, diffle-item or diffle-file"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -194,7 +194,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-icon name=\"Database\" tone=\"red\"",
-      "message": "unknown variant `red`, expected one of `accent`, `success`, `warning`, `error`"
+      "message": "name=\"Database\" does not fit: its name on lucide.dev: `database`, `shield-check`; tone is accent, success, warning or error, not red"
     },
     {
       "element": "h2 \"A\" > diffle-card id=\"iconic\" title=\"I\" icon=\"usr\"",
@@ -206,7 +206,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user\" x=\"1\" y=\"1\" width=\"9\">",
-      "message": "unknown field `width`, expected one of `class`, `data-lucide`, `size`, `x`, `y`"
+      "message": "a <svg> takes no attribute width: it takes class, data-lucide, size, x and y"
     },
     {
       "element": "h2 \"A\" > diffle-diagram > <svg data-lucide=\"user\" x=\"1\" y=\"1\" width=\"9\">",
@@ -242,7 +242,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"2\"",
-      "message": "a diffle-note takes a title: what its step shows, in a few words"
+      "message": "a diffle-note takes title=\"…\": what these lines do, in a few words: `Record each sale`"
     },
     {
       "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"3\" title=\"Block\" > <p>",
@@ -294,7 +294,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-tabs > diffle-tab",
-      "message": "a diffle-tab takes a title: what its pane shows, in a few words"
+      "message": "a diffle-tab takes title=\"…\": what the pane shows, in a few words, on its tab"
     },
     {
       "element": "h2 \"A\" > diffle-tabs > <p>",
@@ -306,7 +306,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-tabs > diffle-tab title=\"B\" kind=\"maybe\"",
-      "message": "unknown variant `maybe`, expected one of `chosen`, `rejected`, `example`"
+      "message": "kind is chosen, rejected or example, not maybe"
     },
     {
       "element": "h2 \"A\" > diffle-tabs > diffle-tab title=\"B\" kind=\"maybe\" > <h2>",
@@ -362,7 +362,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-tree paths=\"app.py\"",
-      "message": "a diffle-tree takes a title: what its files are, such as Server · Rust"
+      "message": "a diffle-tree takes title=\"…\": what its files are, in a few words, as its header: `Server · Rust`"
     },
     {
       "element": "h2 \"A\" > diffle-tree paths=\"app.py\" > <p>",

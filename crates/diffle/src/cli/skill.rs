@@ -5,9 +5,6 @@ use std::fmt::Write as _;
 
 use serde_json::Value;
 
-/// The wire contract, which carries the catalog's schemas and their documentation.
-const CONTRACT: &str = include_str!("../../protocol.generated.json");
-
 const INTRO: &str = include_str!("skill.md");
 
 const DIAGRAM: &str = r#"<diffle-diagram><svg viewBox="0 0 360 52">
@@ -40,8 +37,7 @@ src/login.rs"><diffle-file path="src/auth.rs">start here</diffle-file></diffle-t
 
 /// The agent interface as Markdown.
 pub fn render() -> String {
-    let contract: Value = serde_json::from_str(CONTRACT).expect("the embedded contract is JSON");
-    let defs = &contract["$defs"];
+    let defs = &crate::protocol::contract()["$defs"];
     let mut out = String::from(INTRO);
     out.push_str("\n#### Diagram elements\n\nEach takes the attributes listed; `?` marks an optional one.\n\n");
     for element in defs["TourSvgElement"]["oneOf"].as_array().expect("TourSvgElement is a union") {

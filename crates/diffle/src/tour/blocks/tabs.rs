@@ -3,9 +3,6 @@ use crate::tour::code::holds_markup;
 use crate::tour::dom::{Dom, Node, NodeId};
 use crate::tour::element::{Findings, label, short};
 
-/// Why a `diffle-tab` without a title is refused, in place of the catalog's "missing field".
-pub const UNTITLED: &str = "a diffle-tab takes a title: what its pane shows, in a few words";
-
 /// The tabs of the `diffle-tabs` at `node`; what else it holds `check` refuses.
 pub fn panes(dom: &Dom, node: NodeId) -> Vec<NodeId> {
     dom.children(node).iter().copied().filter(|&c| is_tab(dom, c)).collect()

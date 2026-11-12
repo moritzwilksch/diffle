@@ -3,7 +3,7 @@
 use html5ever::ns;
 
 use super::dom::{Dom, Node, NodeId};
-use super::element::{label, parse};
+use super::element::{knows, label, parse};
 use super::icon;
 use crate::protocol::{TourError, TourSvgClass, TourSvgElement, TourSvgIcon};
 
@@ -55,8 +55,7 @@ impl Check<'_> {
         };
         let tag = &*name.local;
         let element = format!("{}{}", self.context, label(tag, attrs));
-        let unknown = |e: &String| e.starts_with("unknown variant");
-        let known = name.ns == ns!(svg) && !parse::<TourSvgElement>(tag, &[]).is_err_and(|e| unknown(&e));
+        let known = name.ns == ns!(svg) && knows("TourSvgElement", tag);
         if !known {
             return self.error(node, element, refusal(tag));
         }
