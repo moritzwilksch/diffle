@@ -1,7 +1,6 @@
 import { type FileDiffMetadata, parsePatchFiles, type SupportedLanguages } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
 import type { IconNode } from 'lucide-react';
-import type dynamicIconImports from 'lucide-react/dynamicIconImports';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { highlightCode } from '@/client/lsp/highlight.js';
 import { usePrimed, type WorkerPool } from '@/client/Markdown.js';
@@ -103,22 +102,20 @@ function useTokens(lines: readonly string[], lang: string): Token[][] | null {
   return tokens;
 }
 
-type IconName = keyof typeof dynamicIconImports;
 /** Each icon drawn so far, so a later mount draws it at once. */
 const loaded = new Map<string, IconNode>();
 
-/** An icon's drawing, from its chunk; the map of every icon's chunk is a chunk of its own too. */
+/** An icon's drawing, from the one chunk holding every icon's; none when no icon has the name. */
 export async function loadIcon(name: string): Promise<IconNode | undefined> {
   const known = loaded.get(name);
   if (known) return known;
-  const { default: chunks } = await import('lucide-react/dynamicIconImports');
-  if (!Object.hasOwn(chunks, name)) return undefined;
-  const { __iconData } = await chunks[name as IconName]();
-  loaded.set(name, __iconData.node);
-  return __iconData.node;
+  const { ICON_NODES } = await import('./iconNodes.js');
+  const node = ICON_NODES.get(name);
+  if (node) loaded.set(name, node);
+  return node;
 }
 
-/** An icon loaded from its own chunk on first use, so the client does not carry every icon. */
+/** An icon loaded on first use, so the main bundle carries none. */
 function useIcon(name: string): IconNode | undefined {
   const [node, setNode] = useState(() => loaded.get(name));
   useEffect(() => {
