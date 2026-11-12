@@ -4,8 +4,8 @@
 //! sibling boxes or none. What rests on the per-character estimate says "may"; a
 //! geometric fact is said plainly.
 use super::dom::{Dom, Node, NodeId};
-use super::drawing::{Drawing, Rect, get};
-use super::element::label;
+use super::drawing::{Drawing, Rect};
+use super::element::{attr, label};
 use crate::protocol::TourError;
 
 /// The article's column, and the gap between a row's columns, as `TourPage.tsx` and
@@ -31,7 +31,8 @@ pub fn warnings(dom: &Dom, node: NodeId, element: &str, columns: usize) -> Vec<(
     }) else {
         return Vec::new();
     };
-    let view: Vec<f64> = get(attrs, "viewBox").split_whitespace().filter_map(|n| n.parse().ok()).collect();
+    let view: Vec<f64> =
+        attr(attrs, "viewBox").unwrap_or_default().split_whitespace().filter_map(|n| n.parse().ok()).collect();
     let [_, _, width, height] = view[..] else { return Vec::new() };
     let context = format!("{element} > ");
     let drawing = Drawing::read(dom, svg, &context);

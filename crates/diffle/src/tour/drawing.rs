@@ -1,7 +1,7 @@
 //! A diagram's geometry as the layout warnings read it: its boxes, labels and icons, and the
 //! shapes that carry a tone.
 use super::dom::{Dom, Node, NodeId};
-use super::element::label;
+use super::element::{attr, label};
 
 /// An icon's width and height without `size`, as `Diagram.tsx` draws it.
 pub const ICON_SIZE: f64 = 14.0;
@@ -63,10 +63,10 @@ impl Drawing {
     fn visit(&mut self, dom: &Dom, node: NodeId, toned: bool, context: &str) {
         let Node::Element { name, attrs } = dom.node(node) else { return };
         let tag = &*name.local;
-        let classes: Vec<&str> = get(attrs, "class").split_whitespace().collect();
+        let classes: Vec<&str> = attr(attrs, "class").unwrap_or_default().split_whitespace().collect();
         let toned = toned || classes.iter().any(|c| TONES.contains(c));
         let element = format!("{context}{}", label(tag, attrs));
-        let num = |key: &str| get(attrs, key).parse::<f64>().unwrap_or(0.0);
+        let num = |key: &str| attr(attrs, key).unwrap_or_default().parse::<f64>().unwrap_or(0.0);
         let frame = classes.contains(&"frame");
         if matches!(tag, "rect" | "circle" | "ellipse" | "polygon") && !frame {
             self.shapes += 1;
@@ -98,7 +98,7 @@ impl Drawing {
                 self.labels.push(Label { node, element, x, y, left, right: left + wide, centred });
             }
             "svg" => {
-                let size = if get(attrs, "size").is_empty() { ICON_SIZE } else { num("size") };
+                let size = if attr(attrs, "size").unwrap_or_default().is_empty() { ICON_SIZE } else { num("size") };
                 self.icons.push(Icon { node, element, x: num("x"), y: num("y"), size });
             }
             "g" => {
@@ -140,7 +140,7 @@ fn width(dom: &Dom, node: NodeId, classes: &[&str]) -> f64 {
             }
             Node::Element { attrs, .. } => {
                 let mut inner = classes.to_vec();
-                inner.extend(get(attrs, "class").split_whitespace());
+                inner.extend(attr(attrs, "class").unwrap_or_default().split_whitespace());
                 // Words in separate nodes are separated by a space the browser keeps.
                 total += width(dom, child, &inner) + per;
             }
@@ -148,8 +148,4 @@ fn width(dom: &Dom, node: NodeId, classes: &[&str]) -> f64 {
         }
     }
     total
-}
-
-pub fn get<'a>(attrs: &'a [(String, String)], key: &str) -> &'a str {
-    attrs.iter().find(|(k, _)| k == key).map_or("", |(_, v)| v.as_str())
 }

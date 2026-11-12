@@ -73,14 +73,14 @@ function contentNode(node: ChildNode, key: number): ReactNode {
     case 'diffle-walk': {
       const [start, end] = lineSpan(element.lines);
       const range = { path: element.path, side: element.side ?? 'new', start, end };
-      return <TourWalk key={key} source={node} range={range} renderNote={noteContent} />;
+      return <TourWalk key={key} source={node} range={range} renderNote={partContent} />;
     }
     case 'diffle-trace':
-      return <TourTrace key={key} source={node} renderNote={noteContent} />;
+      return <TourTrace key={key} source={node} renderNote={partContent} />;
     case 'diffle-check':
-      return <TourCheck key={key} source={node} renderItem={noteContent} />;
+      return <TourCheck key={key} source={node} renderItem={partContent} />;
     case 'diffle-tabs':
-      return <TourTabs key={key} source={node} renderPane={paneContent} />;
+      return <TourTabs key={key} source={node} renderPane={partContent} />;
     case 'diffle-tree':
       return (
         <TourTree
@@ -109,7 +109,7 @@ function contentNode(node: ChildNode, key: number): ReactNode {
         />
       );
     case 'diffle-diagram':
-      return <TourDiagram key={key} of={node} renderNote={noteContent} />;
+      return <TourDiagram key={key} of={node} renderNote={partContent} />;
     case 'diffle-code':
       return (
         <TourCode
@@ -160,14 +160,12 @@ function TourCheck(props: CheckProps) {
   return <Check {...props} />;
 }
 
-/** A walk's note as inline prose; one function, so a walk reads its notes once per document. */
-function noteContent(note: Element): ReactNode {
-  return <TourContent of={note} />;
-}
-
-/** A tab's pane as the article renders a card's content; one function, so tabs read their panes once. */
-function paneContent(tab: Element): ReactNode {
-  return <TourContent of={tab} />;
+/**
+ * What a note, a checklist item or a tab's pane holds, rendered as the article renders it; one
+ * function, so a block reads its parts once per document.
+ */
+function partContent(part: Element): ReactNode {
+  return <TourContent of={part} />;
 }
 
 /** A tree's notes by the path each sits beside, as inline prose. */

@@ -1,8 +1,8 @@
 //! Where a thread sits in a tour: each element by its place, its reading text and its label, and
 //! the same passage found again in a revised tour.
 use super::dom::{self, Dom, Node, NodeId};
-use super::drawing::{Drawing, get};
-use super::element::{label, short};
+use super::drawing::Drawing;
+use super::element::{attr, label, short};
 use super::reading::{collapse, is_opaque, matches, reading, squash};
 use crate::protocol::{
     CommentAnchor, TourCheckItem, TourCommentTag, TourPart, TourTarget, TourTargetRequest, TourWholeTag,
@@ -163,7 +163,7 @@ impl Walk<'_> {
         let block = tag.parse::<TourWholeTag>().is_ok().then(|| self.label(id, &tag, attrs));
         self.push(&node, element, part.clone(), within.cloned(), text, block);
         let inner = match tag.as_str() {
-            "diffle-card" => format!("{context}diffle-card#{} > ", get(attrs, "id")),
+            "diffle-card" => format!("{context}diffle-card#{} > ", attr(attrs, "id").unwrap_or_default()),
             "diffle-walk" | "diffle-trace" | "diffle-tabs" | "diffle-tab" => {
                 format!("{context}{} > ", label(&tag, attrs))
             }
@@ -218,7 +218,9 @@ impl Walk<'_> {
     /// What finds a set of tabs again: their titles.
     fn titles(&self, id: NodeId) -> String {
         let titles = self.dom.children(id).iter().filter_map(|&c| match self.dom.node(c) {
-            Node::Element { name, attrs } if &*name.local == "diffle-tab" => Some(get(attrs, "title")),
+            Node::Element { name, attrs } if &*name.local == "diffle-tab" => {
+                Some(attr(attrs, "title").unwrap_or_default())
+            }
             _ => None,
         });
         titles.collect::<Vec<_>>().join(" / ")
@@ -230,7 +232,9 @@ impl Walk<'_> {
             Node::Element { name, attrs } if &*name.local == "diffle-stop" => Some(attrs),
             _ => None,
         });
-        stop.map_or_else(String::new, |attrs| format!("{}:{}", get(attrs, "path"), get(attrs, "line")))
+        stop.map_or_else(String::new, |attrs| {
+            format!("{}:{}", attr(attrs, "path").unwrap_or_default(), attr(attrs, "line").unwrap_or_default())
+        })
     }
 
     /// Every element under `parent` with its place.
@@ -261,17 +265,17 @@ impl Walk<'_> {
 
     /// What finds a block again: its title, its file and lines, or the start of its text.
     fn label(&self, id: NodeId, tag: &str, attrs: &[(String, String)]) -> String {
-        let attr = |key: &str| get(attrs, key).to_owned();
+        let value = |key: &str| attr(attrs, key).unwrap_or_default().to_owned();
         match tag {
-            "diffle-card" => attr("title"),
-            "diffle-diff" | "diffle-walk" => format!("{} {}", attr("path"), attr("lines")),
+            "diffle-card" => value("title"),
+            "diffle-diff" | "diffle-walk" => format!("{} {}", value("path"), value("lines")),
             "diffle-trace" => self.first_stop(id),
             "diffle-tabs" => self.titles(id),
             // An item's whole question: ticks and answers find it again by it.
             "diffle-item" => collapse(&reading(self.dom, id)),
-            "diffle-tree" => attr("title"),
-            "diffle-code" if !attr("title").is_empty() => attr("title"),
-            "diffle-code" if !attr("path").is_empty() => format!("{}:{}", attr("path"), attr("line")),
+            "diffle-tree" => value("title"),
+            "diffle-code" if !value("title").is_empty() => value("title"),
+            "diffle-code" if !value("path").is_empty() => format!("{}:{}", value("path"), value("line")),
             "diffle-code" => short(self.dom.text(id).trim()),
             _ => short(&collapse(&reading(self.dom, id))),
         }
@@ -281,14 +285,14 @@ impl Walk<'_> {
 /// The element `tag` with `attrs` by its handle, in full: what an agent searches its document for;
 /// none for a tag no thread can name.
 fn part(tag: &str, attrs: &[(String, String)]) -> Option<TourPart> {
-    let attr = |key: &str| Some(get(attrs, key)).filter(|v| !v.is_empty());
-    let at = |line: &str| attr("path").map(|path| format!("{path}:{}", get(attrs, line)));
+    let value = |key: &str| attr(attrs, key).filter(|v| !v.is_empty());
+    let at = |line: &str| value("path").map(|path| format!("{path}:{}", attr(attrs, line).unwrap_or_default()));
     let handle = match tag {
-        "diffle-card" => attr("id").map(str::to_owned),
+        "diffle-card" => value("id").map(str::to_owned),
         "diffle-diff" | "diffle-walk" => at("lines"),
         "diffle-stop" | "diffle-code" => at("line"),
-        "diffle-note" | "diffle-tab" | "diffle-tree" => attr("title").map(str::to_owned),
-        "diffle-callout" => attr("kind").map(str::to_owned),
+        "diffle-note" | "diffle-tab" | "diffle-tree" => value("title").map(str::to_owned),
+        "diffle-callout" => value("kind").map(str::to_owned),
         _ => None,
     };
     Some(TourPart { tag: tag.parse().ok()?, handle })
