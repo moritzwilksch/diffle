@@ -1,3 +1,4 @@
+import { GitCompareArrows } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readTour } from '@/client/tour/document.js';
 import { TourHostContext } from '@/client/tour/host/host.js';
@@ -65,6 +66,7 @@ export function ExportPage({ data }: { data: BakedTour }) {
   return (
     <div className="tour-export">
       <aside className="tour-export-outline">
+        <Brand />
         <Outline title={doc.title} sections={doc.sections} current={current} onTake={take} />
       </aside>
       <div ref={ref} tabIndex={-1} className="tour-export-page" onScroll={follow}>
@@ -75,5 +77,19 @@ export function ExportPage({ data }: { data: BakedTour }) {
         </article>
       </div>
     </div>
+  );
+}
+
+/** Where the diffle project lives, for whoever receives an exported tour. */
+const REPOSITORY = 'https://github.com/moritzwilksch/diffle';
+
+/** diffle's mark and name, as its header shows them, linking to the project: who made the file. */
+function Brand() {
+  return (
+    <a className="tour-export-brand" href={REPOSITORY} target="_blank" rel="noopener" title="diffle on GitHub">
+      <GitCompareArrows size="0.875rem" aria-hidden />
+      <span className="tour-export-wordmark">diffle</span>
+      <span className="tour-export-repo">GitHub ↗</span>
+    </a>
   );
 }

@@ -704,7 +704,14 @@ test.describe('the tour', () => {
       await expect(file.locator('diffs-container').first()).toBeVisible();
 
       // Every control steps a block or takes a section; nothing opens a diff, comments or ticks.
-      expect(await file.locator('input, textarea, a').count()).toBe(0);
+      expect(await file.locator('input, textarea').count()).toBe(0);
+      // The one link names who made the file: diffle's repository, in a tab of its own.
+      const links = await file
+        .locator('a')
+        .evaluateAll((all) =>
+          all.map((a) => [a.getAttribute('href'), a.getAttribute('target'), a.getAttribute('rel')]),
+        );
+      expect(links).toEqual([['https://github.com/moritzwilksch/diffle', '_blank', 'noopener']]);
       const buttons = await file
         .locator('button')
         .evaluateAll((all) => all.map((b) => b.getAttribute('aria-label') ?? b.getAttribute('title') ?? b.textContent));
