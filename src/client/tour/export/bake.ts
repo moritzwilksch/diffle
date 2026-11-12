@@ -18,7 +18,8 @@ type Ready = Extract<TourLoad, { state: 'ready' }>;
 /**
  * Everything the tour `load` shows, read from the review as it stands: each excerpt's rows, each
  * symbol's colour and hover, each diagram's code coloured, its icons, its trees' files and the
- * ticks. Comments stay out: they are the reviewer's conversation with their agent.
+ * ticks. Comments stay out: they are the reviewer's conversation with their agent. The browser bakes
+ * it, not a server command: only the client has the highlighter.
  */
 export async function bakeTour({ tour, doc, checks }: Ready): Promise<BakedTour> {
   const excerpts: [LineRange, number][] = [];

@@ -1,5 +1,6 @@
 //! A tour document parsed as a browser's `DOMParser` parses it: html5ever's tree construction into
-//! an arena, so the validator sees the tree the client will render.
+//! an arena, so the validator sees the tree the client will render. Its own sink, as
+//! `markup5ever_rcdom` is for tests only by its authors' word.
 use std::borrow::Cow;
 use std::cell::RefCell;
 

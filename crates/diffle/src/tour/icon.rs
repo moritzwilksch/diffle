@@ -1,5 +1,6 @@
 //! The Lucide icons a tour may name: those the installed lucide-react ships, so the client can load
-//! every name the validator accepts.
+//! every name the validator accepts. Not a `z.enum` in the contract: typify would generate a
+//! 2,171-variant enum, and serde's refusal would list every name instead of the closest few.
 use std::cmp::Reverse;
 
 use crate::protocol::TourElement;

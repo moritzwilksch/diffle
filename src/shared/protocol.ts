@@ -1399,6 +1399,8 @@ export const TourRowSchema = z
   })
   .strict();
 
+// Keep each member `.strict()`: typify turns that into `deny_unknown_fields`, which is how the
+// validator refuses an unknown attribute.
 /** A `diffle-*` element of a tour with its attributes, which are strings as in HTML. */
 export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCardSchema,
