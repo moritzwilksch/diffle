@@ -3,7 +3,8 @@ import type { Side } from '@/shared/protocol.js';
 import { FilePath } from '@/client/FilePath.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { type LineRange, lineSpan, primitive } from '@/client/tour/document.js';
-import { DiffRows, ExcerptNotice, linesLabel, useExcerpt } from '@/client/tour/primitives/Diff.js';
+import { useHost } from '@/client/tour/host/host.js';
+import { ExcerptNotice, linesLabel, useExcerpt } from '@/client/tour/primitives/Diff.js';
 import { TourJump } from '@/client/tour/primitives/Jump.js';
 import {
   excerptRows,
@@ -16,7 +17,7 @@ import {
   walkCss,
 } from './rows.js';
 import { NoteBand, StepBadge, Stepper } from './Stepper.js';
-import { reveal, type Steps, useFocusedChild, useSteps } from './steps.js';
+import { reveal, type Steps, useSteps } from './steps.js';
 
 /** One note of a walk, as the article renders it. */
 interface WalkNote extends NoteSpan {
@@ -52,6 +53,7 @@ export function TourWalk({
   /** A note's sentence as the article renders inline prose; the same function on every render. */
   renderNote: (note: Element) => ReactNode;
 }) {
+  const { Rows, useFocusedChild } = useHost();
   const place = placeOf(source);
   const notes = useMemo(() => readNotes(source, renderNote), [source, renderNote]);
   const shown = useExcerpt(range);
@@ -119,7 +121,7 @@ export function TourWalk({
       </figcaption>
       {shown.state === 'ready' ? (
         <div className="relative">
-          <DiffRows fileDiff={shown.fileDiff} css={css} annotations={annotations} renderAnnotation={renderAnnotation} />
+          <Rows patch={shown.patch} css={css} annotations={annotations} renderAnnotation={renderAnnotation} />
           <Marks rows={rows} side={range.side} notes={notes} steps={steps} />
         </div>
       ) : (

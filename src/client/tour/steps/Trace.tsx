@@ -2,12 +2,13 @@ import { type ReactNode, useEffect, useMemo, useRef } from 'react';
 import { FilePath } from '@/client/FilePath.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
-import { DiffRows, ExcerptNotice, useExcerpt } from '@/client/tour/primitives/Diff.js';
+import { useHost } from '@/client/tour/host/host.js';
+import { ExcerptNotice, useExcerpt } from '@/client/tour/primitives/Diff.js';
 import { TourJump } from '@/client/tour/primitives/Jump.js';
 import type { Side } from '@/shared/protocol.js';
 import { excerptRows, lineSelector, litCss, noteRows, rowSpot } from './rows.js';
 import { NoteBand, StepBadge, Stepper } from './Stepper.js';
-import { reveal, useFocusedChild, useSteps } from './steps.js';
+import { reveal, useSteps } from './steps.js';
 
 /** Lines shown on each side of a stop's line. */
 const AROUND = 3;
@@ -44,6 +45,7 @@ export function TourTrace({
   /** A stop's sentence as the article renders inline prose; the same function on every render. */
   renderNote: (stop: Element) => ReactNode;
 }) {
+  const { Rows, useFocusedChild } = useHost();
   const place = placeOf(source);
   const stops = useMemo(() => readStops(source, renderNote), [source, renderNote]);
   const frame = useRef<HTMLElement>(null);
@@ -124,8 +126,8 @@ export function TourTrace({
         <TourJump path={stop.path} line={stop.line} side={stop.side} label="Open" placed />
       </figcaption>
       {shown.state === 'ready' ? (
-        <DiffRows
-          fileDiff={shown.fileDiff}
+        <Rows
+          patch={shown.patch}
           css={css}
           annotations={annotations}
           renderAnnotation={({ metadata }: { metadata: number }) => (

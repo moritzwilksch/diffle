@@ -1,7 +1,5 @@
 import { type RefObject, useCallback, useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { useStore } from '@/client/store.js';
-import type { Place } from '@/client/tour/anchor.js';
 
 /**
  * What every stepped block shares (a walk, a trace, a stepped diagram): which step is taken, the
@@ -122,21 +120,4 @@ export function useSteps(el: RefObject<Element | null>, count: number, start: St
   }, [el, step]);
   const targeted = useTarget((s) => s.target != null && s.target === el.current);
   return { active, take, step, atStart: active === floor, targeted, rests: floor == null };
-}
-
-/**
- * The child of the block at `place` that the focused thread is on, by its index among the block's
- * child elements: a block takes that step, so the thread's words show beside its card.
- */
-export function useFocusedChild(place: Place, onFocus: (child: number) => void): void {
-  const block = place['data-node'];
-  const child = useStore((s) => {
-    const thread = s.focusedThread == null ? undefined : s.threads.find((t) => t.id === s.focusedThread);
-    if (thread?.anchor.kind !== 'tour') return null;
-    const node = thread.anchor.node.join('.');
-    return node.startsWith(`${block}.`) ? Number(node.slice(block.length + 1).split('.')[0]) : null;
-  });
-  useEffect(() => {
-    if (child != null) onFocus(child);
-  }, [child, onFocus]);
 }

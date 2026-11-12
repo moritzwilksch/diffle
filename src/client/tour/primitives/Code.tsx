@@ -1,14 +1,8 @@
-import {
-  type FileDiffMetadata,
-  getFiletypeFromFileName,
-  parsePatchFiles,
-  type SupportedLanguages,
-} from '@pierre/diffs';
-import { useMemo } from 'react';
+import { getFiletypeFromFileName } from '@pierre/diffs';
 import { FilePath } from '@/client/FilePath.js';
-import { DiffRows } from './Diff.js';
-import { TourJump } from './Jump.js';
 import type { Place } from '@/client/tour/anchor.js';
+import { useHost } from '@/client/tour/host/host.js';
+import { TourJump } from './Jump.js';
 
 /**
  * Code the agent wrote, such as an interface or a signature, in the diff's frame and rows: the same
@@ -33,8 +27,7 @@ export function TourCode({
   title?: string;
   place?: Place;
 }) {
-  const language = lang ?? (path ? getFiletypeFromFileName(path) : 'text');
-  const fileDiff = useMemo(() => codeRows(dedent(code), line ?? 1, language), [code, line, language]);
+  const { Rows } = useHost();
   return (
     <figure
       {...place}
@@ -54,25 +47,21 @@ export function TourCode({
           <TourJump path={path} line={line} side="new" label="Open" placed />
         </figcaption>
       )}
-      {fileDiff && <DiffRows fileDiff={fileDiff} />}
+      <Rows patch={codePatch(code, line)} lang={codeLang(lang, path)} />
     </figure>
   );
 }
 
-/** `text` as a patch of one hunk whose lines are all unchanged, numbered from `start`, in `lang`. */
-function codeRows(text: string, start: number, lang: string): FileDiffMetadata | undefined {
-  const lines = text.split('\n');
+/** `code` as the patch of one hunk whose lines are all unchanged, numbered from `start`. */
+export function codePatch(code: string, start = 1): string {
+  const lines = dedent(code).split('\n');
   const range = `${start},${lines.length}`;
-  const patch = `--- a/code\n+++ b/code\n@@ -${range} +${range} @@\n${lines.map((l) => ` ${l}`).join('\n')}\n`;
-  const file = parsePatchFiles(patch, `tour-code:${lang}:${start}:${hash(text)}`)[0]?.files[0];
-  return file && { ...file, lang: lang as SupportedLanguages };
+  return `--- a/code\n+++ b/code\n@@ -${range} +${range} @@\n${lines.map((l) => ` ${l}`).join('\n')}\n`;
 }
 
-/** A short key for `text`, so each block's rows keep their own place in the highlight cache. */
-function hash(text: string): string {
-  let h = 5381;
-  for (let i = 0; i < text.length; i++) h = (h * 33) ^ text.charCodeAt(i);
-  return (h >>> 0).toString(36);
+/** The language a code block is highlighted in: its `lang`, else its file's. */
+export function codeLang(lang?: string, path?: string): string {
+  return lang ?? (path ? getFiletypeFromFileName(path) : 'text');
 }
 
 /** `text` without the blank lines around it and the indentation its lines share, as the server reads it. */

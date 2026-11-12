@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
-import { useFocusedChild } from '@/client/tour/steps/steps.js';
+import { useHost } from '@/client/tour/host/host.js';
 import type { TourTabKind } from '@/shared/protocol.js';
 
 /**
@@ -17,6 +17,7 @@ export function TourTabs({
   /** A pane's content as the article renders a card's; the same function on every render. */
   renderPane: (tab: Element) => ReactNode;
 }) {
+  const { useFocusedChild } = useHost();
   const place = placeOf(source);
   const tabs = useMemo(
     () =>

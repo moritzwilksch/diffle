@@ -2,14 +2,13 @@ import { createElement, Fragment, type ReactNode } from 'react';
 import { TourTagSchema } from '@/shared/protocol.js';
 import { placeOf } from './anchor.js';
 import { lineSpan, primitive } from './document.js';
+import { type CheckProps, type SymbolProps, useHost } from './host/host.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
-import { TourCheck } from './primitives/Check.js';
 import { TourCode } from './primitives/Code.js';
 import { TourDiff } from './primitives/Diff.js';
 import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
-import { TourSymbol } from './primitives/Symbol.js';
 import { TourTabs } from './primitives/Tabs.js';
 import { TourTree } from './primitives/Tree.js';
 import { TourDiagram } from './steps/StepDiagram.js';
@@ -151,6 +150,18 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     default:
       return null;
   }
+}
+
+/** A `diffle-symbol`, as the host draws one. */
+function TourSymbol(props: SymbolProps) {
+  const { Symbol } = useHost();
+  return <Symbol {...props} />;
+}
+
+/** A `diffle-check`, as the host keeps its ticks. */
+function TourCheck(props: CheckProps) {
+  const { Check } = useHost();
+  return <Check {...props} />;
 }
 
 /** A walk's note as inline prose; one function, so a walk reads its notes once per document. */

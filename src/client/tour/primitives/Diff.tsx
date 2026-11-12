@@ -1,48 +1,15 @@
-import { type DiffLineAnnotation, type FileDiffMetadata, parsePatchFiles } from '@pierre/diffs';
-import { FileDiff } from '@pierre/diffs/react';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { FilePath } from '@/client/FilePath.js';
-import { usePrimed, type WorkerPool } from '@/client/Markdown.js';
-import { useStore } from '@/client/store.js';
-import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
-import type { LineRange } from '@/client/tour/document.js';
-import { rangePatch } from '@/client/tour/state.js';
-import { TourJump } from './Jump.js';
 import type { Place } from '@/client/tour/anchor.js';
-
-/** What an excerpt shows: its rows once cut, or why it shows none. */
-export type Shown =
-  | { state: 'loading' }
-  | { state: 'gone' }
-  | { state: 'error'; message: string }
-  | { state: 'ready'; patch: string; fileDiff: FileDiffMetadata };
+import type { LineRange } from '@/client/tour/document.js';
+import { type Shown, useHost } from '@/client/tour/host/host.js';
+import { TourJump } from './Jump.js';
 
 /**
  * The lines `range` names and `context` lines around them, cut from the review's diff, again
- * whenever the snapshot moves.
+ * whenever the review moves.
  */
 export function useExcerpt(range: LineRange, context = 0): Shown {
-  const { path, side, start, end } = range;
-  const version = useStore((s) => s.snapshot?.version);
-  const [shown, setShown] = useState<Shown>({ state: 'loading' });
-  useEffect(() => {
-    let live = true;
-    rangePatch({ path, side, start, end }, context).then(
-      (patch) => {
-        if (!live) return;
-        const fileDiff =
-          patch == null
-            ? undefined
-            : parsePatchFiles(patch, `tour:${version}:${side}:${path}:${start}-${end}+${context}`)[0]?.files[0];
-        setShown(patch == null || !fileDiff ? { state: 'gone' } : { state: 'ready', patch, fileDiff });
-      },
-      (e: unknown) => live && setShown({ state: 'error', message: e instanceof Error ? e.message : String(e) }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [path, side, start, end, context, version]);
-  return shown;
+  return useHost().useExcerpt(range, context);
 }
 
 /** `start-end`, or one line alone, as a range's header shows it. */
@@ -71,6 +38,7 @@ export function ExcerptNotice({ shown, range }: { shown: Exclude<Shown, { state:
  * When they left the review, a notice stands in their place and the jump still opens the file.
  */
 export function TourDiff({ range, place }: { range: LineRange; place?: Place }) {
+  const { Rows } = useHost();
   const shown = useExcerpt(range);
   return (
     <figure
@@ -86,51 +54,7 @@ export function TourDiff({ range, place }: { range: LineRange; place?: Place }) 
         </span>
         <TourJump path={range.path} line={range.start} side={range.side} label="Open" placed />
       </figcaption>
-      {shown.state === 'ready' ? <DiffRows fileDiff={shown.fileDiff} /> : <ExcerptNotice shown={shown} range={range} />}
+      {shown.state === 'ready' ? <Rows patch={shown.patch} /> : <ExcerptNotice shown={shown} range={range} />}
     </figure>
-  );
-}
-
-/**
- * A patch's rows as the tour shows every excerpt: unified, numbered in the gutter, long lines
- * wrapped, highlighted like the diff view. A code block uses it too, so the two read alike.
- */
-export function DiffRows<A = undefined>({
-  fileDiff,
-  css,
-  annotations,
-  renderAnnotation,
-}: {
-  fileDiff: FileDiffMetadata;
-  /** Styles for the rows, inside the diff's shadow root. */
-  css?: string;
-  annotations?: DiffLineAnnotation<A>[];
-  renderAnnotation?: (annotation: DiffLineAnnotation<A>) => ReactNode;
-}) {
-  const theme = useStore((s) => s.theme);
-  const options = useMemo(
-    () => ({
-      unsafeCSS: css,
-      theme: CODE_THEMES,
-      preferredHighlighter: HIGHLIGHTER,
-      themeType: theme,
-      diffStyle: 'unified' as const,
-      diffIndicators: 'classic' as const,
-      hunkSeparators: 'simple' as const,
-      disableFileHeader: true,
-      overflow: 'wrap' as const,
-    }),
-    [theme, css],
-  );
-  const prime = useCallback((pool: WorkerPool) => pool.primeDiffHighlightCache(fileDiff), [fileDiff]);
-  const primed = usePrimed(prime);
-  return (
-    <FileDiff
-      key={primed}
-      fileDiff={fileDiff}
-      options={options}
-      lineAnnotations={annotations}
-      renderAnnotation={renderAnnotation}
-    />
   );
 }

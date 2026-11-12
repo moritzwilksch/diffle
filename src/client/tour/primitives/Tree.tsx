@@ -1,7 +1,6 @@
 import { File, Folder } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useStore } from '@/client/store.js';
-import { jump } from '@/client/tour/state.js';
+import { useHost } from '@/client/tour/host/host.js';
 import type { ChangeStatus } from '@/shared/protocol.js';
 import type { Place } from '@/client/tour/anchor.js';
 import { TourIcon } from './Icon.js';
@@ -11,12 +10,13 @@ interface Dir {
   files: string[];
 }
 
+const FILE = 'inline-flex items-center gap-1 border-0 bg-transparent p-0 font-mono text-[0.75rem] text-foreground';
 const STATUS_COLOR: Partial<Record<ChangeStatus, string>> = { A: 'var(--add)', D: 'var(--del)' };
 
 /**
  * A directory tree of `paths` under `root`, headed by its title and icon as a card is; a changed
- * file shows its status and its lines added and removed, and opens in the diff. A few files carry a
- * note beside their name.
+ * file shows its status and its lines added and removed, and opens in the diff where there is one.
+ * A few files carry a note beside their name.
  */
 export function TourTree({
   paths,
@@ -34,8 +34,8 @@ export function TourTree({
   notes: ReadonlyMap<string, ReactNode>;
   place?: Place;
 }) {
-  const changed = useStore((s) => s.snapshot?.changed);
-  const files = new Map(changed?.map((f) => [f.path, f]));
+  const { open, useChanged } = useHost();
+  const files = useChanged();
   const top: Dir = { dirs: new Map(), files: [] };
   const prefix = root ? `${root}/` : '';
   for (const path of paths.split('\n').map((p) => p.trim())) {
@@ -62,28 +62,33 @@ export function TourTree({
         const file = files.get(path);
         const s = file?.status;
         const note = notes.get(path);
+        const name = (
+          <>
+            <File size="0.75rem" className="text-muted" />
+            {path.slice(path.lastIndexOf('/') + 1)}
+            {s && (
+              <span className="font-semibold" style={{ color: STATUS_COLOR[s] ?? 'var(--accent)' }}>
+                {s}
+              </span>
+            )}
+            {file && file.additions + file.deletions > 0 && (
+              <span className="text-muted">
+                {[file.additions && `+${file.additions}`, file.deletions && `−${file.deletions}`]
+                  .filter(Boolean)
+                  .join(' ')}
+              </span>
+            )}
+          </>
+        );
         return (
           <li key={path} className="flex items-baseline gap-2">
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono text-[0.75rem] text-foreground hover:underline"
-              onClick={() => void jump(path)}
-            >
-              <File size="0.75rem" className="text-muted" />
-              {path.slice(path.lastIndexOf('/') + 1)}
-              {s && (
-                <span className="font-semibold" style={{ color: STATUS_COLOR[s] ?? 'var(--accent)' }}>
-                  {s}
-                </span>
-              )}
-              {file && file.additions + file.deletions > 0 && (
-                <span className="text-muted">
-                  {[file.additions && `+${file.additions}`, file.deletions && `−${file.deletions}`]
-                    .filter(Boolean)
-                    .join(' ')}
-                </span>
-              )}
-            </button>
+            {open ? (
+              <button type="button" className={`${FILE} cursor-pointer hover:underline`} onClick={() => open(path)}>
+                {name}
+              </button>
+            ) : (
+              <span className={FILE}>{name}</span>
+            )}
             {note && <span className="tour-tree-note">{note}</span>}
           </li>
         );

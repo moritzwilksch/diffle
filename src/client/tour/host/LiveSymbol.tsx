@@ -6,13 +6,14 @@ import { useStore } from '@/client/store.js';
 import { source } from '@/client/tour/state.js';
 import { lspBlocker } from '@/shared/lsp.js';
 import type { Side } from '@/shared/protocol.js';
+import type { SymbolProps } from './host.js';
 
 /**
  * A chip for the symbol `name` on `line` of `path`, coloured as the highlighter colours it on that
  * line. Hovering shows the diff's hover card, and a click lists its references, as `gA` does in the
  * diff. While the language servers cannot answer, it is coloured code naming why.
  */
-export function TourSymbol({ path, line, name, side }: { path: string; line: number; name: string; side: Side }) {
+export function LiveSymbol({ path, line, name, side }: SymbolProps) {
   const blocker = useStore((s) =>
     side === 'old'
       ? 'References are asked of the new side; this symbol is on the old one'

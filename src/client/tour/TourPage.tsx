@@ -15,6 +15,8 @@ import {
 import type { TourDocument } from './document.js';
 import { blockAround, shapeAt, useElementMarks, useHoveredBlock } from './blocks.js';
 import { BlockComment, type HoveredBlock, InlineThreads, Margin, SelectionComment, StaleThreads } from './Margin.js';
+import { TourHostContext } from './host/host.js';
+import { liveHost } from './host/live.js';
 import { TourArticle } from './render.js';
 import { useTour } from './state.js';
 import { retarget, stepPage, stepTarget } from './steps/steps.js';
@@ -187,7 +189,9 @@ export function TourPage({ doc }: { doc: TourDocument }) {
               if (id) useStore.getState().focusThread(id);
             }}
           >
-            <TourArticle of={doc.body} after={margin ? undefined : (i) => <InlineThreads index={i} />} />
+            <TourHostContext value={liveHost}>
+              <TourArticle of={doc.body} after={margin ? undefined : (i) => <InlineThreads index={i} />} />
+            </TourHostContext>
           </article>
           <StaleThreads />
           {!margin && <SelectionComment article={article} container={columnRef} at="end" />}
