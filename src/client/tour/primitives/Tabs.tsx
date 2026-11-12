@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { placeOf } from '@/client/tour/anchor.js';
 import { primitive } from '@/client/tour/document.js';
 import { useHost } from '@/client/tour/host/host.js';
-import type { TourTabKind } from '@/shared/tour.js';
+import type { TourTabKind } from '@/shared/tour-catalog.js';
 
 /**
  * Two to four panes in one block's width, one shown at a time: a tab per pane with its title and,

@@ -1,4 +1,4 @@
-// Which side of a comparison a line is on. Its own module so `protocol.ts` and `tour.ts`, which
+// Which side of a comparison a line is on. Its own module so `protocol.ts` and `tour-catalog.ts`, which
 // imports nothing from `protocol.ts`, share it.
 import { z } from 'zod';
 

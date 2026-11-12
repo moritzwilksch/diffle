@@ -15,12 +15,14 @@ import { z } from 'zod';
 import * as protocol from '@/shared/protocol.js';
 import * as side from '@/shared/side.js';
 import * as tour from '@/shared/tour.js';
+import * as tourCatalog from '@/shared/tour-catalog.js';
 
 /** The contract's modules, each with its source for the JSDoc. */
 const MODULES: [exports: object, file: string][] = [
   [protocol, 'protocol.ts'],
   [side, 'side.ts'],
   [tour, 'tour.ts'],
+  [tourCatalog, 'tour-catalog.ts'],
 ];
 
 /** Every `*Schema` export of the contract's modules under `$defs`, named without the suffix; request schemas as the client sends them. */
