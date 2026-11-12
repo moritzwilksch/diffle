@@ -21,8 +21,8 @@ import { TourWalk } from './steps/Walk.js';
  * its attributes included, is left out, so a tour, written by an agent that read untrusted code,
  * can do no more than the catalog says.
  */
-export function TourContent({ of, inCallout = false }: { of: Element; inCallout?: boolean }): ReactNode {
-  return [...of.childNodes].map((node, i) => contentNode(node, i, inCallout));
+export function TourContent({ of }: { of: Element }): ReactNode {
+  return [...of.childNodes].map((node, i) => contentNode(node, i));
 }
 
 /**
@@ -35,13 +35,13 @@ export function TourArticle({ of, after }: { of: Element; after?: (index: number
     <Fragment key={i}>
       {node.localName === 'h2'
         ? createElement('h2', { 'data-step': ++step, ...placeOf(node) }, <TourContent of={node} />)
-        : contentNode(node, i, false)}
+        : contentNode(node, i)}
       {after?.(i)}
     </Fragment>
   ));
 }
 
-function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNode {
+function contentNode(node: ChildNode, key: number): ReactNode {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent;
   if (!(node instanceof Element)) return null;
   const tag = TourTagSchema.safeParse(node.localName);
@@ -51,11 +51,7 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
       tag.data === 'a' && href && /^https?:\/\//.test(href) ? { href, target: '_blank', rel: 'noreferrer' } : {};
     const spans =
       tag.data === 'th' || tag.data === 'td' ? { colSpan: span(node, 'colspan'), rowSpan: span(node, 'rowspan') } : {};
-    return createElement(
-      tag.data,
-      { key, ...link, ...spans, ...placeOf(node) },
-      <TourContent of={node} inCallout={inCallout} />,
-    );
+    return createElement(tag.data, { key, ...link, ...spans, ...placeOf(node) }, <TourContent of={node} />);
   }
   const element = primitive(node);
   switch (element?.tag) {
@@ -130,21 +126,21 @@ function contentNode(node: ChildNode, key: number, inCallout: boolean): ReactNod
     case 'diffle-row':
       return (
         <div key={key} className="tour-row" data-columns={node.children.length} {...placeOf(node)}>
-          {[...node.children].map((column, i) => contentNode(column, i, inCallout))}
+          {[...node.children].map((column, i) => contentNode(column, i))}
         </div>
       );
     case 'diffle-card':
       return (
         <TourCard key={key} id={element.id} title={element.title} icon={element.icon} place={placeOf(node)}>
-          <TourContent of={node} inCallout={inCallout} />
+          <TourContent of={node} />
         </TourCard>
       );
     case 'diffle-icon':
       return <TourIcon key={key} name={element.name} tone={element.tone} />;
     case 'diffle-callout':
-      return inCallout ? null : (
+      return (
         <Callout key={key} kind={element.kind} place={placeOf(node)}>
-          <TourContent of={node} inCallout />
+          <TourContent of={node} />
         </Callout>
       );
     default:

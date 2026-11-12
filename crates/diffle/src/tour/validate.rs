@@ -10,7 +10,7 @@ use super::element::{Findings, attr, is_count, label, parse, short};
 use super::files::{Reference, asks};
 use super::icon;
 use super::layout;
-use super::placement::{Place, Rule, misplaced};
+use super::placement::{Parent, Place, Rule, misplaced};
 use super::stepped;
 use crate::protocol::{TourElement, TourError, TourTag};
 
@@ -79,7 +79,7 @@ impl Walk {
     fn visit(&mut self, dom: &Dom, node: NodeId, place: Place) {
         let context = &self.context();
         match dom.node(node) {
-            Node::Text(text) if !text.trim().is_empty() && place.top => {
+            Node::Text(text) if !text.trim().is_empty() && place.parent == Parent::Top => {
                 let element = format!("{context}text \"{}\"", short(text.trim()));
                 self.error(node, element, "text belongs in a <p>, a list or another block");
             }
@@ -262,7 +262,7 @@ impl Walk {
         let (columns, found) = row::check(dom, node, element, &self.context());
         self.errors.extend(found.errors);
         let outer = std::mem::replace(&mut self.row, columns);
-        self.children(dom, node, Place { top: false, ..place });
+        self.children(dom, node, place.in_row());
         self.row = outer;
     }
 

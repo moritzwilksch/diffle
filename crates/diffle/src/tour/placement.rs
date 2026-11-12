@@ -1,44 +1,55 @@
 //! Where each element of a tour may sit. A tour is an article: headings, prose and blocks at its
 //! top level, inline primitives inside prose, and no block inside a line of text.
 
+/// What directly holds an element: some elements sit in one of these alone.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Parent {
+    /// The article, where `h1` titles it and `h2` and `h3` start sections.
+    Top,
+    /// Anything else: a paragraph, a list, a card, a callout, a row's column.
+    Flow,
+    /// A block of parts (a walk, a trace, a diagram, a checklist, a tree), where its parts sit.
+    Parts,
+    /// A `diffle-tabs`, where its tabs sit.
+    Tabs,
+    /// A `<details>`, where its `<summary>` sits.
+    Details,
+}
+
+/// The most restrictive block an element sits inside, in order: a tab refuses tabs in it, a card
+/// also cards and other big blocks, a callout also callouts. Every rule below refuses from some
+/// level up, so the strictest enclosing block decides alone.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Inside {
+    Article,
+    Tab,
+    Card,
+    Callout,
+}
+
 /// Where an element sits, deciding what it may hold.
 #[derive(Clone, Copy, PartialEq)]
 pub struct Place {
-    /// Directly in the article, where `h1` titles it and `h2` and `h3` start sections.
-    pub top: bool,
-    /// Inside a `diffle-card`.
-    pub in_card: bool,
-    /// Inside a `diffle-callout`.
-    pub in_callout: bool,
-    /// Inside a line of text (a paragraph, a heading, a link, code), where no block fits.
+    pub parent: Parent,
+    pub inside: Inside,
+    /// Inside a line of text (a paragraph, a heading, a link, code, a step's sentence), where no
+    /// block fits. Apart from `inside`: text sits in cards and callouts alike.
     pub in_text: bool,
-    /// Directly in a block of parts (a walk, a trace, a diagram, a checklist, a tree), where they sit.
-    pub in_parts: bool,
-    /// Directly in a `diffle-tabs`, where its tabs sit.
-    pub in_tabs: bool,
-    /// Inside a `diffle-tab`'s pane.
-    pub in_tab: bool,
-    /// Directly in a `<details>`, where its `<summary>` sits.
-    pub in_details: bool,
 }
 
 impl Place {
-    pub const TOP: Self = Self {
-        top: true,
-        in_card: false,
-        in_callout: false,
-        in_text: false,
-        in_parts: false,
-        in_tabs: false,
-        in_tab: false,
-        in_details: false,
-    };
+    pub const TOP: Self = Self { parent: Parent::Top, inside: Inside::Article, in_text: false };
 
     /// The place of what a plain `tag` here holds.
     pub fn within(self, tag: &str) -> Self {
         let text = matches!(tag, "p" | "h1" | "h2" | "h3" | "h4" | "a" | "strong" | "em" | "code" | "pre" | "summary");
-        let in_details = tag == "details";
-        Self { top: false, in_text: self.in_text || text, in_parts: false, in_tabs: false, in_details, ..self }
+        let parent = if tag == "details" { Parent::Details } else { Parent::Flow };
+        Self { parent, in_text: self.in_text || text, ..self }
+    }
+
+    /// The place of what a `diffle-row` here holds: its columns.
+    pub fn in_row(self) -> Self {
+        Self { parent: Parent::Flow, ..self }
     }
 }
 
@@ -108,16 +119,14 @@ impl Rule {
 
     pub fn fits(self, place: Place) -> bool {
         match self {
-            Self::Row => place.top,
-            Self::Card | Self::Walk | Self::Trace | Self::Check => {
-                !place.in_text && !place.in_card && !place.in_callout
-            }
-            Self::Note | Self::Stop | Self::Item | Self::File => place.in_parts,
-            Self::Tabs => !place.in_text && !place.in_card && !place.in_callout && !place.in_tab,
-            Self::Tab => place.in_tabs,
-            Self::Callout => !place.in_text && !place.in_callout,
+            Self::Row => place.parent == Parent::Top,
+            Self::Card | Self::Walk | Self::Trace | Self::Check => !place.in_text && place.inside < Inside::Card,
+            Self::Note | Self::Stop | Self::Item | Self::File => place.parent == Parent::Parts,
+            Self::Tabs => !place.in_text && place.inside == Inside::Article,
+            Self::Tab => place.parent == Parent::Tabs,
+            Self::Callout => !place.in_text && place.inside < Inside::Callout,
             Self::Code | Self::Diagram | Self::Block | Self::Tree => !place.in_text,
-            Self::Jump | Self::Symbol | Self::Icon => !place.top,
+            Self::Jump | Self::Symbol | Self::Icon => place.parent != Parent::Top,
         }
     }
 
@@ -144,15 +153,18 @@ impl Rule {
 impl Rule {
     /// The place of what an element of this rule at `place` holds.
     pub fn inner(self, place: Place) -> Place {
-        let inside = Place { top: false, in_parts: false, in_tabs: false, in_details: false, ..place };
+        let flow = Place { parent: Parent::Flow, ..place };
+        let enclosed = |inside: Inside| Place { inside: place.inside.max(inside), ..flow };
         match self {
-            Self::Card => Place { in_card: true, ..inside },
-            Self::Callout => Place { in_callout: true, ..inside },
-            Self::Note | Self::Stop | Self::Item | Self::File => Place { in_text: true, ..inside },
-            Self::Walk | Self::Trace | Self::Diagram | Self::Check | Self::Tree => Place { in_parts: true, ..inside },
-            Self::Tabs => Place { in_tabs: true, ..inside },
-            Self::Tab => Place { in_tab: true, ..inside },
-            _ => inside,
+            Self::Card => enclosed(Inside::Card),
+            Self::Callout => enclosed(Inside::Callout),
+            Self::Tab => enclosed(Inside::Tab),
+            Self::Note | Self::Stop | Self::Item | Self::File => Place { in_text: true, ..flow },
+            Self::Walk | Self::Trace | Self::Diagram | Self::Check | Self::Tree => {
+                Place { parent: Parent::Parts, ..flow }
+            }
+            Self::Tabs => Place { parent: Parent::Tabs, ..flow },
+            _ => flow,
         }
     }
 }
@@ -160,10 +172,14 @@ impl Rule {
 /// Why a plain `tag` cannot sit at `place`, if it cannot.
 pub fn misplaced(tag: &str, place: Place) -> Option<&'static str> {
     match tag {
-        "h1" if !place.top => Some("<h1> sits at the top level, where it titles the tour"),
-        "h2" | "h3" if !place.top => Some("a heading sits at the top level, where it starts a section"),
+        "h1" if place.parent != Parent::Top => Some("<h1> sits at the top level, where it titles the tour"),
+        "h2" | "h3" if place.parent != Parent::Top => {
+            Some("a heading sits at the top level, where it starts a section")
+        }
         "details" if place.in_text => Some("<details> is a block: it sits between paragraphs"),
-        "summary" if !place.in_details => Some("<summary> sits first in a <details>, saying what opening it shows"),
+        "summary" if place.parent != Parent::Details => {
+            Some("<summary> sits first in a <details>, saying what opening it shows")
+        }
         _ => None,
     }
 }
@@ -184,4 +200,9 @@ pub fn is_column(tag: &str) -> bool {
             | "ul"
             | "ol"
     )
+}
+
+/// Whether a step's sentence may hold `tag`: inline prose and the inline primitives.
+pub fn fits_sentence(tag: &str) -> bool {
+    tag.starts_with("diffle-") || matches!(tag, "code" | "strong" | "em" | "a")
 }

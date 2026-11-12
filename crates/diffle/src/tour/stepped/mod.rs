@@ -10,6 +10,7 @@ use super::code::holds_markup;
 use super::dom::{Dom, Node, NodeId};
 pub use super::element::Findings;
 use super::element::{label, short};
+use super::placement::fits_sentence;
 use super::reading::reading;
 use crate::protocol::TourElement;
 
@@ -19,8 +20,6 @@ pub const UNTITLED: &str = "a diffle-note takes a title: what its step shows, in
 const MANY: usize = 6;
 /// Past this many sentences a step's text stops being a caption.
 const LONG: usize = 2;
-/// The plain tags a step's sentence may use.
-const INLINE: [&str; 4] = ["code", "strong", "em", "a"];
 
 /// Checks the walk, trace or checklist at `node`, named `element`, as the catalog read it (none when it did not fit).
 pub fn check(dom: &Dom, node: NodeId, element: &str, parsed: Option<&TourElement>) -> Findings {
@@ -119,7 +118,7 @@ fn sentence(dom: &Dom, node: NodeId, element: &str, word: &str, found: &mut Find
     while let Some(id) = stack.pop() {
         let Node::Element { name, attrs } = dom.node(id) else { continue };
         let tag = &*name.local;
-        if !tag.starts_with("diffle-") && !INLINE.contains(&tag) {
+        if !fits_sentence(tag) {
             let message =
                 format!("a {word} holds a sentence or two: text, <code>, <strong>, <em>, <a> and inline primitives");
             found.error(id, format!("{element} > {}", label(tag, attrs)), message);
