@@ -1,5 +1,5 @@
 //! The built `diffle` binary, as a user runs it.
-mod common;
+use crate::common;
 
 use std::path::Path;
 use std::process::Child;

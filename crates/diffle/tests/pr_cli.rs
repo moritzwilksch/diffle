@@ -1,7 +1,7 @@
 //! A pull request review run end to end, against a GitHub API on localhost.
 // POSIX-only: the assertion is on a graceful SIGTERM shutdown, which Windows cannot deliver.
 #![cfg(unix)]
-mod common;
+use crate::common;
 
 use std::path::Path;
 

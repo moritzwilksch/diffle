@@ -1,0 +1,17 @@
+---
+source: crates/diffle/tests/lsp_graph.rs
+expression: render(&res.json())
+---
+added     kind 12 runner.py make_agent:3-5
+modified  kind 12 runner.py run_all:6-9
+modified  kind 6 agent.py run:7-9
+modified  kind 6 client.py get:2-4
+consumer  kind 1 cli.py:1-1
+consumer  kind 12 cli.py main:3-5
+consumer  kind 12 report.py summarize:3-5
+agent.py run -> client.py get at [8]
+cli.py -> runner.py run_all at [1]
+cli.py main -> runner.py run_all at [4]
+report.py summarize -> agent.py run at [4]
+runner.py run_all -> agent.py run at [8]
+runner.py run_all -> runner.py make_agent at [7]

@@ -1,0 +1,39 @@
+---
+source: crates/diffle/tests/agent.rs
+expression: masked(replied)
+---
+{
+  "anchor": {
+    "endLine": 2,
+    "kind": "line",
+    "path": "app.py",
+    "quoted": "y = 2",
+    "side": "new",
+    "startLine": 2
+  },
+  "id": "[id]",
+  "messages": [
+    {
+      "body": "why y?",
+      "createdAt": "[time]",
+      "id": "[id]",
+      "updatedAt": "[time]"
+    },
+    {
+      "author": "agent",
+      "body": "It counts the retries.",
+      "createdAt": "[time]",
+      "id": "[id]",
+      "updatedAt": "[time]"
+    },
+    {
+      "author": "agent",
+      "body": "Renamed it to `retries`.\n",
+      "createdAt": "[time]",
+      "id": "[id]",
+      "updatedAt": "[time]"
+    }
+  ],
+  "resolved": false,
+  "stale": false
+}

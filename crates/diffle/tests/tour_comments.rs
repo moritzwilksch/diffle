@@ -1,6 +1,6 @@
 //! Threads on the tour: opened on a passage or an element, moved by a revised push, made stale by a
 //! clear, and read as an agent reads every thread.
-mod common;
+use crate::common;
 
 use common::TestRepo;
 use common::server::TestServer;

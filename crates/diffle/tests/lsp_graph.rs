@@ -1,6 +1,6 @@
 //! `GET /api/lsp/graph` over a fake language server that outlines and references Python by text.
 #![cfg(unix)]
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 

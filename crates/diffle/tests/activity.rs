@@ -1,5 +1,5 @@
 //! `GET /api/threads/activity`: a long poll on the comment activity log, which also drives `/ws`.
-mod common;
+use crate::common;
 
 use std::time::{Duration, Instant};
 
