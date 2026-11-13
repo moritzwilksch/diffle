@@ -7,6 +7,7 @@
     "test/e2e",
     "scripts/screenshot.ts",
     "scripts/record-videos.ts",
+    "scripts/lib/video",
     "test/fixture",
     "test/tmp.ts",
     "src/shared",
