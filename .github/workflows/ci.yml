@@ -164,6 +164,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Pulls the browser image while cargo builds; the suite's setup would otherwise wait ~30 s on it.
+      - name: Pull the browser image
+        run: |
+          version=$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)
+          nohup docker pull --platform linux/amd64 "mcr.microsoft.com/playwright:v$version-noble" > /dev/null 2>&1 &
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
           environments: ci
