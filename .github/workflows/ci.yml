@@ -17,15 +17,22 @@ env:
   CARGO_TERM_COLOR: always
   CLICOLOR_FORCE: 1
   FORCE_COLOR: 1
+  # Line numbers in a backtrace are all a CI failure shows; full debuginfo costs a fifth of the test build.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
-  # Whether a pull request touches what only the packaging jobs exercise; a push to main runs them all.
+  # What a pull request's files call for; a push to main runs everything.
+  #   packaging: the release build and the packages, which only a packaging input changes.
+  #   tests: the test jobs and e2e, which a pull request of documentation alone skips.
+  #   rust: `cargo test`, which a pull request of client code alone skips; e2e still runs its binary.
   changes:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
     outputs:
       packaging: ${{ steps.diff.outputs.packaging }}
+      tests: ${{ steps.diff.outputs.tests }}
+      rust: ${{ steps.diff.outputs.rust }}
     steps:
       - id: diff
         env:
@@ -36,7 +43,7 @@ jobs:
         # The release pull request bumps package.json and Cargo.toml, so it runs them too.
         run: |
           if [ "$EVENT" != pull_request ]; then
-            echo "packaging=true" >> "$GITHUB_OUTPUT"
+            printf '%s=true\n' packaging tests rust >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(gh api --paginate "repos/$REPOSITORY/pulls/$PR/files" --jq '.[].filename')
@@ -47,7 +54,12 @@ jobs:
           else
             packaging=false
           fi
-          echo "packaging=$packaging" | tee -a "$GITHUB_OUTPUT"
+          # Each list names what a job cannot read, so a file on neither runs everything.
+          docs='^(README\.md|AGENTS\.md|CLAUDE\.md|CHANGELOG\.md|\.agents/|\.claude/|\.github/assets/)'
+          client='^(src/client/|test/client/|test/e2e/)'
+          if grep -qvE "$docs" <<< "$files"; then tests=true; else tests=false; fi
+          if grep -qvE "$docs|$client" <<< "$files"; then rust=true; else rust=false; fi
+          printf '%s\n' "packaging=$packaging" "tests=$tests" "rust=$rust" | tee -a "$GITHUB_OUTPUT"
 
   nix:
     needs: changes
@@ -89,21 +101,23 @@ jobs:
           path: output/**/*.conda
           if-no-files-found: error
 
-  # Node and Rust tests in one job, so pixi and npm set up once per runner. Windows arm64 runs on
-  # main alone: its runner is the slowest and rarely fails where Windows x64 passes.
+  # Node and Rust tests in one job, so pixi and npm set up once per runner. The Linux tests gate a
+  # merge through the `ci` job; `test-other-os` runs the same steps where they take longer.
   test:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ${{ matrix.os }}
     # A hung test fails here instead of at GitHub's six-hour limit.
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","ubuntu-24.04-arm","macos-latest","windows-latest"]' || '["ubuntu-latest","ubuntu-24.04-arm","macos-latest","windows-latest","windows-11-arm"]') }}
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     permissions:
       contents: read
     env:
       RUSTFLAGS: -D warnings
-    steps:
+    steps: &test-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
@@ -142,6 +156,7 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: needs.changes.outputs.rust == 'true'
         with:
           shared-key: test
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -151,7 +166,7 @@ jobs:
         run: pixi run -e ci test-node
       # Runs after failed Node tests too, so one run reports both.
       - name: Rust tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.changes.outputs.rust == 'true' }}
         working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: pixi run -e ci test-rust
       - name: Save npm cache
@@ -161,9 +176,30 @@ jobs:
           path: ${{ env.npm_config_cache }}
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
 
+  # macOS and Windows report on the pull request but do not gate it: they finish after the five
+  # minutes a merge should wait, and rarely fail where Linux passes. Windows arm64 runs on main
+  # alone: its runner is the slowest and rarely fails where Windows x64 passes.
+  test-other-os:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-latest","windows-latest"]' || '["macos-latest","windows-latest","windows-11-arm"]') }}
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: -D warnings
+    steps: *test-steps
+
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
   # here as on every developer machine: the screenshots are the container's.
   e2e:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -226,6 +262,16 @@ jobs:
         with:
           shared-key: clippy
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The `npm ci` in every job only checks the dependency tree, so drift in the lockfile's own
+      # metadata (name, version, bin, engines) passes it silently.
+      - name: Check package-lock.json is up to date
+        run: |
+          pixi run -e ci -- npm install --package-lock-only --no-audit --no-fund
+          git diff --exit-code -- package-lock.json || {
+            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
+            exit 1
+          }
+      # The hook over every file: a formatter rewrite or a stale THIRD_PARTY_NOTICES.md fails it.
       - run: pixi run -e ci lefthook-run
 
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
@@ -306,42 +352,11 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: pixi run -e ci package-crate
 
-  lockfile:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-        with:
-          environments: ci
-          cache-write: ${{ github.ref == 'refs/heads/main' }}
-          locked: true
-      # The `npm ci` in the other jobs only checks the dependency tree, so drift in
-      # the lockfile's own metadata (name, version, bin, engines) passes it silently.
-      # `--package-lock-only` needs no install, so this job does not run `npm ci`.
-      - name: Check package-lock.json is up to date
-        run: |
-          pixi run -e ci -- npm install --package-lock-only --no-audit --no-fund
-          git diff --exit-code -- package-lock.json || {
-            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
-            exit 1
-          }
-      # The notices file is generated from Cargo.lock; the pre-commit hook regenerates it, and this
-      # catches a commit that skipped the hook or a crate whose licence about.toml does not accept.
-      - name: Check THIRD_PARTY_NOTICES.md is up to date
-        run: |
-          pixi run -e ci licenses
-          git diff --exit-code -- THIRD_PARTY_NOTICES.md || {
-            echo "::error file=THIRD_PARTY_NOTICES.md::THIRD_PARTY_NOTICES.md is out of date; run \`pixi run licenses\` and commit the result."
-            exit 1
-          }
-
-
-  # The one check the main ruleset requires: jobs a pull request skips count as passed.
+  # The one check the main ruleset requires: jobs a pull request skips count as passed, and
+  # `test-other-os` is left out on purpose.
   ci:
     if: always()
-    needs: [changes, nix, pixi-build, test, e2e, lint, build, npm-packages, crate, lockfile]
+    needs: [changes, nix, pixi-build, test, e2e, lint, build, npm-packages, crate]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
