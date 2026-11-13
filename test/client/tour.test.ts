@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readTour } from '@/client/tour/document.js';
 import { excerpt } from '@/client/tour/excerpt.js';
+import { exportName } from '@/client/tour/export/file.js';
 import { selectionTarget, textRange } from '@/client/tour/anchor.js';
 import { freeSpot, placeCards } from '@/client/tour/margin/cards.js';
 import { excerptRows, noteRows } from '@/client/tour/steps/rows.js';
@@ -191,5 +192,21 @@ describe('the block the keys step', () => {
     ];
     expect(keyTarget(blocks, ...view)).toBe('tall');
     expect(keyTarget([{ block: 'away', top: 800, bottom: 900 }], ...view)).toBeNull();
+  });
+});
+
+describe("an exported tour's file name", () => {
+  it("hyphenates the title's words, whole ones up to the cap", () => {
+    expect(exportName('Tours: your agent walks you through its change')).toBe(
+      'tours-your-agent-walks-you-through-its.html',
+    );
+    expect(exportName('Refunds count against sales')).toBe('refunds-count-against-sales.html');
+    expect(exportName('Ünïcode / paths: `a\\b`')).toBe('ünïcode-paths-a-b.html');
+  });
+
+  it('cuts a lone overlong word and names a wordless title diffle-tour', () => {
+    expect(exportName('x'.repeat(50))).toBe(`${'x'.repeat(40)}.html`);
+    expect(exportName('—')).toBe('diffle-tour.html');
+    expect(exportName(undefined)).toBe('diffle-tour.html');
   });
 });

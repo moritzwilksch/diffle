@@ -49,8 +49,28 @@ async function tourExport(load: Ready): Promise<{ name: string; html: string }> 
   if (runtime.js.trimStart().startsWith('<')) throw new Error('this build of diffle cannot export tours');
   const title = load.doc.title ?? 'Tour';
   const notices = JSON.parse(runtime.notices) as ExportNotices;
-  const name = `${title.replace(/[\\/:*?"<>|]+/g, '-').trim()}.html`;
-  return { name, html: tourFile(baked, title, { ...runtime, notices }) };
+  return { name: exportName(load.doc.title), html: tourFile(baked, title, { ...runtime, notices }) };
+}
+
+/** The longest an exported tour's name runs before `.html`. */
+const NAME_LENGTH = 40;
+
+/**
+ * The file name an exported tour downloads as: its title's words, lowercased and hyphenated, as many
+ * whole ones as fit in `NAME_LENGTH`; `diffle-tour` for a title without any.
+ */
+export function exportName(title: string | null | undefined): string {
+  let name = '';
+  for (const word of title?.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []) {
+    const longer = name ? `${name}-${word}` : word;
+    if (longer.length > NAME_LENGTH) {
+      // A first word longer than the cap is cut, not dropped.
+      if (!name) name = word.slice(0, NAME_LENGTH);
+      break;
+    }
+    name = longer;
+  }
+  return `${name || 'diffle-tour'}.html`;
 }
 
 /**
