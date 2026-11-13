@@ -824,7 +824,7 @@ test.describe('the tour', () => {
         page.waitForEvent('download'),
         page.getByRole('button', { name: 'Export' }).click(),
       ]);
-      expect(download.suggestedFilename()).toBe('Refunds count against sales.html');
+      expect(download.suggestedFilename()).toBe('refunds-count-against-sales.html');
       const saved = testInfo.outputPath('tour.html');
       await download.saveAs(saved);
       await expect(view).toBeVisible();
