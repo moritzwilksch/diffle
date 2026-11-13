@@ -121,6 +121,12 @@ jobs:
           env-mapping: |
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             npm_config_cache,{{ DEV_DRIVE }}/.npm
+            TEMP,{{ DEV_DRIVE }}\tmp
+            TMP,{{ DEV_DRIVE }}\tmp
+      # TEMP holds the repositories the tests create; scanned on C:, they ran ten times slower than on Linux.
+      - name: Create the temp directory
+        if: runner.os == 'Windows'
+        run: New-Item -ItemType Directory -Force -Path $env:TEMP
       # npm ci downloads every package on Windows otherwise; Linux fetches them fast enough.
       - name: Restore npm cache
         id: npm-cache
