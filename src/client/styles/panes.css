@@ -39,12 +39,23 @@
   transform: rotate(45deg);
 }
 
+/* The open body is spaced from the box, not by its children's margins, so it reads the same whatever
+   comes first or last. */
+.tour-article details[open] {
+  padding-bottom: 0.75rem;
+}
+
 .tour-article details[open] > summary {
+  margin-bottom: 0.75rem;
   border-bottom: 1px solid var(--border);
 }
 
+.tour-article details[open] > summary + * {
+  margin-top: 0;
+}
+
 .tour-article details > :last-child:not(summary) {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
 }
 
 /* Tabs: a strip of titles over one pane, framed as a card is. The chip says what a pane is:
