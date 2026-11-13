@@ -3027,7 +3027,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "A highlighted aside, a block in the article's flow or in a card. It holds what a card holds, except another callout."
+      "description": "A highlighted aside: a block, in the article or in a card. It holds what a card holds, except another callout."
     },
     "TourCard": {
       "type": "object",
@@ -3058,7 +3058,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
+      "description": "A block that frames one part of the diff: a title, a sentence or two, and the `diffle-diff`s they\nexplain. It holds what prose holds, except headings and cards."
     },
     "TourCheck": {
       "type": "object",
@@ -3072,7 +3072,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as\ndecided or answered in a thread the agent reads. It holds only its items."
+      "description": "A block of questions the reviewer decides: they tick each `diffle-item` as decided or answer it in\na thread the agent reads. It holds only its items."
     },
     "TourCheckItem": {
       "type": "object",
@@ -3126,7 +3126,7 @@
         "lang": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9+#-]*$",
-          "description": "The highlighter's language; required without `path`, which otherwise names it."
+          "description": "The highlighter's language. Required without `path`, which otherwise implies it."
         },
         "path": {
           "type": "string",
@@ -3136,11 +3136,11 @@
         "line": {
           "type": "string",
           "pattern": "^[1-9][0-9]*$",
-          "description": "Where in `path`, on the new side, its first declaration sits."
+          "description": "The new-side line in `path` of its first declaration."
         },
         "example": {
           "type": "string",
-          "description": "Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`."
+          "description": "Written bare, as an HTML boolean attribute: the code is made up. It takes no `path` or `line`."
         },
         "title": {
           "type": "string",
@@ -3152,7 +3152,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. With `example`, a snippet the agent made up to show how something works\n(data as it flows, a simplified spike, an alternative design), labelled as an example. It holds\nits code as text, `<` written `&lt;`."
+      "description": "A block of code the agent writes: signatures, interfaces, type definitions, the shape of an\nabstraction, never code the diff already shows. It is highlighted like the diff, and `path` frames\nit with the file's path and a jump there. With `example`, it is a made-up snippet that shows how\nsomething works (data as it flows, a simplified spike, an alternative design), labelled as one.\nIt holds its code as text, with `<` written `&lt;`."
     },
     "TourCommentTag": {
       "type": "string",
@@ -3215,7 +3215,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it."
+      "description": "A block holding a simple architecture diagram: one inline `<svg>` of diagram elements, drawn by\nhand, then one `diffle-note` per step if it has steps."
     },
     "TourDiff": {
       "type": "object",
@@ -3231,7 +3231,7 @@
         },
         "side": {
           "$ref": "#/$defs/Side",
-          "description": "Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default)."
+          "description": "Which side `lines` counts on: `old` (before) or `new` (after, the default)."
         },
         "lines": {
           "type": "string",
@@ -3278,7 +3278,7 @@
             "title"
           ],
           "additionalProperties": false,
-          "description": "A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence\nor two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards."
+          "description": "A block that frames one part of the diff: a title, a sentence or two, and the `diffle-diff`s they\nexplain. It holds what prose holds, except headings and cards."
         },
         {
           "type": "object",
@@ -3294,7 +3294,7 @@
             },
             "side": {
               "$ref": "#/$defs/Side",
-              "description": "Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default)."
+              "description": "Which side `lines` counts on: `old` (before) or `new` (after, the default)."
             },
             "lines": {
               "type": "string",
@@ -3335,7 +3335,7 @@
             "root": {
               "type": "string",
               "minLength": 1,
-              "description": "The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root."
+              "description": "The folder the tree starts at, without a trailing `/`; every path lies under it. Defaults to the repository root."
             }
           },
           "required": [
@@ -3344,7 +3344,7 @@
             "paths"
           ],
           "additionalProperties": false,
-          "description": "A directory tree of some files under a title; changed ones show their status and line counts. It\nholds only `diffle-file` notes, on a few of its files."
+          "description": "A block that shows files as a directory tree under a title, each changed one with its status and\nline counts. It holds only `diffle-file` notes, on a few of its files."
         },
         {
           "type": "object",
@@ -3373,7 +3373,7 @@
             "path"
           ],
           "additionalProperties": false,
-          "description": "A button that opens the diff view at a file or a line. Its text is the label, plain text: markup\ninside it is refused. Empty, it shows `path:line`."
+          "description": "A button that opens the diff view at a file or line. Its plain text is the label; markup inside is\nrefused. Empty, it shows `path:line`."
         },
         {
           "type": "object",
@@ -3409,7 +3409,7 @@
             "name"
           ],
           "additionalProperties": false,
-          "description": "A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the\ndiff's hover card and a click that lists its references when a language server serves its file.\nIt holds nothing."
+          "description": "A symbol the prose names, anchored to its line and coloured as the diff colours it there. When a\nlanguage server serves its file, it shows the diff's hover card and lists its references on click.\nIt holds nothing."
         },
         {
           "type": "object",
@@ -3433,7 +3433,7 @@
             "kind"
           ],
           "additionalProperties": false,
-          "description": "A highlighted aside, a block in the article's flow or in a card. It holds what a card holds, except another callout."
+          "description": "A highlighted aside: a block, in the article or in a card. It holds what a card holds, except another callout."
         },
         {
           "type": "object",
@@ -3447,7 +3447,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "A simple architecture diagram, a block in the article's flow: one inline `<svg>` of\n`TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it."
+          "description": "A block holding a simple architecture diagram: one inline `<svg>` of diagram elements, drawn by\nhand, then one `diffle-note` per step if it has steps."
         },
         {
           "type": "object",
@@ -3461,7 +3461,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+          "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
         },
         {
           "type": "object",
@@ -3473,7 +3473,7 @@
             "lang": {
               "type": "string",
               "pattern": "^[a-z0-9][a-z0-9+#-]*$",
-              "description": "The highlighter's language; required without `path`, which otherwise names it."
+              "description": "The highlighter's language. Required without `path`, which otherwise implies it."
             },
             "path": {
               "type": "string",
@@ -3483,11 +3483,11 @@
             "line": {
               "type": "string",
               "pattern": "^[1-9][0-9]*$",
-              "description": "Where in `path`, on the new side, its first declaration sits."
+              "description": "The new-side line in `path` of its first declaration."
             },
             "example": {
               "type": "string",
-              "description": "Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`."
+              "description": "Written bare, as an HTML boolean attribute: the code is made up. It takes no `path` or `line`."
             },
             "title": {
               "type": "string",
@@ -3499,7 +3499,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,\nnever code the diff already shows. Highlighted like the diff; with `path`, framed with the file's\npath and a jump to it. With `example`, a snippet the agent made up to show how something works\n(data as it flows, a simplified spike, an alternative design), labelled as an example. It holds\nits code as text, `<` written `&lt;`."
+          "description": "A block of code the agent writes: signatures, interfaces, type definitions, the shape of an\nabstraction, never code the diff already shows. It is highlighted like the diff, and `path` frames\nit with the file's path and a jump there. With `example`, it is a made-up snippet that shows how\nsomething works (data as it flows, a simplified spike, an alternative design), labelled as one.\nIt holds its code as text, with `<` written `&lt;`."
         },
         {
           "type": "object",
@@ -3529,7 +3529,7 @@
             "name"
           ],
           "additionalProperties": false,
-          "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
+          "description": "A Lucide icon in a line of text (prose, a heading, a table cell), at the text's size and colour,\nmarking one kind of thing the same way throughout the tour. It holds nothing."
         },
         {
           "type": "object",
@@ -3545,12 +3545,12 @@
             },
             "side": {
               "$ref": "#/$defs/Side",
-              "description": "Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default)."
+              "description": "Which side `lines` and its notes' `lines` count on: `old` or `new` (the default)."
             },
             "lines": {
               "type": "string",
               "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
-              "description": "The line range the walk shows, `12-30`."
+              "description": "The line range the walk shows: `12-30`."
             }
           },
           "required": [
@@ -3559,7 +3559,7 @@
             "lines"
           ],
           "additionalProperties": false,
-          "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
+          "description": "A block of the review's diff, read one `diffle-note` at a time: the reader steps through the notes\nin order, and each lights its lines and dims the rest. It holds only its notes."
         },
         {
           "type": "object",
@@ -3571,12 +3571,12 @@
             "lines": {
               "type": "string",
               "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
-              "description": "In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number."
+              "description": "In a walk, the lines it explains, within the walk's and on its side: `14-17` or `14`. A diagram's note takes none: it explains the step of its number."
             },
             "title": {
               "type": "string",
               "minLength": 1,
-              "description": "What these lines do, in a few words: `Record each sale`."
+              "description": "What its lines or step do, in a few words: `Record each sale`."
             }
           },
           "required": [
@@ -3584,7 +3584,7 @@
             "title"
           ],
           "additionalProperties": false,
-          "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+          "description": "A step of a `diffle-walk` or a stepped `diffle-diagram`: a title and one sentence of inline prose\n(`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
         },
         {
           "type": "object",
@@ -3598,7 +3598,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "A path through the code in call order, a block in the article's flow: the reader steps through\nits `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds\nonly its stops."
+          "description": "A block that follows the code in call order: the reader steps through its `diffle-stop`s, each a\nlit line with a few lines around it and a sentence. It holds only its stops."
         },
         {
           "type": "object",
@@ -3615,7 +3615,7 @@
             "line": {
               "type": "string",
               "pattern": "^[1-9][0-9]*$",
-              "description": "The line the stop lights; a few lines around it show too."
+              "description": "The line the stop lights, shown with a few lines around it."
             },
             "side": {
               "$ref": "#/$defs/Side",
@@ -3628,7 +3628,7 @@
             "line"
           ],
           "additionalProperties": false,
-          "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+          "description": "A stop of a `diffle-trace`: a line of the review and one sentence of inline prose on what happens\nthere (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
         },
         {
           "type": "object",
@@ -3642,7 +3642,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Two to four panes side by side in one block's width, one shown at a time: the chosen design next\nto one it rejected, a payload before and after. It holds only its `diffle-tab`s."
+          "description": "A block of two to four panes, one shown at a time: the chosen design beside a rejected one, a\npayload before and after. It holds only its `diffle-tab`s."
         },
         {
           "type": "object",
@@ -3666,7 +3666,7 @@
             "title"
           ],
           "additionalProperties": false,
-          "description": "One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
+          "description": "A pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
         },
         {
           "type": "object",
@@ -3680,7 +3680,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as\ndecided or answered in a thread the agent reads. It holds only its items."
+          "description": "A block of questions the reviewer decides: they tick each `diffle-item` as decided or answer it in\na thread the agent reads. It holds only its items."
         },
         {
           "type": "object",
@@ -3692,14 +3692,14 @@
             "context": {
               "type": "string",
               "minLength": 1,
-              "description": "A sentence of context under the question: what the choice costs or what it rests on."
+              "description": "One sentence under the question: what the choice costs or rests on."
             }
           },
           "required": [
             "tag"
           ],
           "additionalProperties": false,
-          "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
+          "description": "A question in a `diffle-check` for the reviewer to decide, in one line of inline prose."
         },
         {
           "type": "object",
@@ -3844,7 +3844,7 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and\ncolour. It marks one kind of thing the same way throughout the tour. It holds nothing."
+      "description": "A Lucide icon in a line of text (prose, a heading, a table cell), at the text's size and colour,\nmarking one kind of thing the same way throughout the tour. It holds nothing."
     },
     "TourItem": {
       "type": "object",
@@ -3856,14 +3856,14 @@
         "context": {
           "type": "string",
           "minLength": 1,
-          "description": "A sentence of context under the question: what the choice costs or what it rests on."
+          "description": "One sentence under the question: what the choice costs or rests on."
         }
       },
       "required": [
         "tag"
       ],
       "additionalProperties": false,
-      "description": "A question of a `diffle-check`, one line of inline prose: what the reviewer should decide."
+      "description": "A question in a `diffle-check` for the reviewer to decide, in one line of inline prose."
     },
     "TourJump": {
       "type": "object",
@@ -3892,7 +3892,7 @@
         "path"
       ],
       "additionalProperties": false,
-      "description": "A button that opens the diff view at a file or a line. Its text is the label, plain text: markup\ninside it is refused. Empty, it shows `path:line`."
+      "description": "A button that opens the diff view at a file or line. Its plain text is the label; markup inside is\nrefused. Empty, it shows `path:line`."
     },
     "TourNote": {
       "type": "object",
@@ -3904,12 +3904,12 @@
         "lines": {
           "type": "string",
           "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
-          "description": "In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number."
+          "description": "In a walk, the lines it explains, within the walk's and on its side: `14-17` or `14`. A diagram's note takes none: it explains the step of its number."
         },
         "title": {
           "type": "string",
           "minLength": 1,
-          "description": "What these lines do, in a few words: `Record each sale`."
+          "description": "What its lines or step do, in a few words: `Record each sale`."
         }
       },
       "required": [
@@ -3917,7 +3917,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in\ninline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+      "description": "A step of a `diffle-walk` or a stepped `diffle-diagram`: a title and one sentence of inline prose\n(`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
     },
     "TourOpaqueTag": {
       "type": "string",
@@ -4023,7 +4023,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Two or three columns side by side while the window has room, stacked below that, at the top\nlevel. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,\n`diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+      "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
     },
     "TourStop": {
       "type": "object",
@@ -4040,7 +4040,7 @@
         "line": {
           "type": "string",
           "pattern": "^[1-9][0-9]*$",
-          "description": "The line the stop lights; a few lines around it show too."
+          "description": "The line the stop lights, shown with a few lines around it."
         },
         "side": {
           "$ref": "#/$defs/Side",
@@ -4053,7 +4053,7 @@
         "line"
       ],
       "additionalProperties": false,
-      "description": "One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens\nthere, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
+      "description": "A stop of a `diffle-trace`: a line of the review and one sentence of inline prose on what happens\nthere (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`)."
     },
     "TourSvgClass": {
       "type": "string",
@@ -4075,7 +4075,7 @@
         "warning",
         "error"
       ],
-      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),\n`dashed`. Text: `bold`, `small`, `mono`, `code` (lines of code in its `lang`, one `tspan` each,\nhighlighted), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).\nTones, on a shape, group, line or text: `accent` for what the point is about, `success`,\n`warning` and `error` for status."
+      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (heads at both\nends), `dashed`. Text: `bold`, `small`, `mono`, `code` (highlighted lines in its `lang`, one\n`tspan` each), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces:\n`fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line\nor text: `accent` for what the point is about; `success`, `warning` and `error` for status."
     },
     "TourSvgElement": {
       "oneOf": [
@@ -4460,7 +4460,7 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the\ndiff's hover card and a click that lists its references when a language server serves its file.\nIt holds nothing."
+      "description": "A symbol the prose names, anchored to its line and coloured as the diff colours it there. When a\nlanguage server serves its file, it shows the diff's hover card and lists its references on click.\nIt holds nothing."
     },
     "TourTab": {
       "type": "object",
@@ -4484,7 +4484,7 @@
         "title"
       ],
       "additionalProperties": false,
-      "description": "One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
+      "description": "A pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs."
     },
     "TourTabKind": {
       "type": "string",
@@ -4493,7 +4493,7 @@
         "rejected",
         "example"
       ],
-      "description": "What a tab's pane is to the reader, shown as a chip beside its title."
+      "description": "What a pane is to the reader, shown as a chip beside its title."
     },
     "TourTabs": {
       "type": "object",
@@ -4507,7 +4507,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Two to four panes side by side in one block's width, one shown at a time: the chosen design next\nto one it rejected, a payload before and after. It holds only its `diffle-tab`s."
+      "description": "A block of two to four panes, one shown at a time: the chosen design beside a rejected one, a\npayload before and after. It holds only its `diffle-tab`s."
     },
     "TourTag": {
       "type": "string",
@@ -4535,7 +4535,7 @@
         "th",
         "td"
       ],
-      "description": "The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the\nwalk, and `h3` a subsection; `h4` is a small heading inside a card, a tab, a callout or a\n`details`, where those cannot go. The rest carry prose, lists and tables, and `details` folds away\nwhat the main path can do without, opening with its `summary`. They take no\nattributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take\n`colspan` and `rowspan` as positive numbers."
+      "description": "The plain tags a tour is written in. `h1` titles it, each `h2` starts a section (a step of the\nwalk), and `h3` a subsection; `h4` is a small heading inside a card, tab, callout or `details`,\nwhere those cannot go. `details` folds away what the main path can do without and opens with its\n`summary`; the rest carry prose, lists and tables. Only `a` (an `href` to an `http(s)` URL), `th`\nand `td` (`colspan` and `rowspan`, positive numbers) take attributes."
     },
     "TourTarget": {
       "oneOf": [
@@ -4705,7 +4705,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "A path through the code in call order, a block in the article's flow: the reader steps through\nits `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds\nonly its stops."
+      "description": "A block that follows the code in call order: the reader steps through its `diffle-stop`s, each a\nlit line with a few lines around it and a sentence. It holds only its stops."
     },
     "TourTree": {
       "type": "object",
@@ -4732,7 +4732,7 @@
         "root": {
           "type": "string",
           "minLength": 1,
-          "description": "The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root."
+          "description": "The folder the tree starts at, without a trailing `/`; every path lies under it. Defaults to the repository root."
         }
       },
       "required": [
@@ -4741,7 +4741,7 @@
         "paths"
       ],
       "additionalProperties": false,
-      "description": "A directory tree of some files under a title; changed ones show their status and line counts. It\nholds only `diffle-file` notes, on a few of its files."
+      "description": "A block that shows files as a directory tree under a title, each changed one with its status and\nline counts. It holds only `diffle-file` notes, on a few of its files."
     },
     "TourWalk": {
       "type": "object",
@@ -4757,12 +4757,12 @@
         },
         "side": {
           "$ref": "#/$defs/Side",
-          "description": "Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default)."
+          "description": "Which side `lines` and its notes' `lines` count on: `old` or `new` (the default)."
         },
         "lines": {
           "type": "string",
           "pattern": "^[1-9][0-9]*(-[1-9][0-9]*)?$",
-          "description": "The line range the walk shows, `12-30`."
+          "description": "The line range the walk shows: `12-30`."
         }
       },
       "required": [
@@ -4771,7 +4771,7 @@
         "lines"
       ],
       "additionalProperties": false,
-      "description": "Lines of the review's diff walked one note at a time, a block in the article's flow: the reader\nsteps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds\nonly its notes."
+      "description": "A block of the review's diff, read one `diffle-note` at a time: the reader steps through the notes\nin order, and each lights its lines and dims the rest. It holds only its notes."
     },
     "TourWholeTag": {
       "type": "string",
