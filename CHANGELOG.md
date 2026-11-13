@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.3](https://github.com/moritzwilksch/diffle/compare/v0.5.2...v0.5.3) - 2026-11-13
+
+### Bug fixes
+
+- _(tour)_ Show the GitHub mark in the exported tour header ([#468](https://github.com/moritzwilksch/diffle/pull/468))
+- _(tour)_ Stop a taken step pulling an exported tour's scroll back ([#472](https://github.com/moritzwilksch/diffle/pull/472))
+- _(tour)_ Download an exported tour under a short name ([#473](https://github.com/moritzwilksch/diffle/pull/473))
+
+### Refactors
+
+- _(tour)_ Derive an element's line range in one place, `rangeOf` ([#474](https://github.com/moritzwilksch/diffle/pull/474))
+
+### Documentation
+
+- _(skill)_ Tighten the diffle skill, keep replies short ([#470](https://github.com/moritzwilksch/diffle/pull/470))
+- Show agent replies to review comments in the README and the review take ([#471](https://github.com/moritzwilksch/diffle/pull/471))
+
 ## [0.5.2](https://github.com/moritzwilksch/diffle/compare/v0.5.1...v0.5.2) - 2026-11-13
 
 ### Features
