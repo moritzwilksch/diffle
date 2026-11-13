@@ -246,13 +246,18 @@ function clientInputsKey(root: string): string {
  */
 /**
  * How to run the diffle of checkout `root`: `DIFFLE_BIN` for this checkout when set, else its
- * release binary. A base checkout from before the Rust server runs its TypeScript CLI from source.
+ * `e2e`-profile binary, or a base checkout's release binary (it may predate the profile). A base
+ * checkout from before the Rust server runs its TypeScript CLI from source.
  */
 export function diffleCommand(root = REPO_ROOT): string[] {
   if (root === REPO_ROOT && process.env.DIFFLE_BIN) return [resolve(process.env.DIFFLE_BIN)];
   if (!existsSync(join(root, 'Cargo.toml')))
     return [process.execPath, join(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs'), join(root, 'src/cli/main.ts')];
-  return [join(targetDir(root), 'release', process.platform === 'win32' ? 'diffle.exe' : 'diffle')];
+  return [join(targetDir(root), profile(root), process.platform === 'win32' ? 'diffle.exe' : 'diffle')];
+}
+
+function profile(root: string): string {
+  return root === REPO_ROOT ? 'e2e' : 'release';
 }
 
 /** Base checkouts share this checkout's build cache: only what a commit changed recompiles. */
@@ -260,10 +265,10 @@ function targetDir(root: string): string {
   return root === REPO_ROOT ? join(REPO_ROOT, 'target') : join(tmpdir(), 'diffle-base-target');
 }
 
-/** Builds checkout `root`'s release binary, which embeds its client: build the client first. */
+/** Builds checkout `root`'s binary, which embeds its client: build the client first. */
 export function buildServer(root = REPO_ROOT): void {
   if (!existsSync(join(root, 'Cargo.toml'))) return;
-  execFileSync('cargo', ['build', '--release', '--locked', '--quiet'], {
+  execFileSync('cargo', ['build', '--profile', profile(root), '--locked', '--quiet'], {
     cwd: root,
     stdio: 'inherit',
     env: { ...process.env, CARGO_TARGET_DIR: targetDir(root) },

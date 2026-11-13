@@ -12,6 +12,13 @@ lto = "fat"
 codegen-units = 1
 strip = true
 
+# Optimised like release but without its slow link: the e2e suite needs a fast binary, not a small one.
+[profile.e2e]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
+
 # gix hashes worktree files in-process; unoptimised SHA-1 makes debug builds crawl over a large file.
 [profile.dev.package.sha1dc]
 opt-level = 3

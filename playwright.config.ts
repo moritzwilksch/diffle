@@ -15,7 +15,8 @@ export default defineConfig({
   globalSetup: './test/e2e/global-setup.ts',
   globalTeardown: './test/e2e/global-teardown.ts',
   fullyParallel: true,
-  workers: process.env.CI ? 2 : undefined,
+  // CI's public Linux runners have 4 vCPUs.
+  workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
   outputDir: 'test-results',
