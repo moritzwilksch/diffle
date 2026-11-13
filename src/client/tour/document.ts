@@ -69,19 +69,33 @@ export function lineSpan(lines: string): [number, number] {
   return [start, end];
 }
 
+/** An element that shows lines of the review. */
+type Ranged = Extract<TourElement, { tag: 'diffle-diff' | 'diffle-walk' | 'diffle-stop' }>;
+
+/** The review's lines `element` shows: a diff's or a walk's `lines`, a stop's `line`; null for any other element. */
+export function rangeOf(element: Ranged): LineRange;
+export function rangeOf(element: TourElement): LineRange | null;
+export function rangeOf(element: TourElement): LineRange | null {
+  switch (element.tag) {
+    case 'diffle-diff':
+    case 'diffle-walk': {
+      const [start, end] = lineSpan(element.lines);
+      return { path: element.path, side: element.side ?? 'new', start, end };
+    }
+    case 'diffle-stop': {
+      const line = Number(element.line);
+      return { path: element.path, side: element.side ?? 'new', start: line, end: line };
+    }
+    default:
+      return null;
+  }
+}
+
 /** The lines of the `diffle-diff`s, `diffle-walk`s and `diffle-stop`s at or inside `el`. */
 function rangesIn(el: Element): LineRange[] {
-  const ranges: LineRange[] = [];
-  for (const found of [el, ...el.querySelectorAll('diffle-diff, diffle-walk, diffle-stop')]) {
-    const diff = primitive(found);
-    if (diff?.tag === 'diffle-stop') {
-      const line = Number(diff.line);
-      ranges.push({ path: diff.path, side: diff.side ?? 'new', start: line, end: line });
-      continue;
-    }
-    if (diff?.tag !== 'diffle-diff' && diff?.tag !== 'diffle-walk') continue;
-    const [start, end] = lineSpan(diff.lines);
-    ranges.push({ path: diff.path, side: diff.side ?? 'new', start, end });
-  }
-  return ranges;
+  return [el, ...el.querySelectorAll('diffle-diff, diffle-walk, diffle-stop')].flatMap((found) => {
+    const element = primitive(found);
+    const range = element && rangeOf(element);
+    return range ? [range] : [];
+  });
 }
