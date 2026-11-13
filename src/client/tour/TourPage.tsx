@@ -90,6 +90,8 @@ export function TourPage({ doc }: { doc: TourDocument }) {
     stepPage.current = page;
     setWidth(page.clientWidth);
     const observer = new ResizeObserver(() => {
+      // Hidden under another view, the page keeps its layout, so the offset a jump left still lands there.
+      if (!page.clientWidth) return;
       setWidth(page.clientWidth);
       setLayout((n) => n + 1);
       retarget();
@@ -120,6 +122,14 @@ export function TourPage({ doc }: { doc: TourDocument }) {
       behavior: 'smooth',
     });
   }, [reveal, article]);
+  // Ctrl+o back from a jump: the offset left, before paint and without a glide.
+  const back = useTour((s) => s.back);
+  useLayoutEffect(() => {
+    const page = ref.current;
+    if (!page || !back) return;
+    landing.current = null;
+    page.scrollTo({ top: back.top, behavior: 'instant' });
+  }, [back]);
   const focus = useTour((s) => s.focus);
   const headings = (level: 'h2' | 'h3') => [...(ref.current?.querySelectorAll(`article > ${level}`) ?? [])];
 

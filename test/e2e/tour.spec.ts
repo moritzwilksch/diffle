@@ -237,12 +237,24 @@ test.describe('the tour', () => {
       'tour-diagram-code.png',
     );
 
-    // A jump leaves for the diff at its line; Ctrl+o comes back to the step it left.
-    await page.getByRole('button', { name: 'stops on an empty ledger' }).click();
+    // A jump leaves for the diff at its line; Ctrl+o comes back to the very offset it left, at once.
+    const jumpLink = page.getByRole('button', { name: 'stops on an empty ledger' });
+    const scroller = view
+      .locator('article.tour-article')
+      .locator('xpath=ancestor::div[contains(@class, "overflow-auto")]');
+    // Mid-section, off any heading, so a return that lands a heading shows.
+    await jumpLink.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    const left = await scroller.evaluate((el) => el.scrollTop);
+    await jumpLink.click();
     await expect(view).toBeHidden();
     await expect.poll(() => activePath(page)).toBe('tally/cli.py');
     await page.keyboard.press('Control+o');
-    await expect(view).toBeVisible();
+    // No polling: a glide would read short of `left` here, and still be moving a frame later.
+    const back = await scroller.evaluate((el) => el.scrollTop);
+    const later = await scroller.evaluate(
+      (el) => new Promise<number>((done) => setTimeout(() => done(el.scrollTop), 300)),
+    );
+    expect([back, later]).toEqual([left, left]);
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
   });
 

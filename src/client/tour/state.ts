@@ -6,6 +6,7 @@ import type { Side } from '@/shared/side.js';
 import type { Tour } from '@/shared/tour.js';
 import { readTour, type LineRange, type TourDocument } from './document.js';
 import { excerpt } from './excerpt.js';
+import { stepPage } from './steps/steps.js';
 
 export type TourLoad =
   | { state: 'none' }
@@ -20,6 +21,8 @@ interface TourState {
   focus: { section: number; sub: number | null; seq: number } | null;
   /** A thread to scroll to, and a count that repeats the scroll. */
   reveal: { id: string; seq: number } | null;
+  /** A scroll offset the jump list returns to at once, and a count that repeats it. */
+  back: { top: number; seq: number } | null;
   /** Sections holding a `diffle-diff` whose lines left the review, in the current snapshot. */
   stale: ReadonlySet<number>;
   /** How many `diffle-diff`s went stale. */
@@ -36,6 +39,7 @@ export const useTour = create<TourState>((set, get) => ({
   step: -1,
   focus: null,
   reveal: null,
+  back: null,
   stale: new Set(),
   staleDiffs: 0,
   goTo(index, sub) {
@@ -137,14 +141,15 @@ function follow(): void {
   });
 }
 
-/** The section read, for the jump list: Ctrl+o after a jump into the diff comes back to it. */
+/** Where the reader is in the tour, for the jump list: Ctrl+o after a jump into the diff lands back there, without a glide. */
 export function tourPlace(): ViewPlace {
   const { step } = useTour.getState();
+  const top = stepPage.current?.scrollTop ?? 0;
   return {
     view: `tour:${step}`,
     restore() {
       showView('tour');
-      if (step >= 0) useTour.getState().goTo(step);
+      useTour.setState((s) => ({ step, back: { top, seq: (s.back?.seq ?? 0) + 1 } }));
     },
   };
 }
