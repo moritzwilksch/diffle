@@ -1,5 +1,6 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import { api } from '@/client/api.js';
+import { isNotFound } from '@/client/http.js';
 import { pathFromItemId, relativeTime } from '@/client/model.js';
 import { useStore, type ReviewState } from '@/client/store.js';
 import type { BlameResponse, Snapshot } from '@/shared/protocol.js';
@@ -64,7 +65,11 @@ function roomAfter(row: HTMLElement): number {
   // The line numbers stay put over the code as it scrolls sideways.
   const left = code.querySelector('[data-column-number]')?.getBoundingClientRect().right ?? view.left;
   if (end < left) return 0;
-  return Math.min(box.right - parseFloat(cs.paddingRight), view.left + code.clientWidth) - end;
+  const rowEnd = box.right - parseFloat(cs.paddingRight);
+  // A wrapped diff, or a split one not yet hydrated, lays its code out as `display: contents`: the
+  // column has no box of its own and nothing scrolls sideways, so the row's own edge bounds the note.
+  if (getComputedStyle(code).display === 'contents') return rowEnd - end;
+  return Math.min(rowEnd, view.left + code.clientWidth) - end;
 }
 
 const chWidths = new Map<string, number>();
@@ -112,6 +117,17 @@ export function remember<V>(map: Map<string, V>, key: string, value: V, max: num
   if (map.size > max) map.delete(map.keys().next().value!);
 }
 
+/**
+ * One side's blame as of snapshot `version`: null when that side has none, undefined when the answer
+ * is not one to keep (a failure, or the server already past `version`) and the side is asked again later.
+ */
+export function fetchBlame(path: string, side: Side, version: number): Promise<BlameResponse | null | undefined> {
+  return api.blame({ path, side, version }).then(
+    (res) => res,
+    (e: unknown) => (isNotFound(e) ? null : undefined),
+  );
+}
+
 /** One blamed line: where the cursor rests, and the file side it rests in. */
 interface Target {
   id: string;
@@ -119,6 +135,7 @@ interface Target {
   side: Side;
   line: number;
   key: string;
+  version: number;
 }
 
 function targetOf(s: Pick<ReviewState, 'selection' | 'snapshot'>): Target | null {
@@ -126,7 +143,8 @@ function targetOf(s: Pick<ReviewState, 'selection' | 'snapshot'>): Target | null
   if (!sel || !s.snapshot) return null;
   const side = (sel.range.endSide ?? sel.range.side) === 'deletions' ? 'old' : 'new';
   const path = pathFromItemId(sel.id);
-  return { id: sel.id, path, side, line: sel.range.end, key: sideKey(s.snapshot, path, side) };
+  const key = sideKey(s.snapshot, path, side);
+  return { id: sel.id, path, side, line: sel.range.end, key, version: s.snapshot.version };
 }
 
 /** "Ada Lovelace, 3 days ago · Fix the parser" for `line`, or null when the response does not cover it. */
@@ -144,24 +162,23 @@ export function installBlame(viewer: Viewer, scroller: HTMLElement): () => void 
   // Whole-file blames by `sideKey`; null when that side has no blame to show.
   const files = new Map<string, BlameResponse | null>();
   let pending = '';
+  // The side whose answer was not kept: asked again once the cursor or the snapshot moves.
+  let held = '';
   let timer = 0;
   let repaint = () => {};
 
   const request = (t: Target) => {
-    if (pending === t.key) return;
+    if (pending === t.key || held === t.key) return;
     pending = t.key;
     clearTimeout(timer);
     timer = window.setTimeout(() => {
-      api.blame({ path: t.path, side: t.side }).then(
-        (res) => settle(t, res),
-        // A side with no history, or a file the snapshot no longer has: nothing to say.
-        () => settle(t, null),
-      );
+      void fetchBlame(t.path, t.side, t.version).then((res) => settle(t, res));
     }, SETTLE_MS);
   };
-  const settle = (t: Target, res: BlameResponse | null) => {
+  const settle = (t: Target, res: BlameResponse | null | undefined) => {
     if (pending === t.key) pending = '';
-    remember(files, t.key, res, FILES_MAX);
+    if (res === undefined) held = t.key;
+    else remember(files, t.key, res, FILES_MAX);
     repaint();
   };
 
@@ -191,7 +208,10 @@ export function installBlame(viewer: Viewer, scroller: HTMLElement): () => void 
     (schedule) => {
       repaint = schedule;
       return useStore.subscribe((s, prev) => {
-        if (s.selection !== prev.selection || s.snapshot !== prev.snapshot) schedule();
+        if (s.selection !== prev.selection || s.snapshot !== prev.snapshot) {
+          held = '';
+          schedule();
+        }
       });
     },
     (items) => {

@@ -113,3 +113,18 @@ async fn refuses_what_the_snapshot_does_not_show_and_bad_ranges() {
     assert_eq!(status(json!({ "path": "renamed.txt", "side": "new", "start": 0 })).await, 400);
     s.close().await;
 }
+
+#[tokio::test]
+async fn refuses_to_blame_a_snapshot_the_asker_does_not_show() {
+    let s = TestServer::over(history(), EnterRequest::Working).await;
+    let version = s.session.snapshotter().unwrap().current().await.unwrap().version;
+    let status = async |version: i64| {
+        s.json("POST", "/api/blame", json!({ "path": "renamed.txt", "side": "new", "version": version })).await.status
+    };
+    assert_eq!(status(version).await, 200);
+    // An asker still showing an older snapshot gets no blame of the newer one to file under it.
+    s.repo.write("renamed.txt", "changed\n");
+    s.session.refresh().await;
+    assert_eq!(status(version).await, 409);
+    s.close().await;
+}

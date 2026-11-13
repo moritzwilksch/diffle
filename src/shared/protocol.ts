@@ -1086,6 +1086,8 @@ export const BlameRequestSchema = z.object({
   start: z.number().int().positive().optional(),
   /** 1-based last line, inclusive; `start` alone blames that one line. */
   end: z.number().int().positive().optional(),
+  /** The `Snapshot.version` the asker shows; when the current snapshot is another, the server answers 409 rather than blame what the asker does not show. */
+  version: z.number().int().optional(),
 });
 export type BlameRequest = z.infer<typeof BlameRequestSchema>;
 

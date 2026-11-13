@@ -1,10 +1,9 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import { api } from '@/client/api.js';
 import { pathFromItemId, relativeTime } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
 import type { BlameHunk, BlameResponse } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
-import { clearRendered, remember, sideKey } from './blame.js';
+import { clearRendered, fetchBlame, remember, sideKey } from './blame.js';
 import { isDeletionRow, watchRenderedRows } from './rows.js';
 
 /**
@@ -80,32 +79,31 @@ export function installBlameGutter(
 ): () => void {
   // By `sideKey`: the blame, null when the side has none, 'pending' while asked.
   const files = new Map<string, BlameResponse | null | 'pending'>();
-  const queue: { key: string; path: string; side: Side }[] = [];
+  // Sides whose answer was not kept: blank until the next snapshot asks again.
+  const held = new Set<string>();
+  const queue: { key: string; path: string; side: Side; version: number }[] = [];
   let inFlight = 0;
   let stopped = false;
   let repaint = () => {};
 
   const pump = () => {
     while (!stopped && inFlight < IN_FLIGHT_MAX && queue.length) {
-      const { key, path, side } = queue.shift()!;
+      const { key, path, side, version } = queue.shift()!;
       inFlight++;
-      api
-        .blame({ path, side })
-        .then(
-          (res) => res,
-          () => null,
-        )
-        .then((res) => {
-          inFlight--;
-          remember(files, key, res, FILES_MAX);
-          repaint();
-          pump();
-        });
+      void fetchBlame(path, side, version).then((res) => {
+        inFlight--;
+        if (res === undefined) {
+          files.delete(key);
+          held.add(key);
+        } else remember(files, key, res, FILES_MAX);
+        repaint();
+        pump();
+      });
     }
   };
-  const request = (key: string, path: string, side: Side) => {
+  const request = (key: string, path: string, side: Side, version: number) => {
     files.set(key, 'pending');
-    queue.push({ key, path, side });
+    queue.push({ key, path, side, version });
     pump();
   };
 
@@ -115,7 +113,10 @@ export function installBlameGutter(
     (schedule) => {
       repaint = schedule;
       return useStore.subscribe((s, prev) => {
-        if (s.snapshot !== prev.snapshot) schedule();
+        if (s.snapshot !== prev.snapshot) {
+          held.clear();
+          schedule();
+        }
       });
     },
     (items) => {
@@ -130,8 +131,8 @@ export function installBlameGutter(
             const side: Side = isDeletionRow(cell) ? 'old' : 'new';
             const line = Number(cell.dataset.columnNumber);
             const key = sideKey(snap, path, side);
-            const res = files.get(key);
-            if (res === undefined) request(key, path, side);
+            const res = held.has(key) ? null : files.get(key);
+            if (res === undefined) request(key, path, side, snap.version);
             if (res === undefined || res === 'pending') {
               set(cell, GUTTER_ATTR, LABEL);
               continue;
