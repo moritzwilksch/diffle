@@ -243,6 +243,15 @@ pub enum TourCommand {
         #[command(flatten)]
         repo: RepoOpts,
     },
+    /// save the review's tour as one HTML file that reads offline, as the tour view's Export does;
+    /// an open diffle tab bakes it
+    Export {
+        /// where to write the file (`-`: stdout)
+        #[arg(value_name = "file|-", value_hint = ValueHint::FilePath)]
+        file: PathBuf,
+        #[command(flatten)]
+        repo: RepoOpts,
+    },
 }
 
 /// The repository whose running diffle a `diffle comments` or `diffle tour` call talks to.

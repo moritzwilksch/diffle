@@ -948,6 +948,14 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('tour'),
   }),
+  /**
+   * `diffle tour export` asks an open tab to bake the review's tour, which only the browser can
+   * highlight; the tab answers with `PUT /api/tour/exports/{id}`.
+   */
+  z.object({
+    type: z.literal('tourExport'),
+    id: z.string(),
+  }),
   z.object({
     type: z.literal('lsp'),
     payload: LspStatusSchema,

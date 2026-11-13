@@ -2658,6 +2658,22 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "tourExport"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "lsp"
             },
             "payload": {
@@ -3736,6 +3752,43 @@
         "message"
       ],
       "description": "One reason a pushed tour was refused, or one warning about an accepted one."
+    },
+    "TourExportAnswer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "baked"
+            },
+            "html": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "html"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "failed"
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "error"
+          ]
+        }
+      ],
+      "description": "`PUT /api/tour/exports/{id}`: a tab's answer to `ServerMessage` `tourExport`, the exported file\nor why it could not bake one. The first answer wins; later ones answer 404."
     },
     "TourFile": {
       "type": "object",

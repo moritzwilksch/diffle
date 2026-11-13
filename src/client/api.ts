@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { encode, json, q, text } from './http.js';
 import {
   BlameRequestSchema,
   BlameResponseSchema,
@@ -14,7 +15,6 @@ import {
   ResolvedRequestSchema,
   ThreadCreateSchema,
   ViewedBulkRequestSchema,
-  ApiErrorSchema,
   CommentThreadSchema,
   FileResponseSchema,
   GithubExportResponseSchema,
@@ -41,6 +41,8 @@ import {
 import {
   TourThreadCreateSchema,
   type TourThreadCreate,
+  TourExportAnswerSchema,
+  type TourExportAnswer,
   TourResponseSchema,
   TourTickSchema,
   type TourTick,
@@ -67,51 +69,6 @@ import type {
 import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
-
-function encode<S extends z.ZodType>(schema: S, value: z.input<S>): string {
-  return JSON.stringify(schema.parse(value));
-}
-
-async function json<T>(schema: z.ZodType<T>, input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(new URL(input, location.href).href, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...init?.headers },
-  });
-  if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
-  return schema.parse(res.status === 204 ? undefined : await res.json());
-}
-
-async function text(input: string, init?: RequestInit): Promise<string> {
-  const res = await fetch(new URL(input, location.href).href, init);
-  if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
-  return res.text();
-}
-
-async function safeMessage(res: Response): Promise<string> {
-  try {
-    const result = ApiErrorSchema.safeParse(await res.json());
-    return result.success ? result.data.error : res.statusText;
-  } catch {
-    return res.statusText;
-  }
-}
-
-class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-/** Whether `e` is the server answering that what was asked for does not exist. */
-export function isNotFound(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 404;
-}
-
-const q = (params: Record<string, string | undefined>) =>
-  new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
   /** The server's release; answers before the first review resolves. */
@@ -252,6 +209,12 @@ export const api = {
     ]);
     return { js, css, notices };
   },
+  /** Answers the server's request `id` for the tour as one file; a 404 when another tab answered first. */
+  answerTourExport: (id: string, answer: TourExportAnswer) =>
+    json(z.undefined(), `api/tour/exports/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: encode(TourExportAnswerSchema, answer),
+    }),
   /** Ticks a checklist item of the review's tour as decided, or unticks it. */
   tick: (t: TourTick) => json(z.undefined(), 'api/tour/ticks', { method: 'PUT', body: encode(TourTickSchema, t) }),
   /** The snapshot's changed symbols and the code using them. */

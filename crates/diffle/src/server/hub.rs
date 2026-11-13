@@ -1,11 +1,12 @@
-//! The broadcast hub on `/ws`: server → client only.
+//! The broadcast hub on `/ws`: server → client only. A tab answers what the hub asks of it over HTTP.
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use tokio::sync::{broadcast, watch};
 
-use crate::protocol::ServerMessage;
+use super::exports::{Exports, Pending};
+use crate::protocol::{ServerMessage, TourExportAnswer};
 use crate::session::Broadcaster;
 
 /// Clients send nothing; anything larger than a ping is not a client.
@@ -19,6 +20,7 @@ pub struct Hub {
     closing: watch::Sender<bool>,
     count: AtomicUsize,
     clients: watch::Sender<usize>,
+    exports: Exports,
 }
 
 impl Hub {
@@ -28,6 +30,7 @@ impl Hub {
             closing: watch::channel(false).0,
             count: AtomicUsize::new(0),
             clients: watch::channel(0).0,
+            exports: Exports::default(),
         })
     }
 
@@ -47,6 +50,18 @@ impl Hub {
             self.count.fetch_sub(1, Ordering::SeqCst) - 1
         };
         self.clients.send_replace(count);
+    }
+
+    /// Asks the tabs to bake the review's tour; the first answer settles it.
+    pub fn ask_export(&self) -> Pending<'_> {
+        let pending = self.exports.ask();
+        self.broadcast(ServerMessage::TourExport { id: pending.id.clone() });
+        pending
+    }
+
+    /// A tab's `answer` to export `id`; false when another tab answered first or the request is gone.
+    pub fn answer_export(&self, id: &str, answer: TourExportAnswer) -> bool {
+        self.exports.answer(id, answer)
     }
 
     /// Every message broadcast from now on.

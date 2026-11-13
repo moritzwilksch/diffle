@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
@@ -146,6 +146,16 @@ export async function pushTour(url: string, html: string): Promise<void> {
     body: JSON.stringify({ html }),
   });
   if (!response.ok) throw new Error(`pushing a tour failed: HTTP ${response.status} ${await response.text()}`);
+}
+
+/** Run `diffle <args>` as an agent beside the review does, without blocking the page; rejects with its stderr. */
+export function runCli(args: string[]): Promise<string> {
+  const [program, ...launcher] = diffleCommand();
+  return new Promise((done, fail) => {
+    execFile(program!, [...launcher, ...args], { encoding: 'utf8' }, (error, stdout, stderr) =>
+      error ? fail(new Error(`diffle ${args.join(' ')} failed (${error.code}): ${stderr}`)) : done(stdout),
+    );
+  });
 }
 
 /** Reply to a seeded thread directly, as `diffle comments reply` does. */

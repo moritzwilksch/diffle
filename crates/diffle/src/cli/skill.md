@@ -41,6 +41,9 @@ their `<h3>` subsections. Each review has one tour.
 - An accepted push can come back with warnings on stderr, in the same form, such as a file note
   that may be long. They are judgment calls: fix each, or keep it knowingly.
 - `diffle tour clear` removes the review's tour.
+- `diffle tour export <file>|-` saves the review's tour as one HTML file that opens offline, for
+  the user to share with people who do not run diffle: what the tour view's Export saves. The open
+  diffle tab bakes it, so it exits 2 without one, or without a tour.
 - The reviewer answers in this chat, or comments on the tour in diffle: list the threads, reply to
   a question, and revise the document and push it again for a change. The open tour updates in
   place, and each thread follows its passage into it. A diff whose lines left the review since says

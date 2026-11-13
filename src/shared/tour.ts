@@ -133,3 +133,13 @@ export type TourPushed = z.infer<typeof TourPushedSchema>;
 /** What `PUT /api/tour` answers with 422: every reason, in document order. */
 export const TourRejectionSchema = z.object({ errors: TourErrorSchema.array() });
 export type TourRejection = z.infer<typeof TourRejectionSchema>;
+
+/**
+ * `PUT /api/tour/exports/{id}`: a tab's answer to `ServerMessage` `tourExport`, the exported file
+ * or why it could not bake one. The first answer wins; later ones answer 404.
+ */
+export const TourExportAnswerSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('baked'), html: z.string() }),
+  z.object({ type: z.literal('failed'), error: z.string() }),
+]);
+export type TourExportAnswer = z.infer<typeof TourExportAnswerSchema>;

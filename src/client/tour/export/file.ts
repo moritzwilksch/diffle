@@ -1,26 +1,56 @@
 import { api } from '@/client/api.js';
 import type { ExportNotices } from '@/shared/notices.js';
+import { readTour } from '@/client/tour/document.js';
 import type { TourLoad } from '@/client/tour/state.js';
+import type { TourExportAnswer } from '@/shared/tour.js';
 import { bakeTour } from './bake.js';
 import { type BakedTour, DATA_ID } from './data.js';
 
+type Ready = Extract<TourLoad, { state: 'ready' }>;
+
 /**
  * Saves the tour `load` as one HTML file named after its title: the tour as the review shows it
- * now, its script and styles inlined, readable offline in either theme. Its policy lets it load
- * nothing but what it holds.
+ * now, readable offline in either theme.
  */
-export async function exportTour(load: Extract<TourLoad, { state: 'ready' }>): Promise<void> {
+export async function exportTour(load: Ready): Promise<void> {
+  const { name, html } = await tourExport(load);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+/**
+ * Answers the server's request `id` with the review's tour as one file, for `diffle tour export`;
+ * a failure is the answer too, so the command need not wait for its timeout.
+ */
+export async function answerExport(id: string): Promise<void> {
+  let answer: TourExportAnswer;
+  try {
+    const { tour } = await api.tour();
+    if (!tour) throw new Error('the review has no tour');
+    const { html } = await tourExport({ state: 'ready', tour, doc: readTour(tour.html) });
+    answer = { type: 'baked', html };
+  } catch (e) {
+    answer = { type: 'failed', error: e instanceof Error ? e.message : String(e) };
+  }
+  // A 404 means another tab answered first, or the command gave up.
+  await api.answerTourExport(id, answer).catch(() => undefined);
+}
+
+/**
+ * The tour `load` as the review shows it now, baked into one HTML file with its script and styles
+ * inlined, and the file's name from its title. Its policy lets it load nothing but what it holds.
+ */
+async function tourExport(load: Ready): Promise<{ name: string; html: string }> {
   const [baked, runtime] = await Promise.all([bakeTour(load), api.tourRuntime()]);
   // A client built without the export answers with its page instead.
   if (runtime.js.trimStart().startsWith('<')) throw new Error('this build of diffle cannot export tours');
   const title = load.doc.title ?? 'Tour';
   const notices = JSON.parse(runtime.notices) as ExportNotices;
-  const file = new Blob([tourFile(baked, title, { ...runtime, notices })], { type: 'text/html' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(file);
-  link.download = `${title.replace(/[\\/:*?"<>|]+/g, '-').trim()}.html`;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  const name = `${title.replace(/[\\/:*?"<>|]+/g, '-').trim()}.html`;
+  return { name, html: tourFile(baked, title, { ...runtime, notices }) };
 }
 
 /**

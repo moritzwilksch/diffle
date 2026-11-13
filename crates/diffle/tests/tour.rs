@@ -298,3 +298,81 @@ fn pushes_and_clears_a_tour_from_the_command_line() {
     let _ = child.kill();
     let _ = child.wait();
 }
+
+/// A fake tab's wait for the server to ask it for an export: the request's id.
+fn asked_to_export(ws: &mut tokio_tungstenite::tungstenite::WebSocket<std::net::TcpStream>) -> String {
+    loop {
+        let message = ws.read().unwrap();
+        let Ok(text) = message.to_text() else { continue };
+        let Ok(message) = serde_json::from_str::<Value>(text) else { continue };
+        if message["type"] == "tourExport" {
+            return message["id"].as_str().unwrap().to_owned();
+        }
+    }
+}
+
+/// `diffle tour export <args> -C <repo>`, started in the background for a tab to answer.
+fn export_cli(repo: &std::path::Path, target: &str) -> std::process::Child {
+    let config = tempfile::tempdir().unwrap();
+    let args = ["tour", "export", target, "-C", repo.to_str().unwrap()];
+    diffle(config.path(), &args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap()
+}
+
+#[test]
+fn exports_the_tour_a_tab_bakes_from_the_command_line() {
+    let t = TestRepo::new();
+    t.write("app.py", "x = 1\n");
+    t.commit("base");
+    t.write("app.py", "x = 1\ny = 2\n");
+    let config = tempfile::tempdir().unwrap();
+    let (mut child, url, _) = serve(config.path(), &t.path, &["--port", "0"]);
+    let out = t.path.join("tour-export.html");
+    let target = out.to_str().unwrap();
+
+    let untoured = export_cli(&t.path, target).wait_with_output().unwrap();
+    assert_eq!(untoured.status.code(), Some(2), "{}", stderr(&untoured));
+    assert_eq!(stderr(&untoured), "✖ the review has no tour: push one with `diffle tour push`\n");
+    let pushed = tour_cli(&t.path, &["push", "-"], r#"<h2>A</h2><diffle-diff path="app.py" lines="2"></diffle-diff>"#);
+    assert!(pushed.status.success(), "{}", stderr(&pushed));
+    let tabless = export_cli(&t.path, target).wait_with_output().unwrap();
+    assert_eq!(tabless.status.code(), Some(2), "{}", stderr(&tabless));
+    assert!(stderr(&tabless).contains("no browser tab shows the review"), "{}", stderr(&tabless));
+    assert!(!out.exists());
+
+    let authority = url.trim_start_matches("http://").trim_end_matches('/');
+    let socket = std::net::TcpStream::connect(authority).unwrap();
+    let (mut tab, _) = tokio_tungstenite::tungstenite::client(format!("ws://{authority}/ws"), socket).unwrap();
+    let answer = |id: &str, answer: Value| {
+        common::cli::http(&url, "PUT", &format!("/api/tour/exports/{id}"), &answer.to_string()).0
+    };
+
+    // Past the 1 MiB other bodies get: a tour's runtime and fonts ride along.
+    let baked = format!("<!doctype html>{}", "x".repeat(2 << 20));
+    let saving = export_cli(&t.path, target);
+    let id = asked_to_export(&mut tab);
+    let status = answer(&id, json!({ "type": "baked", "html": baked }));
+    assert!(status.contains("204"), "{status}");
+    // Another tab answers too late: the first answer was enough.
+    assert!(answer(&id, json!({ "type": "baked", "html": "late" })).contains("404"));
+    let saved = saving.wait_with_output().unwrap();
+    assert!(saved.status.success(), "{}", stderr(&saved));
+    assert_eq!((stdout(&saved), stderr(&saved)), (String::new(), String::new()));
+    assert!(std::fs::read_to_string(&out).unwrap() == baked);
+
+    let printing = export_cli(&t.path, "-");
+    let id = asked_to_export(&mut tab);
+    assert!(answer(&id, json!({ "type": "baked", "html": "<p>baked</p>" })).contains("204"));
+    let printed = printing.wait_with_output().unwrap();
+    assert!(printed.status.success(), "{}", stderr(&printed));
+    assert_eq!(stdout(&printed), "<p>baked</p>");
+
+    let failing = export_cli(&t.path, "-");
+    let id = asked_to_export(&mut tab);
+    assert!(answer(&id, json!({ "type": "failed", "error": "no highlighter" })).contains("204"));
+    let failed = failing.wait_with_output().unwrap();
+    assert_eq!(failed.status.code(), Some(1), "{}", stderr(&failed));
+    assert!(stderr(&failed).contains("the tab could not export the tour: no highlighter"), "{}", stderr(&failed));
+    assert_eq!(stdout(&failed), "");
+    let _ = child.kill();
+    let _ = child.wait();
+}

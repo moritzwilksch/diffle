@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
 import { activePath } from './browser.js';
-import { pushTour, readPrompt, readThreads, REPO_ROOT, seedReply, seedThreads, waitForLsp } from './server.js';
+import { pushTour, readPrompt, readThreads, REPO_ROOT, runCli, seedReply, seedThreads, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
 const TOUR = `
@@ -305,6 +305,39 @@ test.describe('the tour', () => {
         .locator('svg')
         .evaluateAll((svgs) => svgs.map((svg) => svg.outerHTML)),
     ).toEqual(house);
+    await context.close();
+  });
+
+  test('diffle tour export saves the file Export saves, baked by the open tab, and it reads offline', async ({
+    page,
+    diffle,
+    repo,
+    browser,
+  }, testInfo) => {
+    await pushTour(diffle.url, TOUR);
+    await showTour(page);
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Export' }).click(),
+    ]);
+    const clicked = testInfo.outputPath('clicked.html');
+    await download.saveAs(clicked);
+    const exported = testInfo.outputPath('exported.html');
+    expect(await runCli(['tour', 'export', exported, '-C', repo])).toBe('');
+
+    const html = await readFile(exported, 'utf8');
+    expect(html).toBe(await readFile(clicked, 'utf8'));
+    const context = await browser.newContext();
+    const requests: string[] = [];
+    await context.route('**/*', (route) => {
+      requests.push(route.request().url());
+      return route.abort();
+    });
+    const file = await context.newPage();
+    await file.setContent(html);
+    await expect(file.getByRole('heading', { level: 1, name: 'Refunds count against sales' })).toBeVisible();
+    await expect(file.locator('diffs-container').first()).toBeVisible();
+    expect(requests).toEqual([]);
     await context.close();
   });
 

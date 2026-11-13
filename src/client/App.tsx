@@ -101,6 +101,9 @@ export function App() {
             void refreshTour();
             void refreshThreads();
             break;
+          case 'tourExport':
+            void import('./tour/export/file.js').then(({ answerExport }) => answerExport(msg.id));
+            break;
           case 'lsp':
             setLspStatus(msg.payload);
             break;

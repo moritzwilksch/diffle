@@ -32,7 +32,8 @@ import {
 import { type Side } from '@/shared/side.js';
 import { type TourCheckItem, type TourTargetRequest } from '@/shared/tour.js';
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
-import { api, isNotFound } from './api.js';
+import { api } from './api.js';
+import { isNotFound } from './http.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
 import { anchorPath } from './comments/threads.js';
 import {
