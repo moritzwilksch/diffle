@@ -6,7 +6,7 @@ use axum::Json;
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{RawQuery, State};
-use axum::http::header;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
@@ -103,6 +103,10 @@ async fn blame(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     };
     let path = req.path.to_string();
     let snap = d.session.snapshotter()?.current().await?;
+    // A blame of a newer snapshot would land under the asker's older one: it asks again once it has caught up.
+    if req.version.is_some_and(|v| v != snap.version) {
+        return Err(ApiError(StatusCode::CONFLICT, format!("the snapshot is now version {}", snap.version)));
+    }
     let Some(found) = d.session.blame(&snap, &path, req.side, lines).await? else {
         return Err(ApiError::not_found("no history on that side"));
     };
