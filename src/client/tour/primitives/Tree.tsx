@@ -90,7 +90,7 @@ export function TourTree({
     </ul>
   );
   return (
-    <div className="tour-block rounded-md border border-border bg-canvas">
+    <div className="tour-block overflow-hidden rounded-md border border-border bg-canvas">
       <div className="tour-tree-title">
         {icon && <TourIcon name={icon} />}
         {title}
