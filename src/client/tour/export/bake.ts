@@ -52,7 +52,11 @@ export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
         break;
       }
       case 'diffle-code': {
-        codes.push({ patch: codePatch(el.textContent ?? ''), lang: codeLang(element.lang, element.path) });
+        codes.push({
+          patch: codePatch(el.textContent ?? ''),
+          lang: codeLang(element.lang, element.path),
+          numbered: !element.path,
+        });
         break;
       }
       case 'diffle-symbol':

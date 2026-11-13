@@ -83,9 +83,12 @@ export function useHost(): TourHost {
   return host;
 }
 
-/** A short key naming `patch`'s rows in `lang`: what a highlight is cached and an export keeps them under. */
-export function rowsKey(patch: string, lang = ''): string {
-  const text = `${lang}\n${patch}`;
+/**
+ * A short key naming `patch`'s rows in `lang`, `numbered` or not: what a highlight is cached and an
+ * export keeps them under.
+ */
+export function rowsKey(patch: string, lang = '', numbered = true): string {
+  const text = `${lang}${numbered ? '' : ' unnumbered'}\n${patch}`;
   let h = 5381;
   for (let i = 0; i < text.length; i++) h = (h * 33) ^ text.charCodeAt(i);
   return `${(h >>> 0).toString(36)}-${text.length.toString(36)}`;

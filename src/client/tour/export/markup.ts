@@ -2,10 +2,11 @@ import { preloadDiffHTML } from '@pierre/diffs/ssr';
 import { ROWS_OPTIONS, rowsDiff } from '@/client/tour/host/live.js';
 import { rowsKey } from '@/client/tour/host/host.js';
 
-/** A patch whose rows an export keeps, in `lang` when it is code the agent wrote. */
+/** A patch whose rows an export keeps: in `lang` when it is code the agent wrote, unnumbered when it cites a file. */
 export interface RowsWanted {
   patch: string;
   lang?: string;
+  numbered?: boolean;
 }
 
 /**
@@ -16,11 +17,14 @@ export async function bakeRows(wanted: readonly RowsWanted[]): Promise<{ rows: R
   const sheets = new Set<string>();
   const classes = new Map<string, string>();
   const rows: Record<string, string> = {};
-  for (const { patch, lang } of wanted) {
-    const key = rowsKey(patch, lang);
+  for (const { patch, lang, numbered = true } of wanted) {
+    const key = rowsKey(patch, lang, numbered);
     const fileDiff = rowsDiff(patch, lang);
     if (key in rows || !fileDiff) continue;
-    const html = await preloadDiffHTML({ fileDiff, options: { ...ROWS_OPTIONS, themeType: 'system' } });
+    const html = await preloadDiffHTML({
+      fileDiff,
+      options: { ...ROWS_OPTIONS, themeType: 'system', disableLineNumbers: !numbered },
+    });
     rows[key] = html
       .replace(/<style[^>]*>([\s\S]*?)<\/style>/g, (_, css: string) => (sheets.add(css), ''))
       // The sprite draws a file header's and a separator's icons; the tour shows neither.

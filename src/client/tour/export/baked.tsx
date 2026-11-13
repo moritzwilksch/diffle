@@ -17,7 +17,9 @@ export function bakedHost(data: BakedTour): TourHost {
       const patch = data.excerpts[excerptKey(range, context)];
       return patch == null ? { state: 'gone' } : { state: 'ready', patch };
     },
-    Rows: (props) => <BakedRows {...props} markup={data.rows[rowsKey(props.patch, props.lang)]} sheet={sheet} />,
+    Rows: (props) => (
+      <BakedRows {...props} markup={data.rows[rowsKey(props.patch, props.lang, props.numbered)]} sheet={sheet} />
+    ),
     open: null,
     Symbol: (props) => <BakedSymbol {...props} baked={data.symbols[symbolKey(props)]} />,
     Check: (props) => <BakedCheck {...props} checks={data.checks} />,
