@@ -55,7 +55,7 @@ jobs:
             packaging=false
           fi
           # Each list names what a job cannot read, so a file on neither runs everything.
-          docs='^(README\.md|AGENTS\.md|CLAUDE\.md|CHANGELOG\.md|\.agents/|\.claude/|\.github/assets/)'
+          docs='^((README|AGENTS|CLAUDE|CHANGELOG)\.md$|\.(agents|claude)/|\.github/assets/)'
           client='^(src/client/|test/client/|test/e2e/)'
           if grep -qvE "$docs" <<< "$files"; then tests=true; else tests=false; fi
           if grep -qvE "$docs|$client" <<< "$files"; then rust=true; else rust=false; fi

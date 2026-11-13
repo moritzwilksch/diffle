@@ -241,10 +241,6 @@ function clientInputsKey(root: string): string {
 }
 
 /**
- * Build `cwd`'s client unless `crates/diffle/client` already matches its sources. Output appears only on
- * failure. Returns whether it built.
- */
-/**
  * How to run the diffle of checkout `root`: `DIFFLE_BIN` for this checkout when set, else its
  * `e2e`-profile binary, or a base checkout's release binary (it may predate the profile). A base
  * checkout from before the Rust server runs its TypeScript CLI from source.
@@ -275,6 +271,10 @@ export function buildServer(root = REPO_ROOT): void {
   });
 }
 
+/**
+ * Build `cwd`'s client unless `crates/diffle/client` already matches its sources. Output appears only on
+ * failure. Returns whether it built.
+ */
 export function buildClient(cwd = REPO_ROOT): boolean {
   const stamp = join(cwd, 'crates/diffle/client/.build-stamp');
   const key = clientInputsKey(cwd);
