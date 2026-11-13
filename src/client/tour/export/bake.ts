@@ -9,7 +9,7 @@ import { useStore } from '@/client/store.js';
 import type { SymbolProps, Token } from '@/client/tour/host/host.js';
 import { wordColumn } from '@/client/tour/host/LiveSymbol.js';
 import { loadIcon } from '@/client/tour/host/live.js';
-import { lineSpan, type LineRange, primitive } from '@/client/tour/document.js';
+import { type LineRange, primitive, rangeOf } from '@/client/tour/document.js';
 import { codeLang, codePatch } from '@/client/tour/primitives/Code.js';
 import { rangePatch, type TourLoad } from '@/client/tour/state.js';
 import { AROUND } from '@/client/tour/steps/Trace.js';
@@ -41,16 +41,12 @@ export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
     if (element && 'icon' in element && element.icon) icons.add(element.icon);
     switch (element?.tag) {
       case 'diffle-diff':
-      case 'diffle-walk': {
-        const [start, end] = lineSpan(element.lines);
-        excerpts.push([{ path: element.path, side: element.side ?? 'new', start, end }, 0]);
+      case 'diffle-walk':
+        excerpts.push([rangeOf(element), 0]);
         break;
-      }
-      case 'diffle-stop': {
-        const line = Number(element.line);
-        excerpts.push([{ path: element.path, side: element.side ?? 'new', start: line, end: line }, AROUND]);
+      case 'diffle-stop':
+        excerpts.push([rangeOf(element), AROUND]);
         break;
-      }
       case 'diffle-code': {
         codes.push({
           patch: codePatch(el.textContent ?? ''),

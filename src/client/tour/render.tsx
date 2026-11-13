@@ -1,7 +1,7 @@
 import { createElement, Fragment, type ReactNode } from 'react';
 import { TourTagSchema } from '@/shared/tour-catalog.js';
 import { placeOf } from './anchor.js';
-import { lineSpan, primitive } from './document.js';
+import { primitive, rangeOf } from './document.js';
 import { type CheckProps, type SymbolProps, useHost } from './host/host.js';
 import { Callout } from './primitives/Callout.js';
 import { TourCard } from './primitives/Card.js';
@@ -55,26 +55,10 @@ function contentNode(node: ChildNode, key: number): ReactNode {
   }
   const element = primitive(node);
   switch (element?.tag) {
-    case 'diffle-diff': {
-      const [start, end] = lineSpan(element.lines);
-      return (
-        <TourDiff
-          key={key}
-          range={{
-            path: element.path,
-            side: element.side ?? 'new',
-            start,
-            end,
-          }}
-          place={placeOf(node)}
-        />
-      );
-    }
-    case 'diffle-walk': {
-      const [start, end] = lineSpan(element.lines);
-      const range = { path: element.path, side: element.side ?? 'new', start, end };
-      return <TourWalk key={key} source={node} range={range} renderNote={partContent} />;
-    }
+    case 'diffle-diff':
+      return <TourDiff key={key} range={rangeOf(element)} place={placeOf(node)} />;
+    case 'diffle-walk':
+      return <TourWalk key={key} source={node} range={rangeOf(element)} renderNote={partContent} />;
     case 'diffle-trace':
       return <TourTrace key={key} source={node} renderNote={partContent} />;
     case 'diffle-check':
