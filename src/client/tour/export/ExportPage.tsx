@@ -4,6 +4,7 @@ import { readTour } from '@/client/tour/document.js';
 import { TourHostContext } from '@/client/tour/host/host.js';
 import { Outline } from '@/client/tour/Outline.js';
 import { TourArticle } from '@/client/tour/render.js';
+import { GithubMark } from '@/client/ui/GithubMark.js';
 import { retarget, stepPage, stepTarget } from '@/client/tour/steps/steps.js';
 import { bakedHost } from './baked.js';
 import type { BakedTour } from './data.js';
@@ -90,7 +91,7 @@ function Brand() {
     <a className="tour-export-brand" href={REPOSITORY} target="_blank" rel="noopener" title="diffle on GitHub">
       <GitCompareArrows size="0.875rem" aria-hidden />
       <span className="tour-export-wordmark">diffle</span>
-      <span className="tour-export-repo">GitHub ↗</span>
+      <GithubMark size="0.875rem" />
     </a>
   );
 }
@@ -105,7 +106,9 @@ function quietTitles(): () => void {
     const text = el?.getAttribute('title');
     if (!el || !text || text !== el.textContent?.trim() || el.scrollWidth > el.clientWidth) return;
     el.removeAttribute('title');
-    el.addEventListener('pointerleave', () => el.setAttribute('title', text), { once: true });
+    el.addEventListener('pointerleave', () => el.setAttribute('title', text), {
+      once: true,
+    });
   };
   document.addEventListener('pointerover', over);
   return () => document.removeEventListener('pointerover', over);
