@@ -62,7 +62,7 @@ function SteppedDiagram({ of, notes }: { of: Element; notes: readonly DiagramNot
       ref={frame}
       {...place}
       data-stepped=""
-      className="tour-block mx-0 rounded-md border border-border bg-canvas"
+      className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
     >
       <figcaption
         data-opaque=""
