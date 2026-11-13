@@ -18,7 +18,7 @@ pub use lsp::*;
 pub use snapshot::*;
 
 /// The wire contract as JSON Schema: the catalog's attributes and their documentation, which the
-/// tour validator checks attributes against and `--skill` prints.
+/// tour validator checks attributes against and `diffle skill` prints.
 pub fn contract() -> &'static serde_json::Value {
     static CONTRACT: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
         serde_json::from_str(include_str!("../../protocol.generated.json")).expect("the embedded contract is JSON")

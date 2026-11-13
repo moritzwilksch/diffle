@@ -1,5 +1,5 @@
 // The elements a tour document is written in: every `diffle-*` element and its attributes, the plain
-// tags, and a diagram's drawing. `diffle --skill` prints it, the validator and the client both read
+// tags, and a diagram's drawing. `diffle skill` prints it, the validator and the client both read
 // it, so it is one cohesive catalog.
 import { z } from 'zod';
 import { SideSchema } from './side.js';

@@ -35,14 +35,6 @@ pub fn main() -> ExitCode {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
     }
-    if cli.skill {
-        // `exclusive` refuses any other argument, but not a subcommand.
-        if cli.command.is_some() {
-            Cli::command().error(clap::error::ErrorKind::ArgumentConflict, "--skill takes no command").exit();
-        }
-        print!("{}", skill::render());
-        return ExitCode::SUCCESS;
-    }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
     match runtime.block_on(dispatch(cli)) {
         Ok(()) => ExitCode::SUCCESS,
@@ -55,6 +47,11 @@ pub fn main() -> ExitCode {
 
 async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     let (req, later) = match cli.command {
+        Some(Command::Skill { no_frontmatter }) => {
+            let skill = skill::render();
+            print!("{}", if no_frontmatter { skill::without_frontmatter(&skill) } else { &skill });
+            return Ok(());
+        }
         Some(Command::Config) => return config::run().await,
         Some(Command::Lsp) => return lsp::list().await,
         // `diffle -C <path> comments ...` names the repository as well as `comments ... -C <path>`.

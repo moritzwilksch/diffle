@@ -56,7 +56,7 @@
             '';
           };
           # The Cargo sources plus the files they embed: the wire contract build.rs turns into Rust, and
-          # the prose `diffle --skill` prints.
+          # the prose `diffle skill` prints.
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [

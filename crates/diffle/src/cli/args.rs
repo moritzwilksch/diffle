@@ -67,9 +67,6 @@ pub struct Cli {
     /// display help for command
     #[arg(short = 'h', long, global = true, action = ArgAction::Help)]
     pub help: Option<bool>,
-    /// print what diffle offers a coding agent, as Markdown to install as a skill
-    #[arg(long, exclusive = true)]
-    pub skill: bool,
     #[command(flatten)]
     pub global: GlobalOpts,
     /// git-diff style revisions: <rev> | <a>..<b> | <a>...<b> | <a> <b>
@@ -185,6 +182,12 @@ pub enum Command {
     Tour {
         #[command(subcommand)]
         command: TourCommand,
+    },
+    /// print what diffle offers a coding agent, as a skill to install as is
+    Skill {
+        /// leave out the frontmatter that names the skill and says when to use it
+        #[arg(long)]
+        no_frontmatter: bool,
     },
     /// print the config file path and contents
     Config,

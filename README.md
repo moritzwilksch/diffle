@@ -219,9 +219,9 @@ diagram, read as one page and walked in steps. diffle checks it against the revi
 it with every reason when it names a file, line, or symbol the review lacks. Press `T` to open
 the tour and `n` / `p` to step through it. Each review keeps its own tour.
 
-`diffle --skill` prints all of this for the agent, the tour's elements included, as a skill to
+`diffle skill` prints all of this for the agent, the tour's elements included, as a skill to
 install as is: save it as `SKILL.md` in a `diffle` folder among your agent's skills, such as
-`~/.claude/skills/diffle/`.
+`~/.claude/skills/diffle/`. `--no-frontmatter` leaves out its name and description.
 
 ## Open from lazygit
 

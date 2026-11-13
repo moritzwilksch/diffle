@@ -1,4 +1,4 @@
-//! `diffle --skill`: everything diffle offers a coding agent, as a skill to install as is: Markdown
+//! `diffle skill`: everything diffle offers a coding agent, as a skill to install as is: Markdown
 //! whose frontmatter (in `skill.md`) names it and says when to use it. The element catalog comes from
 //! the contract the validator enforces, so the two never disagree.
 use std::fmt::Write as _;
@@ -35,7 +35,7 @@ const EXAMPLE: &str = r#"<h1>Tokens expire</h1>
 src/login.rs"><diffle-file path="src/auth.rs">start here</diffle-file></diffle-tree>
 <p>The old check is gone: <diffle-jump path="src/auth.rs" line="30" side="old">see what it did</diffle-jump>.</p>"#;
 
-/// The agent interface as Markdown.
+/// The agent interface as a skill: Markdown opening with `skill.md`'s frontmatter.
 pub fn render() -> String {
     let defs = &crate::protocol::contract()["$defs"];
     let mut out = String::from(INTRO);
@@ -82,6 +82,12 @@ pub fn render() -> String {
         tags.join(", "),
     );
     out
+}
+
+/// `skill` after the frontmatter `render` opens it with, and the blank line that follows it.
+pub fn without_frontmatter(skill: &str) -> &str {
+    let body = skill.strip_prefix("---\n").and_then(|rest| rest.split_once("\n---\n")).map(|(_, body)| body);
+    body.expect("the skill opens with its frontmatter").trim_start_matches('\n')
 }
 
 /// A diagram element's attributes, required first, the optional ones marked `?`.
