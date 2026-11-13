@@ -14,6 +14,19 @@ serving the current repository, or the one `-C <path>` names; a run announces it
 `<git-dir>/diffle/server.json`. If none runs, they exit 2 with "no diffle is running for this
 repository": ask the reviewer to run `diffle` in the repository.
 
+## Writing
+
+The reviewer reads your replies and tours inside diffle, so hold them to its bar as a product, in
+the little space its panels give. Write like a curious, direct colleague explaining the change
+across a table: lead with the point. Use plain, everyday words in short, active sentences, and pick
+the exact verb and the concrete fact over adjectives and abstract nouns. Cut every word that adds no
+meaning, but stay concise, not telegraphic. Name what the diff shows, such as names, numbers and
+consequences, and explain a change by contrast: the old behaviour beside the new. State only what
+the diff supports, and never invent a rationale. Cut filler, stacked hedges, reflexive triads,
+windups such as "Here's the thing:", and closing summaries. Skip stock phrasing such as "delve",
+"robust", "seamless", "crucial", "leverage" and "it's worth noting". Use straight quotes, no em
+dashes and no emoji.
+
 ## Comments
 
 `diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
@@ -31,7 +44,9 @@ anchor and messages. Your messages carry `"author": "agent"`. An anchor is one o
 
 `diffle comments reply <thread-id> <body|->` adds your Markdown reply (stdin with `-`), shown to the
 reviewer as yours, and prints the thread as JSON. Reply to answer a question or to say what you
-changed; if the answer is a change, make it before replying.
+changed; if the answer is a change, make it before replying. A tour's threads sit in a narrow
+margin beside the passage, so keep a reply to a sentence or two. Put a longer explanation in the
+tour, or in this chat when the reviewer asks for one.
 
 ## Tours
 
@@ -56,6 +71,8 @@ each thread follows its passage. A diff whose lines have left the review since s
 
 ### Structure
 
+- Open each section with a sentence or two on what it shows. Let the diff show the code.
+- Leave the change's tests out unless the reviewer asks for them.
 - Order the `<h2>` steps the way that best explains the change, and split a long section with
   `<h3>`. Headings sit at the top level; inside a card, tab, callout or `<details>`, use `<h4>`.
 - Between headings, write prose and lists and place blocks: the `diffle-*` elements below and
@@ -84,20 +101,6 @@ each thread follows its passage. A diff whose lines have left the review since s
   keep `<code>` for paths, commands and literals. Hover and references need the `new` side and a
   language server for the file (`diffle lsp` lists them); without them the chip is coloured code
   only.
-
-### Writing
-
-The reviewer reads your words inside diffle, so hold them to its bar as a product. Write like a
-senior colleague explaining the change across a table: lead with the point, use plain, exact words,
-and keep sentences short and active. Name what the diff shows, such as names, numbers and
-consequences, instead of adjectives. State only what the diff supports, and never invent a
-rationale. Cut filler, stacked hedges, reflexive triads, windups such as "Here's the thing:", and
-closing summaries. Skip stock phrasing such as "delve", "robust", "seamless", "crucial", "leverage"
-and "it's worth noting". Use straight quotes, no em dashes and no emoji.
-
-Open a section with a sentence or two on what it shows; a card is its title and one or two
-sentences. Let the diff show the code. Leave the change's tests out unless the reviewer asks for
-them.
 
 ### Walks
 
