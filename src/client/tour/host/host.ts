@@ -12,7 +12,10 @@ import type { Side } from '@/shared/side.js';
  * host; a tour exported as a file is another, holding what it showed when it was exported.
  */
 export interface TourHost {
-  /** The patch showing `range` and `context` lines around it, cut again whenever the review moves. */
+  /**
+   * The patch showing `range` and `context` lines around it, cut again whenever the review moves.
+   * The same object until then: blocks key effects on it, and a stepped one scrolls to its step.
+   */
   useExcerpt(range: LineRange, context: number): Shown;
   /** A patch's rows, unified, numbered and highlighted like the diff; `lang` overrides its file's. */
   Rows: <A>(props: RowsProps<A>) => ReactNode;
