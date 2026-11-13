@@ -1,3 +1,8 @@
+---
+name: diffle
+description: Show and talk through code changes with the user in diffle, the diff viewer open in their browser. Read and answer their review comments, and push a guided tour of a change. Use when the user wants to see, review, walk through or explain changes, or collaborate in diffle.
+---
+
 # diffle
 
 diffle is the reviewer's diff viewer, running in the browser beside you. The commands below talk

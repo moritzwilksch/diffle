@@ -1,6 +1,6 @@
-//! `diffle --skill`: everything diffle offers a coding agent, as Markdown without frontmatter, for
-//! the user to install as a skill under a name and description of their own. The element catalog
-//! comes from the contract the validator enforces, so the two never disagree.
+//! `diffle --skill`: everything diffle offers a coding agent, as a skill to install as is: Markdown
+//! whose frontmatter (in `skill.md`) names it and says when to use it. The element catalog comes from
+//! the contract the validator enforces, so the two never disagree.
 use std::fmt::Write as _;
 
 use serde_json::Value;
