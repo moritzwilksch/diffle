@@ -93,7 +93,7 @@ export function walkCss(
   return active == null ? lane : `${lane}\n${litCss(rows, side, notes[active]!)}`;
 }
 
-/** The rows of `span` lit and every other row dimmed. */
+/** The rows of `span` lit and every other row dimmed, its note's row on the code's ground. */
 export function litCss(rows: readonly WalkRow[], side: Side, span: NoteSpan): string {
   const lit = noteRows(rows, side, span);
   if (!lit) return '';
@@ -105,6 +105,8 @@ export function litCss(rows: readonly WalkRow[], side: Side, span: NoteSpan): st
     `:is(${lines}, ${gutters}) { opacity: 1; }`,
     `:is(${lines})[data-line-type='context'] { background-color: ${LIT_FACE}; }`,
     `:is(${gutters}) { box-shadow: inset 2px 0 0 var(--accent); }`,
+    // The note is a callout of its own; the library would tint its row and grey its gutter.
+    `[data-code] :is([data-line-annotation], [data-gutter-buffer='annotation']) { --diffs-annotation-bg: var(--diffs-bg); }`,
   ].join('\n');
 }
 
