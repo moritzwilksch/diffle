@@ -7,7 +7,8 @@
 [![website](https://img.shields.io/badge/website-diffle.app-0349b4?style=flat-square)](https://diffle.app)
 
 Review a Git diff in the browser and comment on lines, blocks, or whole files. Then hand the
-comments to an agent as a prompt, or to GitHub as a pending review.
+comments to an agent as a prompt, or to GitHub as a pending review. Or let the agent walk you
+through the change first, with a [tour](#take-a-tour-of-the-change).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/review-dark.gif">
@@ -116,6 +117,38 @@ Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattr
 them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
 globs in settings or with `diffle config`.
 
+## Take a tour of the change
+
+Before you review your agent's change, let it walk you through it. It writes a tour: one page
+beside the diff that explains the change in a sensible order, shows the lines it talks about, and
+ends with the questions you need to decide. You know what you're looking at before you open the
+diff.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/tour-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/tour-light.gif">
+  <img alt="A tour in diffle: a diagram and a walk stepped with l, a symbol's references, a comment on the tour's words, a trace and tabs, then a checklist ticked and answered" src=".github/assets/videos/tour-light.gif">
+</picture>
+
+Install the skill once, and your agent knows how to write a tour:
+
+```bash
+mkdir -p ~/.claude/skills/diffle
+diffle skill > ~/.claude/skills/diffle/SKILL.md
+```
+
+Then ask it for one and press `T` in diffle:
+
+- `n` / `p`: next or previous section
+- `l` / `h`: step through the walk, trace, or diagram in view
+- `c`: comment on the selected words, or hover a block for its **Comment** button
+- click a symbol to see where it's used; **Open** jumps to those lines in the diff, and `Ctrl+o`
+  brings you back
+
+Your comments on the tour reach the agent like any other comment, so you can ask "why?" right where
+the question comes up. Each review keeps its own tour. **Export** saves it as one HTML file that
+opens offline, to share with your team.
+
 ## Send comments to GitHub
 
 The pull request icon adds one thread, or all open threads, to a pending review on the PR.
@@ -215,12 +248,7 @@ diffle tour clear               # remove it
 diffle tour export tour.html    # save it as one HTML file that opens offline; - for stdout
 ```
 
-A tour is one HTML document of cards, each showing lines of the diff, a table or a small
-diagram, read as one page and walked in steps. diffle checks it against the review and refuses
-it with every reason when it names a file, line, or symbol the review lacks. Press `T` to open
-the tour and `n` / `p` to step through it. Each review keeps its own tour. **Export**, or `diffle tour
-export` while a diffle tab is open, saves it as one HTML file that opens offline, to share with your
-team.
+See [Take a tour of the change](#take-a-tour-of-the-change) for what a tour shows.
 
 `diffle skill` prints all of this for the agent, the tour's elements included, as a skill to
 install as is: save it as `SKILL.md` in a `diffle` folder among your agent's skills, such as
