@@ -200,9 +200,10 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
     s.close().await;
 }
 
-/// A tour that holds every judgment call diffle warns of: a long file note.
+/// A tour that holds every judgment call diffle warns of: a long file note, a code line that wraps.
 const CROWDED: &str = r#"<h2>Flow</h2>
-<diffle-tree title="Loader" paths="app.py"><diffle-file path="app.py">the one file that holds every change here</diffle-file></diffle-tree>"#;
+<diffle-tree title="Loader" paths="app.py"><diffle-file path="app.py">the one file that holds every change here</diffle-file></diffle-tree>
+<diffle-row><diffle-code lang="python">def load(path: str, encoding: str = "utf-8") -&gt; list[str]: ...</diffle-code><diffle-code lang="python">x = 1</diffle-code></diffle-row>"#;
 
 #[tokio::test]
 async fn shows_a_tour_with_judgment_calls_and_warns_of_each() {

@@ -6,5 +6,9 @@ expression: "pushed.json()[\"warnings\"]"
   {
     "element": "h2 \"Flow\" > diffle-tree title=\"Loader\" paths=\"app.py\" > diffle-file path=\"app.py\"",
     "message": "May be long for a file note, at 8 words: a few say where to start or what surprises"
+  },
+  {
+    "element": "h2 \"Flow\" > diffle-code lang=\"python\"",
+    "message": "Line 1 wraps, at 62 characters: 49 fit in a column of a 2-column row. Break it as the language's formatter would, one parameter per line"
   }
 ]

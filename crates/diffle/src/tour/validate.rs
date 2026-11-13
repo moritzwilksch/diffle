@@ -34,6 +34,10 @@ struct Walk {
     card: Option<String>,
     /// The block whose parts (a tree's notes, tabs) the walk is in, and the part, as errors name them.
     parts: Option<String>,
+    /// How many columns the row the walk is in has; 0 outside a row.
+    columns: usize,
+    /// The boxes the walk is in, outermost first, which narrow a code block.
+    frames: Vec<code::Frame>,
     /// Each card's `id`, to find one taken twice.
     ids: Vec<(NodeId, String, String)>,
     /// Each `h1`, and whether an `h2` came before it.
@@ -132,7 +136,18 @@ impl Walk {
                 self.error(node, element.clone(), format!("<{tag}> takes no attribute {key}"));
             }
         }
-        self.children(dom, node, place.within(tag));
+        if tag == "details" {
+            self.framed(code::Frame::Details, |walk| walk.children(dom, node, place.within(tag)));
+        } else {
+            self.children(dom, node, place.within(tag));
+        }
+    }
+
+    /// Runs `visit` inside `frame`.
+    fn framed(&mut self, frame: code::Frame, visit: impl FnOnce(&mut Self)) {
+        self.frames.push(frame);
+        visit(self);
+        self.frames.pop();
     }
 
     fn primitive(&mut self, dom: &Dom, node: NodeId, place: Place, (tag, attrs): Tag, context: &str) {
@@ -154,7 +169,7 @@ impl Walk {
                     self.ids.push((node, element.clone(), id.clone()));
                 }
                 let outer = std::mem::replace(&mut self.card, id.or_else(|| Some(String::new())));
-                self.children(dom, node, rule.inner(place));
+                self.framed(code::Frame::Card, |walk| walk.children(dom, node, rule.inner(place)));
                 self.card = outer;
                 if !holds_diff(dom, node) {
                     let message = "a diffle-card explains part of the diff: it holds a diffle-diff";
@@ -174,7 +189,7 @@ impl Walk {
                 // Inside a tab, errors name its tabs and the tab itself.
                 let tabs = self.parts.clone().map_or_else(String::new, |tabs| format!("{tabs} > "));
                 let outer = self.parts.replace(format!("{tabs}{}", label(tag, attrs)));
-                self.children(dom, node, rule.inner(place));
+                self.framed(code::Frame::Tab, |walk| walk.children(dom, node, rule.inner(place)));
                 self.parts = outer;
             }
             Rule::Callout | Rule::File => self.children(dom, node, rule.inner(place)),
@@ -182,6 +197,11 @@ impl Walk {
                 if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
                     let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
                     self.error(node, element.clone(), message);
+                } else {
+                    let numbered = attr(attrs, "path").is_none();
+                    for message in code::wraps(&dom.text(node), self.columns, &self.frames, numbered) {
+                        self.warnings.push((node, TourError { element: element.clone(), message }));
+                    }
                 }
                 for message in code::refusals(attrs) {
                     self.error(node, element.clone(), message);
@@ -216,7 +236,10 @@ impl Walk {
     fn row(&mut self, dom: &Dom, node: NodeId, place: Place, element: &str) {
         let found = row::check(dom, node, element, &self.context());
         self.errors.extend(found.errors);
+        let columns = dom.children(node).iter().filter(|&&c| matches!(dom.node(c), Node::Element { .. })).count();
+        let outer = std::mem::replace(&mut self.columns, columns);
         self.children(dom, node, place.in_row());
+        self.columns = outer;
     }
 
     /// Notes what a well-placed element asks of the review's files.
