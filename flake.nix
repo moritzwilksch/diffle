@@ -55,7 +55,8 @@
               cp -r crates/diffle/client "$out"
             '';
           };
-          # The Cargo sources plus what build.rs reads: the wire contract it turns into Rust.
+          # The Cargo sources plus the files they embed: the wire contract build.rs turns into Rust, and
+          # the prose `diffle skill` prints.
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
@@ -63,6 +64,7 @@
               ./Cargo.toml
               ./Cargo.lock
               ./crates/diffle/protocol.generated.json
+              ./crates/diffle/src/cli/skill.md
             ];
           };
           common = {

@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CommentMessage, CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
 import { ThreadIcon } from '@/client/comments/AgentMark.js';
+import { anchorPath } from '@/client/comments/threads.js';
 import { useCopied } from '@/client/clipboard.js';
 import { Markdown } from '@/client/Markdown.js';
 import { anchorLabel, composerKey, exportLabel, relativeTime, type ExportOutcome } from '@/client/model.js';
@@ -26,8 +27,11 @@ import { useStore } from '@/client/store.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
 
-/** A thread rendered inline under its last anchored line: messages, reply composer, resolve. */
-export function CommentCard({ thread }: { thread: CommentThread }) {
+/**
+ * A thread rendered inline under its last anchored line, or beside the tour: messages, reply
+ * composer, resolve. `className` adjusts its outer spacing to where it sits.
+ */
+export function CommentCard({ thread, className }: { thread: CommentThread; className?: string }) {
   const deleteThread = useStore((s) => s.deleteThread);
   const setResolved = useStore((s) => s.setResolved);
   const replying = useStore((s) => s.replyTo === thread.id);
@@ -56,18 +60,26 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
     <div
       className={twMerge(
         `mx-2 my-1 overflow-hidden rounded-md border border-border bg-card p-0 font-sans text-[0.8125rem] shadow-card [&_.markdown]:[word-break:break-word] ${thread.stale ? 'border-dashed' : ''} ${thread.resolved ? 'opacity-70' : ''} ${focused ? 'border-accent shadow-[0_0_0_1px_var(--accent),_var(--review-card-shadow)]' : ''}`,
+        className,
       )}
     >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <ThreadIcon thread={thread} />
-        <span className="font-mono font-semibold text-foreground">{anchorLabel(a)}</span>
+        {/* Lines are code; a tour's words are prose, cut to one line in the narrow margin. */}
+        <span
+          className={`font-semibold text-foreground ${a.kind === 'tour' ? 'min-w-0 truncate font-sans' : 'font-mono'}`}
+        >
+          {anchorLabel(a)}
+        </span>
         {thread.stale && (
           <span
             className="inline-flex items-center gap-0.75 text-warn"
             title={
-              a.kind === 'file'
-                ? 'Not in the current diff: the file left the review'
-                : 'Not found in the current diff: the text changed or left the changed lines'
+              a.kind === 'tour'
+                ? "Not in the tour: the agent's last push no longer holds it"
+                : a.kind === 'file'
+                  ? 'Not in the current diff: the file left the review'
+                  : 'Not found in the current diff: the text changed or left the changed lines'
             }
           >
             <AlertTriangle size="0.75rem" /> stale
@@ -79,7 +91,7 @@ export function CommentCard({ thread }: { thread: CommentThread }) {
           </span>
         )}
         <span className="flex-1" />
-        {canExport && (
+        {canExport && thread.anchor.kind !== 'tour' && (
           <Button
             variant="ghost"
             icon={!post.armed && !posted}
@@ -214,7 +226,7 @@ function Message({ thread, message, first }: { thread: CommentThread; message: C
         ) : (
           <Markdown
             text={message.body}
-            path={thread.anchor.path}
+            path={anchorPath(thread.anchor) ?? undefined}
             quoted={thread.anchor.kind === 'line' ? thread.anchor.quoted : undefined}
           />
         )}

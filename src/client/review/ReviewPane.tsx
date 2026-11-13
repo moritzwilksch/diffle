@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import { comparisonLabel, languageOf, type ChangedFile, type CommentThread, type Side } from '@/shared/protocol.js';
+import { comparisonLabel, languageOf, type ChangedFile, type CommentThread } from '@/shared/protocol.js';
+import { type Side } from '@/shared/side.js';
 import { hoverOnly, serversFor } from '@/shared/lsp.js';
 import { useCopied } from '@/client/clipboard.js';
 import { FilePath } from '@/client/FilePath.js';
@@ -41,6 +42,7 @@ import { SymbolMenu } from '@/client/lsp/SymbolMenu.js';
 import { SymbolPicker } from '@/client/lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '@/client/lsp/target.js';
 import {
+  codeDraft,
   draftRange,
   imageSides,
   type ImageSides,
@@ -58,7 +60,7 @@ import {
 } from '@/client/model.js';
 import { onTextSizeChange, useRemPx } from '@/client/scale.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
-import { useStore, type Draft, type Loaded, type ReviewState } from '@/client/store.js';
+import { useStore, type CodeDraft, type Loaded, type ReviewState } from '@/client/store.js';
 import { gridColumns, useViews } from '@/client/views/state.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
@@ -76,6 +78,7 @@ import { CommentComposer } from './CommentComposer.js';
 import { PlaceholderBanner, type PlaceholderKind } from './PlaceholderBanner.js';
 import { hostOf } from './host.js';
 import { ImageDiff } from './ImageDiff.js';
+import { anchorPath } from '@/client/comments/threads.js';
 
 export type Annot =
   | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
@@ -299,7 +302,7 @@ export function ReviewPane() {
   const showResolved = useStore((s) => s.showResolved);
   const replyTo = useStore((s) => s.replyTo);
   const editingId = useStore((s) => s.editingId);
-  const draft = useStore((s) => s.draft);
+  const draft = useStore((s) => codeDraft(s.draft));
   const collapsed = useStore((s) => s.collapsed);
   const viewed = useStore((s) => s.viewed);
   const config = useStore((s) => s.config);
@@ -332,9 +335,11 @@ export function ReviewPane() {
     const state = { collapsed, viewed, config, snapshot };
     const threadsByPath = new Map<string, CommentThread[]>();
     for (const t of visibleThreads({ threads, showResolved })) {
-      const list = threadsByPath.get(t.anchor.path);
+      const path = anchorPath(t.anchor);
+      if (path == null) continue;
+      const list = threadsByPath.get(path);
       if (list) list.push(t);
-      else threadsByPath.set(t.anchor.path, [t]);
+      else threadsByPath.set(path, [t]);
     }
     const versionOf = (path: string, mine: CommentThread[], isCollapsed: boolean) => {
       const v = itemVersion(
@@ -1078,7 +1083,7 @@ function toItem(
   loaded: Loaded,
   changed: ChangedFile | undefined,
   mine: CommentThread[],
-  draft: Draft | null,
+  draft: CodeDraft | null,
   version: number,
   gen: number,
   collapsed: boolean,
@@ -1310,7 +1315,7 @@ function FileHeaderMeta({ path }: { path: string }) {
   }, [path, toggleCollapsed, selectFile, full]);
   const vs = useStore((s) => (file ? viewedState(s, file) : 'unviewed'));
   const setViewed = useStore((s) => s.setViewed);
-  const count = useStore((s) => s.threads.filter((t) => t.anchor.path === path && !t.resolved).length);
+  const count = useStore((s) => s.threads.filter((t) => anchorPath(t.anchor) === path && !t.resolved).length);
   const collapsedNow = useStore((s) => isCollapsed(s, path));
   const openFullFile = useStore((s) => s.openFullFile);
   const oversized = useStore((s) => s.loaded[path]?.kind === 'oversized');

@@ -3,6 +3,7 @@ mod api;
 mod comments;
 mod files;
 mod lsp;
+mod tour;
 
 use std::sync::Arc;
 
@@ -16,7 +17,12 @@ use super::ApiDeps;
 use crate::error::Error;
 
 pub fn router() -> Router<Arc<ApiDeps>> {
-    Router::new().merge(api::routes()).merge(files::routes()).merge(comments::routes()).merge(lsp::routes())
+    Router::new()
+        .merge(api::routes())
+        .merge(files::routes())
+        .merge(comments::routes())
+        .merge(lsp::routes())
+        .merge(tour::routes())
 }
 
 /// An error as the API answers it: a status and `{ "error": message }`.

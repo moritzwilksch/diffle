@@ -8,6 +8,8 @@ Usage: diffle [OPTIONS] [revs]... [COMMAND]
 
 Commands:
   comments    read and answer the comments of the review running for this repository, as an agent
+  tour        show a guided tour of the review diffle is running for this repository, as an agent
+  skill       print what diffle offers a coding agent, as a skill to install as is
   config      print the config file path and contents
   lsp         show the language server each language would get, and what is missing from PATH
   completion  print a shell completion script

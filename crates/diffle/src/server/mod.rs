@@ -1,6 +1,7 @@
 //! The HTTP server: the API, the WebSocket hub, and the embedded client.
 pub mod announce;
 mod assets;
+mod exports;
 pub mod guard;
 pub mod hub;
 pub mod image;
@@ -32,6 +33,10 @@ use routes::ApiError;
 pub const DEFAULT_PORT: u16 = 4966;
 /// JSON bodies are small (comments, viewed marks, config); anything bigger is not a client.
 const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// A baked tour carries its runtime, fonts and every excerpt it shows.
+const MAX_EXPORT_BYTES: usize = 64 * 1024 * 1024;
+/// Where a tab answers a tour export, the one body allowed past `MAX_BODY_BYTES`.
+const EXPORTS_PATH: &str = "/api/tour/exports/";
 
 pub struct ServerOptions {
     pub endpoint: Endpoint,
@@ -167,6 +172,7 @@ async fn check_guard(State(app): State<Arc<App>>, req: Request, next: Next) -> R
 /// Reads the body under the cap. An oversized upload is drained before the reply: closing
 /// mid-write gives clients EPIPE, not 413.
 async fn limit_body(req: Request, next: Next) -> Response {
+    let cap = if req.uri().path().starts_with(EXPORTS_PATH) { MAX_EXPORT_BYTES } else { MAX_BODY_BYTES };
     let (parts, mut body) = req.into_parts();
     let mut kept = Vec::new();
     let mut size = 0;
@@ -174,12 +180,12 @@ async fn limit_body(req: Request, next: Next) -> Response {
         let Ok(frame) = frame else { return ApiError::bad_request("unreadable request body").into_response() };
         if let Some(data) = frame.data_ref() {
             size += data.len();
-            if size <= MAX_BODY_BYTES {
+            if size <= cap {
                 kept.extend_from_slice(data);
             }
         }
     }
-    if size > MAX_BODY_BYTES {
+    if size > cap {
         return ApiError(StatusCode::PAYLOAD_TOO_LARGE, "request body too large".into()).into_response();
     }
     next.run(Request::from_parts(parts, Body::from(Bytes::from(kept)))).await

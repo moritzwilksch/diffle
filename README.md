@@ -204,6 +204,28 @@ returns to the graph as you left it.
 The graph needs the language servers, the same ones [Jump to definitions](#jump-to-definitions)
 uses.
 
+## Work with a coding agent
+
+A coding agent in the same repository talks to the diffle running there:
+
+```bash
+diffle comments list            # the threads you are shown, as JSON
+diffle tour push tour.html      # show a guided tour of the change; stdin without a file
+diffle tour clear               # remove it
+diffle tour export tour.html    # save it as one HTML file that opens offline; - for stdout
+```
+
+A tour is one HTML document of cards, each showing lines of the diff, a table or a small
+diagram, read as one page and walked in steps. diffle checks it against the review and refuses
+it with every reason when it names a file, line, or symbol the review lacks. Press `T` to open
+the tour and `n` / `p` to step through it. Each review keeps its own tour. **Export**, or `diffle tour
+export` while a diffle tab is open, saves it as one HTML file that opens offline, to share with your
+team.
+
+`diffle skill` prints all of this for the agent, the tour's elements included, as a skill to
+install as is: save it as `SKILL.md` in a `diffle` folder among your agent's skills, such as
+`~/.claude/skills/diffle/`. `--no-frontmatter` leaves out its name and description.
+
 ## Open from lazygit
 
 [lazygit](https://github.com/jesseduffield/lazygit) custom commands open diffle on what is

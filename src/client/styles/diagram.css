@@ -1,0 +1,137 @@
+/* A tour's diagram (`diffle-diagram`): every shape, line and label takes its look from its classes
+   (`TourSvgClass`) and the theme, so it follows light and dark like the rest of the page. One unit is
+   one pixel at the default text size, and the drawing grows with the Settings text size, so its text
+   keeps the UI's sizes: body 0.8125rem, `small` and `mono` 0.75rem (11.7 and 10.8 units). */
+.tour-diagram {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+  font-family: var(--sans);
+  --edge: var(--fg);
+  --face: var(--bg-card);
+  --line: var(--fg-2);
+}
+
+/* An icon's own shapes keep Lucide's look: these rules skip them, at no cost in specificity. */
+.tour-diagram :is(rect, circle, ellipse, polygon):not(:where(.tour-diagram-icon *)) {
+  fill: var(--face);
+  stroke: var(--edge);
+  stroke-width: 1.25;
+}
+
+.tour-diagram rect:not(:where(.tour-diagram-icon *)) {
+  rx: 4px;
+}
+
+.tour-diagram :is(path, line, polyline):not(:where(.tour-diagram-icon *)) {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.25;
+}
+
+.tour-diagram text {
+  fill: var(--fg);
+  font-size: 11.7px;
+  dominant-baseline: central;
+}
+
+.tour-diagram .bold {
+  font-weight: 600;
+}
+
+.tour-diagram .small {
+  font-size: 10.8px;
+  fill: var(--fg-2);
+}
+
+/* Lines of code, one `tspan` each, keep their indentation; their tokens take the highlighter's colours. */
+.tour-diagram .code {
+  font-family: var(--mono);
+  font-size: 10.8px;
+  white-space: pre;
+}
+
+.tour-diagram .mono {
+  font-family: var(--mono);
+  font-size: 10.8px;
+}
+
+.tour-diagram .c {
+  text-anchor: middle;
+}
+
+.tour-diagram .e {
+  text-anchor: end;
+}
+
+.tour-diagram .eyebrow {
+  font-size: 10.8px;
+  font-weight: 600;
+  fill: var(--fg-2);
+}
+
+.tour-diagram .dashed {
+  stroke-dasharray: 6 4;
+}
+
+.tour-diagram .fill {
+  --face: var(--bg-3);
+}
+
+.tour-diagram .frame {
+  fill: none;
+  stroke: var(--fg-2);
+  stroke-dasharray: 6 4;
+}
+
+/* A tone colours the edges, faces and lines of what carries it or sits in it; text only its own. */
+.tour-diagram .accent {
+  --tone: var(--accent);
+}
+
+.tour-diagram .success {
+  --tone: var(--add);
+}
+
+.tour-diagram .warning {
+  --tone: var(--warn);
+}
+
+.tour-diagram .error {
+  --tone: var(--danger);
+}
+
+.tour-diagram :is(.accent, .success, .warning, .error) {
+  --edge: var(--tone);
+  --line: var(--tone);
+  --face: color-mix(in srgb, var(--tone) 14%, var(--bg-card));
+}
+
+.tour-diagram :is(text, tspan):is(.accent, .success, .warning, .error) {
+  fill: var(--tone);
+}
+
+/* An icon takes the text's colour, or the tone of its group or its own class. */
+.tour-diagram .tour-diagram-icon {
+  color: var(--tone, var(--fg));
+}
+
+/* A stepped diagram: the taken step's groups lit in the accent, the other steps' groups dimmed. */
+.tour-diagram g[data-step] {
+  transition: opacity 150ms;
+}
+
+.tour-diagram[data-stepping] g[data-step]:not([data-lit]) {
+  opacity: 0.25;
+}
+
+.tour-diagram g[data-lit] {
+  --edge: var(--accent);
+  --face: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+  --line: var(--accent);
+}
+
+.tour-diagram g[data-lit] :is(rect, circle, ellipse, polygon, path, line, polyline):not(:where(.tour-diagram-icon *)) {
+  stroke-width: 2;
+}

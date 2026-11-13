@@ -1,4 +1,4 @@
-// Generates the wire types from the JSON Schema that `protocol.ts` exports.
+// Generates the wire types from the JSON Schema that `scripts/protocol-schema.ts` exports from `src/shared/`.
 use std::{env, fs, path::Path};
 
 fn main() {
@@ -10,7 +10,7 @@ fn main() {
     let text = fs::read_to_string(schema_path).expect("read protocol schema");
     let schema: schemars::schema::RootSchema = serde_json::from_str(&text).expect("parse protocol schema");
     let mut settings = typify::TypeSpaceSettings::default();
-    // Wire values compare directly: whether a review changed, whether a server's projects changed.
+    // Wire values compare directly: whether a thread moved, a review changed, a server's projects changed.
     settings.with_struct_builder(false).with_derive("PartialEq".into());
     let mut space = typify::TypeSpace::new(&settings);
     space.add_root_schema(schema).expect("convert protocol schema");

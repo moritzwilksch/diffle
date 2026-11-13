@@ -6,29 +6,12 @@
 @import './styles/base.css' layer(base);
 @import './styles/markdown.css' layer(components);
 @import './styles/viewers.css' layer(components);
+@import './styles/diagram.css' layer(components);
+@import './styles/tour.css' layer(components);
+@import './styles/steps.css' layer(components);
+@import './styles/panes.css' layer(components);
 
-@theme inline {
-  --color-canvas: var(--bg);
-  --color-surface: var(--bg-2);
-  --color-hover: var(--bg-3);
-  --color-raised: var(--bg-raised);
-  --color-foreground: var(--fg);
-  --color-muted: var(--fg-2);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-fg: var(--accent-fg);
-  --color-danger: var(--danger);
-  --color-warn: var(--warn);
-  --color-add: var(--add);
-  --color-del: var(--del);
-  --color-kind-type: var(--kind-type);
-  --color-kind-callable: var(--kind-callable);
-  --color-kind-value: var(--kind-value);
-  --color-card: var(--bg-card);
-  --font-mono: var(--mono);
-  --font-sans: var(--sans);
-  --shadow-card: var(--review-card-shadow);
-}
+@import './styles/tokens.css';
 
 @keyframes spin {
   to {

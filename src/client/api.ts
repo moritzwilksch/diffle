@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { encode, json, q, text } from './http.js';
 import {
   BlameRequestSchema,
   BlameResponseSchema,
@@ -14,7 +15,6 @@ import {
   ResolvedRequestSchema,
   ThreadCreateSchema,
   ViewedBulkRequestSchema,
-  ApiErrorSchema,
   CommentThreadSchema,
   FileResponseSchema,
   GithubExportResponseSchema,
@@ -38,6 +38,15 @@ import {
   UserConfigSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
+import {
+  TourThreadCreateSchema,
+  type TourThreadCreate,
+  TourExportAnswerSchema,
+  type TourExportAnswer,
+  TourResponseSchema,
+  TourTickSchema,
+  type TourTick,
+} from '@/shared/tour.js';
 import type {
   BlameRequest,
   GraphQuery,
@@ -51,55 +60,15 @@ import type {
   SearchScope,
   SearchContent,
   ServerMessage,
-  Side,
   ThreadCreate,
   ThreadQuery,
   ViewedEntry,
   ConfigUpdate,
   SymbolsQuery,
 } from '@/shared/protocol.js';
+import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
-
-function encode<S extends z.ZodType>(schema: S, value: z.input<S>): string {
-  return JSON.stringify(schema.parse(value));
-}
-
-async function json<T>(schema: z.ZodType<T>, input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(new URL(input, location.href).href, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...init?.headers },
-  });
-  if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
-  return schema.parse(res.status === 204 ? undefined : await res.json());
-}
-
-async function text(input: string, init?: RequestInit): Promise<string> {
-  const res = await fetch(new URL(input, location.href).href, init);
-  if (!res.ok) throw new ApiError(res.status, await safeMessage(res));
-  return res.text();
-}
-
-async function safeMessage(res: Response): Promise<string> {
-  try {
-    const result = ApiErrorSchema.safeParse(await res.json());
-    return result.success ? result.data.error : res.statusText;
-  } catch {
-    return res.statusText;
-  }
-}
-
-class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-const q = (params: Record<string, string | undefined>) =>
-  new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString();
 
 export const api = {
   /** The server's release; answers before the first review resolves. */
@@ -156,8 +125,9 @@ export const api = {
       SearchResponseSchema,
       `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, content: opts.content, path: opts.path })}`,
     ),
+  /** The shown set's threads, and its tour's checklist items each paired with its tick and answer. */
   threads: (query: ThreadQuery = {}) =>
-    json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`).then((list) => list.threads),
+    json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt. */
   exportComments: () => text(`api/threads/export?${q({ state: 'open' })}`),
   /** One message, with its thread's location and quote, as an agent prompt. */
@@ -171,6 +141,8 @@ export const api = {
     }),
   addThread: (t: ThreadCreate) =>
     json(CommentThreadSchema.array(), 'api/threads', { method: 'POST', body: encode(ThreadCreateSchema, t) }),
+  addTourThread: (t: TourThreadCreate) =>
+    json(CommentThreadSchema, 'api/tour/threads', { method: 'POST', body: encode(TourThreadCreateSchema, t) }),
   reply: (id: string, r: ReplyCreate) =>
     json(CommentThreadSchema, `api/threads/${encodeURIComponent(id)}/replies`, {
       method: 'POST',
@@ -227,6 +199,24 @@ export const api = {
   /** What class of token sits at `pos`; `keyword` means symbol navigation has nothing to offer. */
   lspReferences: (pos: LspPosition) =>
     json(LspLocationsResponseSchema, 'api/lsp/references', { method: 'POST', body: encode(LspPositionSchema, pos) }),
+  tour: () => json(TourResponseSchema, 'api/tour'),
+  /** The script and the stylesheet an exported tour runs on, built with the client, and what they bundle with its licences (`ExportNotices` as JSON). */
+  tourRuntime: async () => {
+    const [js, css, notices] = await Promise.all([
+      text('export/tour.js'),
+      text('export/tour.css'),
+      text('export/notices.json'),
+    ]);
+    return { js, css, notices };
+  },
+  /** Answers the server's request `id` for the tour as one file; a 404 when another tab answered first. */
+  answerTourExport: (id: string, answer: TourExportAnswer) =>
+    json(z.undefined(), `api/tour/exports/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: encode(TourExportAnswerSchema, answer),
+    }),
+  /** Ticks a checklist item of the review's tour as decided, or unticks it. */
+  tick: (t: TourTick) => json(z.undefined(), 'api/tour/ticks', { method: 'PUT', body: encode(TourTickSchema, t) }),
   /** The snapshot's changed symbols and the code using them. */
   lspGraph: (query: GraphQuery) => json(GraphResponseSchema, `api/lsp/graph?${q(query)}`),
   lspOccurrences: (pos: LspPosition) =>

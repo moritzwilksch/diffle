@@ -1,0 +1,27 @@
+---
+source: crates/diffle/tests/tour_comments.rs
+expression: prompt
+---
+(check) 1. Decide, open
+
+> Should load_user check the id?
+
+No: the store already did.
+
+---
+
+(check) 1. Decide, decided
+
+> Keep the old name as an alias?
+
+Yes, until the rename ships.
+
+---
+
+(check) 1. Decide, open
+
+> Ship it behind a flag?
+
+(no answer yet)
+
+---

@@ -10,6 +10,7 @@ pub mod paint;
 mod parse;
 pub mod repository;
 mod serve;
+mod skill;
 mod timing;
 
 use std::process::ExitCode;
@@ -46,10 +47,16 @@ pub fn main() -> ExitCode {
 
 async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     let (req, later) = match cli.command {
+        Some(Command::Skill { no_frontmatter }) => {
+            let skill = skill::render();
+            print!("{}", if no_frontmatter { skill::without_frontmatter(&skill) } else { &skill });
+            return Ok(());
+        }
         Some(Command::Config) => return config::run().await,
         Some(Command::Lsp) => return lsp::list().await,
         // `diffle -C <path> comments ...` names the repository as well as `comments ... -C <path>`.
-        Some(Command::Comments { command }) => return agent::run(command, cli.global.dir).await,
+        Some(Command::Comments { command }) => return agent::comments(command, cli.global.dir).await,
+        Some(Command::Tour { command }) => return agent::tour(command, cli.global.dir).await,
         Some(Command::Completion { shell }) => {
             completion::print(shell);
             return Ok(());

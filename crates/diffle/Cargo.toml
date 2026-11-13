@@ -12,7 +12,15 @@ readme = "../../README.md"
 keywords = ["git", "diff", "code-review", "review"]
 categories = ["command-line-utilities", "development-tools"]
 # The client build and the licence files are git-ignored: scripts/package-crate.ts builds and copies them in.
-include = ["/src/**/*.rs", "/build.rs", "/protocol.generated.json", "/client/**", "/LICENSE", "/THIRD_PARTY_NOTICES.md"]
+include = [
+  "/src/**/*.rs",
+  "/src/cli/skill.md",
+  "/build.rs",
+  "/protocol.generated.json",
+  "/client/**",
+  "/LICENSE",
+  "/THIRD_PARTY_NOTICES.md",
+]
 
 # `cargo binstall diffle` downloads the release archive rather than compiling; a target without one compiles.
 [package.metadata.binstall]
@@ -54,6 +62,7 @@ gix = { version = "0.90", default-features = false, features = [
 # Pack generation for fetching from a repository on disk; the `gix` version's own gix-pack.
 gix-pack = { version = "0.77", default-features = false, features = ["generate"] }
 hex = "0.4"
+html5ever = "0.40"
 http = "1"
 indexmap = "2"
 http-body-util = "0.1"

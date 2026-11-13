@@ -7,3 +7,7 @@ crates/diffle/protocol.generated.json merge=binary linguist-generated=true
 THIRD_PARTY_NOTICES.md merge=binary linguist-generated=true
 # git-cliff writes it from the squash-merged titles.
 CHANGELOG.md linguist-generated=true
+# Embedded in what diffle ships (`diffle skill`, an exported tour's licences): LF everywhere, so a
+# Windows checkout builds the same text.
+crates/diffle/src/cli/skill.md text eol=lf
+scripts/licenses-fonts.md text eol=lf

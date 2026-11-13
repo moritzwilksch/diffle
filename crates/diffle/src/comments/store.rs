@@ -1,10 +1,11 @@
-//! This mode's threads and viewed marks in `<gitDir>/diffle/comments.json`.
+//! This mode's threads, viewed marks and tour in `<gitDir>/diffle/comments.json`.
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use super::anchor::{anchor_path, compare_threads};
+use super::tour::StoredTour;
 use crate::error::{Error, Result};
 use crate::iterations::now_ms;
 use crate::persist::{with_file_lock, write_file_atomic};
@@ -21,6 +22,9 @@ pub(super) struct SetData {
     pub(super) threads: Vec<CommentThread>,
     #[serde(default)]
     pub(super) viewed: Vec<ViewedEntry>,
+    /// The agent's tour, beside the threads on it (`comments/tour.rs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) tour: Option<StoredTour>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,7 +44,12 @@ pub struct CommentStore {
 
 impl CommentStore {
     pub async fn open(git_dir: &Path, key: &str) -> Result<Self> {
-        Ok(Self { file: git_dir.join("diffle").join("comments.json"), key: key.to_owned() })
+        Ok(Self::at(git_dir, key))
+    }
+
+    /// The store of `key`'s set, whichever set the session shows.
+    pub fn at(git_dir: &Path, key: &str) -> Self {
+        Self { file: git_dir.join("diffle").join("comments.json"), key: key.to_owned() }
     }
 
     pub fn key(&self) -> &str {
@@ -51,7 +60,7 @@ impl CommentStore {
         &self.file
     }
 
-    /// Threads matching `q` (every thread by default), ordered by path, line, then creation.
+    /// Threads matching `q` (every thread by default), in review order (`compare_threads`).
     pub async fn threads(&self, q: &ThreadQuery) -> Result<Vec<CommentThread>> {
         let state = q.state.unwrap_or(ThreadState::All);
         let mut threads: Vec<CommentThread> = self
@@ -64,7 +73,7 @@ impl CommentStore {
                 ThreadState::Resolved => t.resolved,
                 ThreadState::All => true,
             })
-            .filter(|t| q.path.as_deref().is_none_or(|p| anchor_path(&t.anchor) == p))
+            .filter(|t| q.path.as_deref().is_none_or(|p| anchor_path(&t.anchor) == Some(p)))
             .collect();
         threads.sort_by(compare_threads);
         Ok(threads)
@@ -195,14 +204,14 @@ impl CommentStore {
     }
 
     /// This key's set as on disk right now; empty when the file is absent. Malformed JSON fails.
-    async fn read(&self) -> Result<SetData> {
+    pub(super) async fn read(&self) -> Result<SetData> {
         Ok(read_store_file(&self.file).await?.sets.remove(&self.key).unwrap_or_default())
     }
 
     /// Locked read-modify-write: `f` edits this key's set as read from disk under the lock, other
     /// keys pass through untouched, and the file is rewritten when `f` reports a change. A failing
     /// `f` writes nothing; a failed write fails its caller only.
-    async fn mutate<R>(&self, f: impl FnOnce(&mut SetData) -> Result<(R, bool)>) -> Result<R> {
+    pub(super) async fn mutate<R>(&self, f: impl FnOnce(&mut SetData) -> Result<(R, bool)>) -> Result<R> {
         with_file_lock(&self.file, || async {
             let mut all = read_store_file(&self.file).await?;
             let mut set = all.sets.remove(&self.key).unwrap_or_default();

@@ -8,6 +8,7 @@ import { useRemPx } from './scale.js';
 import { ServerLost } from './ServerLost.js';
 import { useStore } from './store.js';
 import { FileTreePane } from './tree/FileTreePane.js';
+import { refreshTour } from './tour/state.js';
 import { TooltipHost } from './ui/TitleTooltips.js';
 import './views/registry.js';
 import { gridColumns, listViews, panelOf, useViews } from './views/state.js';
@@ -75,6 +76,7 @@ export function App() {
     const resync = () => {
       setLost(false);
       void boot();
+      void refreshTour();
     };
     return connectWs(
       (msg) => {
@@ -93,6 +95,14 @@ export function App() {
             break;
           case 'config':
             void refreshConfig();
+            break;
+          case 'tour':
+            // A push or a tick also changes the checklist items read with the threads.
+            void refreshTour();
+            void refreshThreads();
+            break;
+          case 'tourExport':
+            void import('./tour/export/file.js').then(({ answerExport }) => answerExport(msg.id));
             break;
           case 'lsp':
             setLspStatus(msg.payload);

@@ -96,6 +96,10 @@ export const DIFF_HELP: HelpSection[][] = [
       ],
     },
     {
+      title: 'Tour',
+      rows: [['T', "the agent's tour, once pushed; ? there lists its keys"]],
+    },
+    {
       title: 'Iterations',
       rows: [
         ['r', 'reload once the compared refs moved'],

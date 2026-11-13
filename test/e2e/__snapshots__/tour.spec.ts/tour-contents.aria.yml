@@ -1,0 +1,12 @@
+- navigation "Contents":
+  - heading "Refunds count against sales" [level=2]
+  - list:
+    - listitem:
+      - button "1 Entries learn their kind"
+    - listitem:
+      - button "2 Parsing reads the kind column"
+    - listitem:
+      - button "3 Unmatched refunds"
+      - list:
+        - listitem:
+          - button "Where it lives"

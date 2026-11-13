@@ -1,0 +1,60 @@
+import { FilePath } from '@/client/FilePath.js';
+import type { Place } from '@/client/tour/anchor.js';
+import type { LineRange } from '@/client/tour/document.js';
+import { type Shown, useHost } from '@/client/tour/host/host.js';
+import { TourJump } from './Jump.js';
+
+/**
+ * The lines `range` names and `context` lines around them, cut from the review's diff, again
+ * whenever the review moves.
+ */
+export function useExcerpt(range: LineRange, context = 0): Shown {
+  return useHost().useExcerpt(range, context);
+}
+
+/** `start-end`, or one line alone, as a range's header shows it. */
+export function linesLabel({ start, end }: LineRange): string {
+  return start === end ? `${start}` : `${start}-${end}`;
+}
+
+/** What stands in for an excerpt's rows while they load, or once they are gone. */
+export function ExcerptNotice({ shown, range }: { shown: Exclude<Shown, { state: 'ready' }>; range: LineRange }) {
+  return (
+    <p
+      data-opaque=""
+      className={`m-0 px-2.5 py-2 text-[0.75rem] ${shown.state === 'loading' ? 'text-muted' : 'text-warn'}`}
+    >
+      {shown.state === 'loading'
+        ? 'Loading…'
+        : shown.state === 'error'
+          ? `Cannot show these lines: ${shown.message}`
+          : `${range.start === range.end ? `Line ${range.start} is` : `Lines ${linesLabel(range)} are`} no longer in the review; ask the agent for a fresh tour.`}
+    </p>
+  );
+}
+
+/**
+ * The lines `range` names, cut from the review's diff when the card renders and highlighted like it.
+ * When they left the review, a notice stands in their place and the jump still opens the file.
+ */
+export function TourDiff({ range, place }: { range: LineRange; place?: Place }) {
+  const { Rows } = useHost();
+  const shown = useExcerpt(range);
+  return (
+    <figure
+      {...place}
+      data-opaque=""
+      className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
+    >
+      <figcaption className="flex items-center gap-1.5 border-b border-border bg-surface px-2 py-1 text-[0.75rem]">
+        <FilePath path={range.path} className="min-w-0 flex-1" nowrap />
+        <span className="shrink-0 font-mono text-muted">
+          {range.side === 'old' ? 'before ' : ''}
+          {linesLabel(range)}
+        </span>
+        <TourJump path={range.path} line={range.start} side={range.side} label="Open" placed />
+      </figcaption>
+      {shown.state === 'ready' ? <Rows patch={shown.patch} /> : <ExcerptNotice shown={shown} range={range} />}
+    </figure>
+  );
+}

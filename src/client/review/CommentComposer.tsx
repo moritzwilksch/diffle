@@ -1,3 +1,4 @@
+import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { TextArea } from '@/client/ui/TextArea.js';
@@ -12,14 +13,14 @@ import { draftPermalink } from './permalink.js';
  * Inline comment editor rendered as an annotation at the selection's last line. Its header names the
  * lines the comment will attach to, as the saved card's does, since the cursor may have moved on.
  */
-export function CommentComposer({ label }: { label: string }) {
+export function CommentComposer({ label, className }: { label: string; className?: string }) {
   const submitDraft = useStore((s) => s.submitDraft);
   const closeDraft = useStore((s) => s.closeDraft);
   const draftQuote = useStore((s) => s.draftQuote);
   // Each open request makes a new draft; the viewer may keep this composer mounted across them.
   const draft = useStore((s) => s.draft);
-  // A comment on the whole file has no lines to suggest a replacement for.
-  const fileLevel = draft != null && draft.selection == null;
+  // Only a comment on lines has lines to suggest a replacement for.
+  const onLines = draft?.kind === 'code' && draft.selection != null;
   // The text outlives the composer, so Esc or Cancel and reopening on the same lines resumes it.
   const key = useStore((s) => composerKey(s, { kind: 'draft' }));
   const text = useStore((s) => (key ? (s.unsent[key] ?? '') : ''));
@@ -38,15 +39,16 @@ export function CommentComposer({ label }: { label: string }) {
   }, [text]);
 
   // Focus on every open, not just on mount. The viewer lays out only rows near the viewport: a composer
-  // off screen has no box to take focus until the jump to it renders it.
+  // off screen has no box to take focus until the jump to it renders it. Focus never scrolls: where the
+  // composer shows is its host's to place (the diff's jump, the tour's margin), and it may not be placed yet.
   useEffect(() => {
     const textarea = ref.current;
     if (!textarea) return;
-    if (textarea.getClientRects().length > 0) return textarea.focus();
+    if (textarea.getClientRects().length > 0) return textarea.focus({ preventScroll: true });
     const observer = new ResizeObserver(() => {
       if (textarea.getClientRects().length === 0) return;
       observer.disconnect();
-      textarea.focus();
+      textarea.focus({ preventScroll: true });
     });
     observer.observe(textarea);
     return () => observer.disconnect();
@@ -71,7 +73,12 @@ export function CommentComposer({ label }: { label: string }) {
   };
 
   return (
-    <div className="@container mx-2 my-1 overflow-hidden rounded-md border border-accent bg-surface font-sans text-[0.8125rem]">
+    <div
+      className={twMerge(
+        '@container mx-2 my-1 overflow-hidden rounded-md border border-accent bg-surface font-sans text-[0.8125rem]',
+        className,
+      )}
+    >
       <div className="flex items-center gap-2 border-b border-b-border bg-hover px-2.5 py-1 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
         <MessageSquare size="0.8125rem" />
         <span className="font-mono font-semibold text-foreground">{label}</span>
@@ -93,7 +100,7 @@ export function CommentComposer({ label }: { label: string }) {
           <span className="mr-auto text-[0.75rem] whitespace-nowrap text-muted @max-[36rem]:hidden">
             <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to cancel
           </span>
-          {!fileLevel && (
+          {onLines && (
             <Button
               variant="ghost"
               onClick={() => void suggest()}

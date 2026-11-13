@@ -17,6 +17,25 @@ fn prints_the_bare_version() {
     }
 }
 
+/// `diffle skill`, what an agent learns diffle offers it: the commands and the tour catalog, as a
+/// skill whose frontmatter `--no-frontmatter` leaves out.
+#[test]
+fn prints_the_agent_interface_as_a_skill() {
+    let config = tempfile::tempdir().unwrap();
+    let out = run(config.path(), &["skill"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let skill = stdout(&out);
+    insta::assert_snapshot!("skill", skill);
+    let bare = run(config.path(), &["skill", "--no-frontmatter"]);
+    assert!(bare.status.success(), "{}", stderr(&bare));
+    let body = &skill[skill.find("# diffle\n").unwrap()..];
+    assert!(skill.starts_with("---\nname: diffle\n"));
+    assert_eq!(stdout(&bare), body);
+    let extra = run(config.path(), &["skill", "list"]);
+    assert_eq!(extra.status.code(), Some(2), "{}", stderr(&extra));
+    assert_eq!(stdout(&extra), "");
+}
+
 #[test]
 fn help_is_the_committed_text_and_keeps_the_shorthands_in_a_section_of_their_own() {
     let config = tempfile::tempdir().unwrap();
