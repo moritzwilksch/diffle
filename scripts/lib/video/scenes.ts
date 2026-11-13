@@ -3,6 +3,7 @@
 import type { Page } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readThreads, runCli } from '../../../test/e2e/server.js';
 import { OUT } from './encode.js';
 import {
   SLOW,
@@ -39,7 +40,7 @@ export interface Scene {
 export const SCENES: Record<string, Scene> = {
   /**
    * The core loop with a language server: hover a call, find its references, jump to one, comment on
-   * it, and copy every comment as one prompt.
+   * it, read the agent's reply, and copy every comment as one prompt.
    */
   review: {
     args: ['--lsp', `python=${PYTHON_LSP}`],
@@ -64,13 +65,19 @@ export const SCENES: Record<string, Scene> = {
       await pause(page, 1500);
 
       await selectLines(page, test, refill, refill + 1);
-      await comment(
-        page,
-        'Also step the clock back: a negative `elapsed` drains the bucket. `time.monotonic()` cannot go back.',
-      );
+      await comment(page, 'Why 0.5 s? Is that just enough for the next call to pass?');
 
+      // A question, since an answer to a change request would have to change the diff too. The agent
+      // answers through the real CLI, as it would beside the review; the reply arrives live.
       await glide(page, VIEWPORT.width * 0.55, VIEWPORT.height * 0.3);
-      await pause(page, 500);
+      await pause(page, 1200);
+      const [thread] = await readThreads(url);
+      const reply =
+        'Yes: at `rate=2.0` one token takes 0.5 s to refill, so this is the shortest wait that lets the next call through.';
+      await runCli(['comments', 'reply', thread!.id, reply, '-C', repo]);
+      await page.getByText('the shortest wait').first().waitFor();
+      await pause(page, 2800);
+
       await page.keyboard.press('y');
       await pause(page, 90);
       await page.keyboard.press('y');

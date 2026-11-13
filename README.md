@@ -7,13 +7,13 @@
 [![website](https://img.shields.io/badge/website-diffle.app-0349b4?style=flat-square)](https://diffle.app)
 
 Review a Git diff in the browser and comment on lines, blocks, or whole files. Then hand the
-comments to an agent as a prompt, or to GitHub as a pending review. Or let the agent walk you
-through the change first, with a [tour](#take-a-tour-of-the-change).
+comments to an agent, which replies right in the thread, or to GitHub as a pending review. Or let
+the agent walk you through the change first, with a [tour](#take-a-tour-of-the-change).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/videos/review-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/videos/review-light.gif">
-  <img alt="A review in diffle: a language-server hover, its references, a jump to one and a comment there, then yy copies the comments as one prompt" src=".github/assets/videos/review-light.gif">
+  <img alt="A review in diffle: a language-server hover, its references, a jump to one and a comment there, the agent's reply, then yy copies the comments as one prompt" src=".github/assets/videos/review-light.gif">
 </picture>
 
 ## Install
@@ -243,10 +243,14 @@ A coding agent in the same repository talks to the diffle running there:
 
 ```bash
 diffle comments list            # the threads you are shown, as JSON
+diffle comments reply <id> -    # answer a thread in Markdown; - reads stdin
 diffle tour push tour.html      # show a guided tour of the change; stdin without a file
 diffle tour clear               # remove it
 diffle tour export tour.html    # save it as one HTML file that opens offline; - for stdout
 ```
+
+Ask your agent to look at your comments: it reads the threads, makes the changes, and replies in
+each one. The replies show up in your open review, marked as the agent's.
 
 See [Take a tour of the change](#take-a-tour-of-the-change) for what a tour shows.
 

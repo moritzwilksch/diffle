@@ -64,6 +64,10 @@ async function type(page: Page, view: Locator, text: string) {
   await pause(page, 1200);
 }
 
+// Sections are reached by wheel, not `n`: a jump reads as a cut, and `n` to the last section lands at the
+// page's bottom, past what comes next.
+const heading = (view: Locator, name: string) => view.getByRole('heading', { level: 2, name });
+
 async function press(page: Page, key: string, wait: number) {
   await page.keyboard.press(key);
   await pause(page, wait);
@@ -90,7 +94,8 @@ export async function tour(page: Page, url: string) {
   for (let i = 0; i < 4; i++) await press(page, 'l', 1500);
 
   // The token bucket: a symbol's references, then the walk.
-  await press(page, 'n', 1400);
+  await scrollTo(page, view, heading(view, 'The token bucket'), 0.12);
+  await pause(page, 1400);
   await clickOn(page, view.getByRole('button', { name: 'RateLimiter' }));
   const references = page.getByRole('dialog', { name: 'References' });
   await references.waitFor();
@@ -111,7 +116,8 @@ export async function tour(page: Page, url: string) {
   await pause(page, 1400);
 
   // The handler: a trace from stop to stop, then the alternatives in tabs.
-  await press(page, 'n', 1600);
+  await scrollTo(page, view, heading(view, 'The handler answers 429'), 0.12);
+  await pause(page, 1600);
   const trace = view.locator('figure[data-trace]');
   await scrollTo(page, view, trace, 0.15);
   await pause(page, 900);
@@ -128,8 +134,10 @@ export async function tour(page: Page, url: string) {
   }
 
   // The rest: a folded aside, and the questions to settle before merging.
-  await press(page, 'n', 1400);
-  await clickOn(page, view.locator('details summary'));
+  const aside = view.locator('details summary');
+  await scrollTo(page, view, aside, 0.3);
+  await pause(page, 1000);
+  await clickOn(page, aside);
   await pause(page, 1600);
   const check = view.getByRole('region', { name: 'Checklist' });
   await scrollTo(page, view, check, 0.3);
