@@ -1,6 +1,6 @@
 import type { DiffLineAnnotation } from '@pierre/diffs';
 import { createElement, type ReactNode, useLayoutEffect, useRef } from 'react';
-import { type RowsProps, rowsKey, type TourHost } from '@/client/tour/host/host.js';
+import { type RowsProps, rowsKey, type Shown, type TourHost } from '@/client/tour/host/host.js';
 import { type BakedTour, excerptKey, symbolKey, tokensKey } from './data.js';
 import { BakedCheck, BakedLucide, BakedSymbol } from './parts.js';
 
@@ -12,10 +12,17 @@ export function bakedHost(data: BakedTour): TourHost {
   const changed = new Map(data.changed.map((f) => [f.path, f]));
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(data.rowsCss);
+  const excerpts = new Map<string, Shown>();
   return {
     useExcerpt: (range, context) => {
-      const patch = data.excerpts[excerptKey(range, context)];
-      return patch == null ? { state: 'gone' } : { state: 'ready', patch };
+      const key = excerptKey(range, context);
+      let shown = excerpts.get(key);
+      if (!shown) {
+        const patch = data.excerpts[key];
+        shown = patch == null ? { state: 'gone' } : { state: 'ready', patch };
+        excerpts.set(key, shown);
+      }
+      return shown;
     },
     Rows: (props) => (
       <BakedRows {...props} markup={data.rows[rowsKey(props.patch, props.lang, props.numbered)]} sheet={sheet} />
