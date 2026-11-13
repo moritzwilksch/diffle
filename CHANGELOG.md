@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.2](https://github.com/moritzwilksch/diffle/compare/v0.5.1...v0.5.2) - 2026-11-13
+
+### Features
+
+- _(cli)_ Answer a thread with `diffle comments reply` ([#458](https://github.com/moritzwilksch/diffle/pull/458))
+- _(tour)_ Push a tour, comment on it, step through it and export it ([#459](https://github.com/moritzwilksch/diffle/pull/459))
+
+### Bug fixes
+
+- _(review)_ Show inline blame on wrapped lines and keep only current blames ([#467](https://github.com/moritzwilksch/diffle/pull/467))
+
+### Documentation
+
+- _(readme)_ Show the tour, with a recorded take of one ([#466](https://github.com/moritzwilksch/diffle/pull/466))
+
 ## [0.5.1](https://github.com/moritzwilksch/diffle/compare/v0.5.0...v0.5.1) - 2026-11-12
 
 ### Features
