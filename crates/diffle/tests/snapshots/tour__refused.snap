@@ -230,7 +230,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"2\"",
-      "message": "a diffle-note takes title=\"…\": what these lines do, in a few words: `Record each sale`"
+      "message": "a diffle-note takes title=\"…\": what its lines or step do, in a few words: `Record each sale`"
     },
     {
       "element": "h2 \"A\" > diffle-walk path=\"app.py\" lines=\"2-3\" > diffle-note lines=\"3\" title=\"Block\" > <p>",

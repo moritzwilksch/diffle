@@ -14,8 +14,8 @@ const tourLinesSchema = z.string().regex(/^[1-9][0-9]*(-[1-9][0-9]*)?$/);
 const tourIconNameSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 
 /**
- * A framed explainer for one part of the diff, a block in the article's flow: its title, a sentence
- * or two, and the `diffle-diff`s it explains. It holds what prose holds, except headings and cards.
+ * A block that frames one part of the diff: a title, a sentence or two, and the `diffle-diff`s they
+ * explain. It holds what prose holds, except headings and cards.
  */
 export const TourCardSchema = z
   .object({
@@ -30,8 +30,8 @@ export const TourCardSchema = z
   .strict();
 
 /**
- * A Lucide icon inside a line of text (prose, a heading, a table cell), at the text's size and
- * colour. It marks one kind of thing the same way throughout the tour. It holds nothing.
+ * A Lucide icon in a line of text (prose, a heading, a table cell), at the text's size and colour,
+ * marking one kind of thing the same way throughout the tour. It holds nothing.
  */
 export const TourIconSchema = z
   .object({
@@ -49,7 +49,7 @@ export const TourDiffSchema = z
     tag: z.literal('diffle-diff'),
     /** A file of the review, relative to the repository root; a renamed file by its new path. */
     path: z.string().min(1),
-    /** Which side's line numbers `lines` counts: `old` (before) or `new` (after, the default). */
+    /** Which side `lines` counts on: `old` (before) or `new` (after, the default). */
     side: SideSchema.optional(),
     /** The line range on that side, `40-58`, or one line, `40`. */
     lines: tourLinesSchema,
@@ -57,40 +57,38 @@ export const TourDiffSchema = z
   .strict();
 
 /**
- * Lines of the review's diff walked one note at a time, a block in the article's flow: the reader
- * steps through its `diffle-note`s in order, and each lights its lines and dims the rest. It holds
- * only its notes.
+ * A block of the review's diff, read one `diffle-note` at a time: the reader steps through the notes
+ * in order, and each lights its lines and dims the rest. It holds only its notes.
  */
 export const TourWalkSchema = z
   .object({
     tag: z.literal('diffle-walk'),
     /** A file of the review, relative to the repository root; a renamed file by its new path. */
     path: z.string().min(1),
-    /** Which side's line numbers `lines` and its notes' `lines` count: `old` or `new` (the default). */
+    /** Which side `lines` and its notes' `lines` count on: `old` or `new` (the default). */
     side: SideSchema.optional(),
-    /** The line range the walk shows, `12-30`. */
+    /** The line range the walk shows: `12-30`. */
     lines: tourLinesSchema,
   })
   .strict();
 
 /**
- * One step of a `diffle-walk` or a stepped `diffle-diagram`: a title and a sentence or two, in
- * inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ * A step of a `diffle-walk` or a stepped `diffle-diagram`: a title and one sentence of inline prose
+ * (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
  */
 export const TourNoteSchema = z
   .object({
     tag: z.literal('diffle-note'),
-    /** In a walk, the lines it explains, within the walk's, on its side: `14-17`, or `14`. A diagram's note takes none: it explains the step of its number. */
+    /** In a walk, the lines it explains, within the walk's and on its side: `14-17` or `14`. A diagram's note takes none: it explains the step of its number. */
     lines: tourLinesSchema.optional(),
-    /** What these lines do, in a few words: `Record each sale`. */
+    /** What its lines or step do, in a few words: `Record each sale`. */
     title: z.string().min(1),
   })
   .strict();
 
 /**
- * A path through the code in call order, a block in the article's flow: the reader steps through
- * its `diffle-stop`s, each a few lines of a file around one line, lit, with a sentence. It holds
- * only its stops.
+ * A block that follows the code in call order: the reader steps through its `diffle-stop`s, each a
+ * lit line with a few lines around it and a sentence. It holds only its stops.
  */
 export const TourTraceSchema = z
   .object({
@@ -99,15 +97,15 @@ export const TourTraceSchema = z
   .strict();
 
 /**
- * One stop of a `diffle-trace`: a line of a file of the review and a sentence about what happens
- * there, in inline prose (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
+ * A stop of a `diffle-trace`: a line of the review and one sentence of inline prose on what happens
+ * there (`code`, `strong`, `em`, `a`, `diffle-symbol`, `diffle-jump`, `diffle-icon`).
  */
 export const TourStopSchema = z
   .object({
     tag: z.literal('diffle-stop'),
     /** A file of the review, relative to the repository root. */
     path: z.string().min(1),
-    /** The line the stop lights; a few lines around it show too. */
+    /** The line the stop lights, shown with a few lines around it. */
     line: tourNumberSchema,
     /** Which side `line` counts on: `old` or `new` (the default). */
     side: SideSchema.optional(),
@@ -115,8 +113,8 @@ export const TourStopSchema = z
   .strict();
 
 /**
- * Two to four panes side by side in one block's width, one shown at a time: the chosen design next
- * to one it rejected, a payload before and after. It holds only its `diffle-tab`s.
+ * A block of two to four panes, one shown at a time: the chosen design beside a rejected one, a
+ * payload before and after. It holds only its `diffle-tab`s.
  */
 export const TourTabsSchema = z
   .object({
@@ -124,11 +122,11 @@ export const TourTabsSchema = z
   })
   .strict();
 
-/** What a tab's pane is to the reader, shown as a chip beside its title. */
+/** What a pane is to the reader, shown as a chip beside its title. */
 export const TourTabKindSchema = z.enum(['chosen', 'rejected', 'example']);
 export type TourTabKind = z.infer<typeof TourTabKindSchema>;
 
-/** One pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs. */
+/** A pane of a `diffle-tabs`. It holds what a card holds: prose and blocks, no headings or other tabs. */
 export const TourTabSchema = z
   .object({
     tag: z.literal('diffle-tab'),
@@ -140,8 +138,8 @@ export const TourTabSchema = z
   .strict();
 
 /**
- * Questions the reviewer decides, a block in the article's flow: each `diffle-item` is ticked as
- * decided or answered in a thread the agent reads. It holds only its items.
+ * A block of questions the reviewer decides: they tick each `diffle-item` as decided or answer it in
+ * a thread the agent reads. It holds only its items.
  */
 export const TourCheckSchema = z
   .object({
@@ -149,11 +147,11 @@ export const TourCheckSchema = z
   })
   .strict();
 
-/** A question of a `diffle-check`, one line of inline prose: what the reviewer should decide. */
+/** A question in a `diffle-check` for the reviewer to decide, in one line of inline prose. */
 export const TourItemSchema = z
   .object({
     tag: z.literal('diffle-item'),
-    /** A sentence of context under the question: what the choice costs or what it rests on. */
+    /** One sentence under the question: what the choice costs or rests on. */
     context: z.string().min(1).optional(),
   })
   .strict();
@@ -162,22 +160,22 @@ export const TourItemSchema = z
 const tourLangSchema = z.string().regex(/^[a-z0-9][a-z0-9+#-]*$/);
 
 /**
- * Code the agent writes: signatures, interfaces, type definitions, the shape of an abstraction,
- * never code the diff already shows. Highlighted like the diff; with `path`, framed with the file's
- * path and a jump to it. With `example`, a snippet the agent made up to show how something works
- * (data as it flows, a simplified spike, an alternative design), labelled as an example. It holds
- * its code as text, `<` written `&lt;`.
+ * A block of code the agent writes: signatures, interfaces, type definitions, the shape of an
+ * abstraction, never code the diff already shows. It is highlighted like the diff, and `path` frames
+ * it with the file's path and a jump there. With `example`, it is a made-up snippet that shows how
+ * something works (data as it flows, a simplified spike, an alternative design), labelled as one.
+ * It holds its code as text, with `<` written `&lt;`.
  */
 export const TourCodeSchema = z
   .object({
     tag: z.literal('diffle-code'),
-    /** The highlighter's language; required without `path`, which otherwise names it. */
+    /** The highlighter's language. Required without `path`, which otherwise implies it. */
     lang: tourLangSchema.optional(),
     /** The file of the review the code comes from, relative to the repository root. */
     path: z.string().min(1).optional(),
-    /** Where in `path`, on the new side, its first declaration sits. */
+    /** The new-side line in `path` of its first declaration. */
     line: tourNumberSchema.optional(),
-    /** Written bare, as an HTML boolean attribute: the code is made up, not from the repository. It takes no `path` or `line`. */
+    /** Written bare, as an HTML boolean attribute: the code is made up. It takes no `path` or `line`. */
     example: z.string().optional(),
     /** What an example shows, beside its label: `Response to POST /login`. */
     title: z.string().min(1).optional(),
@@ -185,8 +183,8 @@ export const TourCodeSchema = z
   .strict();
 
 /**
- * A directory tree of some files under a title; changed ones show their status and line counts. It
- * holds only `diffle-file` notes, on a few of its files.
+ * A block that shows files as a directory tree under a title, each changed one with its status and
+ * line counts. It holds only `diffle-file` notes, on a few of its files.
  */
 export const TourTreeSchema = z
   .object({
@@ -197,7 +195,7 @@ export const TourTreeSchema = z
     icon: tourIconNameSchema.optional(),
     /** Files of the review, one per line, relative to the repository root. */
     paths: z.string().min(1),
-    /** The folder the tree starts at, without a trailing `/`; every path lies under it. Default: the repository root. */
+    /** The folder the tree starts at, without a trailing `/`; every path lies under it. Defaults to the repository root. */
     root: z.string().min(1).optional(),
   })
   .strict();
@@ -215,8 +213,8 @@ export const TourFileSchema = z
   .strict();
 
 /**
- * A button that opens the diff view at a file or a line. Its text is the label, plain text: markup
- * inside it is refused. Empty, it shows `path:line`.
+ * A button that opens the diff view at a file or line. Its plain text is the label; markup inside is
+ * refused. Empty, it shows `path:line`.
  */
 export const TourJumpSchema = z
   .object({
@@ -231,8 +229,8 @@ export const TourJumpSchema = z
   .strict();
 
 /**
- * A symbol the prose names, anchored to its line: coloured as the diff colours it there, with the
- * diff's hover card and a click that lists its references when a language server serves its file.
+ * A symbol the prose names, anchored to its line and coloured as the diff colours it there. When a
+ * language server serves its file, it shows the diff's hover card and lists its references on click.
  * It holds nothing.
  */
 export const TourSymbolSchema = z
@@ -249,7 +247,7 @@ export const TourSymbolSchema = z
   })
   .strict();
 
-/** A highlighted aside, a block in the article's flow or in a card. It holds what a card holds, except another callout. */
+/** A highlighted aside: a block, in the article or in a card. It holds what a card holds, except another callout. */
 export const TourCalloutSchema = z
   .object({
     tag: z.literal('diffle-callout'),
@@ -259,8 +257,8 @@ export const TourCalloutSchema = z
   .strict();
 
 /**
- * A simple architecture diagram, a block in the article's flow: one inline `<svg>` of
- * `TourSvgElement`s, drawn by hand; with steps, a `diffle-note` per step after it.
+ * A block holding a simple architecture diagram: one inline `<svg>` of diagram elements, drawn by
+ * hand, then one `diffle-note` per step if it has steps.
  */
 export const TourDiagramSchema = z
   .object({
@@ -382,11 +380,11 @@ export const TourSvgIconSchema = z
 export type TourSvgIcon = z.infer<typeof TourSvgIconSchema>;
 
 /**
- * The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (both ends),
- * `dashed`. Text: `bold`, `small`, `mono`, `code` (lines of code in its `lang`, one `tspan` each,
- * highlighted), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces: `fill` (a gray face), `frame` (a dashed container without a face).
- * Tones, on a shape, group, line or text: `accent` for what the point is about, `success`,
- * `warning` and `error` for status.
+ * The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (heads at both
+ * ends), `dashed`. Text: `bold`, `small`, `mono`, `code` (highlighted lines in its `lang`, one
+ * `tspan` each), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces:
+ * `fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line
+ * or text: `accent` for what the point is about; `success`, `warning` and `error` for status.
  */
 export const TourSvgClassSchema = z.enum([
   'arrow',
@@ -409,9 +407,9 @@ export const TourSvgClassSchema = z.enum([
 export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
 
 /**
- * Two or three columns side by side while the window has room, stacked below that, at the top
- * level. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`,
- * `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
+ * Two or three columns side by side, stacked when the window is narrow. It sits at the top level.
+ * Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,
+ * `diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
  */
 export const TourRowSchema = z
   .object({
@@ -447,12 +445,11 @@ export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
 
 /**
- * The plain tags a tour is written in: `h1` titles it, each `h2` starts a section, a step of the
- * walk, and `h3` a subsection; `h4` is a small heading inside a card, a tab, a callout or a
- * `details`, where those cannot go. The rest carry prose, lists and tables, and `details` folds away
- * what the main path can do without, opening with its `summary`. They take no
- * attributes, except `a`, which takes an `href` to an `http(s)` URL, and `th` and `td`, which take
- * `colspan` and `rowspan` as positive numbers.
+ * The plain tags a tour is written in. `h1` titles it, each `h2` starts a section (a step of the
+ * walk), and `h3` a subsection; `h4` is a small heading inside a card, tab, callout or `details`,
+ * where those cannot go. `details` folds away what the main path can do without and opens with its
+ * `summary`; the rest carry prose, lists and tables. Only `a` (an `href` to an `http(s)` URL), `th`
+ * and `td` (`colspan` and `rowspan`, positive numbers) take attributes.
  */
 export const TourTagSchema = z.enum([
   'h1',

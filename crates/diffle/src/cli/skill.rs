@@ -77,7 +77,7 @@ pub fn render() -> String {
         .collect();
     let _ = write!(
         out,
-        "\n### Plain tags\n\n{} {}\n\n### Example\n\n```html\n{EXAMPLE}\n```\n",
+        "\n### Plain tags\n\n{}\n\n{}\n\n### Example\n\n```html\n{EXAMPLE}\n```\n",
         one_line(&defs["TourTag"]["description"]),
         tags.join(", "),
     );
