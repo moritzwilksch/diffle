@@ -15,14 +15,12 @@
   letter-spacing: -0.01em;
 }
 
-/* A section's heading carries its step number and rests on a hairline. */
+/* A section's heading carries its step number; the space above it, not a rule, opens the section. */
 .tour-article > h2 {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  margin: 3rem 0 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
+  margin: 3rem 0 0.75rem;
   font-size: 1.375rem;
   line-height: 1.3;
   font-weight: 650;
