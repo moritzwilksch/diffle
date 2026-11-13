@@ -4,11 +4,11 @@ import { TourJump } from './Jump.js';
 import { Rows } from './Rows.js';
 
 /**
- * Code the agent wrote, such as an interface or a signature, in the diff's frame and rows: the same
- * gutter, numbered from 1, and long lines wrapped. Code from the repository (`path`)
- * sits under a quiet header naming its file, its line and a jump there; an example the agent made up
- * says so in the same header, beside its title, so it never passes for the repository's code. Other
- * made-up code has no header.
+ * Code the agent wrote, such as an interface or a signature, in the diff's frame and rows, long lines
+ * wrapped. Made-up code is numbered from 1. Code from the repository (`path`) is unnumbered, as the
+ * agent elides and reflows it, and sits under a quiet header naming its file and a jump to its line.
+ * An example the agent made up says so in the same header, beside its title, so it never passes for
+ * the repository's code. Other made-up code has no header.
  */
 export function TourCode({
   code,
@@ -35,7 +35,7 @@ export function TourCode({
           {path && <TourJump path={path} line={line} side="new" label="Open" placed />}
         </figcaption>
       )}
-      <Rows patch={codePatch(code)} lang={codeLang(lang, path)} />
+      <Rows patch={codePatch(code)} lang={codeLang(lang, path)} numbered={!path} />
     </figure>
   );
 }

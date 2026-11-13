@@ -28,13 +28,18 @@ export interface RowsProps<A> {
   css?: string;
   annotations?: DiffLineAnnotation<A>[];
   renderAnnotation?: (annotation: DiffLineAnnotation<A>) => ReactNode;
+  /** Whether the gutter numbers the rows; true unless the numbers would not be the file's. */
+  numbered?: boolean;
 }
 
 /** A patch's rows, unified, numbered and highlighted like the diff; `lang` overrides its file's. */
-export function Rows<A>({ patch, lang, css, annotations, renderAnnotation }: RowsProps<A>) {
+export function Rows<A>({ patch, lang, css, annotations, renderAnnotation, numbered = true }: RowsProps<A>) {
   const theme = useStore((s) => s.theme);
   const fileDiff = useMemo(() => rowsDiff(patch, lang), [patch, lang]);
-  const options = useMemo(() => ({ ...ROWS_OPTIONS, unsafeCSS: css, themeType: theme }), [theme, css]);
+  const options = useMemo(
+    () => ({ ...ROWS_OPTIONS, unsafeCSS: css, themeType: theme, disableLineNumbers: !numbered }),
+    [theme, css, numbered],
+  );
   const prime = useCallback(
     (pool: WorkerPool) => (fileDiff ? pool.primeDiffHighlightCache(fileDiff) : Promise.resolve()),
     [fileDiff],
