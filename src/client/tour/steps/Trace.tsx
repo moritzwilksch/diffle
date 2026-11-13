@@ -94,8 +94,8 @@ export function TourTrace({
       data-trace=""
       className="tour-block mx-0 overflow-hidden rounded-md border border-border bg-canvas"
     >
-      <div data-opaque="" className="flex items-center border-b border-border bg-surface text-[0.75rem]">
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto">
+      <div data-opaque="" className="flex items-center bg-surface px-1 pt-1 text-[0.75rem]">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
           {stops.map((s, i) => (
             <button
               key={i}
@@ -110,7 +110,7 @@ export function TourTrace({
             </button>
           ))}
         </div>
-        <div className="flex-none px-2">
+        <div className="flex-none px-1">
           <Stepper titles={stops.map((s) => `${s.path}:${s.line}`)} label="Stop" steps={steps} />
         </div>
       </div>
