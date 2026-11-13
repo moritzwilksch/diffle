@@ -24,6 +24,12 @@ pub fn outline_errors(html: &str) -> Vec<TourError> {
     validate::outline(html).errors.into_iter().map(|(_, e)| e).collect()
 }
 
+/// The judgment calls about `html` that need no file of the review.
+#[cfg(test)]
+pub fn outline_warnings(html: &str) -> Vec<TourError> {
+    validate::outline(html).warnings.into_iter().map(|(_, e)| e).collect()
+}
+
 /// What checking a document found, each list in document order.
 pub struct Verdict {
     /// Reasons to refuse it; none when it is fine.

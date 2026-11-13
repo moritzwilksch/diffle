@@ -124,11 +124,23 @@ definitions, the shape of an abstraction. It holds code only, never a list of fi
 reader sees which file it comes from: diffle names the file over it. Give `line` too, the new
 side's line of its first declaration: diffle checks the file has it and opens the file there.
 Code that exists nowhere gives `lang` instead and shows no file. Write `<` as `&lt;` and `&` as
-`&amp;`. Set collaborators side by side in a row:
+`&amp;`.
+
+Format a block as the language's formatter would at the width it gets, so no line wraps: 110
+characters at full width, 49 in a column of a two-column row, 29 in a three-column one, 106 in a
+card, a tab or a `<details>` (113, 53, 33 and 109 with `path`, which shows no line numbers). A
+signature that does not fit puts each parameter on its own line and the return type after the
+closing parenthesis, as rustfmt and prettier do; diffle warns of a line that wraps. Set
+collaborators side by side in a row:
 
 ```html
 <diffle-row>
-<diffle-code path="src/auth.rs" line="12">pub fn validate(token: &amp;Token, now: Instant) -&gt; Result&lt;Claims&gt;;</diffle-code>
+<diffle-code path="src/auth.rs" line="12">
+pub fn validate(
+    token: &amp;Token,
+    now: Instant,
+) -&gt; Result&lt;Claims&gt;;
+</diffle-code>
 <diffle-code lang="rust">
 pub trait TokenStore {
     fn get(&amp;self, id: &amp;str) -&gt; Option&lt;Token&gt;;

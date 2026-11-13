@@ -121,8 +121,9 @@ mod tests {
         // One block is part of a drawing; the others are whole blocks.
         let documents = blocks.iter().map(|b| if b.starts_with("<rect") { diagram(b) } else { whole(b) });
         for html in documents {
-            let errors = crate::tour::outline_errors(&html);
-            assert!(errors.is_empty(), "{:?}", errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+            let found = [crate::tour::outline_errors(&html), crate::tour::outline_warnings(&html)].concat();
+            let messages: Vec<_> = found.iter().map(|e| &e.message).collect();
+            assert!(messages.is_empty(), "{messages:?}");
         }
     }
 
