@@ -1,8 +1,8 @@
-//! `diffle comments`, as an agent runs it beside a review: finding the run, then reading its threads.
+//! `diffle comments`, as an agent runs it beside a review: finding the run, then reading and answering its threads.
 mod common;
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Output};
+use std::process::{Child, Output, Stdio};
 
 use common::TestRepo;
 use common::cli::{http, run, serve, stderr, stdout};
@@ -53,6 +53,15 @@ fn repo() -> TestRepo {
 fn comments(repo: &Path, args: &[&str]) -> Output {
     let config = tempfile::tempdir().unwrap();
     run(config.path(), &[&["comments"], args, &["-C", repo.to_str().unwrap()]].concat())
+}
+
+/// `diffle comments <args> -C <repo>`, with `stdin` piped in.
+fn comments_stdin(repo: &Path, args: &[&str], stdin: &str) -> Output {
+    let config = tempfile::tempdir().unwrap();
+    let mut cmd = common::cli::diffle(config.path(), &[&["comments"], args, &["-C", repo.to_str().unwrap()]].concat());
+    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    std::io::Write::write_all(&mut child.stdin.take().unwrap(), stdin.as_bytes()).unwrap();
+    child.wait_with_output().unwrap()
 }
 
 fn json_out(out: &Output) -> Value {
@@ -146,6 +155,30 @@ fn lists_the_shown_threads_by_state_and_path() {
     assert_eq!(bodies(&json_out(&comments(&t.path, &["list", "--state", "open"]))), ["rename y"]);
     assert_eq!(bodies(&json_out(&comments(&t.path, &["list", "--state", "resolved"]))), ["why 2?"]);
     assert_eq!(bodies(&json_out(&comments(&t.path, &["list", "--path", "lib.py"]))), ["why 2?"]);
+}
+
+#[test]
+fn replies_to_a_thread_as_the_agent() {
+    let t = repo();
+    let served = Served::start(&t.path, &["--port", "0"]);
+    let (status, body) =
+        http(&served.url, "POST", "/api/threads", r#"{"path":"app.py","startLine":2,"body":"why y?"}"#);
+    assert!(status.contains("201"), "{status}");
+    let id = serde_json::from_str::<Value>(&body).unwrap()[0]["id"].as_str().unwrap().to_owned();
+
+    json_out(&comments(&t.path, &["reply", &id, "It counts the retries."]));
+    let replied = json_out(&comments_stdin(&t.path, &["reply", &id, "-"], "Renamed it to `retries`.\n"));
+
+    // The thread as the agent's last reply left it, as `reply` prints it.
+    insta::assert_json_snapshot!("reply", masked(replied));
+}
+
+#[test]
+fn refuses_a_reply_to_a_thread_the_review_lacks() {
+    let t = repo();
+    let _served = Served::start(&t.path, &["--port", "0"]);
+
+    assert_user_error(&comments(&t.path, &["reply", "gone", "hello"]), "no thread gone in the review");
 }
 
 /// `value` with its ids, times and comment key masked, which change from run to run.

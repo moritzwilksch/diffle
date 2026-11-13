@@ -138,7 +138,7 @@ export async function seedThreads(url: string, threads: ThreadCreate[]): Promise
   return (await response.json()) as CommentThread[];
 }
 
-/** Reply to a seeded thread directly, as `diffle comments reply` will. */
+/** Reply to a seeded thread directly, as `diffle comments reply` does. */
 export async function seedReply(url: string, threadId: string, reply: ReplyCreate): Promise<CommentThread> {
   const response = await fetch(new URL(`api/threads/${encodeURIComponent(threadId)}/replies`, url), {
     method: 'POST',

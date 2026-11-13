@@ -11,7 +11,7 @@ use crate::github::metadata::discover_github;
 use crate::github::permalink::permalink;
 use crate::github::review::ExportInput;
 use crate::protocol::{
-    GithubExportResponse, GithubMetadata, Permalink, PermalinkRequest, Snapshot, ThreadQuery, ThreadState, same_review,
+    GithubExportResponse, GithubMetadata, Permalink, PermalinkRequest, Snapshot, ThreadQuery, ThreadState,
 };
 
 /// How long one discovery answers for its snapshot before GitHub is asked again.
@@ -27,7 +27,7 @@ impl Session {
     pub async fn github_metadata(self: &Arc<Self>, snap: &Arc<Snapshot>) -> Result<GithubMetadata> {
         let a = self.active()?;
         // The snapshot must be one of the active review's: a discovery answers for one comparison.
-        if !same_review(&a.review, &snap.review) {
+        if a.review != snap.review {
             return Err(changed().into());
         }
         let task = {

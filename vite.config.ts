@@ -78,5 +78,8 @@ export default defineConfig({
     // Vite's preload helper reaches for `document`, which a worker chunk sharing it lacks. Off localhost-only
     // serving, the round trip a preload saves is negligible; the one stylesheet loads from index.html.
     modulePreload: false,
+    // The binary serves every chunk from memory on localhost, so size costs no download; the main bundle
+    // and the grammars are each well past Vite's 500 kB default.
+    chunkSizeWarningLimit: 2048,
   },
 });

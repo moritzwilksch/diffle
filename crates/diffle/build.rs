@@ -9,7 +9,10 @@ fn main() {
     println!("cargo:rerun-if-changed={schema_path}");
     let text = fs::read_to_string(schema_path).expect("read protocol schema");
     let schema: schemars::schema::RootSchema = serde_json::from_str(&text).expect("parse protocol schema");
-    let mut space = typify::TypeSpace::new(typify::TypeSpaceSettings::default().with_struct_builder(false));
+    let mut settings = typify::TypeSpaceSettings::default();
+    // Wire values compare directly: whether a review changed, whether a server's projects changed.
+    settings.with_struct_builder(false).with_derive("PartialEq".into());
+    let mut space = typify::TypeSpace::new(&settings);
     space.add_root_schema(schema).expect("convert protocol schema");
     let file = syn::parse2::<syn::File>(space.to_stream()).expect("parse generated types");
     let out = Path::new(&env::var("OUT_DIR").unwrap()).join("protocol.rs");

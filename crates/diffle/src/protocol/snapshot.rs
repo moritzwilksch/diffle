@@ -50,8 +50,3 @@ pub fn with_view(review: &Review, view: RangeView) -> Option<Review> {
     }
     Some(range)
 }
-
-/// Whether two reviews name the same thing, slice included.
-pub fn same_review(a: &Review, b: &Review) -> bool {
-    serde_json::to_value(a).ok() == serde_json::to_value(b).ok()
-}

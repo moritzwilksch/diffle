@@ -2,6 +2,8 @@
 use std::path::Path;
 
 use anyhow::{Context, bail};
+use reqwest::{Method, Response};
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
@@ -29,12 +31,26 @@ pub async fn reach(git_dir: &Path) -> Result<Diffle> {
 impl Diffle {
     /// `GET path`, relative to the server root and with its query, parsed from JSON.
     pub async fn get<T: DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
-        let response = self.http.get(self.base.join(path)?).send().await.with_context(|| format!("GET {path}"))?;
-        let status = response.status();
-        if !status.is_success() {
-            let error = response.json::<ApiError>().await.map_or_else(|e| e.to_string(), |e| e.error);
-            bail!("GET {path} answered {status}: {error}");
+        Ok(Self::success(self.send(Method::GET, path, None::<&()>).await?).await?.json().await?)
+    }
+
+    /// `method path` with `body` as JSON; the response whatever its status.
+    pub async fn send(&self, method: Method, path: &str, body: Option<&impl Serialize>) -> anyhow::Result<Response> {
+        let mut request = self.http.request(method.clone(), self.base.join(path)?);
+        if let Some(body) = body {
+            request = request.json(body);
         }
-        Ok(response.json().await?)
+        request.send().await.with_context(|| format!("{method} {path}"))
+    }
+
+    /// `response` when it succeeded, else the error the API answered.
+    pub async fn success(response: Response) -> anyhow::Result<Response> {
+        let status = response.status();
+        if status.is_success() {
+            return Ok(response);
+        }
+        let path = response.url().path().to_owned();
+        let error = response.json::<ApiError>().await.map_or_else(|e| e.to_string(), |e| e.error);
+        bail!("{path} answered {status}: {error}")
     }
 }
