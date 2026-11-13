@@ -5,9 +5,10 @@ on:
       - main
   pull_request:
 
-# A newer push to a pull request supersedes its running checks; main runs every push.
+# A newer push to a pull request supersedes its running checks; each push to main gets its own group,
+# so none is replaced while it waits.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The log is not a terminal, so cargo, clippy, vitest, oxlint and diffle itself would print plain
@@ -40,7 +41,12 @@ jobs:
           fi
           files=$(gh api --paginate "repos/$REPOSITORY/pulls/$PR/files" --jq '.[].filename')
           pattern='^(\.github/workflows/|npm/|recipe/|scripts/(package-binary|package-crate|npm-packages|smoke-binary)\.ts$|scripts/install\.(sh|ps1)$|flake\.(nix|lock)$|Cargo\.(toml|lock)$|crates/diffle/(Cargo\.toml|build\.rs)$|package(-lock)?\.json$|pixi\.(toml|lock)$|rust-toolchain\.toml$)'
-          if grep -qE "$pattern" <<< "$files"; then packaging=true; else packaging=false; fi
+          # A non-Rust file under src is an embedded asset the crate's `include` and flake.nix list by name.
+          if grep -qE "$pattern" <<< "$files" || grep -E '^crates/diffle/src/' <<< "$files" | grep -qvE '\.rs$'; then
+            packaging=true
+          else
+            packaging=false
+          fi
           echo "packaging=$packaging" | tee -a "$GITHUB_OUTPUT"
 
   nix:
@@ -103,13 +109,15 @@ jobs:
       - name: Disable autocrlf
         if: runner.os == 'Windows'
         run: git config --system core.autocrlf false
-      # Defender scans every file written to C:, which slows npm and cargo several-fold; a Dev Drive is exempt.
+      # Defender scans every file written to C: synchronously, which slows npm and cargo several-fold;
+      # on a trusted Dev Drive it scans asynchronously.
       - name: Set up Dev Drive
         if: runner.os == 'Windows'
         uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 25GB
           workspace-copy: true
+          trusted-dev-drive: true
           env-mapping: |
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             npm_config_cache,{{ DEV_DRIVE }}/.npm
