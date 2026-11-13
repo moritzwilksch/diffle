@@ -878,8 +878,17 @@ test.describe('the tour', () => {
       await expect(walk).toHaveScreenshot('tour-export-walk-dark.png');
       await file.emulateMedia({ colorScheme: 'light' });
 
-      // A symbol chip keeps the hover its language server gave at export.
+      // A symbol chip keeps the hover its language server gave at export. `l` revealed its note by a
+      // smooth scroll, which Playwright does not freeze: placing the chip mid-glide lands it elsewhere.
       const chip = file.locator('.tour-chip');
+      await file.locator('.tour-export-page').evaluate(
+        (page) =>
+          new Promise<void>((done) => {
+            let last = NaN;
+            const watch = () => (page.scrollTop === last ? done() : ((last = page.scrollTop), setTimeout(watch, 100)));
+            watch();
+          }),
+      );
       await chip.scrollIntoViewIfNeeded();
       await chip.hover();
       await expect(chip.getByRole('tooltip')).toContainText('def f() -> None');
