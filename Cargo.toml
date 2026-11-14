@@ -12,7 +12,7 @@ lto = "fat"
 codegen-units = 1
 strip = true
 
-# Optimised like release but without its slow link: the e2e suite needs a fast binary, not a small one.
+# Release without its slow link: the suite needs optimised code, not a small binary; a debug build ran it about a third slower in CI.
 [profile.e2e]
 inherits = "release"
 lto = false
