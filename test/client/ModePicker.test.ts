@@ -171,7 +171,7 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   const target = host.querySelector<HTMLInputElement>('[aria-label="Target ref"]')!;
   const swap = host.querySelector<HTMLButtonElement>('[aria-label="Swap refs"]')!;
   await act(() => swap.click());
-  expect(base.value).toBe('HEAD');
+  expect(base.value).toBe('worktree');
   expect(target.value).toBe('main');
   const toggle = host.querySelector<HTMLElement>('[role="group"][aria-label^="Comparison:"]')!;
   const key = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true });
@@ -181,7 +181,7 @@ it('swaps refs by button and x without submitting or consuming typed x', async (
   });
   expect(key.defaultPrevented).toBe(true);
   expect(base.value).toBe('main');
-  expect(target.value).toBe('HEAD');
+  expect(target.value).toBe('worktree');
   const typed = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true });
   await act(() => {
     base.focus();

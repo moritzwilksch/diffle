@@ -34,7 +34,7 @@ export function ModePicker() {
   const highlight = useStore((s) => s.highlightModeEntry);
   const [refs, setRefs] = useState<RefsResponse | null>(null);
   const [a, setA] = useState('');
-  const [b, setB] = useState('HEAD');
+  const [b, setB] = useState('worktree');
   const [dots, setDots] = useState<'..' | '...'>('...');
   // A range-diff's two ranges, `old..new` each; the bases follow the default branch until typed.
   const [ranges, setRanges] = useState({ oldBase: '', oldTip: '', newBase: '', newTip: 'HEAD' });
