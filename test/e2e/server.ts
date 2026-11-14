@@ -242,24 +242,18 @@ function clientInputsKey(root: string): string {
 
 /**
  * How to run the diffle of checkout `root`: `DIFFLE_BIN` for this checkout when set, else its
- * debug binary, or a base checkout's release binary. A base
+ * `e2e`-profile binary, or a base checkout's release binary (it may predate the profile). A base
  * checkout from before the Rust server runs its TypeScript CLI from source.
  */
 export function diffleCommand(root = REPO_ROOT): string[] {
   if (root === REPO_ROOT && process.env.DIFFLE_BIN) return [resolve(process.env.DIFFLE_BIN)];
   if (!existsSync(join(root, 'Cargo.toml')))
     return [process.execPath, join(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs'), join(root, 'src/cli/main.ts')];
-  return [join(targetDir(root), profileDir(root), process.platform === 'win32' ? 'diffle.exe' : 'diffle')];
+  return [join(targetDir(root), profile(root), process.platform === 'win32' ? 'diffle.exe' : 'diffle')];
 }
 
 function profile(root: string): string {
-  return root === REPO_ROOT ? 'dev' : 'release';
-}
-
-/** Cargo writes the `dev` profile to `target/debug`. */
-function profileDir(root: string): string {
-  const name = profile(root);
-  return name === 'dev' ? 'debug' : name;
+  return root === REPO_ROOT ? 'e2e' : 'release';
 }
 
 /** Base checkouts share this checkout's build cache: only what a commit changed recompiles. */
