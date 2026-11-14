@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.4](https://github.com/moritzwilksch/diffle/compare/v0.5.3...v0.5.4) - 2026-11-14
+
+### Features
+
+- _(mode-picker)_ Default the two-refs target to the worktree ([#476](https://github.com/moritzwilksch/diffle/pull/476))
+
 ## [0.5.3](https://github.com/moritzwilksch/diffle/compare/v0.5.2...v0.5.3) - 2026-11-13
 
 ### Bug fixes
