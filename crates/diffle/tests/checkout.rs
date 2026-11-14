@@ -1,6 +1,6 @@
 //! Entering a branch or a pull request checks it out when the worktree is clean, so language
 //! servers see the new side.
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

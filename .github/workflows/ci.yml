@@ -5,15 +5,65 @@ on:
       - main
   pull_request:
 
+# A newer push to a pull request supersedes its running checks; each push to main gets its own group,
+# so none is replaced while it waits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # The log is not a terminal, so cargo, clippy, vitest, oxlint and diffle itself would print plain
 # text; these tell each to colour anyway.
 env:
   CARGO_TERM_COLOR: always
   CLICOLOR_FORCE: 1
   FORCE_COLOR: 1
+  # Line numbers in a backtrace are all a CI failure shows; full debuginfo costs a fifth of the test build.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
+  # What a pull request's files call for; a push to main runs everything.
+  #   packaging: the release build and the packages, which only a packaging input changes.
+  #   tests: the test jobs and e2e, which a pull request of documentation alone skips.
+  #   rust: `cargo test`, which a pull request of client code alone skips; e2e still runs its binary.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      packaging: ${{ steps.diff.outputs.packaging }}
+      tests: ${{ steps.diff.outputs.tests }}
+      rust: ${{ steps.diff.outputs.rust }}
+    steps:
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        # The release pull request bumps package.json and Cargo.toml, so it runs them too.
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            printf '%s=true\n' packaging tests rust >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(gh api --paginate "repos/$REPOSITORY/pulls/$PR/files" --jq '.[].filename')
+          pattern='^(\.github/workflows/|npm/|recipe/|scripts/(package-binary|package-crate|npm-packages|smoke-binary)\.ts$|scripts/install\.(sh|ps1)$|flake\.(nix|lock)$|Cargo\.(toml|lock)$|crates/diffle/(Cargo\.toml|build\.rs)$|package(-lock)?\.json$|pixi\.(toml|lock)$|rust-toolchain\.toml$)'
+          # A non-Rust file under src is an embedded asset the crate's `include` and flake.nix list by name.
+          if grep -qE "$pattern" <<< "$files" || grep -E '^crates/diffle/src/' <<< "$files" | grep -qvE '\.rs$'; then
+            packaging=true
+          else
+            packaging=false
+          fi
+          # Each list names what a job cannot read, so a file on neither runs everything.
+          docs='^((README|AGENTS|CLAUDE|CHANGELOG)\.md$|\.(agents|claude)/|\.github/assets/)'
+          client='^(src/client/|test/client/|test/e2e/)'
+          if grep -qvE "$docs" <<< "$files"; then tests=true; else tests=false; fi
+          if grep -qvE "$docs|$client" <<< "$files"; then rust=true; else rust=false; fi
+          printf '%s\n' "packaging=$packaging" "tests=$tests" "rust=$rust" | tee -a "$GITHUB_OUTPUT"
+
   nix:
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,6 +84,8 @@ jobs:
         run: nix run . -- --help
 
   pixi-build:
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,69 +101,125 @@ jobs:
           path: output/**/*.conda
           if-no-files-found: error
 
+  # Node and Rust tests in one job, so pixi and npm set up once per runner. The Linux tests gate a
+  # merge through the `ci` job; `test-other-os` runs the same steps where they take longer.
   test:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ${{ matrix.os }}
     # A hung test fails here instead of at GitHub's six-hour limit.
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-latest
-          - windows-latest
-          - windows-11-arm
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     permissions:
       contents: read
-    steps:
+    env:
+      RUSTFLAGS: -D warnings
+    steps: &test-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
       # The runner's system config converts line endings in every repository the tests create and commit to.
       - name: Disable autocrlf
         if: runner.os == 'Windows'
         run: git config --system core.autocrlf false
-      - run: pixi run test-node
+      # Defender scans every file written to C: synchronously, which slows npm and cargo several-fold;
+      # on a trusted Dev Drive it scans asynchronously.
+      - name: Set up Dev Drive
+        if: runner.os == 'Windows'
+        uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
+        with:
+          drive-size: 25GB
+          workspace-copy: true
+          trusted-dev-drive: true
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            npm_config_cache,{{ DEV_DRIVE }}/.npm
+            TEMP,{{ DEV_DRIVE }}\tmp
+            TMP,{{ DEV_DRIVE }}\tmp
+      # TEMP holds the repositories the tests create; scanned on C:, they ran ten times slower than on Linux.
+      - name: Create the temp directory
+        if: runner.os == 'Windows'
+        run: New-Item -ItemType Directory -Force -Path $env:TEMP
+      # npm ci downloads every package on Windows otherwise; Linux fetches them fast enough.
+      - name: Restore npm cache
+        id: npm-cache
+        if: runner.os == 'Windows'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.npm_config_cache }}
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-${{ runner.arch }}-
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: ci
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+          working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: needs.changes.outputs.rust == 'true'
+        with:
+          shared-key: test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
+      - name: Node tests
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
+        run: pixi run -e ci test-node
+      # Runs after failed Node tests too, so one run reports both.
+      - name: Rust tests
+        if: ${{ !cancelled() && needs.changes.outputs.rust == 'true' }}
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
+        run: pixi run -e ci test-rust
+      - name: Save npm cache
+        if: runner.os == 'Windows' && github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.npm_config_cache }}
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
 
-  rust:
+  # macOS and Windows report on the pull request but do not gate it: they finish after the five
+  # minutes a merge should wait, and rarely fail where Linux passes. Windows arm64 runs on main
+  # alone: its runner is the slowest and rarely fails where Windows x64 passes.
+  test-other-os:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-latest
-          - windows-latest
-          - windows-11-arm
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-latest","windows-latest"]' || '["macos-latest","windows-latest","windows-11-arm"]') }}
     permissions:
       contents: read
-    # Clippy runs on Linux alone: code behind `cfg(unix)` or `cfg(windows)` is checked only here.
     env:
       RUSTFLAGS: -D warnings
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # The runner's system config converts line endings in every repository the tests create and commit to.
-      - name: Disable autocrlf
-        if: runner.os == 'Windows'
-        run: git config --system core.autocrlf false
-      - run: pixi run test-rust
+    steps: *test-steps
 
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
   # here as on every developer machine: the screenshots are the container's.
   e2e:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Pulls the browser image while cargo builds; the suite's setup would otherwise wait ~30 s on it.
+      - name: Pull the browser image
+        run: |
+          version=$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)
+          nohup docker pull --platform linux/amd64 "mcr.microsoft.com/playwright:v$version-noble" > /dev/null 2>&1 &
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: ci
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: pixi run e2e
+        with:
+          shared-key: e2e
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: pixi run -e ci e2e
       # Expected, actual and diff images plus traces for every failed scenario, and the HTML report.
       - name: Upload failure artifacts
         if: failure()
@@ -125,7 +233,7 @@ jobs:
       # Rewrites the snapshots of the failed scenarios; the Update snapshots workflow commits them.
       - name: Regenerate failed snapshots
         if: failure()
-        run: pixi run e2e --last-failed --update-snapshots
+        run: pixi run -e ci e2e --last-failed --update-snapshots
       - name: Collect changed snapshots
         if: failure()
         run: |
@@ -147,11 +255,29 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: ci
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: pixi run lefthook-run
+        with:
+          shared-key: clippy
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The `npm ci` in every job only checks the dependency tree, so drift in the lockfile's own
+      # metadata (name, version, bin, engines) passes it silently.
+      - name: Check package-lock.json is up to date
+        run: |
+          pixi run -e ci -- npm install --package-lock-only --no-audit --no-fund
+          git diff --exit-code -- package-lock.json || {
+            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
+            exit 1
+          }
+      # The hook over every file: a formatter rewrite or a stale THIRD_PARTY_NOTICES.md fails it.
+      - run: pixi run -e ci lefthook-run
 
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
   build:
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
     name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -168,8 +294,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: ci
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: pixi run package
+        with:
+          shared-key: release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: pixi run -e ci package
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: out/*
@@ -183,6 +315,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: ci
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: diffle-*
@@ -191,7 +326,7 @@ jobs:
           # Without it a .zip archive (`archive: false`) arrives unpacked, and the Windows
           # archives are lost.
           skip-decompress: true
-      - run: pixi run npm-packages
+      - run: pixi run -e ci npm-packages
       # The tarballs alone: an artifact drops file modes, which only a tarball keeps.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -200,16 +335,8 @@ jobs:
 
   # Packages the crate as crates.io receives it, client included, and compiles the package alone.
   crate:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: pixi run package-crate
-
-  lockfile:
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -217,23 +344,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
-          locked: true
-      # The `npm ci` in the other jobs only checks the dependency tree, so drift in
-      # the lockfile's own metadata (name, version, bin, engines) passes it silently.
-      # `--package-lock-only` needs no install, so this job does not run `npm ci`.
-      - name: Check package-lock.json is up to date
+          environments: ci
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: crate
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: pixi run -e ci package-crate
+
+  # The one check the main ruleset requires: jobs a pull request skips count as passed, and
+  # `test-other-os` is left out on purpose.
+  ci:
+    if: always()
+    needs: [changes, nix, pixi-build, test, e2e, lint, build, npm-packages, crate]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - env:
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: |
-          pixi run -- npm install --package-lock-only --no-audit --no-fund
-          git diff --exit-code -- package-lock.json || {
-            echo "::error file=package-lock.json::package-lock.json is out of date; run \`npm install\` and commit the result. Use Node 24 as \`engines\` requires: older npm keeps optional peer entries this npm drops, so the lockfile it writes fails here."
+          if [ "$FAILED" = true ]; then
+            echo "::error::A required job failed or was cancelled."
             exit 1
-          }
-      # The notices file is generated from Cargo.lock; the pre-commit hook regenerates it, and this
-      # catches a commit that skipped the hook or a crate whose licence about.toml does not accept.
-      - name: Check THIRD_PARTY_NOTICES.md is up to date
-        run: |
-          pixi run licenses
-          git diff --exit-code -- THIRD_PARTY_NOTICES.md || {
-            echo "::error file=THIRD_PARTY_NOTICES.md::THIRD_PARTY_NOTICES.md is out of date; run \`pixi run licenses\` and commit the result."
-            exit 1
-          }
+          fi

@@ -1,5 +1,5 @@
 //! Pull requests: naming them, fetching them into this run's refs, and reviewing them in place.
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

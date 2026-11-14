@@ -1,5 +1,5 @@
 //! Range-diff pairing and patch ids agree with `git range-diff` and `git patch-id --stable`.
-mod common;
+use crate::common;
 
 use std::io::Write;
 use std::process::{Command, Stdio};

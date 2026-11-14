@@ -1,5 +1,5 @@
 //! Threads as a pending GitHub review: building it, and creating or merging into the viewer's draft.
-mod common;
+use crate::common;
 
 use std::sync::{Arc, Mutex};
 

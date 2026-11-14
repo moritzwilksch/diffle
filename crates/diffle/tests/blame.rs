@@ -1,4 +1,4 @@
-mod common;
+use crate::common;
 
 use common::server::TestServer;
 use common::{TestRepo, revspec};

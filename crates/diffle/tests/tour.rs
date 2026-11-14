@@ -1,6 +1,6 @@
 //! Tours: pushed, refused with every reason, cleared, and kept across refreshes; and `diffle tour`
 //! as an agent runs it.
-mod common;
+use crate::common;
 
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;

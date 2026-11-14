@@ -12,6 +12,18 @@ lto = "fat"
 codegen-units = 1
 strip = true
 
+# Release without its slow link: the suite needs optimised code, not a small binary; a debug build ran it about a third slower in CI.
+[profile.e2e]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
+
+# The suite's load falls on the optimised dependencies (gix, syntect, regex); diffle's own code
+# compiles nine times faster unoptimised, and it is the one crate no cache holds.
+[profile.e2e.package.diffle]
+opt-level = 0
+
 # gix hashes worktree files in-process; unoptimised SHA-1 makes debug builds crawl over a large file.
 [profile.dev.package.sha1dc]
 opt-level = 3

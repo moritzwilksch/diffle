@@ -1,5 +1,5 @@
 //! A worktree with a submodule, a broken symlink and a nested repository; gitattributes.
-mod common;
+use crate::common;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;

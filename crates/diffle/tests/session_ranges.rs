@@ -1,5 +1,5 @@
 //! Iterations of a range and range-diffs, as the session enters, reloads and leaves them.
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

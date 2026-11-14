@@ -1,5 +1,5 @@
 //! Links to lines on origin's GitHub, judged from local refs: which sides it can show, and how.
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 
