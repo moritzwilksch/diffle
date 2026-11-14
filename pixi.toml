@@ -37,7 +37,7 @@ build-debug = { cmd = "cargo build --locked", depends-on = ["build-client"] }
 test-node = { cmd = "npm test", depends-on = ["install-node"] }
 test-rust = { cmd = "cargo test --locked --no-fail-fast", depends-on = ["build-client"] }
 build-e2e = { cmd = "cargo build --profile e2e --locked", depends-on = ["build-client"] }
-e2e = { cmd = "npm run test:e2e --", depends-on = ["build-e2e"] }
+e2e = { cmd = "npm run test:e2e --", depends-on = ["build-debug"] }
 e2e-report = { cmd = "npm run test:e2e:report", depends-on = ["install-node"] }
 # lefthook
 lefthook-run = { cmd = "lefthook run pre-commit --all-files", depends-on = ["install-node"] }
