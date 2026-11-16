@@ -69,6 +69,7 @@ const api = {
     lineWrap: true,
     blame: 'inline',
     lspCommands: { python: 'pyrefly lsp' },
+    lspSettings: {},
     githubHosts: {},
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
@@ -830,6 +831,7 @@ describe('client transitions', () => {
         lineWrap: true,
         blame: 'inline',
         lspCommands: {},
+        lspSettings: {},
         githubHosts: {},
       },
       lsp: LSP_OFF,
@@ -843,6 +845,7 @@ describe('client transitions', () => {
       lineWrap: true,
       blame: 'inline',
       lspCommands: {},
+      lspSettings: {},
       githubHosts: {},
     });
     api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
@@ -1939,6 +1942,7 @@ describe('request ownership', () => {
       lineWrap: true,
       blame: 'inline',
       lspCommands: {},
+      lspSettings: {},
       githubHosts: {},
     });
     const load = deferred<UserConfig>();

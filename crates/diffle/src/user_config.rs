@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use crate::persist::{user_config_dir, write_file_atomic};
 use crate::protocol::{BlameMode, FollowRefs, LanguageId, UserConfig, language_ids};
 
-/// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/githubHosts).
+/// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/lspSettings/githubHosts).
 #[derive(Default, Clone, Debug)]
 pub struct UserConfigPatch {
     pub auto_viewed: Option<Vec<String>>,
@@ -27,6 +27,7 @@ impl Default for UserConfig {
             line_wrap: true,
             blame: BlameMode::Inline,
             lsp_commands: HashMap::new(),
+            lsp_settings: HashMap::new(),
             github_hosts: HashMap::new(),
         }
     }
@@ -121,23 +122,44 @@ fn normalize(value: &Value) -> UserConfig {
         line_wrap,
         blame,
         lsp_commands: lsp_commands(c.get("lspCommands")),
+        lsp_settings: lsp_settings(c.get("lspSettings")),
         github_hosts: github_hosts(c.get("githubHosts")),
     }
 }
 
-/// Per-language commands, keeping only languages diffle knows: a typo would otherwise sit there
-/// looking effective. An empty value is kept, it turns the language off. Unknown keys are dropped
-/// on the next save.
+/// Per-language commands. An empty value is kept, it turns the language off.
 fn lsp_commands(value: Option<&Value>) -> HashMap<LanguageId, String> {
+    per_language("lspCommands", value, |_, command| command.as_str().map(|c| c.trim().to_owned()))
+}
+
+/// Per-language settings objects; anything else for a language is dropped with a warning.
+fn lsp_settings(value: Option<&Value>) -> HashMap<LanguageId, Map<String, Value>> {
+    per_language("lspSettings", value, |language, settings| {
+        let object = settings.as_object().cloned();
+        if object.is_none() {
+            crate::status!("[diffle] ignoring config lspSettings.{language}: not an object");
+        }
+        object
+    })
+}
+
+/// The entries of `field` keyed by a language diffle knows, as `parse` reads them: a typo would
+/// otherwise sit there looking effective. Unknown keys are dropped on the next save.
+fn per_language<T>(
+    field: &str,
+    value: Option<&Value>,
+    parse: impl Fn(&str, &Value) -> Option<T>,
+) -> HashMap<LanguageId, T> {
     let known = language_ids();
     let mut out = HashMap::new();
-    for (language, command) in value.and_then(Value::as_object).into_iter().flatten() {
-        let Some(command) = command.as_str() else { continue };
+    for (language, entry) in value.and_then(Value::as_object).into_iter().flatten() {
         match serde_json::from_value::<LanguageId>(Value::from(language.as_str())) {
             Ok(id) if known.contains(&id) => {
-                out.insert(id, command.trim().to_owned());
+                if let Some(parsed) = parse(language, entry) {
+                    out.insert(id, parsed);
+                }
             }
-            _ => crate::status!("[diffle] ignoring config lspCommands.{language}: not a language diffle knows"),
+            _ => crate::status!("[diffle] ignoring config {field}.{language}: not a language diffle knows"),
         }
     }
     out

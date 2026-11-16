@@ -473,14 +473,23 @@ async fn lsp_routes_say_language_servers_are_off() {
 }
 
 #[tokio::test]
-async fn ignores_lsp_commands_on_put_config() {
+async fn ignores_lsp_commands_and_settings_on_put_config() {
     let s = TestServer::start().await;
-    let before = s.config.get().lsp_commands;
-    let r = s.json("PUT", "/api/config", json!({ "lspCommands": { "python": "rm -rf /" }, "contextLines": 7 })).await;
+    let before = s.config.get();
+    let put = json!({
+        "lspCommands": { "python": "rm -rf /" },
+        "lspSettings": { "python": { "py": { "command": "rm -rf /" } } },
+        "contextLines": 7,
+    });
+    let r = s.json("PUT", "/api/config", put).await;
     assert_eq!(r.status, 200);
-    assert_eq!(r.json()["lspCommands"], serde_json::to_value(&before).unwrap());
+    assert_eq!(r.json()["lspCommands"], serde_json::to_value(&before.lsp_commands).unwrap());
+    assert_eq!(r.json()["lspSettings"], serde_json::to_value(&before.lsp_settings).unwrap());
     let after = s.config.get();
-    assert_eq!((after.lsp_commands, after.context_lines), (before, 7));
+    assert_eq!(
+        (after.lsp_commands, after.lsp_settings, after.context_lines),
+        (before.lsp_commands, before.lsp_settings, 7)
+    );
     s.close().await;
 }
 

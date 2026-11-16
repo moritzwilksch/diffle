@@ -88,12 +88,21 @@ struct Setup {
     env: Vec<(&'static str, Vec<(&'static str, &'static str)>)>,
     /// Real files in the root, and the snapshot reading every path as `fn main() {}`.
     on_disk: Option<Vec<(&'static str, &'static str)>>,
+    /// The user's settings per language, as the config file holds them.
+    settings: Value,
 }
 
 impl Default for Setup {
     fn default() -> Self {
         // Every override names a program the probe would not find, so the pool must not probe them.
-        Self { overrides: Vec::new(), preload: Vec::new(), lookup: Arc::new(|_| None), env: Vec::new(), on_disk: None }
+        Self {
+            overrides: Vec::new(),
+            preload: Vec::new(),
+            lookup: Arc::new(|_| None),
+            env: Vec::new(),
+            on_disk: None,
+            settings: json!({}),
+        }
     }
 }
 
@@ -131,6 +140,7 @@ fn start(setup: Setup) -> Option<Started> {
         }),
         on_status: Arc::new(move |s| record.lock().unwrap().push(s)),
         overrides: setup.overrides.into_iter().map(|(l, c)| (l, c.to_owned())).collect(),
+        settings: Arc::new(serde_json::from_value(setup.settings).unwrap()),
         preload: setup.preload,
         lookup: setup.lookup,
         max_open: None,
@@ -308,6 +318,65 @@ async fn names_rust_analyzer_the_cargo_workspaces_the_diff_reaches_again_as_it_r
             == Some(shown.clone())
     })
     .await;
+    s.pool.close().await;
+}
+
+/// What the fake logged under `prefix`, each line's JSON parsed.
+fn logged_json(s: &Started, command: &str, prefix: &str) -> Vec<Value> {
+    let lines = s.events(command).unwrap_or_default();
+    lines.iter().filter_map(|l| l.strip_prefix(prefix)).map(|j| serde_json::from_str(j).unwrap()).collect()
+}
+
+#[tokio::test]
+async fn lays_the_users_settings_over_the_built_in_ones_and_answers_each_section_with_its_own() {
+    let setup = Setup {
+        on_disk: Some(vec![("Cargo.toml", "[package]\nname = \"a\"\n")]),
+        env: vec![
+            ("rust-analyzer", vec![("FAKE_LSP_CONFIGURATION", "rust-analyzer,rust-analyzer.cargo,other,missing")]),
+            ("py-server", vec![("FAKE_LSP_CONFIGURATION", "py")]),
+        ],
+        settings: json!({
+            "rust": { "rust-analyzer": { "cargo": { "features": "all" } }, "other": { "x": 1 } },
+            "python": { "py": { "strict": true } },
+            "c": { "unused": true },
+        }),
+        ..with(&[(LanguageId::Rust, "rust-analyzer"), (LanguageId::Python, "py-server"), (LanguageId::Go, "go-server")])
+    };
+    let Some(s) = start(setup) else { return };
+    s.pool.track(&diff(&["src/lib.rs", "a.py", "b.go"])).await;
+    let manifest = s.root.join("Cargo.toml").to_string_lossy().into_owned();
+    // The built-in linkedProjects stay beside what the user added.
+    let rust = json!({
+        "rust-analyzer": { "linkedProjects": [manifest], "cargo": { "features": "all" } },
+        "other": { "x": 1 },
+    });
+    eventually("rust-analyzer's settings", || logged_json(&s, "rust-analyzer", "config ") == [rust.clone()]).await;
+    let sections = json!([rust["rust-analyzer"], { "features": "all" }, { "x": 1 }, null]);
+    eventually("rust-analyzer's sections", || logged_json(&s, "rust-analyzer", "configuration ") == [sections.clone()])
+        .await;
+    // A server with no settings of its own gets the user's alone.
+    let py = json!({ "py": { "strict": true } });
+    eventually("py-server's settings", || logged_json(&s, "py-server", "config ") == [py.clone()]).await;
+    eventually("py-server's section", || logged_json(&s, "py-server", "configuration ") == [json!([py["py"]])]).await;
+    // One nobody configured is sent none.
+    s.settle().await;
+    assert_eq!(s.events("go-server").unwrap(), ["open b.go v1"]);
+    s.pool.close().await;
+}
+
+#[tokio::test]
+async fn sends_a_shared_server_the_settings_of_a_language_it_takes_on_later() {
+    let setup = Setup {
+        settings: json!({ "cpp": { "clangd": { "fallbackFlags": ["-std=c++20"] } } }),
+        ..with(&[(LanguageId::C, "clangd-ish"), (LanguageId::Cpp, "clangd-ish")])
+    };
+    let Some(s) = start(setup) else { return };
+    s.pool.track(&diff(&["x.c"])).await;
+    s.settle().await;
+    assert!(logged_json(&s, "clangd-ish", "config ").is_empty());
+    s.pool.track(&diff(&["x.c", "y.cpp"])).await;
+    let cpp = json!({ "clangd": { "fallbackFlags": ["-std=c++20"] } });
+    eventually("the cpp settings", || logged_json(&s, "clangd-ish", "config ") == [cpp.clone()]).await;
     s.pool.close().await;
 }
 

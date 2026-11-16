@@ -214,6 +214,15 @@ Or persistently, in the config file (`diffle config` prints its path and content
 { "lspCommands": { "rust": "rust-analyzer", "java": "" } }
 ```
 
+Send a server your own settings with `lspSettings`, keyed by language like `lspCommands`.
+Diffle merges each object over its built-in settings for the server of that language, so the
+built-in values stay unless you override them. The server gets the result through
+`workspace/didChangeConfiguration` and `workspace/configuration`:
+
+```json
+{ "lspSettings": { "yaml": { "yaml": { "customTags": ["!Ref"] } } } }
+```
+
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 
