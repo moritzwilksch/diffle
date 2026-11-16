@@ -22,8 +22,13 @@ const TOUR = `
 <diffle-callout kind="danger"><p>A refund with no matching sale used to count as income.</p></diffle-callout>
 <diffle-diff path="tally/refunds.py" lines="12-22"></diffle-diff>
 <p>It takes the ledger and hands back entries:</p>
-<diffle-row>
 <diffle-code path="tally/refunds.py" line="12">def unmatched_refunds(ledger: Ledger) -&gt; list[Entry]: ...</diffle-code>
+<diffle-row>
+<diffle-code lang="python" example title="A refund nobody sold">
+&gt;&gt;&gt; unmatched_refunds(ledger)
+[Entry(account="acme", description="lamp",
+       kind="refund", ...)]
+</diffle-code>
 <diffle-code lang="python">
 class Ledger:
     entries: list[Entry]
