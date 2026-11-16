@@ -147,7 +147,7 @@ describe('a selection in the tour', () => {
     expect(textRange(root, { ...again, target: { ...again.target, occurrence: 2 } })).toBeNull();
   });
 
-  it('refuses words inside a diff or a drawing', () => {
+  it('quotes nothing inside a diff or a drawing, and names where the selection lies', () => {
     const root = article();
     const inner = root.querySelector('figure p')!.firstChild as Text;
     const range = document.createRange();
@@ -156,9 +156,7 @@ describe('a selection in the tour', () => {
     document.getSelection()!.removeAllRanges();
     document.getSelection()!.addRange(range);
 
-    expect(selectionTarget(document.getSelection(), root)).toEqual({
-      refused: 'Comment on a diff, code or a diagram as a whole',
-    });
+    expect(selectionTarget(document.getSelection(), root)).toEqual({ code: root.querySelector('figure p') });
   });
 });
 

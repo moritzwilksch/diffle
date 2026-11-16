@@ -69,20 +69,33 @@ function matchStarts(text: string, quoted: string): number[] {
   return starts;
 }
 
-/** What a thread on the selection would be on, or why it can be none; null for no selection in `article`. */
+/** The element `node` sits in, outside any shadow tree: a diff's rows render in one. */
+function lightElement(node: Node): Element | null {
+  let at: Node = node;
+  for (let root = at.getRootNode(); root instanceof ShadowRoot; root = at.getRootNode()) at = root.host;
+  return at instanceof Element ? at : at.parentElement;
+}
+
+/**
+ * What a thread on the selection would be on, or why it can be none; null for no selection in
+ * `article`. A selection in code or a drawing quotes nothing: `code` is the element it lies in, for
+ * the block around it to take the comment as a whole.
+ */
 export function selectionTarget(
   selection: Selection | null,
   article: Element,
-): { node: number[]; target: TourTargetRequest } | { refused: string } | null {
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+): { node: number[]; target: TourTargetRequest } | { refused: string } | { code: Element } | null {
+  if (!selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);
-  if (!article.contains(range.commonAncestorContainer)) return null;
+  const common = range.commonAncestorContainer;
+  const start = lightElement(common);
+  if (!start || !article.contains(start)) return null;
+  // Chrome reports a selection within a shadow tree as collapsed at its host, its words intact.
+  const shadowed = selection.isCollapsed || start !== (common instanceof Element ? common : common.parentElement);
+  if (shadowed || start.closest(`[${OPAQUE_ATTR}]`)) return selection.toString().trim() ? { code: start } : null;
   const quoted = range.toString().replace(/\s+/g, ' ').trim();
   if (!quoted) return null;
-  const common = range.commonAncestorContainer;
-  const start = common instanceof Element ? common : common.parentElement;
-  if (start?.closest(`[${OPAQUE_ATTR}]`)) return { refused: 'Comment on a diff, code or a diagram as a whole' };
-  const holder = start?.closest(`[${NODE_ATTR}]`);
+  const holder = start.closest(`[${NODE_ATTR}]`);
   if (!holder || !article.contains(holder)) return { refused: 'Select text within one block to comment on it' };
   const { text, at } = readingChars(holder);
   // The first character at or after the selection's start: whitespace before it is no part of the quote.
