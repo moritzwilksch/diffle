@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { api } from '@/client/api.js';
+import { type MouseEvent, useEffect, useState } from 'react';
 import { highlightLines } from '@/client/lsp/highlight.js';
 import { hoverControl } from '@/client/lsp/HoverTooltip.js';
+import type { TokenTarget } from '@/client/lsp/target.js';
 import { useStore } from '@/client/store.js';
 import { lspBlocker } from '@/shared/lsp.js';
 import type { Side } from '@/shared/side.js';
@@ -9,14 +9,12 @@ import type { SymbolProps } from './host.js';
 
 /**
  * A chip for the symbol `name` on `line` of `path`, coloured as the highlighter colours it on that
- * line. Hovering shows the diff's hover card, and a click lists its references, as `gA` does in the
- * diff. While the language servers cannot answer, it is coloured code naming why.
+ * line. Hovering shows the diff's hover card, and a click opens the diff's symbol menu (⌘/Ctrl+click
+ * goes to the definition). While the language servers cannot answer, it is coloured code naming why.
  */
 export function LiveSymbol({ path, line, name, side }: SymbolProps) {
   const blocker = useStore((s) =>
-    side === 'old'
-      ? 'References are asked of the new side; this symbol is on the old one'
-      : lspBlocker(s.lsp, s.snapshot, { path, feature: 'references' }),
+    side === 'old' ? 'Symbol navigation works on the new side only' : lspBlocker(s.lsp, s.snapshot, { path }),
   );
   const { col, color } = useToken(path, side, line, name);
   const style = color ? { color } : undefined;
@@ -33,12 +31,21 @@ export function LiveSymbol({ path, line, name, side }: SymbolProps) {
       className="cursor-pointer rounded-sm border-0 bg-transparent p-0 align-baseline hover:underline"
       onPointerEnter={(e) => target && hoverControl.enter(target, e.currentTarget)}
       onPointerLeave={() => hoverControl.leave()}
-      onClick={() => void references(path, line, name, col)}
-      aria-label={`References to ${name}`}
+      onClick={(e) => openMenu(target, e, `${name} is no longer on line ${line} of ${path}`)}
+      aria-haspopup="menu"
     >
       <code style={style}>{name}</code>
     </button>
   );
+}
+
+/** What a click on a symbol in the diff does: the menu, or straight to the definition with ⌘/Ctrl. */
+function openMenu(target: TokenTarget | null, e: MouseEvent, moved: string): void {
+  const store = useStore.getState();
+  hoverControl.cancel();
+  if (!target) return store.flash(moved);
+  if (e.ctrlKey || e.metaKey) return void store.goToDefinition(target);
+  void store.openSymbolMenu(target, e.clientX, e.clientY);
 }
 
 /** Where `name` sits on its line, and the colour the highlighter gives it there. */
@@ -65,18 +72,6 @@ function useToken(path: string, side: Side, line: number, name: string): { col: 
     };
   }, [path, side, line, name, theme, version]);
   return token;
-}
-
-async function references(path: string, line: number, name: string, col: number | null): Promise<void> {
-  const store = useStore.getState();
-  if (col == null) return store.flash(`${name} is no longer on line ${line} of ${path}`);
-  try {
-    const { locations, inconclusive } = await api.lspReferences({ path, line, col });
-    if (!locations.length) return store.flash(inconclusive ?? `No references to ${name}`);
-    store.showReferences({ kind: 'references', symbol: name, items: locations });
-  } catch (e) {
-    store.flash(`Finding references to ${name} failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
 }
 
 /** Where `name` first occurs in `line` as a whole word, as the server checked it when the tour was pushed. */

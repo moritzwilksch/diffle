@@ -293,9 +293,10 @@ export function useKeymap(): void {
         return; // the tree owns every other key while focused
       }
       if (isEditable(target) || e.metaKey || hasModifier(e)) return;
-      // A view covering the diff owns the keys, but for a few that act on the whole review.
+      // A view covering the diff owns the keys, but for a few that act on the whole review. An open symbol
+      // menu (a tour's symbol chip) takes its chords, `gd` / `gA` / `gy`, as in the diff.
       const view = activeView();
-      if (view.keys && !s.modeMenuOpen && !s.helpOpen) {
+      if (view.keys && !s.modeMenuOpen && !s.helpOpen && !s.symbolMenu) {
         if (view.keys(e)) {
           e.preventDefault();
           clearPending();

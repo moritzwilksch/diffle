@@ -948,7 +948,7 @@ test.describe('the tour', () => {
       await context.close();
     });
 
-    test('a symbol chip is coloured as in the diff, hovers, and lists its references; on the old side it only shows', async ({
+    test('a symbol chip is coloured as in the diff, hovers, and opens the symbol menu; on the old side it only shows', async ({
       page,
       diffle,
     }) => {
@@ -960,15 +960,23 @@ test.describe('the tour', () => {
         <diffle-symbol path="tally/ledger.py" line="15" name="Entry" side="old"></diffle-symbol>.</p>`,
       );
       const view = await showTour(page);
-      await expect(view.locator('code[title^="References are asked of the new side"]')).toHaveText('Entry');
+      await expect(view.locator('code[title="Symbol navigation works on the new side only"]')).toHaveText('Entry');
       // Both chips take the colours the highlighter gives them on their lines.
       await expect(view.locator('article p')).toHaveScreenshot('tour-symbols.png');
 
       // Hovering the chip with a server shows the diff's hover card.
-      await view.getByRole('button', { name: 'parse_row' }).hover();
+      const chip = view.getByRole('button', { name: 'parse_row' });
+      await chip.hover();
       await expect(page.locator('.hover-markdown')).toContainText('def f() -> None');
       await expect(page).toHaveScreenshot('tour-symbol-hover.png');
-      await view.getByRole('button', { name: 'parse_row' }).click();
+
+      // A click opens the diff's symbol menu over the tour; References lists them there.
+      await chip.click();
+      const menu = page.getByRole('menu');
+      await expect(menu).toBeVisible();
+      await expect(page).toHaveScreenshot('tour-symbol-menu.png');
+      await menu.getByRole('button', { name: /References/ }).click();
+      await expect(menu).toHaveCount(0);
       const list = page.getByRole('dialog', { name: 'References' });
       await expect(list).toBeVisible();
       await expect(list).toMatchAriaSnapshot({
@@ -981,7 +989,9 @@ test.describe('the tour', () => {
       await expect(view).toBeVisible();
       // The list opens once its request answers; Enter before that would reach nothing, and the open
       // list would hide the tour from role queries, so the jump is checked where it lands.
-      await view.getByRole('button', { name: 'parse_row' }).click();
+      await chip.click();
+      await expect(menu).toBeVisible();
+      await page.keyboard.type('gA');
       await expect(list).toBeVisible();
       await page.keyboard.press('Enter');
       await expect(list).toBeHidden();
@@ -989,6 +999,14 @@ test.describe('the tour', () => {
       await expect(view).toBeHidden();
       await page.keyboard.press('Control+o');
       await expect(view).toBeVisible();
+
+      // gd from the menu goes to the definition, which the fake server puts on line 2 of the same file.
+      await chip.click();
+      await expect(menu).toBeVisible();
+      await page.keyboard.type('gd');
+      await expect(menu).toHaveCount(0);
+      await expect(view).toBeHidden();
+      await expect(page.locator('[data-line][data-selected-line]').first()).toHaveAttribute('data-line', '2');
     });
   });
 });
