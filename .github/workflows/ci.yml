@@ -4,6 +4,8 @@ on:
     branches:
       - main
   pull_request:
+  # Runs the packaging jobs on a branch: `gh workflow run ci.yml --ref <branch>`.
+  workflow_dispatch:
 
 # A newer push to a pull request supersedes its running checks; each push to main gets its own group,
 # so none is replaced while it waits.
@@ -21,49 +23,10 @@ env:
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
-  # What a pull request's files call for; a push to main runs everything.
-  #   packaging: the release build and the packages, which only a packaging input changes.
-  #   tests: the test jobs and e2e, which a pull request of documentation alone skips.
-  #   rust: `cargo test`, which a pull request of client code alone skips; e2e still runs its binary.
-  changes:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    outputs:
-      packaging: ${{ steps.diff.outputs.packaging }}
-      tests: ${{ steps.diff.outputs.tests }}
-      rust: ${{ steps.diff.outputs.rust }}
-    steps:
-      - id: diff
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT: ${{ github.event_name }}
-          REPOSITORY: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-        # The release pull request bumps package.json and Cargo.toml, so it runs them too.
-        run: |
-          if [ "$EVENT" != pull_request ]; then
-            printf '%s=true\n' packaging tests rust >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          files=$(gh api --paginate "repos/$REPOSITORY/pulls/$PR/files" --jq '.[].filename')
-          pattern='^(\.github/workflows/|npm/|recipe/|scripts/(package-binary|package-crate|npm-packages|smoke-binary)\.ts$|scripts/install\.(sh|ps1)$|flake\.(nix|lock)$|Cargo\.(toml|lock)$|crates/diffle/(Cargo\.toml|build\.rs)$|package(-lock)?\.json$|pixi\.(toml|lock)$|rust-toolchain\.toml$)'
-          # A non-Rust file under src is an embedded asset the crate's `include` and flake.nix list by name.
-          if grep -qE "$pattern" <<< "$files" || grep -E '^crates/diffle/src/' <<< "$files" | grep -qvE '\.rs$'; then
-            packaging=true
-          else
-            packaging=false
-          fi
-          # Each list names what a job cannot read, so a file on neither runs everything.
-          docs='^((README|AGENTS|CLAUDE|CHANGELOG)\.md$|\.(agents|claude)/|\.github/assets/)'
-          client='^(src/client/|test/client/|test/e2e/)'
-          if grep -qvE "$docs" <<< "$files"; then tests=true; else tests=false; fi
-          if grep -qvE "$docs|$client" <<< "$files"; then rust=true; else rust=false; fi
-          printf '%s\n' "packaging=$packaging" "tests=$tests" "rust=$rust" | tee -a "$GITHUB_OUTPUT"
-
+  # The release build and the packages (nix, pixi-build, build, npm-packages, crate) run on main and
+  # on dispatch; a pull request skips them, so a packaging break first shows on main.
   nix:
-    needs: changes
-    if: needs.changes.outputs.packaging == 'true'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -84,8 +47,7 @@ jobs:
         run: nix run . -- --help
 
   pixi-build:
-    needs: changes
-    if: needs.changes.outputs.packaging == 'true'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -104,8 +66,6 @@ jobs:
   # Node and Rust tests in one job, so pixi and npm set up once per runner. A pull request tests on
   # Linux alone, which finishes in the five minutes a merge should wait; main adds macOS and Windows.
   test:
-    needs: changes
-    if: needs.changes.outputs.tests == 'true'
     runs-on: ${{ matrix.os }}
     # A hung test fails here instead of at GitHub's six-hour limit.
     timeout-minutes: 30
@@ -156,7 +116,6 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        if: needs.changes.outputs.rust == 'true'
         with:
           shared-key: test
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -166,7 +125,7 @@ jobs:
         run: pixi run -e ci test-node
       # Runs after failed Node tests too, so one run reports both.
       - name: Rust tests
-        if: ${{ !cancelled() && needs.changes.outputs.rust == 'true' }}
+        if: ${{ !cancelled() }}
         working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: pixi run -e ci test-rust
       - name: Save npm cache
@@ -179,8 +138,6 @@ jobs:
   # The runner and diffle run on the host, the browser in Playwright's container (compose.yml),
   # here as on every developer machine: the screenshots are the container's.
   e2e:
-    needs: changes
-    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -257,8 +214,7 @@ jobs:
 
   # Builds and smoke-tests the release binaries so a packaging break shows up before a tag.
   build:
-    needs: changes
-    if: needs.changes.outputs.packaging == 'true'
+    if: github.event_name != 'pull_request'
     name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -316,8 +272,7 @@ jobs:
 
   # Packages the crate as crates.io receives it, client included, and compiles the package alone.
   crate:
-    needs: changes
-    if: needs.changes.outputs.packaging == 'true'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -333,10 +288,10 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: pixi run -e ci package-crate
 
-  # The one check the main ruleset requires; jobs a pull request skips count as passed.
+  # The one check the main ruleset requires; the packaging jobs a pull request skips count as passed.
   ci:
     if: always()
-    needs: [changes, nix, pixi-build, test, e2e, lint, build, npm-packages, crate]
+    needs: [nix, pixi-build, test, e2e, lint, build, npm-packages, crate]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
