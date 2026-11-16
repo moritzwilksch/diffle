@@ -72,7 +72,11 @@ function repeats(body: Element): Map<Text, TermUse[]> {
       found.push({ start, end, def });
       shown.set(key, section);
     }
-    if (found.length) uses.set(text, found.sort((a, b) => a.start - b.start));
+    if (found.length)
+      uses.set(
+        text,
+        found.sort((a, b) => a.start - b.start),
+      );
   };
   const visit = (node: Node, top: boolean) => {
     if (node instanceof Text) return mark(node);

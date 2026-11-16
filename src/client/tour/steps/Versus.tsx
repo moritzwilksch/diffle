@@ -5,7 +5,6 @@ import { type LineRange, primitive, rangeOf } from '@/client/tour/document.js';
 import { oneSide } from '@/client/tour/excerpt.js';
 import { useHost } from '@/client/tour/host/host.js';
 import { ExcerptNotice, useExcerpt } from '@/client/tour/primitives/Diff.js';
-import { TourJump } from '@/client/tour/primitives/Jump.js';
 import type { TourOutcome } from '@/shared/tour-catalog.js';
 import { StepBadge, Stepper } from './Stepper.js';
 import { reveal, useSteps } from './steps.js';
@@ -43,7 +42,15 @@ function readSteps(source: Element, render: (part: Element) => ReactNode): Step[
     const after = runs.find((r) => r.localName === 'diffle-after');
     const title = ((after ?? before ?? el).textContent ?? '').trim().replace(/\s+/g, ' ');
     if (!before && !after) return [{ shared: true, run: run(el), place: placeOf(el), title }];
-    return [{ shared: false, before: before ? run(before) : null, after: after ? run(after) : null, place: placeOf(el), title }];
+    return [
+      {
+        shared: false,
+        before: before ? run(before) : null,
+        after: after ? run(after) : null,
+        place: placeOf(el),
+        title,
+      },
+    ];
   });
 }
 
@@ -81,7 +88,9 @@ export function TourVersus({
     });
     return () => cancelAnimationFrame(id);
   }, [active]);
-  const tones = new Set(steps.flatMap((s) => (s.shared ? [] : [s.before?.tone, s.after?.tone])).filter((t) => t != null));
+  const tones = new Set(
+    steps.flatMap((s) => (s.shared ? [] : [s.before?.tone, s.after?.tone])).filter((t) => t != null),
+  );
   return (
     <figure
       ref={frame}
@@ -102,10 +111,13 @@ export function TourVersus({
         <Stepper titles={steps.map((s) => s.title)} label="Step" steps={stepping} />
       </figcaption>
       <div className="tour-versus">
-        <div data-opaque="" className="tour-versus-head" aria-hidden>
-          <span />
-          <span>Before</span>
-          <span>After</span>
+        {/* Two lanes, the old run's and the new run's, either side of the spine the steps sit on. */}
+        <div data-opaque="" className="tour-versus-lane" data-lane="before" aria-hidden>
+          Before
+        </div>
+        <div data-opaque="" className="tour-versus-spine" aria-hidden />
+        <div data-opaque="" className="tour-versus-lane" data-lane="after" aria-hidden>
+          After
         </div>
         {steps.map((step, i) => (
           <div
@@ -128,8 +140,8 @@ export function TourVersus({
               <RunCell run={step.run} wide />
             ) : (
               <>
-                <RunCell run={step.before} />
-                <RunCell run={step.after} />
+                <RunCell run={step.before} lane="before" />
+                <RunCell run={step.after} lane="after" />
               </>
             )}
           </div>
@@ -154,11 +166,11 @@ export function TourVersus({
   );
 }
 
-/** One run's part of a step: its sentence, marked by its outcome, over the line it names. */
-function RunCell({ run, wide = false }: { run: Run | null; wide?: boolean }) {
+/** One run's part of a step in its lane, or a shared step across both: its sentence, marked by its outcome, over the line it names. */
+function RunCell({ run, wide = false, lane }: { run: Run | null; wide?: boolean; lane?: 'before' | 'after' }) {
   if (!run) {
     return (
-      <div data-opaque="" className="tour-versus-cell" data-ended="">
+      <div data-opaque="" className="tour-versus-cell" data-lane={lane} data-ended="">
         Run ended
       </div>
     );
@@ -167,7 +179,7 @@ function RunCell({ run, wide = false }: { run: Run | null; wide?: boolean }) {
   // A shared step's sentence is its own element, whose place the row carries.
   const place = wide ? {} : run.place;
   return (
-    <div {...place} className="tour-versus-cell" data-tone={run.tone} data-wide={wide || undefined}>
+    <div {...place} className="tour-versus-cell" data-lane={lane} data-tone={run.tone} data-wide={wide || undefined}>
       <div className="flex gap-1.5">
         {outcome && <outcome.Icon size="0.875rem" className="tour-versus-outcome" aria-label={outcome.label} />}
         <div className="min-w-0">{run.content}</div>
@@ -184,13 +196,27 @@ function RunLine({ range }: { range: LineRange }) {
   const patch = useMemo(() => (shown.state === 'ready' ? oneSide(shown.patch, range.side) : ''), [shown, range.side]);
   return (
     <div data-opaque="" className="tour-versus-line">
-      <div className="flex items-center gap-1 px-2 py-0.5 text-[0.6875rem] text-muted">
-        <span className="min-w-0 flex-1 truncate font-mono">
-          {range.path.split('/').pop()}:{range.start}
-        </span>
-        <TourJump path={range.path} line={range.start} side={range.side} label="Open" placed />
+      <RunPlace range={range} />
+      <div className="tour-versus-code">
+        {shown.state === 'ready' ? <Rows patch={patch} /> : <ExcerptNotice shown={shown} range={range} />}
       </div>
-      {shown.state === 'ready' ? <Rows patch={patch} /> : <ExcerptNotice shown={shown} range={range} />}
     </div>
+  );
+}
+
+/** A run's file and line, a quiet link into the diff where one stands behind the tour. */
+function RunPlace({ range }: { range: LineRange }) {
+  const { open } = useHost();
+  const label = `${range.path.split('/').pop()}:${range.start}`;
+  if (!open) return <span className="tour-versus-place">{label}</span>;
+  return (
+    <button
+      type="button"
+      className="tour-versus-place"
+      title={`Open ${range.path}:${range.start}${range.side === 'old' ? ' (before)' : ''} in the diff`}
+      onClick={() => open(range.path, range.start, range.side)}
+    >
+      {label}
+    </button>
   );
 }

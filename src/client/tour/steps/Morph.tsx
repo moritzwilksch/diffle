@@ -59,7 +59,12 @@ export function TourMorph({ of, renderState }: { of: Element; renderState: (stat
         data-opaque=""
         className="flex items-center justify-end border-b border-border bg-surface px-2 py-1 text-[0.75rem]"
       >
-        <div role="tablist" aria-label="States" data-targeted={steps.targeted || undefined} className="tour-morph-states">
+        <div
+          role="tablist"
+          aria-label="States"
+          data-targeted={steps.targeted || undefined}
+          className="tour-morph-states"
+        >
           {STATES.map((s, i) => (
             <button
               key={s.state}

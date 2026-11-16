@@ -53,7 +53,7 @@ export function TourTerm({ def, defines, children }: { def: string; defines: boo
       {anchor && (
         <TipSurface
           anchor={anchor}
-          className="pointer-events-none max-w-[min(22rem,_90vw)] origin-top-left text-[0.8125rem] leading-[1.45] [animation:tip-in_150ms_ease-out] motion-reduce:animate-none"
+          className="pointer-events-none max-w-[min(22rem,_90vw)] origin-top-left [animation:tip-in_150ms_ease-out] text-[0.8125rem] leading-[1.45] motion-reduce:animate-none"
         >
           {def}
         </TipSurface>

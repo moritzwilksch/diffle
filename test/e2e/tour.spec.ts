@@ -158,11 +158,11 @@ const CHANGES = `
 <diffle-after>Rounding lives in the currency module, and a refund check reads the ledger.</diffle-after>
 </diffle-morph>
 <p>A sale and its refund cancel out:</p>
-<diffle-diagram><svg viewBox="0 0 336 52">
-  <g class="contrast-a"><rect x="8" y="12" width="96" height="28"/><svg data-lucide="circle-plus" x="16" y="19"/><text x="36" y="26">Sale 80.00</text></g>
-  <g class="contrast-b"><rect x="120" y="12" width="104" height="28"/><svg data-lucide="circle-minus" x="128" y="19"/><text x="148" y="26">Refund 80.00</text></g>
-  <path d="M224 26 H256" class="arrow"/>
-  <rect x="256" y="12" width="72" height="28"/><text x="264" y="26">Total 0</text>
+<diffle-diagram><svg viewBox="0 0 352 52">
+  <g class="contrast-a"><rect x="8" y="12" width="104" height="28"/><svg data-lucide="circle-plus" x="16" y="19"/><text x="36" y="26">Sale 80.00</text></g>
+  <g class="contrast-b"><rect x="128" y="12" width="112" height="28"/><svg data-lucide="circle-minus" x="136" y="19"/><text x="156" y="26">Refund 80.00</text></g>
+  <path d="M240 26 H272" class="arrow"/>
+  <rect x="272" y="12" width="72" height="28"/><text x="280" y="26">Total 0</text>
 </svg></diffle-diagram>
 `;
 
@@ -667,11 +667,12 @@ test.describe('the tour', () => {
     await defined.hover();
     const tip = page.getByRole('tooltip');
     await expect(tip).toHaveText('Whether a row is a sale or a refund: the new kind column, a sale when empty.');
-    // The tip hangs outside the paragraph, so the shot spans both.
-    const [text, hung] = [(await defined.locator('xpath=..').boundingBox())!, (await tip.boundingBox())!];
-    const [left, top] = [Math.min(text.x, hung.x) - 8, Math.min(text.y, hung.y) - 8];
-    const right = Math.max(text.x + text.width, hung.x + hung.width) + 8;
-    const bottom = Math.max(text.y + text.height, hung.y + hung.height) + 8;
+    // The tip hangs outside the term's line, so the shot spans both, and nothing else on the page.
+    const [text, hung] = [(await defined.boundingBox())!, (await tip.boundingBox())!];
+    // Whole pixels, so the shot keeps its size wherever the page scrolled to.
+    const [left, top] = [Math.floor(Math.min(text.x, hung.x)) - 8, Math.floor(Math.min(text.y, hung.y)) - 8];
+    const right = Math.ceil(Math.max(text.x + text.width, hung.x + hung.width)) + 8;
+    const bottom = Math.ceil(Math.max(text.y + text.height, hung.y + hung.height)) + 8;
     await expect(page).toHaveScreenshot('tour-term.png', {
       clip: { x: left, y: top, width: right - left, height: bottom - top },
     });
