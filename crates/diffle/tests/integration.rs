@@ -1,0 +1,37 @@
+//! The integration tests, one module per area, linked as one binary.
+mod common;
+
+mod activity;
+mod agent;
+mod batch;
+mod blame;
+mod checkout;
+mod cli;
+mod comments;
+mod diff_parity;
+mod git;
+mod github;
+mod github_client;
+mod github_hosts;
+mod gix_parity;
+mod hostile;
+mod local_remote;
+mod lsp_process;
+mod lsp_projects;
+mod lsp_registry;
+mod permalink;
+mod pr_cli;
+mod pr_mode;
+mod prompt;
+mod replay;
+mod series_parity;
+mod server;
+mod server_images;
+mod session;
+mod session_ranges;
+mod snapshot;
+mod tour;
+mod tour_comments;
+mod user_config;
+mod watcher;
+mod worktree_kinds;

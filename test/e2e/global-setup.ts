@@ -3,7 +3,7 @@ import { ensureBrowserServer } from './browser-server.js';
 import { diffleCommand } from './server.js';
 
 /**
- * The suite drives the release binary, which embeds `crates/diffle/client`; `pixi run e2e` builds
+ * The suite drives the `e2e`-profile binary, which embeds `crates/diffle/client`; `pixi run e2e` builds
  * both first, and `DIFFLE_BIN=<path>` names another build. Then make sure the browser container
  * answers; the teardown stops what this started.
  */

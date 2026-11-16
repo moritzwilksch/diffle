@@ -2,11 +2,13 @@ output: [summary]
 no_auto_install: true
 templates:
   run: run --as-is --quiet --no-progress
+  # The environment the hook runs in (CI's slim `ci`), or the default from a plain shell.
+  env: -e "${PIXI_ENVIRONMENT_NAME:-default}"
 pre-commit:
   fail_on_changes: always
   jobs:
     - name: pixi-install
-      run: pixi install --quiet --no-progress
+      run: pixi install {env} --quiet --no-progress
     - name: format
       run: npm run format -- --no-error-on-unmatched-pattern {staged_files}
     - name: rustfmt
@@ -25,7 +27,7 @@ pre-commit:
       run: npm run check-version
     - name: licenses
       glob: "{Cargo.lock,package-lock.json,about.toml,about.hbs,vite.config.ts,vite.plugins.ts,scripts/licenses*}"
-      run: pixi run licenses
+      run: pixi run {env} licenses
     - name: zizmor
       glob: "*.{yml,yaml}"
-      run: pixi {run} zizmor --no-progress --min-severity high --fix --offline .
+      run: pixi {run} {env} zizmor --no-progress --min-severity high --fix --offline .
