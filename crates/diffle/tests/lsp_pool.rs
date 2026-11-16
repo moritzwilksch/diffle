@@ -365,18 +365,22 @@ async fn lays_the_users_settings_over_the_built_in_ones_and_answers_each_section
 }
 
 #[tokio::test]
-async fn sends_a_shared_server_the_settings_of_a_language_it_takes_on_later() {
+async fn sends_a_shared_server_the_settings_of_a_language_it_takes_on_later_in_the_order_of_their_names() {
     let setup = Setup {
-        settings: json!({ "cpp": { "clangd": { "fallbackFlags": ["-std=c++20"] } } }),
+        settings: json!({
+            "c": { "clangd": { "fallbackFlags": ["-std=c17"], "c": true } },
+            "cpp": { "clangd": { "fallbackFlags": ["-std=c++20"] } },
+        }),
         ..with(&[(LanguageId::C, "clangd-ish"), (LanguageId::Cpp, "clangd-ish")])
     };
     let Some(s) = start(setup) else { return };
-    s.pool.track(&diff(&["x.c"])).await;
-    s.settle().await;
-    assert!(logged_json(&s, "clangd-ish", "config ").is_empty());
-    s.pool.track(&diff(&["x.c", "y.cpp"])).await;
+    s.pool.track(&diff(&["y.cpp"])).await;
     let cpp = json!({ "clangd": { "fallbackFlags": ["-std=c++20"] } });
     eventually("the cpp settings", || logged_json(&s, "clangd-ish", "config ") == [cpp.clone()]).await;
+    // c arrives second but sorts first, so cpp's flags still win.
+    s.pool.track(&diff(&["y.cpp", "x.c"])).await;
+    let both = json!({ "clangd": { "fallbackFlags": ["-std=c++20"], "c": true } });
+    eventually("the merged settings", || logged_json(&s, "clangd-ish", "config ") == [cpp.clone(), both.clone()]).await;
     s.pool.close().await;
 }
 

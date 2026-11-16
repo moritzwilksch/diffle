@@ -10,7 +10,7 @@ use super::configuration::merge_settings;
 use super::documents::ReadFn;
 use super::locator::HasFn;
 use super::process::{ProcessOptions, SettingsFuture};
-use super::registry::{Lookup, ServerContext, ServerDefinition, definition_of};
+use super::registry::{Lookup, ServerContext, ServerDefinition, definition_of, name};
 use crate::protocol::{LanguageId, LspProcessStatus, LspProjects, LspServerStatus};
 use crate::user_config::LspSettings;
 
@@ -53,8 +53,9 @@ pub struct PoolServer {
     on_status: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// The built-in settings with the user's for `languages` laid over them, in that order; none when
-/// neither has any, so a server nobody configured is sent nothing.
+/// The built-in settings with the user's for `languages` laid over them, sorted by name so the
+/// result does not depend on the order the diff revealed them; none when neither has any, so a
+/// server nobody configured is sent nothing.
 fn settings_of(
     definition: &ServerDefinition,
     ctx: &ServerContext,
@@ -62,7 +63,9 @@ fn settings_of(
     languages: &[LanguageId],
 ) -> Option<SettingsFuture> {
     let builtin = definition.settings.map(|settings| settings(ctx));
-    let layers: Vec<Value> = languages.iter().filter_map(|l| user.get(l)).map(|s| Value::Object(s.clone())).collect();
+    let mut configured: Vec<LanguageId> = languages.iter().copied().filter(|l| user.contains_key(l)).collect();
+    configured.sort_by_key(|l| name(*l));
+    let layers: Vec<Value> = configured.iter().map(|l| Value::Object(user[l].clone())).collect();
     if builtin.is_none() && layers.is_empty() {
         return None;
     }
