@@ -19,7 +19,7 @@ export interface TourHeading {
 /** An `h2` section: a step of the walk, with its `h3` subsections. */
 export interface TourSection extends TourHeading {
   subsections: TourHeading[];
-  /** The lines its `diffle-diff`s, `diffle-walk`s and `diffle-stop`s show, which decide whether it holds a stale one. */
+  /** The lines its diffs, walks, stops and versus steps show, which decide whether it holds a stale one. */
   ranges: LineRange[];
 }
 
@@ -72,7 +72,14 @@ export function lineSpan(lines: string): [number, number] {
 /** An element that shows lines of the review. */
 type Ranged = Extract<TourElement, { tag: 'diffle-diff' | 'diffle-walk' | 'diffle-stop' }>;
 
-/** The review's lines `element` shows: a diff's or a walk's `lines`, a stop's `line`; null for any other element. */
+/** The tags whose elements show lines of the review. */
+const RANGED = 'diffle-diff, diffle-walk, diffle-stop, diffle-step, diffle-before, diffle-after';
+
+/**
+ * The review's lines `element` shows: a diff's or a walk's `lines`, a stop's `line`, the line of a
+ * versus step that names one (a `diffle-before`'s on the old side, a `diffle-after`'s on the new);
+ * null for any other element.
+ */
 export function rangeOf(element: Ranged): LineRange;
 export function rangeOf(element: TourElement): LineRange | null;
 export function rangeOf(element: TourElement): LineRange | null {
@@ -86,14 +93,23 @@ export function rangeOf(element: TourElement): LineRange | null {
       const line = Number(element.line);
       return { path: element.path, side: element.side ?? 'new', start: line, end: line };
     }
+    case 'diffle-step':
+    case 'diffle-before':
+    case 'diffle-after': {
+      if (element.path == null || element.line == null) return null;
+      const line = Number(element.line);
+      const side =
+        element.tag === 'diffle-step' ? (element.side ?? 'new') : element.tag === 'diffle-before' ? 'old' : 'new';
+      return { path: element.path, side, start: line, end: line };
+    }
     default:
       return null;
   }
 }
 
-/** The lines of the `diffle-diff`s, `diffle-walk`s and `diffle-stop`s at or inside `el`. */
+/** The lines the elements at or inside `el` show. */
 function rangesIn(el: Element): LineRange[] {
-  return [el, ...el.querySelectorAll('diffle-diff, diffle-walk, diffle-stop')].flatMap((found) => {
+  return [el, ...el.querySelectorAll(RANGED)].flatMap((found) => {
     const element = primitive(found);
     const range = element && rangeOf(element);
     return range ? [range] : [];

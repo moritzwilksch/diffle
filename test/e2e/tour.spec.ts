@@ -126,6 +126,46 @@ const COMMENTED = `
 <p>Any other kind is refused.</p>
 `;
 
+/** The blocks that set the old code against the new: a versus, a morph, a contrast diagram, and a term. */
+const CHANGES = `
+<h2>Refunds count negative</h2>
+<p>A refund row used to count as a sale. Each row now carries a <diffle-term def="Whether a row is a sale or a refund: the new kind column, a sale when empty.">kind</diffle-term>, and the total reads it.</p>
+<diffle-versus input="A refund row: 1 gadget at 80.00">
+<diffle-step path="tally/cli.py" line="25">The CLI reads and merges the ledger.</diffle-step>
+<diffle-step>
+<diffle-before path="tally/ledger.py" line="64">Parsing knows no kind column.</diffle-before>
+<diffle-after path="tally/ledger.py" line="77">Parsing reads the kind, <code>refund</code>.</diffle-after>
+</diffle-step>
+<diffle-step>
+<diffle-before path="tally/ledger.py" line="26" tone="error">The total adds 80.00 as income.</diffle-before>
+<diffle-after path="tally/ledger.py" line="34" tone="success">The total subtracts 80.00.</diffle-after>
+</diffle-step>
+</diffle-versus>
+<h2>Rounding moves to the currency module</h2>
+<p>Every row's kind decides its sign before the totals are rounded.</p>
+<diffle-morph><svg viewBox="0 0 448 112">
+  <rect x="8" y="16" width="64" height="28"/><text x="16" y="30">CLI</text>
+  <path d="M72 30 H104" class="arrow"/>
+  <rect x="104" y="16" width="80" height="28"/><text x="112" y="30">Ledger</text>
+  <path d="M184 30 H216" class="arrow"/>
+  <rect x="216" y="16" width="80" height="28"/><text x="224" y="30">Totals</text>
+  <g in="before"><path d="M256 44 V68" class="arrow"/></g>
+  <g in="after"><path d="M296 30 H312 V82 H344" class="arrow"/><rect x="328" y="48" width="112" height="56" class="frame"/><text x="336" y="60" class="eyebrow">currency.py</text></g>
+  <g in="after"><path d="M144 44 V68" class="arrow"/><rect x="104" y="68" width="80" height="28"/><text x="112" y="82">Refunds</text></g>
+  <g move="128 0"><rect x="216" y="68" width="80" height="28"/><text x="224" y="82">Rounding</text></g>
+</svg>
+<diffle-before>The ledger rounds its own totals.</diffle-before>
+<diffle-after>Rounding lives in the currency module, and a refund check reads the ledger.</diffle-after>
+</diffle-morph>
+<p>A sale and its refund cancel out:</p>
+<diffle-diagram><svg viewBox="0 0 336 52">
+  <g class="contrast-a"><rect x="8" y="12" width="96" height="28"/><svg data-lucide="circle-plus" x="16" y="19"/><text x="36" y="26">Sale 80.00</text></g>
+  <g class="contrast-b"><rect x="120" y="12" width="104" height="28"/><svg data-lucide="circle-minus" x="128" y="19"/><text x="148" y="26">Refund 80.00</text></g>
+  <path d="M224 26 H256" class="arrow"/>
+  <rect x="256" y="12" width="72" height="28"/><text x="264" y="26">Total 0</text>
+</svg></diffle-diagram>
+`;
+
 /** A card and a diagram to comment on as a whole. */
 const BLOCKS = `
 <h2>Parsing reads the kind column</h2>
@@ -521,6 +561,122 @@ test.describe('the tour', () => {
     );
     expect(prompt).toContain('> Is exit code 1 right for an empty ledger?\n\nYes: scripts treat it as a failure.');
     expect(prompt).not.toContain('strict enough');
+  });
+
+  test('a versus runs the old and the new code on one input, side by side, one step lit at a time', async ({
+    page,
+    diffle,
+    browser,
+  }, testInfo) => {
+    await pushTour(diffle.url, CHANGES);
+    const view = await showTour(page);
+    const versus = view.locator('figure[data-versus]');
+    await versus.scrollIntoViewIfNeeded();
+    // Each run shows its own side's line: the old run's as removed, the new run's as added.
+    await expect(versus.locator('diffs-container')).toHaveCount(5);
+    await expect(versus.locator('.tour-versus-row')).toHaveCount(3);
+    await expect(versus.getByLabel('fails', { exact: true })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(versus).toHaveScreenshot('tour-versus.png');
+
+    await versus
+      .getByRole('button', { name: /^Step 3/ })
+      .first()
+      .click();
+    await expect(versus.locator('.tour-versus-row[data-lit]')).toContainText('subtracts 80.00');
+    await page.mouse.move(0, 0);
+    await expect(versus).toHaveScreenshot('tour-versus-step.png');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(versus).toHaveScreenshot('tour-versus-dark.png');
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    // h steps back, and the taken number again returns the runs to rest.
+    await page.keyboard.press('h');
+    await expect(versus.locator('.tour-versus-row[data-lit]')).toContainText('reads the kind');
+    await versus
+      .getByRole('button', { name: /^Step 2/ })
+      .first()
+      .click();
+    await expect(versus.locator('.tour-versus-row[data-lit]')).toHaveCount(0);
+
+    // An export keeps each run's line, the morph's states and the terms' definitions.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Export' }).click(),
+    ]);
+    const saved = testInfo.outputPath('changes.html');
+    await download.saveAs(saved);
+    const file = await (await browser.newContext()).newPage();
+    await file.setContent(await readFile(saved, 'utf8'));
+    const baked = file.locator('figure[data-versus]');
+    await baked.scrollIntoViewIfNeeded();
+    await expect(baked).toHaveScreenshot('tour-export-versus.png');
+    await file.locator('figure[data-morph-block]').getByRole('tab', { name: 'Diff' }).click();
+    await expect(file.locator('figure[data-morph-block] .tour-legend')).toContainText('where it was');
+    await file.locator('dfn.tour-term').hover();
+    await expect(file.getByRole('tooltip')).toContainText('sale or a refund');
+  });
+
+  test('a morph switches its drawing between before and after, and its Diff colours the change', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, CHANGES);
+    const view = await showTour(page);
+    const morph = view.locator('figure[data-morph-block]');
+    const state = (name: string) => morph.getByRole('tab', { name });
+    await morph.scrollIntoViewIfNeeded();
+    await expect(state('Before')).toHaveAttribute('aria-selected', 'true');
+    await expect(morph.locator('.tour-note')).toContainText('rounds its own totals');
+    await page.mouse.move(0, 0);
+    await expect(morph).toHaveScreenshot('tour-morph-before.png');
+
+    await state('After').click();
+    await expect(morph.locator('.tour-note')).toContainText('currency module');
+    await page.mouse.move(0, 0);
+    await expect(morph).toHaveScreenshot('tour-morph-after.png');
+
+    // The Diff shows both states at once, the change coloured over where the moved part was.
+    await state('Diff').click();
+    await page.mouse.move(0, 0);
+    await expect(state('Diff')).toHaveAttribute('aria-selected', 'true');
+    await expect(morph.locator('.tour-legend')).toHaveText(/added.*removed.*moved.*where it was/);
+    await expect(morph).toHaveScreenshot('tour-morph-diff.png');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(morph).toHaveScreenshot('tour-morph-diff-dark.png');
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    const contrast = view.locator('svg.tour-diagram').last();
+    await expect(contrast).toHaveScreenshot('tour-diagram-contrast.png');
+  });
+
+  test('a term shows its definition on hover, and again at its first use in a later section', async ({
+    page,
+    diffle,
+  }) => {
+    await pushTour(diffle.url, CHANGES);
+    const view = await showTour(page);
+    const defined = view.locator('dfn.tour-term');
+    await expect(defined).toHaveText('kind');
+    const repeated = view.locator('span.tour-term');
+    // The versus's sentences in the first section say "kind" again, plainly; the next section's first use repeats the definition.
+    await expect(repeated).toHaveCount(1);
+    await expect(repeated).toHaveAttribute('aria-description', /sale or a refund/);
+    await expect(view.locator('h2').nth(1).locator('xpath=following-sibling::p[1]')).toContainText('kind decides');
+
+    await defined.hover();
+    const tip = page.getByRole('tooltip');
+    await expect(tip).toHaveText('Whether a row is a sale or a refund: the new kind column, a sale when empty.');
+    // The tip hangs outside the paragraph, so the shot spans both.
+    const [text, hung] = [(await defined.locator('xpath=..').boundingBox())!, (await tip.boundingBox())!];
+    const [left, top] = [Math.min(text.x, hung.x) - 8, Math.min(text.y, hung.y) - 8];
+    const right = Math.max(text.x + text.width, hung.x + hung.width) + 8;
+    const bottom = Math.max(text.y + text.height, hung.y + hung.height) + 8;
+    await expect(page).toHaveScreenshot('tour-term.png', {
+      clip: { x: left, y: top, width: right - left, height: bottom - top },
+    });
+    await page.mouse.move(0, 0);
+    await expect(tip).toHaveCount(0);
   });
 
   test('l and h step one block: the topmost wholly in view, marked so', async ({ page, diffle }) => {

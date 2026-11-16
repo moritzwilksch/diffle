@@ -266,6 +266,84 @@ export const TourDiagramSchema = z
   })
   .strict();
 
+/** How a run's step ends up, shown as its colour: `success`, `warning` (a failure handled) or `error`. */
+export const TourOutcomeSchema = z.enum(['success', 'warning', 'error']);
+export type TourOutcome = z.infer<typeof TourOutcomeSchema>;
+
+/**
+ * A block that runs the old and the new code on one input, step for step, to show a bug fix or a
+ * change in behaviour: the reader steps through its `diffle-step`s, each shared by both runs or
+ * split into what each run does. It holds only its steps.
+ */
+export const TourVersusSchema = z
+  .object({
+    tag: z.literal('diffle-versus'),
+    /** The case both runs get, in a few words: `A refund row of 80.00`. */
+    input: z.string().min(1),
+  })
+  .strict();
+
+/**
+ * A step of a `diffle-versus`. Shared by both runs, it holds one sentence of inline prose and may
+ * name its place; where the runs differ, it holds a `diffle-before` and a `diffle-after` and nothing else.
+ */
+export const TourStepSchema = z
+  .object({
+    tag: z.literal('diffle-step'),
+    /** A file of the review, relative to the repository root; with `line`, the place both runs pass. */
+    path: z.string().min(1).optional(),
+    /** The line the step shows; given with `path`. */
+    line: tourNumberSchema.optional(),
+    /** Which side `line` counts on: `old` or `new` (the default). */
+    side: SideSchema.optional(),
+  })
+  .strict();
+
+/** A run's step in a `diffle-versus`, or a state's sentence in a `diffle-morph`. */
+const tourRunShape = {
+  /** In a versus, a file of the review the run passes; with `line`. A morph's state takes none. */
+  path: z.string().min(1).optional(),
+  /** The line it shows, on the run's side; given with `path`. */
+  line: tourNumberSchema.optional(),
+  /** In a versus, how the run's step ends up: `success`, `warning` (a failure handled) or `error`. */
+  tone: TourOutcomeSchema.optional(),
+};
+
+/**
+ * What the old code does at a step of a `diffle-versus`, one sentence of inline prose; its place is
+ * on the old side. In a `diffle-morph`, the sentence on what holds before the change.
+ */
+export const TourBeforeSchema = z.object({ tag: z.literal('diffle-before'), ...tourRunShape }).strict();
+
+/**
+ * What the new code does at a step of a `diffle-versus`, one sentence of inline prose; its place is
+ * on the new side. In a `diffle-morph`, the sentence on what holds after the change.
+ */
+export const TourAfterSchema = z.object({ tag: z.literal('diffle-after'), ...tourRunShape }).strict();
+
+/**
+ * A block holding one drawing in two states: one `<svg>` whose groups take `in` or `move`, then a
+ * `diffle-before` and a `diffle-after`, one sentence each. The reader switches Before, After and Diff;
+ * diffle colours the change and draws the legend.
+ */
+export const TourMorphSchema = z
+  .object({
+    tag: z.literal('diffle-morph'),
+  })
+  .strict();
+
+/**
+ * A term the reader may not know, defined where the prose first uses it; the reader sees the
+ * definition on hover, and again at the term's first use in each later section. It holds the term as text.
+ */
+export const TourTermSchema = z
+  .object({
+    tag: z.literal('diffle-term'),
+    /** One sentence that defines it. */
+    def: z.string().min(1),
+  })
+  .strict();
+
 /** A coordinate or length in diagram units; one unit is one pixel. */
 const svgNumberSchema = z.string().regex(/^-?[0-9]+(\.[0-9]+)?$/);
 /** Coordinate pairs, `x,y x,y ...`. */
@@ -293,6 +371,13 @@ export const TourSvgElementSchema = z.discriminatedUnion('tag', [
       class: svgClassSchema.optional(),
       /** The step of a stepped diagram that lights this group; the diagram holds one `diffle-note` per step. */
       step: tourNumberSchema.optional(),
+      /** In a `diffle-morph`, the one state the group is in: `before` (removed) or `after` (added). */
+      in: z.enum(['before', 'after']).optional(),
+      /** In a `diffle-morph`, how far the group moves right and down after the change, drawn where it was before: `240 0`. */
+      move: z
+        .string()
+        .regex(/^-?[0-9]+(\.[0-9]+)? -?[0-9]+(\.[0-9]+)?$/)
+        .optional(),
     })
     .strict(),
   z
@@ -384,7 +469,9 @@ export type TourSvgIcon = z.infer<typeof TourSvgIconSchema>;
  * ends), `dashed`. Text: `bold`, `small`, `mono`, `code` (highlighted lines in its `lang`, one
  * `tspan` each), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces:
  * `fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line
- * or text: `accent` for what the point is about; `success`, `warning` and `error` for status.
+ * or text, from one palette per drawing: focus, `accent` on what the point is about; change,
+ * `success` added, `error` removed, `accent` changed, `warning` a risk; contrast, `contrast-a` and
+ * `contrast-b` for two concepts the tour sets against each other.
  */
 export const TourSvgClassSchema = z.enum([
   'arrow',
@@ -403,6 +490,8 @@ export const TourSvgClassSchema = z.enum([
   'success',
   'warning',
   'error',
+  'contrast-a',
+  'contrast-b',
 ]);
 export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
 
@@ -440,6 +529,12 @@ export const TourElementSchema = z.discriminatedUnion('tag', [
   TourCheckSchema,
   TourItemSchema,
   TourFileSchema,
+  TourVersusSchema,
+  TourStepSchema,
+  TourBeforeSchema,
+  TourAfterSchema,
+  TourMorphSchema,
+  TourTermSchema,
 ]);
 export type TourElement = z.infer<typeof TourElementSchema>;
 export type TourElementTag = TourElement['tag'];
@@ -504,6 +599,8 @@ export const TourWholeTagSchema = TourCommentTagSchema.extract([
   'diffle-tree',
   'diffle-callout',
   'diffle-diagram',
+  'diffle-versus',
+  'diffle-morph',
   'table',
   'rect',
   'text',
@@ -516,5 +613,6 @@ export const TourOpaqueTagSchema = TourWholeTagSchema.extract([
   'diffle-code',
   'diffle-tree',
   'diffle-diagram',
+  'diffle-morph',
 ]);
 export type TourOpaqueTag = z.infer<typeof TourOpaqueTagSchema>;

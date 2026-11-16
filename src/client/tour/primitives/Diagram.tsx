@@ -1,4 +1,4 @@
-import { createElement, type ReactNode, useId } from 'react';
+import { createElement, Fragment, type ReactNode, useId } from 'react';
 import {
   type TourSvgClass,
   TourSvgClassSchema,
@@ -9,8 +9,15 @@ import { DiagramCode } from './DiagramCode.js';
 import { LucideIcon } from './Icon.js';
 import { type Place, placeOf } from '@/client/tour/anchor.js';
 
-type Tone = 'accent' | 'success' | 'warning' | 'error';
-const TONES: ReadonlySet<TourSvgClass> = new Set<Tone>(['accent', 'success', 'warning', 'error']);
+type Tone = 'accent' | 'success' | 'warning' | 'error' | 'contrast-a' | 'contrast-b';
+const TONES: ReadonlySet<TourSvgClass> = new Set<Tone>([
+  'accent',
+  'success',
+  'warning',
+  'error',
+  'contrast-a',
+  'contrast-b',
+]);
 /** An arrowhead's colour: a marker paints apart from the line it ends, so it cannot inherit the tone. */
 const HEAD: Record<Tone | 'ink', string> = {
   ink: 'var(--fg-2)',
@@ -18,7 +25,15 @@ const HEAD: Record<Tone | 'ink', string> = {
   success: 'var(--add)',
   warning: 'var(--warn)',
   error: 'var(--danger)',
+  'contrast-a': 'var(--contrast-a)',
+  'contrast-b': 'var(--contrast-b)',
 };
+
+/** Which state a morph's drawing shows: one of its two, or both with the change coloured. */
+export type MorphState = 'before' | 'after' | 'diff';
+
+/** The tone a morph's Diff gives a group that is in one state alone, or moves. */
+const CHANGE = { before: 'error', after: 'success', move: 'accent' } as const;
 const LINES = new Set(['path', 'line', 'polyline']);
 /** An icon's width and height without `size`. */
 const ICON_SIZE = '14';
@@ -27,10 +42,22 @@ const ICON_SIZE = '14';
  * A diagram, drawn again from what `TourSvgElement` and `TourSvgClass` allow, so styles, scripts
  * and links the agent wrote never reach the page. diffle's stylesheet styles it from the theme,
  * and each arrow gets a head in its line's tone. In a stepped diagram, `active` names the step
- * whose groups are lit; the other steps' groups dim. `place` names the diagram where the drawing
- * stands for it; a stepped diagram's frame carries it instead.
+ * whose groups are lit; the other steps' groups dim. In a morph, `morph` names the state shown: a
+ * group in the other state fades, a moved group slides, and the Diff colours the change and outlines
+ * where a moved group was. `place` names the diagram where the drawing stands for it; a stepped
+ * diagram's or a morph's frame carries it instead.
  */
-export function TourDrawing({ of, place, active = null }: { of: Element; place?: Place; active?: number | null }) {
+export function TourDrawing({
+  of,
+  place,
+  active = null,
+  morph,
+}: {
+  of: Element;
+  place?: Place;
+  active?: number | null;
+  morph?: MorphState;
+}) {
   const id = useId();
   const svg = [...of.children].find((c) => c.localName === 'svg');
   const root = svg ? read(svg) : null;
@@ -42,6 +69,7 @@ export function TourDrawing({ of, place, active = null }: { of: Element; place?:
       {...place}
       data-opaque=""
       data-stepping={active != null || undefined}
+      data-morph={morph}
       viewBox={root.viewBox}
       className="tour-diagram"
       style={{ width: `calc(${width}px * var(--diffle-text-scale, 1))` }}
@@ -63,15 +91,18 @@ export function TourDrawing({ of, place, active = null }: { of: Element; place?:
           </marker>
         ))}
       </defs>
-      {[...svg.childNodes].map((node, i) => draw(node, i, null, { head, active }))}
+      {[...svg.childNodes].map((node, i) => draw(node, i, null, { head, active, morph, ghost: false }))}
     </svg>
   );
 }
 
-/** What every element of a drawing is drawn with: its arrowheads, and the step lit, if any. */
+/** What every element of a drawing is drawn with: its arrowheads, the step lit, the morph's state, and whether it is a moved group's outline. */
 interface Drawn {
   head: (tone: Tone | 'ink') => string;
   active: number | null;
+  morph: MorphState | undefined;
+  /** The outline of where a moved group was, which names no element of the source. */
+  ghost: boolean;
 }
 
 function draw(node: ChildNode, key: number, tone: Tone | null, drawn: Drawn): ReactNode {
@@ -84,19 +115,31 @@ function draw(node: ChildNode, key: number, tone: Tone | null, drawn: Drawn): Re
   const element = read(node);
   if (!element || element.tag === 'svg') return null;
   const { tag, class: words = '', ...rest } = element;
-  const { lang, step, ...geometry } = { lang: undefined, step: undefined, ...rest };
+  const {
+    lang,
+    step,
+    in: state,
+    move,
+    ...geometry
+  } = { lang: undefined, step: undefined, in: undefined, move: undefined, ...rest };
   const lit = step != null && Number(step) === drawn.active;
   const classes = words.split(/\s+/).filter((w) => TourSvgClassSchema.safeParse(w).success) as TourSvgClass[];
-  // A lit step's arrows take the accent with its lines.
-  const own = (classes.find((c) => TONES.has(c)) as Tone | undefined) ?? (lit ? 'accent' : tone);
+  const changed = state ?? (move == null ? null : 'move');
+  const change = drawn.morph === 'diff' && !drawn.ghost && changed ? CHANGE[changed] : undefined;
+  // A lit step's arrows take the accent with its lines, and a morph's changed ones its change colour.
+  const own = (classes.find((c) => TONES.has(c)) as Tone | undefined) ?? change ?? (lit ? 'accent' : tone);
   const arrow = LINES.has(tag) && (classes.includes('arrow') || classes.includes('arrows'));
+  const [dx, dy] = move?.split(' ') ?? [];
   const props = {
     key,
-    ...placeOf(node),
+    ...(drawn.ghost ? {} : placeOf(node)),
     ...geometry,
     className: classes.join(' ') || undefined,
     'data-step': step,
     'data-lit': lit || undefined,
+    'data-in': state,
+    'data-move': move == null ? undefined : '',
+    style: move == null ? undefined : { '--dx': `${dx}px`, '--dy': `${dy}px` },
     markerEnd: arrow ? drawn.head(own ?? 'ink') : undefined,
     markerStart: arrow && classes.includes('arrows') ? drawn.head(own ?? 'ink') : undefined,
   };
@@ -109,7 +152,18 @@ function draw(node: ChildNode, key: number, tone: Tone | null, drawn: Drawn): Re
     });
     return <DiagramCode key={key} props={props} lines={lines} lang={lang ?? 'text'} />;
   }
-  return createElement(tag, props, ...[...node.childNodes].map((child, i) => draw(child, i, own, drawn)));
+  const drawing = createElement(tag, props, ...[...node.childNodes].map((child, i) => draw(child, i, own, drawn)));
+  if (move == null || drawn.ghost) return drawing;
+  // Where the group was: its shapes again, outlined, under the group that moves away.
+  const ghost = { ...drawn, ghost: true };
+  return (
+    <Fragment key={key}>
+      <g data-ghost="" aria-hidden>
+        {[...node.childNodes].map((child, i) => draw(child, i, null, ghost))}
+      </g>
+      {drawing}
+    </Fragment>
+  );
 }
 
 /** An `<svg data-lucide>` in the drawing: the icon, in its text's colour or its tone. */

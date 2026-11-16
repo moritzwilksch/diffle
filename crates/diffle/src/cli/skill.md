@@ -133,6 +133,38 @@ walk; one place with a sentence is a card.
 </diffle-trace>
 ```
 
+### Versus
+
+Use a `diffle-versus` to show a bug fix or a change in behaviour: it runs the old and the new code
+on one `input`, step for step, side by side. A step both runs take is a `diffle-step` holding one
+sentence. Where the runs part, the step holds a `diffle-before` and a `diffle-after`, each one
+sentence; leave one out once its run has ended. Give a step its place with `path` and `line`: a
+`diffle-before`'s line counts on the old side, a `diffle-after`'s on the new, and diffle shows each
+line as the diff marks it. Mark how a run's step ends up with `tone`: `success`, `warning` (a
+failure handled) or `error`. Keep to the steps the point needs, about 6 at most; one run alone is a
+trace.
+
+```html
+<diffle-versus input="The upstream answers 503">
+<diffle-step path="src/api.rs" line="6">The handler fetches the user.</diffle-step>
+<diffle-step>
+<diffle-before path="src/api.rs" line="9" tone="error">The error reaches the client as a 500.</diffle-before>
+<diffle-after path="src/retry.rs" line="18" tone="success">The fetch is retried and succeeds.</diffle-after>
+</diffle-step>
+</diffle-versus>
+```
+
+### Terms
+
+Wrap a term the reviewer may not know in a `diffle-term` at its first use in prose: domain jargon, a
+name the change coins, an abbreviation. `def` defines it in one sentence; the reviewer reads it on
+hover. Define each term once and write later uses as plain text: diffle shows the definition again
+at its first use in each later section.
+
+```html
+<p>Waits grow with <diffle-term def="Random spread added to each wait, so clients do not retry in step.">jitter</diffle-term>.</p>
+```
+
 ### Tabs
 
 Use `diffle-tabs` for two to four alternatives: the design you chose beside one you rejected, a
@@ -263,6 +295,16 @@ attributes and no `<defs>`.
   right of a vertical one, never on it.
 - Name a region with a `frame` rect and an `eyebrow` text at (x+8, y+12).
 - Tone at most about a third of the nodes, only those the point is about.
+- Colour answers a question. Draw neutral first, and before adding a tone, name the question it
+  answers for the reviewer; "these boxes differ" is none. Take a drawing's tones from one palette,
+  and keep one meaning per tone across the tour:
+  - Focus: `accent` on the one part the drawing is about. The default for a drawing of no change.
+  - Change: `success` added, `error` removed, `accent` changed; `success` and `error` also mark a
+    good and a bad outcome, `warning` a risk. Never use them to tell ordinary parts apart.
+  - Contrast: `contrast-a` and `contrast-b` for two concepts the whole tour sets against each other,
+    such as client and server. Parts of one kind share a tone.
+
+  diffle warns of a drawing that mixes contrast with the other tones.
 
 Step through a diagram when its parts happen in an order the reader should follow, such as a
 request's trip or a pipeline's stages. Give each `<g>` the `step="n"` that lights it, numbered from 1
@@ -279,4 +321,23 @@ walk.
 <diffle-note title="Login issues a token">The token carries its expiry.</diffle-note>
 <diffle-note title="Every request checks it">An expired token is refused.</diffle-note>
 </diffle-diagram>
+```
+
+Draw a change to how parts connect as a `diffle-morph`: one drawing in two states, so only the
+difference moves. Draw unchanged parts plain, give a removed part's `<g>` `in="before"`, an added
+one's `in="after"`, and a part that changes place `move="dx dy"`, drawn where it was. After the
+`<svg>`, put a `diffle-before` and a `diffle-after`, one sentence each on what holds then. The
+reviewer switches Before, After and Diff; diffle colours the change, outlines where a moved part was
+and adds the legend, so leave the parts untoned.
+
+```html
+<diffle-morph><svg viewBox="0 0 248 96">
+  <rect x="8" y="12" width="64" height="28"/><text x="16" y="26">API</text>
+  <g in="before"><path d="M40 40 V60" class="arrow"/></g>
+  <g in="after"><path d="M72 26 H136" class="arrow"/><rect x="136" y="12" width="64" height="28"/><text x="144" y="26">Queue</text><path d="M168 40 V60" class="arrow"/></g>
+  <g move="128 0"><rect x="8" y="60" width="96" height="28"/><text x="16" y="74">Retry policy</text></g>
+</svg>
+<diffle-before>The API retries inside the request.</diffle-before>
+<diffle-after>A queue's worker owns the retries.</diffle-after>
+</diffle-morph>
 ```

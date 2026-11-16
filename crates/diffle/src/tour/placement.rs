@@ -91,6 +91,16 @@ pub enum Rule {
     Symbol,
     /// `diffle-icon`: a mark in a line of text, holding nothing.
     Icon,
+    /// `diffle-versus`: a block holding its steps.
+    Versus,
+    /// `diffle-step`: a step of a versus, holding a sentence or its two runs' steps.
+    Step,
+    /// `diffle-before` or `diffle-after`: a run's step in a versus, or a state's sentence in a morph.
+    Run,
+    /// `diffle-morph`: a block holding a drawing and its two states' sentences.
+    Morph,
+    /// `diffle-term`: a word of the prose, holding the term as text.
+    Term,
 }
 
 impl Rule {
@@ -115,6 +125,11 @@ impl Rule {
             "diffle-file" => Self::File,
             "diffle-symbol" => Self::Symbol,
             "diffle-icon" => Self::Icon,
+            "diffle-versus" => Self::Versus,
+            "diffle-step" => Self::Step,
+            "diffle-before" | "diffle-after" => Self::Run,
+            "diffle-morph" => Self::Morph,
+            "diffle-term" => Self::Term,
             _ => return None,
         })
     }
@@ -122,13 +137,15 @@ impl Rule {
     pub fn fits(self, place: Place) -> bool {
         match self {
             Self::Row => place.parent == Parent::Top,
-            Self::Card | Self::Walk | Self::Trace | Self::Check => !place.in_text && place.inside < Inside::Card,
-            Self::Note | Self::Stop | Self::Item | Self::File => place.parent == Parent::Parts,
+            Self::Card | Self::Walk | Self::Trace | Self::Check | Self::Versus => {
+                !place.in_text && place.inside < Inside::Card
+            }
+            Self::Note | Self::Stop | Self::Item | Self::File | Self::Step | Self::Run => place.parent == Parent::Parts,
             Self::Tabs => !place.in_text && place.inside == Inside::Article,
             Self::Tab => place.parent == Parent::Tabs,
             Self::Callout => !place.in_text && place.inside < Inside::Callout,
-            Self::Code | Self::Diagram | Self::Block | Self::Tree => !place.in_text,
-            Self::Jump | Self::Symbol | Self::Icon => place.parent != Parent::Top,
+            Self::Code | Self::Diagram | Self::Block | Self::Tree | Self::Morph => !place.in_text,
+            Self::Jump | Self::Symbol | Self::Icon | Self::Term => place.parent != Parent::Top,
         }
     }
 
@@ -136,18 +153,20 @@ impl Rule {
         match self {
             Self::Row => "at the top level, between paragraphs",
             Self::Card => "between paragraphs, outside other cards and callouts",
-            Self::Walk | Self::Trace | Self::Check => "between paragraphs, outside cards and callouts",
+            Self::Walk | Self::Trace | Self::Check | Self::Versus => "between paragraphs, outside cards and callouts",
             Self::Note => "directly inside a diffle-walk, or a diffle-diagram after its <svg>",
             Self::Stop => "directly inside a diffle-trace",
             Self::Item => "directly inside a diffle-check",
             Self::File => "directly inside a diffle-tree",
+            Self::Step => "directly inside a diffle-versus",
+            Self::Run => "directly inside a diffle-step of a diffle-versus, or a diffle-morph after its <svg>",
             Self::Tabs => "between paragraphs, outside cards, callouts and other tabs",
             Self::Tab => "directly inside a diffle-tabs",
             Self::Callout => "between paragraphs, outside other callouts",
-            Self::Code | Self::Diagram | Self::Block | Self::Tree => {
+            Self::Code | Self::Diagram | Self::Block | Self::Tree | Self::Morph => {
                 "between paragraphs: it is a block, not part of a line of text"
             }
-            Self::Jump | Self::Symbol | Self::Icon => "inside a paragraph, a list item or other text",
+            Self::Jump | Self::Symbol | Self::Icon | Self::Term => "inside a paragraph, a list item or other text",
         }
     }
 }
@@ -161,8 +180,12 @@ impl Rule {
             Self::Card => enclosed(Inside::Card),
             Self::Callout => enclosed(Inside::Callout),
             Self::Tab => enclosed(Inside::Tab),
-            Self::Note | Self::Stop | Self::Item | Self::File => Place { in_text: true, ..flow },
-            Self::Walk | Self::Trace | Self::Diagram | Self::Check | Self::Tree => {
+            Self::Note | Self::Stop | Self::Item | Self::File | Self::Run | Self::Term => {
+                Place { in_text: true, ..flow }
+            }
+            // A split step holds its runs' steps as parts; a shared one, its sentence.
+            Self::Step => Place { parent: Parent::Parts, in_text: true, ..flow },
+            Self::Walk | Self::Trace | Self::Diagram | Self::Check | Self::Tree | Self::Versus | Self::Morph => {
                 Place { parent: Parent::Parts, ..flow }
             }
             Self::Tabs => Place { parent: Parent::Tabs, ..flow },

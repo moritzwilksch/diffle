@@ -172,6 +172,15 @@ fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
         T::DiffleTree => format!("the tree \"{handle}\""),
         T::DiffleCallout => format!("a {handle} callout"),
         T::DiffleDiagram => "a diagram".into(),
+        T::DiffleVersus => format!("the runs on \"{handle}\""),
+        T::DiffleStep if element.handle.is_some() => format!("the step at {handle}"),
+        T::DiffleStep => "a step both runs take".into(),
+        T::DiffleBefore if element.handle.is_some() => format!("the old run at {handle}"),
+        T::DiffleBefore => "the before".into(),
+        T::DiffleAfter if element.handle.is_some() => format!("the new run at {handle}"),
+        T::DiffleAfter => "the after".into(),
+        T::DiffleMorph => "a morph".into(),
+        T::DiffleTerm => "a term".into(),
         T::Rect => "a box in the diagram".into(),
         T::Text => "a label in the diagram".into(),
         T::H1
@@ -208,7 +217,9 @@ fn spoken(element: &TourPart, within: Option<&TourPart>, text: bool) -> String {
             T::DiffleCard => format!(" in the card #{handle}"),
             T::DiffleTab => format!(" in the tab \"{handle}\""),
             T::DiffleWalk => format!(" in the walk of {handle}"),
-            // The holders `TourIndex` names are the three above and a diagram.
+            T::DiffleVersus => format!(" in the runs on \"{handle}\""),
+            T::DiffleMorph => " in the morph".into(),
+            // The holders `TourIndex` names are the five above and a diagram.
             _ => " in the diagram".into(),
         }
     });
@@ -238,6 +249,15 @@ mod tests {
         assert_eq!(
             spoken(&part("diffle-note", Some("Retry")), Some(&part("diffle-walk", Some("a.rs:1-9"))), true),
             "in the note \"Retry\" in the walk of a.rs:1-9"
+        );
+        let versus = part("diffle-versus", Some("Id 7"));
+        assert_eq!(
+            spoken(&part("diffle-before", Some("a.rs:2")), Some(&versus), true),
+            "in the old run at a.rs:2 in the runs on \"Id 7\""
+        );
+        assert_eq!(
+            spoken(&part("diffle-after", None), Some(&part("diffle-morph", None)), true),
+            "in the after in the morph"
         );
     }
 

@@ -134,7 +134,7 @@ expression: refused.json()
     },
     {
       "element": "h2 \"A\" > diffle-group title=\"G\"",
-      "message": "diffle-group is not an element a tour may use; use diffle-card, diffle-diff, diffle-tree, diffle-jump, diffle-symbol, diffle-callout, diffle-diagram, diffle-row, diffle-code, diffle-icon, diffle-walk, diffle-note, diffle-trace, diffle-stop, diffle-tabs, diffle-tab, diffle-check, diffle-item or diffle-file"
+      "message": "diffle-group is not an element a tour may use; use diffle-card, diffle-diff, diffle-tree, diffle-jump, diffle-symbol, diffle-callout, diffle-diagram, diffle-row, diffle-code, diffle-icon, diffle-walk, diffle-note, diffle-trace, diffle-stop, diffle-tabs, diffle-tab, diffle-check, diffle-item, diffle-file, diffle-versus, diffle-step, diffle-before, diffle-after, diffle-morph or diffle-term"
     },
     {
       "element": "h2 \"A\" > diffle-code",
@@ -343,6 +343,134 @@ expression: refused.json()
     {
       "element": "h2 \"A\" > diffle-item",
       "message": "diffle-item belongs directly inside a diffle-check"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"One step\"",
+      "message": "a diffle-versus holds two or more diffle-steps: one per step both runs take, in order"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"One step\" > diffle-step path=\"app.py\"",
+      "message": "a place takes path and line together"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"Past the end\" > diffle-before path=\"app.py\" line=\"5\"",
+      "message": "line 5 is past the end of app.py, which has 2 lines on the old side"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"Past the end\" > diffle-after path=\"app.py\" line=\"5\"",
+      "message": "line 5 is past the end of app.py, which has 3 lines on the new side"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"\"",
+      "message": "input is empty"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"\" > text \"loose\"",
+      "message": "a diffle-versus holds only diffle-steps: text belongs in a step"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"\" > <p>",
+      "message": "a diffle-versus holds only diffle-steps: prose goes before or after it"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"\" > diffle-step path=\"app.py\" line=\"2\"",
+      "message": "a step where the runs differ takes no place: its diffle-before and diffle-after name theirs"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"\" > diffle-step path=\"app.py\" line=\"2\"",
+      "message": "a step where the runs differ holds one diffle-before, then one diffle-after, and nothing else"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"\" > diffle-step path=\"app.py\" line=\"2\" > diffle-before line=\"9\"",
+      "message": "a place takes path and line together"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"An ended run\" > diffle-step",
+      "message": "the old run ended at step 1: it takes no later step"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"An ended run\" > diffle-before path=\"app.py\" line=\"9\" tone=\"danger\"",
+      "message": "tone is success, warning or error, not danger"
+    },
+    {
+      "element": "h2 \"A\" > diffle-versus input=\"An ended run\" > diffle-step",
+      "message": "a run ended at step 1: later steps hold only the other run's"
+    },
+    {
+      "element": "h2 \"A\" > diffle-step",
+      "message": "diffle-step belongs directly inside a diffle-versus"
+    },
+    {
+      "element": "h2 \"A\" > diffle-after",
+      "message": "diffle-after belongs directly inside a diffle-step of a diffle-versus, or a diffle-morph after its <svg>"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph",
+      "message": "diffle-morph holds one <svg>, then a diffle-before and a diffle-after"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph",
+      "message": "a diffle-morph holds one diffle-after: a sentence on what holds after the change"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph > <g step=\"1\">",
+      "message": "a morph switches states, not steps: its groups take in or move"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph > <g in=\"never\" move=\"1\">",
+      "message": "in is before or after, not never; move=\"1\" does not fit: in a `diffle-morph`, how far the group moves right and down after the change, drawn where it was before: `240 0`"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph > <g in=\"never\" move=\"1\">",
+      "message": "a group takes in or move, not both: a part in one state stays where it is"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph > diffle-before path=\"app.py\" line=\"2\"",
+      "message": "a morph's state takes no path, line or tone: it says what holds then"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph > diffle-note title=\"N\"",
+      "message": "<diffle-note> is not allowed in a diagram; draw with rect, circle, ellipse, polygon, g, path, line, polyline, text and tspan"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph",
+      "message": "a diffle-morph holds one diffle-before: a sentence on what holds before the change"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph",
+      "message": "a diffle-morph holds one diffle-after: a sentence on what holds after the change"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph > <g in=\"after\" move=\"8 0\">",
+      "message": "a group takes in or move, not both: a part in one state stays where it is"
+    },
+    {
+      "element": "h2 \"A\" > diffle-morph",
+      "message": "a morph's groups take in=\"before\", in=\"after\" or move=\"dx dy\": a drawing in one state is a diffle-diagram"
+    },
+    {
+      "element": "h2 \"A\" > diffle-diagram > <g in=\"after\">",
+      "message": "in and move tag a diffle-morph's groups: draw two states as a diffle-morph"
+    },
+    {
+      "element": "h2 \"A\" > diffle-term def=\"Twice.\"",
+      "message": "\"cache\" is defined already; later uses show its definition, so write this one as plain text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-term def=\"\"",
+      "message": "def is empty"
+    },
+    {
+      "element": "h2 \"A\" > diffle-term def=\"Marked.\"",
+      "message": "diffle-term holds only the term, as text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-term def=\"Nothing.\"",
+      "message": "diffle-term holds the term it defines, as text"
+    },
+    {
+      "element": "h2 \"A\" > diffle-term def=\"Loose.\"",
+      "message": "diffle-term belongs inside a paragraph, a list item or other text"
     },
     {
       "element": "h2 \"A\" > <h1>",
