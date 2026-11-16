@@ -213,17 +213,7 @@ pub fn misplaced(tag: &str, place: Place) -> Option<&'static str> {
 pub fn is_column(tag: &str) -> bool {
     matches!(
         tag,
-        "diffle-card"
-            | "diffle-code"
-            | "diffle-diff"
-            | "diffle-diagram"
-            | "diffle-tree"
-            | "diffle-callout"
-            | "table"
-            | "div"
-            | "p"
-            | "ul"
-            | "ol"
+        "diffle-code" | "diffle-diagram" | "diffle-tree" | "diffle-callout" | "table" | "div" | "p" | "ul" | "ol"
     )
 }
 

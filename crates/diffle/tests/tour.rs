@@ -45,8 +45,10 @@ const TOUR: &str = r#"
   <svg data-lucide="id-card" x="200" y="29"/>
   <text x="220" y="36">User <tspan class="mono">id</tspan></text>
 </svg></diffle-diagram>
-<diffle-row>
 <diffle-code path="app.py" line="2">def load_user(id) -&gt; int: ...</diffle-code>
+<diffle-row>
+<diffle-code lang="json" example title="Before">{ "id": 1, "ok": true }</diffle-code>
+<diffle-code lang="json" example title="After">{ "id": 1 }</diffle-code>
 <diffle-code lang="python">x: int</diffle-code>
 </diffle-row>
 <diffle-code lang="python">
@@ -253,6 +255,30 @@ a <diffle-term def="Marked."><em>bold</em> word</diffle-term> and an empty <diff
     assert_eq!(tour(&s).await, Value::Null);
     let empty = push(&s, "<p>no sections</p>").await;
     assert_eq!(empty.json()["errors"].as_array().unwrap().len(), 1, "{}", empty.body);
+    s.close().await;
+}
+
+#[tokio::test]
+async fn refuses_code_of_the_review_in_a_row() {
+    let s = server().await;
+    let html = r#"<h2>Rows</h2>
+<diffle-row>
+<diffle-card id="a" title="A"><diffle-diff path="app.py" lines="2"></diffle-diff></diffle-card>
+<diffle-diff path="app.py" lines="3"></diffle-diff>
+</diffle-row>
+<diffle-row>
+<diffle-code path="app.py" line="2">def load_user(id): ...</diffle-code>
+<div><diffle-callout kind="info"><details><summary>Code</summary><diffle-diff path="app.py" lines="2"></diffle-diff></details></diffle-callout></div>
+<div><diffle-trace><diffle-stop path="app.py" line="2">Here.</diffle-stop><diffle-stop path="app.py" line="3">There.</diffle-stop></diffle-trace></div>
+</diffle-row>
+<diffle-row>
+<div><diffle-walk path="app.py" lines="2-3"><diffle-note lines="2" title="Name">It is named.</diffle-note><diffle-note lines="3" title="Body">It returns.</diffle-note></diffle-walk></div>
+<div><diffle-versus input="An id"><diffle-step path="app.py" line="2">It loads.</diffle-step><diffle-step><diffle-before>It fails.</diffle-before><diffle-after>It returns.</diffle-after></diffle-step></diffle-versus></div>
+</diffle-row>
+"#;
+    let refused = push(&s, html).await;
+    assert_eq!(refused.status, 422, "{}", refused.body);
+    insta::assert_json_snapshot!("refused_row", refused.json());
     s.close().await;
 }
 
