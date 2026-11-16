@@ -22,5 +22,25 @@ expression: "pushed.json()[\"warnings\"]"
   {
     "element": "h2 \"Flow\" > diffle-walk path=\"app.py\" lines=\"1-2\" > diffle-note lines=\"1-2\" title=\"The loader\"",
     "message": "Shares lines with note 1 (line 1): the reader sees them lit twice"
+  },
+  {
+    "element": "h2 \"Shapes\" > diffle-term def=\"A read of one user by id.\"",
+    "message": "\"user lookup\" is used before this definition: define a term at its first use"
+  },
+  {
+    "element": "h2 \"Shapes\" > diffle-diagram",
+    "message": "Mixes contrast-a with error: colour a drawing from one palette, accent and the change tones or contrast-a and contrast-b, so each colour answers one question"
+  },
+  {
+    "element": "h2 \"Shapes\" > diffle-morph",
+    "message": "Tones its parts (accent, contrast-b): diffle colours a morph's change in its Diff, so draw the parts plain"
+  },
+  {
+    "element": "h2 \"Shapes\" > diffle-versus input=\"Seven steps\"",
+    "message": "Has 7 steps; past about 6 a versus is hard to follow: keep the steps the runs differ at"
+  },
+  {
+    "element": "h2 \"Shapes\" > diffle-versus input=\"Seven steps\" > diffle-step > diffle-after",
+    "message": "May be long for a run's step, at about 3 sentences: keep it to one or two"
   }
 ]

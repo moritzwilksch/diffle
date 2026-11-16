@@ -82,6 +82,29 @@ docs/readme.md"><diffle-file path="app.py">start at <diffle-symbol path="app.py"
   <diffle-note lines="1" title="Imports">It imports <code>os</code>.</diffle-note>
   <diffle-note lines="2-3" title="The loader">Takes an id and returns it.</diffle-note>
 </diffle-walk>
+<h2>Old and new</h2>
+<p>Each call is an <diffle-term def="A call that names a user by its id.">id lookup</diffle-term>.</p>
+<diffle-versus input="A call with id 7">
+  <diffle-step path="app.py" line="1">Both runs import <code>os</code>.</diffle-step>
+  <diffle-step>
+    <diffle-before path="app.py" line="2" tone="error">The old function takes no id.</diffle-before>
+    <diffle-after path="app.py" line="3" tone="success">The loader returns it.</diffle-after>
+  </diffle-step>
+  <diffle-step><diffle-after>The id lookup answers 7.</diffle-after></diffle-step>
+</diffle-versus>
+<diffle-morph><svg viewBox="0 0 312 52">
+  <rect x="8" y="12" width="80" height="28"/><text x="16" y="26">Caller</text>
+  <g in="before"><path d="M88 26 H128" class="arrow"/><rect x="128" y="12" width="80" height="28"/><text x="136" y="26">old</text></g>
+  <g in="after"><path d="M88 26 H128" class="arrow"/><rect x="128" y="12" width="88" height="28"/><text x="136" y="26">load_user</text></g>
+  <g move="0 0"><rect x="224" y="12" width="80" height="28" class="frame"/></g>
+</svg>
+<diffle-before>Callers reach <code>old</code>.</diffle-before>
+<diffle-after>Callers reach the loader.</diffle-after>
+</diffle-morph>
+<diffle-diagram><svg viewBox="0 0 216 52">
+  <g class="contrast-a"><rect x="8" y="16" width="80" height="28"/><text x="16" y="30">Client</text></g>
+  <g class="contrast-b"><rect x="128" y="16" width="80" height="28"/><text x="136" y="30">Server</text></g>
+</svg></diffle-diagram>
 "#;
 
 async fn push(s: &TestServer, html: &str) -> common::server::Res {
@@ -200,6 +223,27 @@ docs/readme.md"></diffle-tree>
 <diffle-check><diffle-item>Same?</diffle-item><diffle-item> Same? </diffle-item><diffle-item context="x"></diffle-item></diffle-check>
 <diffle-check><diffle-item>Same?</diffle-item><diffle-item>Other?</diffle-item></diffle-check>
 <p><diffle-item>Alone?</diffle-item></p>
+<diffle-versus input="One step"><diffle-step path="app.py">Half a place.</diffle-step></diffle-versus>
+<diffle-versus input="Past the end"><diffle-step>Same.</diffle-step>
+<diffle-step><diffle-before path="app.py" line="5">Old side.</diffle-before><diffle-after path="app.py" line="5">New side.</diffle-after></diffle-step></diffle-versus>
+<diffle-versus input="">loose<p>prose</p>
+  <diffle-step>Same.</diffle-step>
+  <diffle-step path="app.py" line="2"><diffle-before line="9">No path.</diffle-before><diffle-before>Twice.</diffle-before></diffle-step>
+</diffle-versus>
+<diffle-versus input="An ended run">
+  <diffle-step><diffle-after path="app.py" line="2">The old run stops.</diffle-after></diffle-step>
+  <diffle-step><diffle-before path="app.py" line="9" tone="danger">It returns.</diffle-before><diffle-after>Both.</diffle-after></diffle-step>
+  <diffle-step>Shared again.</diffle-step>
+</diffle-versus>
+<p><diffle-step>Alone.</diffle-step> <diffle-after>Alone.</diffle-after></p>
+<diffle-morph><svg viewBox="0 0 104 44"><g step="1"><rect x="8" y="8" width="40" height="28"/></g><g in="never" move="1"><rect x="56" y="8" width="40" height="28"/></g></svg>
+<diffle-before path="app.py" line="2">Has a place.</diffle-before><diffle-note title="N">A note.</diffle-note></diffle-morph>
+<diffle-morph><svg viewBox="0 0 56 44"><g in="after" move="8 0"><rect x="8" y="8" width="40" height="28"/></g></svg></diffle-morph>
+<diffle-morph><svg viewBox="0 0 56 44"><rect x="8" y="8" width="40" height="28"/></svg><diffle-before>One.</diffle-before><diffle-after>Two.</diffle-after></diffle-morph>
+<diffle-diagram><svg viewBox="0 0 56 44"><g in="after"><rect x="8" y="8" width="40" height="28"/></g></svg></diffle-diagram>
+<p>A <diffle-term def="Once.">cache</diffle-term>, a <diffle-term def="Twice."> Cache </diffle-term>, a <diffle-term def="">thing</diffle-term>,
+a <diffle-term def="Marked."><em>bold</em> word</diffle-term> and an empty <diffle-term def="Nothing."> </diffle-term>.</p>
+<diffle-term def="Loose.">top</diffle-term>
 <h1>Second title</h1>
 <diffle-tree paths="app.py"/><p>after</p>
 "#;
@@ -232,7 +276,8 @@ async fn keeps_the_tour_across_refreshes_until_cleared() {
 }
 
 /// A tour that holds every judgment call diffle warns of: a long file note, a code line that wraps,
-/// a one-stop trace, and a walk whose long note shares a line with the one before it.
+/// a one-stop trace, a walk whose long note shares a line with the one before it, a term used
+/// before its definition, a drawing mixing palettes, a toned morph and a long versus.
 const CROWDED: &str = r#"<h2>Flow</h2>
 <diffle-tree title="Loader" paths="app.py"><diffle-file path="app.py">the one file that holds every change here</diffle-file></diffle-tree>
 <diffle-row><diffle-code lang="python">def load(path: str, encoding: str = "utf-8") -&gt; list[str]: ...</diffle-code><diffle-code lang="python">x = 1</diffle-code></diffle-row>
@@ -240,7 +285,23 @@ const CROWDED: &str = r#"<h2>Flow</h2>
 <diffle-walk path="app.py" lines="1-2">
   <diffle-note lines="1" title="Imports">It imports os.</diffle-note>
   <diffle-note lines="1-2" title="The loader">It defines the loader. It takes an id. It returns it.</diffle-note>
-</diffle-walk>"#;
+</diffle-walk>
+<p>The loader serves each user lookup.</p>
+<h2>Shapes</h2>
+<p>A <diffle-term def="A read of one user by id.">user lookup</diffle-term> goes through the loader.</p>
+<diffle-diagram><svg viewBox="0 0 216 52">
+  <g class="contrast-a"><rect x="8" y="16" width="80" height="28"/><text x="16" y="30">Client</text></g>
+  <g class="error"><rect x="128" y="16" width="80" height="28"/><text x="136" y="30">Server</text></g>
+</svg></diffle-diagram>
+<diffle-morph><svg viewBox="0 0 104 44">
+  <g in="before" class="accent"><rect x="8" y="8" width="40" height="28"/></g>
+  <g in="after"><rect x="56" y="8" width="40" height="28" class="contrast-b"/></g>
+</svg><diffle-before>One box.</diffle-before><diffle-after>Another box.</diffle-after></diffle-morph>
+<diffle-versus input="Seven steps">
+  <diffle-step>One.</diffle-step><diffle-step>Two.</diffle-step><diffle-step>Three.</diffle-step>
+  <diffle-step>Four.</diffle-step><diffle-step>Five.</diffle-step><diffle-step>Six.</diffle-step>
+  <diffle-step><diffle-before>Old seven.</diffle-before><diffle-after>New seven. It differs. It ends.</diffle-after></diffle-step>
+</diffle-versus>"#;
 
 #[tokio::test]
 async fn shows_a_tour_with_judgment_calls_and_warns_of_each() {

@@ -2,12 +2,13 @@
 //! rules across elements: where each element may sit, one title, at least one section.
 use serde_json::Value;
 
-use super::blocks::{checklist, row, tabs, tree};
+use super::blocks::{checklist, row, tabs, term, tree};
 use super::code;
-use super::diagram;
+use super::diagram::{self, Block};
 use super::dom::{self, Dom, Node, NodeId};
 use super::element::{Findings, attr, is_count, label, parse, short};
 use super::files::{Reference, asks};
+use super::morph;
 use super::placement::{Parent, Place, Rule, holds_diff, misplaced, opens_with_summary};
 use super::stepped;
 use crate::protocol::{TourElement, TourError, TourTag};
@@ -41,6 +42,8 @@ struct Walk {
     frames: Vec<code::Frame>,
     /// Each card's `id`, to find one taken twice.
     ids: Vec<(NodeId, String, String)>,
+    /// Each `diffle-term`, checked across the document once the walk is done.
+    terms: Vec<(NodeId, String)>,
     /// Each `h1`, and whether an `h2` came before it.
     titles: Vec<(NodeId, String, bool)>,
     sections: usize,
@@ -57,6 +60,9 @@ pub fn outline(html: &str) -> Outline {
         walk.visit(&dom, child, Place::TOP);
     }
     walk.across();
+    let terms = term::check(&dom, &walk.terms);
+    walk.errors.extend(terms.errors);
+    walk.warnings.extend(terms.warnings);
     Outline { errors: walk.errors, warnings: walk.warnings, references: walk.references }
 }
 
@@ -186,6 +192,14 @@ impl Walk {
                 let found = stepped::trace::check(dom, node, &element);
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
             }
+            Rule::Versus => {
+                let found = stepped::versus::check(dom, node, &element);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
+            }
+            Rule::Morph => {
+                let found = morph::check(dom, node, &element);
+                self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), tag.into(), found);
+            }
             Rule::Check => {
                 let found = checklist::check(dom, node, &element);
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), label(tag, attrs), found);
@@ -205,22 +219,14 @@ impl Walk {
                 self.framed(code::Frame::Tab, |walk| walk.children(dom, node, rule.inner(place)));
                 self.parts = outer;
             }
-            Rule::Callout | Rule::Note | Rule::Stop | Rule::Item | Rule::File => {
+            Rule::Callout | Rule::Note | Rule::Stop | Rule::Item | Rule::File | Rule::Step | Rule::Run => {
                 self.children(dom, node, rule.inner(place))
             }
+            Rule::Term => self.terms.push((node, element.clone())),
             Rule::Code => {
-                if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
-                    let message = "diffle-code holds its code as text: write < as &lt; and & as &amp;";
-                    self.error(node, element.clone(), message);
-                } else {
-                    let numbered = attr(attrs, "path").is_none();
-                    for message in code::wraps(&dom.text(node), self.columns, &self.frames, numbered) {
-                        self.warnings.push((node, TourError { element: element.clone(), message }));
-                    }
-                }
-                for message in code::refusals(attrs) {
-                    self.error(node, element.clone(), message);
-                }
+                let found = code::check(dom, node, &element, attrs, self.columns, &self.frames);
+                self.errors.extend(found.errors);
+                self.warnings.extend(found.warnings);
             }
             Rule::Jump => {
                 if dom.children(node).iter().any(|&c| !matches!(dom.node(c), Node::Text(_) | Node::Ignored)) {
@@ -228,8 +234,9 @@ impl Walk {
                 }
             }
             Rule::Diagram => {
-                self.errors.extend(diagram::check(dom, node, &element));
-                let found = stepped::diagram::check(dom, node, &element);
+                self.errors.extend(diagram::check(dom, node, &element, Block::Diagram));
+                let mut found = stepped::diagram::check(dom, node, &element);
+                found.warnings.extend(diagram::palette(dom, node, &element));
                 self.parts(dom, stepped::step_nodes(dom, node), rule.inner(place), tag.into(), found);
             }
             Rule::Block | Rule::Symbol | Rule::Icon => self.empty(dom, node, tag, &element),

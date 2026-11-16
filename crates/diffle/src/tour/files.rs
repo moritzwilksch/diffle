@@ -76,7 +76,26 @@ pub fn asks(element: TourElement) -> (Vec<(String, Need)>, Vec<String>) {
             });
             needs.push((path.to_string(), need));
         }
-        TourElement::DiffleCode { path: None, .. }
+        TourElement::DiffleStep { path: Some(path), line: Some(line), side } => {
+            let line = number(&line);
+            needs.push((path.to_string(), Need::Lines { side: side.unwrap_or(Side::New), start: line, end: line }));
+        }
+        // A morph's states take no place; `versus` refuses one there.
+        TourElement::DiffleBefore { path: Some(path), line: Some(line), .. } => {
+            let line = number(&line);
+            needs.push((path.to_string(), Need::Lines { side: Side::Old, start: line, end: line }));
+        }
+        TourElement::DiffleAfter { path: Some(path), line: Some(line), .. } => {
+            let line = number(&line);
+            needs.push((path.to_string(), Need::Lines { side: Side::New, start: line, end: line }));
+        }
+        TourElement::DiffleStep { .. }
+        | TourElement::DiffleBefore { .. }
+        | TourElement::DiffleAfter { .. }
+        | TourElement::DiffleVersus { .. }
+        | TourElement::DiffleMorph
+        | TourElement::DiffleTerm { .. }
+        | TourElement::DiffleCode { path: None, .. }
         | TourElement::DiffleCard { .. }
         | TourElement::DiffleCallout { .. }
         | TourElement::DiffleDiagram

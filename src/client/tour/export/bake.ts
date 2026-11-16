@@ -10,6 +10,7 @@ import type { SymbolProps, Token } from '@/client/tour/host/host.js';
 import { wordColumn } from '@/client/tour/host/LiveSymbol.js';
 import { loadIcon } from '@/client/tour/host/live.js';
 import { type LineRange, primitive, rangeOf } from '@/client/tour/document.js';
+import { oneSide } from '@/client/tour/excerpt.js';
 import { codeLang, codePatch } from '@/client/tour/primitives/Code.js';
 import { rangePatch, type TourLoad } from '@/client/tour/state.js';
 import { AROUND } from '@/client/tour/steps/Trace.js';
@@ -31,6 +32,8 @@ export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
   const diagrams: { lines: string[]; lang: string }[] = [];
   const icons = new Set<string>();
   const listed = new Set<string>();
+  /** The excerpts a versus shows one side of, by their index in `excerpts`. */
+  const sided = new Set<number>();
   for (const el of doc.body.querySelectorAll('*')) {
     if (el.localName === 'svg' && el.hasAttribute('data-lucide')) icons.add(el.getAttribute('data-lucide')!);
     if (el.localName === 'text' && el.classList.contains('code')) {
@@ -47,6 +50,16 @@ export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
       case 'diffle-stop':
         excerpts.push([rangeOf(element), AROUND]);
         break;
+      case 'diffle-step':
+      case 'diffle-before':
+      case 'diffle-after': {
+        const range = rangeOf(element);
+        if (range) {
+          sided.add(excerpts.length);
+          excerpts.push([range, 0]);
+        }
+        break;
+      }
       case 'diffle-code': {
         codes.push({
           patch: codePatch(el.textContent ?? ''),
@@ -73,7 +86,11 @@ export async function bakeTour({ tour, doc }: Ready): Promise<BakedTour> {
   }
 
   const patches = await Promise.all(excerpts.map(([range, context]) => rangePatch(range, context)));
-  const { rows, css } = await bakeRows([...patches.flatMap((patch) => (patch == null ? [] : [{ patch }])), ...codes]);
+  const shown = patches.flatMap((patch, i) => {
+    if (patch == null) return [];
+    return sided.has(i) ? [{ patch: oneSide(patch, excerpts[i]![0].side) }] : [{ patch }];
+  });
+  const { rows, css } = await bakeRows([...shown, ...codes]);
   const baked: BakedTour = {
     html: tour.html,
     excerpts: Object.fromEntries(excerpts.map(([range, context], i) => [excerptKey(range, context), patches[i]!])),

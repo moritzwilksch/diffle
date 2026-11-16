@@ -1,5 +1,32 @@
-//! A `diffle-code` block: what its attributes may combine, and whether the parser cut one short.
+//! A `diffle-code` block: what its attributes may combine, whether its lines wrap where it sits,
+//! and whether the parser cut one short.
 use super::dom::{Dom, Node, NodeId};
+use super::element::{Findings, attr};
+
+/// Checks the `diffle-code` at `node`, named `element`, with `attrs`, in one of a row's `columns`
+/// inside `frames`: it holds its code as text, its attributes go together, and its lines fit.
+pub fn check(
+    dom: &Dom,
+    node: NodeId,
+    element: &str,
+    attrs: &[(String, String)],
+    columns: usize,
+    frames: &[Frame],
+) -> Findings {
+    let mut found = Findings::default();
+    if dom.children(node).iter().any(|&c| matches!(dom.node(c), Node::Element { .. })) {
+        found.error(node, element.into(), "diffle-code holds its code as text: write < as &lt; and & as &amp;");
+    } else {
+        let numbered = attr(attrs, "path").is_none();
+        for message in wraps(&dom.text(node), columns, frames, numbered) {
+            found.warn(node, element.into(), message);
+        }
+    }
+    for message in refusals(attrs) {
+        found.error(node, element.into(), message);
+    }
+    found
+}
 
 /// Whether a `diffle-code` under `node` holds markup: a raw `<` the parser read as a tag, which may
 /// have cut the block short and moved what follows into or beside it.

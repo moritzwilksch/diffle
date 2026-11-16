@@ -10,10 +10,14 @@ import { TourDiff } from './primitives/Diff.js';
 import { TourIcon } from './primitives/Icon.js';
 import { TourJump } from './primitives/Jump.js';
 import { TourTabs } from './primitives/Tabs.js';
+import { TourTerm } from './primitives/Term.js';
 import { TourTree } from './primitives/Tree.js';
 import { TourDiagram } from './steps/StepDiagram.js';
+import { TourMorph } from './steps/Morph.js';
 import { TourTrace } from './steps/Trace.js';
+import { TourVersus } from './steps/Versus.js';
 import { TourWalk } from './steps/Walk.js';
+import { termUses } from './terms.js';
 
 /**
  * An article or what a block in it holds, as React: the plain tags `TourTag` allows (an `a` only to
@@ -42,7 +46,7 @@ export function TourArticle({ of, after }: { of: Element; after?: (index: number
 }
 
 function contentNode(node: ChildNode, key: number): ReactNode {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+  if (node instanceof Text) return termed(node, key);
   if (!(node instanceof Element)) return null;
   const tag = TourTagSchema.safeParse(node.localName);
   if (tag.success) {
@@ -94,6 +98,16 @@ function contentNode(node: ChildNode, key: number): ReactNode {
       );
     case 'diffle-diagram':
       return <TourDiagram key={key} of={node} renderNote={partContent} />;
+    case 'diffle-morph':
+      return <TourMorph key={key} of={node} renderState={partContent} />;
+    case 'diffle-versus':
+      return <TourVersus key={key} source={node} input={element.input} renderStep={partContent} />;
+    case 'diffle-term':
+      return (
+        <TourTerm key={key} def={element.def} defines>
+          {node.textContent}
+        </TourTerm>
+      );
     case 'diffle-code':
       return (
         <TourCode
@@ -130,6 +144,25 @@ function contentNode(node: ChildNode, key: number): ReactNode {
     default:
       return null;
   }
+}
+
+/** A text node, with each term use that shows a definition again marked as the term. */
+function termed(text: Text, key: number): ReactNode {
+  const uses = termUses(text);
+  if (!uses) return text.data;
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const use of uses) {
+    parts.push(text.data.slice(at, use.start));
+    parts.push(
+      <TourTerm key={use.start} def={use.def} defines={false}>
+        {text.data.slice(use.start, use.end)}
+      </TourTerm>,
+    );
+    at = use.end;
+  }
+  parts.push(text.data.slice(at));
+  return <Fragment key={key}>{parts}</Fragment>;
 }
 
 /** A `diffle-symbol`, as the host draws one. */

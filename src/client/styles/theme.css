@@ -20,6 +20,10 @@
   --kind-type: #702c00;
   --kind-callable: #622cbc;
   --kind-value: #023b95;
+  /* A diagram's contrast palette: two concepts a tour sets against each other, in the code theme's
+     callable and type colours, apart from the accent and the change colours. */
+  --contrast-a: var(--kind-callable);
+  --contrast-b: var(--kind-type);
   --search-match: #f0ce5380;
   --search-current: #e09b13;
   --search-current-fg: #0e1116;
