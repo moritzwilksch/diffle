@@ -1,6 +1,6 @@
 //! One language server as diffle asks it, against the fake server in `test/lsp`.
 #![cfg(unix)]
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

@@ -1,6 +1,6 @@
 //! The LSP routes over a real pool of fake language servers: what they answer, and why they refuse.
 #![cfg(unix)]
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 

@@ -1,5 +1,5 @@
 //! What diffle reads in-process through gix agrees with what the git CLI answers for the same repository.
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 use std::process::Command;
