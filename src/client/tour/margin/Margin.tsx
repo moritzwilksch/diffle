@@ -6,10 +6,11 @@ import { CommentComposer } from '@/client/review/CommentComposer.js';
 import { useStore, type TourDraft } from '@/client/store.js';
 import { remPx } from '@/client/scale.js';
 import { Button } from '@/client/ui/Button.js';
-import { anchorTop, selectionTarget } from '@/client/tour/anchor.js';
+import { anchorTop, elementAt } from '@/client/tour/anchor.js';
 import {
   commentOnSelection,
   DRAFT,
+  selectionSpot,
   type TourThread,
   useActiveCard,
   useTourDraft,
@@ -43,11 +44,12 @@ export interface HoveredBlock {
   tag: string;
 }
 
-/** Whether words are selected: their own button stands for the comment then. */
+/** Whether anything is selected, code included: the selection's own button stands for the comment then. */
 function useSelecting(): boolean {
   const [selecting, setSelecting] = useState(false);
   useEffect(() => {
-    const update = () => setSelecting(document.getSelection()?.isCollapsed === false);
+    // Not `isCollapsed`: Chrome reports a selection in a diff's shadow tree as collapsed.
+    const update = () => setSelecting(!!document.getSelection()?.toString().trim());
     document.addEventListener('selectionchange', update);
     return () => document.removeEventListener('selectionchange', update);
   }, []);
@@ -78,16 +80,12 @@ export function BlockComment({
   const selecting = useSelecting();
   const box = container.current?.getBoundingClientRect();
   if (!block || drafting || !box || selecting) return null;
-  const rect = block.el.getBoundingClientRect();
   const kind = elementKind(block.tag);
-  const spot =
-    at === 'edge'
-      ? { top: clearOf(rect.top - box.top, taken), left: 0 }
-      : { top: rect.bottom - box.top + 2, left: rect.right - box.left, transform: 'translateX(-100%)' };
+  const spot = blockSpot(block.el.getBoundingClientRect(), box, at);
   return (
     <Button
       className="tour-comment-button"
-      style={spot}
+      style={{ ...spot, top: clearOf(spot.top, taken) }}
       onPointerEnter={hovering.hold}
       onPointerLeave={hovering.release}
       onClick={() => {
@@ -190,6 +188,19 @@ export function Margin({
   );
 }
 
+/** Where a Comment button on a block as a whole sits in `box`: level with its top, or under its bottom-right corner. */
+function blockSpot(rect: DOMRect, box: DOMRect, at: 'edge' | 'end'): ButtonSpot {
+  return at === 'edge'
+    ? { top: rect.top - box.top, left: 0 }
+    : { top: rect.bottom - box.top + 2, left: rect.right - box.left, transform: 'translateX(-100%)' };
+}
+
+interface ButtonSpot {
+  top: number;
+  left: number;
+  transform?: string;
+}
+
 /** A Comment button's height: one line of the UI's text in a button. */
 const BUTTON_REM = 1.75;
 
@@ -203,8 +214,9 @@ function same(a: Map<string, number>, b: Map<string, number>): boolean {
 }
 
 /**
- * A button to comment on the selected words while they can take one, in `container` (positioned):
- * level with their first line, at its `edge` (the margin) or just past their `end` (inline).
+ * A button to comment on the selection while it can take one, in `container` (positioned): level
+ * with the words' first line, at its `edge` (the margin) or just past their `end` (inline); for a
+ * selection in code, where its block's own button would be.
  */
 export function SelectionComment({
   article,
@@ -218,17 +230,22 @@ export function SelectionComment({
   /** The margin's cards, which the button never covers. */
   taken?: readonly Taken[];
 }) {
-  const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
+  const [spot, setSpot] = useState<(ButtonSpot & { title: string }) | null>(null);
   const drafting = useTourDraft() != null;
   useEffect(() => {
     if (!article) return;
     const update = () => {
-      const selection = document.getSelection();
-      const found = selectionTarget(selection, article);
+      const found = selectionSpot(article);
       const box = container.current?.getBoundingClientRect();
       if (!found || 'refused' in found || !box) return setSpot(null);
-      const words = selection!.getRangeAt(0).getBoundingClientRect();
+      if (found.target.on === 'element') {
+        const block = elementAt(article, found.node);
+        const title = 'Comment on this block as a whole (c)';
+        return setSpot(block && { ...blockSpot(block.getBoundingClientRect(), box, at), title });
+      }
+      const words = document.getSelection()!.getRangeAt(0).getBoundingClientRect();
       setSpot({
+        title: 'Comment on the selected words (c)',
         top: words.top - box.top,
         left: at === 'edge' ? 0 : words.right - box.left + 4,
       });
@@ -240,11 +257,11 @@ export function SelectionComment({
   return (
     <Button
       className="tour-comment-button"
-      style={{ ...spot, top: clearOf(spot.top, taken) }}
+      style={{ top: clearOf(spot.top, taken), left: spot.left, transform: spot.transform }}
       // Pressing the button would otherwise clear the selection it comments on.
       onPointerDown={(e) => e.preventDefault()}
       onClick={() => void commentOnSelection()}
-      title="Comment on the selected words (c)"
+      title={spot.title}
     >
       <MessageSquarePlus size="0.875rem" /> Comment
     </Button>
