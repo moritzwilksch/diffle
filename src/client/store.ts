@@ -1455,6 +1455,8 @@ export const useStore = create<ReviewState>((set, get) => {
         return get().showReferences({ kind: 'types', symbol: target!.text, items: res.locations });
       }
       await jumpToLine(loc.path, loc.line, loc.external, loc.col);
+      // A view over the diff, a tour's symbol menu, gives way once the jump list has recorded it.
+      outside?.leave();
     } catch (e) {
       if (current(g)) report(kind === 'definition' ? 'Go to definition' : 'Go to type definition', e);
     }
