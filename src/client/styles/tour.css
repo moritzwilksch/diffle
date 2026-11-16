@@ -205,11 +205,11 @@
 
 /* The words a thread is on, through the CSS Custom Highlight API; the active thread's stronger. */
 ::highlight(tour-comment) {
-  background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  background-color: color-mix(in srgb, var(--comment-mark) 25%, transparent);
 }
 
 ::highlight(tour-comment-active) {
-  background-color: color-mix(in srgb, var(--accent) 36%, transparent);
+  background-color: color-mix(in srgb, var(--comment-mark) 50%, transparent);
 }
 
 .tour-inline-threads {
