@@ -185,6 +185,22 @@ async fn routes_by_extension_and_refuses_a_path_it_cannot_serve() {
 }
 
 #[tokio::test]
+async fn routes_a_chart_template_to_the_helm_server_and_the_chart_values_to_the_yaml_one() {
+    let overrides = [(LanguageId::Helm, "helm-server"), (LanguageId::Yaml, "yaml-server")];
+    let Some(s) = start(Setup { on_disk: Some(Vec::new()), ..with(&overrides) }) else { return };
+    let mut snap = diff(&["chart/templates/svc.yaml", "chart/values.yaml", "ci/templates/job.yaml"]);
+    snap.tree.push("chart/Chart.yaml".into());
+    snap.tree.sort();
+    s.pool.track(&snap).await;
+    s.settle().await;
+    assert_eq!(s.events("helm-server").unwrap(), ["open svc.yaml v1"]);
+    // No `Chart.yaml` above `ci/`, so its template is plain YAML.
+    assert_eq!(s.events("yaml-server").unwrap(), ["open values.yaml v1", "open job.yaml v1"]);
+    assert_eq!(s.pool.hover(&pos("chart/templates/svc.yaml", 1, 0), false).await.map(|_| ()).ok(), Some(()));
+    s.pool.close().await;
+}
+
+#[tokio::test]
 async fn reports_every_server_and_every_unserved_language_as_one_status() {
     let Some(s) = start(with(&[(LanguageId::Python, "py-server"), (LanguageId::Rust, "")])) else { return };
     s.pool.track(&diff(&["a.py", "main.rs", "b.go"])).await;

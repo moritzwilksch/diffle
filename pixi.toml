@@ -76,5 +76,9 @@ clang-tools = "*"
 tombi = "*"
 bash-language-server = "*"
 
+# conda-forge builds helm-ls for Linux and macOS only.
+[feature.lsp-more.target.unix.dependencies]
+helm-ls = "*"
+
 [environments]
 default = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"]

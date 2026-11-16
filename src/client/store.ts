@@ -1903,7 +1903,7 @@ export const useStore = create<ReviewState>((set, get) => {
     symbolMenu: null,
     async openSymbolMenu(target, x, y) {
       // A file whose servers offer hover alone (a schema server) has no symbols to act on.
-      if (hoverOnly(get().lsp, target.path)) {
+      if (hoverOnly(get().lsp, target.path, get().snapshot?.tree ?? [])) {
         get().closeSymbolMenu();
         return;
       }
@@ -1935,7 +1935,7 @@ export const useStore = create<ReviewState>((set, get) => {
       try {
         // A word in a string or a comment names no symbol to the owner, so the syntax gate spares the
         // round trip. A server joining the language answers there, though: Tailwind's classes live in strings.
-        const language = languageOf(target.path);
+        const language = languageOf(target.path, get().snapshot?.tree ?? []);
         const blocked =
           language != null && joinedBy(get().lsp, language)
             ? false

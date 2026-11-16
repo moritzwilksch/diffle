@@ -11,7 +11,7 @@ use serde_json::json;
 use super::process::LspProcess;
 use super::rpc::Connection;
 use crate::error::{Error, Result};
-use crate::protocol::language_of;
+use crate::protocol::LanguageId;
 
 /// Navigation opens whatever file a query lands in. Without a cap every path visited in a long
 /// review stays open in the server, growing its memory and per-save recheck cost.
@@ -19,6 +19,10 @@ pub const MAX_UNTRACKED_OPEN: usize = 64;
 
 /// New-side text of a snapshot path, or none when the snapshot does not expose it.
 pub type ReadFn = Arc<dyn Fn(String) -> BoxFuture<'static, Option<String>> + Send + Sync>;
+
+/// The language a path has on the current new side, which `didOpen` names: a Helm template's
+/// depends on the tree around it, not on the path alone.
+pub type LanguageFn = Arc<dyn Fn(&str) -> Option<LanguageId> + Send + Sync>;
 
 /// A document a server is asked about: a snapshot path, or a file outside the snapshot that one of
 /// the server's results named, with the repository path it would have should it lie inside the
@@ -61,6 +65,7 @@ struct State {
 pub struct Documents {
     process: Arc<LspProcess>,
     read: ReadFn,
+    language: LanguageFn,
     /// The URI of a snapshot path.
     uri: Arc<dyn Fn(&str) -> String + Send + Sync>,
     max_open: usize,
@@ -73,11 +78,13 @@ impl Documents {
     pub fn new(
         process: Arc<LspProcess>,
         read: ReadFn,
+        language: LanguageFn,
         uri: Arc<dyn Fn(&str) -> String + Send + Sync>,
         max_open: Option<usize>,
     ) -> Self {
         let max_open = max_open.unwrap_or(MAX_UNTRACKED_OPEN);
-        Self { process, read, uri, max_open, state: Arc::default(), tracking: tokio::sync::Mutex::new(()) }
+        let tracking = tokio::sync::Mutex::new(());
+        Self { process, read, language, uri, max_open, state: Arc::default(), tracking }
     }
 
     /// The URI the server knows `origin` by.
@@ -104,9 +111,9 @@ impl Documents {
             } else {
                 let (process, read, max, shared) =
                     (self.process.clone(), self.read.clone(), self.max_open, self.state.clone());
-                let (origin, key) = (origin.clone(), uri.clone());
+                let (origin, key, language) = (origin.clone(), uri.clone(), self.language.clone());
                 let task = async move {
-                    let result = sync_now(&process, &read, max, &shared, &origin, &key).await;
+                    let result = sync_now(&process, &read, &language, max, &shared, &origin, &key).await;
                     shared.lock().unwrap().syncing.remove(&key);
                     result
                 }
@@ -163,6 +170,7 @@ fn uri_of(snapshot_uri: &(dyn Fn(&str) -> String + Send + Sync), origin: &Origin
 async fn sync_now(
     process: &LspProcess,
     read: &ReadFn,
+    language: &LanguageFn,
     max_open: usize,
     state: &Mutex<State>,
     origin: &Origin,
@@ -187,7 +195,7 @@ async fn sync_now(
     let mut state = state.lock().unwrap();
     match state.open.shift_remove(uri) {
         None => {
-            let language = language_of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
+            let language = language(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
             let open = json!({ "textDocument": { "uri": uri, "languageId": language, "version": 1, "text": text } });
             state.open.insert(uri.to_owned(), Doc { version: 1, text, snapshot });
             rpc.notify("textDocument/didOpen", open);

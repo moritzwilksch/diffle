@@ -1,6 +1,8 @@
 //! How a language-server query's fate is decided from one status; the client decides the same way,
 //! so its flash and the API's 409 say the same thing.
-use super::{LanguageId, LspFeature, LspServerStatus, LspState, LspStatus, Snapshot, follows_checkout, language_of};
+use super::{
+    Charts, LanguageId, LspFeature, LspServerStatus, LspState, LspStatus, Snapshot, follows_checkout, language_of,
+};
 
 /// How messages name a feature: "pyrefly offers no go to definition".
 pub fn feature_label(feature: LspFeature) -> &'static str {
@@ -22,6 +24,8 @@ pub struct LspQuery<'a> {
     pub feature: Option<LspFeature>,
     /// Let a starting server through: the pool waits for it to initialize.
     pub patient: bool,
+    /// The new side's Helm charts, which make a template there `helm`; none for no charts.
+    pub charts: Option<&'a Charts>,
 }
 
 /// Whether the new side of `snap` is what the language servers read: false for a snapshot not loaded yet.
@@ -41,7 +45,7 @@ pub fn lsp_blocker(lsp: &LspStatus, checkout: bool, q: &LspQuery<'_>) -> Option<
     let mut servers: Vec<&LspServerStatus> = lsp.servers.iter().collect();
     let mut language = None;
     if let Some(path) = q.path {
-        let Some(found) = language_of(path) else {
+        let Some(found) = language_of(path, q.charts.unwrap_or(&Charts::default())) else {
             let ext = path.rfind('.').map(|i| &path[i..]).filter(|e| !e[1..].contains(['/', '\\']) && e.len() > 1);
             return Some(format!("No language server for {} files", ext.unwrap_or("these")));
         };
@@ -138,7 +142,7 @@ mod tests {
     }
 
     fn at(path: &str, feature: Option<LspFeature>) -> LspQuery<'_> {
-        LspQuery { path: Some(path), feature, patient: false }
+        LspQuery { path: Some(path), feature, ..Default::default() }
     }
 
     #[test]

@@ -66,6 +66,8 @@ requirements:
       - vscode-langservers-extracted
     yaml:
       - yaml-language-server
+    helm:
+      - helm-ls
     toml:
       - tombi
 

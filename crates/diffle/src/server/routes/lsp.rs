@@ -56,7 +56,8 @@ async fn log(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResul
 /// no reason to refuse.
 async fn pool_for(d: &ApiDeps, path: Option<&str>, feature: Option<LspFeature>) -> ApiResult<Arc<LspPool>> {
     let snap = d.session.snapshotter()?.current().await?;
-    let q = LspQuery { path, feature, patient: true };
+    let charts = d.lsp.as_ref().map(|p| p.charts()).unwrap_or_default();
+    let q = LspQuery { path, feature, patient: true, charts: Some(&charts) };
     let refuse = |m: String| ApiError(StatusCode::CONFLICT, m);
     if let Some(blocked) = lsp_blocker(&lsp_status(d), readable_by_servers(Some(&snap)), &q) {
         return Err(refuse(blocked));
