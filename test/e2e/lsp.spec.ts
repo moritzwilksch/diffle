@@ -62,9 +62,12 @@ test.describe('with a language server', () => {
         .toEqual({ focus: ['amount'], read: ['amount', 'amount'], write: ['amount'] });
     }).toPass({ timeout: 10000 });
     await expect(page).toHaveScreenshot('occurrences.png');
-    // `w` moves on; held down it repeats, and only the word it settles on is asked about.
+    // `w` moves on, and the tint follows to the word it settles on. Only the settled tint is asserted:
+    // the untinted moment before the answer lasts a debounce and a round trip, too short to poll for.
     await page.keyboard.press('w');
-    await expect.poll(() => highlighted(page)).toEqual({ focus: ['self'], read: [], write: [] });
+    await expect
+      .poll(() => highlighted(page))
+      .toEqual({ focus: ['self'], read: ['self', 'self', 'self', 'self'], write: [] });
     await page.keyboard.press('b');
     await expect
       .poll(() => highlighted(page))
