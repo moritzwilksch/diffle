@@ -1,0 +1,36 @@
+---
+source: crates/diffle/tests/tour.rs
+expression: refused.json()
+---
+{
+  "errors": [
+    {
+      "element": "h2 \"Rows\" > diffle-diff path=\"app.py\" lines=\"2\"",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    },
+    {
+      "element": "h2 \"Rows\" > diffle-diff path=\"app.py\" lines=\"3\"",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    },
+    {
+      "element": "h2 \"Rows\" > diffle-code path=\"app.py\" line=\"2\"",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    },
+    {
+      "element": "h2 \"Rows\" > diffle-diff path=\"app.py\" lines=\"2\"",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    },
+    {
+      "element": "h2 \"Rows\" > diffle-trace",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    },
+    {
+      "element": "h2 \"Rows\" > diffle-walk path=\"app.py\" lines=\"2-3\"",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    },
+    {
+      "element": "h2 \"Rows\" > diffle-versus input=\"An id\"",
+      "message": "code of the review wraps its lines in a column: place it full width, outside the diffle-row. Only made-up code sits in a row: a diffle-code with example, or with lang and no path"
+    }
+  ]
+}

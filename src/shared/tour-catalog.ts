@@ -497,9 +497,10 @@ export type TourSvgClass = z.infer<typeof TourSvgClassSchema>;
 
 /**
  * Two or three columns side by side, stacked when the window is narrow. It sits at the top level.
- * Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,
- * `diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`). Keep code
- * full width: a diff or a code block in a column wraps its lines.
+ * Each column is a block (`diffle-code`, `diffle-diagram`, `diffle-tree`, `diffle-callout`,
+ * `table`) or short prose (`div`, `p`, `ul`, `ol`). It holds no code of the review, whose lines
+ * wrap in a column: no `diffle-diff` (so no card), walk, trace or versus with places, and no
+ * `diffle-code` with `path`. Made-up code (`example`, or `lang` without `path`) fits.
  */
 export const TourRowSchema = z
   .object({

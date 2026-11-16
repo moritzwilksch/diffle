@@ -78,8 +78,9 @@ each thread follows its passage. A diff whose lines have left the review since s
   and its `diffle-diff`s. Use prose and the other blocks for the rest.
 - Use a `diffle-row` for two or three columns of prose, tables or small diagrams that belong
   together: a table beside the prose about it, two small diagrams to compare. Use `<div>` only to
-  group prose into one column. Keep code full width, never side by side: diffs, code blocks and the
-  cards that hold them wrap their lines in a row.
+  group prose into one column. Keep code of the review full width: diffle refuses a row that holds
+  a diff, walk, trace or placed versus, or a `diffle-code` with `path`, as its lines wrap in a
+  column. Made-up code may sit side by side: two `example` blocks to compare.
 - Keep a diff to about 12 lines or fewer, and split a long story into more sections.
 - Fold into a `<details>` what the main path can do without, such as an edge case or a long aside,
   never what the reviewer needs to follow the change. Its `<summary>` says in a few words what
