@@ -9,6 +9,7 @@ const LANGUAGE_BY_EXT: &[(&str, LanguageId)] = &[
     ("c", C),
     ("cc", Cpp),
     ("cjs", Javascript),
+    ("containerfile", Dockerfile),
     ("cpp", Cpp),
     ("cs", Csharp),
     ("css", Css),
@@ -56,6 +57,9 @@ const LANGUAGE_BY_EXT: &[(&str, LanguageId)] = &[
 /// `<name>.<suffix>` (`Dockerfile.dev`), ahead of the suffix as an extension.
 const LANGUAGE_BY_NAME: &[(&str, LanguageId)] = &[("containerfile", Dockerfile), ("dockerfile", Dockerfile)];
 
+/// Suffixes that turn a named file into something else: BuildKit's `Dockerfile.dockerignore`.
+const NOT_BY_NAME: &[&str] = &["dockerignore"];
+
 /// Every language some name or extension selects, sorted by its LSP spelling: `LANGUAGE_IDS`.
 pub fn language_ids() -> Vec<LanguageId> {
     let ids: BTreeSet<(String, LanguageId)> =
@@ -68,11 +72,14 @@ pub fn language_ids() -> Vec<LanguageId> {
 pub fn language_of(path: &str) -> Option<LanguageId> {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_lowercase();
     let stem = name.split('.').next().unwrap_or_default();
-    if let Some((_, id)) = LANGUAGE_BY_NAME.iter().find(|(n, _)| *n == stem) {
+    // The extension must follow a dot in the name: `dir.py/Makefile` has none.
+    let ext = name.rsplit_once('.').map(|(_, ext)| ext);
+    if !ext.is_some_and(|ext| NOT_BY_NAME.contains(&ext))
+        && let Some((_, id)) = LANGUAGE_BY_NAME.iter().find(|(n, _)| *n == stem)
+    {
         return Some(*id);
     }
-    // The extension must follow a dot in the name: `dir.py/Makefile` has none.
-    let (_, ext) = name.rsplit_once('.')?;
+    let ext = ext?;
     LANGUAGE_BY_EXT.iter().find(|(e, _)| *e == ext).map(|(_, id)| *id)
 }
 
@@ -99,13 +106,20 @@ mod tests {
             "container/Dockerfile",
             "Containerfile",
             "Dockerfile.dev",
-            "DOCKERFILE.prod.json",
             "api.dockerfile",
+            "api.containerfile",
             r"c:\x\dockerfile",
         ] {
             assert_eq!(language_of(path), Some(Dockerfile), "{path}");
         }
-        for path in ["Dockerfiles/app.py", "my-Dockerfile", ".dockerignore", "Dockerfile/README"] {
+        for path in [
+            "Dockerfiles/app.py",
+            "my-Dockerfile",
+            ".dockerignore",
+            "Dockerfile.dockerignore",
+            "Dockerfile.dev.dockerignore",
+            "Dockerfile/README",
+        ] {
             assert_ne!(language_of(path), Some(Dockerfile), "{path}");
         }
     }

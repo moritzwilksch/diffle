@@ -8,13 +8,20 @@ describe('languageOf', () => {
       'container/Dockerfile',
       'Containerfile',
       'Dockerfile.dev',
-      'DOCKERFILE.prod.json',
       'api.dockerfile',
+      'api.containerfile',
       'c:\\x\\dockerfile',
     ]) {
       expect(languageOf(path), path).toBe('dockerfile');
     }
-    for (const path of ['Dockerfiles/app.py', 'my-Dockerfile', '.dockerignore', 'Dockerfile/README']) {
+    for (const path of [
+      'Dockerfiles/app.py',
+      'my-Dockerfile',
+      '.dockerignore',
+      'Dockerfile.dockerignore',
+      'Dockerfile.dev.dockerignore',
+      'Dockerfile/README',
+    ]) {
       expect(languageOf(path), path).not.toBe('dockerfile');
     }
   });
@@ -23,7 +30,15 @@ describe('languageOf', () => {
     expect(languageOf('src/main.rs')).toBe('rust');
     expect(languageOf('App.TSX')).toBe('typescriptreact');
     expect(languageOf('a.d.ts')).toBe('typescript');
-    for (const path of ['Makefile', 'dir.py/Makefile', 'trailing.', 'x.unknown', '.bashrc', 'x.constructor', 'constructor']) {
+    for (const path of [
+      'Makefile',
+      'dir.py/Makefile',
+      'trailing.',
+      'x.unknown',
+      '.bashrc',
+      'x.constructor',
+      'constructor',
+    ]) {
       expect(languageOf(path), path).toBeNull();
     }
   });

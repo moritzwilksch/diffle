@@ -976,6 +976,7 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   c: 'c',
   cc: 'cpp',
   cjs: 'javascript',
+  containerfile: 'dockerfile',
   cpp: 'cpp',
   cs: 'csharp',
   css: 'css',
@@ -1028,6 +1029,9 @@ const LANGUAGE_BY_NAME: Record<string, LanguageId> = {
   dockerfile: 'dockerfile',
 };
 
+/** Suffixes that turn a named file into something else: BuildKit's `Dockerfile.dockerignore`. */
+const NOT_BY_NAME = new Set(['dockerignore']);
+
 /** Every language diffle knows, sorted, for CLI validation and help. */
 export const LANGUAGE_IDS: LanguageId[] = [
   ...new Set([...Object.values(LANGUAGE_BY_EXT), ...Object.values(LANGUAGE_BY_NAME)]),
@@ -1037,8 +1041,8 @@ export const LANGUAGE_IDS: LanguageId[] = [
 export function languageOf(path: string): LanguageId | null {
   const name = /[^/\\]*$/.exec(path)![0].toLowerCase();
   const stem = name.split('.')[0]!;
-  if (Object.hasOwn(LANGUAGE_BY_NAME, stem)) return LANGUAGE_BY_NAME[stem]!;
   const ext = /\.([^.]+)$/.exec(name)?.[1];
+  if (Object.hasOwn(LANGUAGE_BY_NAME, stem) && !NOT_BY_NAME.has(ext ?? '')) return LANGUAGE_BY_NAME[stem]!;
   return (ext && Object.hasOwn(LANGUAGE_BY_EXT, ext) && LANGUAGE_BY_EXT[ext]) || null;
 }
 

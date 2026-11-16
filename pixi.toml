@@ -75,6 +75,7 @@ clang-tools = "*"
 # terraform-ls = "*"
 tombi = "*"
 bash-language-server = "*"
+dockerfile-language-server-nodejs = "*"
 
 [environments]
 default = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"]
