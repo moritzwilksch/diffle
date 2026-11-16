@@ -3517,7 +3517,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+          "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`). Keep code\nfull width: a diff or a code block in a column wraps its lines."
         },
         {
           "type": "object",
@@ -4235,7 +4235,7 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+      "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`). Keep code\nfull width: a diff or a code block in a column wraps its lines."
     },
     "TourStep": {
       "type": "object",

@@ -80,9 +80,10 @@ each thread follows its passage. A diff whose lines have left the review since s
   tables. A block sits between paragraphs, never inside one.
 - Use a `diffle-card` to explain one part of the diff beside its code: a title, a sentence or two,
   and its `diffle-diff`s. Use prose and the other blocks for the rest.
-- Use a `diffle-row` for two or three blocks or short prose columns that belong together: a table
-  beside the prose about it, two small diagrams to compare. Use `<div>` only to group prose into one
-  column. Keep diffs, and cards with diffs, full width: in a row their lines may wrap.
+- Use a `diffle-row` for two or three columns of prose, tables or small diagrams that belong
+  together: a table beside the prose about it, two small diagrams to compare. Use `<div>` only to
+  group prose into one column. Keep code full width, never side by side: diffs, code blocks and the
+  cards that hold them wrap their lines in a row.
 - Keep a diff to about 12 lines or fewer, and split a long story into more sections.
 - Fold into a `<details>` what the main path can do without, such as an edge case or a long aside,
   never what the reviewer needs to follow the change. Its `<summary>` says in a few words what
@@ -223,16 +224,13 @@ Format a block as the language's formatter would at the width it gets, so no lin
 | Where | Characters | With `path` |
 |---|---|---|
 | Full width | 110 | 113 |
-| A column of a two-column row | 49 | 53 |
-| A column of a three-column row | 29 | 33 |
 | A card, a tab or a `<details>` | 106 | 109 |
 
 When a signature doesn't fit, put each parameter on its own line and the return type after the
-closing parenthesis, as rustfmt and prettier do; diffle warns of a line that wraps. Set
-collaborators side by side in a row:
+closing parenthesis, as rustfmt and prettier do; diffle warns of a line that wraps. Show
+collaborators one after another:
 
 ```html
-<diffle-row>
 <diffle-code path="src/auth.rs" line="12">
 pub fn validate(
     token: &amp;Token,
@@ -244,7 +242,6 @@ pub trait TokenStore {
     fn get(&amp;self, id: &amp;str) -&gt; Option&lt;Token&gt;;
 }
 </diffle-code>
-</diffle-row>
 ```
 
 A diagram box carries code as a `<text class="code" lang="rust">` with one `<tspan>` per line, 16
@@ -449,7 +446,7 @@ A block holding a simple architecture diagram: one inline `<svg>` of diagram ele
 
 #### `diffle-row`
 
-Two or three columns side by side, stacked when the window is narrow. It sits at the top level. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`).
+Two or three columns side by side, stacked when the window is narrow. It sits at the top level. Each column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`, `diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`). Keep code full width: a diff or a code block in a column wraps its lines.
 
 #### `diffle-code`
 
