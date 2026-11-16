@@ -24,10 +24,8 @@
   border-radius: 0.5rem;
   background: color-mix(in srgb, var(--fg) 4%, transparent);
   color: var(--fg-2);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .tour-versus-lane[data-lane='before'] {

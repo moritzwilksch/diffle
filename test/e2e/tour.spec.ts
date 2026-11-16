@@ -668,14 +668,13 @@ test.describe('the tour', () => {
     const tip = page.getByRole('tooltip');
     await expect(tip).toHaveText('Whether a row is a sale or a refund: the new kind column, a sale when empty.');
     // The tip hangs outside the term's line, so the shot spans both, and nothing else on the page.
+    // The tip scales in: measure it once it has opened, not while it grows.
+    await tip.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
     const [text, hung] = [(await defined.boundingBox())!, (await tip.boundingBox())!];
-    // Whole pixels, so the shot keeps its size wherever the page scrolled to.
-    const [left, top] = [Math.floor(Math.min(text.x, hung.x)) - 8, Math.floor(Math.min(text.y, hung.y)) - 8];
-    const right = Math.ceil(Math.max(text.x + text.width, hung.x + hung.width)) + 8;
-    const bottom = Math.ceil(Math.max(text.y + text.height, hung.y + hung.height)) + 8;
-    await expect(page).toHaveScreenshot('tour-term.png', {
-      clip: { x: left, y: top, width: right - left, height: bottom - top },
-    });
+    // Whole pixels, the size taken from the tip's own box, which hangs from the term's left edge.
+    const [x, y] = [Math.round(hung.x) - 8, Math.round(text.y) - 8];
+    const [width, height] = [Math.round(hung.width) + 16, Math.round(hung.y + hung.height - text.y) + 16];
+    await expect(page).toHaveScreenshot('tour-term.png', { clip: { x, y, width, height } });
     await page.mouse.move(0, 0);
     await expect(tip).toHaveCount(0);
   });
