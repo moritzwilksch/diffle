@@ -14,7 +14,7 @@ use diffle::error::Error;
 use diffle::git::Touched;
 use diffle::lsp::bridge::{BridgeOptions, LspBridge};
 use diffle::lsp::process::ProcessOptions;
-use diffle::protocol::{Charts, LspFeature, LspPosition, LspProcessStatus, LspState, language_of};
+use diffle::protocol::{LspFeature, LspPosition, LspProcessStatus, LspState};
 
 type Files = Arc<Mutex<HashMap<String, String>>>;
 
@@ -103,7 +103,6 @@ fn start_with(
             let found = listed.lock().unwrap().contains_key(&p);
             async move { found }.boxed()
         }),
-        language: Arc::new(|p| language_of(p, &Charts::default())),
         max_open,
     });
     Some(Started { bridge, statuses, reads, files, root, _dir: dir })

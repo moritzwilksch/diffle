@@ -220,7 +220,7 @@ function targetOf(
   // No server for this language means no hover, no menu: a target would only produce blockers.
   if (!served(path)) return null;
   // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const word = wordAtPoint(props.tokenElement, event, hoverOnlyNow(path));
+  const word = wordAtPoint(props.tokenElement, event, hoverOnly(useStore.getState().lsp, path));
   if (!word) return null;
   let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
   let line = props.lineNumber;
@@ -237,15 +237,9 @@ function targetOf(
 
 /** Whether some running language server claims this file's language. */
 function served(path: string): boolean {
-  const { lsp, snapshot } = useStore.getState();
-  const language = languageOf(path, snapshot?.tree ?? []);
+  const language = languageOf(path);
+  const { lsp } = useStore.getState();
   return language != null && lsp.enabled && serversFor(lsp, language).length > 0;
-}
-
-/** `hoverOnly` for the current status and snapshot. */
-function hoverOnlyNow(path: string): boolean {
-  const { lsp, snapshot } = useStore.getState();
-  return hoverOnly(lsp, path, snapshot?.tree ?? []);
 }
 
 /** The identifier under the pointer inside a token span: its text and its offset within the token, or null on punctuation or space. */
@@ -908,7 +902,7 @@ export function ReviewPane() {
           occurrenceControl.hover(t);
           if (t) hoverControl.enter(t, props.tokenElement);
           else hoverControl.leave();
-          markHover(props.tokenElement, !!t && !hoverOnlyNow(t.path) && (e.ctrlKey || e.metaKey));
+          markHover(props.tokenElement, !!t && !hoverOnly(useStore.getState().lsp, t.path) && (e.ctrlKey || e.metaKey));
         };
         point(event);
         props.tokenElement.addEventListener('pointermove', point);
@@ -944,7 +938,7 @@ export function ReviewPane() {
         ctx: { item: { id: string } },
       ) => {
         const target = targetOf(props, ctx.item.id, event);
-        if (!target || hoverOnlyNow(target.path)) return;
+        if (!target || hoverOnly(useStore.getState().lsp, target.path)) return;
         markHover(props.tokenElement, false);
         hoverControl.cancel();
         if (event.ctrlKey || event.metaKey) {

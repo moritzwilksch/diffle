@@ -15,9 +15,7 @@ use crate::comments::hunks::new_side_changes;
 use crate::concurrency::map_limit;
 use crate::error::{Error, Result};
 use crate::lsp::pool::LspPool;
-use crate::protocol::{
-    ChangeStatus, Charts, GraphResponse, LspLocation, LspPosition, LspSymbol, Snapshot, language_of,
-};
+use crate::protocol::{ChangeStatus, GraphResponse, LspLocation, LspPosition, LspSymbol, Snapshot, language_of};
 use crate::snapshotter::Snapshotter;
 
 /// Changed symbols one graph holds unless asked for all; past it the least telling files are cut
@@ -49,14 +47,11 @@ pub async fn build(
     let under = scope.map(|dir| format!("{dir}/"));
     let by = Instant::now() + BUDGET;
     let mut reasons = Vec::new();
-    let charts = Charts::of(&snap.tree);
     // Owned items: a closure over borrowed ones is not general enough for axum's `Send` bound.
     let files: Vec<String> = snap
         .changed
         .iter()
-        .filter(|f| {
-            f.status != ChangeStatus::D && !f.binary && f.submodule.is_none() && language_of(&f.path, &charts).is_some()
-        })
+        .filter(|f| f.status != ChangeStatus::D && !f.binary && f.submodule.is_none() && language_of(&f.path).is_some())
         .filter(|f| under.as_ref().is_none_or(|dir| f.path.starts_with(dir.as_str())))
         .map(|f| f.path.clone())
         .collect();

@@ -5,7 +5,7 @@ use futures::FutureExt;
 use indexmap::{IndexMap, IndexSet};
 
 use super::bridge::{BridgeOptions, LspBridge};
-use super::documents::{LanguageFn, ReadFn};
+use super::documents::ReadFn;
 use super::locator::HasFn;
 use super::process::{ProcessOptions, SettingsFuture};
 use super::registry::{Lookup, ServerContext, ServerDefinition, definition_of};
@@ -18,7 +18,6 @@ pub struct ServerOptions {
     pub root: std::path::PathBuf,
     pub read: ReadFn,
     pub has: HasFn,
-    pub language: LanguageFn,
     pub lookup: Lookup,
     pub max_open: Option<usize>,
     /// Its status moved.
@@ -63,8 +62,7 @@ impl PoolServer {
             initialization_options: definition.initialization_options.and_then(|init| init(&ctx)),
             on_status: Arc::new(move |_: &LspProcessStatus| notify()),
         };
-        let (read, has, language, max_open) = (opts.read, opts.has, opts.language, opts.max_open);
-        let bridge = LspBridge::new(BridgeOptions { process, read, has, language, max_open });
+        let bridge = LspBridge::new(BridgeOptions { process, read: opts.read, has: opts.has, max_open: opts.max_open });
         Self {
             command: command.to_owned(),
             bridge,

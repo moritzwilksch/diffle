@@ -35,7 +35,7 @@ export interface LspQuery {
  */
 export function lspBlocker(
   lsp: LspStatus,
-  snap: Pick<Snapshot, 'newSha' | 'headSha' | 'tree'> | null,
+  snap: Pick<Snapshot, 'newSha' | 'headSha'> | null,
   { path, feature, patient = false }: LspQuery = {},
 ): string | null {
   if (!lsp.enabled) return 'Language servers are off for this run (--no-lsp)';
@@ -44,7 +44,7 @@ export function lspBlocker(
   let servers = lsp.servers;
   let language: LanguageId | undefined;
   if (path != null) {
-    language = languageOf(path, snap.tree) ?? undefined;
+    language = languageOf(path) ?? undefined;
     if (!language) return `No language server for ${/(\.[^./\\]+)$/.exec(path)?.[1] ?? 'these'} files`;
     servers = serversFor(lsp, language);
   }
@@ -65,11 +65,10 @@ export function serversFor(lsp: LspStatus, language: LanguageId): LspServerStatu
 
 /**
  * Whether the file's servers offer hover and nothing to navigate by: the schema servers for
- * configuration files. Such a file gets tooltips on any token and no symbol menu. `tree` is the
- * new side's, which tells a Helm template from plain YAML.
+ * configuration files. Such a file gets tooltips on any token and no symbol menu.
  */
-export function hoverOnly(lsp: LspStatus, path: string, tree: readonly string[]): boolean {
-  const language = languageOf(path, tree);
+export function hoverOnly(lsp: LspStatus, path: string): boolean {
+  const language = languageOf(path);
   const ready = language ? serversFor(lsp, language).filter((s) => s.state === 'ready') : [];
   return ready.length > 0 && ready.every((s) => !s.supports.some((f) => f === 'definition' || f === 'references'));
 }

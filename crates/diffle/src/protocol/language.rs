@@ -1,5 +1,5 @@
-//! Which language server a file selects: by its extension, or as a Helm chart's template by where it
-//! sits. The client keeps the same rule.
+//! Which language server a file selects: by its extension, or as a Helm template by its directory.
+//! The client keeps the same rule.
 use std::collections::BTreeSet;
 
 use super::LanguageId::{self, *};
@@ -52,28 +52,8 @@ const LANGUAGE_BY_EXT: &[(&str, LanguageId)] = &[
     ("zig", Zig),
 ];
 
-/// The file naming a Helm chart; its directory's `templates/` holds the chart's templates.
-const CHART: &str = "Chart.yaml";
 /// The extensions of a Helm template: manifests and the `_helpers.tpl` partials.
 const TEMPLATE_EXTS: &[&str] = &["yaml", "yml", "tpl"];
-
-/// The Helm charts on one new side: each directory holding a `Chart.yaml`, with its trailing `/`
-/// (empty for the repository root).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Charts(BTreeSet<String>);
-
-impl Charts {
-    pub fn of(tree: &[String]) -> Self {
-        let dirs = tree.iter().filter_map(|p| p.strip_suffix(CHART)).filter(|d| d.is_empty() || d.ends_with('/'));
-        Self(dirs.map(str::to_owned).collect())
-    }
-
-    /// Whether `path` lies in a chart's `templates/`, at any depth. A subchart's own `templates/`
-    /// counts too, as Helm renders it.
-    fn holds_template(&self, path: &str) -> bool {
-        path.match_indices("templates/").any(|(i, _)| self.0.contains(&path[..i]))
-    }
-}
 
 /// Every language diffle can start a server for, sorted by its LSP spelling: `LANGUAGE_IDS`.
 pub fn language_ids() -> Vec<LanguageId> {
@@ -82,32 +62,33 @@ pub fn language_ids() -> Vec<LanguageId> {
     ids.into_iter().map(|(_, id)| id).collect()
 }
 
-/// The language of `path` on a new side holding `charts`: a chart's template is `helm`, anything
-/// else goes by its extension, case-insensitively. None for an unknown or absent extension.
-pub fn language_of(path: &str, charts: &Charts) -> Option<LanguageId> {
+/// The language of `path`: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
+/// chart; anything else goes by its extension, case-insensitively. None for an unknown or absent
+/// extension. Any `templates/` counts, chart or not: telling them apart needs the tree around the path.
+pub fn language_of(path: &str) -> Option<LanguageId> {
     let ext = path.rsplit(['.', '/', '\\']).next().filter(|ext| ext.len() < path.len())?;
     // The segment must follow a dot, not a separator: `dir/Makefile` has no extension.
     if !path[..path.len() - ext.len()].ends_with('.') || ext.is_empty() {
         return None;
     }
     let ext = ext.to_lowercase();
-    if TEMPLATE_EXTS.contains(&ext.as_str()) && charts.holds_template(path) {
+    if TEMPLATE_EXTS.contains(&ext.as_str()) && in_templates(path) {
         return Some(Helm);
     }
     LANGUAGE_BY_EXT.iter().find(|(e, _)| *e == ext).map(|(_, id)| *id)
+}
+
+/// Whether a directory of `path` is named `templates`: at the start or after a separator.
+fn in_templates(path: &str) -> bool {
+    path.match_indices("templates/").any(|(i, _)| i == 0 || path[..i].ends_with('/'))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn charts(tree: &[&str]) -> Charts {
-        Charts::of(&tree.iter().map(|p| (*p).to_owned()).collect::<Vec<_>>())
-    }
-
     #[test]
     fn reads_the_language_from_the_last_extension_case_insensitively() {
-        let language_of = |path| language_of(path, &Charts::default());
         assert_eq!(language_of("src/main.rs"), Some(Rust));
         assert_eq!(language_of("App.TSX"), Some(Typescriptreact));
         assert_eq!(language_of("a.d.ts"), Some(Typescript));
@@ -129,30 +110,23 @@ mod tests {
     }
 
     #[test]
-    fn takes_a_template_for_helm_only_under_a_chart_on_the_same_side() {
-        let side = charts(&[
-            "deploy/app/Chart.yaml",
-            "deploy/app/values.yaml",
+    fn takes_a_yaml_or_tpl_file_under_a_templates_directory_for_helm() {
+        let of = |path| language_of(path).map(|l| l.to_string());
+        for helm in [
             "deploy/app/templates/deployment.yaml",
-            "deploy/app/charts/db/Chart.yaml",
-            "Chart.yaml",
+            "deploy/app/templates/_helpers.tpl",
+            "deploy/app/templates/tests/x.yml",
+            "deploy/app/charts/db/templates/svc.yaml",
+            "templates/root.YAML",
+            // The tradeoff of a rule on the path alone: a templates directory outside any chart counts too.
             "ci/templates/job.yml",
-            "MyChart.yaml",
-        ]);
-        let of = |path| language_of(path, &side).map(|l| l.to_string());
-        assert_eq!(of("deploy/app/templates/deployment.yaml").as_deref(), Some("helm"));
-        assert_eq!(of("deploy/app/templates/_helpers.tpl").as_deref(), Some("helm"));
-        assert_eq!(of("deploy/app/templates/tests/test-connection.YML").as_deref(), Some("helm"));
-        assert_eq!(of("deploy/app/charts/db/templates/svc.yaml").as_deref(), Some("helm"));
-        assert_eq!(of("templates/root.yaml").as_deref(), Some("helm"));
-        // The chart's own files, other YAML, and a template outside any chart stay what they were.
+        ] {
+            assert_eq!(of(helm).as_deref(), Some("helm"), "{helm}");
+        }
         assert_eq!(of("deploy/app/values.yaml").as_deref(), Some("yaml"));
         assert_eq!(of("deploy/app/Chart.yaml").as_deref(), Some("yaml"));
-        assert_eq!(of("deploy/app/templates/NOTES.txt"), None);
-        assert_eq!(of("ci/templates/job.yml").as_deref(), Some("yaml"));
-        assert_eq!(of("ci/templates/macro.tpl"), None);
         assert_eq!(of("deploy/app/my-templates/x.yaml").as_deref(), Some("yaml"));
-        // Without a `Chart.yaml` on this side, the same path is plain YAML.
-        assert_eq!(language_of("deploy/app/templates/deployment.yaml", &Charts::default()), Some(Yaml));
+        assert_eq!(of("deploy/app/templates/NOTES.txt"), None);
+        assert_eq!(of("deploy/app/templates/config.json").as_deref(), Some("json"));
     }
 }

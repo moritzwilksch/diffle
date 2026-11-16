@@ -1021,38 +1021,17 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
 /** Every language diffle knows, sorted, for CLI validation and help. Helm goes by a template's place, not its extension. */
 export const LANGUAGE_IDS: LanguageId[] = [...new Set([...Object.values(LANGUAGE_BY_EXT), 'helm' as const])].sort();
 
-/** The file naming a Helm chart; its directory's `templates/` holds the chart's templates. */
-const CHART = 'Chart.yaml';
 const TEMPLATE_EXTS = new Set(['yaml', 'yml', 'tpl']);
-/** A tree's chart directories, each with its trailing `/`; a snapshot's tree never changes, so once per tree. */
-const chartsByTree = new WeakMap<readonly string[], Set<string>>();
-
-function chartsOf(tree: readonly string[]): Set<string> {
-  let charts = chartsByTree.get(tree);
-  if (!charts) {
-    charts = new Set();
-    for (const path of tree) {
-      const dir = path.endsWith(CHART) ? path.slice(0, -CHART.length) : null;
-      if (dir != null && (dir === '' || dir.endsWith('/'))) charts.add(dir);
-    }
-    chartsByTree.set(tree, charts);
-  }
-  return charts;
-}
 
 /**
- * The language of a path on a new side whose paths are `tree`: a Helm chart's template (a YAML or
- * `.tpl` file in the `templates/` of a directory holding a `Chart.yaml`) is `helm`, anything else
- * goes by its extension. Null when diffle has no server for it.
+ * The language of a path: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
+ * chart; anything else goes by its extension. Null when diffle has no server for it. Any
+ * `templates/` counts, chart or not: telling them apart needs the tree around the path.
  */
-export function languageOf(path: string, tree: readonly string[]): LanguageId | null {
+export function languageOf(path: string): LanguageId | null {
   const ext = /\.([^./\\]+)$/.exec(path)?.[1]?.toLowerCase();
   if (!ext) return null;
-  if (TEMPLATE_EXTS.has(ext)) {
-    const charts = chartsOf(tree);
-    for (let i = path.indexOf('templates/'); i >= 0; i = path.indexOf('templates/', i + 1))
-      if (charts.has(path.slice(0, i))) return 'helm';
-  }
+  if (TEMPLATE_EXTS.has(ext) && /(^|\/)templates\//.test(path)) return 'helm';
   return LANGUAGE_BY_EXT[ext] ?? null;
 }
 

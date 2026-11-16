@@ -2,14 +2,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use indexmap::IndexMap;
 
-mod publish;
-
-use self::publish::Publish;
 use super::documents::{Origin, ReadFn};
 use super::locator::HasFn;
 use super::merge::{merge_hovers, merge_locations, union};
@@ -17,11 +15,14 @@ use super::pool_server::{PathsByLanguage, PoolServer, ServerOptions, paths_of};
 use super::registry::{Lookup, resolve_servers};
 use crate::error::{Error, Result};
 use crate::protocol::{
-    ChangeStatus, Charts, LanguageId, LspHoverResponse, LspLocationsResponse, LspLogEntry, LspMissing,
-    LspOccurrencesResponse, LspPosition, LspStatus, LspSymbolsResponse, Snapshot, follows_checkout, fuzzy_rank,
-    language_of,
+    ChangeStatus, LanguageId, LspHoverResponse, LspLocationsResponse, LspLogEntry, LspMissing, LspOccurrencesResponse,
+    LspPosition, LspStatus, LspSymbolsResponse, Snapshot, follows_checkout, fuzzy_rank, language_of,
 };
 
+/// A status change goes out at once when the pool has been quiet, and later ones within this
+/// window ride on one trailing publish: a server logging a hundred stderr lines while indexing is a
+/// few broadcasts, not a hundred.
+const PUBLISH_WINDOW: Duration = Duration::from_millis(20);
 /// Workspace symbols one search answers with, ranked before the cap.
 const SYMBOL_LIMIT: usize = 200;
 
@@ -48,6 +49,12 @@ pub struct PoolOptions {
     pub max_open: Option<usize>,
 }
 
+#[derive(Default)]
+struct Publish {
+    pending: bool,
+    due: bool,
+}
+
 /// Routes like an editor: every server for a file's language is asked at once and their hovers,
 /// definitions and references merged, owner first; highlights and outlines come from the owner
 /// alone. Repository-wide queries fan out to all servers, and all of them report as one status.
@@ -58,8 +65,6 @@ pub struct LspPool {
     missing: Mutex<Vec<LspMissing>>,
     /// Languages already resolved, served or not, so the PATH probe runs once each.
     resolved: Mutex<HashSet<LanguageId>>,
-    /// The tracked snapshot's Helm charts, which tell a chart's templates from plain YAML.
-    charts: Arc<Mutex<Charts>>,
     closing: AtomicBool,
     publish: Mutex<Publish>,
 }
@@ -72,7 +77,6 @@ impl LspPool {
             entries: Mutex::default(),
             missing: Mutex::default(),
             resolved: Mutex::default(),
-            charts: Arc::default(),
             closing: AtomicBool::new(false),
             publish: Mutex::default(),
         });
@@ -83,11 +87,6 @@ impl LspPool {
     pub fn status(&self) -> LspStatus {
         let servers = self.servers().iter().map(|s| s.status()).collect();
         LspStatus { enabled: true, servers, missing: self.missing.lock().unwrap().clone() }
-    }
-
-    /// The Helm charts of the snapshot tracked last.
-    pub fn charts(&self) -> Charts {
-        self.charts.lock().unwrap().clone()
     }
 
     pub fn servers(&self) -> Vec<Arc<PoolServer>> {
@@ -173,15 +172,13 @@ impl LspPool {
     /// Nothing is tracked when the new side is not the checkout: a server would see text contradicting its disk.
     pub fn track(self: &Arc<Self>, snap: &Snapshot) -> impl Future<Output = ()> + use<> {
         let mut by_language = PathsByLanguage::new();
-        let charts = Charts::of(&snap.tree);
         if follows_checkout(snap) {
             for f in snap.changed.iter().filter(|f| f.status != ChangeStatus::D && !f.binary) {
-                if let Some(language) = language_of(&f.path, &charts) {
+                if let Some(language) = language_of(&f.path) {
                     by_language.entry(language).or_default().push(f.path.clone());
                 }
             }
         }
-        *self.charts.lock().unwrap() = charts;
         // A snapshot can land while the run is ending; a shutting-down server takes no documents.
         let closing = self.closing.load(Ordering::SeqCst);
         if !closing {
@@ -212,8 +209,7 @@ impl LspPool {
             return Err(Error::LspUnavailable("the language servers are shutting down".into()));
         }
         let all = self.servers();
-        let language = language_of(path, &self.charts.lock().unwrap());
-        let found: Vec<Arc<PoolServer>> = match language {
+        let found: Vec<Arc<PoolServer>> = match language_of(path) {
             Some(language) => {
                 let owners = all.iter().filter(|s| s.routes().languages.contains(&language));
                 let joiners = all.iter().filter(|s| s.routes().joins.contains(&language));
@@ -291,10 +287,6 @@ impl LspPool {
             root: self.opts.root.clone(),
             read: self.opts.read.clone(),
             has: self.opts.has.clone(),
-            language: {
-                let charts = self.charts.clone();
-                Arc::new(move |path| language_of(path, &charts.lock().unwrap()))
-            },
             lookup: self.opts.lookup.clone(),
             max_open: self.opts.max_open,
             on_status: Arc::new(move || {
@@ -306,5 +298,33 @@ impl LspPool {
         let server = Arc::new(PoolServer::new(command, paths, opts));
         self.entries.lock().unwrap().insert(command.to_owned(), server.clone());
         server
+    }
+
+    fn publish(self: &Arc<Self>) {
+        if self.closing.load(Ordering::SeqCst) {
+            return;
+        }
+        {
+            let mut publish = self.publish.lock().unwrap();
+            if publish.pending {
+                publish.due = true;
+                return;
+            }
+            publish.pending = true;
+        }
+        (self.opts.on_status)(self.status());
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(PUBLISH_WINDOW).await;
+            let Some(pool) = weak.upgrade() else { return };
+            let due = {
+                let mut publish = pool.publish.lock().unwrap();
+                publish.pending = false;
+                std::mem::take(&mut publish.due)
+            };
+            if due {
+                pool.publish();
+            }
+        });
     }
 }

@@ -22,8 +22,8 @@ const server = (extra: Partial<LspServerStatus> = {}): LspServerStatus => ({
   ...extra,
 });
 const status = (...servers: LspServerStatus[]): LspStatus => ({ enabled: true, servers, missing: [] });
-const checkout = { newSha: 'worktree', headSha: '', tree: [] };
-const elsewhere = { newSha: 'abc123', headSha: 'def456', tree: [] };
+const checkout = { newSha: 'worktree', headSha: '' };
+const elsewhere = { newSha: 'abc123', headSha: 'def456' };
 
 describe('lspBlocker', () => {
   it('names the run, the snapshot, the language, the server and the feature, in that order', () => {
@@ -75,26 +75,15 @@ describe('lspBlocker', () => {
       'css is starting…',
     );
   });
-
-  it("asks a chart template's server, not the YAML one, when the snapshot holds the chart", () => {
-    const yaml = server({ name: 'yaml', command: 'yaml', languages: ['yaml'], supports: ['hover'] });
-    const missing: LspStatus['missing'] = [{ language: 'helm', tried: ['helm_ls', 'helm-ls'] }];
-    const chart = { ...checkout, tree: ['chart/Chart.yaml', 'chart/templates/svc.yaml', 'chart/values.yaml'] };
-    expect(lspBlocker({ ...status(yaml), missing }, chart, { path: 'chart/templates/svc.yaml' })).toBe(
-      'No language server for helm on PATH: install one of helm_ls, helm-ls',
-    );
-    expect(lspBlocker({ ...status(yaml), missing }, chart, { path: 'chart/values.yaml' })).toBeNull();
-    expect(lspBlocker({ ...status(yaml), missing }, checkout, { path: 'chart/templates/svc.yaml' })).toBeNull();
-  });
 });
 
 describe('hoverOnly', () => {
   it('is true for a file whose ready servers navigate nowhere, such as a schema server', () => {
-    expect(
-      hoverOnly(status(server({ languages: ['json'], supports: ['hover', 'documentSymbol'] })), 'x.json', []),
-    ).toBe(true);
-    expect(hoverOnly(status(server()), 'a.py', [])).toBe(false);
-    expect(hoverOnly(status(server({ state: 'starting', supports: [] })), 'a.py', [])).toBe(false);
-    expect(hoverOnly(status(), 'a.py', [])).toBe(false);
+    expect(hoverOnly(status(server({ languages: ['json'], supports: ['hover', 'documentSymbol'] })), 'x.json')).toBe(
+      true,
+    );
+    expect(hoverOnly(status(server()), 'a.py')).toBe(false);
+    expect(hoverOnly(status(server({ state: 'starting', supports: [] })), 'a.py')).toBe(false);
+    expect(hoverOnly(status(), 'a.py')).toBe(false);
   });
 });
