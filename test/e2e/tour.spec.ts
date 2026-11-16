@@ -722,6 +722,52 @@ test.describe('the tour', () => {
       expect(Math.abs((await top(view.locator('.tour-margin-card'))) - (await top(card)))).toBeLessThanOrEqual(1);
       expect(Math.abs((await scroller.evaluate((el) => el.scrollTop)) - before)).toBeLessThanOrEqual(1);
     });
+
+    test("a diff in a card keeps its button while the pointer crosses the card to it; selected code takes the diff's comment", async ({
+      page,
+      diffle,
+    }) => {
+      await pushTour(diffle.url, BLOCKS);
+      const view = await showTour(page);
+      const button = view.getByRole('button', { name: 'Comment', exact: true });
+      const diff = view.locator('[data-card="parse"] figure');
+      const composer = view.getByPlaceholder('Leave a comment…');
+
+      // From the diff to its button, the pointer crosses the card's padding: the card's own button
+      // must not take the diff's place on the way.
+      await diff.hover();
+      const to = (await button.boundingBox())!;
+      const from = (await diff.boundingBox())!;
+      expect(Math.abs(to.y - from.y)).toBeLessThanOrEqual(1);
+      await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+      await page.mouse.down();
+      await page.mouse.up();
+      await expect(composer).toBeFocused();
+      await page.keyboard.type('Why these lines?');
+      await page.keyboard.press('Control+Enter');
+      await expect(view.locator('.tour-margin-card').filter({ hasText: 'Why these lines?' })).toBeVisible();
+
+      // Code dragged across in the diff, its rows in a shadow tree, takes a comment on the diff as a whole.
+      const rows = diff.locator('diffs-container');
+      const box = (await rows.boundingBox())!;
+      await page.mouse.move(box.x + 60, box.y + 30);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 300, box.y + 30, { steps: 10 });
+      await page.mouse.up();
+      await expect(button).toHaveAttribute('title', 'Comment on this block as a whole (c)');
+      await page.keyboard.press('c');
+      await expect(composer).toBeFocused();
+      await page.keyboard.type('And the code?');
+      await page.keyboard.press('Control+Enter');
+      await expect(view.locator('.tour-margin-card').filter({ hasText: 'And the code?' })).toBeVisible();
+
+      const threads = await readThreads(diffle.url);
+      const onDiff = { element: { tag: 'diffle-diff' }, target: { on: 'element' } };
+      expect(threads.map((t) => [t.messages[0]!.body, t.anchor]).sort()).toMatchObject([
+        ['And the code?', onDiff],
+        ['Why these lines?', onDiff],
+      ]);
+    });
   });
 
   test('a diagram box takes a comment with a click and a card with its button; a narrow page shows them under their blocks', async ({

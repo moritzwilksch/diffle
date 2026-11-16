@@ -3,8 +3,10 @@ import { compareThreads } from '@/client/comments/threads.js';
 import { visibleThreads } from '@/client/model.js';
 import { useStore, type TourDraft } from '@/client/store.js';
 import type { CommentThread } from '@/shared/protocol.js';
-import type { TourAnchor } from '@/shared/tour.js';
+import type { TourAnchor, TourTargetRequest } from '@/shared/tour.js';
 import { selectionTarget, type Spot, textRange } from '@/client/tour/anchor.js';
+import { useTour } from '@/client/tour/state.js';
+import { blockAround } from './targets.js';
 
 /** A thread on the tour, its anchor narrowed. */
 export type TourThread = CommentThread & { anchor: TourAnchor };
@@ -41,11 +43,25 @@ export const DRAFT = 'draft';
 /** The article the tour page shows, for `c` to read the selection in. */
 export const tourArticle: { current: HTMLElement | null } = { current: null };
 
-/** Opens a draft on the selected words; false when nothing in the article is selected. */
+/**
+ * What a comment on the selection in `article` is on: the selected words, or the block around a
+ * selection in code or a drawing, as a whole; null when nothing in the article is selected.
+ */
+export function selectionSpot(
+  article: Element,
+): { node: number[]; target: TourTargetRequest } | { refused: string } | null {
+  const found = selectionTarget(document.getSelection(), article);
+  if (!found || !('code' in found)) return found;
+  const load = useTour.getState().load;
+  const block = load.state === 'ready' ? blockAround(found.code, load.doc.body) : null;
+  return block ? { node: block.node, target: { on: 'element' } } : null;
+}
+
+/** Opens a draft on the selection; false when nothing in the article is selected. */
 export function commentOnSelection(): boolean {
   const article = tourArticle.current;
   if (!article) return false;
-  const found = selectionTarget(document.getSelection(), article);
+  const found = selectionSpot(article);
   if (!found) return false;
   const review = useStore.getState();
   if ('refused' in found) return (review.flash(found.refused), true);

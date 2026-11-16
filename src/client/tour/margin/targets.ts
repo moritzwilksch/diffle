@@ -57,8 +57,9 @@ const GRACE_MS = 300;
 
 /**
  * The block under the pointer, kept a moment after the pointer leaves it so it can reach the
- * block's button, and for as long as it rests there. `enter` takes the block now under the pointer
- * (null for none); `hold` and `release` are the button's.
+ * block's button, and for as long as it rests there. The pointer leaving for a block around it, as
+ * on its way to the margin, counts as leaving. `enter` takes the block now under the pointer (null
+ * for none); `hold` and `release` are the button's.
  */
 export function useHoveredBlock<B extends { el: Element }>(): {
   block: B | null;
@@ -68,19 +69,24 @@ export function useHoveredBlock<B extends { el: Element }>(): {
 } {
   const [block, setBlock] = useState<B | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** What the block becomes once the grace ends. */
+  const next = useRef<B | null>(null);
   const hold = () => {
     if (timer.current != null) clearTimeout(timer.current);
     timer.current = null;
   };
-  // Pending already: the pointer moving on through prose must not put the end off.
-  const release = () => {
+  // Pending already: the pointer moving on must not put the end off.
+  const leave = (to: B | null) => {
+    next.current = to;
     timer.current ??= setTimeout(() => {
       timer.current = null;
-      setBlock(null);
+      setBlock(next.current);
     }, GRACE_MS);
   };
+  const release = () => leave(null);
   const enter = (found: B | null) => {
     if (!found) return release();
+    if (block && found.el !== block.el && found.el.contains(block.el)) return leave(found);
     hold();
     setBlock((prev) => (prev?.el === found.el ? prev : found));
   };
