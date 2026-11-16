@@ -641,12 +641,6 @@ export const UserConfigSchema = z.object({
    */
   lspCommands: z.partialRecord(LanguageIdSchema, z.string()),
   /**
-   * Language server settings per language, deep-merged over the built-in ones for the server that
-   * owns the language: sent as `workspace/didChangeConfiguration` and answered to
-   * `workspace/configuration`. Read-only over HTTP; set by editing the config file.
-   */
-  lspSettings: z.partialRecord(LanguageIdSchema, z.record(z.string(), z.unknown())),
-  /**
    * GitHub Enterprise hosts: the host in remote urls → the host serving the web UI and API, the
    * same one for most. github.com needs no entry. Read-only over HTTP; set by editing the
    * config file.
@@ -662,7 +656,6 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   lineWrap: true,
   blame: 'inline',
   lspCommands: {},
-  lspSettings: {},
   githubHosts: {},
 };
 
@@ -1033,7 +1026,7 @@ export function languageOf(path: string): LanguageId | null {
   return (ext && LANGUAGE_BY_EXT[ext]) || null;
 }
 
-/** Writable HTTP config fields; unknown keys, including CLI-only lspCommands, lspSettings and githubHosts, are stripped. */
+/** Writable HTTP config fields; unknown keys, including CLI-only lspCommands and githubHosts, are stripped. */
 export const ConfigUpdateSchema = z.object({
   autoViewed: z.string().array().optional(),
   contextLines: z.number().int().min(0).max(10_000).optional(),

@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use crate::persist::{user_config_dir, write_file_atomic};
 use crate::protocol::{BlameMode, FollowRefs, LanguageId, UserConfig, language_ids};
 
-/// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/lspSettings/githubHosts).
+/// Every field optional: what `set` merges in (routes' ConfigUpdate plus CLI-only lspCommands/githubHosts).
 #[derive(Default, Clone, Debug)]
 pub struct UserConfigPatch {
     pub auto_viewed: Option<Vec<String>>,
@@ -27,16 +27,20 @@ impl Default for UserConfig {
             line_wrap: true,
             blame: BlameMode::Inline,
             lsp_commands: HashMap::new(),
-            lsp_settings: HashMap::new(),
             github_hosts: HashMap::new(),
         }
     }
 }
 
+/// Language server settings per language, as the user wrote them.
+pub type LspSettings = HashMap<LanguageId, Map<String, Value>>;
+
 /// Owns the config file. Writes are serialized, so overlapping `set`s land in call order.
 pub struct UserConfigStore {
     file: PathBuf,
     config: Mutex<UserConfig>,
+    /// Kept apart from `UserConfig`, which the client reads: settings may carry secrets.
+    lsp_settings: LspSettings,
     writing: tokio::sync::Mutex<()>,
 }
 
@@ -47,21 +51,26 @@ impl UserConfigStore {
 
     /// Reads `file`; an absent file is the defaults, and so is an unreadable one, with a warning.
     pub async fn open(file: PathBuf) -> Self {
-        let config = match tokio::fs::read_to_string(&file).await {
+        let value = match tokio::fs::read_to_string(&file).await {
             Ok(text) => match serde_json::from_str::<Value>(&text) {
-                Ok(value) => normalize(&value),
+                Ok(value) => value,
                 Err(e) => {
                     crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
-                    UserConfig::default()
+                    Value::Null
                 }
             },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => UserConfig::default(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Value::Null,
             Err(e) => {
                 crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
-                UserConfig::default()
+                Value::Null
             }
         };
-        Self { file, config: Mutex::new(config), writing: tokio::sync::Mutex::new(()) }
+        Self {
+            file,
+            config: Mutex::new(normalize(&value)),
+            lsp_settings: lsp_settings(value.get("lspSettings")),
+            writing: tokio::sync::Mutex::new(()),
+        }
     }
 
     pub fn file(&self) -> &Path {
@@ -70,6 +79,11 @@ impl UserConfigStore {
 
     pub fn get(&self) -> UserConfig {
         self.config.lock().unwrap().clone()
+    }
+
+    /// The `lspSettings` read at open; nothing writes them but the user.
+    pub fn lsp_settings(&self) -> &LspSettings {
+        &self.lsp_settings
     }
 
     /// Merges `next` in and persists it. A failed write fails its caller only; the next `set` still writes.
@@ -88,8 +102,12 @@ impl UserConfigStore {
         put("lineWrap", next.line_wrap.map(Value::from));
         put("blame", next.blame.map(|b| Value::from(b.to_string())));
         let config = normalize(&merged);
+        let mut saved = serde_json::to_value(&config)?;
+        if !self.lsp_settings.is_empty() {
+            saved["lspSettings"] = serde_json::to_value(&self.lsp_settings)?;
+        }
         // May hold a shell command: the write is owner-only.
-        write_file_atomic(&self.file, &(serde_json::to_string_pretty(&config)? + "\n")).await?;
+        write_file_atomic(&self.file, &(serde_json::to_string_pretty(&saved)? + "\n")).await?;
         *self.config.lock().unwrap() = config.clone();
         Ok(config)
     }
@@ -122,7 +140,6 @@ fn normalize(value: &Value) -> UserConfig {
         line_wrap,
         blame,
         lsp_commands: lsp_commands(c.get("lspCommands")),
-        lsp_settings: lsp_settings(c.get("lspSettings")),
         github_hosts: github_hosts(c.get("githubHosts")),
     }
 }
@@ -133,7 +150,7 @@ fn lsp_commands(value: Option<&Value>) -> HashMap<LanguageId, String> {
 }
 
 /// Per-language settings objects; anything else for a language is dropped with a warning.
-fn lsp_settings(value: Option<&Value>) -> HashMap<LanguageId, Map<String, Value>> {
+fn lsp_settings(value: Option<&Value>) -> LspSettings {
     per_language("lspSettings", value, |language, settings| {
         let object = settings.as_object().cloned();
         if object.is_none() {

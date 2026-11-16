@@ -542,7 +542,7 @@
           "$ref": "#/$defs/BlameMode"
         }
       },
-      "description": "Writable HTTP config fields; unknown keys, including CLI-only lspCommands, lspSettings and githubHosts, are stripped."
+      "description": "Writable HTTP config fields; unknown keys, including CLI-only lspCommands and githubHosts, are stripped."
     },
     "EnterRequest": {
       "oneOf": [
@@ -4831,20 +4831,6 @@
           },
           "description": "Language server command per language, replacing the built-in candidate for it; an empty\nstring disables the language. Read-only over HTTP; set in the config file, whose path `diffle config` prints."
         },
-        "lspSettings": {
-          "type": "object",
-          "propertyNames": {
-            "$ref": "#/$defs/LanguageId"
-          },
-          "additionalProperties": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
-          "description": "Language server settings per language, deep-merged over the built-in ones for the server that\nowns the language: sent as `workspace/didChangeConfiguration` and answered to\n`workspace/configuration`. Read-only over HTTP; set by editing the config file."
-        },
         "githubHosts": {
           "type": "object",
           "propertyNames": {
@@ -4863,7 +4849,6 @@
         "lineWrap",
         "blame",
         "lspCommands",
-        "lspSettings",
         "githubHosts"
       ]
     },

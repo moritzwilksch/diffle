@@ -58,7 +58,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
     let lsp = (!opts.no_lsp).then(|| {
         let mut overrides: HashMap<_, _> = config.get().lsp_commands.into_iter().collect();
         overrides.extend(opts.lsp.iter().map(|o| (o.language, o.command.clone())));
-        let settings = Arc::new(config.get().lsp_settings.into_iter().collect());
+        let settings = Arc::new(config.lsp_settings().clone());
         super::lsp::start(&session, &hub, overrides, settings, opts.lsp.iter().map(|o| o.language).collect())
     });
     let server: Arc<Mutex<Served>> = Arc::default();

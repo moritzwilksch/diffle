@@ -223,6 +223,8 @@ built-in values stay unless you override them. The server gets the result throug
 { "lspSettings": { "yaml": { "yaml": { "customTags": ["!Ref"] } } } }
 ```
 
+An entry for a language diffle doesn't know yet is ignored with a warning.
+
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 

@@ -90,7 +90,7 @@ async fn keeps_lsp_settings_objects_for_known_languages_across_a_save() {
     let dir = temp();
     let yaml = json!({ "yaml": { "format": { "enable": true }, "customTags": ["!Ref"] } });
     let store = open_with(&dir, json!({ "lspSettings": { "yaml": yaml, "go": "fast", "nope": {} } })).await;
-    let settings = serde_json::to_value(store.get().lsp_settings).unwrap();
+    let settings = serde_json::to_value(store.lsp_settings()).unwrap();
     assert_eq!(settings, json!({ "yaml": yaml }));
     store.set(UserConfigPatch { context_lines: Some(3), ..Default::default() }).await.unwrap();
     assert_eq!(on_disk(&store)["lspSettings"], json!({ "yaml": yaml }));

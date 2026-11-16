@@ -1,5 +1,4 @@
 //! One server of the pool: its bridge, the languages routed to it, and what its definition pointed it at.
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
@@ -13,12 +12,13 @@ use super::locator::HasFn;
 use super::process::{ProcessOptions, SettingsFuture};
 use super::registry::{Lookup, ServerContext, ServerDefinition, definition_of};
 use crate::protocol::{LanguageId, LspProcessStatus, LspProjects, LspServerStatus};
+use crate::user_config::LspSettings;
 
 /// The diff's files by language.
 pub type PathsByLanguage = IndexMap<LanguageId, Vec<String>>;
 
 /// The user's settings per language, laid over the built-in ones of the server owning it.
-pub type UserSettings = Arc<HashMap<LanguageId, Map<String, Value>>>;
+pub type UserSettings = Arc<LspSettings>;
 
 pub struct ServerOptions {
     pub root: std::path::PathBuf,
