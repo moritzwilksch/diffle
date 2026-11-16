@@ -50,8 +50,8 @@ pixi exec diffle working
 nix run github:moritzwilksch/diffle -- working
 ```
 
-The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, `#python`, and `#csharp` bundle
-language servers. Every package takes more with `withLsps`, and `#unwrapped` is the bare binary:
+The Nix package bundles `gh`; `#minimal` drops it, and `#web`, `#rust`, `#python`, `#csharp`, and `#docker`
+bundle language servers. Every package takes more with `withLsps`, and `#unwrapped` is the bare binary:
 
 ```nix
 diffle.packages.${system}.default.withLsps [ pkgs.gopls pkgs.clang-tools ]
