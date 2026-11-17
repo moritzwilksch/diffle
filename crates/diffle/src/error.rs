@@ -86,7 +86,7 @@ pub enum Error {
     #[error("{0}")]
     Invalid(String),
     /// Another run already serves the repository's git dir, at this URL.
-    #[error("diffle is already running at {0}")]
+    #[error("diffle is already serving this repository at {0} (one run per repository)")]
     AlreadyRunning(String),
     /// No diffle serves the repository a `diffle comments` call is in.
     #[error("no diffle is running for this repository")]

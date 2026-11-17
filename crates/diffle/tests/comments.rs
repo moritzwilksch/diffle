@@ -1,5 +1,3 @@
-mod common;
-
 use std::path::Path;
 
 use diffle::comments::import::parse_imports;

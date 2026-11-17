@@ -1,5 +1,5 @@
 //! The built `diffle` binary, as a user runs it.
-mod common;
+use crate::common;
 
 use std::path::Path;
 use std::process::Child;
@@ -148,7 +148,12 @@ fn refuses_a_second_run_on_the_same_git_dir_while_the_first_serves() {
 
     let second = run(config.path(), &["working", "--no-open", "--no-watch", "-C", t.path.to_str().unwrap(), "-p", "0"]);
     assert_eq!(second.status.code(), Some(2), "{}", stderr(&second));
-    assert!(stderr(&second).contains(&format!("diffle is already running at {url}")), "{}", stderr(&second));
+    assert!(
+        stderr(&second)
+            .contains(&format!("diffle is already serving this repository at {url} (one run per repository)")),
+        "{}",
+        stderr(&second)
+    );
     assert!(!stderr(&second).contains("🚀"), "{}", stderr(&second));
 
     let (status, after) = http(&url, "GET", "/api/server", "");

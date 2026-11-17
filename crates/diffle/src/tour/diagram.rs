@@ -1,5 +1,5 @@
-//! Checks a `diffle-diagram`: one `<svg>` of the elements `TourSvgElement` allows, styled only by
-//! `TourSvgClass`es, each refusal with its reason.
+//! Checks the drawing of a `diffle-diagram` or a `diffle-morph`: one `<svg>` of the elements
+//! `TourSvgElement` allows, styled only by `TourSvgClass`es from one palette, each refusal with its reason.
 use html5ever::ns;
 
 use super::dom::{Dom, Node, NodeId};
@@ -14,16 +14,32 @@ enum Place {
     Text,
 }
 
-/// Every reason to refuse the `diffle-diagram` at `node`, which errors name as `element`.
-pub fn check(dom: &Dom, node: NodeId, element: &str) -> Vec<(NodeId, TourError)> {
-    let mut check = Check { dom, context: format!("{element} > "), errors: Vec::new() };
-    // Its notes, which step through the drawing, are checked as steps.
-    let is_note = |c: NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "diffle-note");
+/// The block a drawing sits in, deciding what its groups take and what follows its `<svg>`.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Block {
+    /// A `diffle-diagram`: groups take `step`, and a `diffle-note` per step follows.
+    Diagram,
+    /// A `diffle-morph`: groups take `in` or `move`, and a `diffle-before` and a `diffle-after` follow.
+    Morph,
+}
+
+/// Every reason to refuse the drawing of the block at `node`, which errors name as `element`.
+pub fn check(dom: &Dom, node: NodeId, element: &str, block: Block) -> Vec<(NodeId, TourError)> {
+    let mut check = Check { dom, context: format!("{element} > "), block, errors: Vec::new() };
+    // What follows the drawing is checked as steps or states.
+    let parts: &[&str] = match block {
+        Block::Diagram => &["diffle-note"],
+        Block::Morph => &["diffle-before", "diffle-after"],
+    };
+    let is_part = |c: NodeId| matches!(dom.node(c), Node::Element { name, .. } if parts.contains(&&*name.local));
     let content: Vec<NodeId> =
-        dom.children(node).iter().copied().filter(|&c| holds(dom.node(c)) && !is_note(c)).collect();
+        dom.children(node).iter().copied().filter(|&c| holds(dom.node(c)) && !is_part(c)).collect();
     let is_svg = |&c: &NodeId| matches!(dom.node(c), Node::Element { name, .. } if &*name.local == "svg");
     if content.len() != 1 || !content.iter().all(is_svg) {
-        let message = "diffle-diagram holds one <svg>, then a diffle-note per step when its groups take step";
+        let message = match block {
+            Block::Diagram => "diffle-diagram holds one <svg>, then a diffle-note per step when its groups take step",
+            Block::Morph => "diffle-morph holds one <svg>, then a diffle-before and a diffle-after",
+        };
         check.error(node, element.into(), message);
     }
     for child in content {
@@ -35,6 +51,7 @@ pub fn check(dom: &Dom, node: NodeId, element: &str) -> Vec<(NodeId, TourError)>
 struct Check<'a> {
     dom: &'a Dom,
     context: String,
+    block: Block,
     errors: Vec<(NodeId, TourError)>,
 }
 
@@ -88,6 +105,17 @@ impl Check<'_> {
         if is_icon && self.dom.children(node).iter().any(|&c| holds(self.dom.node(c))) {
             self.error(node, element.clone(), "an icon's <svg> holds nothing");
         }
+        let keys = |names: &[&str]| geometry.iter().any(|(key, _)| names.contains(&key.as_str()));
+        if tag == "g" && self.block == Block::Diagram && keys(&["in", "move"]) {
+            self.error(
+                node,
+                element.clone(),
+                "in and move tag a diffle-morph's groups: draw two states as a diffle-morph",
+            );
+        }
+        if tag == "g" && self.block == Block::Morph && keys(&["step"]) {
+            self.error(node, element.clone(), "a morph switches states, not steps: its groups take in or move");
+        }
         let classes = geometry.iter().filter(|(key, _)| key == "class").flat_map(|(_, v)| v.split_whitespace());
         for word in classes {
             if parse_class(word).is_none() {
@@ -121,6 +149,42 @@ fn is_styling(key: &str) -> bool {
 
 fn parse_class(word: &str) -> Option<TourSvgClass> {
     serde_json::from_value(serde_json::Value::String(word.into())).ok()
+}
+
+/// The tones of the contrast palette; the rest (`accent` and the change tones) make up the other.
+const CONTRAST: [&str; 2] = ["contrast-a", "contrast-b"];
+const TONES: [&str; 6] = ["accent", "success", "error", "warning", "contrast-a", "contrast-b"];
+
+/// The tone classes on the elements under `node`, each once, in the order first met.
+pub fn tones(dom: &Dom, node: NodeId) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    let mut stack = vec![node];
+    while let Some(id) = stack.pop() {
+        if let Node::Element { attrs, .. } = dom.node(id) {
+            let words = attrs.iter().filter(|(k, _)| k == "class").flat_map(|(_, v)| v.split_whitespace());
+            for word in words.filter(|w| TONES.contains(w)) {
+                if !found.iter().any(|f| f == word) {
+                    found.push(word.to_owned());
+                }
+            }
+        }
+        stack.extend(dom.children(id).iter().rev());
+    }
+    found
+}
+
+/// The warning for a diagram at `node` whose tones mix palettes, so no colour answers one question.
+pub fn palette(dom: &Dom, node: NodeId, element: &str) -> Option<(NodeId, TourError)> {
+    let (contrast, other): (Vec<String>, Vec<String>) =
+        tones(dom, node).into_iter().partition(|t| CONTRAST.contains(&t.as_str()));
+    (!contrast.is_empty() && !other.is_empty()).then(|| {
+        let message = format!(
+            "Mixes {} with {}: colour a drawing from one palette, accent and the change tones or contrast-a and contrast-b, so each colour answers one question",
+            contrast.join(", "),
+            other.join(", ")
+        );
+        (node, TourError { element: element.into(), message })
+    })
 }
 
 /// Whether a node is content: an element, or text that is not whitespace.

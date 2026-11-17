@@ -1,7 +1,7 @@
 // The tour scene: an agent's tour of the change (`demo-tour.ts`), read the way a reviewer would.
 import type { Locator, Page } from '@playwright/test';
 import { DEMO_TOUR } from '../demo-tour.js';
-import { SLOW, clickOn, glide, pause } from './pace.js';
+import { SLOW, clickOn, glide, pause, pickFromSymbolMenu } from './pace.js';
 
 async function pushTour(url: string) {
   const response = await fetch(new URL('api/tour', url), {
@@ -97,6 +97,7 @@ export async function tour(page: Page, url: string) {
   await scrollTo(page, view, heading(view, 'The token bucket'), 0.12);
   await pause(page, 1400);
   await clickOn(page, view.getByRole('button', { name: 'RateLimiter' }));
+  await pickFromSymbolMenu(page, 'Find references');
   const references = page.getByRole('dialog', { name: 'References' });
   await references.waitFor();
   await pause(page, 1800);

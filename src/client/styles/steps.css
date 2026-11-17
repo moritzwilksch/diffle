@@ -86,7 +86,7 @@
   white-space: normal;
 }
 
-figure[data-stepped] > .tour-note {
+figure:is([data-stepped], [data-morph-block]) > .tour-note {
   margin: 0 0.75rem 0.75rem;
 }
 

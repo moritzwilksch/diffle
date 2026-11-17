@@ -3,6 +3,7 @@
 //! items included; each block's own rules sit in its module.
 pub mod diagram;
 pub mod trace;
+pub mod versus;
 pub mod walk;
 
 use super::dom::{Dom, Node, NodeId};
@@ -81,15 +82,15 @@ pub fn steps<'a>(dom: &'a Dom, node: NodeId, element: &str, kind: &Kind, found: 
     steps
 }
 
-/// The steps of the block at `node`, its notes or stops; what else it holds `steps` refuses, and
+/// The steps of the block at `node`: its notes, stops, items, steps or states; what else it holds `steps` refuses, and
 /// its content would only repeat that.
 pub fn step_nodes(dom: &Dom, node: NodeId) -> Vec<NodeId> {
-    let is_step = |&&c: &&NodeId| matches!(dom.node(c), Node::Element { name, .. } if matches!(&*name.local, "diffle-note" | "diffle-stop" | "diffle-item"));
+    let is_step = |&&c: &&NodeId| matches!(dom.node(c), Node::Element { name, .. } if matches!(&*name.local, "diffle-note" | "diffle-stop" | "diffle-item" | "diffle-step" | "diffle-before" | "diffle-after"));
     dom.children(node).iter().filter(is_step).copied().collect()
 }
 
 /// Checks what a step holds: a sentence or two of inline prose.
-fn sentence(dom: &Dom, node: NodeId, element: &str, word: &str, found: &mut Findings) {
+pub fn sentence(dom: &Dom, node: NodeId, element: &str, word: &str, found: &mut Findings) {
     let text: String = dom.children(node).iter().map(|&c| reading(dom, c)).collect();
     let sentences = sentences(&text);
     if sentences > LONG {

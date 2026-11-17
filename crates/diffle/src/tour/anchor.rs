@@ -156,8 +156,8 @@ impl Walk<'_> {
             self.section = collapse(&reading(self.dom, id));
         }
         let element = format!("{context}{}", label(&tag, attrs));
-        if tag == "diffle-diagram" {
-            self.diagram(id, &node, element);
+        if matches!(tag.as_str(), "diffle-diagram" | "diffle-morph") {
+            self.diagram(id, &node, element, &tag);
             return;
         }
         let Some(part) = part(&tag, attrs) else {
@@ -169,20 +169,21 @@ impl Walk<'_> {
         self.push(&node, element, part.clone(), within.cloned(), text, block);
         let inner = match tag.as_str() {
             "diffle-card" => format!("{context}diffle-card#{} > ", attr(attrs, "id").unwrap_or_default()),
-            "diffle-walk" | "diffle-trace" | "diffle-tabs" | "diffle-tab" => {
+            "diffle-walk" | "diffle-trace" | "diffle-tabs" | "diffle-tab" | "diffle-versus" => {
                 format!("{context}{} > ", label(&tag, attrs))
             }
             _ => context.to_owned(),
         };
-        let holder = matches!(tag.as_str(), "diffle-card" | "diffle-tab" | "diffle-walk");
+        let holder = matches!(tag.as_str(), "diffle-card" | "diffle-tab" | "diffle-walk" | "diffle-versus");
         if !is_opaque(&tag) {
             self.children(id, &node, &inner, if holder { Some(&part) } else { within });
         }
     }
 
-    /// A diagram, and each box and label in it, which take threads as a whole.
-    fn diagram(&mut self, id: NodeId, node: &[i64], element: String) {
-        let diagram = TourPart { tag: TourCommentTag::DiffleDiagram, handle: None };
+    /// A diagram or a morph, and each box and label in it, which take threads as a whole.
+    fn diagram(&mut self, id: NodeId, node: &[i64], element: String, tag: &str) {
+        let Ok(kind) = tag.parse() else { return };
+        let diagram = TourPart { tag: kind, handle: None };
         self.push(node, element, diagram.clone(), None, None, Some(String::new()));
         let elements: Vec<NodeId> = self
             .dom
@@ -191,11 +192,12 @@ impl Walk<'_> {
             .copied()
             .filter(|&c| matches!(self.dom.node(c), Node::Element { .. }))
             .collect();
-        // Its notes, when it steps, read as prose.
+        // Its notes, when it steps, and a morph's states read as prose.
         let is = |c: NodeId, tag: &str| matches!(self.dom.node(c), Node::Element { name, .. } if &*name.local == tag);
+        let context = format!("{tag} > ");
         for (i, &child) in elements.iter().enumerate() {
-            if is(child, "diffle-note") {
-                self.visit(child, [node, &[i as i64]].concat(), "diffle-diagram > ", Some(&diagram));
+            if ["diffle-note", "diffle-before", "diffle-after"].iter().any(|t| is(child, t)) {
+                self.visit(child, [node, &[i as i64]].concat(), &context, Some(&diagram));
             }
         }
         let Some(at) = elements.iter().position(|&c| is(c, "svg")) else { return };
@@ -213,7 +215,7 @@ impl Walk<'_> {
                 "text" => collapse(&reading(self.dom, shape)),
                 _ => continue,
             };
-            let element = format!("diffle-diagram > {}", self::label(&name.local, attrs));
+            let element = format!("{context}{}", self::label(&name.local, attrs));
             // A box or a label names its diagram itself.
             let Some(part) = part(&name.local, attrs) else { continue };
             self.push(&at, element, part, None, None, Some(label));
@@ -275,6 +277,7 @@ impl Walk<'_> {
             "diffle-card" => value("title"),
             "diffle-diff" | "diffle-walk" => format!("{} {}", value("path"), value("lines")),
             "diffle-trace" => self.first_stop(id),
+            "diffle-versus" => value("input"),
             "diffle-tabs" => self.titles(id),
             // An item's whole question: ticks and answers find it again by it.
             "diffle-item" => collapse(&reading(self.dom, id)),
@@ -295,7 +298,8 @@ fn part(tag: &str, attrs: &[(String, String)]) -> Option<TourPart> {
     let handle = match tag {
         "diffle-card" => value("id").map(str::to_owned),
         "diffle-diff" | "diffle-walk" => at("lines"),
-        "diffle-stop" | "diffle-code" => at("line"),
+        "diffle-stop" | "diffle-code" | "diffle-step" | "diffle-before" | "diffle-after" => at("line"),
+        "diffle-versus" => value("input").map(str::to_owned),
         "diffle-note" | "diffle-tab" | "diffle-tree" => value("title").map(str::to_owned),
         "diffle-callout" => value("kind").map(str::to_owned),
         _ => None,
@@ -372,6 +376,30 @@ mod tests {
         assert_eq!(
             (&note["element"], &note["within"]),
             (&json!({"tag": "diffle-note", "handle": "Retry"}), &json!({"tag": "diffle-walk", "handle": "a.rs:1-4"}))
+        );
+    }
+
+    #[test]
+    fn a_versus_and_a_morph_name_their_parts() {
+        let blocks = r#"<diffle-versus input="Id 7"><diffle-step>Both.</diffle-step><diffle-step>
+<diffle-before path="a.rs" line="2">Old.</diffle-before><diffle-after path="a.rs" line="3">New.</diffle-after></diffle-step></diffle-versus>
+<diffle-morph><svg viewBox="0 0 100 50"><g in="after"><rect x="8" y="8" width="80" height="28"></rect><text x="16" y="22">Cache</text></g></svg>
+<diffle-before>Without.</diffle-before><diffle-after>With.</diffle-after></diffle-morph>"#;
+        let tour = TourIndex::read(&format!("{TOUR}{blocks}"));
+        let whole = |node: &[i64]| json(&tour.place(node, &TourTargetRequest::Element).unwrap());
+
+        let after = json(&tour.place(&[7, 1, 1], &text("New", 0)).unwrap());
+        let state = json(&tour.place(&[8, 2], &text("With", 0)).unwrap());
+
+        assert_eq!(whole(&[7])["target"], json!({"on": "element", "label": "Id 7"}));
+        assert_eq!(
+            (&after["element"], &after["within"]),
+            (&json!({"tag": "diffle-after", "handle": "a.rs:3"}), &json!({"tag": "diffle-versus", "handle": "Id 7"}))
+        );
+        assert_eq!(whole(&[8, 0, 0, 0])["target"]["label"], "Cache");
+        assert_eq!(
+            (&state["element"], &state["within"]),
+            (&json!({"tag": "diffle-after"}), &json!({"tag": "diffle-morph"}))
         );
     }
 

@@ -47,6 +47,8 @@ const KINDS: Record<TourWholeTag, string> = {
   'diffle-tree': 'tree',
   'diffle-callout': 'callout',
   'diffle-diagram': 'diagram',
+  'diffle-versus': 'versus',
+  'diffle-morph': 'morph',
   table: 'table',
 };
 

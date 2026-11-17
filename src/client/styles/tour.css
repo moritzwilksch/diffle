@@ -205,11 +205,11 @@
 
 /* The words a thread is on, through the CSS Custom Highlight API; the active thread's stronger. */
 ::highlight(tour-comment) {
-  background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  background-color: color-mix(in srgb, var(--comment-mark) 25%, transparent);
 }
 
 ::highlight(tour-comment-active) {
-  background-color: color-mix(in srgb, var(--accent) 36%, transparent);
+  background-color: color-mix(in srgb, var(--comment-mark) 50%, transparent);
 }
 
 .tour-inline-threads {
@@ -287,4 +287,24 @@
   border-radius: 0.25rem;
   background: var(--bg-2);
   font-weight: 500;
+}
+
+/* A term the tour defines: underlined dotted where its definition shows on hover or focus. */
+.tour-term {
+  border-radius: 2px;
+  font-style: normal;
+  text-decoration: underline dotted var(--fg-2);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: help;
+}
+
+.tour-term:is(:hover, [data-shown]) {
+  text-decoration-color: var(--accent);
+  text-decoration-style: solid;
+}
+
+.tour-term:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

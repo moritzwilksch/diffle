@@ -3,6 +3,7 @@ import { connectWs } from './api.js';
 import { Header } from './header/Header.js';
 import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
+import { SymbolMenu } from './lsp/SymbolMenu.js';
 import { documentTitle } from './model.js';
 import { useRemPx } from './scale.js';
 import { ServerLost } from './ServerLost.js';
@@ -141,6 +142,8 @@ export function App() {
           <ViewLayers part="Side" />
         </>
       )}
+      {/* Above every view: the diff and the tour's symbol chips both open it. */}
+      <SymbolMenu />
       <HelpOverlay />
       <TooltipHost />
       {lost && <ServerLost />}

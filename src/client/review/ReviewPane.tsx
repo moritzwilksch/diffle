@@ -38,7 +38,6 @@ import { renderedContext } from '@/client/keyboard/nav.js';
 import { SearchBar } from '@/client/keyboard/SearchBar.js';
 import { HoverTooltip, hoverControl } from '@/client/lsp/HoverTooltip.js';
 import { ReferencesList } from '@/client/lsp/ReferencesList.js';
-import { SymbolMenu } from '@/client/lsp/SymbolMenu.js';
 import { SymbolPicker } from '@/client/lsp/SymbolPicker.js';
 import { lspTarget, type TokenTarget } from '@/client/lsp/target.js';
 import {
@@ -1027,7 +1026,6 @@ export function ReviewPane() {
     <main className="relative flex min-h-0 min-w-0 flex-col outline-none" tabIndex={-1}>
       <SearchBar />
       <SymbolPicker />
-      <SymbolMenu />
       <HoverTooltip />
       <ReferencesList />
       {fileView && <FileViewBar path={fileView.path} />}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { readTour } from '@/client/tour/document.js';
-import { excerpt } from '@/client/tour/excerpt.js';
+import { excerpt, oneSide } from '@/client/tour/excerpt.js';
 import { exportName } from '@/client/tour/export/file.js';
 import { selectionTarget, textRange } from '@/client/tour/anchor.js';
 import { freeSpot, placeCards } from '@/client/tour/margin/cards.js';
@@ -46,6 +46,16 @@ describe('excerpt', () => {
       '@@ -1,2 +1,2 @@\n import os\n a\n',
     );
     expect(excerpt({ path: 'app.py', side: 'new', start: 6, end: 9 }, NEW, PATCH)).toBeNull();
+  });
+
+  it("shows one run's line alone, numbered on its side, as a versus does", () => {
+    const old = excerpt({ path: 'app.py', side: 'old', start: 3, end: 3 }, OLD, PATCH)!;
+    const added = excerpt({ path: 'app.py', side: 'new', start: 4, end: 4 }, NEW, PATCH)!;
+    const kept = excerpt({ path: 'app.py', side: 'new', start: 5, end: 5 }, NEW, PATCH)!;
+
+    expect(body(oneSide(old, 'old'))).toBe('@@ -3,1 +3,1 @@\n-b\n');
+    expect(body(oneSide(added, 'new'))).toBe('@@ -4,1 +4,1 @@\n+C\n');
+    expect(body(oneSide(kept, 'new'))).toBe('@@ -5,1 +5,1 @@\n d\n');
   });
 });
 

@@ -7,6 +7,7 @@ mod dom;
 mod drawing;
 mod element;
 mod files;
+mod morph;
 mod placement;
 mod reading;
 mod stepped;

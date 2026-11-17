@@ -39,6 +39,18 @@ test('closes the settings dialog on Escape and on a click outside it', async ({ 
   await expect(dialog).toHaveCount(0);
 });
 
+test('scrolls the settings dialog to its buttons on a short viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 500 });
+  // The header's buttons overlap at this width, so a pointer click would hit a neighbour.
+  await page.getByRole('button', { name: 'Settings' }).dispatchEvent('click');
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const save = dialog.getByRole('button', { name: 'Save' });
+  await save.scrollIntoViewIfNeeded();
+  await expect(save).toBeInViewport();
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+});
+
 /** The number of `path`'s first line below its sticky header: the row a reader's eye is on. */
 const topLine = (page: Page, path: string) =>
   page

@@ -1,5 +1,5 @@
 //! Fetching from and cloning a repository on disk: what lands in the object store, as git checks it.
-mod common;
+use crate::common;
 
 use common::{TestRepo, git_in};
 use diffle::git::GitRepo;
