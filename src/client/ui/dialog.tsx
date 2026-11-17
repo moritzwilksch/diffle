@@ -22,7 +22,7 @@ function DialogContent({
         <DialogPrimitive.Popup
           data-slot="dialog-content"
           className={cn(
-            'w-140 max-w-[95vw] rounded-[0.625rem] border border-border bg-canvas p-4 shadow-[0_1rem_3rem_rgba(0,0,0,0.3)] outline-none',
+            'w-140 max-h-[95dvh] max-w-[95vw] overflow-y-auto overscroll-contain rounded-[0.625rem] border border-border bg-canvas p-4 shadow-[0_1rem_3rem_rgba(0,0,0,0.3)] outline-none',
             className,
           )}
           {...props}
