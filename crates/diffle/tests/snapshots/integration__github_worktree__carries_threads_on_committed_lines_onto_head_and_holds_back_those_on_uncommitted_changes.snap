@@ -1,0 +1,55 @@
+---
+source: crates/diffle/tests/github_worktree.rs
+expression: "json!({ \"placed\": placed, \"held\": held })"
+---
+{
+  "held": [
+    [
+      "added-on-top",
+      "on uncommitted changes"
+    ],
+    [
+      "edited-file",
+      "on uncommitted changes"
+    ],
+    [
+      "uncommitted",
+      "on uncommitted changes"
+    ],
+    [
+      "untracked-file",
+      "on uncommitted changes"
+    ]
+  ],
+  "placed": [
+    [
+      "committed",
+      {
+        "endLine": 5,
+        "kind": "line",
+        "path": "a.txt",
+        "quoted": "committed",
+        "side": "new",
+        "startLine": 5
+      }
+    ],
+    [
+      "removed",
+      {
+        "endLine": 5,
+        "kind": "line",
+        "path": "a.txt",
+        "quoted": "line 5",
+        "side": "old",
+        "startLine": 5
+      }
+    ],
+    [
+      "pushed-file",
+      {
+        "kind": "file",
+        "path": "c.txt"
+      }
+    ]
+  ]
+}

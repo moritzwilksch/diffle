@@ -42,9 +42,11 @@ pub async fn discover_github(
     };
     let reason = if pr.state != "OPEN" {
         Some("The pull request is not open".to_owned())
-    } else if snap.old_sha == WORKTREE || snap.new_sha == WORKTREE {
+    } else if snap.old_sha == WORKTREE {
         Some("GitHub cannot anchor comments to the worktree".to_owned())
-    } else if snap.new_sha != pr.head_ref_oid {
+    } else if snap.new_sha == WORKTREE && snap.head_sha != pr.head_ref_oid {
+        Some("HEAD is not the pull request head; push or pull first".to_owned())
+    } else if snap.new_sha != WORKTREE && snap.new_sha != pr.head_ref_oid {
         Some("The comparison does not end at the pull request head".to_owned())
     } else {
         match repo.merge_base(&pr.base_ref_oid, &pr.head_ref_oid).await {
@@ -57,12 +59,13 @@ pub async fn discover_github(
 }
 
 /// The one open pull request from the new endpoint's upstream branch into the old one's, or why
-/// there is none.
+/// there is none. A worktree endpoint is HEAD's branch: its threads are carried onto HEAD.
 async fn matching_pr(repo: &GitRepo, snap: &Snapshot, github: &Github) -> Result<Result<PullRequest, String>> {
     let client = github.client.as_ref().expect("a client");
     let Review::Range { old, new, .. } = &snap.review else {
         return Ok(Err("A single commit belongs to no pull request".into()));
     };
+    let new = if new == WORKTREE { "HEAD" } else { new };
     let (old, new, remotes) =
         tokio::try_join!(repo.upstream_branch(old), repo.upstream_branch(new), async { repo.remotes().await })?;
     let (Some(old), Some(new)) = (old, new) else {

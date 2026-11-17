@@ -108,7 +108,8 @@ fn json_of<T: serde::Serialize>(value: &T) -> Value {
 
 #[test]
 fn build_review_maps_sides_and_multi_line_ranges_to_the_review_thread_shape() {
-    let built = build_review(&[t("n").build(), t("o").old().lines(5, 8).body("gone").build()], None);
+    let built =
+        build_review(&[t("n").build(), t("o").old().lines(5, 8).body("gone").build()], None, &Default::default());
     assert!(built.skipped.is_empty());
     assert_eq!(
         json_of(&built.comments),
@@ -121,7 +122,7 @@ fn build_review_maps_sides_and_multi_line_ranges_to_the_review_thread_shape() {
 
 #[test]
 fn build_review_keeps_file_threads_in_the_comment_list_in_review_order() {
-    let built = build_review(&[t("n").build(), file_thread("f", "whole file", "a.txt")], None);
+    let built = build_review(&[t("n").build(), file_thread("f", "whole file", "a.txt")], None, &Default::default());
     assert_eq!(
         json_of(&built.comments),
         json!([
@@ -134,7 +135,8 @@ fn build_review_keeps_file_threads_in_the_comment_list_in_review_order() {
 
 #[test]
 fn build_review_skips_stale_threads_and_without_ids_resolved_ones() {
-    let built = build_review(&[t("s").stale().build(), t("r").resolved().build(), t("k").build()], None);
+    let built =
+        build_review(&[t("s").stale().build(), t("r").resolved().build(), t("k").build()], None, &Default::default());
     assert_eq!(built.comments.iter().map(|c| c.body.as_str()).collect::<Vec<_>>(), ["hi"]);
     assert_eq!(json_of(&built.skipped), json!([{ "id": "s", "reason": "stale" }]));
 }
@@ -145,7 +147,8 @@ fn build_review_skips_threads_on_the_tour() {
     let element = TourPart { tag: TourCommentTag::P, handle: None };
     let anchor =
         CommentAnchor::Tour { node: vec![3], step: Some(1), section: "S".into(), element, within: None, target };
-    let built = build_review(&[thread_with("tour", anchor, "why?", false, false), t("k").build()], None);
+    let built =
+        build_review(&[thread_with("tour", anchor, "why?", false, false), t("k").build()], None, &Default::default());
     assert_eq!(built.ids, ["k"]);
     let skipped = json!([{ "id": "tour", "reason": "a comment on the tour has no place in a pull request review" }]);
     assert_eq!(json_of(&built.skipped), skipped);
@@ -154,7 +157,8 @@ fn build_review_skips_threads_on_the_tour() {
 #[test]
 fn build_review_with_ids_posts_the_named_threads_resolved_included_and_reports_unknown_ids() {
     let ids = ["r".to_owned(), "nope".to_owned()];
-    let built = build_review(&[t("r").resolved().body("done").build(), t("k").build()], Some(&ids));
+    let built =
+        build_review(&[t("r").resolved().body("done").build(), t("k").build()], Some(&ids), &Default::default());
     assert_eq!(built.comments.iter().map(|c| c.body.as_str()).collect::<Vec<_>>(), ["done"]);
     assert_eq!(json_of(&built.skipped), json!([{ "id": "nope", "reason": "unknown thread" }]));
 }
@@ -171,7 +175,7 @@ fn build_review_posts_agent_messages_like_the_reviewers_without_a_prefix() {
         updated_at: 2,
         author: Some(CommentAuthor::Agent),
     });
-    let built = build_review(&[opened, answered], None);
+    let built = build_review(&[opened, answered], None, &Default::default());
     assert!(built.skipped.is_empty());
     assert_eq!(
         json_of(&built.comments),
@@ -324,6 +328,7 @@ async fn export_on(
         pull_request: pull_request(),
         threads,
         thread_ids,
+        unplaced: Default::default(),
         github: Arc::new(github.clone()) as Arc<dyn GithubClient>,
     };
     exporter.export(|| async { Ok(input) }).await.map_err(|e| match e {
