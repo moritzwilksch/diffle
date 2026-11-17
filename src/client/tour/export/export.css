@@ -101,18 +101,109 @@
     padding: 2rem 24px 4rem;
   }
 
-  /* Narrow, the contents sit over the article. */
+  .tour-export-bar {
+    display: none;
+  }
+
+  /* Narrow, the contents hide behind a bar under the article (StepBar.tsx). */
   @media (width < 56rem) {
     .tour-export {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .tour-export-outline {
-      max-height: 30vh;
-      border-right: 0;
-      border-bottom: 1px solid var(--border);
+      display: none;
     }
+
+    .tour-export-page > .tour-article {
+      padding: 1.25rem 16px 3rem;
+    }
+
+    .tour-export-bar {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+  }
+
+  .tour-export-bar > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+
+  .tour-export-bar > button:active:not(:disabled) {
+    background: var(--bg-3);
+  }
+
+  .tour-export-step {
+    flex: none;
+    width: 2.75rem;
+  }
+
+  .tour-export-step:disabled {
+    color: var(--fg-2);
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .tour-export-where {
+    flex: 1;
+    min-width: 0;
+    gap: 0.5rem;
+    padding: 0 0.5rem;
+    font-weight: 500;
+  }
+
+  .tour-export-count {
+    flex: none;
+    color: var(--fg-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tour-export-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tour-export-caret {
+    flex: none;
+    color: var(--fg-2);
+  }
+
+  .tour-export-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgb(0 0 0 / 0.4);
+  }
+
+  /* The contents, risen from the bar over the article. */
+  .tour-export-sheet {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    z-index: 21;
+    max-height: 70dvh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-top: 1px solid var(--border);
+    border-radius: 0.75rem 0.75rem 0 0;
+    background: var(--bg-2);
   }
 
   /* A symbol chip's hover, under it while the pointer or the focus is on it. */
