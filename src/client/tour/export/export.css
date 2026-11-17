@@ -17,11 +17,43 @@
 @source '../';
 @source '../../FilePath.tsx';
 
+/* Unlayered, so it beats the unlayered reset a host wraps the file in (claude.ai's sets a light
+   color-scheme and a 14px system font on body), which would win over every layered rule. The page's
+   own root sets what its contents inherit, so whatever body carries does not reach them. */
+:root {
+  color-scheme: light;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* A phone reads at arm's length: its rem, which every size here derives from, is 17px, not 14.4px. */
+@media (width < 40rem) {
+  :root {
+    font-size: 106.25%;
+  }
+}
+
+.tour-export {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 0.8125rem/1.4 var(--sans);
+}
+
 @layer components {
   .tour-export {
     display: grid;
     grid-template-columns: 16rem minmax(0, 1fr);
-    height: 100%;
   }
 
   .tour-export-outline {
