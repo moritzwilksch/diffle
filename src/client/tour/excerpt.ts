@@ -66,3 +66,20 @@ function fileRows(side: 'old' | 'new', lines: string[], patch: string): Row[] {
   unchangedUntil(end);
   return rows;
 }
+
+/**
+ * `patch`, an excerpt of one line as `excerpt` cuts it, with the other side's rows dropped and the
+ * gutter numbering the line on `side`: what one run of the code passes, as the diff marks it.
+ */
+export function oneSide(patch: string, side: 'old' | 'new'): string {
+  const lines = patch.split('\n');
+  const at = lines.findIndex((l) => HUNK.test(l));
+  const hunk = at < 0 ? null : HUNK.exec(lines[at]!);
+  if (!hunk) return patch;
+  const start = Number(side === 'old' ? hunk[1] : hunk[3]);
+  const other = side === 'old' ? '+' : '-';
+  const kept = lines.slice(at + 1).filter((l) => l !== '' && l[0] !== other);
+  const count = kept.length;
+  const header = `@@ -${start},${count} +${start},${count} @@`;
+  return [...lines.slice(0, at), header, ...kept, ''].join('\n');
+}

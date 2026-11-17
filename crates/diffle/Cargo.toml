@@ -9,6 +9,8 @@ rust-version.workspace = true
 repository = "https://github.com/moritzwilksch/diffle"
 homepage = "https://diffle.app"
 readme = "../../README.md"
+# Linking is most of a test build, Windows's above all: the tests link as three binaries, not one per file.
+autotests = false
 keywords = ["git", "diff", "code-review", "review"]
 categories = ["command-line-utilities", "development-tools"]
 # The client build and the licence files are git-ignored: scripts/package-crate.ts builds and copies them in.
@@ -96,6 +98,20 @@ insta = { version = "1", features = ["json"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream"] }
 tokio = { version = "1", features = ["full", "test-util"] }
 tokio-tungstenite = "0.30.0"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+# The fake language servers go first on PATH for the whole process.
+[[test]]
+name = "fake_lsp"
+path = "tests/fake_lsp.rs"
+
+# Sets the process's git config and temp directory.
+[[test]]
+name = "pr_clone"
+path = "tests/pr_clone.rs"
 
 [build-dependencies]
 prettyplease = "0.3"

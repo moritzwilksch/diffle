@@ -1,5 +1,5 @@
-//! Which language server a file selects: by its extension, or as a Helm template by its directory.
-//! The client keeps the same rule.
+//! Which language server a file selects: by its name or extension, or as a Helm template by its
+//! directory. The client keeps the same rules.
 use std::collections::BTreeSet;
 
 use super::LanguageId::{self, *};
@@ -10,11 +10,13 @@ const LANGUAGE_BY_EXT: &[(&str, LanguageId)] = &[
     ("c", C),
     ("cc", Cpp),
     ("cjs", Javascript),
+    ("containerfile", Dockerfile),
     ("cpp", Cpp),
     ("cs", Csharp),
     ("css", Css),
     ("cts", Typescript),
     ("cxx", Cpp),
+    ("dockerfile", Dockerfile),
     ("go", Go),
     ("h", C),
     ("hh", Cpp),
@@ -55,24 +57,36 @@ const LANGUAGE_BY_EXT: &[(&str, LanguageId)] = &[
 /// The extensions of a Helm template: manifests and the `_helpers.tpl` partials.
 const TEMPLATE_EXTS: &[&str] = &["yaml", "yml", "tpl"];
 
+/// File name (lowercase) → language, for files named rather than extended. A name also claims
+/// `<name>.<suffix>` (`Dockerfile.dev`), ahead of the suffix as an extension.
+const LANGUAGE_BY_NAME: &[(&str, LanguageId)] = &[("containerfile", Dockerfile), ("dockerfile", Dockerfile)];
+
+/// Suffixes that turn a named file into something else: BuildKit's `Dockerfile.dockerignore`.
+const NOT_BY_NAME: &[&str] = &["dockerignore"];
+
 /// Every language diffle can start a server for, sorted by its LSP spelling: `LANGUAGE_IDS`.
 pub fn language_ids() -> Vec<LanguageId> {
-    let by_ext = LANGUAGE_BY_EXT.iter().map(|(_, id)| *id);
-    let ids: BTreeSet<(String, LanguageId)> = by_ext.chain([Helm]).map(|id| (id.to_string(), id)).collect();
+    let named = LANGUAGE_BY_EXT.iter().chain(LANGUAGE_BY_NAME).map(|(_, id)| *id);
+    let ids: BTreeSet<(String, LanguageId)> = named.chain([Helm]).map(|id| (id.to_string(), id)).collect();
     ids.into_iter().map(|(_, id)| id).collect()
 }
 
 /// The language of `path`: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
-/// chart; anything else goes by its extension, case-insensitively. None for an unknown or absent
-/// extension. Any `templates/` counts, chart or not: telling them apart needs the tree around the path.
+/// chart; anything else goes by its file name, then its extension, case-insensitively. None for an
+/// unknown or absent one. Any `templates/` counts, chart or not: telling them apart needs the tree
+/// around the path.
 pub fn language_of(path: &str) -> Option<LanguageId> {
-    let ext = path.rsplit(['.', '/', '\\']).next().filter(|ext| ext.len() < path.len())?;
-    // The segment must follow a dot, not a separator: `dir/Makefile` has no extension.
-    if !path[..path.len() - ext.len()].ends_with('.') || ext.is_empty() {
-        return None;
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_lowercase();
+    let stem = name.split('.').next().unwrap_or_default();
+    // The extension must follow a dot in the name: `dir.py/Makefile` has none.
+    let ext = name.rsplit_once('.').map(|(_, ext)| ext);
+    if !ext.is_some_and(|ext| NOT_BY_NAME.contains(&ext))
+        && let Some((_, id)) = LANGUAGE_BY_NAME.iter().find(|(n, _)| *n == stem)
+    {
+        return Some(*id);
     }
-    let ext = ext.to_lowercase();
-    if TEMPLATE_EXTS.contains(&ext.as_str()) && in_templates(path) {
+    let ext = ext?;
+    if TEMPLATE_EXTS.contains(&ext) && in_templates(path) {
         return Some(Helm);
     }
     LANGUAGE_BY_EXT.iter().find(|(e, _)| *e == ext).map(|(_, id)| *id)
@@ -100,13 +114,38 @@ mod tests {
     }
 
     #[test]
+    fn reads_dockerfiles_by_name_before_extension() {
+        for path in [
+            "Dockerfile",
+            "container/Dockerfile",
+            "Containerfile",
+            "Dockerfile.dev",
+            "api.dockerfile",
+            "api.containerfile",
+            r"c:\x\dockerfile",
+        ] {
+            assert_eq!(language_of(path), Some(Dockerfile), "{path}");
+        }
+        for path in [
+            "Dockerfiles/app.py",
+            "my-Dockerfile",
+            ".dockerignore",
+            "Dockerfile.dockerignore",
+            "Dockerfile.dev.dockerignore",
+            "Dockerfile/README",
+        ] {
+            assert_ne!(language_of(path), Some(Dockerfile), "{path}");
+        }
+    }
+
+    #[test]
     fn lists_each_language_once_in_spelling_order() {
         let ids: Vec<String> = language_ids().iter().map(ToString::to_string).collect();
         let mut sorted = ids.clone();
         sorted.sort();
         sorted.dedup();
         assert_eq!(ids, sorted);
-        assert!(ids.contains(&"shellscript".to_owned()) && ids.contains(&"helm".to_owned()) && ids.len() == 30);
+        assert!(ids.contains(&"shellscript".to_owned()) && ids.contains(&"helm".to_owned()) && ids.len() == 31);
     }
 
     #[test]

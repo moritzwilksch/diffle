@@ -1106,6 +1106,7 @@
         "cpp",
         "csharp",
         "css",
+        "dockerfile",
         "go",
         "haskell",
         "helm",
@@ -2959,6 +2960,31 @@
       ],
       "description": "The review's tour: one HTML document, as the agent last pushed it."
     },
+    "TourAfter": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-after"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "tone": {
+          "$ref": "#/$defs/TourOutcome"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "What the new code does at a step of a `diffle-versus`, one sentence of inline prose; its place is\non the new side. In a `diffle-morph`, the sentence on what holds after the change."
+    },
     "TourAnchor": {
       "type": "object",
       "properties": {
@@ -3005,6 +3031,31 @@
         "target"
       ],
       "description": "A thread on the review's tour, at the element `node` names and the part of it `target` names."
+    },
+    "TourBefore": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-before"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "tone": {
+          "$ref": "#/$defs/TourOutcome"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "What the old code does at a step of a `diffle-versus`, one sentence of inline prose; its place is\non the old side. In a `diffle-morph`, the sentence on what holds before the change."
     },
     "TourCallout": {
       "type": "object",
@@ -3199,6 +3250,12 @@
         "diffle-check",
         "diffle-item",
         "diffle-file",
+        "diffle-versus",
+        "diffle-step",
+        "diffle-before",
+        "diffle-after",
+        "diffle-morph",
+        "diffle-term",
         "rect",
         "text"
       ],
@@ -3462,7 +3519,7 @@
             "tag"
           ],
           "additionalProperties": false,
-          "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+          "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-code`, `diffle-diagram`, `diffle-tree`, `diffle-callout`,\n`table`) or short prose (`div`, `p`, `ul`, `ol`). It holds no code of the review, whose lines\nwrap in a column: no `diffle-diff` (so no card), walk, trace or versus with places, and no\n`diffle-code` with `path`. Made-up code (`example`, or `lang` without `path`) fits."
         },
         {
           "type": "object",
@@ -3721,6 +3778,138 @@
           ],
           "additionalProperties": false,
           "description": "A note beside one file of its `diffle-tree`: a few words of inline prose on where to start or what\nsurprises, never the file's name again."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-versus"
+            },
+            "input": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The case both runs get, in a few words: `A refund row of 80.00`."
+            }
+          },
+          "required": [
+            "tag",
+            "input"
+          ],
+          "additionalProperties": false,
+          "description": "A block that runs the old and the new code on one input, step for step, to show a bug fix or a\nchange in behaviour: the reader steps through its `diffle-step`s, each shared by both runs or\nsplit into what each run does. It holds only its steps."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-step"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file of the review, relative to the repository root; with `line`, the place both runs pass."
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$",
+              "description": "The line the step shows; given with `path`."
+            },
+            "side": {
+              "$ref": "#/$defs/Side",
+              "description": "Which side `line` counts on: `old` or `new` (the default)."
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A step of a `diffle-versus`. Shared by both runs, it holds one sentence of inline prose and may\nname its place; where the runs differ, it holds a `diffle-before` and a `diffle-after` and nothing else."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-before"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "tone": {
+              "$ref": "#/$defs/TourOutcome"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "What the old code does at a step of a `diffle-versus`, one sentence of inline prose; its place is\non the old side. In a `diffle-morph`, the sentence on what holds before the change."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-after"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "line": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "tone": {
+              "$ref": "#/$defs/TourOutcome"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "What the new code does at a step of a `diffle-versus`, one sentence of inline prose; its place is\non the new side. In a `diffle-morph`, the sentence on what holds after the change."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-morph"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false,
+          "description": "A block holding one drawing in two states: one `<svg>` whose groups take `in` or `move`, then a\n`diffle-before` and a `diffle-after`, one sentence each. The reader switches Before, After and Diff;\ndiffle colours the change and draws the legend."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "const": "diffle-term"
+            },
+            "def": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One sentence that defines it."
+            }
+          },
+          "required": [
+            "tag",
+            "def"
+          ],
+          "additionalProperties": false,
+          "description": "A term the reader may not know, defined where the prose first uses it; the reader sees the\ndefinition on hover, and again at the term's first use in each later section. It holds the term as text."
         }
       ],
       "description": "A `diffle-*` element of a tour with its attributes, which are strings as in HTML."
@@ -3895,6 +4084,20 @@
       "additionalProperties": false,
       "description": "A button that opens the diff view at a file or line. Its plain text is the label; markup inside is\nrefused. Empty, it shows `path:line`."
     },
+    "TourMorph": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-morph"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A block holding one drawing in two states: one `<svg>` whose groups take `in` or `move`, then a\n`diffle-before` and a `diffle-after`, one sentence each. The reader switches Before, After and Diff;\ndiffle colours the change and draws the legend."
+    },
     "TourNote": {
       "type": "object",
       "properties": {
@@ -3926,9 +4129,19 @@
         "diffle-diff",
         "diffle-code",
         "diffle-tree",
-        "diffle-diagram"
+        "diffle-diagram",
+        "diffle-morph"
       ],
       "description": "The blocks whose content is code or a drawing, not reading text: a selection in them quotes nothing."
+    },
+    "TourOutcome": {
+      "type": "string",
+      "enum": [
+        "success",
+        "warning",
+        "error"
+      ],
+      "description": "How a run's step ends up, shown as its colour: `success`, `warning` (a failure handled) or `error`."
     },
     "TourPart": {
       "type": "object",
@@ -4024,7 +4237,35 @@
         "tag"
       ],
       "additionalProperties": false,
-      "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-card`, `diffle-code`, `diffle-diff`, `diffle-diagram`,\n`diffle-tree`, `diffle-callout`, `table`) or short prose (`div`, `p`, `ul`, `ol`)."
+      "description": "Two or three columns side by side, stacked when the window is narrow. It sits at the top level.\nEach column is a block (`diffle-code`, `diffle-diagram`, `diffle-tree`, `diffle-callout`,\n`table`) or short prose (`div`, `p`, `ul`, `ol`). It holds no code of the review, whose lines\nwrap in a column: no `diffle-diff` (so no card), walk, trace or versus with places, and no\n`diffle-code` with `path`. Made-up code (`example`, or `lang` without `path`) fits."
+    },
+    "TourStep": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-step"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file of the review, relative to the repository root; with `line`, the place both runs pass."
+        },
+        "line": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "description": "The line the step shows; given with `path`."
+        },
+        "side": {
+          "$ref": "#/$defs/Side",
+          "description": "Which side `line` counts on: `old` or `new` (the default)."
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "additionalProperties": false,
+      "description": "A step of a `diffle-versus`. Shared by both runs, it holds one sentence of inline prose and may\nname its place; where the runs differ, it holds a `diffle-before` and a `diffle-after` and nothing else."
     },
     "TourStop": {
       "type": "object",
@@ -4074,9 +4315,11 @@
         "accent",
         "success",
         "warning",
-        "error"
+        "error",
+        "contrast-a",
+        "contrast-b"
       ],
-      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (heads at both\nends), `dashed`. Text: `bold`, `small`, `mono`, `code` (highlighted lines in its `lang`, one\n`tspan` each), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces:\n`fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line\nor text: `accent` for what the point is about; `success`, `warning` and `error` for status."
+      "description": "The classes that style a diagram. Lines: `arrow` (a head at the end), `arrows` (heads at both\nends), `dashed`. Text: `bold`, `small`, `mono`, `code` (highlighted lines in its `lang`, one\n`tspan` each), `c` (centred on `x`), `e` (ends at `x`), `eyebrow` (a region's label). Surfaces:\n`fill` (a gray face), `frame` (a dashed container without a face). Tones, on a shape, group, line\nor text, from one palette per drawing: focus, `accent` on what the point is about; change,\n`success` added, `error` removed, `accent` changed, `warning` a risk; contrast, `contrast-a` and\n`contrast-b` for two concepts the tour sets against each other."
     },
     "TourSvgElement": {
       "oneOf": [
@@ -4113,6 +4356,19 @@
               "type": "string",
               "pattern": "^[1-9][0-9]*$",
               "description": "The step of a stepped diagram that lights this group; the diagram holds one `diffle-note` per step."
+            },
+            "in": {
+              "type": "string",
+              "enum": [
+                "before",
+                "after"
+              ],
+              "description": "In a `diffle-morph`, the one state the group is in: `before` (removed) or `after` (added)."
+            },
+            "move": {
+              "type": "string",
+              "pattern": "^-?[0-9]+(\\.[0-9]+)? -?[0-9]+(\\.[0-9]+)?$",
+              "description": "In a `diffle-morph`, how far the group moves right and down after the change, drawn where it was before: `240 0`."
             }
           },
           "required": [
@@ -4628,6 +4884,26 @@
       ],
       "description": "The part of a tour element a new thread is on; the server labels an element."
     },
+    "TourTerm": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-term"
+        },
+        "def": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One sentence that defines it."
+        }
+      },
+      "required": [
+        "tag",
+        "def"
+      ],
+      "additionalProperties": false,
+      "description": "A term the reader may not know, defined where the prose first uses it; the reader sees the\ndefinition on hover, and again at the term's first use in each later section. It holds the term as text."
+    },
     "TourTextTarget": {
       "type": "object",
       "properties": {
@@ -4744,6 +5020,26 @@
       "additionalProperties": false,
       "description": "A block that shows files as a directory tree under a title, each changed one with its status and\nline counts. It holds only `diffle-file` notes, on a few of its files."
     },
+    "TourVersus": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "const": "diffle-versus"
+        },
+        "input": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The case both runs get, in a few words: `A refund row of 80.00`."
+        }
+      },
+      "required": [
+        "tag",
+        "input"
+      ],
+      "additionalProperties": false,
+      "description": "A block that runs the old and the new code on one input, step for step, to show a bug fix or a\nchange in behaviour: the reader steps through its `diffle-step`s, each shared by both runs or\nsplit into what each run does. It holds only its steps."
+    },
     "TourWalk": {
       "type": "object",
       "properties": {
@@ -4788,6 +5084,8 @@
         "diffle-tree",
         "diffle-callout",
         "diffle-diagram",
+        "diffle-versus",
+        "diffle-morph",
         "table",
         "rect",
         "text"

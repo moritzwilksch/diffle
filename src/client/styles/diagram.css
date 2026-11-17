@@ -102,13 +102,21 @@
   --tone: var(--danger);
 }
 
-.tour-diagram :is(.accent, .success, .warning, .error) {
+.tour-diagram .contrast-a {
+  --tone: var(--contrast-a);
+}
+
+.tour-diagram .contrast-b {
+  --tone: var(--contrast-b);
+}
+
+.tour-diagram :is(.accent, .success, .warning, .error, .contrast-a, .contrast-b) {
   --edge: var(--tone);
   --line: var(--tone);
   --face: color-mix(in srgb, var(--tone) 14%, var(--bg-card));
 }
 
-.tour-diagram :is(text, tspan):is(.accent, .success, .warning, .error) {
+.tour-diagram :is(text, tspan):is(.accent, .success, .warning, .error, .contrast-a, .contrast-b) {
   fill: var(--tone);
 }
 
@@ -134,4 +142,74 @@
 
 .tour-diagram g[data-lit] :is(rect, circle, ellipse, polygon, path, line, polyline):not(:where(.tour-diagram-icon *)) {
   stroke-width: 2;
+}
+
+/* A morph: the group in the state not shown fades, a moved group slides to where it goes, and the
+   Diff colours the change (added, removed dashed, moved) over a dashed outline of where it was. */
+.tour-diagram :is(g[data-in], g[data-move], g[data-ghost]) {
+  transition:
+    opacity 300ms ease,
+    transform 450ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tour-diagram[data-morph='before'] :is(g[data-in='after'], g[data-ghost]),
+.tour-diagram[data-morph='after'] :is(g[data-in='before'], g[data-ghost]) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tour-diagram[data-morph]:not([data-morph='before']) g[data-move] {
+  transform: translate(var(--dx), var(--dy));
+}
+
+.tour-diagram[data-morph='diff'] g[data-in='after'] {
+  --tone: var(--add);
+}
+
+.tour-diagram[data-morph='diff'] g[data-in='before'] {
+  --tone: var(--del);
+}
+
+.tour-diagram[data-morph='diff'] g[data-move] {
+  --tone: var(--accent);
+}
+
+.tour-diagram[data-morph='diff'] :is(g[data-in], g[data-move]) {
+  --edge: var(--tone);
+  --line: var(--tone);
+  --face: color-mix(in srgb, var(--tone) 14%, var(--bg-card));
+}
+
+.tour-diagram[data-morph='diff']
+  g[data-in='before']
+  :is(rect, circle, ellipse, polygon, path, line, polyline):not(:where(.tour-diagram-icon *)) {
+  stroke-dasharray: 6 4;
+}
+
+.tour-diagram[data-morph='diff'] :is(g[data-in], g[data-move]) .frame {
+  stroke: var(--tone);
+}
+
+.tour-diagram[data-morph='diff'] g[data-in='before'] :is(text, tspan) {
+  fill: var(--del);
+}
+
+.tour-diagram
+  g[data-ghost]
+  :is(rect, circle, ellipse, polygon, path, line, polyline):not(:where(.tour-diagram-icon *)) {
+  fill: none;
+  stroke: var(--fg-2);
+  stroke-dasharray: 4 3;
+  marker-start: none;
+  marker-end: none;
+}
+
+.tour-diagram g[data-ghost] :is(text, .tour-diagram-icon) {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-diagram :is(g[data-in], g[data-move], g[data-ghost]) {
+    transition: none;
+  }
 }

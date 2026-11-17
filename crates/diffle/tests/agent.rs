@@ -1,5 +1,5 @@
 //! `diffle comments`, as an agent runs it beside a review: finding the run, then reading and answering its threads.
-mod common;
+use crate::common;
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Output, Stdio};

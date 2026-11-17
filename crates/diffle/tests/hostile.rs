@@ -1,5 +1,5 @@
 //! Repository config that would break the parsers if the overrides did not pin it.
-mod common;
+use crate::common;
 
 use common::TestRepo;
 use diffle::git::GrepOptions;

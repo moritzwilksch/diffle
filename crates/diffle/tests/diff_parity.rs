@@ -1,6 +1,6 @@
 //! Diffle's in-process diff prints what `git diff -M` prints: the same files, line counts and patch text.
 //! Renames come from gix's tracker, which git agrees with on ordinary text renames, the ones tested here.
-mod common;
+use crate::common;
 
 use std::collections::HashSet;
 use std::process::Command;

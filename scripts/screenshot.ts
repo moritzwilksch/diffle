@@ -26,6 +26,7 @@ import {
 import {
   REPO_ROOT,
   buildClient,
+  buildServer,
   readPrompt,
   readThreads,
   resetReviewState,
@@ -134,6 +135,7 @@ if (spec === 'fixture') {
 }
 
 buildClient();
+buildServer();
 const sides: ['before' | 'after', string][] = [['after', REPO_ROOT]];
 if (values.before) sides.push(['before', baseCheckout(values.before)]);
 

@@ -135,6 +135,7 @@
           rust = default.withLsps [ pkgs.rust-analyzer ];
           python = default.withLsps [ pkgs.pyrefly ];
           csharp = default.withLsps [ pkgs.roslyn-ls ];
+          docker = default.withLsps [ pkgs.dockerfile-language-server ];
           # helm-ls starts yaml-language-server for the YAML inside templates.
           helm = default.withLsps [
             pkgs.helm-ls

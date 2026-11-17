@@ -20,9 +20,15 @@
   --kind-type: #702c00;
   --kind-callable: #622cbc;
   --kind-value: #023b95;
+  /* A diagram's contrast palette: two concepts a tour sets against each other, in the code theme's
+     callable and type colours, apart from the accent and the change colours. */
+  --contrast-a: var(--kind-callable);
+  --contrast-b: var(--kind-type);
   --search-match: #f0ce5380;
   --search-current: #e09b13;
   --search-current-fg: #0e1116;
+  /* The marker on the words a tour thread is on: amber, apart from the blue accent and the search yellows. */
+  --comment-mark: #f5a300;
   --bg-card: #ffffff;
   --review-card-shadow: 0 1px 2px rgba(14, 17, 22, 0.08), 0 0.1875rem 0.625rem rgba(14, 17, 22, 0.1);
   /* The bundled families (fonts.css) come first; the system stacks only cover glyphs the bundled subsets lack. */
@@ -51,6 +57,7 @@
     --search-match: #fbd66940;
     --search-current: #e09b13;
     --search-current-fg: #0a0c10;
+    --comment-mark: #f08c00;
     --bg-card: #14181f;
     --review-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0.1875rem 0.625rem rgba(0, 0, 0, 0.6);
   }
@@ -76,6 +83,7 @@
   --search-match: #fbd66940;
   --search-current: #e09b13;
   --search-current-fg: #0a0c10;
+  --comment-mark: #f08c00;
   --bg-card: #14181f;
   --review-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0.1875rem 0.625rem rgba(0, 0, 0, 0.6);
 }

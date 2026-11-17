@@ -13,6 +13,7 @@ export const LanguageIdSchema = z.enum([
   'cpp',
   'csharp',
   'css',
+  'dockerfile',
   'go',
   'haskell',
   'helm',
@@ -976,11 +977,13 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   c: 'c',
   cc: 'cpp',
   cjs: 'javascript',
+  containerfile: 'dockerfile',
   cpp: 'cpp',
   cs: 'csharp',
   css: 'css',
   cts: 'typescript',
   cxx: 'cpp',
+  dockerfile: 'dockerfile',
   go: 'go',
   h: 'c',
   hh: 'cpp',
@@ -1018,21 +1021,37 @@ const LANGUAGE_BY_EXT: Record<string, LanguageId> = {
   zig: 'zig',
 };
 
-/** Every language diffle knows, sorted, for CLI validation and help. Helm goes by a template's place, not its extension. */
-export const LANGUAGE_IDS: LanguageId[] = [...new Set([...Object.values(LANGUAGE_BY_EXT), 'helm' as const])].sort();
+/**
+ * File name (lowercase) → language, for files named rather than extended. A name also claims
+ * `<name>.<suffix>` (`Dockerfile.dev`), ahead of the suffix as an extension.
+ */
+const LANGUAGE_BY_NAME: Record<string, LanguageId> = {
+  containerfile: 'dockerfile',
+  dockerfile: 'dockerfile',
+};
+
+/** Suffixes that turn a named file into something else: BuildKit's `Dockerfile.dockerignore`. */
+const NOT_BY_NAME = new Set(['dockerignore']);
 
 const TEMPLATE_EXTS = new Set(['yaml', 'yml', 'tpl']);
 
+/** Every language diffle knows, sorted, for CLI validation and help. Helm goes by a template's place, not its name. */
+export const LANGUAGE_IDS: LanguageId[] = [
+  ...new Set([...Object.values(LANGUAGE_BY_EXT), ...Object.values(LANGUAGE_BY_NAME), 'helm' as const]),
+].sort();
+
 /**
  * The language of a path: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
- * chart; anything else goes by its extension. Null when diffle has no server for it. Any
- * `templates/` counts, chart or not: telling them apart needs the tree around the path.
+ * chart; anything else goes by its file name, then its extension. Null when diffle has no server
+ * for it. Any `templates/` counts, chart or not: telling them apart needs the tree around the path.
  */
 export function languageOf(path: string): LanguageId | null {
-  const ext = /\.([^./\\]+)$/.exec(path)?.[1]?.toLowerCase();
-  if (!ext) return null;
-  if (TEMPLATE_EXTS.has(ext) && /(^|\/)templates\//.test(path)) return 'helm';
-  return LANGUAGE_BY_EXT[ext] ?? null;
+  const name = /[^/\\]*$/.exec(path)![0].toLowerCase();
+  const stem = name.split('.')[0]!;
+  const ext = /\.([^.]+)$/.exec(name)?.[1];
+  if (Object.hasOwn(LANGUAGE_BY_NAME, stem) && !NOT_BY_NAME.has(ext ?? '')) return LANGUAGE_BY_NAME[stem]!;
+  if (ext && TEMPLATE_EXTS.has(ext) && /(^|\/)templates\//.test(path)) return 'helm';
+  return (ext && Object.hasOwn(LANGUAGE_BY_EXT, ext) && LANGUAGE_BY_EXT[ext]) || null;
 }
 
 /** Writable HTTP config fields; unknown keys, including CLI-only lspCommands and githubHosts, are stripped. */

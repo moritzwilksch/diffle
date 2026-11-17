@@ -1,5 +1,5 @@
 //! Which GitHub a run talks to, and which remotes point at it.
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 
