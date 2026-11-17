@@ -1106,6 +1106,7 @@
         "cpp",
         "csharp",
         "css",
+        "dockerfile",
         "go",
         "haskell",
         "html",

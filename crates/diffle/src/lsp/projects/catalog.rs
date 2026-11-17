@@ -126,7 +126,7 @@ fn json_settings(_: &ServerContext) -> BoxFuture<'static, Value> {
 /// Built-in servers, in preference order per language: the first one whose program is on PATH is
 /// used. Entries serving several languages become one process, which is how the servers themselves
 /// want it (clangd for c and cpp, tsserver for all of js/ts).
-static CANDIDATES: [Candidate; 40] = [
+static CANDIDATES: [Candidate; 41] = [
     plain(&[Python], "pyrefly lsp"),
     plain(&[Python], "ty server"),
     plain(&[Python], "basedpyright-langserver --stdio"),
@@ -177,6 +177,7 @@ static CANDIDATES: [Candidate; 40] = [
     plain(&[Haskell], "haskell-language-server-wrapper --lsp"),
     plain(&[Ocaml], "ocamllsp"),
     plain(&[Terraform], "terraform-ls serve"),
+    plain(&[Dockerfile], "docker-langserver --stdio"),
     with_settings(&[Json, Jsonc], "vscode-json-language-server --stdio", json_settings),
     with_settings(&[Json, Jsonc], "vscode-json-languageserver --stdio", json_settings),
     with_settings(&[Yaml], "yaml-language-server --stdio", |_| {
