@@ -1087,15 +1087,19 @@ test.describe('the tour', () => {
 
       // A symbol chip keeps the hover its language server gave at export. `l` revealed its note by a
       // smooth scroll, which Playwright does not freeze: placing the chip mid-glide lands it elsewhere.
+      const scroller = file.locator('.tour-export-page');
+      const settle = () =>
+        scroller.evaluate(
+          (page) =>
+            new Promise<void>((done) => {
+              let last = NaN;
+              const watch = () =>
+                page.scrollTop === last ? done() : ((last = page.scrollTop), setTimeout(watch, 100));
+              watch();
+            }),
+        );
       const chip = file.locator('.tour-chip');
-      await file.locator('.tour-export-page').evaluate(
-        (page) =>
-          new Promise<void>((done) => {
-            let last = NaN;
-            const watch = () => (page.scrollTop === last ? done() : ((last = page.scrollTop), setTimeout(watch, 100)));
-            watch();
-          }),
-      );
+      await settle();
       await chip.scrollIntoViewIfNeeded();
       await chip.hover();
       await expect(chip.getByRole('tooltip')).toContainText('def f() -> None');
@@ -1105,6 +1109,58 @@ test.describe('the tour', () => {
       const check = file.getByRole('region', { name: 'Checklist' });
       await check.scrollIntoViewIfNeeded();
       await expect(check).toHaveScreenshot('tour-export-check.png');
+
+      // On a phone the contents wait behind a bar under the article, in larger type. Its next and
+      // previous take sections; a second tap while the first still scrolls moves on from the one it took.
+      await file.setViewportSize({ width: 390, height: 844 });
+      await scroller.evaluate((page) => page.scrollTo({ top: 0 }));
+      await settle();
+      const where = file.locator('.tour-export-where');
+      await expect(where).toHaveText('Refunds count against sales');
+      await expect(file).toHaveScreenshot('tour-export-phone.png');
+      const next = file.getByRole('button', { name: 'Next section' });
+      await next.click();
+      await next.click();
+      await expect(where).toHaveText(/^2\/4\s*Parsing reads the kind column$/);
+      await settle();
+      // The section opens the contents as a sheet; taking an entry closes it.
+      await where.click();
+      const sheet = file.locator('.tour-export-sheet');
+      await expect(sheet.locator('[aria-current]')).toContainText('Parsing reads the kind column');
+      await expect(file).toHaveScreenshot('tour-export-phone-contents.png');
+      await sheet
+        .getByRole('button')
+        .filter({ hasText: /^3\s*Unmatched refunds$/ })
+        .click();
+      await expect(sheet).toBeHidden();
+      await expect(where).toHaveText(/^3\/4\s*Unmatched refunds$/);
+      await settle();
+      await file.emulateMedia({ colorScheme: 'dark' });
+      await expect(file).toHaveScreenshot('tour-export-phone-dark.png');
+      // Between a phone and the sidebar, the bar with the desktop's type.
+      await file.setViewportSize({ width: 720, height: 844 });
+      await settle();
+      await expect(file).toHaveScreenshot('tour-export-narrow.png');
+
+      // A host that wraps the file in its own page and reset, as claude.ai does (a light
+      // color-scheme, a 14px system font on body), changes none of the tour's look, here in dark.
+      const article = file.locator('.tour-article');
+      const look = () =>
+        article.evaluate((a) => {
+          const own = getComputedStyle(a);
+          return {
+            font: `${own.fontSize} ${own.fontFamily}`,
+            color: own.color,
+            background: getComputedStyle(a.closest('.tour-export')!).backgroundColor,
+            scheme: getComputedStyle(document.documentElement).colorScheme,
+          };
+        });
+      const bare = await look();
+      await file.setContent(
+        `<!doctype html><html><head><style>:root{color-scheme:light}body{margin:0;font:14px system-ui}</style></head><body>${html}</body></html>`,
+      );
+      expect(await look()).toEqual(bare);
+      expect(bare.scheme).toBe('dark');
       expect(requests).toEqual([]);
       await context.close();
     });
