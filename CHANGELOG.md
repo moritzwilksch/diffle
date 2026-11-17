@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.4](https://github.com/moritzwilksch/diffle/compare/v0.5.3...v0.5.4) - 2026-11-17
+
+### Features
+
+- _(mode-picker)_ Default the two-refs target to the worktree ([#476](https://github.com/moritzwilksch/diffle/pull/476))
+- _(tour)_ Open the symbol menu from a tour's symbol chip ([#483](https://github.com/moritzwilksch/diffle/pull/483))
+- _(tour)_ Add versus, morph and term blocks, one palette per diagram ([#486](https://github.com/moritzwilksch/diffle/pull/486))
+- _(tour)_ Refuse code from the review in a diffle-row ([#488](https://github.com/moritzwilksch/diffle/pull/488))
+- _(lsp)_ Serve Dockerfiles with docker-langserver ([#479](https://github.com/moritzwilksch/diffle/pull/479))
+- _(tour)_ Read an exported tour on a phone ([#489](https://github.com/moritzwilksch/diffle/pull/489))
+
+### Bug fixes
+
+- _(tour)_ Keep nested Comment buttons reachable and let code selections comment on their block ([#482](https://github.com/moritzwilksch/diffle/pull/482))
+- _(tour)_ Mark a thread's words in amber, apart from the blue accent ([#484](https://github.com/moritzwilksch/diffle/pull/484))
+- _(cli)_ Say a second run is refused per repository ([#485](https://github.com/moritzwilksch/diffle/pull/485))
+- _(client)_ Let a dialog taller than the viewport scroll ([#478](https://github.com/moritzwilksch/diffle/pull/478))
+
+### Testing
+
+- _(e2e)_ Wait for the settled occurrence tint after w ([#487](https://github.com/moritzwilksch/diffle/pull/487))
+
+### Build and CI
+
+- Improve CI times ([#475](https://github.com/moritzwilksch/diffle/pull/475))
+
 ## [0.5.3](https://github.com/moritzwilksch/diffle/compare/v0.5.2...v0.5.3) - 2026-11-13
 
 ### Bug fixes
