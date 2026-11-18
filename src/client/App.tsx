@@ -74,10 +74,13 @@ export function App() {
     void boot().then(() => performance.mark('diffle:snapshot'));
     // Every connection, the first included, resyncs the whole state: pushes sent before it
     // subscribed are not replayed.
+    let connected = false;
     const resync = () => {
       setLost(false);
       void boot();
-      void refreshTour();
+      // A push missed while disconnected still shows; the first connection loads without it.
+      void refreshTour({ reveal: connected });
+      connected = true;
     };
     return connectWs(
       (msg) => {
@@ -99,7 +102,7 @@ export function App() {
             break;
           case 'tour':
             // A push or a tick also changes the checklist items read with the threads.
-            void refreshTour();
+            void refreshTour({ reveal: true });
             void refreshThreads();
             break;
           case 'tourExport':

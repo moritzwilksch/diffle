@@ -138,7 +138,7 @@ mkdir -p ~/.claude/skills/diffle
 diffle skill > ~/.claude/skills/diffle/SKILL.md
 ```
 
-Then ask it for one and press `T` in diffle:
+Then ask it for one. diffle opens the tour as soon as it's pushed, and `T` toggles it:
 
 - `n` / `p`: next or previous section
 - `l` / `h`: step through the walk, trace, or diagram in view

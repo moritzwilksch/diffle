@@ -53,7 +53,7 @@ between steps with `n` and `p`, and the side panel lists them with their `<h3>` 
 review has one tour.
 
 - `diffle tour push [<file>|-]` (stdin without a file) checks the document, makes it the review's
-  tour, and prints the stored tour as JSON. A refused push exits 2, lists every reason as
+  tour, opens it in the reviewer's diffle, and prints the stored tour as JSON. A refused push exits 2, lists every reason as
   `<element>: <reason>`, and keeps the previous tour: fix them all and push again. An accepted push
   may print warnings to stderr in the same form, such as a file note that may be long: fix each, or
   keep it knowingly.
