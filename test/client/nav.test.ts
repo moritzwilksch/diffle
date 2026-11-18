@@ -1,4 +1,5 @@
 import { parseDiffFromFile, parsePatchFiles } from '@pierre/diffs';
+import { PARSE } from '@/client/diffs.js';
 import { describe, expect, it } from 'vitest';
 import { cursorFromSelection, diffRows, renderedContext, step, stepFile, type NavItem } from '@/client/keyboard/nav.js';
 
@@ -16,7 +17,7 @@ const patch = `diff --git a/f.txt b/f.txt
 +THIRTY-ONE
  thirty-two
 `;
-const fileDiff = parsePatchFiles(patch, { cacheKeyPrefix: 'k' })[0]!.files[0]!;
+const fileDiff = parsePatchFiles(patch, { ...PARSE, cacheKeyPrefix: 'k' })[0]!.files[0]!;
 
 describe('navigation', () => {
   const row = (line: number) => ({ side: 'additions' as const, line, hunkStart: true });
@@ -104,7 +105,7 @@ describe('diffRows with revealed context', () => {
 -six
  seven
 `;
-    const rows = diffRows(parsePatchFiles(twoBlocks, { cacheKeyPrefix: 'k2' })[0]!.files[0]!);
+    const rows = diffRows(parsePatchFiles(twoBlocks, { ...PARSE, cacheKeyPrefix: 'k2' })[0]!.files[0]!);
     expect(rows.filter((r) => r.hunkStart).map((r) => `${r.side[0]}${r.line}`)).toEqual(['a2', 'a5']);
     const pureDeletion = `diff --git a/h.txt b/h.txt
 --- a/h.txt
@@ -114,7 +115,7 @@ describe('diffRows with revealed context', () => {
 -two
  three
 `;
-    const del = diffRows(parsePatchFiles(pureDeletion, { cacheKeyPrefix: 'k3' })[0]!.files[0]!);
+    const del = diffRows(parsePatchFiles(pureDeletion, { ...PARSE, cacheKeyPrefix: 'k3' })[0]!.files[0]!);
     expect(del.filter((r) => r.hunkStart).map((r) => `${r.side[0]}${r.line}`)).toEqual(['d2']);
   });
 
@@ -129,7 +130,7 @@ describe('diffRows with revealed context', () => {
 +TWO
  four
 `;
-    const fd = parsePatchFiles(patch, { cacheKeyPrefix: 'k4' })[0]!.files[0]!;
+    const fd = parsePatchFiles(patch, { ...PARSE, cacheKeyPrefix: 'k4' })[0]!.files[0]!;
     expect(diffRows(fd, [], 'unified').map((r) => `${r.side[0]}${r.line}`)).toEqual(['a1', 'd2', 'd3', 'a2', 'a3']);
     expect(diffRows(fd, [], 'split').map((r) => `${r.side[0]}${r.line}`)).toEqual(['a1', 'a2', 'd3', 'a3']);
   });
@@ -147,7 +148,7 @@ describe('renderedContext', () => {
   const full = parseDiffFromFile(
     { name: 'a.txt', contents: lines(40, []) },
     { name: 'a.txt', contents: lines(40, [3, 38]) },
-    { context: 5 },
+    { ...PARSE, context: 5 },
   );
   const hunkLines = new Set(diffRows(full).map((r) => r.line));
   const showing =
@@ -175,7 +176,7 @@ describe('renderedContext', () => {
     const early = parseDiffFromFile(
       { name: 'b.txt', contents: lines(40, []) },
       { name: 'b.txt', contents: lines(40, [3]) },
-      { context: 5 },
+      { ...PARSE, context: 5 },
     );
     expect(renderedContext(early, (line) => line >= 1)).toEqual([[9, 40]]);
   });
