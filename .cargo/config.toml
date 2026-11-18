@@ -1,0 +1,3 @@
+# The cooldown dependabot.yml and pixi.toml's exclude-newer keep: a release resolves once it is a week old.
+[registry]
+global-min-publish-age = "7 days"

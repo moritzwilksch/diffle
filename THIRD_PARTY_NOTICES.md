@@ -9807,9 +9807,9 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- rust-embed-impl 8.13.0 (https://pyrossh.dev/repos/rust-embed)
-- rust-embed-utils 8.13.0 (https://pyrossh.dev/repos/rust-embed)
-- rust-embed 8.13.0 (https://pyrossh.dev/repos/rust-embed)
+- rust-embed-impl 8.14.0 (https://pyrossh.dev/repos/rust-embed)
+- rust-embed-utils 8.14.0 (https://pyrossh.dev/repos/rust-embed)
+- rust-embed 8.14.0 (https://pyrossh.dev/repos/rust-embed)
 
 ```
 The MIT License (MIT)
