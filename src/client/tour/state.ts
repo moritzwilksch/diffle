@@ -83,10 +83,11 @@ let following = false;
 
 /**
  * Fetches the review's tour and which of its diffs went stale. A shown section stays when the tour
- * is pushed again. The first call starts following the review: a new snapshot rechecks the diffs,
- * and another comment key, another review's tour.
+ * is pushed again. With `reveal`, a tour pushed since the last fetch opens its view, unless a
+ * comment is being written. The first call starts following the review: a new snapshot rechecks
+ * the diffs, and another comment key, another review's tour.
  */
-export async function refreshTour(): Promise<void> {
+export async function refreshTour({ reveal = false }: { reveal?: boolean } = {}): Promise<void> {
   follow();
   const g = ++generation;
   try {
@@ -94,13 +95,22 @@ export async function refreshTour(): Promise<void> {
     if (g !== generation) return;
     if (!tour) return set({ state: 'none' });
     const doc = readTour(tour.html);
+    const prev = useTour.getState().load;
     set({ state: 'ready', tour, doc });
+    // A tick refetches the same push; only a new one takes the reader to it.
+    if (reveal && (prev.state !== 'ready' || prev.tour.pushedAt !== tour.pushedAt) && !composing()) showView('tour');
     const c = ++checks;
     const stale = await staleSections(doc);
     if (g === generation && c === checks) useTour.setState(stale);
   } catch (e) {
     if (g === generation) set({ state: 'error', message: e instanceof Error ? e.message : String(e) });
   }
+}
+
+/** True while a comment or reply is open, which a switch of view would take away. */
+function composing(): boolean {
+  const { draft, replyTo } = useStore.getState();
+  return draft != null || replyTo != null;
 }
 
 function set(load: TourLoad): void {

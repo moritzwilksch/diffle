@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
-import { activePath } from './browser.js';
+import { activePath, gotoFile, selectLines } from './browser.js';
 import { pushTour, readPrompt, readThreads, REPO_ROOT, runCli, seedReply, seedThreads, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
@@ -301,6 +301,40 @@ test.describe('the tour', () => {
     );
     expect([back, later]).toEqual([left, left]);
     await expect(view.getByText('Section 3 of 4')).toBeVisible();
+  });
+
+  test('a pushed tour opens its view; a tick, or a push while a comment is written, stays in the diff', async ({
+    page,
+    diffle,
+  }) => {
+    const view = page.getByRole('region', { name: 'Tour view' });
+    const panel = page.locator('aside').last();
+    await expect(view).toBeHidden();
+    await pushTour(diffle.url, TOUR);
+    await expect(view).toBeVisible();
+
+    // Each wait on a seeded thread orders the check after the tour's own refetch.
+    await page.keyboard.press('T');
+    await expect(view).toBeHidden();
+    const tick = await fetch(new URL('api/tour/ticks', diffle.url), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'Is matching by description strict enough?', ticked: true }),
+    });
+    expect(tick.ok).toBe(true);
+    await seedThreads(diffle.url, [{ path: 'tally/ledger.py', startLine: 30, body: 'After the tick.' }]);
+    await expect(panel).toContainText('After the tick.');
+    await expect(view).toBeHidden();
+
+    await gotoFile(page, 'tally/ledger.py');
+    await selectLines(page, 'tally/ledger.py', 3, 4);
+    const composer = page.getByPlaceholder('Leave a comment…');
+    await composer.fill('Half a thought');
+    await pushTour(diffle.url, '<h2>A fresh tour</h2><p>Revised.</p>');
+    await seedThreads(diffle.url, [{ path: 'tally/ledger.py', startLine: 31, body: 'After the push.' }]);
+    await expect(panel).toContainText('After the push.');
+    await expect(view).toBeHidden();
+    await expect(composer).toHaveValue('Half a thought');
   });
 
   test('an icon draws the same live and in an export, an alias as its icon; a name Lucide lacks shows a placeholder naming it', async ({
