@@ -20,6 +20,18 @@ import { toggleDirectoryViewed, trackMenuPointer, TreeMenu } from './TreeMenu.js
 
 type Scope = 'changed' | 'all';
 
+// A review compares two sides, not the worktree against the index: say so rather than "Git status".
+const LABELS = {
+  searchPlaceholder: 'Search files…',
+  gitStatusTitles: {
+    added: 'Added in this review',
+    deleted: 'Deleted in this review',
+    modified: 'Modified in this review',
+    renamed: 'Renamed in this review',
+  },
+  containsGitStatusTitle: 'Contains changed files',
+};
+
 export function FileTreePane() {
   const snapshot = useStore((s) => s.snapshot);
   const openFile = useStore((s) => s.openFile);
@@ -52,6 +64,7 @@ export function FileTreePane() {
     initialExpansion: 'closed',
     initialExpandedPaths: directoriesOf(paths),
     search: true,
+    labels: LABELS,
     // The tree sizes rows and paddings in px; derive both from the root font size so it follows the app's scale.
     itemHeight: Math.round(1.875 * remPx()),
     density: remPx() / 16,
@@ -187,13 +200,6 @@ export function FileTreePane() {
 
   useCutNameTitles(bodyRef);
   useEffect(() => trackMenuPointer(bodyRef.current), []);
-
-  useEffect(() => {
-    const input = bodyRef.current?.firstElementChild?.shadowRoot?.querySelector<HTMLInputElement>(
-      '[data-file-tree-search-input]',
-    );
-    if (input) input.placeholder = 'Search files…';
-  }, []);
 
   const setTreeModel = useStore((s) => s.setTreeModel);
   useEffect(() => {

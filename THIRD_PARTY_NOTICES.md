@@ -1064,12 +1064,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-gfm-autolink-literal 2.0.1 (syntax-tree/mdast-util-gfm-autolink-literal)
+#### mdast-util-gfm-autolink-literal 2.1.0 (syntax-tree/mdast-util-gfm-autolink-literal)
 
 ```
 (The MIT License)
 
-Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -1172,12 +1172,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-gfm-task-list-item 2.0.0 (syntax-tree/mdast-util-gfm-task-list-item)
+#### mdast-util-gfm-task-list-item 2.0.1 (syntax-tree/mdast-util-gfm-task-list-item)
 
 ```
 (The MIT License)
 
-Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>
+Copyright (c) Titus Wormer <tituswormer@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -1254,7 +1254,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### mdast-util-to-markdown 2.2.2 (syntax-tree/mdast-util-to-markdown)
+#### mdast-util-to-markdown 2.2.3 (syntax-tree/mdast-util-to-markdown)
 
 ```
 (The MIT License)
@@ -2802,7 +2802,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-#### vfile-message 4.0.3 (vfile/vfile-message)
+#### vfile-message 4.0.4 (vfile/vfile-message)
 
 ```
 (The MIT License)
@@ -2855,7 +2855,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### zustand 5.0.16 (git+https://github.com/pmndrs/zustand.git)
+#### zustand 5.1.0 (git+https://github.com/pmndrs/zustand.git)
 
 ```
 MIT License
@@ -2910,7 +2910,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### Apache-2.0
 
-#### @pierre/diffs 1.6.2
+#### @pierre/diffs 1.6.4
 
 ```
 Apache License
@@ -3104,7 +3104,7 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 ```
 
-#### @pierre/highlights 0.3.0
+#### @pierre/highlights 0.4.0
 
 ```
 Apache License
@@ -3306,6 +3306,25 @@ the pinned Shiki TextMate files listed below. Theme names and appearances are
 normalized to Shiki's catalog.
 
 ## Sources
+
+Terminal palettes use the same pinned sources as the themes below. Exceptions:
+
+- Horizon's original repository is unavailable. Its palette comes from the
+  [Zed Horizon 0.0.1 archive](https://api.zed.dev/extensions/horizon/0.0.1/download).
+- Andromeeda's two null black entries and both Horizon themes' four null black
+  and white entries use their inherited
+  [Zed defaults at `ce48461`](https://github.com/zed-industries/zed/blob/ce48461eaadd16c65c31f835511ab96bd3b6e746/crates/theme/src/default_colors.rs).
+- LaserWave leaves ten terminal colors undefined; Slack Dark leaves all 16
+  undefined. These entries use the dark palette in
+  [VS Code at `3623f17`](https://github.com/microsoft/vscode/blob/3623f170559712f7ee16f59dfbd87c885b6a2b31/src/vs/workbench/contrib/terminal/common/terminalColorRegistry.ts).
+- Pierre's palettes come from
+  [its Zed theme](https://github.com/pierrecomputer/pierre/blob/861ce3c61e1cfeaf283d83e95a3767479e75bfee/packages/theme/zed/themes/pierre.json).
+  The vibrant variants preserve the Display P3 values in
+  [Pierre Dark Vibrant](https://github.com/pierrecomputer/pierre/blob/861ce3c61e1cfeaf283d83e95a3767479e75bfee/packages/theme/themes/pierre-dark-vibrant.json)
+  and
+  [Pierre Light Vibrant](https://github.com/pierrecomputer/pierre/blob/861ce3c61e1cfeaf283d83e95a3767479e75bfee/packages/theme/themes/pierre-light-vibrant.json).
+
+Dracula's `ffffffff` bright white value is normalized to `#ffffffff`.
 
 The Zed version is the extension version published in the
 [Zed registry](https://github.com/zed-industries/extensions) at
@@ -3862,7 +3881,7 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 ```
 
-#### @pierre/trees 1.0.0-beta.6
+#### @pierre/trees 1.0.0
 
 ```
 Apache License
@@ -4116,7 +4135,7 @@ OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### lucide-react 1.67.0 (https://github.com/lucide-icons/lucide.git)
+#### lucide-react 1.71.0 (https://github.com/lucide-icons/lucide.git)
 
 ```
 ISC License
@@ -5135,14 +5154,13 @@ Used by:
 - aws-lc-sys 0.47.0 (https://github.com/aws/aws-lc-rs)
 
 ```
-ISC License:
+ISC License
 
-Copyright (c) 2004-2010 by Internet Systems Consortium, Inc. ("ISC")
-Copyright (c) 1995-2003 by Internet Software Consortium
+Copyright <year> <owner> 
 
 Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
 
-THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ```
 
@@ -9789,9 +9807,9 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- rust-embed-impl 8.13.0 (https://pyrossh.dev/repos/rust-embed)
-- rust-embed-utils 8.13.0 (https://pyrossh.dev/repos/rust-embed)
-- rust-embed 8.13.0 (https://pyrossh.dev/repos/rust-embed)
+- rust-embed-impl 8.14.0 (https://pyrossh.dev/repos/rust-embed)
+- rust-embed-utils 8.14.0 (https://pyrossh.dev/repos/rust-embed)
+- rust-embed 8.14.0 (https://pyrossh.dev/repos/rust-embed)
 
 ```
 The MIT License (MIT)

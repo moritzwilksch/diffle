@@ -6,7 +6,7 @@
 # (`docker compose logs browser`).
 services:
   browser:
-    image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:-1.63.0}-noble
+    image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:-1.65.0}-noble
     # Pin the architecture too: screenshots must match the Linux x64 CI runner.
     platform: linux/amd64
     init: true

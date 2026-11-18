@@ -273,7 +273,7 @@ test.describe('the tour', () => {
     await expect(view.locator('.tour-block').filter({ hasText: 'Ledger and refunds · Python' })).toHaveScreenshot(
       'tour-tree.png',
     );
-    await expect(view.locator('figure').filter({ hasText: 'Example' })).toHaveScreenshot('tour-example.png');
+    await expect(view.getByRole('figure', { name: 'An entry, parsed' })).toHaveScreenshot('tour-example.png');
     await expect(view.locator('.tour-row').filter({ has: page.locator('.tour-diagram') })).toHaveScreenshot(
       'tour-row.png',
     );
