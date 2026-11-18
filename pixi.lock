@@ -222,7 +222,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/cargo-about-0.9.3-h2852063_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cmake-4.4.5-hde52c71_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/gh-2.103.3-h11686cb_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/git-2.56.0-h57928b3_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/git-2.56.1-h57928b3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/git-cliff-2.14.2-h9165e7a_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/icu-78.3-h5112557_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/krb5-1.22.2-h719d79b_2.conda
@@ -251,7 +251,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/cargo-about-0.9.3-hacad0c3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/cmake-4.4.5-h668d1a9_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/gh-2.103.3-h4c3bf4e_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-2.56.0-ha03c420_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-2.56.1-ha03c420_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-cliff-2.14.2-h5c03787_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/krb5-1.22.2-h68e0809_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/lefthook-2.2.2-h4c3bf4e_0.conda
@@ -597,7 +597,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/clang-tools-23.1.5-default_h3ac1485_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cmake-4.4.5-hde52c71_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/gh-2.103.3-h11686cb_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/git-2.56.0-h57928b3_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/git-2.56.1-h57928b3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/git-cliff-2.14.2-h9165e7a_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/go-1.27.3-nocgo_h68bbeb6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/gopls-0.23.0-h11686cb_0.conda
@@ -653,7 +653,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/clang-tools-23.1.5-default_h9a5852e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/cmake-4.4.5-h668d1a9_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/gh-2.103.3-h4c3bf4e_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-2.56.0-ha03c420_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-2.56.1-ha03c420_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-cliff-2.14.2-h5c03787_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/go-1.27.3-nocgo_h401b19e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/gopls-0.23.0-h4c3bf4e_0.conda
@@ -4570,13 +4570,13 @@ packages:
   run_exports: {}
   size: 13159607
   timestamp: 1793777336563
-- conda: https://conda.anaconda.org/conda-forge/win-64/git-2.56.0-h57928b3_1.conda
-  sha256: 246bb5175f55805b21c21f877198b36464e8820e8dce30f028c3de08b3584185
-  md5: 7ab8bea1ab7f70ab82eb8c6f67d5d5a3
+- conda: https://conda.anaconda.org/conda-forge/win-64/git-2.56.1-h57928b3_0.conda
+  sha256: 2289909410cc46be48951ddb200c1cc7094428dc9984197c5d71f11a92ca954a
+  md5: 7b35d1296dbc2713d60e4fd974f3dbae
   license: GPL-2.0-or-later and LGPL-2.1-or-later
   run_exports: {}
-  size: 123969809
-  timestamp: 1794045400933
+  size: 121286803
+  timestamp: 1794393709405
 - conda: https://conda.anaconda.org/conda-forge/win-64/git-cliff-2.14.2-h9165e7a_2.conda
   sha256: 9c03333b5aa0a10739d7644e37d361c6862f4d86e798a94258793bcf330f77f9
   md5: db494659f50bcf3fe25e443b597afaeb
@@ -5162,13 +5162,13 @@ packages:
   run_exports: {}
   size: 11715597
   timestamp: 1793777334134
-- conda: https://conda.anaconda.org/conda-forge/win-arm64/git-2.56.0-ha03c420_1.conda
-  sha256: 3f5f13a5d8c5e01437581b8e6ecb6b2445e0efd4472cada3297f9b6b692490a6
-  md5: 621bef74efb252795ce6e0abb644579c
+- conda: https://conda.anaconda.org/conda-forge/win-arm64/git-2.56.1-ha03c420_0.conda
+  sha256: fa47cd509f109191b84ba726e7ca31898f19b344a14f355513f01820fd84fb61
+  md5: ead4aacf33a9952ec0f3ea62c01c6e14
   license: GPL-2.0-or-later and LGPL-2.1-or-later
   run_exports: {}
-  size: 117780496
-  timestamp: 1794045558811
+  size: 119073339
+  timestamp: 1794393961907
 - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-cliff-2.14.2-h5c03787_2.conda
   sha256: 50b96371ceae408c47535d66698bed12bde806a3484cae00a6899cf045df620c
   md5: 72c165ec4ee77555ce4953d53d77b99e
