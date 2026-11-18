@@ -303,6 +303,25 @@ async fn steps_back_from_head_and_offers_the_way_forward_while_holding_the_check
 }
 
 #[tokio::test]
+async fn offers_the_pickers_commits_from_where_the_reviewer_left_head() {
+    let (t, first) = on_feat();
+    let tip = t.git(&["rev-parse", "feat"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&[&format!("{first}^!")])).await.unwrap()).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first, "the older commit is the checkout");
+    let refs = s.refs().await.unwrap();
+    assert_eq!((refs.current.as_deref(), refs.recent[0].sha.as_str()), (Some("feat"), tip.as_str()));
+    let preview = s.last_commits_preview(1, 0).await.unwrap();
+    let entered = s.enter(revspec(&["HEAD~1..HEAD~0"])).await.unwrap();
+    assert_eq!(entered.new_sha, tip);
+    assert_eq!(
+        (preview.old.unwrap().sha, preview.new.unwrap().sha),
+        (entered.old_sha.clone(), entered.new_sha.clone()),
+        "the preview names what entering it shows"
+    );
+}
+
+#[tokio::test]
 async fn checks_out_a_focused_commit_of_a_range_ending_at_the_worktree_and_comes_back() {
     let (t, first) = on_feat();
     let s = session(t.open().await, Github::tokenless(), true);

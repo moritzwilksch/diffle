@@ -182,19 +182,25 @@ impl GitRepo {
         .await
     }
 
-    /// Branches, tags, and recent commits for the mode picker.
-    pub async fn refs(&self) -> Result<RefsResponse> {
-        let listed = self.gix("listing refs", |repo| {
+    /// Branches, tags, and recent commits for the mode picker, with `head` as HEAD: its branch is
+    /// the current one, and the recent commits are its newest.
+    pub async fn refs(&self, head: &str) -> Result<RefsResponse> {
+        let head = head.to_owned();
+        let listed = self.gix("listing refs", move |repo| {
             let heads = sorted(repo, "refs/heads/", Date::Committer)?;
             // `origin/HEAD` names no branch of its own.
             let remotes = sorted(repo, "refs/remotes/", Date::Committer)?;
             let remotes = remotes.into_iter().filter(|r| r.contains('/') && !r.ends_with("/HEAD")).collect();
             let tags = sorted(repo, "refs/tags/", Date::Creator)?;
-            let head = repo.head()?;
-            let current = (!head.is_detached() && !head.is_unborn())
-                .then(|| head.referent_name().map(|n| n.shorten().to_string()))
-                .flatten();
-            Ok((heads, remotes, tags, current, recent(repo).unwrap_or_default()))
+            let current = if head == "HEAD" {
+                let head = repo.head()?;
+                (!head.is_detached() && !head.is_unborn())
+                    .then(|| head.referent_name().map(|n| n.shorten().to_string()))
+                    .flatten()
+            } else {
+                repo.try_find_reference(format!("refs/heads/{head}").as_str())?.map(|_| head.clone())
+            };
+            Ok((heads, remotes, tags, current, recent(repo, &head).unwrap_or_default()))
         });
         let (listed, default_branch) = tokio::join!(listed, self.default_branch());
         let (branches, remote_branches, tags, current, recent) = listed?;
@@ -272,9 +278,10 @@ fn sorted(repo: &gix::Repository, prefix: &str, date: Date) -> anyhow::Result<Ve
     Ok(dated.into_iter().map(|(_, name)| name).collect())
 }
 
-/// HEAD's newest commits; none on an unborn branch.
-fn recent(repo: &gix::Repository) -> anyhow::Result<Vec<RefsResponseRecentItem>> {
-    let walk = repo.head_id()?.ancestors().sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst)).all()?;
+/// `head`'s newest commits; none on an unborn branch.
+fn recent(repo: &gix::Repository, head: &str) -> anyhow::Result<Vec<RefsResponseRecentItem>> {
+    let walk =
+        repo.rev_parse_single(head)?.ancestors().sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst)).all()?;
     walk.take(RECENT)
         .map(|info| {
             let commit = info?.object()?;

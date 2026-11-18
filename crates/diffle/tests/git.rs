@@ -39,14 +39,14 @@ fn find<'a>(files: &'a [ChangedFile], path: &str) -> &'a ChangedFile {
 async fn previews_both_last_commit_endpoints_and_reports_missing_ancestors() {
     let t = feature_repo();
     let repo = t.open().await;
-    let preview = repo.last_commits_preview(1, 0).await.unwrap();
+    let preview = repo.last_commits_preview("HEAD", 1, 0).await.unwrap();
     let (old, new) = (preview.old.clone().unwrap(), preview.new.clone().unwrap());
     assert_eq!((old.message.as_str(), new.message.as_str()), ("base", "feat 1"));
     assert_eq!(old.sha, t.git(&["rev-parse", "HEAD~1"]));
-    let missing = repo.last_commits_preview(999, 0).await.unwrap();
+    let missing = repo.last_commits_preview("HEAD", 999, 0).await.unwrap();
     assert!(missing.old.is_none());
     assert_eq!(missing.new.unwrap().sha, new.sha);
-    let reversed = repo.last_commits_preview(0, 1).await.unwrap();
+    let reversed = repo.last_commits_preview("HEAD", 0, 1).await.unwrap();
     assert_eq!((reversed.old.unwrap().sha, reversed.new.unwrap().sha), (new.sha, old.sha));
 }
 
@@ -236,13 +236,13 @@ async fn searches_by_word_case_regex_and_literal_paths() {
 async fn lists_refs_and_survives_an_unborn_branch() {
     let t = feature_repo();
     let repo = t.open().await;
-    let refs = repo.refs().await.unwrap();
+    let refs = repo.refs("HEAD").await.unwrap();
     assert_eq!(refs.current.as_deref(), Some("feat"));
     let mut branches = refs.branches.clone();
     branches.sort();
     assert_eq!(branches, ["feat", "main"]);
     assert_eq!(refs.recent[0].subject, "feat 1");
     let unborn = TestRepo::new();
-    let empty = unborn.open().await.refs().await.unwrap();
+    let empty = unborn.open().await.refs("HEAD").await.unwrap();
     assert!(empty.branches.is_empty() && empty.recent.is_empty() && empty.current.is_none());
 }

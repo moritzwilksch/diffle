@@ -134,7 +134,7 @@ async fn lists_refs_as_for_each_ref_sorts_them() {
     t.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
     t.git(&["update-ref", "refs/remotes/origin/old", "HEAD~3"]);
     t.git(&["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
-    let refs = t.open().await.refs().await.unwrap();
+    let refs = t.open().await.refs("HEAD").await.unwrap();
     let each = |order: &str, prefix: &str| -> Vec<String> {
         t.git(&["for-each-ref", "--format=%(refname:short)", order, prefix]).lines().map(str::to_owned).collect()
     };
