@@ -5,7 +5,6 @@ import { createElement, useCallback, useEffect, useMemo, useState } from 'react'
 import { highlightCode } from '@/client/lsp/highlight.js';
 import { usePrimed, type WorkerPool } from '@/client/Markdown.js';
 import { useStore } from '@/client/store.js';
-import { PARSE } from '@/client/diffs.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import type { Place } from '@/client/tour/anchor.js';
 import type { LineRange } from '@/client/tour/document.js';
@@ -27,7 +26,7 @@ export const ROWS_OPTIONS = {
 
 /** `patch` as the diff reads it, in `lang` when given; undefined when it holds no file. */
 export function rowsDiff(patch: string, lang?: string): FileDiffMetadata | undefined {
-  const file = parsePatchFiles(patch, { ...PARSE, cacheKeyPrefix: `tour:${rowsKey(patch, lang)}` })[0]?.files[0];
+  const file = parsePatchFiles(patch, { cacheKeyPrefix: `tour:${rowsKey(patch, lang)}` })[0]?.files[0];
   return file && lang ? { ...file, lang: lang as SupportedLanguages } : file;
 }
 

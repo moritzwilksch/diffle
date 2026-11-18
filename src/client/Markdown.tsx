@@ -6,7 +6,6 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { HighlightedCode } from './lsp/highlight.js';
 import { useStore } from './store.js';
-import { PARSE } from './diffs.js';
 import { CODE_THEMES, HIGHLIGHTER } from './theme.js';
 
 /**
@@ -137,7 +136,6 @@ function SuggestedChange({ path, quoted, source }: { path: string; quoted: strin
         // The quote spans at least one line, so an empty one is a blank line; an empty suggestion deletes.
         { name: path, contents: `${quoted}\n`, cacheKey: cacheKey('old', path, quoted) },
         { name: path, contents: source === '' ? '' : `${source}\n`, cacheKey: cacheKey('new', path, source) },
-        PARSE,
       ),
     [path, quoted, source],
   );

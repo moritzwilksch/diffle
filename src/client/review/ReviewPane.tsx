@@ -58,7 +58,6 @@ import {
   commentsOff,
 } from '@/client/model.js';
 import { onTextSizeChange, useRemPx } from '@/client/scale.js';
-import { PARSE } from '@/client/diffs.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
 import { useStore, type CodeDraft, type Loaded, type ReviewState } from '@/client/store.js';
 import { gridColumns, useViews } from '@/client/views/state.js';
@@ -260,7 +259,6 @@ const codeViewOptions = {
   theme: CODE_THEMES,
   preferredHighlighter: HIGHLIGHTER,
   loadDiffFiles,
-  parseDiffOptions: PARSE,
   stickyHeaders: true,
   enableLineSelection: true,
   // Token hit-testing (data-char spans); also set on the worker pool in main.tsx, whose options win when the pool renders.

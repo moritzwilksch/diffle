@@ -74,7 +74,6 @@ import {
   iterationPick,
   iterationStep,
 } from './model.js';
-import { PARSE } from './diffs.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 import type { ViewId } from './views/state.js';
 
@@ -873,10 +872,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const patch = paths.length === 1 ? await api.patch(paths[0]!) : await api.patches(paths);
       // Unique cache key per load: the renderer otherwise treats two diffs with
       // undefined keys as the same and reuses stale highlighted lines.
-      const parsed = parsePatchFiles(patch, {
-        ...PARSE,
-        cacheKeyPrefix: `s${snap.version}c${snap.context}t${Date.now()}`,
-      });
+      const parsed = parsePatchFiles(patch, { cacheKeyPrefix: `s${snap.version}c${snap.context}t${Date.now()}` });
       for (const p of parsed) for (const f of p.files) files.set(f.name, f);
       for (const p of paths) {
         const f = files.get(p);
@@ -965,15 +961,10 @@ export const useStore = create<ReviewState>((set, get) => {
       const [o, n] = await Promise.all([fetchFile(oldPath, 'old'), fetchFile(f.name, 'new')]);
       // Dropped if a newer transition ran or this file was reloaded meanwhile.
       if (stale()) return;
-      const fileDiff = hydratePartialDiff(
-        'clone',
-        f,
-        {
-          oldFile: { name: oldPath, contents: o.contents },
-          newFile: { name: f.name, contents: n.contents },
-        },
-        PARSE,
-      );
+      const fileDiff = hydratePartialDiff('clone', f, {
+        oldFile: { name: oldPath, contents: o.contents },
+        newFile: { name: f.name, contents: n.contents },
+      });
       queueHydrated({ path, fileDiff, old: o.contents, new: n.contents, replaces, g });
     } catch {
       /* keep the partial diff; highlighting degrades but the diff still renders */
