@@ -260,14 +260,13 @@ test.describe('the tour', () => {
     // n takes the first section and scrolls its heading near the top; p does not go before it.
     await page.keyboard.press('n');
     await page.keyboard.press('n');
-    await expect(view.getByText('Section 2 of 4')).toBeVisible();
     await expect(contents.getByRole('button', { name: /Parsing reads/ })).toHaveAttribute('aria-current', 'step');
     await expect(page).toHaveScreenshot('tour-step.png');
     await page.keyboard.press('p');
     await page.keyboard.press('p');
-    await expect(view.getByText('Section 1 of 4')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Entries learn/ })).toHaveAttribute('aria-current', 'step');
     await contents.getByRole('button', { name: /Unmatched refunds/ }).click();
-    await expect(view.getByText('Section 3 of 4')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Unmatched refunds/ })).toHaveAttribute('aria-current', 'step');
     await expect(view.locator('aside[aria-label="danger"]')).toHaveScreenshot('tour-danger.png');
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
     await expect(view.locator('.tour-block').filter({ hasText: 'Ledger and refunds · Python' })).toHaveScreenshot(
@@ -300,7 +299,7 @@ test.describe('the tour', () => {
       (el) => new Promise<number>((done) => setTimeout(() => done(el.scrollTop), 300)),
     );
     expect([back, later]).toEqual([left, left]);
-    await expect(view.getByText('Section 3 of 4')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Unmatched refunds/ })).toHaveAttribute('aria-current', 'step');
   });
 
   test('a pushed tour opens its view; a tick, or a push while a comment is written, stays in the diff', async ({
@@ -427,11 +426,9 @@ test.describe('the tour', () => {
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
     const walk = view.locator('figure[data-walk]');
-    await page
-      .getByRole('navigation', { name: 'Contents' })
-      .getByRole('button', { name: /Finding unmatched/ })
-      .click();
-    await expect(view.getByText('Section 4 of 4')).toBeVisible();
+    const contents = page.getByRole('navigation', { name: 'Contents' });
+    await contents.getByRole('button', { name: /Finding unmatched/ }).click();
+    await expect(contents.getByRole('button', { name: /Finding unmatched/ })).toHaveAttribute('aria-current', 'step');
     const note = walk.locator('.tour-note');
     // At rest the diff shows plainly, each note's number on the gutter of its first line.
     await expect(note).toHaveCount(0);
