@@ -24,9 +24,10 @@ env:
 
 jobs:
   # The release build and the packages (nix, pixi-build, build, npm-packages, crate) run on main and
-  # on dispatch; a pull request skips them, so a packaging break first shows on main.
+  # on dispatch; a pull request skips them, so a packaging break first shows on main. The flake.lock
+  # update's pull request builds the Nix package, the one input it changes.
   nix:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || github.head_ref == 'update-flake'
     runs-on: ubuntu-latest
     permissions:
       contents: read
