@@ -2815,16 +2815,18 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     async saveConfig(config) {
+      // Shown at once: the server answers once the file is synced to disk, which a busy disk holds up for seconds.
       // Saves run in order, and only the newest config request (save or load) may commit.
-      let t = 0;
+      const t = configSeq.start();
+      set((s) => ({ config: { ...s.config, ...config } }));
       try {
-        const saved = await configWrites(() => {
-          t = configSeq.start();
-          return api.saveConfig(config);
-        });
+        const saved = await configWrites(() => api.saveConfig(config));
         if (configSeq.latest(t)) set({ config: saved });
       } catch (e) {
-        if (configSeq.latest(t)) report('Saving settings', e);
+        if (!configSeq.latest(t)) return;
+        report('Saving settings', e);
+        // Undo what was shown but never saved.
+        void get().refreshConfig();
       }
     },
 
