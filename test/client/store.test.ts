@@ -1968,6 +1968,23 @@ describe('request ownership', () => {
     await b;
     expect(useStore.getState().config.contextLines).toBe(2);
   });
+
+  it('a config save shows before the server answers, and a failed one reloads what was saved', async () => {
+    useStore.setState({ config: { ...useStore.getState().config, lineWrap: true } });
+    const slow = deferred<UserConfig>();
+    api.saveConfig.mockReturnValueOnce(slow.promise);
+    const saving = useStore.getState().saveConfig({ lineWrap: false });
+    expect(useStore.getState().config.lineWrap).toBe(false);
+    slow.resolve({ ...useStore.getState().config, lineWrap: false });
+    await saving;
+    expect(useStore.getState().config.lineWrap).toBe(false);
+
+    api.saveConfig.mockRejectedValueOnce(new Error('disk full'));
+    api.config.mockResolvedValueOnce({ ...useStore.getState().config, lineWrap: false });
+    await useStore.getState().saveConfig({ lineWrap: true });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(useStore.getState().config.lineWrap).toBe(false);
+  });
 });
 
 describe('threads', () => {

@@ -106,7 +106,10 @@ test('the tree ellipsizes while lines wrap, unwrapping trades that for the scrol
     .hover({ position: { x: 70, y: 13 } });
   await expect(page.getByRole('tooltip')).toHaveText('tally/generated/openapi.py');
 
+  // The toggle shows before the server has the choice on disk; reload once it does.
+  const saved = page.waitForResponse((r) => r.url().endsWith('/api/config') && r.request().method() === 'PUT');
   await scrollLongNames(page);
+  await saved;
   await page.reload();
   await expect.poll(() => scrollsSideways(page)).toBe(true);
 });
