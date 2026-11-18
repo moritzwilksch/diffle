@@ -291,6 +291,18 @@ async fn checks_out_a_focused_commit_and_the_range_again() {
 }
 
 #[tokio::test]
+async fn steps_back_from_head_and_offers_the_way_forward_while_holding_the_checkout() {
+    let (t, first) = on_feat();
+    let tip = t.git(&["rev-parse", "feat"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    let snap = s.start(s.resolve(revspec(&["HEAD^!"])).await.unwrap()).await.unwrap();
+    assert_eq!(snap.commit.as_ref().unwrap().parent.as_deref(), Some(first.as_str()));
+    let snap = s.enter(revspec(&[&format!("{first}^!")])).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first, "the older commit is the checkout");
+    assert_eq!(snap.commit.as_ref().unwrap().child, Some(tip), "next leads back to where the reviewer left HEAD");
+}
+
+#[tokio::test]
 async fn checks_out_a_focused_commit_of_a_range_ending_at_the_worktree_and_comes_back() {
     let (t, first) = on_feat();
     let s = session(t.open().await, Github::tokenless(), true);

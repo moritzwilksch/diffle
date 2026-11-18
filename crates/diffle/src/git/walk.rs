@@ -43,10 +43,10 @@ impl GitRepo {
         .await
     }
 
-    /// `sha`'s first parent, and the commit toward HEAD whose first parent it is. The child is none
-    /// at HEAD, on an unborn branch, or when `sha` is off HEAD's first-parent line.
-    pub async fn commit_neighbours(&self, sha: &str) -> Result<(Option<String>, Option<String>)> {
-        let sha = sha.to_owned();
+    /// `sha`'s first parent, and the commit toward `head` whose first parent it is. The child is none
+    /// at `head`, when `head` names no commit, or when `sha` is off `head`'s first-parent line.
+    pub async fn commit_neighbours(&self, sha: &str, head: &str) -> Result<(Option<String>, Option<String>)> {
+        let (sha, head) = (sha.to_owned(), head.to_owned());
         self.gix("walking HEAD's first parents", move |repo| {
             let Ok(target) = repo.rev_parse_single(sha.as_str()).map(gix::Id::detach) else {
                 return Ok((None, None));
@@ -55,11 +55,11 @@ impl GitRepo {
                 return Ok((None, None));
             };
             let parent = target_commit.parent_ids().next().map(|p| p.to_string());
-            let Ok(head) = repo.head_id() else {
+            let Ok(head) = repo.rev_parse_single(head.as_str()) else {
                 return Ok((parent, None));
             };
-            // HEAD's first-parent line down to where `sha`'s history begins, as `rev-list
-            // --first-parent sha..HEAD` walks it: the child is the commit there whose first parent is `sha`.
+            // `head`'s first-parent line down to where `sha`'s history begins, as `rev-list
+            // --first-parent sha..head` walks it: the child is the commit there whose first parent is `sha`.
             let line = repo.rev_walk([head.detach()]).first_parent_only().with_hidden([target_commit.id]).all()?;
             for info in line {
                 let info = info?;
