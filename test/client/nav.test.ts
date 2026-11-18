@@ -16,7 +16,7 @@ const patch = `diff --git a/f.txt b/f.txt
 +THIRTY-ONE
  thirty-two
 `;
-const fileDiff = parsePatchFiles(patch, 'k')[0]!.files[0]!;
+const fileDiff = parsePatchFiles(patch, { cacheKeyPrefix: 'k' })[0]!.files[0]!;
 
 describe('navigation', () => {
   const row = (line: number) => ({ side: 'additions' as const, line, hunkStart: true });
@@ -104,7 +104,7 @@ describe('diffRows with revealed context', () => {
 -six
  seven
 `;
-    const rows = diffRows(parsePatchFiles(twoBlocks, 'k2')[0]!.files[0]!);
+    const rows = diffRows(parsePatchFiles(twoBlocks, { cacheKeyPrefix: 'k2' })[0]!.files[0]!);
     expect(rows.filter((r) => r.hunkStart).map((r) => `${r.side[0]}${r.line}`)).toEqual(['a2', 'a5']);
     const pureDeletion = `diff --git a/h.txt b/h.txt
 --- a/h.txt
@@ -114,7 +114,7 @@ describe('diffRows with revealed context', () => {
 -two
  three
 `;
-    const del = diffRows(parsePatchFiles(pureDeletion, 'k3')[0]!.files[0]!);
+    const del = diffRows(parsePatchFiles(pureDeletion, { cacheKeyPrefix: 'k3' })[0]!.files[0]!);
     expect(del.filter((r) => r.hunkStart).map((r) => `${r.side[0]}${r.line}`)).toEqual(['d2']);
   });
 
@@ -129,7 +129,7 @@ describe('diffRows with revealed context', () => {
 +TWO
  four
 `;
-    const fd = parsePatchFiles(patch, 'k4')[0]!.files[0]!;
+    const fd = parsePatchFiles(patch, { cacheKeyPrefix: 'k4' })[0]!.files[0]!;
     expect(diffRows(fd, [], 'unified').map((r) => `${r.side[0]}${r.line}`)).toEqual(['a1', 'd2', 'd3', 'a2', 'a3']);
     expect(diffRows(fd, [], 'split').map((r) => `${r.side[0]}${r.line}`)).toEqual(['a1', 'a2', 'd3', 'a3']);
   });

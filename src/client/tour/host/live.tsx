@@ -26,7 +26,7 @@ export const ROWS_OPTIONS = {
 
 /** `patch` as the diff reads it, in `lang` when given; undefined when it holds no file. */
 export function rowsDiff(patch: string, lang?: string): FileDiffMetadata | undefined {
-  const file = parsePatchFiles(patch, `tour:${rowsKey(patch, lang)}`)[0]?.files[0];
+  const file = parsePatchFiles(patch, { cacheKeyPrefix: `tour:${rowsKey(patch, lang)}` })[0]?.files[0];
   return file && lang ? { ...file, lang: lang as SupportedLanguages } : file;
 }
 

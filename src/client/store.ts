@@ -872,7 +872,7 @@ export const useStore = create<ReviewState>((set, get) => {
       const patch = paths.length === 1 ? await api.patch(paths[0]!) : await api.patches(paths);
       // Unique cache key per load: the renderer otherwise treats two diffs with
       // undefined keys as the same and reuses stale highlighted lines.
-      const parsed = parsePatchFiles(patch, `s${snap.version}c${snap.context}t${Date.now()}`);
+      const parsed = parsePatchFiles(patch, { cacheKeyPrefix: `s${snap.version}c${snap.context}t${Date.now()}` });
       for (const p of parsed) for (const f of p.files) files.set(f.name, f);
       for (const p of paths) {
         const f = files.get(p);
