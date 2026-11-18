@@ -322,6 +322,18 @@ async fn offers_the_pickers_commits_from_where_the_reviewer_left_head() {
 }
 
 #[tokio::test]
+async fn opens_head_where_the_reviewer_left_it_after_stepping_back() {
+    let (t, first) = on_feat();
+    let tip = t.git(&["rev-parse", "feat"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["HEAD^!"])).await.unwrap()).await.unwrap();
+    s.enter(revspec(&[&format!("{first}^!")])).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first, "the older commit is the checkout");
+    let snap = s.enter(revspec(&["HEAD^!"])).await.unwrap();
+    assert_eq!(snap.new_sha, tip, "HEAD names feat's tip, as it does in a range");
+}
+
+#[tokio::test]
 async fn checks_out_a_focused_commit_of_a_range_ending_at_the_worktree_and_comes_back() {
     let (t, first) = on_feat();
     let s = session(t.open().await, Github::tokenless(), true);

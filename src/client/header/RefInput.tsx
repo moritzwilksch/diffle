@@ -29,7 +29,8 @@ export function RefInput({
   const [active, setActive] = useState(-1);
   const list = useRef<HTMLDivElement>(null);
   const options = [
-    { value: 'HEAD', detail: 'Current commit', section: 'special' },
+    // While diffle holds an older commit checked out, HEAD names where the reviewer left it.
+    { value: 'HEAD', detail: 'Your checkout', section: 'special' },
     ...(worktree ? [{ value: 'worktree', detail: 'Uncommitted changes', section: 'special' }] : []),
     ...(refs?.branches ?? []).map((value) => ({
       value,
