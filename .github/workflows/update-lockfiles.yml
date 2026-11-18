@@ -1,5 +1,6 @@
 name: Update lock files
-# Keeps a pull request open that updates pixi.lock within pixi.toml's constraints, monthly or on demand.
+# Keeps pull requests open that update pixi.lock within pixi.toml's constraints and flake.lock,
+# monthly or on demand.
 on:
   schedule:
     - cron: 0 5 1 * *
@@ -48,4 +49,43 @@ jobs:
           labels: pixi
           delete-branch: true
           add-paths: pixi.lock
+          sign-commits: true
+
+  flake-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: Update flake.lock
+        run: |
+          # nix reports each updated input on stderr.
+          nix flake update 2> "$RUNNER_TEMP/update.log"
+          {
+            echo '```'
+            grep -v '^warning:' "$RUNNER_TEMP/update.log"
+            echo '```'
+          } > "$RUNNER_TEMP/diff.md"
+      - name: Obtain GitHub app token
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ github.repository }}
+          identity: update-lockfiles
+      - name: Open or update the pull request
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+        with:
+          token: ${{ steps.octo-sts.outputs.token }}
+          branch: update-flake
+          base: main
+          title: "chore(deps): update flake.lock"
+          commit-message: "chore(deps): update flake.lock"
+          body-path: ${{ runner.temp }}/diff.md
+          labels: nix
+          delete-branch: true
+          add-paths: flake.lock
           sign-commits: true
