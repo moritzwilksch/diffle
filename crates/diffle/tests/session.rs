@@ -47,6 +47,43 @@ fn text(buf: Option<Vec<u8>>) -> Option<String> {
     buf.map(|b| String::from_utf8(b).unwrap())
 }
 
+#[tokio::test]
+async fn reloading_the_whole_pr_fetches_new_pushes_and_keeps_the_review_key() {
+    use diffle::github::hosts::{Github, GithubInstance};
+    use diffle::server::hub::Hub;
+    use diffle::session::{Session, SessionOptions};
+
+    let fixture = common::pr::Fixture::new();
+    let session = Session::new(
+        Arc::new(fixture.repo().await),
+        Hub::new(),
+        SessionOptions {
+            watch: false,
+            github: Github { instance: GithubInstance::github_com(), client: Some(Arc::new(fixture.github())) },
+            context: 3,
+            follow_refs: FollowRefs::Off,
+            instance: "pr-reload".into(),
+            checkout: false,
+        },
+    );
+    let review = session.resolve(EnterRequest::Pr { pr: Some("https://github.com/o/r/pull/7".into()) }).await.unwrap();
+    let before = session.start(review).await.unwrap();
+    assert_eq!(before.new_sha, fixture.head);
+
+    common::git_in(&fixture.origin, &["checkout", "-q", "--detach", &fixture.head]);
+    std::fs::write(fixture.origin.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+    common::git_in(&fixture.origin, &["commit", "-qam", "update the PR"]);
+    let head = common::git_in(&fixture.origin, &["rev-parse", "HEAD"]);
+    common::git_in(&fixture.origin, &["update-ref", "refs/pull/7/head", &head]);
+
+    let after = session.reload().await.unwrap();
+    assert_eq!(after.new_sha, head);
+    assert_eq!(after.comment_key, before.comment_key);
+    assert!(after.version > before.version);
+    assert_eq!(after.changed[0].additions, 2);
+    session.close().await;
+}
+
 #[test]
 fn side_path_maps_renames_and_refuses_paths_outside_the_snapshot() {
     let snap: Snapshot = serde_json::from_value(serde_json::json!({

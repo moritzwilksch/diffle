@@ -103,7 +103,7 @@ export const DIFF_HELP: HelpSection[][] = [
     {
       title: 'Iterations',
       rows: [
-        ['r', 'reload once the compared refs moved'],
+        ['r', 'fetch the whole PR again or reload moved refs'],
         ['ii', 'latest iteration vs. the one before; again: the range'],
         ['ij / ik', 'span’s lower end one iteration older / newer'],
         ['iJ / iK', 'span’s higher end one iteration older / newer'],

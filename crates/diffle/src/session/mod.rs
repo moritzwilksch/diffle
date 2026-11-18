@@ -6,6 +6,7 @@ mod files;
 mod github;
 mod refresh;
 mod transitions;
+mod viewed;
 mod watch;
 
 use std::future::Future;

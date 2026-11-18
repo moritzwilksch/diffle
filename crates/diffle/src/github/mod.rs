@@ -8,3 +8,4 @@ pub mod permalink;
 pub mod pulls;
 pub mod review;
 pub(crate) mod submit_review;
+pub(crate) mod viewed;

@@ -160,6 +160,9 @@ GitHub comments are included.
 The **GitHub comments** panel below Threads shows the PR discussion and inline threads, including
 resolved and outdated ones. Drag its divider to resize it.
 
+In the whole PR view, **Viewed** syncs with your GitHub account. Press `r` to fetch new commits
+and read GitHub's viewed marks again. GitHub clears a file's viewed mark when the file changes.
+
 The pull request icon adds one thread, or all open threads, to a pending review on the PR.
 Adding a thread again updates its pending comment. You can also edit, drop, or submit pending
 comments on GitHub.

@@ -827,6 +827,107 @@ async fn start_pr_session(
     (session, snap)
 }
 
+struct ViewerFiles {
+    pr: Value,
+    state: &'static str,
+    advanced_before_write: bool,
+    offline: bool,
+}
+
+fn viewed_client(files: Arc<Mutex<ViewerFiles>>) -> FakeGithub {
+    FakeGithub::new(move |query, variables| {
+        let files = files.clone();
+        async move {
+            let mut files = files.lock().unwrap();
+            let refs = json!({ "headRefOid": files.pr["headRefOid"], "baseRefOid": files.pr["baseRefOid"] });
+            if query.starts_with("mutation") {
+                assert_eq!(variables["input0"], json!({ "pullRequestId": "PR_7", "path": "a.txt" }));
+                files.state = if query.contains(":markFileAsViewed") { "VIEWED" } else { "UNVIEWED" };
+                return Ok(json!({ "file0": { "pullRequest": refs } }));
+            }
+            if query.contains("viewerViewedState") {
+                if files.offline {
+                    return Err(GithubError::new("GitHub unavailable", 502));
+                }
+                let second = !variables["after"].is_null();
+                if second {
+                    assert_eq!(variables["after"], "next");
+                }
+                let mut pr = files.pr.clone();
+                pr["id"] = json!("PR_7");
+                pr["files"] = json!({
+                    "nodes": [{ "path": if second { "a.txt" } else { "missing.txt" }, "viewerViewedState": files.state }],
+                    "pageInfo": { "hasNextPage": !second, "endCursor": (!second).then_some("next") },
+                });
+                return Ok(json!({ "repository": { "pullRequest": pr } }));
+            }
+            if query.contains("node(id:") {
+                let mut refs = refs;
+                if files.advanced_before_write {
+                    refs["headRefOid"] = json!("another-head");
+                }
+                return Ok(json!({ "node": refs }));
+            }
+            Ok(json!({ "repository": { "pullRequest": files.pr } }))
+        }
+    })
+}
+
+#[tokio::test]
+async fn syncs_viewed_marks_with_github_and_reads_them_again_at_the_refreshed_head() {
+    use diffle::protocol::ViewedEntry;
+
+    let fixture = common::pr::Fixture::new();
+    let remote = Arc::new(Mutex::new(ViewerFiles {
+        pr: fixture.node(json!({ "headRefOid": fixture.head })),
+        state: "VIEWED",
+        advanced_before_write: false,
+        offline: false,
+    }));
+    let github = viewed_client(remote.clone());
+    let (session, initial) = start_pr_session(&fixture, &github).await;
+    let viewed = ViewedEntry { path: "a.txt".into(), blob: initial.changed[0].blob.clone(), viewed: true };
+    assert_eq!(session.viewed_marks().await.unwrap().as_slice(), std::slice::from_ref(&viewed));
+
+    let unviewed = ViewedEntry { viewed: false, ..viewed.clone() };
+    assert_eq!(session.set_viewed_mark(unviewed.clone()).await.unwrap().as_slice(), std::slice::from_ref(&unviewed));
+    assert_eq!(remote.lock().unwrap().state, "UNVIEWED");
+    assert_eq!(session.viewed_marks().await.unwrap(), [unviewed]);
+    assert_eq!(session.set_viewed_marks(vec![viewed.clone()]).await.unwrap().as_slice(), std::slice::from_ref(&viewed));
+    assert_eq!(remote.lock().unwrap().state, "VIEWED");
+
+    // A push between the file lookup and the write's final head check cannot mark the new file.
+    github.clear();
+    remote.lock().unwrap().advanced_before_write = true;
+    assert!(matches!(session.set_viewed_mark(viewed.clone()).await, Err(Error::Github(_))));
+    assert!(github.calls().iter().all(|call| !call.query.starts_with("mutation")));
+
+    common::git_in(&fixture.origin, &["checkout", "--detach", &fixture.head]);
+    std::fs::write(fixture.origin.join("a.txt"), "one\ntwo\nnew change\n").unwrap();
+    common::git_in(&fixture.origin, &["commit", "-qam", "new PR change"]);
+    let head = common::git_in(&fixture.origin, &["rev-parse", "HEAD"]);
+    common::git_in(&fixture.origin, &["update-ref", "refs/pull/7/head", &head]);
+    remote.lock().unwrap().pr["headRefOid"] = json!(head);
+    remote.lock().unwrap().advanced_before_write = false;
+    remote.lock().unwrap().state = "DISMISSED";
+    github.clear();
+    assert!(matches!(session.set_viewed_mark(viewed.clone()).await, Err(Error::Github(_))));
+    assert!(github.calls().iter().all(|call| !call.query.starts_with("mutation")));
+
+    let refreshed = session.reload().await.unwrap();
+    assert_eq!(refreshed.new_sha, head);
+    assert_ne!(refreshed.changed[0].blob, viewed.blob);
+    assert_eq!(session.viewed_marks().await.unwrap().as_slice(), std::slice::from_ref(&viewed));
+    remote.lock().unwrap().state = "VIEWED";
+    let fresh = ViewedEntry { blob: refreshed.changed[0].blob.clone(), ..viewed.clone() };
+    let entries = session.viewed_marks().await.unwrap();
+    assert!(entries.contains(&fresh));
+
+    remote.lock().unwrap().offline = true;
+    assert_eq!(session.viewed_marks().await.unwrap(), [viewed]);
+    session.close().await;
+}
+
 #[tokio::test]
 async fn submits_review_decisions_to_the_viewers_pending_review_or_the_reviewed_commit() {
     use diffle::protocol::{GithubReviewDecision as Decision, GithubReviewSubmit};

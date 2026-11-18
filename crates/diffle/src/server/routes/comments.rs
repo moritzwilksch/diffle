@@ -265,12 +265,12 @@ async fn github_review(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
 }
 
 async fn viewed(State(d): State<Arc<ApiDeps>>) -> ApiResult {
-    Ok(Json(d.session.comments()?.viewed().await?).into_response())
+    Ok(Json(d.session.viewed_marks().await?).into_response())
 }
 
 async fn set_viewed(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let entry: ViewedEntry = body(&raw)?;
-    let list = d.session.comments()?.set_viewed(&entry.path, &entry.blob, entry.viewed).await?;
+    let list = d.session.set_viewed_mark(entry).await?;
     d.hub.broadcast(ServerMessage::Viewed);
     Ok(Json(list).into_response())
 }
@@ -282,7 +282,7 @@ struct ViewedBulk {
 
 async fn set_viewed_bulk(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: ViewedBulk = body(&raw)?;
-    let list = d.session.comments()?.set_viewed_many(req.entries).await?;
+    let list = d.session.set_viewed_marks(req.entries).await?;
     d.hub.broadcast(ServerMessage::Viewed);
     Ok(Json(list).into_response())
 }

@@ -2533,7 +2533,8 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     reloadIfMoved() {
-      if (get().moved) void get().reload();
+      const review = get().snapshot?.review;
+      if (get().moved || (review?.kind === 'range' && review.pr && review.view.kind === 'whole')) void get().reload();
       else get().flash('Nothing moved since this snapshot');
     },
 
