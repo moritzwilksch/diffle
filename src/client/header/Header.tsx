@@ -3,6 +3,7 @@ import { GitCompareArrows, Keyboard, Monitor, Moon, PanelLeft, PanelRight, Setti
 import { useState } from 'react';
 import { repoName } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
+import { TerminalToggle } from '@/client/terminal/TerminalPanel.js';
 import { nextTheme, type ThemeChoice } from '@/client/theme.js';
 import { panelOf, useActiveView } from '@/client/views/state.js';
 import { ViewSwitch } from '@/client/views/ViewSwitch.js';
@@ -68,6 +69,7 @@ export function Header() {
       {/* The switch shows in every view, so it holds its place; a view's own controls come and go beside it. */}
       {view.Controls && <view.Controls />}
       <ViewSwitch />
+      <TerminalToggle />
       <Button variant="ghost" icon onClick={() => setTheme(nextTheme(theme))} title={`Theme: ${theme} (t)`}>
         <ThemeIcon choice={theme} />
       </Button>

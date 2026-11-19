@@ -540,6 +540,35 @@
         },
         "blame": {
           "$ref": "#/$defs/BlameMode"
+        },
+        "textScale": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "editorFontSize": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 48
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terminalFontSize": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 48
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "description": "Writable HTTP config fields; unknown keys, including CLI-only lspCommands and githubHosts, are stripped."
@@ -2786,6 +2815,48 @@
         "after"
       ]
     },
+    "ReviewLocation": {
+      "type": "object",
+      "properties": {
+        "updatedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "commentKey": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "full": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "updatedAt",
+        "commentKey",
+        "path",
+        "line",
+        "side",
+        "full"
+      ]
+    },
     "SearchContent": {
       "type": "string",
       "enum": [
@@ -3165,6 +3236,137 @@
           "type": "string"
         }
       }
+    },
+    "TerminalAccess": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/$defs/TerminalLayout"
+        }
+      },
+      "required": [
+        "token",
+        "layout"
+      ]
+    },
+    "TerminalLayout": {
+      "type": "object",
+      "properties": {
+        "updatedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "next": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "active": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tabs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TerminalTab"
+          }
+        }
+      },
+      "required": [
+        "updatedAt",
+        "open",
+        "next",
+        "active",
+        "tabs"
+      ]
+    },
+    "TerminalReplay": {
+      "type": "object",
+      "properties": {
+        "replayChunks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "replayChunks"
+      ]
+    },
+    "TerminalResize": {
+      "type": "object",
+      "properties": {
+        "cols": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        }
+      },
+      "required": [
+        "cols",
+        "rows"
+      ]
+    },
+    "TerminalStatus": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "exitCode": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "TerminalTab": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "panes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "activePane": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "panes",
+        "activePane"
+      ]
     },
     "ThreadCreate": {
       "type": "object",
@@ -5493,6 +5695,38 @@
           "$ref": "#/$defs/BlameMode",
           "description": "Where git blame shows; see `BlameModeSchema`. Default inline."
         },
+        "textScale": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Overall interface scale in percent. Default 100."
+        },
+        "editorFontSize": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Code text size in CSS pixels. Null follows the interface scale."
+        },
+        "terminalFontSize": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Terminal text size in CSS pixels. Null follows the interface scale."
+        },
         "lspCommands": {
           "type": "object",
           "propertyNames": {
@@ -5520,6 +5754,9 @@
         "followRefs",
         "lineWrap",
         "blame",
+        "textScale",
+        "editorFontSize",
+        "terminalFontSize",
         "lspCommands",
         "githubHosts"
       ]

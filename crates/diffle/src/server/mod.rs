@@ -7,6 +7,7 @@ pub mod hub;
 pub mod image;
 mod listen;
 mod routes;
+mod terminal;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -41,7 +42,11 @@ const EXPORTS_PATH: &str = "/api/tour/exports/";
 pub struct ServerOptions {
     pub endpoint: Endpoint,
     pub allowed_origin: Option<String>,
+    pub launch_dir: Option<PathBuf>,
+    pub terminal_tabs: Vec<Vec<String>>,
 }
+
+pub use terminal::MAX_TERMINALS;
 
 pub enum Endpoint {
     /// A port on `host`; with `probe`, the first free one at or above `port` instead of failing.
@@ -84,12 +89,23 @@ impl Server {
             Endpoint::Unix(_) => "127.0.0.1",
         };
         let guard = RequestGuard::for_host(host, opts.allowed_origin.as_deref());
-        let router = router(Arc::new(App { deps: Arc::new(deps), guard }));
         let (stop, stopped) = watch::channel(false);
+        let app = Arc::new(App { deps: Arc::new(deps), guard });
+        let router = router(app);
         let (serving, at, socket) = match opts.endpoint {
             Endpoint::Tcp { host, port, probe } => {
                 let listener = listen::tcp(&host, port, probe).await?;
-                let at = url(&host, listener.local_addr()?);
+                let addr = listener.local_addr()?;
+                let at = url(&host, addr);
+                let router = if opts.allowed_origin.is_none() && addr.ip().is_loopback() {
+                    if let Some(dir) = opts.launch_dir {
+                        router.merge(terminal::router(dir, opts.terminal_tabs, addr.port(), stopped.clone()))
+                    } else {
+                        router
+                    }
+                } else {
+                    router
+                };
                 (spawn(listener, router, stopped), at, None)
             }
             #[cfg(unix)]

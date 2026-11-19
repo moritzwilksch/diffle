@@ -111,6 +111,15 @@ export const DIFF_HELP: HelpSection[][] = [
       ],
     },
     {
+      title: 'Terminal',
+      rows: [
+        ['Ctrl+`', 'toggle the terminal panel'],
+        ['Alt+Shift+g', 'open and focus the current terminal'],
+        ['Alt+Shift+j / k', 'next / previous terminal tab'],
+        ['Alt+Shift+h / l', 'focus the terminal pane to the left / right'],
+      ],
+    },
+    {
       title: 'General',
       rows: [
         ['?', 'toggle this help'],

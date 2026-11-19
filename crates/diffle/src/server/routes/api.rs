@@ -15,7 +15,7 @@ use crate::protocol::{
     UserConfig, comparison_label,
 };
 use crate::session::Broadcaster;
-use crate::user_config::UserConfigPatch;
+use crate::user_config::{FONT_SIZE_RANGE, TEXT_SCALES, UserConfigPatch};
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
     Router::new()
@@ -121,6 +121,16 @@ struct ConfigUpdate {
     follow_refs: Option<FollowRefs>,
     line_wrap: Option<bool>,
     blame: Option<BlameMode>,
+    text_scale: Option<i64>,
+    #[serde(default, deserialize_with = "font_size_update")]
+    editor_font_size: Option<Option<i64>>,
+    #[serde(default, deserialize_with = "font_size_update")]
+    terminal_font_size: Option<Option<i64>>,
+}
+
+// A missing key leaves the override alone. A supplied null clears it.
+fn font_size_update<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
+    Option::deserialize(d).map(Some)
 }
 
 async fn set_config(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
@@ -128,12 +138,23 @@ async fn set_config(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     if update.context_lines.is_some_and(|n| !(0..=10_000).contains(&n)) {
         return Err(ApiError::bad_request("contextLines: expected an integer between 0 and 10000"));
     }
+    if update.text_scale.is_some_and(|n| !TEXT_SCALES.contains(&n)) {
+        return Err(ApiError::bad_request("textScale: expected one of 80, 90, 100, 110, 125, 150"));
+    }
+    for (name, size) in [("editorFontSize", update.editor_font_size), ("terminalFontSize", update.terminal_font_size)] {
+        if size.flatten().is_some_and(|n| !FONT_SIZE_RANGE.contains(&n)) {
+            return Err(ApiError::bad_request(format!("{name}: expected an integer between 8 and 48 or null")));
+        }
+    }
     let patch = UserConfigPatch {
         auto_viewed: update.auto_viewed,
         context_lines: update.context_lines,
         follow_refs: update.follow_refs,
         line_wrap: update.line_wrap,
         blame: update.blame,
+        text_scale: update.text_scale,
+        editor_font_size: update.editor_font_size,
+        terminal_font_size: update.terminal_font_size,
     };
     let saved = d.config.set(patch).await?;
     d.hub.broadcast(ServerMessage::Config);

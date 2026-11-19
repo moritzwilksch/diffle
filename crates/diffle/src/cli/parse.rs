@@ -1,4 +1,5 @@
 //! Value parsers for the command line; each failure says what was wrong, and clap makes it a usage error.
+use std::convert::Infallible;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -20,6 +21,27 @@ pub fn port(raw: &str) -> Result<u16, String> {
 
 pub fn context(raw: &str) -> Result<u32, String> {
     int_arg(raw, 0, 10_000)
+}
+
+#[derive(Clone, Debug)]
+pub struct StartupTerminalTab {
+    pub panes: Vec<String>,
+}
+
+/// One terminal tab, with comma-separated panes. A backslash protects a literal comma.
+pub fn terminal_tab(raw: &str) -> Result<StartupTerminalTab, Infallible> {
+    let mut panes = Vec::new();
+    let mut command = String::new();
+    let mut chars = raw.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' if chars.next_if_eq(&',').is_some() => command.push(','),
+            ',' => panes.push(std::mem::take(&mut command)),
+            _ => command.push(ch),
+        }
+    }
+    panes.push(command);
+    Ok(StartupTerminalTab { panes })
 }
 
 static ORIGIN_SHAPE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^https?://[^/?#]+/?$").unwrap());

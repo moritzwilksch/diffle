@@ -1,6 +1,7 @@
 import { CornerDownLeft, ExternalLink, GitPullRequest, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useId, useState } from 'react';
-import { api, githubCommentsEvent } from '@/client/api.js';
+import { api } from '@/client/api.js';
+import { githubCommentsEvent } from './commentsEvent.js';
 import { refreshGithubPeek, showGithubComment } from './commentPeek.js';
 import { githubCommentBody } from './GithubPeekCard.js';
 import { GithubPendingDelete } from './GithubPendingDelete.js';

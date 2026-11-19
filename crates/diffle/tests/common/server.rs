@@ -145,6 +145,8 @@ impl TestServer {
         let opts = ServerOptions {
             endpoint: Endpoint::Tcp { host: "127.0.0.1".into(), port: 0, probe: false },
             allowed_origin: Some("https://proxy.example".into()),
+            launch_dir: None,
+            terminal_tabs: Vec::new(),
         };
         let (server, base) = Server::listen(deps, opts).await.unwrap();
         Self { repo, session, config, hub, base, server: Some(server), lsp, client: reqwest::Client::new() }

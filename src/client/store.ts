@@ -11,6 +11,7 @@ import {
   type GithubMetadata,
   type ChangedFile,
   type CommentThread,
+  type ConfigUpdate,
   type FileResponse,
   type LspFeature,
   type LspLocation,
@@ -565,6 +566,7 @@ export interface ReviewState {
    * deleted files. `external` opens a file the language server named outside the snapshot instead.
    */
   openFullFile(path: string, line?: number, external?: boolean): Promise<void>;
+  restorePosition(position: JumpPosition): Promise<void>;
   /** Back to the diff list, at the position the file view was entered from. */
   closeFullFile(): void;
   setSelection(sel: CodeViewLineSelection | null): void;
@@ -596,9 +598,7 @@ export interface ReviewState {
   toggleCollapsed(path: string): void;
   /** A click on a file's header: the cursor moves onto that file, the viewport stays where it is. */
   selectFile(path: string): void;
-  saveConfig(
-    config: Partial<Pick<UserConfig, 'autoViewed' | 'contextLines' | 'followRefs' | 'lineWrap' | 'blame'>>,
-  ): Promise<void>;
+  saveConfig(config: ConfigUpdate): Promise<boolean>;
   jumpTo(path: string, line?: number, side?: Side): void;
   setActivePath(path: string | null): void;
 }
@@ -2552,6 +2552,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     loadFile,
+    restorePosition: goToPositionSilently,
 
     async openFile(path, line, side) {
       const snap = get().snapshot;
@@ -2830,15 +2831,19 @@ export const useStore = create<ReviewState>((set, get) => {
       // Shown at once: the server answers once the file is synced to disk, which a busy disk holds up for seconds.
       // Saves run in order, and only the newest config request (save or load) may commit.
       const t = configSeq.start();
-      set((s) => ({ config: { ...s.config, ...config } }));
+      const patch: ConfigUpdate = Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined));
+      set((s) => ({ config: { ...s.config, ...patch } }));
       try {
-        const saved = await configWrites(() => api.saveConfig(config));
+        const saved = await configWrites(() => api.saveConfig(patch));
         if (configSeq.latest(t)) set({ config: saved });
+        return true;
       } catch (e) {
-        if (!configSeq.latest(t)) return;
-        report('Saving settings', e);
-        // Undo what was shown but never saved.
-        void get().refreshConfig();
+        if (configSeq.latest(t)) {
+          report('Saving settings', e);
+          // Undo what was shown but never saved.
+          void get().refreshConfig();
+        }
+        return false;
       }
     },
 

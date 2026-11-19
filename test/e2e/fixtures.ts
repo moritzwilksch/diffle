@@ -20,6 +20,8 @@ export interface Options {
   args: string[];
   /** Extra environment for the diffle process. */
   env: NodeJS.ProcessEnv;
+  /** Include the integrated terminal in this scenario. */
+  terminal: boolean;
 }
 
 export interface Fixtures {
@@ -37,6 +39,7 @@ export const test = base.extend<Options & Fixtures, WorkerFixtures>({
   revs: [[`${MAIN_BRANCH}...${FEATURE_BRANCH}`], { option: true }],
   args: [[], { option: true }],
   env: [{}, { option: true }],
+  terminal: [false, { option: true }],
 
   // Copy the complete checkout, including staged/unstaged files; git clone would lose working-mode inputs.
   fixtureTemplate: [
@@ -65,8 +68,8 @@ export const test = base.extend<Options & Fixtures, WorkerFixtures>({
     }
   },
 
-  diffle: async ({ repo, revs, args, env }, use) => {
-    const server = await startDiffle({ repo, revs, args, env });
+  diffle: async ({ repo, revs, args, env, terminal }, use) => {
+    const server = await startDiffle({ repo, revs, args: terminal ? args : ['--no-terminal', ...args], env });
     try {
       await use(server);
     } finally {

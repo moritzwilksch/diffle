@@ -60,7 +60,7 @@ fn help_is_the_committed_text_and_keeps_the_shorthands_in_a_section_of_their_own
 #[test]
 fn usage_errors_name_what_was_wrong_and_exit_2() {
     let config = tempfile::tempdir().unwrap();
-    let cases: [(&[&str], &str); 7] = [
+    let cases: [(&[&str], &str); 8] = [
         (&["completion"], "--shell <shell>"),
         (&["completion", "--shell", "nope"], "invalid value 'nope' for '--shell <shell>'"),
         (&["working", "--no-open", "--no-watch", "--lsp", "python=x", "--lsp"], "--lsp <language=command>"),
@@ -69,6 +69,7 @@ fn usage_errors_name_what_was_wrong_and_exit_2() {
         (&["working", "--socket", "d.sock", "-p", "1"], "--socket replaces --port and --host"),
         // Before the shorthand and after it: the conflict shows only once they merge.
         (&["-H", "::1", "working", "--socket", "d.sock"], "--socket replaces --port and --host"),
+        (&["--terminal=,,,,,,,,,,,", "working", "--terminal"], "at most 12 startup terminal panes are supported"),
     ];
     for (args, message) in cases {
         let out = run(config.path(), args);

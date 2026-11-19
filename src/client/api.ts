@@ -1,6 +1,18 @@
 import { z } from 'zod';
-import { encode, json, q, text } from './http.js';
+import { githubCommentsChanged } from './github/commentsEvent.js';
+
+export function connectTerminal(token: string, pane: number): WebSocket {
+  const url = new URL(`api/terminal/socket?${q({ token, pane: String(pane) })}`, location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(url);
+  socket.binaryType = 'arraybuffer';
+  return socket;
+}
+import { encode, json, q, saveViewState, text } from './http.js';
 import {
+  TerminalAccessSchema,
+  TerminalLayoutSchema,
+  ReviewLocationSchema,
   BlameRequestSchema,
   BlameResponseSchema,
   ConfigUpdateSchema,
@@ -75,13 +87,6 @@ import type {
 import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
-
-export const githubCommentsEvent = 'diffle:github-comments';
-
-function githubCommentsChanged<T>(value: T): T {
-  window.dispatchEvent(new Event(githubCommentsEvent));
-  return value;
-}
 
 export const api = {
   /** The server's release; answers before the first review resolves. */
@@ -253,6 +258,13 @@ export const api = {
   /** Document symbols for a path, or workspace symbols matching a query. */
   lspSymbols: (query: SymbolsQuery) => json(LspSymbolsResponseSchema, `api/lsp/symbols?${q(query)}`),
   config: () => json(UserConfigSchema, 'api/config'),
+  terminalAccess: (signal: AbortSignal) =>
+    json(TerminalAccessSchema, 'api/terminal/access', { method: 'POST', signal }),
+  saveTerminalLayout: (token: string, layout: z.input<typeof TerminalLayoutSchema>) =>
+    saveViewState(TerminalLayoutSchema, `api/terminal/layout?${q({ token })}`, layout),
+  reviewLocation: () => json(ReviewLocationSchema.optional(), 'api/review-location'),
+  saveReviewLocation: (position: z.input<typeof ReviewLocationSchema>) =>
+    saveViewState(ReviewLocationSchema, 'api/review-location', position),
   /** lspCommands and githubHosts are CLI-only; the server ignores them. */
   saveConfig: (config: ConfigUpdate) =>
     json(UserConfigSchema, 'api/config', { method: 'PUT', body: encode(ConfigUpdateSchema, config) }),

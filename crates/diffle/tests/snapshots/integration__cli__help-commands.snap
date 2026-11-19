@@ -19,6 +19,9 @@ Options:
       --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
                                  place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
+      --no-terminal              disable integrated browser shells
+      --terminal[=<panes>]       Open a terminal tab on load (repeatable). Separate panes with
+                                 commas, escape literal commas as \,. Empty panes run a shell
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes
       --auto-viewed <glob>       mark matching files viewed for this session (repeatable)
@@ -50,6 +53,9 @@ Options:
       --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
                                  place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
+      --no-terminal              disable integrated browser shells
+      --terminal[=<panes>]       Open a terminal tab on load (repeatable). Separate panes with
+                                 commas, escape literal commas as \,. Empty panes run a shell
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes
       --auto-viewed <glob>       mark matching files viewed for this session (repeatable)
@@ -82,6 +88,9 @@ Options:
       --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
                                  place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
+      --no-terminal              disable integrated browser shells
+      --terminal[=<panes>]       Open a terminal tab on load (repeatable). Separate panes with
+                                 commas, escape literal commas as \,. Empty panes run a shell
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes
       --auto-viewed <glob>       mark matching files viewed for this session (repeatable)

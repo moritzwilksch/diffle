@@ -65,5 +65,6 @@ function clientSection(): string {
 
 const crates = execFileSync('cargo', ['about', 'generate', 'about.hbs'], { cwd: ROOT, encoding: 'utf8' });
 const fonts = readFileSync(join(ROOT, 'scripts', 'licenses-fonts.md'), 'utf8');
-writeFileSync(join(ROOT, 'THIRD_PARTY_NOTICES.md'), [header, fonts, clientSection(), crates].join('\n'));
+const wasm = readFileSync(join(ROOT, 'scripts', 'licenses-wasm.md'), 'utf8');
+writeFileSync(join(ROOT, 'THIRD_PARTY_NOTICES.md'), [header, fonts, wasm, clientSection(), crates].join('\n'));
 console.error('wrote THIRD_PARTY_NOTICES.md');

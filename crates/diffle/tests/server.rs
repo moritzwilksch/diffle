@@ -99,6 +99,9 @@ async fn validates_fields() {
         ("PUT", "/api/config", json!({ "contextLines": -1 })),
         ("PUT", "/api/config", json!({ "contextLines": 1.5 })),
         ("PUT", "/api/config", json!({ "contextLines": 10001 })),
+        ("PUT", "/api/config", json!({ "editorFontSize": 7 })),
+        ("PUT", "/api/config", json!({ "terminalFontSize": 12.5 })),
+        ("PUT", "/api/config", json!({ "textScale": 37 })),
         ("PUT", "/api/viewed/bulk", json!({ "entries": [{ "path": "a", "blob": "", "viewed": true }, null] })),
         ("PUT", "/api/viewed", json!({ "path": "a", "blob": "", "viewed": "true" })),
         ("POST", "/api/github/export", json!({ "threadIds": [1] })),
@@ -485,6 +488,20 @@ async fn ignores_lsp_commands_on_put_config() {
     assert_eq!(r.json()["lspCommands"], serde_json::to_value(&before).unwrap());
     let after = s.config.get();
     assert_eq!((after.lsp_commands, after.context_lines), (before, 7));
+    s.close().await;
+}
+
+#[tokio::test]
+async fn config_can_set_and_clear_one_font_size_at_a_time() {
+    let s = TestServer::start().await;
+    let r = s.json("PUT", "/api/config", json!({ "editorFontSize": 17, "terminalFontSize": 19 })).await;
+    assert_eq!(r.status, 200);
+    assert_eq!(r.json()["editorFontSize"], 17);
+    let r = s.json("PUT", "/api/config", json!({ "editorFontSize": null })).await;
+    assert_eq!(r.status, 200);
+    let saved = s.get("/api/config").await.json();
+    assert!(saved["editorFontSize"].is_null());
+    assert_eq!(saved["terminalFontSize"], 19);
     s.close().await;
 }
 

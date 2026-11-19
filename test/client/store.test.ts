@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_USER_CONFIG } from '@/shared/protocol.js';
 import type {
   GithubMetadata,
   ChangedFile,
@@ -63,13 +64,9 @@ const api = {
   threads: vi.fn(async (): Promise<ThreadList> => list()),
   viewed: vi.fn(async (): Promise<ViewedEntry[]> => []),
   config: vi.fn(async (): Promise<UserConfig> => ({
-    autoViewed: [],
-    contextLines: 5,
+    ...DEFAULT_USER_CONFIG,
     followRefs: 'off',
-    lineWrap: true,
-    blame: 'inline',
     lspCommands: { python: 'pyrefly lsp' },
-    githubHosts: {},
   })),
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
   lspLog: vi.fn(async (): Promise<LspLogResponse> => ({ entries: [] })),
@@ -824,26 +821,18 @@ describe('client transitions', () => {
   it('a snapshot push that overtakes boot keeps the config and LSP status boot fetched', async () => {
     useStore.setState({
       config: {
-        autoViewed: [],
-        contextLines: 5,
+        ...DEFAULT_USER_CONFIG,
         followRefs: 'off' as const,
-        lineWrap: true,
-        blame: 'inline',
-        lspCommands: {},
-        githubHosts: {},
       },
       lsp: LSP_OFF,
     });
     const slow = deferred<Snapshot>();
     api.snapshot.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(snap(2, 'working'));
     api.config.mockResolvedValueOnce({
+      ...DEFAULT_USER_CONFIG,
       autoViewed: ['*.lock'],
       contextLines: 9,
       followRefs: 'off' as const,
-      lineWrap: true,
-      blame: 'inline',
-      lspCommands: {},
-      githubHosts: {},
     });
     api.lspStatus.mockResolvedValueOnce(lspStatus('ready'));
     const boot = useStore.getState().boot();
@@ -1933,13 +1922,9 @@ describe('request ownership', () => {
 
   it('config loads and saves: the newest request wins and saves run in order', async () => {
     const cfg = (contextLines: number): UserConfig => ({
-      autoViewed: [],
+      ...DEFAULT_USER_CONFIG,
       contextLines,
       followRefs: 'off',
-      lineWrap: true,
-      blame: 'inline',
-      lspCommands: {},
-      githubHosts: {},
     });
     const load = deferred<UserConfig>();
     const save = deferred<UserConfig>();

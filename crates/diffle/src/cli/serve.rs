@@ -30,6 +30,16 @@ const CLOSE_BOUND: Duration = Duration::from_millis(1500);
 /// Serves `req` until a signal or the last auto-opened tab ends the run. Fails, before anything
 /// is served, when the request does not resolve.
 pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
+    if opts.no_terminal && !opts.terminal_tabs.is_empty() {
+        return Err(crate::error::Error::Invalid("--terminal conflicts with --no-terminal".into()).into());
+    }
+    if opts.terminal_tabs.iter().map(|tab| tab.panes.len()).sum::<usize>() > crate::server::MAX_TERMINALS {
+        return Err(crate::error::Error::Invalid(format!(
+            "at most {} startup terminal panes are supported",
+            crate::server::MAX_TERMINALS
+        ))
+        .into());
+    }
     let mut timing = Timing::new(opts.timing);
     let config = Arc::new(UserConfigStore::open(UserConfigStore::default_path()).await);
     let dir = match &opts.dir {
@@ -86,6 +96,7 @@ pub async fn run(req: EnterRequest, opts: GlobalOpts) -> anyhow::Result<()> {
         &server,
         &repo,
         lsp.clone(),
+        dir,
         (&github, token_source.as_deref()),
         &mut timing,
     );
@@ -120,6 +131,7 @@ async fn start(
     server: &Mutex<Served>,
     repo: &GitRepo,
     lsp: Option<Arc<LspPool>>,
+    launch_dir: std::path::PathBuf,
     (github, token_source): (&Github, Option<&str>),
     timing: &mut Timing,
 ) -> anyhow::Result<()> {
@@ -149,7 +161,12 @@ async fn start(
             probe: opts.port.is_none(),
         },
     };
-    let server_opts = ServerOptions { endpoint, allowed_origin: opts.allowed_origin.clone() };
+    let server_opts = ServerOptions {
+        endpoint,
+        allowed_origin: opts.allowed_origin.clone(),
+        launch_dir: (!opts.no_terminal).then_some(launch_dir),
+        terminal_tabs: opts.terminal_tabs.iter().map(|tab| tab.panes.clone()).collect(),
+    };
     let (bound, url) = Server::listen(deps, server_opts).await?;
     server.lock().unwrap().server = Some(bound);
     timing.mark("listen");

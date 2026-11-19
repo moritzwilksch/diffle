@@ -24,6 +24,16 @@ describe('review geometry', () => {
     }
     expect(itemMetrics.diffHeaderHeight).toBe(itemMetrics.lineHeight + 3 * itemMetrics.spacing);
   });
+
+  it('uses an explicit editor size for the virtual rows at any interface scale', () => {
+    for (const rem of [14.4, 18]) {
+      const { itemMetrics, css } = reviewGeometry(rem, 19);
+      expect(css).toContain('--diffs-font-size: 19px;');
+      expect(css).toContain('--diffs-line-height: 29px;');
+      expect(itemMetrics.lineHeight).toBe(29);
+      expect(itemMetrics.diffHeaderHeight).toBe(reviewGeometry(rem).itemMetrics.diffHeaderHeight);
+    }
+  });
 });
 
 describe('overflow', () => {

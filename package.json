@@ -42,6 +42,7 @@
     "@pierre/diffs": "1.6.4",
     "@pierre/trees": "1.0.0",
     "commander": "^15.1.0",
+    "ghostty-web": "0.4.0",
     "lucide-react": "^1.71.0",
     "picomatch": "^4.0.7",
     "react": "^19.3.1",

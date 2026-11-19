@@ -119,6 +119,11 @@ Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattr
 them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
 globs in settings or with `diffle config`.
 
+Settings are shared across repositories. Set the editor and terminal font sizes in pixels,
+or leave them blank to follow the app’s text size. Diffle saves these preferences in
+`~/.config/diffle/config.json` (`$XDG_CONFIG_HOME/diffle/config.json` when set).
+Run `diffle config` to see the active path and values.
+
 ## Take a tour of the change
 
 Before you review your agent's change, let it walk you through it. It writes a tour: one page
@@ -245,6 +250,30 @@ returns to the graph as you left it.
 
 The graph needs the language servers, the same ones [Jump to definitions](#jump-to-definitions)
 uses.
+
+## Terminal
+
+Click **Terminal** or press Ctrl+Backtick to toggle the resizable bottom panel. Use **+** to open
+a new tab or **Split terminal right** to open a shell beside the active pane. Use Alt+Shift+G
+to open and focus the current terminal, Alt+Shift+J/K to move to the next/previous tab,
+and Alt+Shift+H/L to focus the pane to the left/right. Use Option in place of Alt on macOS.
+These bindings also appear in **Keyboard shortcuts**.
+
+Each shell starts in the directory where you ran Diffle or the directory passed to `-C`.
+Reloading or reopening the page restores terminal tabs, splits, and the last position in the
+review while the same Diffle process is running. Shells keep running through a disconnect.
+Closing a terminal pane ends its shell. Use `--keep-alive` to keep Diffle running after its
+last browser tab closes.
+The terminal is available on a direct localhost connection. Use `--no-terminal` to disable it.
+
+Repeat `--terminal` to open tabs in order when the review loads. Separate commands with commas
+to open panes left to right in the same tab. An empty entry opens a shell. Quote commands with
+spaces and escape literal commas as `\,` inside the quoted value.
+
+```sh
+diffle working --keep-alive --terminal=codex --terminal  # two tabs
+diffle working --keep-alive --terminal="codex,"          # one tab with two panes
+```
 
 ## Work with a coding agent
 

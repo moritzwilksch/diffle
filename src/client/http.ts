@@ -6,6 +6,11 @@ export function encode<S extends z.ZodType>(schema: S, value: z.input<S>): strin
   return JSON.stringify(schema.parse(value));
 }
 
+/** Persist view state even if the browser leaves before the response arrives. */
+export async function saveViewState<S extends z.ZodType>(schema: S, input: string, value: z.input<S>): Promise<void> {
+  await json(z.undefined(), input, { method: 'PUT', keepalive: true, body: encode(schema, value) });
+}
+
 export async function json<T>(schema: z.ZodType<T>, input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(new URL(input, location.href).href, {
     ...init,
