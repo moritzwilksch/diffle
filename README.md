@@ -211,6 +211,10 @@ get [helm-ls](https://github.com/mrjosh/helm-ls) instead of the YAML server; `va
 `Chart.yaml` stay YAML. helm-ls passes the templates' YAML on to `yaml-language-server` when that is
 on `PATH` too.
 
+After jumping to a definition or reference, use your browser's **Back** button (including a mouse
+Back button), or press `gu` or `Ctrl+o` to return to the source line. Use browser **Forward**
+(including a mouse Forward button), `gU` (g, then Shift+u), or `Ctrl+i` to revisit the destination.
+
 `diffle lsp` shows which server each language gets and what to install for the rest:
 
 ```
