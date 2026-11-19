@@ -63,7 +63,7 @@ async fn hands_tour_threads_to_the_agent_after_the_code_threads() {
 
     let prompt = s.get("/api/threads/export").await.body;
 
-    insta::assert_snapshot!("prompt", prompt);
+    insta::assert_snapshot!("prompt", prompt.split("\n## Pending feedback").next().unwrap());
 }
 
 /// A handle longer than an error's 40-character cut reaches the agent whole.
@@ -83,7 +83,7 @@ async fn names_a_diff_on_a_long_path_in_full() {
 
     let prompt = s.get("/api/threads/export").await.body;
 
-    insta::assert_snapshot!("long_path_prompt", prompt);
+    insta::assert_snapshot!("long_path_prompt", prompt.split("\n## Pending feedback").next().unwrap());
 }
 
 #[tokio::test]
@@ -194,7 +194,7 @@ async fn hands_the_checklist_to_the_agent_and_keeps_ticks_across_a_push() {
         .map(|c| json!([c["question"], c["ticked"]]))
         .collect();
 
-    insta::assert_snapshot!("checklist_prompt", prompt);
+    insta::assert_snapshot!("checklist_prompt", prompt.split("\n## Pending feedback").next().unwrap());
     assert_eq!(
         checks.as_array().unwrap().iter().map(|c| c["thread"].is_string()).collect::<Vec<_>>(),
         [true, false, true, false]

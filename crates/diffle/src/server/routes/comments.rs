@@ -17,7 +17,7 @@ use tokio::time::Instant;
 
 use super::{ApiDeps, ApiError, ApiResult, body, query};
 use crate::comments::activity::{Change, Cursor, Since};
-use crate::comments::format::format_prompt;
+use crate::comments::format_followup;
 use crate::comments::import::parse_imports;
 use crate::error::Error;
 use crate::protocol::{
@@ -76,7 +76,8 @@ async fn export(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiRe
     // A prompt for one path is about its code; the checklist is about the tour.
     let checks =
         if checklist && tq.path.is_none() { crate::tour::checklist(&d.session, &threads).await? } else { Vec::new() };
-    Ok(text(format_prompt(&threads, &checks)))
+    let pending = d.session.pending_feedback().await?;
+    Ok(text(format_followup(&threads, &checks, &pending, true)))
 }
 
 async fn export_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(String, String)>) -> ApiResult {
@@ -85,7 +86,8 @@ async fn export_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(St
         return Err(Error::NotFound(mid).into());
     };
     thread.messages = vec![message];
-    Ok(text(format_prompt(&[thread], &[])))
+    let pending = d.session.pending_feedback().await?;
+    Ok(text(format_followup(&[thread], &[], &pending, true)))
 }
 
 /// One object or an array. Answers what was created; open duplicates are skipped.
@@ -106,7 +108,11 @@ async fn reply(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, raw: Bytes
     if req.body.trim().is_empty() {
         return Err(ApiError::bad_request("body: body required"));
     }
-    let thread = d.session.comments()?.reply(&id, req.body, req.author).await?;
+    let thread = if req.author.is_none() {
+        d.session.follow_up(id.clone(), req.body).await?
+    } else {
+        d.session.comments()?.reply(&id, req.body, req.author).await?
+    };
     changed(&d, [(req.author, id)]);
     Ok((StatusCode::CREATED, Json(thread)).into_response())
 }

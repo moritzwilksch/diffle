@@ -2,12 +2,11 @@
 use std::collections::HashMap;
 use std::future::Future;
 
-use super::anchor::relocate;
 use super::hunks::is_shown;
 use super::store::{CommentStore, read_store_file, write_store_file};
 use crate::error::{Error, Result};
 use crate::persist::with_file_lock;
-use crate::protocol::{CommentAnchor, CommentThread, Side};
+use crate::protocol::{CommentAnchor, CommentThread, FeedbackLocation, ReviewEvidence, Side};
 
 /// One side of a file as the review presents it.
 pub struct SideView {
@@ -51,7 +50,13 @@ impl CommentStore {
                                 Err(e) => return Ok(Err(e)),
                             };
                         }
-                        relocate_thread(t, sides[&key].as_ref())
+                        let evidence = set
+                            .feedback
+                            .originals
+                            .get(&t.messages[0].id)
+                            .cloned()
+                            .or_else(|| ReviewEvidence::from_anchor(&t.anchor));
+                        relocate_thread(t, sides[&key].as_ref(), evidence.as_ref())
                     }
                 };
             }
@@ -66,10 +71,17 @@ impl CommentStore {
 }
 
 /// Moves a line thread onto its text in `view`, or marks it stale. Returns whether it changed.
-fn relocate_thread(t: &mut CommentThread, view: Option<&SideView>) -> bool {
-    let CommentAnchor::Line { start_line, end_line, quoted, .. } = &mut t.anchor else { return false };
+fn relocate_thread(t: &mut CommentThread, view: Option<&SideView>, evidence: Option<&ReviewEvidence>) -> bool {
+    let CommentAnchor::Line { start_line, end_line, .. } = &mut t.anchor else { return false };
     let moved = view
-        .and_then(|v| relocate(*start_line, *end_line, quoted, &v.contents).map(|range| (range, v)))
+        .and_then(|v| {
+            let (location, range) = evidence?.locate(&v.contents);
+            if matches!(location, FeedbackLocation::Unchanged | FeedbackLocation::Moved) {
+                range.map(|range| (range, v))
+            } else {
+                None
+            }
+        })
         .filter(|((s, e), v)| v.shown.as_ref().is_none_or(|shown| is_shown(shown, *s, *e)))
         .map(|(range, _)| range);
     let Some((start, end)) = moved else {

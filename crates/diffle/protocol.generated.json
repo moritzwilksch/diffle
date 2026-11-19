@@ -614,6 +614,81 @@
       ],
       "description": "What the CLI and the picker enter a review with: the words, parsed and resolved by the server\ninto a `Review`. A slice of the active range is chosen with a `RangeView` instead."
     },
+    "FeedbackContext": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/FeedbackItem"
+        },
+        "location": {
+          "$ref": "#/$defs/FeedbackLocation"
+        },
+        "current": {
+          "$ref": "#/$defs/ReviewEvidence"
+        }
+      },
+      "required": [
+        "item",
+        "location"
+      ]
+    },
+    "FeedbackItem": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "messageId": {
+          "type": "string"
+        },
+        "feedback": {
+          "type": "string"
+        },
+        "anchor": {
+          "$ref": "#/$defs/CommentAnchor"
+        },
+        "original": {
+          "$ref": "#/$defs/ReviewEvidence"
+        }
+      },
+      "required": [
+        "target",
+        "threadId",
+        "messageId",
+        "feedback",
+        "anchor"
+      ]
+    },
+    "FeedbackLocation": {
+      "type": "string",
+      "enum": [
+        "unchanged",
+        "moved",
+        "changed",
+        "deleted",
+        "ambiguous",
+        "unlocated",
+        "unavailable",
+        "original-side",
+        "historical",
+        "file",
+        "tour"
+      ]
+    },
+    "FeedbackReply": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ]
+    },
     "FileAnchor": {
       "type": "object",
       "properties": {
@@ -2394,6 +2469,27 @@
       ],
       "description": "What is under review, as named: a range between two revisions (either may be \"worktree\"), with\nthe slice of it on screen, or one commit against its first parent. Nothing here is resolved:\nthe snapshot carries the hashes, what the review follows and where its comments live."
     },
+    "ReviewContextLine": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "line",
+        "text",
+        "truncated"
+      ]
+    },
     "ReviewedCommit": {
       "type": "object",
       "properties": {
@@ -2429,6 +2525,55 @@
         "child"
       ],
       "description": "A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it."
+    },
+    "ReviewEvidence": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "excerpt": {
+          "type": "string"
+        },
+        "excerptTruncated": {
+          "type": "boolean"
+        },
+        "before": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReviewContextLine"
+          }
+        },
+        "after": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReviewContextLine"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "side",
+        "startLine",
+        "endLine",
+        "excerpt",
+        "excerptTruncated",
+        "before",
+        "after"
+      ]
     },
     "SearchContent": {
       "type": "string",

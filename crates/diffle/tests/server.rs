@@ -223,7 +223,9 @@ async fn creates_a_thread_on_the_whole_file_from_a_payload_without_a_line_and_ex
     assert_eq!(thread["anchor"], json!({ "kind": "file", "path": "a.txt" }));
     assert_eq!(thread["stale"], false);
     let r = s.get("/api/threads/export").await;
-    assert_eq!((r.status, r.body.as_str()), (200, "(file) a.txt\n\nRename it.\n\n---\n"));
+    assert_eq!(r.status, 200);
+    assert!(r.body.starts_with("(file) a.txt\n\nRename it.\n\n---\n"));
+    assert!(r.body.contains("diffle comments context <target>"));
     let missing = s.json("POST", "/api/threads", json!({ "path": "nope.txt", "body": "x" })).await;
     assert_eq!(missing.status, 400);
     assert!(missing.json()["error"].as_str().unwrap().contains("nope.txt"));
@@ -246,7 +248,7 @@ async fn keeps_who_wrote_each_message_and_marks_the_agent_in_the_prompt() {
         stored["threads"][0]["messages"].as_array().unwrap().iter().map(|m| &m["author"]).collect();
     assert_eq!(authors, [&json!("agent"), &Value::Null, &json!("agent")]);
     let r = s.get("/api/threads/export").await;
-    assert_eq!(r.body, "(file) a.txt\n\n(agent) Split it.\n\nWhy?\n\n(agent) Smaller diffs.\n\n---\n");
+    assert!(r.body.starts_with("(file) a.txt\n\n(agent) Split it.\n\nWhy?\n\n(agent) Smaller diffs.\n\n---\n"));
     let refused = s.json("POST", &format!("/api/threads/{id}/replies"), json!({ "body": "x", "author": "bot" })).await;
     assert_eq!(refused.status, 400);
     s.close().await;
@@ -260,7 +262,9 @@ async fn exports_one_message_with_its_thread_context() {
     let thread = &created.json()[0];
     let (id, mid) = (thread["id"].as_str().unwrap(), thread["messages"][0]["id"].as_str().unwrap());
     let r = s.get(&format!("/api/threads/{id}/messages/{mid}/export")).await;
-    assert_eq!((r.status, r.body.as_str()), (200, "a.txt:1\n\n> a\n\nCheck this.\n\n---\n"));
+    assert_eq!(r.status, 200);
+    assert!(r.body.starts_with("a.txt:1\n\n> a\n\nCheck this.\n\n---\n"));
+    assert!(r.body.contains("Original (New side) a.txt:1–1"));
     assert_eq!(s.get(&format!("/api/threads/{id}/messages/missing/export")).await.status, 404);
     s.close().await;
 }

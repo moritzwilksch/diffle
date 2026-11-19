@@ -8,7 +8,9 @@ use super::anchor::anchor_path;
 use super::store::{CommentStore, new_thread, read_store_file, write_store_file};
 use crate::error::{Error, Result};
 use crate::persist::with_file_lock;
-use crate::protocol::{CommentAnchor, CommentAuthor, CommentThread, Side, ThreadCreate, ThreadCreatePath};
+use crate::protocol::{
+    CommentAnchor, CommentAuthor, CommentThread, ReviewEvidence, Side, ThreadCreate, ThreadCreatePath,
+};
 
 /// Everything `POST /api/threads` accepts: 1 MiB, like the HTTP body limit.
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
@@ -178,6 +180,9 @@ pub trait AnchorSource: Sync {
         start: i64,
         end: i64,
     ) -> impl Future<Output = Result<Option<String>>> + Send;
+    fn evidence(&self, anchor: &CommentAnchor) -> impl Future<Output = Result<Option<ReviewEvidence>>> + Send {
+        async { Ok(ReviewEvidence::from_anchor(anchor)) }
+    }
     /// Whether the review has a file at `path` on either side.
     fn has_file(&self, path: &str) -> impl Future<Output = Result<bool>> + Send;
 }
@@ -208,6 +213,13 @@ impl CommentStore {
                     Err(e) => return Ok(Err(e)),
                 };
                 let thread = new_thread(anchor, t.body, t.author);
+                match source.evidence(&thread.anchor).await {
+                    Ok(Some(evidence)) => {
+                        set.feedback.originals.insert(thread.messages[0].id.clone(), evidence);
+                    }
+                    Ok(None) => {}
+                    Err(e) => return Ok(Err(e)),
+                }
                 // Later imports in the same batch may duplicate this one.
                 existing.push(thread.clone());
                 added.push(thread);

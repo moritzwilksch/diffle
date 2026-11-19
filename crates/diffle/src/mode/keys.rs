@@ -5,8 +5,18 @@ use crate::git::{GitRepo, WORKTREE};
 use crate::github::hosts::{GithubInstance, github_repository};
 use crate::protocol::{ComparisonBase, PullRef, RangeEnds, ref_name};
 
-/// The uncommitted changes, whether entered as `working` or reached from a range ending at the worktree.
+/// Placeholder for the uncommitted slice's key until the checkout is resolved.
 pub const WORKING: &str = "working";
+
+pub async fn working_key(repo: &GitRepo) -> Result<String> {
+    use crate::git::CheckoutTarget;
+    let key = match repo.current_checkout().await? {
+        Some(CheckoutTarget::Branch(branch)) => format!("{WORKING}:branch:{branch}"),
+        Some(CheckoutTarget::Detached(sha)) => format!("{WORKING}:commit:{sha}"),
+        None => format!("{WORKING}:unborn"),
+    };
+    Ok(key)
+}
 
 /// A commit's own comments, the same whether it was entered alone or focused within a range.
 pub fn commit_key(sha: &str) -> String {

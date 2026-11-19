@@ -1277,3 +1277,51 @@ export const ActivitySchema = z.object({
 export type Activity = z.infer<typeof ActivitySchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });
+
+export const ReviewContextLineSchema = z.object({
+  line: z.number().int(),
+  text: z.string(),
+  truncated: z.boolean(),
+});
+
+export const ReviewEvidenceSchema = z.object({
+  path: z.string(),
+  side: SideSchema,
+  startLine: z.number().int(),
+  endLine: z.number().int(),
+  excerpt: z.string(),
+  excerptTruncated: z.boolean(),
+  before: ReviewContextLineSchema.array(),
+  after: ReviewContextLineSchema.array(),
+});
+
+export const FeedbackItemSchema = z.object({
+  target: z.string(),
+  threadId: z.string(),
+  messageId: z.string(),
+  feedback: z.string(),
+  anchor: CommentAnchorSchema,
+  original: ReviewEvidenceSchema.optional(),
+});
+
+export const FeedbackLocationSchema = z.enum([
+  'unchanged',
+  'moved',
+  'changed',
+  'deleted',
+  'ambiguous',
+  'unlocated',
+  'unavailable',
+  'original-side',
+  'historical',
+  'file',
+  'tour',
+]);
+
+export const FeedbackContextSchema = z.object({
+  item: FeedbackItemSchema,
+  location: FeedbackLocationSchema,
+  current: ReviewEvidenceSchema.optional(),
+});
+
+export const FeedbackReplySchema = z.object({ summary: z.string() });

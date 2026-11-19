@@ -22,10 +22,14 @@ pub async fn comments(command: CommentsCommand, dir: Option<PathBuf>) -> anyhow:
             let diffle = connect(repo, dir).await?;
             print(&comments::list(&diffle, state.as_deref(), path.as_deref()).await?)
         }
-        CommentsCommand::Reply { thread, body, repo } => {
+        CommentsCommand::Pending { repo } => print(&comments::pending(&connect(repo, dir).await?).await?),
+        CommentsCommand::Context { target, repo } => {
+            print(&comments::context(&connect(repo, dir).await?, &target).await?)
+        }
+        CommentsCommand::Reply { target, body, repo } => {
             let body = if body == "-" { read_document(None)? } else { body };
             let diffle = connect(repo, dir).await?;
-            print(&comments::reply(&diffle, &thread, body).await?)
+            print(&comments::reply(&diffle, &target, body).await?)
         }
     }
 }

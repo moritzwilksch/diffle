@@ -129,8 +129,7 @@ export const api = {
   threads: (query: ThreadQuery = {}) =>
     json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt; with `checklist`, the tour's open or answered questions too. */
-  exportComments: (checklist: boolean) =>
-    text(`api/threads/export?${q({ state: 'open', checklist: checklist ? '1' : undefined })}`),
+  exportComments: (checklist: boolean) => text(`api/threads/export?state=open${checklist ? '&checklist=1' : ''}`),
   /** One message, with its thread's location and quote, as an agent prompt. */
   exportComment: (threadId: string, messageId: string) =>
     text(`api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
