@@ -6,6 +6,9 @@ import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { TextArea } from '@/client/ui/TextArea.js';
+import { GithubComment } from './GithubComment.js';
+import { githubCommentsChanged } from './commentsEvent.js';
+import { useGithubComments } from './useGithubComments.js';
 
 const decisions = [
   ['comment', 'Comment'],
@@ -28,7 +31,10 @@ function ReviewTrigger({ pr, version }: { pr: PullRef; version: number }) {
         aria-label="Review changes"
         title="Submit your GitHub review"
         variant="ghost"
-        onClick={() => setDraftVersion(version)}
+        onClick={() => {
+          githubCommentsChanged(undefined);
+          setDraftVersion(version);
+        }}
       >
         <ClipboardCheck size="1rem" /> <span className="max-lg:hidden">Review changes</span>
       </Button>
@@ -94,7 +100,7 @@ function ReviewDialog({
     <Dialog open onOpenChange={(open) => !open && !submitting.current && onClose()}>
       <DialogContent aria-label={`Review pull request #${pr.number}`}>
         <h2 className="font-semibold">Review pull request #{pr.number}</h2>
-        <p className="mt-1 mb-4 text-sm text-muted">Your pending GitHub comments will be included.</p>
+        <PendingComments prUrl={pr.url} submitting={saving} />
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -143,5 +149,37 @@ function ReviewDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PendingComments({ prUrl, submitting }: { prUrl: string; submitting: boolean }) {
+  const { data, loading, error } = useGithubComments(prUrl);
+  const pending = data?.threads.flatMap((thread) =>
+    thread.comments.filter((message) => message.isOwnPending).map((message) => ({ thread, message })),
+  );
+  return (
+    <section aria-label="Pending GitHub comments" className="my-3 space-y-1 text-sm">
+      <h3 className="font-medium">Pending comments{pending?.length ? ` (${pending.length})` : ''}</h3>
+      {error && (
+        <p role="alert" className="text-warn">
+          {error}
+        </p>
+      )}
+      {!data && loading && <p className="text-muted">Loading pending comments…</p>}
+      {data && !pending?.length && !loading && <p className="text-muted">No pending comments.</p>}
+      {!!pending?.length && (
+        <ul className="max-h-48 divide-y divide-border overflow-auto rounded-md border border-border text-xs">
+          {pending.map(({ thread, message }) => (
+            <li key={message.id}>
+              <div className="px-2 pt-1.5 font-mono wrap-anywhere text-muted">
+                {thread.path}
+                {(thread.line ?? thread.originalLine) == null ? '' : `:${thread.line ?? thread.originalLine}`}
+              </div>
+              <GithubComment message={message} prUrl={prUrl} path={thread.path} allowChanges={!submitting} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

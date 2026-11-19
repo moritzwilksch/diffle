@@ -1,13 +1,12 @@
-import { CornerDownLeft, ExternalLink, GitPullRequest, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useId, useState } from 'react';
-import { api } from '@/client/api.js';
-import { githubCommentsEvent } from './commentsEvent.js';
-import { refreshGithubPeek, showGithubComment } from './commentPeek.js';
-import { githubCommentBody } from './GithubPeekCard.js';
-import { GithubPendingDelete } from './GithubPendingDelete.js';
-import { Markdown } from '@/client/Markdown.js';
+import { GitPullRequest, RefreshCw } from 'lucide-react';
+import { useId, useState } from 'react';
+import { githubCommentsChanged } from './commentsEvent.js';
+import { showGithubThread } from './inlineThreads.js';
+import { GithubComment } from './GithubComment.js';
+import { GithubThreadActions } from './GithubThreadActions.js';
+import { useGithubComments } from './useGithubComments.js';
 import { Button } from '@/client/ui/Button.js';
-import type { GithubCommentMessage, GithubComments, PullRef } from '@/shared/protocol.js';
+import type { PullRef } from '@/shared/protocol.js';
 
 const MIN_SHARE = 22;
 const MAX_SHARE = 68;
@@ -16,36 +15,11 @@ const clamp = (percent: number) => Math.max(MIN_SHARE, Math.min(MAX_SHARE, Math.
 export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
   const id = useId();
   const [share, setShare] = useState(42);
-  const [data, setData] = useState<GithubComments>();
-  const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
-  const [revision, refresh] = useState(0);
-  const reload = useCallback(() => refresh((value) => value + 1), []);
-
-  useEffect(() => {
-    window.addEventListener(githubCommentsEvent, reload);
-    return () => window.removeEventListener(githubCommentsEvent, reload);
-  }, [reload]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setError(undefined);
-    setLoading(true);
-    void api.githubComments(controller.signal).then(
-      (comments) => {
-        if (controller.signal.aborted) return;
-        setData(comments);
-        refreshGithubPeek(pr.url, comments);
-        setLoading(false);
-      },
-      (cause: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message : String(cause));
-        setLoading(false);
-      },
-    );
-    return () => controller.abort();
-  }, [pr.url, revision]);
+  const { data, error, loading } = useGithubComments(pr.url);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const openThreads = data?.threads.filter((thread) => !collapsed.has(thread.id)) ?? [];
+  const resolved = openThreads.filter((thread) => thread.isResolved);
+  const outdated = openThreads.filter((thread) => thread.isOutdated);
 
   const count = data?.threads.length ?? 0;
   return (
@@ -92,10 +66,34 @@ export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
               {count} {count === 1 ? 'thread' : 'threads'}
             </span>
           )}
-          <Button variant="ghost" icon aria-label="Refresh GitHub comments" onClick={reload} disabled={loading}>
+          <Button
+            variant="ghost"
+            icon
+            aria-label="Refresh GitHub comments"
+            onClick={() => githubCommentsChanged(undefined)}
+            disabled={loading}
+          >
             <RefreshCw size="0.875rem" />
           </Button>
         </header>
+        {!!count && (
+          <div className="flex shrink-0 flex-wrap gap-1 border-b border-border px-2.5 py-1">
+            <Button
+              variant="ghost"
+              disabled={!resolved.length}
+              onClick={() => setCollapsed((current) => new Set([...current, ...resolved.map((thread) => thread.id)]))}
+            >
+              Collapse resolved
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={!outdated.length}
+              onClick={() => setCollapsed((current) => new Set([...current, ...outdated.map((thread) => thread.id)]))}
+            >
+              Collapse outdated
+            </Button>
+          </div>
+        )}
         <div className="min-h-0 flex-1 space-y-2 overflow-auto px-2.5 py-2 text-xs">
           {loading && !data && <p className="text-muted">Loading GitHub comments…</p>}
           {error && (
@@ -109,7 +107,7 @@ export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
               <summary className="cursor-pointer px-2 py-1.5 font-medium">General discussion</summary>
               <div className="divide-y divide-border border-t border-border">
                 {data.conversation.map((message) => (
-                  <Comment key={message.id} message={message} prUrl={pr.url} />
+                  <GithubComment key={message.id} message={message} prUrl={pr.url} />
                 ))}
               </div>
             </details>
@@ -119,7 +117,21 @@ export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
             const start = thread.line == null ? thread.originalStartLine : thread.startLine;
             const range = end == null ? '' : start != null && start !== end ? `:${start}–${end}` : `:${end}`;
             return (
-              <details key={thread.id} open className="rounded-md border border-border bg-card">
+              <details
+                key={thread.id}
+                open={!collapsed.has(thread.id)}
+                className="rounded-md border border-border bg-card"
+                onToggle={(event) => {
+                  const closed = !event.currentTarget.open;
+                  setCollapsed((current) => {
+                    if (closed === current.has(thread.id)) return current;
+                    const next = new Set(current);
+                    if (closed) next.add(thread.id);
+                    else next.delete(thread.id);
+                    return next;
+                  });
+                }}
+              >
                 <summary className="cursor-pointer px-2 py-1.5">
                   <span className="font-mono break-all">
                     {thread.path}
@@ -131,11 +143,11 @@ export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
                 </summary>
                 <div className="divide-y divide-border border-t border-border">
                   {thread.comments.map((message) => (
-                    <Comment
+                    <GithubComment
                       key={message.id}
                       message={message}
                       prUrl={pr.url}
-                      onOpen={() => showGithubComment(pr.url, thread, message)}
+                      onOpen={thread.isOutdated ? undefined : () => showGithubThread(pr.url, thread)}
                     />
                   ))}
                   {thread.comments.length === 0 && (
@@ -144,69 +156,12 @@ export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
                     </a>
                   )}
                 </div>
+                <GithubThreadActions prUrl={pr.url} thread={thread} />
               </details>
             );
           })}
         </div>
       </section>
     </>
-  );
-}
-
-const states: Record<string, string> = {
-  PENDING: 'Pending',
-  APPROVED: 'Approved',
-  CHANGES_REQUESTED: 'Changes requested',
-  DISMISSED: 'Dismissed',
-};
-
-function Comment({ message, prUrl, onOpen }: { message: GithubCommentMessage; prUrl: string; onOpen?: () => void }) {
-  const state = message.state && states[message.state];
-  const href = /^https?:\/\//i.test(message.url) ? message.url : undefined;
-  const body = githubCommentBody(message.body);
-  return (
-    <article className="px-2 py-1.5 wrap-anywhere">
-      <div className="mb-1 flex items-baseline gap-1.5">
-        {onOpen ? (
-          <button
-            type="button"
-            className="inline-flex cursor-pointer items-center gap-1 font-semibold hover:text-accent hover:underline"
-            title="Show comment in code"
-            onClick={onOpen}
-          >
-            {message.author} <CornerDownLeft size="0.6875rem" />
-          </button>
-        ) : (
-          <strong>{message.author}</strong>
-        )}
-        {state && <span className="text-muted">{state}</span>}
-        {href && (
-          <a
-            aria-label="Open comment on GitHub"
-            className="ml-auto text-accent"
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <ExternalLink size="0.75rem" />
-          </a>
-        )}
-        <GithubPendingDelete prUrl={prUrl} message={message} />
-      </div>
-      {onOpen ? (
-        <div
-          role="presentation"
-          className="cursor-pointer"
-          onClick={(event) => {
-            if (event.target instanceof Element && event.target.closest('a, button')) return;
-            if (window.getSelection()?.isCollapsed !== false) onOpen();
-          }}
-        >
-          <Markdown text={body} />
-        </div>
-      ) : (
-        <Markdown text={body} />
-      )}
-    </article>
   );
 }

@@ -20,7 +20,10 @@ import {
   GithubCommentRequestSchema,
   GithubCommentsSchema,
   GithubPendingCommentDeleteSchema,
+  GithubPendingCommentEditSchema,
   GithubReviewSubmitSchema,
+  GithubThreadReplySchema,
+  GithubThreadResolutionSchema,
   type GithubReviewSubmit,
   type GithubCommentRequest,
   LspHoverRequestSchema,
@@ -88,14 +91,20 @@ import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
 
+function githubWrite<T>(response: z.ZodType<T>, path: string, method: string, body: string) {
+  return json(response, `api/github/${path}`, { method, body }).then(githubCommentsChanged);
+}
+
 export const api = {
-  /** The server's release; answers before the first review resolves. */
   deleteGithubPendingComment: (id: string, prUrl: string) =>
-    json(z.undefined(), 'api/github/comments', {
-      method: 'DELETE',
-      body: encode(GithubPendingCommentDeleteSchema, { id, prUrl }),
-    }).then(githubCommentsChanged),
+    githubWrite(z.undefined(), 'comments', 'DELETE', encode(GithubPendingCommentDeleteSchema, { id, prUrl })),
+  editGithubPendingComment: (id: string, prUrl: string, body: string) =>
+    githubWrite(z.undefined(), 'comments', 'PATCH', encode(GithubPendingCommentEditSchema, { id, prUrl, body })),
   githubComments: (signal: AbortSignal) => json(GithubCommentsSchema, 'api/github/comments', { signal }),
+  replyGithubThread: (id: string, prUrl: string, body: string) =>
+    githubWrite(z.undefined(), 'thread/reply', 'POST', encode(GithubThreadReplySchema, { id, prUrl, body })),
+  resolveGithubThread: (id: string, prUrl: string, resolved: boolean) =>
+    githubWrite(z.undefined(), 'thread/resolved', 'PUT', encode(GithubThreadResolutionSchema, { id, prUrl, resolved })),
   github: () => json(GithubMetadataSchema, 'api/github'),
   /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
   permalink: (req: PermalinkRequest) =>
@@ -158,20 +167,11 @@ export const api = {
     text(`api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
   /** Posts threads to the matching PR's pending review; all unresolved ones without `threadIds`. */
   exportToGithub: (req: GithubExportRequest) =>
-    json(GithubExportResponseSchema, 'api/github/export', {
-      method: 'POST',
-      body: encode(GithubExportRequestSchema, req),
-    }).then(githubCommentsChanged),
+    githubWrite(GithubExportResponseSchema, 'export', 'POST', encode(GithubExportRequestSchema, req)),
   submitGithubReview: (req: GithubReviewSubmit) =>
-    json(z.undefined(), 'api/github/review', {
-      method: 'POST',
-      body: encode(GithubReviewSubmitSchema, req),
-    }).then(githubCommentsChanged),
+    githubWrite(z.undefined(), 'review', 'POST', encode(GithubReviewSubmitSchema, req)),
   addGithubComment: (req: GithubCommentRequest) =>
-    json(GithubExportResponseSchema, 'api/github/comment', {
-      method: 'POST',
-      body: encode(GithubCommentRequestSchema, req),
-    }).then(githubCommentsChanged),
+    githubWrite(GithubExportResponseSchema, 'comment', 'POST', encode(GithubCommentRequestSchema, req)),
   addThread: (t: ThreadCreate) =>
     json(CommentThreadSchema.array(), 'api/threads', { method: 'POST', body: encode(ThreadCreateSchema, t) }),
   addTourThread: (t: TourThreadCreate) =>

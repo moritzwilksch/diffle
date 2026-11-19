@@ -7,6 +7,12 @@ export function anchorPath(anchor: CommentAnchor): string | null {
   return anchor.kind === 'tour' ? null : anchor.path;
 }
 
+/** Only the reviewer can revise the final message, before anyone replies to it. */
+export function editableThreadMessage(thread: CommentThread) {
+  const last = thread.messages.at(-1);
+  return last?.author == null ? last : undefined;
+}
+
 /**
  * Review order, as the prompt has it: code threads by path, then line with the file thread first;
  * then the tour's in document order; then by when each was opened.

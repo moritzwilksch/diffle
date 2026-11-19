@@ -1,5 +1,4 @@
 import { twMerge } from 'tailwind-merge';
-import type { CommentDestination } from '@/client/comments/destination.js';
 import { Button } from '@/client/ui/Button.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { TextArea } from '@/client/ui/TextArea.js';
@@ -24,8 +23,9 @@ export function CommentComposer({ label, className }: { label: string; className
   const github = useStore((s) => (s.github.data?.version === s.snapshot?.version ? s.github.data : undefined));
   const showDestination = draft?.kind === 'code' && Boolean(pr);
   const canPostGithub = showDestination && github?.reason === null;
-  const [choice, setChoice] = useState<{ draft: typeof draft; destination: CommentDestination }>();
-  const destination = choice?.draft === draft ? (choice?.destination ?? 'local') : 'local';
+  const choice = useStore((s) => s.commentDestination);
+  const setChoice = useStore((s) => s.setCommentDestination);
+  const destination = showDestination ? choice : 'local';
   // Only line comments can suggest a replacement.
   const onLines = draft?.kind === 'code' && draft.selection != null;
   // The text outlives the composer, so Esc or Cancel and reopening on the same lines resumes it.
@@ -100,7 +100,9 @@ export function CommentComposer({ label, className }: { label: string; className
           onValueChange={setText}
           // Escape is the keymap's: handled here too, it would also drop the cursor.
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
+            if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            void submit();
           }}
         />
         <div className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5">
@@ -122,9 +124,7 @@ export function CommentComposer({ label, className }: { label: string; className
               aria-label="Comment destination"
               className="rounded-sm border border-border bg-canvas px-1.5 py-1 text-foreground"
               value={destination}
-              onChange={(e) =>
-                setChoice({ draft, destination: e.currentTarget.value === 'github' ? 'github' : 'local' })
-              }
+              onChange={(e) => setChoice(e.currentTarget.value === 'github' ? 'github' : 'local')}
               disabled={busy}
               title={canPostGithub ? undefined : (github?.reason ?? 'Checking GitHub review availability')}
             >

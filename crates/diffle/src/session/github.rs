@@ -8,14 +8,16 @@ use super::{Session, pr_url};
 use crate::comments::import::draft_for_github;
 use crate::error::{Error, GithubError, Result};
 use crate::github::client::{GithubClient, no_token};
+use crate::github::comments;
 use crate::github::metadata::discover_github;
-use crate::github::pending_review::find_pending_review;
+use crate::github::pending_review::{create_pending_review, find_pending_review, update_comment};
 use crate::github::permalink::permalink;
 use crate::github::review::ExportInput;
 use crate::github::submit_review::submit_review;
 use crate::protocol::{
-    GithubCommentRequest, GithubExportResponse, GithubMetadata, GithubPullRequest, GithubReviewSubmit, Permalink,
-    PermalinkRequest, Snapshot, ThreadQuery, ThreadState,
+    GithubCommentRequest, GithubExportResponse, GithubMetadata, GithubPullRequest, GithubReviewSubmit,
+    GithubThreadReply, GithubThreadResolution, Permalink, PermalinkRequest, PullRef, Review, Snapshot, ThreadQuery,
+    ThreadState,
 };
 
 enum Export {
@@ -31,36 +33,104 @@ fn changed() -> GithubError {
 }
 
 impl Session {
+    pub async fn reply_github_thread(&self, request: GithubThreadReply) -> Result<()> {
+        let body = request.body.trim();
+        if body.is_empty() {
+            return Err(Error::Invalid("GitHub reply cannot be empty".into()));
+        }
+        let _turn = self.exporter.turn().await;
+        let active = self.active()?;
+        let (pr, client) = self.github_comment_target(&active.review, Some(&request.pr_url))?;
+        let target = comments::thread_target(client, &pr.url, &request.id).await?;
+        if !target.viewer_can_reply {
+            return Err(GithubError::conflict("You cannot reply to this GitHub thread").into());
+        }
+        let (pr_id, pending) = find_pending_review(client, &pr.url, pr.number).await?;
+        if !self.is_active(&active) {
+            return Err(changed().into());
+        }
+        let review_id = match pending {
+            Some(id) => id,
+            None => create_pending_review(client, &pr_id, &target.pull_request.head_ref_oid, &[]).await?,
+        };
+        if !self.is_active(&active) {
+            return Err(changed().into());
+        }
+        comments::reply(client, &request.id, &review_id, body).await?;
+        Ok(())
+    }
+
+    pub async fn resolve_github_thread(&self, request: GithubThreadResolution) -> Result<()> {
+        let _turn = self.exporter.turn().await;
+        let active = self.active()?;
+        let (pr, client) = self.github_comment_target(&active.review, Some(&request.pr_url))?;
+        let target = comments::thread_target(client, &pr.url, &request.id).await?;
+        if !self.is_active(&active) {
+            return Err(changed().into());
+        }
+        if target.is_resolved == request.resolved {
+            return Ok(());
+        }
+        if !(if request.resolved { target.viewer_can_resolve } else { target.viewer_can_unresolve }) {
+            return Err(GithubError::conflict("You cannot change this GitHub thread's resolution").into());
+        }
+        comments::set_resolved(client, &request.id, request.resolved).await?;
+        Ok(())
+    }
+
+    fn github_comment_target<'a>(
+        &'a self,
+        review: &'a Review,
+        expected_url: Option<&str>,
+    ) -> Result<(&'a PullRef, &'a dyn GithubClient)> {
+        let Review::Range { pr: Some(pr), .. } = review else {
+            return Err(GithubError::conflict("Open a pull request with diffle pr").into());
+        };
+        if expected_url.is_some_and(|url| url != pr.url) {
+            return Err(changed().into());
+        }
+        let Some(client) = self.github.client.as_deref() else {
+            return Err(GithubError::conflict(no_token(&self.github.instance.host)).into());
+        };
+        Ok((pr, client))
+    }
+
     pub async fn delete_github_pending_comment(
         &self,
         request: crate::protocol::GithubPendingCommentDelete,
     ) -> Result<()> {
         let _turn = self.exporter.turn().await;
         let active = self.active()?;
-        let Some(url) = pr_url(&active.review).filter(|url| url == &request.pr_url) else {
-            return Err(changed().into());
-        };
-        let Some(client) = self.github.client.as_deref() else {
-            return Err(GithubError::conflict(no_token(&self.github.instance.host)).into());
-        };
-        let database_id = crate::github::comments::pending_comment_id(client, &url, &request.id).await?;
+        let (pr, client) = self.github_comment_target(&active.review, Some(&request.pr_url))?;
+        let database_id = comments::pending_comment_id(client, &pr.url, &request.id).await?;
         if !self.is_active(&active) {
             return Err(changed().into());
         }
-        let (owner, repo) = crate::github::pulls::repo_of_pr_url(&url)?;
+        let (owner, repo) = crate::github::pulls::repo_of_pr_url(&pr.url)?;
         client.delete_review_comment(&owner, &repo, database_id).await?;
+        Ok(())
+    }
+
+    pub async fn edit_github_pending_comment(&self, request: crate::protocol::GithubPendingCommentEdit) -> Result<()> {
+        let body = request.body.trim();
+        if body.is_empty() {
+            return Err(Error::Invalid("GitHub comment cannot be empty".into()));
+        }
+        let _turn = self.exporter.turn().await;
+        let active = self.active()?;
+        let (pr, client) = self.github_comment_target(&active.review, Some(&request.pr_url))?;
+        let body = comments::pending_comment_edit(client, &pr.url, &request.id, body).await?;
+        if !self.is_active(&active) {
+            return Err(changed().into());
+        }
+        update_comment(client, &request.id, &body).await?;
         Ok(())
     }
 
     pub async fn github_comments(&self) -> Result<crate::protocol::GithubComments> {
         let active = self.active()?;
-        let crate::protocol::Review::Range { pr: Some(pr), .. } = &active.review else {
-            return Err(GithubError::conflict("Open a pull request with diffle pr").into());
-        };
-        let Some(client) = self.github.client.as_deref() else {
-            return Err(GithubError::conflict(no_token(&self.github.instance.host)).into());
-        };
-        let comments = crate::github::comments::read(client, pr).await?;
+        let (pr, client) = self.github_comment_target(&active.review, None)?;
+        let comments = comments::read(client, pr).await?;
         if !self.is_active(&active) {
             return Err(changed().into());
         }
@@ -164,7 +234,7 @@ impl Session {
             return Err(changed().into());
         }
         let (client, pr) = self.review_target(&snap).await?;
-        let (pr_id, pending) = find_pending_review(client.as_ref(), &pr).await?;
+        let (pr_id, pending) = find_pending_review(client.as_ref(), &pr.url, pr.number).await?;
         if !self.is_active(&active) || !Arc::ptr_eq(&snap, &active.snapshotter.current().await?) {
             return Err(changed().into());
         }

@@ -52,13 +52,14 @@ fn unreadable(message: impl Into<String>) -> GithubError {
 /// draft would put our comments in their review.
 pub async fn find_pending_review(
     github: &dyn GithubClient,
-    pr: &GithubPullRequest,
+    url: &str,
+    number: i64,
 ) -> Result<(String, Option<String>), GithubError> {
-    let (owner, repo) = repo_of_pr_url(&pr.url)?;
+    let (owner, repo) = repo_of_pr_url(url)?;
     let query = "query($owner:String!,$repo:String!,$number:Int!){viewer{login} repository(owner:$owner,name:$repo){pullRequest(number:$number){id reviews(last:20,states:[PENDING]){nodes{id author{login}}}}}}";
-    let data = github.graphql(query, json!({ "owner": owner, "repo": repo, "number": pr.number }), None).await?;
+    let data = github.graphql(query, json!({ "owner": owner, "repo": repo, "number": number }), None).await?;
     let Some(pull_request_id) = data.pointer("/repository/pullRequest/id").and_then(Value::as_str) else {
-        return Err(unreadable(format!("cannot read pull request {} from GitHub", pr.url)));
+        return Err(unreadable(format!("cannot read pull request {url} from GitHub")));
     };
     let login = data.pointer("/viewer/login").and_then(Value::as_str);
     let nodes = data.pointer("/repository/pullRequest/reviews/nodes").and_then(Value::as_array);

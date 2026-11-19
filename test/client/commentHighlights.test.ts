@@ -81,11 +81,23 @@ describe('markCommentRows', () => {
     const threads = [thread('t1', anchor('new', 1, 1), true), thread('t2', anchor('new', 2, 2), false)];
     const pre = document.createElement('pre');
     pre.append(column([{ line: 1 }, { line: 2 }]));
-    markCommentRows(pre, tintedRanges({ threads, showResolved: false, ...noDraft }, 'a.ts'));
+    markCommentRows(pre, tintedRanges({ threads, ...noDraft }, 'a.ts'));
     expect(marked(pre)).toEqual(['new:2#', 'new:2']);
-    markCommentRows(pre, tintedRanges({ threads, showResolved: true, ...noDraft }, 'a.ts'));
-    expect(marked(pre)).toEqual(['new:1#', 'new:2#', 'new:1', 'new:2']);
-    expect(tintedRanges({ threads, showResolved: true, ...noDraft }, 'b.ts')).toEqual([]);
+    markCommentRows(
+      pre,
+      tintedRanges(
+        { threads, ...noDraft },
+        'a.ts',
+        new Map([
+          ['local:t1', true],
+          ['local:t2', false],
+        ]),
+      ),
+    );
+    expect(marked(pre)).toEqual(['new:1#', 'new:1']);
+    threads[0]!.stale = true;
+    expect(tintedRanges({ threads, ...noDraft }, 'a.ts', new Map([['local:t1', true]]))).toEqual([anchor('new', 2, 2)]);
+    expect(tintedRanges({ threads, ...noDraft }, 'b.ts')).toEqual([]);
   });
   it('tints the open draft only in its own file', () => {
     const draft: Draft = {

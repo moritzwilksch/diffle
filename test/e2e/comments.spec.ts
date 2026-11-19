@@ -1,9 +1,20 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.js';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { clickLine, gotoFile, selectLines, settle } from './browser.js';
 import { readPrompt, readThreads, seedReply, seedThreads } from './server.js';
 
 function stableTargets(prompt: string): string {
   return prompt.replace(/^Target: `[^`]+`$/gm, 'Target: `[target]`').replace(/[ \t]+$/gm, '');
+}
+
+async function snapshotComments(page: Page, name: string) {
+  // The server timestamps new comments with its real clock.
+  await page.locator('time.whitespace-nowrap').evaluateAll((dates) => {
+    for (const date of dates) date.textContent = 'Jun 1, 2024';
+  });
+  await expect(page).toHaveScreenshot(name);
 }
 
 test('comments on a line range and lists the thread in the panel', async ({ page, diffle }) => {
@@ -23,8 +34,8 @@ test('comments on a line range and lists the thread in the panel', async ({ page
     startLine: 3,
     endLine: 4,
   });
-  await expect(page).toHaveScreenshot('comment.png');
   await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'threads-panel.aria.yml' });
+  await snapshotComments(page, 'comment.png');
 });
 
 test("regression: pressing the cursor's line number comments on that line", async ({ page, diffle }) => {
@@ -63,7 +74,7 @@ test('comments on a whole file and exports both threads as a prompt', async ({ p
   expect(prompt).toContain('KWD');
   // The prompt an agent receives for this review, quoted lines included.
   expect(stableTargets(prompt)).toMatchSnapshot('prompt.md');
-  await expect(page).toHaveScreenshot('two-threads.png');
+  await snapshotComments(page, 'two-threads.png');
 });
 
 test('regression: deleting a thread needs a second click and confirmation expires', async ({ page, diffle }) => {
@@ -98,6 +109,55 @@ test('resolves and reopens a thread from the comments panel', async ({ page, dif
   await expect(sidebar.getByText('Keep the review history.')).toBeVisible();
   await sidebar.getByRole('button', { name: 'Reopen thread', exact: true }).click();
   await expect.poll(async () => (await readThreads(diffle.url))[0]?.resolved).toBe(false);
+});
+
+test('edits only the latest reviewer message in a local thread', async ({ page, diffle }) => {
+  const path = 'tally/ledger.py';
+  const [thread] = await seedThreads(diffle.url, [{ path, startLine: 4, body: 'Original reviewer comment' }]);
+  await gotoFile(page, path);
+  const code = page.locator('.codeview');
+  const edit = code.getByRole('button', { name: 'Edit (e)', exact: true });
+  await expect(edit).toHaveCount(1);
+
+  await seedReply(diffle.url, thread!.id, { body: 'Agent response', author: 'agent' });
+  await expect(code.getByText('Agent response')).toBeVisible();
+  await expect(edit).toHaveCount(0);
+
+  await seedReply(diffle.url, thread!.id, { body: 'My follow-up' });
+  await expect(code.getByText('My follow-up')).toBeVisible();
+  await expect(edit).toHaveCount(1);
+  await edit.click();
+  const editor = code.getByRole('textbox');
+  await expect(editor).toHaveValue('My follow-up');
+  await editor.fill('Updated reviewer message');
+  await editor.press('Control+Enter');
+  await expect(code.getByText('Updated reviewer message')).toBeVisible();
+  await expect(code.getByText('Agent response')).toBeVisible();
+  await expect(code.getByText('Original reviewer comment')).toBeVisible();
+});
+
+test.describe('a stale local thread', () => {
+  test.use({ revs: ['working'] });
+
+  test('stays in the sidebar when its code anchor becomes stale', async ({ page, diffle, repo }) => {
+    const path = 'tally/refunds.py';
+    const file = join(repo, path);
+    await seedThreads(diffle.url, [{ path, startLine: 18, body: 'Discuss the original refund logic.' }]);
+    await gotoFile(page, path);
+    const code = page.locator('.codeview');
+    const body = code.getByText('Discuss the original refund logic.');
+    await expect(body).toBeVisible();
+
+    const lines = (await readFile(file, 'utf8')).split('\n');
+    lines[17] = '    # The original refund logic has moved.';
+    await writeFile(file, lines.join('\n'));
+    const reloaded = await page.request.post(new URL('api/reload', diffle.url).href);
+    expect(reloaded.ok()).toBe(true);
+    await expect.poll(async () => (await readThreads(diffle.url))[0]?.stale).toBe(true);
+    await expect(body).toHaveCount(0);
+    await expect(code.locator('[data-thread-marker]')).toHaveCount(0);
+    await expect(page.locator('aside').last().getByText('Discuss the original refund logic.')).toBeVisible();
+  });
 });
 
 test('regression: closing a composer keeps its text until the comment is posted', async ({ page, diffle }) => {
@@ -149,19 +209,21 @@ test('marks a thread the agent opened in its header, in the panel and inline', a
   ]);
   await gotoFile(page, 'tally/ledger.py');
   await expect(page.locator('aside').last()).toContainText('agent');
-  await expect(page).toHaveScreenshot('agent-thread.png');
   await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'agent-threads-panel.aria.yml' });
+  await snapshotComments(page, 'agent-thread.png');
 });
 
-test("marks only the agent's reply in a reviewer's thread", async ({ page, diffle }) => {
+test('shows agent and reviewer replies in order in the Threads panel', async ({ page, diffle }) => {
   const [thread] = await seedThreads(diffle.url, [
     { path: 'tally/currency.py', startLine: 7, body: '`KWD` gets three decimals above but no symbol here.' },
   ]);
   await seedReply(diffle.url, thread!.id, { body: 'Added `KD` to `_SYMBOLS`.', author: 'agent' });
   await seedReply(diffle.url, thread!.id, { body: 'Thanks.' });
   await gotoFile(page, 'tally/currency.py');
-  await expect(page.getByText('Thanks.').first()).toBeVisible();
-  await expect(page).toHaveScreenshot('agent-reply.png');
+  const messages = ['KWD gets three decimals above but no symbol here.', 'Added KD to _SYMBOLS.', 'Thanks.'];
+  await expect(page.locator('.codeview').getByText('Thanks.', { exact: true })).toBeVisible();
+  await expect(page.locator('aside').last().getByRole('paragraph')).toHaveText(messages);
+  await snapshotComments(page, 'agent-reply.png');
 });
 
 test('exports agent messages with an (agent) prefix in the prompt', async ({ diffle }) => {

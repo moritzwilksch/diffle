@@ -5,7 +5,6 @@ import { useStore } from '@/client/store.js';
 import { Button } from '@/client/ui/Button.js';
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import type { GithubCommentMessage } from '@/shared/protocol.js';
-import { closeGithubPeek } from './commentPeek.js';
 
 export function GithubPendingDelete({ prUrl, message }: { prUrl: string; message: GithubCommentMessage }) {
   const [confirm, setConfirm] = useState(false);
@@ -22,7 +21,6 @@ export function GithubPendingDelete({ prUrl, message }: { prUrl: string; message
     try {
       await api.deleteGithubPendingComment(message.id, prUrl);
       setConfirm(false);
-      closeGithubPeek(message.id);
       useStore.getState().flash('Deleted pending GitHub comment');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

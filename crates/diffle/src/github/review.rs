@@ -142,7 +142,7 @@ pub async fn export_to_github(
     for (c, id) in comments.iter_mut().zip(&ids) {
         c.body += &format!("\n\n{}", thread_marker(id));
     }
-    let (pull_request_id, pending) = find_pending_review(github, pr).await?;
+    let (pull_request_id, pending) = find_pending_review(github, &pr.url, pr.number).await?;
     let Some(pending) = pending else {
         // The review is created with its line comments in one call; file comments only exist as added threads.
         let lines: Vec<&ReviewComment> = comments.iter().filter(|c| !c.is_file()).collect();
