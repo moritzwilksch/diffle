@@ -24,6 +24,7 @@ use crate::protocol::{
     Activity, ActivityQuery, AuthorQuery, ClearThreadsQuery, CommentAuthor, MessagePatch, ReplyCreate, ResolvedRequest,
     ServerMessage, ThreadExportQuery, ThreadList, ThreadQuery, ThreadState, ViewedEntry,
 };
+use crate::protocol::{GithubCommentRequest, GithubReviewSubmit};
 use crate::session::Broadcaster;
 
 pub fn routes() -> Router<Arc<ApiDeps>> {
@@ -37,6 +38,9 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/threads/{id}/messages/{mid}", patch(edit_message).delete(remove_message))
         .route("/api/threads/{id}/messages/{mid}/export", get(export_message))
         .route("/api/github/export", post(github_export))
+        .route("/api/github/comment", post(github_comment))
+        .route("/api/github/comments", get(github_comments).delete(delete_github_comment))
+        .route("/api/github/review", post(github_review))
         .route("/api/viewed", get(viewed).put(set_viewed))
         .route("/api/viewed/bulk", put(set_viewed_bulk))
 }
@@ -235,10 +239,29 @@ struct GithubExportRequest {
     thread_ids: Option<Vec<String>>,
 }
 
-/// Adds threads to a pending review on the matching pull request; the human submits it on GitHub.
+/// Adds threads to a pending review on the matching pull request.
 async fn github_export(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: GithubExportRequest = body(&raw)?;
     Ok(Json(d.session.export_github(req.thread_ids).await?).into_response())
+}
+
+async fn delete_github_comment(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    d.session.delete_github_pending_comment(body(&raw)?).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+async fn github_comments(State(d): State<Arc<ApiDeps>>) -> ApiResult {
+    Ok(Json(d.session.github_comments().await?).into_response())
+}
+
+async fn github_comment(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    let request: GithubCommentRequest = body(&raw)?;
+    Ok(Json(d.session.send_github_comment(request).await?).into_response())
+}
+
+async fn github_review(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
+    d.session.submit_github_review(body::<GithubReviewSubmit>(&raw)?).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 async fn viewed(State(d): State<Arc<ApiDeps>>) -> ApiResult {

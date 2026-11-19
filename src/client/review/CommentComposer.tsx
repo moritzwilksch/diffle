@@ -1,4 +1,5 @@
 import { twMerge } from 'tailwind-merge';
+import type { CommentDestination } from '@/client/comments/destination.js';
 import { Button } from '@/client/ui/Button.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { TextArea } from '@/client/ui/TextArea.js';
@@ -19,7 +20,13 @@ export function CommentComposer({ label, className }: { label: string; className
   const draftQuote = useStore((s) => s.draftQuote);
   // Each open request makes a new draft; the viewer may keep this composer mounted across them.
   const draft = useStore((s) => s.draft);
-  // Only a comment on lines has lines to suggest a replacement for.
+  const pr = useStore((s) => (s.snapshot?.review.kind === 'range' ? s.snapshot.review.pr : undefined));
+  const github = useStore((s) => (s.github.data?.version === s.snapshot?.version ? s.github.data : undefined));
+  const showDestination = draft?.kind === 'code' && Boolean(pr);
+  const canPostGithub = showDestination && github?.reason === null;
+  const [choice, setChoice] = useState<{ draft: typeof draft; destination: CommentDestination }>();
+  const destination = choice?.draft === draft ? (choice?.destination ?? 'local') : 'local';
+  // Only line comments can suggest a replacement.
   const onLines = draft?.kind === 'code' && draft.selection != null;
   // The text outlives the composer, so Esc or Cancel and reopening on the same lines resumes it.
   const key = useStore((s) => composerKey(s, { kind: 'draft' }));
@@ -55,10 +62,10 @@ export function CommentComposer({ label, className }: { label: string; className
   }, [draft]);
 
   const submit = async () => {
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || (destination === 'github' && !canPostGithub)) return;
     setBusy(true);
     try {
-      await submitDraft(text);
+      await submitDraft(text, destination);
     } finally {
       setBusy(false);
     }
@@ -110,9 +117,30 @@ export function CommentComposer({ label, className }: { label: string; className
               <FileDiff size="0.8125rem" /> <span className="@max-[18rem]:hidden">Suggest change</span>
             </Button>
           )}
+          {showDestination && (
+            <select
+              aria-label="Comment destination"
+              className="rounded-sm border border-border bg-canvas px-1.5 py-1 text-foreground"
+              value={destination}
+              onChange={(e) =>
+                setChoice({ draft, destination: e.currentTarget.value === 'github' ? 'github' : 'local' })
+              }
+              disabled={busy}
+              title={canPostGithub ? undefined : (github?.reason ?? 'Checking GitHub review availability')}
+            >
+              <option value="local">Local</option>
+              <option value="github" disabled={!canPostGithub}>
+                GitHub pending review
+              </option>
+            </select>
+          )}
           <Button onClick={closeDraft}>Cancel</Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
-            Comment
+          <Button
+            variant="primary"
+            onClick={() => void submit()}
+            disabled={!text.trim() || busy || (destination === 'github' && !canPostGithub)}
+          >
+            {destination === 'github' ? 'Add to GitHub review' : 'Comment'}
           </Button>
         </div>
       </div>

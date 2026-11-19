@@ -1,6 +1,6 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
-import { AlertTriangle, Check, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, RotateCcw, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import type { CommentThread } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
@@ -11,6 +11,7 @@ import { anchorPath } from './threads.js';
 import { Markdown } from '@/client/Markdown.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
+import { useStore } from '@/client/store.js';
 
 /**
  * One thread. Memoized on the thread object and the store's stable actions, so
@@ -31,6 +32,7 @@ export const ThreadRow = memo(function ThreadRow({
   openTourThread: (id: string) => void;
 }) {
   const first = t.messages[0];
+  const setResolved = useStore((s) => s.setResolved);
   const del = useConfirm(() => void deleteThread(t.id));
   const open = () => {
     // A file thread's card sits above the file's first line, where opening the file lands.
@@ -85,12 +87,25 @@ export const ThreadRow = memo(function ThreadRow({
           </span>
         )}
         <Button
+          variant="ghost"
+          icon
+          className="ml-auto"
+          aria-label={t.resolved ? 'Reopen thread' : 'Resolve thread'}
+          title={t.resolved ? 'Reopen thread' : 'Resolve thread'}
+          onClick={(e) => {
+            e.stopPropagation();
+            void setResolved(t.id, !t.resolved);
+          }}
+        >
+          {t.resolved ? <RotateCcw size="0.75rem" /> : <Check size="0.75rem" />}
+        </Button>
+        <Button
           type="button"
           variant="ghost"
           danger
           icon={!del.armed}
           feedback={del.armed ? 'confirm' : undefined}
-          className="ml-auto px-0.75 py-[1px] opacity-0 group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
+          className="px-0.75 py-[1px] opacity-0 group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
           title={del.armed ? 'Click again to delete this thread' : 'Delete this thread'}
           aria-label={del.armed ? 'Delete this thread? Click again to confirm' : 'Delete this thread'}
           onClick={(e) => {
@@ -113,6 +128,17 @@ export const ThreadRow = memo(function ThreadRow({
           path={anchorPath(t.anchor) ?? undefined}
           quoted={t.anchor.kind === 'line' ? t.anchor.quoted : undefined}
         />
+        {t.stale && t.messages.length > 1 && (
+          <details className="mt-1 text-muted" onClick={(event) => event.stopPropagation()}>
+            <summary className="cursor-pointer">Show replies</summary>
+            {t.messages.slice(1).map((message) => (
+              <div key={message.id} className="mt-2 border-l border-border pl-2 text-foreground">
+                {message.author === 'agent' && <AgentMark size="0.75rem" />}
+                <Markdown text={message.body} />
+              </div>
+            ))}
+          </details>
+        )}
       </div>
     </div>
   );

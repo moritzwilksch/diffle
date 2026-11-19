@@ -103,7 +103,7 @@ export function CommentCard({ thread, className }: { thread: CommentThread; clas
                 ? 'Stale threads cannot be added to a GitHub review'
                 : post.armed
                   ? 'Click again to add this thread to the pending review'
-                  : 'Add this thread to a pending review on the GitHub pull request; you submit it on GitHub'
+                  : 'Add this thread to a pending review on the GitHub pull request'
             }
           >
             {posted ? <Check size="0.875rem" /> : <GitPullRequestArrow size="0.875rem" />}

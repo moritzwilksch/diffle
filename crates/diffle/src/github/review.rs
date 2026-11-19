@@ -222,12 +222,17 @@ pub struct GithubExporter {
 }
 
 impl GithubExporter {
+    /// Holds the same turn for submissions and edits to the pending review.
+    pub(crate) async fn turn(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.turn.lock().await
+    }
+
     /// Runs `prepare`, then the export, after every earlier export settled; a failure blocks no later one.
     pub async fn export<Fut>(&self, prepare: impl FnOnce() -> Fut) -> Result<GithubExportResponse>
     where
         Fut: Future<Output = Result<ExportInput>>,
     {
-        let _turn = self.turn.lock().await;
+        let _turn = self.turn().await;
         let input = prepare().await?;
         let ids = input.thread_ids.as_deref();
         Ok(export_to_github(input.github.as_ref(), &input.new_sha, &input.pull_request, &input.threads, ids).await?)

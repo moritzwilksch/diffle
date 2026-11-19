@@ -751,6 +751,172 @@
       ],
       "description": "How a review between refs reacts when one of them moves. `on`: recompute at once, as a worktree\nreview follows edits. `off`: announce the move and wait for Reload. `auto`: wait for Reload when an\nendpoint names a branch, whose pushes and rebases should not swap the review out under the\nreviewer; recompute at once otherwise (a detached HEAD, a tag, an expression)."
     },
+    "GithubCommentMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "state": {
+          "type": "string"
+        },
+        "canDelete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "author",
+        "body",
+        "createdAt",
+        "url"
+      ]
+    },
+    "GithubCommentRequest": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "type": "string"
+        },
+        "comment": {
+          "$ref": "#/$defs/ThreadCreate"
+        }
+      },
+      "required": [
+        "version",
+        "id",
+        "comment"
+      ]
+    },
+    "GithubComments": {
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GithubCommentThread"
+          }
+        },
+        "conversation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GithubCommentMessage"
+          }
+        }
+      },
+      "required": [
+        "threads",
+        "conversation"
+      ]
+    },
+    "GithubCommentThread": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startLine": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "originalLine": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "originalStartLine": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diffSide": {
+          "type": "string",
+          "enum": [
+            "LEFT",
+            "RIGHT"
+          ]
+        },
+        "isResolved": {
+          "type": "boolean"
+        },
+        "isOutdated": {
+          "type": "boolean"
+        },
+        "comments": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GithubCommentMessage"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "line",
+        "startLine",
+        "originalLine",
+        "originalStartLine",
+        "diffSide",
+        "isResolved",
+        "isOutdated"
+      ]
+    },
     "GithubExportRequest": {
       "type": "object",
       "properties": {
@@ -768,7 +934,7 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "The pull request whose pending review the comments joined; the human submits the review there."
+          "description": "The pull request whose pending review the comments joined; which can be submitted from Diffle or GitHub."
         },
         "posted": {
           "type": "integer",
@@ -868,6 +1034,22 @@
       ],
       "description": "Optional enrichment for a snapshot, independent of its comparison."
     },
+    "GithubPendingCommentDelete": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "prUrl"
+      ]
+    },
     "GithubPullRequest": {
       "type": "object",
       "properties": {
@@ -904,6 +1086,35 @@
         "title",
         "state",
         "isDraft"
+      ]
+    },
+    "GithubReviewDecision": {
+      "type": "string",
+      "enum": [
+        "comment",
+        "approve",
+        "request-changes"
+      ]
+    },
+    "GithubReviewSubmit": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "decision": {
+          "$ref": "#/$defs/GithubReviewDecision"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "decision",
+        "summary"
       ]
     },
     "GraphEdge": {

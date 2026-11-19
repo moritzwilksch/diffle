@@ -500,6 +500,13 @@ export const ThreadCreateSchema = z
   });
 export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
 
+export const GithubCommentRequestSchema = z.object({
+  version: z.number().int(),
+  id: z.string(),
+  comment: ThreadCreateSchema,
+});
+export type GithubCommentRequest = z.infer<typeof GithubCommentRequestSchema>;
+
 export const ReplyCreateSchema = z.object({
   body: z.string().refine((body) => body.trim().length > 0, 'body required'),
   /** Absent: the reviewer replies. */
@@ -516,8 +523,18 @@ export const GithubExportRequestSchema = z.object({
 });
 export type GithubExportRequest = z.infer<typeof GithubExportRequestSchema>;
 
+export const GithubReviewDecisionSchema = z.enum(['comment', 'approve', 'request-changes']);
+export type GithubReviewDecision = z.infer<typeof GithubReviewDecisionSchema>;
+
+export const GithubReviewSubmitSchema = z.object({
+  version: z.number().int(),
+  decision: GithubReviewDecisionSchema,
+  summary: z.string(),
+});
+export type GithubReviewSubmit = z.infer<typeof GithubReviewSubmitSchema>;
+
 export const GithubExportResponseSchema = z.object({
-  /** The pull request whose pending review the comments joined; the human submits the review there. */
+  /** The pull request whose pending review the comments joined; which can be submitted from Diffle or GitHub. */
   url: z.string(),
   /** Review comments added to the pending review. */
   posted: z.number().int(),
@@ -1325,3 +1342,41 @@ export const FeedbackContextSchema = z.object({
 });
 
 export const FeedbackReplySchema = z.object({ summary: z.string() });
+
+export const GithubCommentMessageSchema = z.object({
+  id: z.string(),
+  author: z.string(),
+  body: z.string(),
+  createdAt: z.string(),
+  url: z.string().url(),
+  state: z.string().optional(),
+  canDelete: z.boolean().optional(),
+});
+
+export const GithubPendingCommentDeleteSchema = z.object({
+  id: z.string().min(1),
+  prUrl: z.string(),
+});
+export type GithubPendingCommentDelete = z.infer<typeof GithubPendingCommentDeleteSchema>;
+
+export const GithubCommentThreadSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  line: z.number().int().nullable(),
+  startLine: z.number().int().nullable(),
+  originalLine: z.number().int().nullable(),
+  originalStartLine: z.number().int().nullable(),
+  diffSide: z.enum(['LEFT', 'RIGHT']),
+  isResolved: z.boolean(),
+  isOutdated: z.boolean(),
+  comments: GithubCommentMessageSchema.array().default([]),
+});
+
+export type GithubCommentThread = z.infer<typeof GithubCommentThreadSchema>;
+
+export const GithubCommentsSchema = z.object({
+  threads: GithubCommentThreadSchema.array(),
+  conversation: GithubCommentMessageSchema.array(),
+});
+export type GithubComments = z.infer<typeof GithubCommentsSchema>;
+export type GithubCommentMessage = z.infer<typeof GithubCommentMessageSchema>;

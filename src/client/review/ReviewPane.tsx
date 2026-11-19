@@ -28,6 +28,8 @@ import { twMerge } from 'tailwind-merge';
 import { comparisonLabel, type ChangedFile, type CommentThread } from '@/shared/protocol.js';
 import { useCopied } from '@/client/clipboard.js';
 import { FilePath } from '@/client/FilePath.js';
+import { useGithubPeek, withGithubPeek, type GithubPeek } from '@/client/github/commentPeek.js';
+import { GithubPeekCard } from '@/client/github/GithubPeekCard.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { lineBounds, sideOf } from '@/client/comments/anchor.js';
 import { renderedContext } from '@/client/keyboard/nav.js';
@@ -79,7 +81,8 @@ export type Annot =
   | { kind: 'placeholder'; placeholder: PlaceholderKind; message: string }
   | { kind: 'image'; path: string; sides: ImageSides }
   | { kind: 'thread'; thread: CommentThread }
-  | { kind: 'draft' };
+  | { kind: 'draft' }
+  | { kind: 'github'; peek: GithubPeek };
 
 /** Where jump navigation parks the target line, as a fraction of the viewport height. */
 const EYE_FRACTION = 0.5;
@@ -265,8 +268,11 @@ export function ReviewPane() {
   // CodeView re-renders an item only when its version changes, so each path's version is derived
   // here from what the item paints (its threads, draft, composers, collapsed state); no manual bump.
   const versions = useRef(new Map<string, ItemVersion>());
+  const githubPeek = useGithubPeek((s) => s.peek);
   const items = useMemo<CodeViewItem<Annot>[]>(() => {
     if (!snapshot) return [];
+    const peek = githubPeek?.version === snapshot.version ? githubPeek : null;
+    const peekOf = (path: string) => (peek?.path === path ? peek : null);
     const byPath = new Map(snapshot.changed.map((f) => [f.path, f]));
     const state = { collapsed, viewed, config, snapshot };
     const threadsByPath = new Map<string, CommentThread[]>();
@@ -278,10 +284,10 @@ export function ReviewPane() {
       else threadsByPath.set(path, [t]);
     }
     const versionOf = (path: string, mine: CommentThread[], isCollapsed: boolean) => {
-      const v = itemVersion(
-        versions.current.get(path),
-        itemDeps({ draft, replyTo, editingId }, path, mine, isCollapsed),
-      );
+      const v = itemVersion(versions.current.get(path), [
+        ...itemDeps({ draft, replyTo, editingId }, path, mine, isCollapsed),
+        peekOf(path),
+      ]);
       versions.current.set(path, v);
       return v.version;
     };
@@ -289,7 +295,12 @@ export function ReviewPane() {
       const { path, item } = fileView;
       const mine = threadsByPath.get(path) ?? [];
       const one =
-        item && toItem(path, item, undefined, mine, draft, versionOf(path, mine, false), gens[path] ?? 0, false);
+        item &&
+        withGithubPeek(
+          toItem(path, item, undefined, mine, draft, versionOf(path, mine, false), gens[path] ?? 0, false),
+          peekOf(path),
+          false,
+        );
       return one ? [one] : [];
     }
     const out: CodeViewItem<Annot>[] = [];
@@ -309,10 +320,25 @@ export function ReviewPane() {
         gens[path] ?? 0,
         folded,
       );
-      if (item) out.push(item);
+      const annotated = withGithubPeek(item, peekOf(path), byPath.get(path)?.status === 'D');
+      if (annotated) out.push(annotated);
     }
     return out;
-  }, [snapshot, loaded, gens, fileView, threads, showResolved, replyTo, editingId, draft, collapsed, viewed, config]);
+  }, [
+    snapshot,
+    loaded,
+    gens,
+    fileView,
+    threads,
+    showResolved,
+    replyTo,
+    editingId,
+    draft,
+    collapsed,
+    viewed,
+    config,
+    githubPeek,
+  ]);
 
   // The scroller is state, not a ref: CodeView mounts after the empty / error branches and remounts per
   // theme, and the effects that listen to it must re-run for each element, not only when the snapshot appears.
@@ -841,6 +867,7 @@ export function ReviewPane() {
   const renderAnnotation = useCallback((...[annotation]: CodeViewAnnotationArgs<Annot>) => {
     const meta = annotation.metadata;
     if (meta.kind === 'placeholder') return <PlaceholderBanner kind={meta.placeholder} message={meta.message} />;
+    if (meta.kind === 'github') return <GithubPeekCard peek={meta.peek} />;
     if (meta.kind === 'image') return <ImageDiff path={meta.path} sides={meta.sides} />;
     if (meta.kind === 'draft') {
       const range = draftRange(useStore.getState());

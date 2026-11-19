@@ -12,6 +12,21 @@ use crate::protocol::{
     CommentAnchor, CommentAuthor, CommentThread, ReviewEvidence, Side, ThreadCreate, ThreadCreatePath,
 };
 
+/// Prepares a reviewer comment for GitHub without storing it locally.
+pub(crate) async fn draft_for_github(
+    comment: ThreadCreate,
+    id: uuid::Uuid,
+    source: &impl AnchorSource,
+) -> Result<CommentThread> {
+    if comment.body.trim().is_empty() {
+        return Err(Error::Invalid("body: body required".into()));
+    }
+    let anchor = place_import(&comment, source).await?;
+    let mut thread = new_thread(anchor, comment.body, None);
+    thread.id = format!("draft-{id}");
+    Ok(thread)
+}
+
 /// Everything `POST /api/threads` accepts: 1 MiB, like the HTTP body limit.
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
 /// JavaScript's largest exact integer: the protocol's bound on a line number.
