@@ -591,12 +591,26 @@ test.describe('the tour', () => {
     await page.mouse.move(0, 0);
     await expect(check).toHaveScreenshot('tour-check-answered.png');
 
-    const prompt = await readPrompt(diffle.url);
+    const prompt = await readPrompt(diffle.url, { checklist: true });
     expect(prompt).toContain(
       '(check) 4. Finding unmatched refunds, open\n\n> Should a bad row fail the file, or be skipped?\n\n(no answer yet)',
     );
     expect(prompt).toContain('> Is exit code 1 right for an empty ledger?\n\nYes: scripts treat it as a failure.');
     expect(prompt).not.toContain('strict enough');
+
+    // yy copies the checklist from the tour view alone; the diff view copies the comments.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+    await page.mouse.click(1, 1);
+    await page.keyboard.press('y');
+    await page.keyboard.press('y');
+    await expect.poll(clipboard).toBe(prompt);
+    await page.keyboard.press('T');
+    await expect(view).toBeHidden();
+    await page.keyboard.press('y');
+    await page.keyboard.press('y');
+    await expect.poll(clipboard).toBe(await readPrompt(diffle.url));
+    expect(await clipboard()).not.toContain('(check)');
   });
 
   test('a versus runs the old and the new code on one input, side by side, one step lit at a time', async ({
@@ -792,7 +806,7 @@ test.describe('the tour', () => {
       await page.keyboard.press('y');
       await expect(page.getByText('Copied all comments')).toBeVisible();
       const copied = await page.evaluate(() => navigator.clipboard.readText());
-      expect(copied).toBe(await readPrompt(diffle.url));
+      expect(copied).toBe(await readPrompt(diffle.url, { checklist: true }));
       expect(copied).toContain('tally/ledger.py:30');
       expect(copied).toContain('(tour) 1. Entries learn their kind, in a <p>');
 

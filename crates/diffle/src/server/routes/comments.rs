@@ -22,7 +22,7 @@ use crate::comments::import::parse_imports;
 use crate::error::Error;
 use crate::protocol::{
     Activity, ActivityQuery, AuthorQuery, ClearThreadsQuery, CommentAuthor, MessagePatch, ReplyCreate, ResolvedRequest,
-    ServerMessage, ThreadList, ThreadQuery, ThreadState, ViewedEntry,
+    ServerMessage, ThreadExportQuery, ThreadList, ThreadQuery, ThreadState, ViewedEntry,
 };
 use crate::session::Broadcaster;
 
@@ -65,10 +65,17 @@ async fn threads(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiR
 }
 
 async fn export(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
-    let q = thread_query(raw.as_deref(), ThreadState::Open)?;
-    let threads = d.session.comments()?.threads(&q).await?;
+    let q: ThreadExportQuery = query(raw.as_deref())?;
+    let checklist = match q.checklist.as_deref() {
+        Some("1") => true,
+        None => false,
+        Some(other) => return Err(ApiError::bad_request(format!("checklist: expected \"1\", got \"{other}\""))),
+    };
+    let tq = ThreadQuery { state: Some(q.state.unwrap_or(ThreadState::Open)), path: q.path };
+    let threads = d.session.comments()?.threads(&tq).await?;
     // A prompt for one path is about its code; the checklist is about the tour.
-    let checks = if q.path.is_some() { Vec::new() } else { crate::tour::checklist(&d.session, &threads).await? };
+    let checks =
+        if checklist && tq.path.is_none() { crate::tour::checklist(&d.session, &threads).await? } else { Vec::new() };
     Ok(text(format_prompt(&threads, &checks)))
 }
 

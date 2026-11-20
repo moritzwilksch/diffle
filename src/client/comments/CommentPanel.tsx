@@ -8,6 +8,7 @@ import { api } from '@/client/api.js';
 import { copyText, useCopied } from '@/client/clipboard.js';
 import { commentsOff, exportLabel, type ExportOutcome, visibleThreads } from '@/client/model.js';
 import { useStore } from '@/client/store.js';
+import { useViews } from '@/client/views/state.js';
 import { FilePath } from '@/client/FilePath.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
@@ -80,7 +81,7 @@ export function CommentPanel({
   const copy = async (): Promise<boolean> => {
     let text: string;
     try {
-      text = await api.exportComments();
+      text = await api.exportComments(useViews.getState().active === 'tour');
     } catch (e) {
       // Otherwise the button stays quiet and the previous clipboard gets pasted into the agent.
       report('Copying comments', e);
