@@ -81,6 +81,7 @@ test('scales the app to the chosen text size and keeps the diff in place', async
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('18px');
   expect(await activePath(page)).toBe(path);
   await expect.poll(() => topLine(page, path)).toBe(line);
+  await expect(page.locator('header button').last()).toBeInViewport({ ratio: 1 });
   await expect(page).toHaveScreenshot('text-size-125.png');
 
   // Kept in the browser: a reload opens at the same size.

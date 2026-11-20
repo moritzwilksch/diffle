@@ -2,12 +2,23 @@ import { expect, test } from './fixtures.js';
 import { activePath, gotoFile, viewed, collapsed } from './browser.js';
 
 test('marks a file viewed, collapses it and moves on', async ({ page }) => {
+  const header = page.locator('header');
+  await expect(header).toContainText('0/17 viewed · 0%');
   await gotoFile(page, 'scripts/build.bat');
   await page.keyboard.press('v');
   expect(await viewed(page, 'scripts/build.bat')).toBe(true);
   expect(await collapsed(page, 'scripts/build.bat')).toBe(true);
   await expect(page.locator('file-tree-container')).toContainText('✓');
+  await expect(header).toContainText('1/17 viewed · 4%');
   await expect(page).toHaveScreenshot('viewed.png');
+
+  await gotoFile(page, 'scripts/tally.sh');
+  await page.keyboard.press('v');
+  await expect(header).toContainText('2/17 viewed · 4%');
+
+  await gotoFile(page, 'scripts/build.bat');
+  await page.keyboard.press('v');
+  await expect(header).toContainText('1/17 viewed · 0%');
 });
 
 test('regression: selecting an empty file keeps that file active', async ({ page }) => {
