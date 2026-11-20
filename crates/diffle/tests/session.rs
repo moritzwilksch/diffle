@@ -84,6 +84,59 @@ async fn reloading_the_whole_pr_fetches_new_pushes_and_keeps_the_review_key() {
     session.close().await;
 }
 
+#[tokio::test]
+async fn pr_reload_keeps_symbol_navigation_on_the_fetched_head() {
+    use diffle::github::hosts::{Github, GithubInstance};
+    use diffle::server::hub::Hub;
+    use diffle::session::{Session, SessionOptions};
+
+    let fixture = common::pr::Fixture::new();
+    let session = Session::new(
+        Arc::new(fixture.repo().await),
+        Hub::new(),
+        SessionOptions {
+            watch: false,
+            github: Github { instance: GithubInstance::github_com(), client: Some(Arc::new(fixture.github())) },
+            context: 3,
+            follow_refs: FollowRefs::Off,
+            instance: "pr-reload".into(),
+            checkout: true,
+        },
+    );
+    let review = session.resolve(EnterRequest::Pr { pr: Some("https://github.com/o/r/pull/7".into()) }).await.unwrap();
+    common::git_in(&fixture.local, &["checkout", "-qb", "review", &fixture.head]);
+    let before = session.start(review).await.unwrap();
+    assert_eq!(before.head_sha, before.new_sha);
+    assert_eq!(common::git_in(&fixture.local, &["branch", "--show-current"]), "review");
+
+    common::git_in(&fixture.origin, &["checkout", "-q", "--detach", &fixture.head]);
+    let push = |content| {
+        std::fs::write(fixture.origin.join("a.txt"), content).unwrap();
+        common::git_in(&fixture.origin, &["commit", "-qam", "update the PR"]);
+        let head = common::git_in(&fixture.origin, &["rev-parse", "HEAD"]);
+        common::git_in(&fixture.origin, &["update-ref", "refs/pull/7/head", &head]);
+        head
+    };
+    let head = push("one\ntwo\nthree\n");
+    let after = session.reload().await.unwrap();
+    assert_eq!(after.new_sha, head);
+    assert_eq!(after.head_sha, head, "refresh leaves the checkout on the side language servers index");
+
+    let edited = fixture.local.join("a.txt");
+    std::fs::write(&edited, "local edit\n").unwrap();
+    let head = push("one\ntwo\nthree\nfour\n");
+    let dirty = session.reload().await.unwrap();
+    assert_eq!(dirty.new_sha, head);
+    assert_eq!(dirty.head_sha, after.head_sha);
+    assert_eq!(std::fs::read_to_string(&edited).unwrap(), "local edit\n");
+
+    common::git_in(&fixture.local, &["restore", "--", "a.txt"]);
+    let clean = session.reload().await.unwrap();
+    assert_eq!(clean.head_sha, head, "refresh retries a checkout previously blocked by edits");
+    session.close().await;
+    assert_eq!(common::git_in(&fixture.local, &["branch", "--show-current"]), "review");
+}
+
 #[test]
 fn side_path_maps_renames_and_refuses_paths_outside_the_snapshot() {
     let snap: Snapshot = serde_json::from_value(serde_json::json!({

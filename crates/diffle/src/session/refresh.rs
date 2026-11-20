@@ -74,12 +74,16 @@ impl Session {
             if let Review::Range { pr: Some(pr), view: RangeView::Whole, .. } = &a.review {
                 // A PR's local refs are pinned to the last fetch, even when its owner has pushed.
                 let review = resolve_pr(Some(&pr.url), &this.repo, &this.github).await?;
+                // Fetching a push can update the same refs. On an explicit PR refresh,
+                // try their new head even when the previous head was already checked out at launch.
+                this.check_out(&review).await;
                 if review != a.review {
-                    this.check_out(&review).await;
                     let snap = this.activate(review).await?;
                     this.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
                     return Ok(snap);
                 }
+                a.snapshotter.invalidate(this.next_version());
+                return this.publish(&a).await;
             }
             this.recompute().await
         })
