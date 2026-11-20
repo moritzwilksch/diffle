@@ -60,7 +60,8 @@ export function tourLayout(width: number, rem: number): { column: number; margin
 /**
  * The tour as an article that scrolls. Taking a section scrolls its heading to the top, or the page
  * as far as it goes; scrolling the page makes the section whose heading passed that line the current
- * one, and the last one at the bottom. A taken section stays current until the reader scrolls.
+ * one. A taken section stays current until the reader scrolls, so one that cannot reach the top is
+ * current only when taken.
  */
 export function TourPage({ doc }: { doc: TourDocument }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -167,12 +168,9 @@ export function TourPage({ doc }: { doc: TourDocument }) {
       if (Math.abs(page.scrollTop - landing.current) <= 1) landing.current = null;
       return;
     }
-    const sections = headings('h2');
-    const bottom = page.scrollTop >= page.scrollHeight - page.clientHeight - 1;
+    // No jump to the last section at the bottom: the one read at the top line is still on screen.
     const line = page.getBoundingClientRect().top + headingMargin();
-    const read = bottom
-      ? sections.length - 1
-      : sections.filter((h) => h.getBoundingClientRect().top <= line + 1).length - 1;
+    const read = headings('h2').filter((h) => h.getBoundingClientRect().top <= line + 1).length - 1;
     if (read !== useTour.getState().step) useTour.setState({ step: read });
   };
 
