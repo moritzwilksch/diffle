@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.5](https://github.com/moritzwilksch/diffle/compare/v0.5.4...v0.5.5) - 2026-11-20
+
+### Features
+
+- _(tour)_ Open a newly pushed tour in the client ([#494](https://github.com/moritzwilksch/diffle/pull/494))
+
+### Bug fixes
+
+- _(store)_ Show a config change before the server has it on disk ([#500](https://github.com/moritzwilksch/diffle/pull/500))
+- _(tour)_ Drop the section counter beside the contents ([#501](https://github.com/moritzwilksch/diffle/pull/501))
+- _(tour)_ Keep the section read at the top current at the bottom ([#502](https://github.com/moritzwilksch/diffle/pull/502))
+
+### Documentation
+
+- _(readme)_ Add crates.io and Homebrew badges, drop the platforms badge ([#491](https://github.com/moritzwilksch/diffle/pull/491))
+
+### Build and CI
+
+- Update flake.lock monthly alongside pixi.lock ([#497](https://github.com/moritzwilksch/diffle/pull/497))
+
+### Other
+
+- _(deps)_ Update npm, pixi and GitHub Actions dependencies ([#493](https://github.com/moritzwilksch/diffle/pull/493))
+- _(deps)_ Update pixi lock file ([#498](https://github.com/moritzwilksch/diffle/pull/498))
+- _(deps)_ Update flake.lock ([#499](https://github.com/moritzwilksch/diffle/pull/499))
+
 ## [0.5.4](https://github.com/moritzwilksch/diffle/compare/v0.5.3...v0.5.4) - 2026-11-17
 
 ### Features
