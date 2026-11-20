@@ -183,7 +183,7 @@ async fn hands_the_checklist_to_the_agent_and_keeps_ticks_across_a_push() {
     comment(&s, json!([1, 2]), json!({ "on": "element" }), "Yes, until the rename ships.").await;
     comment(&s, json!([1, 0]), json!({ "on": "element" }), "No: the store already did.").await;
 
-    let prompt = s.get("/api/threads/export").await.body;
+    let prompt = s.get("/api/threads/export?checklist=1").await.body;
     let checks = s.get("/api/threads").await.json()["checks"].clone();
     // A revision that rewords one question keeps the other ticks and drops that one's.
     push(&s, &CHECKLIST.replace("Keep the old name as an alias?", "Keep old as an alias?")).await;

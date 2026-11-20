@@ -486,7 +486,7 @@ async function copyComments(): Promise<void> {
   const s = useStore.getState();
   let text: string;
   try {
-    text = await api.exportComments();
+    text = await api.exportComments(useViews.getState().active === 'tour');
   } catch (e) {
     // A silent failure leaves the previous clipboard to be pasted into the agent.
     return s.report('Copying comments', e);
