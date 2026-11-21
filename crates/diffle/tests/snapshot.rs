@@ -159,7 +159,7 @@ async fn steps_along_heads_first_parent_line_and_stops_at_its_ends() {
     let n = |sha: &str| {
         let repo = &repo;
         let sha = sha.to_owned();
-        async move { repo.commit_neighbours(&sha).await.unwrap() }
+        async move { repo.commit_neighbours(&sha, "HEAD").await.unwrap() }
     };
     assert_eq!(n(&root).await, (None, Some(second.clone())));
     assert_eq!(n(&second).await, (Some(root.clone()), Some(merge.clone())));

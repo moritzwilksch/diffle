@@ -268,7 +268,9 @@ impl Snapshotter {
     }
 
     async fn reviewed_commit(&self, sha: &str) -> Result<Option<ReviewedCommit>> {
-        let (info, neighbours) = tokio::try_join!(self.repo.commit_info(sha), self.repo.commit_neighbours(sha))?;
+        let head = self.head.rev();
+        let neighbours = self.repo.commit_neighbours(sha, &head);
+        let (info, neighbours) = tokio::try_join!(self.repo.commit_info(sha), neighbours)?;
         Ok(info.map(|info| ReviewedCommit {
             sha: info.sha,
             short: info.short,
