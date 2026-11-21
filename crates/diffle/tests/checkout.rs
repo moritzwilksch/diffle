@@ -291,6 +291,49 @@ async fn checks_out_a_focused_commit_and_the_range_again() {
 }
 
 #[tokio::test]
+async fn steps_back_from_head_and_offers_the_way_forward_while_holding_the_checkout() {
+    let (t, first) = on_feat();
+    let tip = t.git(&["rev-parse", "feat"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    let snap = s.start(s.resolve(revspec(&["HEAD^!"])).await.unwrap()).await.unwrap();
+    assert_eq!(snap.commit.as_ref().unwrap().parent.as_deref(), Some(first.as_str()));
+    let snap = s.enter(revspec(&[&format!("{first}^!")])).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first, "the older commit is the checkout");
+    assert_eq!(snap.commit.as_ref().unwrap().child, Some(tip), "next leads back to where the reviewer left HEAD");
+}
+
+#[tokio::test]
+async fn offers_the_pickers_commits_from_where_the_reviewer_left_head() {
+    let (t, first) = on_feat();
+    let tip = t.git(&["rev-parse", "feat"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&[&format!("{first}^!")])).await.unwrap()).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first, "the older commit is the checkout");
+    let refs = s.refs().await.unwrap();
+    assert_eq!((refs.current.as_deref(), refs.recent[0].sha.as_str()), (Some("feat"), tip.as_str()));
+    let preview = s.last_commits_preview(1, 0).await.unwrap();
+    let entered = s.enter(revspec(&["HEAD~1..HEAD~0"])).await.unwrap();
+    assert_eq!(entered.new_sha, tip);
+    assert_eq!(
+        (preview.old.unwrap().sha, preview.new.unwrap().sha),
+        (entered.old_sha.clone(), entered.new_sha.clone()),
+        "the preview names what entering it shows"
+    );
+}
+
+#[tokio::test]
+async fn opens_head_where_the_reviewer_left_it_after_stepping_back() {
+    let (t, first) = on_feat();
+    let tip = t.git(&["rev-parse", "feat"]);
+    let s = session(t.open().await, Github::tokenless(), true);
+    s.start(s.resolve(revspec(&["HEAD^!"])).await.unwrap()).await.unwrap();
+    s.enter(revspec(&[&format!("{first}^!")])).await.unwrap();
+    assert_eq!(t.git(&["rev-parse", "HEAD"]), first, "the older commit is the checkout");
+    let snap = s.enter(revspec(&["HEAD^!"])).await.unwrap();
+    assert_eq!(snap.new_sha, tip, "HEAD names feat's tip, as it does in a range");
+}
+
+#[tokio::test]
 async fn checks_out_a_focused_commit_of_a_range_ending_at_the_worktree_and_comes_back() {
     let (t, first) = on_feat();
     let s = session(t.open().await, Github::tokenless(), true);

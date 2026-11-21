@@ -21,7 +21,7 @@ impl Session {
     /// before serving. Queued, so `close` waits for it.
     pub fn resolve(self: &Arc<Self>, req: EnterRequest) -> impl Future<Output = Result<Review>> + Send + use<> {
         let this = self.clone();
-        self.run(async move { resolve_review(&req, &this.repo, &this.github).await })
+        self.run(async move { resolve_review(&req, &this.repo, &this.github, &this.head).await })
     }
 
     /// First review, from `resolve`. Fails `ready` too, so early requests error out.
@@ -42,7 +42,7 @@ impl Session {
         let this = self.clone();
         let snap = self
             .run(async move {
-                let review = resolve_review(&req, &this.repo, &this.github).await?;
+                let review = resolve_review(&req, &this.repo, &this.github, &this.head).await?;
                 this.check_out(&review).await;
                 this.activate(review).await
             })

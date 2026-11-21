@@ -89,7 +89,7 @@ pub fn revspec(args: &[&str]) -> EnterRequest {
 }
 
 pub async fn mode(repo: &GitRepo, req: EnterRequest) -> Review {
-    resolve_review(&req, repo, &Github::tokenless()).await.unwrap()
+    resolve_review(&req, repo, &Github::tokenless(), &Default::default()).await.unwrap()
 }
 
 /// Where the review's range keeps its comments, as the session derives it; none for a lone commit.

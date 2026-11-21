@@ -159,7 +159,7 @@ async fn steps_along_heads_first_parent_line_and_stops_at_its_ends() {
     let n = |sha: &str| {
         let repo = &repo;
         let sha = sha.to_owned();
-        async move { repo.commit_neighbours(&sha).await.unwrap() }
+        async move { repo.commit_neighbours(&sha, "HEAD").await.unwrap() }
     };
     assert_eq!(n(&root).await, (None, Some(second.clone())));
     assert_eq!(n(&second).await, (Some(root.clone()), Some(merge.clone())));
@@ -208,9 +208,14 @@ async fn reports_an_unknown_commit_as_a_revspec_error() {
     let t = merge_repo();
     let repo = t.open().await;
     let req = revspec(&["nope^!"]);
-    let err = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::Github::tokenless())
-        .await
-        .unwrap_err();
+    let err = diffle::mode::resolve::resolve_review(
+        &req,
+        &repo,
+        &diffle::github::hosts::Github::tokenless(),
+        &Default::default(),
+    )
+    .await
+    .unwrap_err();
     assert!(matches!(err, diffle::error::Error::Revspec(_)));
     assert_eq!(err.to_string(), "unknown revision: nope");
 }
@@ -231,9 +236,14 @@ async fn working_mode_on_an_unborn_branch_diffs_against_the_empty_tree() {
     assert!(snapshotter.patch("staged.txt").await.unwrap().unwrap().contains("+s2\n"));
     assert!(snapshotter.patch_all().await.unwrap().contains("+l\n"));
     let req = revspec(&["HEAD"]);
-    let err = diffle::mode::resolve::resolve_review(&req, &repo, &diffle::github::hosts::Github::tokenless())
-        .await
-        .unwrap_err();
+    let err = diffle::mode::resolve::resolve_review(
+        &req,
+        &repo,
+        &diffle::github::hosts::Github::tokenless(),
+        &Default::default(),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(err.to_string(), "unknown revision: HEAD");
 }
 

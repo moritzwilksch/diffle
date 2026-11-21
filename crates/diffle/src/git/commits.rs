@@ -42,9 +42,14 @@ impl GitRepo {
         Ok(found.ok_or_else(|| GitError::missing(format!("unknown revision: {rev}")))?)
     }
 
-    /// Commit messages for two ancestor offsets, pinned to one HEAD.
-    pub async fn last_commits_preview(&self, old_offset: u64, new_offset: u64) -> Result<LastCommitsPreview> {
-        let Some(head) = self.commit_info("HEAD").await? else {
+    /// Commit messages for two ancestor offsets of `head`, pinned to one commit.
+    pub async fn last_commits_preview(
+        &self,
+        head: &str,
+        old_offset: u64,
+        new_offset: u64,
+    ) -> Result<LastCommitsPreview> {
+        let Some(head) = self.commit_info(head).await? else {
             return Ok(LastCommitsPreview { old: None, new: None });
         };
         let at = |offset: u64| {
