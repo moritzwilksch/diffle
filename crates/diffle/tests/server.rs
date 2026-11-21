@@ -484,6 +484,28 @@ async fn ignores_lsp_commands_on_put_config() {
     s.close().await;
 }
 
+#[tokio::test]
+async fn keeps_lsp_settings_out_of_the_config_it_serves_and_out_of_reach_of_put() {
+    let repo = common::TestRepo::new();
+    repo.write("a.txt", "a\n");
+    repo.commit("base");
+    let secret = json!({ "python": { "py": { "licenseKey": "secret" } } });
+    repo.write("cfg/config.json", json!({ "lspSettings": secret }).to_string());
+    let s = TestServer::over(repo, EnterRequest::Working).await;
+    assert_eq!(serde_json::to_value(s.config.lsp_settings()).unwrap(), secret);
+    let r = s.get("/api/config").await;
+    assert_eq!(r.status, 200);
+    assert!(!r.body.contains("lspSettings") && !r.body.contains("secret"), "{}", r.body);
+    let put = json!({ "lspSettings": { "python": { "py": { "licenseKey": "other" } } }, "contextLines": 7 });
+    let r = s.json("PUT", "/api/config", put).await;
+    assert_eq!(r.status, 200);
+    assert!(!r.body.contains("lspSettings"), "{}", r.body);
+    assert_eq!(serde_json::to_value(s.config.lsp_settings()).unwrap(), secret);
+    let disk: Value = serde_json::from_str(&std::fs::read_to_string(s.config.file()).unwrap()).unwrap();
+    assert_eq!((disk["lspSettings"].clone(), disk["contextLines"].clone()), (secret, json!(7)));
+    s.close().await;
+}
+
 // Windows has no POSIX mode bits to check.
 #[cfg(unix)]
 #[tokio::test]

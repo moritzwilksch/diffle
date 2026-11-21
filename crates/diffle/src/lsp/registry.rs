@@ -82,7 +82,7 @@ pub fn definition_of(command: &str) -> ServerDefinition {
 }
 
 /// The spec's spelling of a language, which is also how languages sort.
-fn name(language: LanguageId) -> String {
+pub fn name(language: LanguageId) -> String {
     serde_json::to_value(language).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
 }
 

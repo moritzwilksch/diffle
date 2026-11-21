@@ -40,6 +40,7 @@ fn start_lsp(session: &Arc<Session>, overrides: std::collections::HashMap<Langua
         }),
         on_status: Arc::new(|_| {}),
         overrides,
+        settings: Arc::default(),
         preload: Vec::new(),
         lookup: Arc::new(|_| None),
         max_open: None,

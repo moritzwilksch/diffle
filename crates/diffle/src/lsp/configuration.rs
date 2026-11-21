@@ -69,6 +69,24 @@ async fn download(url: &str) -> Option<Vec<Value>> {
     Some(schema_associations(&response.json::<Value>().await.ok()?))
 }
 
+/// Lays `over` onto `base`: objects merge key by key, at any depth; anything else in `over`, an
+/// array or `null` included, replaces what `base` holds there.
+pub fn merge_settings(base: &mut Value, over: &Value) {
+    match (base, over) {
+        (Value::Object(base), Value::Object(over)) => {
+            for (key, value) in over {
+                match base.get_mut(key) {
+                    Some(slot) => merge_settings(slot, value),
+                    None => {
+                        base.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+        }
+        (base, over) => *base = over.clone(),
+    }
+}
+
 /// Answers a server's `workspace/configuration` request from `settings`: each requested section in
 /// order, null for unknown sections, the whole tree for an omitted one. Params are untrusted JSON
 /// from the server; malformed requests are refused before any settings are returned.
@@ -153,6 +171,27 @@ mod tests {
         ] });
         let items = configuration_items(&settings, &params).unwrap();
         assert_eq!(Value::Array(items), json!([true, true, null, settings, null]));
+    }
+
+    #[test]
+    fn merges_objects_at_any_depth_and_lets_anything_else_replace() {
+        let mut base = json!({
+            "yaml": { "hover": true, "schemaStore": { "enable": true, "url": "u" }, "schemas": { "a": ["x"] } },
+            "kept": 1,
+        });
+        let over = json!({
+            "yaml": { "schemaStore": { "enable": false }, "schemas": { "a": ["y"] }, "format": null },
+            "added": { "z": 1 },
+        });
+        merge_settings(&mut base, &over);
+        let merged = json!({
+            "yaml": { "hover": true, "schemaStore": { "enable": false, "url": "u" }, "schemas": { "a": ["y"] }, "format": null },
+            "kept": 1,
+            "added": { "z": 1 },
+        });
+        assert_eq!(base, merged);
+        merge_settings(&mut base, &json!(["not", "an", "object"]));
+        assert_eq!(base, json!(["not", "an", "object"]));
     }
 
     #[tokio::test]
