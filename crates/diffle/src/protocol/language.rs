@@ -1,4 +1,5 @@
-//! Which language server a file's name or extension selects; the client keeps the same tables.
+//! Which language server a file selects: by its name or extension, or as a Helm template by its
+//! directory. The client keeps the same rules.
 use std::collections::BTreeSet;
 
 use super::LanguageId::{self, *};
@@ -53,6 +54,9 @@ const LANGUAGE_BY_EXT: &[(&str, LanguageId)] = &[
     ("zig", Zig),
 ];
 
+/// The extensions of a Helm template: manifests and the `_helpers.tpl` partials.
+const TEMPLATE_EXTS: &[&str] = &["yaml", "yml", "tpl"];
+
 /// File name (lowercase) → language, for files named rather than extended. A name also claims
 /// `<name>.<suffix>` (`Dockerfile.dev`), ahead of the suffix as an extension.
 const LANGUAGE_BY_NAME: &[(&str, LanguageId)] = &[("containerfile", Dockerfile), ("dockerfile", Dockerfile)];
@@ -60,15 +64,17 @@ const LANGUAGE_BY_NAME: &[(&str, LanguageId)] = &[("containerfile", Dockerfile),
 /// Suffixes that turn a named file into something else: BuildKit's `Dockerfile.dockerignore`.
 const NOT_BY_NAME: &[&str] = &["dockerignore"];
 
-/// Every language some name or extension selects, sorted by its LSP spelling: `LANGUAGE_IDS`.
+/// Every language diffle can start a server for, sorted by its LSP spelling: `LANGUAGE_IDS`.
 pub fn language_ids() -> Vec<LanguageId> {
-    let ids: BTreeSet<(String, LanguageId)> =
-        LANGUAGE_BY_EXT.iter().chain(LANGUAGE_BY_NAME).map(|(_, id)| (id.to_string(), *id)).collect();
+    let named = LANGUAGE_BY_EXT.iter().chain(LANGUAGE_BY_NAME).map(|(_, id)| *id);
+    let ids: BTreeSet<(String, LanguageId)> = named.chain([Helm]).map(|id| (id.to_string(), id)).collect();
     ids.into_iter().map(|(_, id)| id).collect()
 }
 
-/// The language of `path` by its file name, then its extension, case-insensitively; none for an
-/// unknown or absent one.
+/// The language of `path`: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
+/// chart; anything else goes by its file name, then its extension, case-insensitively. None for an
+/// unknown or absent one. Any `templates/` counts, chart or not: telling them apart needs the tree
+/// around the path.
 pub fn language_of(path: &str) -> Option<LanguageId> {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_lowercase();
     let stem = name.split('.').next().unwrap_or_default();
@@ -80,7 +86,15 @@ pub fn language_of(path: &str) -> Option<LanguageId> {
         return Some(*id);
     }
     let ext = ext?;
+    if TEMPLATE_EXTS.contains(&ext) && in_templates(path) {
+        return Some(Helm);
+    }
     LANGUAGE_BY_EXT.iter().find(|(e, _)| *e == ext).map(|(_, id)| *id)
+}
+
+/// Whether a directory of `path` is named `templates`: at the start or after a separator.
+fn in_templates(path: &str) -> bool {
+    path.match_indices("templates/").any(|(i, _)| i == 0 || path[..i].ends_with('/'))
 }
 
 #[cfg(test)]
@@ -131,6 +145,27 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(ids, sorted);
-        assert!(ids.contains(&"shellscript".to_owned()) && ids.len() == 30);
+        assert!(ids.contains(&"shellscript".to_owned()) && ids.contains(&"helm".to_owned()) && ids.len() == 31);
+    }
+
+    #[test]
+    fn takes_a_yaml_or_tpl_file_under_a_templates_directory_for_helm() {
+        let of = |path| language_of(path).map(|l| l.to_string());
+        for helm in [
+            "deploy/app/templates/deployment.yaml",
+            "deploy/app/templates/_helpers.tpl",
+            "deploy/app/templates/tests/x.yml",
+            "deploy/app/charts/db/templates/svc.yaml",
+            "templates/root.YAML",
+            // The tradeoff of a rule on the path alone: a templates directory outside any chart counts too.
+            "ci/templates/job.yml",
+        ] {
+            assert_eq!(of(helm).as_deref(), Some("helm"), "{helm}");
+        }
+        assert_eq!(of("deploy/app/values.yaml").as_deref(), Some("yaml"));
+        assert_eq!(of("deploy/app/Chart.yaml").as_deref(), Some("yaml"));
+        assert_eq!(of("deploy/app/my-templates/x.yaml").as_deref(), Some("yaml"));
+        assert_eq!(of("deploy/app/templates/NOTES.txt"), None);
+        assert_eq!(of("deploy/app/templates/config.json").as_deref(), Some("json"));
     }
 }

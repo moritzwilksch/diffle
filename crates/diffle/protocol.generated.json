@@ -1109,6 +1109,7 @@
         "dockerfile",
         "go",
         "haskell",
+        "helm",
         "html",
         "java",
         "javascript",

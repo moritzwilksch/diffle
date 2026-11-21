@@ -16,6 +16,7 @@ export const LanguageIdSchema = z.enum([
   'dockerfile',
   'go',
   'haskell',
+  'helm',
   'html',
   'java',
   'javascript',
@@ -1032,17 +1033,24 @@ const LANGUAGE_BY_NAME: Record<string, LanguageId> = {
 /** Suffixes that turn a named file into something else: BuildKit's `Dockerfile.dockerignore`. */
 const NOT_BY_NAME = new Set(['dockerignore']);
 
-/** Every language diffle knows, sorted, for CLI validation and help. */
+const TEMPLATE_EXTS = new Set(['yaml', 'yml', 'tpl']);
+
+/** Every language diffle knows, sorted, for CLI validation and help. Helm goes by a template's place, not its name. */
 export const LANGUAGE_IDS: LanguageId[] = [
-  ...new Set([...Object.values(LANGUAGE_BY_EXT), ...Object.values(LANGUAGE_BY_NAME)]),
+  ...new Set([...Object.values(LANGUAGE_BY_EXT), ...Object.values(LANGUAGE_BY_NAME), 'helm' as const]),
 ].sort();
 
-/** The language of a path by its file name, then its extension, or null when diffle has no server for it. */
+/**
+ * The language of a path: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
+ * chart; anything else goes by its file name, then its extension. Null when diffle has no server
+ * for it. Any `templates/` counts, chart or not: telling them apart needs the tree around the path.
+ */
 export function languageOf(path: string): LanguageId | null {
   const name = /[^/\\]*$/.exec(path)![0].toLowerCase();
   const stem = name.split('.')[0]!;
   const ext = /\.([^.]+)$/.exec(name)?.[1];
   if (Object.hasOwn(LANGUAGE_BY_NAME, stem) && !NOT_BY_NAME.has(ext ?? '')) return LANGUAGE_BY_NAME[stem]!;
+  if (ext && TEMPLATE_EXTS.has(ext) && /(^|\/)templates\//.test(path)) return 'helm';
   return (ext && Object.hasOwn(LANGUAGE_BY_EXT, ext) && LANGUAGE_BY_EXT[ext]) || null;
 }
 

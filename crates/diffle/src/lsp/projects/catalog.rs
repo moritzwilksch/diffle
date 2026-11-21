@@ -123,10 +123,16 @@ fn json_settings(_: &ServerContext) -> BoxFuture<'static, Value> {
     async { json!({ "json": { "schemas": load_schema_catalog(None).await } }) }.boxed()
 }
 
+/// helm-ls starts its own yaml-language-server for a template's YAML, and gives up on it after
+/// 3 seconds by default: a cold start beside the other servers can take longer.
+fn helm_settings(_: &ServerContext) -> BoxFuture<'static, Value> {
+    ready(json!({ "helm-ls": { "yamlls": { "initTimeoutSeconds": 15 } } }))
+}
+
 /// Built-in servers, in preference order per language: the first one whose program is on PATH is
 /// used. Entries serving several languages become one process, which is how the servers themselves
 /// want it (clangd for c and cpp, tsserver for all of js/ts).
-static CANDIDATES: [Candidate; 41] = [
+static CANDIDATES: [Candidate; 43] = [
     plain(&[Python], "pyrefly lsp"),
     plain(&[Python], "ty server"),
     plain(&[Python], "basedpyright-langserver --stdio"),
@@ -178,6 +184,9 @@ static CANDIDATES: [Candidate; 41] = [
     plain(&[Ocaml], "ocamllsp"),
     plain(&[Terraform], "terraform-ls serve"),
     plain(&[Dockerfile], "docker-langserver --stdio"),
+    // Upstream builds name the binary `helm_ls`; conda-forge names it `helm-ls`.
+    with_settings(&[Helm], "helm_ls serve", helm_settings),
+    with_settings(&[Helm], "helm-ls serve", helm_settings),
     with_settings(&[Json, Jsonc], "vscode-json-language-server --stdio", json_settings),
     with_settings(&[Json, Jsonc], "vscode-json-languageserver --stdio", json_settings),
     with_settings(&[Yaml], "yaml-language-server --stdio", |_| {
