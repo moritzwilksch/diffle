@@ -26,9 +26,14 @@ fn skip(id: &str, reason: &str) -> GithubExportResponseSkippedItem {
 }
 
 /// Threads → the comments of one pending review, one per thread. Stale threads are skipped: their
-/// lines no longer sit in the diff, and GitHub would refuse them anyway. So are threads on the tour. With `thread_ids`, only
-/// those (resolved included, the user asked for them by hand); without, every unresolved thread.
-pub fn build_review(threads: &[CommentThread], thread_ids: Option<&[String]>) -> BuiltReview {
+/// lines no longer sit in the diff, and GitHub would refuse them anyway. So are threads on the tour,
+/// and the `unplaced` ones, for the reason given. With `thread_ids`, only those (resolved included,
+/// the user asked for them by hand); without, every unresolved thread.
+pub fn build_review(
+    threads: &[CommentThread],
+    thread_ids: Option<&[String]>,
+    unplaced: &HashMap<String, String>,
+) -> BuiltReview {
     let mut skipped = Vec::new();
     let mut chosen: Vec<&CommentThread> = match thread_ids {
         Some(ids) => {
@@ -50,6 +55,10 @@ pub fn build_review(threads: &[CommentThread], thread_ids: Option<&[String]>) ->
     for t in chosen {
         if t.stale {
             skipped.push(skip(&t.id, "stale"));
+            continue;
+        }
+        if let Some(reason) = unplaced.get(&t.id) {
+            skipped.push(skip(&t.id, reason));
             continue;
         }
         let Some(comment) = to_review_comment(t) else {
@@ -126,11 +135,12 @@ pub async fn export_to_github(
     pr: &GithubPullRequest,
     threads: &[CommentThread],
     thread_ids: Option<&[String]>,
+    unplaced: &HashMap<String, String>,
 ) -> Result<GithubExportResponse, GithubError> {
     if new_sha == "worktree" {
         return Err(GithubError::conflict("GitHub cannot anchor comments to the worktree"));
     }
-    let BuiltReview { mut comments, ids, mut skipped } = build_review(threads, thread_ids);
+    let BuiltReview { mut comments, ids, mut skipped } = build_review(threads, thread_ids, unplaced);
     if comments.is_empty() {
         let message = if skipped.is_empty() {
             "nothing to post".to_owned()
@@ -212,6 +222,8 @@ pub struct ExportInput {
     pub pull_request: GithubPullRequest,
     pub threads: Vec<CommentThread>,
     pub thread_ids: Option<Vec<String>>,
+    /// Threads with no place on the pull request's diff, and why.
+    pub unplaced: HashMap<String, String>,
     pub github: Arc<dyn GithubClient>,
 }
 
@@ -230,6 +242,7 @@ impl GithubExporter {
         let _turn = self.turn.lock().await;
         let input = prepare().await?;
         let ids = input.thread_ids.as_deref();
-        Ok(export_to_github(input.github.as_ref(), &input.new_sha, &input.pull_request, &input.threads, ids).await?)
+        let (github, pr) = (input.github.as_ref(), &input.pull_request);
+        Ok(export_to_github(github, &input.new_sha, pr, &input.threads, ids, &input.unplaced).await?)
     }
 }

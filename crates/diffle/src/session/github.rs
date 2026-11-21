@@ -6,10 +6,12 @@ use futures::FutureExt;
 
 use super::{Session, pr_url};
 use crate::error::{GithubError, Result};
+use crate::git::WORKTREE;
 use crate::github::client::no_token;
 use crate::github::metadata::discover_github;
 use crate::github::permalink::permalink;
 use crate::github::review::ExportInput;
+use crate::github::worktree::onto_head;
 use crate::protocol::{
     GithubExportResponse, GithubMetadata, Permalink, PermalinkRequest, Snapshot, ThreadQuery, ThreadState,
 };
@@ -61,7 +63,8 @@ impl Session {
     }
 
     /// Adds threads to a pending review on the matching pull request, with fresh pull request data
-    /// validated against the current comparison inside the export queue. The human submits it.
+    /// validated against the current comparison inside the export queue. The human submits it. A
+    /// comparison that ends at the worktree exports onto HEAD, which must be the pull request's head.
     pub async fn export_github(self: &Arc<Self>, thread_ids: Option<Vec<String>>) -> Result<GithubExportResponse> {
         self.exporter
             .export(|| async {
@@ -85,7 +88,13 @@ impl Session {
                     return Err(changed().into());
                 }
                 let threads = a.comments.threads(&ThreadQuery { state: Some(ThreadState::All), path: None }).await?;
-                Ok(ExportInput { new_sha: snap.new_sha.clone(), pull_request, threads, thread_ids, github: client })
+                let (new_sha, threads, unplaced) = if snap.new_sha == WORKTREE {
+                    let (threads, unplaced) = onto_head(&self.repo, &snap.old_sha, &snap.head_sha, threads).await?;
+                    (snap.head_sha.clone(), threads, unplaced)
+                } else {
+                    (snap.new_sha.clone(), threads, Default::default())
+                };
+                Ok(ExportInput { new_sha, pull_request, threads, thread_ids, unplaced, github: client })
             })
             .await
     }

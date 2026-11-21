@@ -13,6 +13,7 @@ mod git;
 mod github;
 mod github_client;
 mod github_hosts;
+mod github_worktree;
 mod gix_parity;
 mod hostile;
 mod local_remote;
