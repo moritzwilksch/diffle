@@ -1040,17 +1040,29 @@ export const LANGUAGE_IDS: LanguageId[] = [
   ...new Set([...Object.values(LANGUAGE_BY_EXT), ...Object.values(LANGUAGE_BY_NAME), 'helm' as const]),
 ].sort();
 
+/** Each tree's paths as a set, built once per snapshot. */
+const treeSets = new WeakMap<readonly string[], Set<string>>();
+
+/** Whether a directory of `path` named `templates` has a `Chart.yaml` beside it in `tree`. */
+function inChartTemplates(path: string, tree: readonly string[]): boolean {
+  let paths = treeSets.get(tree);
+  if (!paths) treeSets.set(tree, (paths = new Set(tree)));
+  for (const m of path.matchAll(/(?<=^|\/)templates\//g))
+    if (paths.has(`${path.slice(0, m.index)}Chart.yaml`)) return true;
+  return false;
+}
+
 /**
- * The language of a path: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
- * chart; anything else goes by its file name, then its extension. Null when diffle has no server
- * for it. Any `templates/` counts, chart or not: telling them apart needs the tree around the path.
+ * The language of `path` in `tree`, the paths of the side it lies on: a YAML or `.tpl` file under a
+ * chart's `templates/`, beside its `Chart.yaml`, is `helm`; anything else goes by its file name,
+ * then its extension. Null when diffle has no server for it.
  */
-export function languageOf(path: string): LanguageId | null {
+export function languageOf(path: string, tree: readonly string[]): LanguageId | null {
   const name = /[^/\\]*$/.exec(path)![0].toLowerCase();
   const stem = name.split('.')[0]!;
   const ext = /\.([^.]+)$/.exec(name)?.[1];
   if (Object.hasOwn(LANGUAGE_BY_NAME, stem) && !NOT_BY_NAME.has(ext ?? '')) return LANGUAGE_BY_NAME[stem]!;
-  if (ext && TEMPLATE_EXTS.has(ext) && /(^|\/)templates\//.test(path)) return 'helm';
+  if (ext && TEMPLATE_EXTS.has(ext) && inChartTemplates(path, tree)) return 'helm';
   return (ext && Object.hasOwn(LANGUAGE_BY_EXT, ext) && LANGUAGE_BY_EXT[ext]) || null;
 }
 

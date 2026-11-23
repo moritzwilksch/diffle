@@ -1,5 +1,5 @@
 //! Which language server a file selects: by its name or extension, or as a Helm template by its
-//! directory. The client keeps the same rules.
+//! place in a chart. The client keeps the same rules.
 use std::collections::BTreeSet;
 
 use super::LanguageId::{self, *};
@@ -71,11 +71,10 @@ pub fn language_ids() -> Vec<LanguageId> {
     ids.into_iter().map(|(_, id)| id).collect()
 }
 
-/// The language of `path`: a YAML or `.tpl` file under a `templates/` directory is `helm`, as in a
-/// chart; anything else goes by its file name, then its extension, case-insensitively. None for an
-/// unknown or absent one. Any `templates/` counts, chart or not: telling them apart needs the tree
-/// around the path.
-pub fn language_of(path: &str) -> Option<LanguageId> {
+/// The language of `path` in `tree`, the sorted paths of the side it lies on: a YAML or `.tpl`
+/// file under a chart's `templates/`, beside its `Chart.yaml`, is `helm`; anything else goes by its
+/// file name, then its extension, case-insensitively. None for an unknown or absent one.
+pub fn language_of(path: &str, tree: &[String]) -> Option<LanguageId> {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_lowercase();
     let stem = name.split('.').next().unwrap_or_default();
     // The extension must follow a dot in the name: `dir.py/Makefile` has none.
@@ -86,15 +85,18 @@ pub fn language_of(path: &str) -> Option<LanguageId> {
         return Some(*id);
     }
     let ext = ext?;
-    if TEMPLATE_EXTS.contains(&ext) && in_templates(path) {
+    if TEMPLATE_EXTS.contains(&ext) && in_chart_templates(path, tree) {
         return Some(Helm);
     }
     LANGUAGE_BY_EXT.iter().find(|(e, _)| *e == ext).map(|(_, id)| *id)
 }
 
-/// Whether a directory of `path` is named `templates`: at the start or after a separator.
-fn in_templates(path: &str) -> bool {
-    path.match_indices("templates/").any(|(i, _)| i == 0 || path[..i].ends_with('/'))
+/// Whether a directory of `path` named `templates` has a `Chart.yaml` beside it in `tree`.
+fn in_chart_templates(path: &str, tree: &[String]) -> bool {
+    path.match_indices("templates/").filter(|(i, _)| *i == 0 || path[..*i].ends_with('/')).any(|(i, _)| {
+        let chart = format!("{}Chart.yaml", &path[..i]);
+        tree.binary_search_by(|p| p.as_str().cmp(&chart)).is_ok()
+    })
 }
 
 #[cfg(test)]
@@ -103,14 +105,14 @@ mod tests {
 
     #[test]
     fn reads_the_language_from_the_last_extension_case_insensitively() {
-        assert_eq!(language_of("src/main.rs"), Some(Rust));
-        assert_eq!(language_of("App.TSX"), Some(Typescriptreact));
-        assert_eq!(language_of("a.d.ts"), Some(Typescript));
-        assert_eq!(language_of("Makefile"), None);
-        assert_eq!(language_of("dir.py/Makefile"), None);
-        assert_eq!(language_of("trailing."), None);
-        assert_eq!(language_of("x.unknown"), None);
-        assert_eq!(language_of(".bashrc"), None);
+        assert_eq!(language_of("src/main.rs", &[]), Some(Rust));
+        assert_eq!(language_of("App.TSX", &[]), Some(Typescriptreact));
+        assert_eq!(language_of("a.d.ts", &[]), Some(Typescript));
+        assert_eq!(language_of("Makefile", &[]), None);
+        assert_eq!(language_of("dir.py/Makefile", &[]), None);
+        assert_eq!(language_of("trailing.", &[]), None);
+        assert_eq!(language_of("x.unknown", &[]), None);
+        assert_eq!(language_of(".bashrc", &[]), None);
     }
 
     #[test]
@@ -124,7 +126,7 @@ mod tests {
             "api.containerfile",
             r"c:\x\dockerfile",
         ] {
-            assert_eq!(language_of(path), Some(Dockerfile), "{path}");
+            assert_eq!(language_of(path, &[]), Some(Dockerfile), "{path}");
         }
         for path in [
             "Dockerfiles/app.py",
@@ -134,7 +136,7 @@ mod tests {
             "Dockerfile.dev.dockerignore",
             "Dockerfile/README",
         ] {
-            assert_ne!(language_of(path), Some(Dockerfile), "{path}");
+            assert_ne!(language_of(path, &[]), Some(Dockerfile), "{path}");
         }
     }
 
@@ -149,22 +151,27 @@ mod tests {
     }
 
     #[test]
-    fn takes_a_yaml_or_tpl_file_under_a_templates_directory_for_helm() {
-        let of = |path| language_of(path).map(|l| l.to_string());
+    fn takes_a_yaml_or_tpl_file_under_a_charts_templates_for_helm() {
+        let tree: Vec<String> = ["Chart.yaml", "deploy/app/Chart.yaml", "deploy/app/charts/db/Chart.yaml"]
+            .map(String::from)
+            .into_iter()
+            .collect();
+        let of = |path| language_of(path, &tree).map(|l| l.to_string());
         for helm in [
             "deploy/app/templates/deployment.yaml",
             "deploy/app/templates/_helpers.tpl",
             "deploy/app/templates/tests/x.yml",
             "deploy/app/charts/db/templates/svc.yaml",
             "templates/root.YAML",
-            // The tradeoff of a rule on the path alone: a templates directory outside any chart counts too.
-            "ci/templates/job.yml",
         ] {
             assert_eq!(of(helm).as_deref(), Some("helm"), "{helm}");
         }
         assert_eq!(of("deploy/app/values.yaml").as_deref(), Some("yaml"));
         assert_eq!(of("deploy/app/Chart.yaml").as_deref(), Some("yaml"));
         assert_eq!(of("deploy/app/my-templates/x.yaml").as_deref(), Some("yaml"));
+        // No Chart.yaml beside the templates directory: plain YAML, as in a CI repository.
+        assert_eq!(of("ci/templates/job.yml").as_deref(), Some("yaml"));
+        assert_eq!(of("deploy/app/sub/templates/x.yaml").as_deref(), Some("yaml"));
         assert_eq!(of("deploy/app/templates/NOTES.txt"), None);
         assert_eq!(of("deploy/app/templates/config.json").as_deref(), Some("json"));
     }

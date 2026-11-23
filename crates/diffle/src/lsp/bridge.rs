@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 
 use super::documents::{Documents, Origin, ReadFn};
 use super::hover::{hover_markdown, localize_file_links};
+use super::languages::Languages;
 use super::locator::{HasFn, Locator};
 use super::process::{LspProcess, ProcessOptions, SettingsFuture};
 use super::rpc::RequestError;
@@ -28,6 +29,7 @@ pub struct BridgeOptions {
     pub process: ProcessOptions,
     pub read: ReadFn,
     pub has: HasFn,
+    pub languages: Languages,
     /// Most documents kept open beyond the tracked set.
     pub max_open: Option<usize>,
 }
@@ -51,7 +53,7 @@ impl LspBridge {
         let process = LspProcess::start(opts.process);
         let uri_root = root.clone();
         let uri = Arc::new(move |path: &str| file_uri(&uri_root, path));
-        let documents = Documents::new(process.clone(), opts.read.clone(), uri, opts.max_open);
+        let documents = Documents::new(process.clone(), opts.read.clone(), opts.languages, uri, opts.max_open);
         let locator = Locator::new(root, opts.read, opts.has);
         Self { process, documents, locator }
     }

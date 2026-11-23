@@ -13,6 +13,7 @@ use common::lsp::{ask, events, eventually, fake_env, fake_servers, flush, root, 
 use diffle::error::Error;
 use diffle::git::Touched;
 use diffle::lsp::bridge::{BridgeOptions, LspBridge};
+use diffle::lsp::languages::Languages;
 use diffle::lsp::process::ProcessOptions;
 use diffle::protocol::{LspFeature, LspPosition, LspProcessStatus, LspState};
 
@@ -103,6 +104,7 @@ fn start_with(
             let found = listed.lock().unwrap().contains_key(&p);
             async move { found }.boxed()
         }),
+        languages: Languages::default(),
         max_open,
     });
     Some(Started { bridge, statuses, reads, files, root, _dir: dir })

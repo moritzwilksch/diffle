@@ -6,6 +6,7 @@ use indexmap::{IndexMap, IndexSet};
 
 use super::bridge::{BridgeOptions, LspBridge};
 use super::documents::ReadFn;
+use super::languages::Languages;
 use super::locator::HasFn;
 use super::process::{ProcessOptions, SettingsFuture};
 use super::registry::{Lookup, ServerContext, ServerDefinition, definition_of};
@@ -18,6 +19,7 @@ pub struct ServerOptions {
     pub root: std::path::PathBuf,
     pub read: ReadFn,
     pub has: HasFn,
+    pub languages: Languages,
     pub lookup: Lookup,
     pub max_open: Option<usize>,
     /// Its status moved.
@@ -30,6 +32,19 @@ pub struct ServerOptions {
 pub struct Routes {
     pub languages: Vec<LanguageId>,
     pub joins: Vec<LanguageId>,
+}
+
+impl Routes {
+    /// Adds the languages not routed here yet, keeping the order they came in.
+    pub fn grow(&mut self, languages: Vec<LanguageId>, joins: Vec<LanguageId>) {
+        for (routed, more) in [(&mut self.languages, languages), (&mut self.joins, joins)] {
+            for l in more {
+                if !routed.contains(&l) {
+                    routed.push(l);
+                }
+            }
+        }
+    }
 }
 
 pub struct PoolServer {
@@ -62,7 +77,13 @@ impl PoolServer {
             initialization_options: definition.initialization_options.and_then(|init| init(&ctx)),
             on_status: Arc::new(move |_: &LspProcessStatus| notify()),
         };
-        let bridge = LspBridge::new(BridgeOptions { process, read: opts.read, has: opts.has, max_open: opts.max_open });
+        let bridge = LspBridge::new(BridgeOptions {
+            process,
+            read: opts.read,
+            has: opts.has,
+            languages: opts.languages,
+            max_open: opts.max_open,
+        });
         Self {
             command: command.to_owned(),
             bridge,

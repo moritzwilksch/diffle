@@ -196,11 +196,10 @@ diffle starts a language server for each language in the diff, if it finds one o
 Results outside the diff, such as the standard library, open read-only. Large repositories can
 take a while to index.
 
-A Helm chart's templates (the YAML and `.tpl` files under `templates/`) get
-[helm-ls](https://github.com/mrjosh/helm-ls) instead of the YAML server; `values.yaml` and
-`Chart.yaml` stay YAML. Any `templates/` directory counts, so plain YAML under one outside a chart
-also gets helm-ls, which applies the Kubernetes schema to it. helm-ls passes the templates' YAML on
-to `yaml-language-server` when that is on `PATH` too.
+A Helm chart's templates (the YAML and `.tpl` files under the `templates/` beside its `Chart.yaml`)
+get [helm-ls](https://github.com/mrjosh/helm-ls) instead of the YAML server; `values.yaml` and
+`Chart.yaml` stay YAML. helm-ls passes the templates' YAML on to `yaml-language-server` when that is
+on `PATH` too.
 
 `diffle lsp` shows which server each language gets and what to install for the rest:
 

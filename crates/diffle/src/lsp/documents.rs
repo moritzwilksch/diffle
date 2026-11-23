@@ -8,10 +8,10 @@ use futures::future::{BoxFuture, Shared};
 use indexmap::IndexMap;
 use serde_json::json;
 
+use super::languages::Languages;
 use super::process::LspProcess;
 use super::rpc::Connection;
 use crate::error::{Error, Result};
-use crate::protocol::language_of;
 
 /// Navigation opens whatever file a query lands in. Without a cap every path visited in a long
 /// review stays open in the server, growing its memory and per-save recheck cost.
@@ -61,6 +61,7 @@ struct State {
 pub struct Documents {
     process: Arc<LspProcess>,
     read: ReadFn,
+    languages: Languages,
     /// The URI of a snapshot path.
     uri: Arc<dyn Fn(&str) -> String + Send + Sync>,
     max_open: usize,
@@ -73,11 +74,12 @@ impl Documents {
     pub fn new(
         process: Arc<LspProcess>,
         read: ReadFn,
+        languages: Languages,
         uri: Arc<dyn Fn(&str) -> String + Send + Sync>,
         max_open: Option<usize>,
     ) -> Self {
         let max_open = max_open.unwrap_or(MAX_UNTRACKED_OPEN);
-        Self { process, read, uri, max_open, state: Arc::default(), tracking: tokio::sync::Mutex::new(()) }
+        Self { process, read, languages, uri, max_open, state: Arc::default(), tracking: tokio::sync::Mutex::new(()) }
     }
 
     /// The URI the server knows `origin` by.
@@ -104,9 +106,10 @@ impl Documents {
             } else {
                 let (process, read, max, shared) =
                     (self.process.clone(), self.read.clone(), self.max_open, self.state.clone());
+                let languages = self.languages.clone();
                 let (origin, key) = (origin.clone(), uri.clone());
                 let task = async move {
-                    let result = sync_now(&process, &read, max, &shared, &origin, &key).await;
+                    let result = sync_now(&process, &read, &languages, max, &shared, &origin, &key).await;
                     shared.lock().unwrap().syncing.remove(&key);
                     result
                 }
@@ -163,6 +166,7 @@ fn uri_of(snapshot_uri: &(dyn Fn(&str) -> String + Send + Sync), origin: &Origin
 async fn sync_now(
     process: &LspProcess,
     read: &ReadFn,
+    languages: &Languages,
     max_open: usize,
     state: &Mutex<State>,
     origin: &Origin,
@@ -187,7 +191,7 @@ async fn sync_now(
     let mut state = state.lock().unwrap();
     match state.open.shift_remove(uri) {
         None => {
-            let language = language_of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
+            let language = languages.of(&path).map_or_else(|| "plaintext".to_owned(), |l| l.to_string());
             let open = json!({ "textDocument": { "uri": uri, "languageId": language, "version": 1, "text": text } });
             state.open.insert(uri.to_owned(), Doc { version: 1, text, snapshot });
             rpc.notify("textDocument/didOpen", open);
