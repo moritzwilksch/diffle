@@ -8,25 +8,32 @@ import { GithubMark } from '@/client/ui/GithubMark.js';
 import { retarget, stepPage, stepTarget } from '@/client/tour/steps/steps.js';
 import { bakedHost } from './baked.js';
 import type { BakedTour } from './data.js';
+import { StepBar } from './StepBar.js';
 
 /** How far below the page's top a taken heading lands. */
 const HEADING_MARGIN = 16;
 
 /**
- * An exported tour: its contents beside the article, as in diffle. `n` / `p` take the next or
- * previous section; `l` / `h` and the arrows step the stepped block in view.
+ * An exported tour: its contents beside the article, as in diffle, or on a narrow screen behind a
+ * bar under it. `n` / `p` take the next or previous section; `l` / `h` and the arrows step the
+ * stepped block in view.
  */
 export function ExportPage({ data }: { data: BakedTour }) {
   const doc = useMemo(() => readTour(data.html), [data]);
   const host = useMemo(() => bakedHost(data), [data]);
   const ref = useRef<HTMLDivElement>(null);
   const [current, setCurrent] = useState(-1);
+  // The section a take scrolls to: current while the smooth scroll passes the ones before it, so a
+  // second tap mid-scroll moves on from it. The reader's own scroll lets it go.
+  const aim = useRef<number | null>(null);
 
   const headings = (level: 'h2' | 'h3') => [...(ref.current?.querySelectorAll(`article > ${level}`) ?? [])];
   const take = (section: number, sub?: number) => {
     const page = ref.current;
     const heading = sub == null ? headings('h2')[section] : headings('h3')[sub];
     if (!page || !heading) return;
+    aim.current = sub == null ? section : null;
+    if (sub == null) setCurrent(section);
     const top = heading.getBoundingClientRect().top - page.getBoundingClientRect().top - HEADING_MARGIN;
     page.scrollTo({ top: page.scrollTop + top, behavior: 'smooth' });
   };
@@ -38,8 +45,13 @@ export function ExportPage({ data }: { data: BakedTour }) {
     const sections = headings('h2');
     const bottom = page.scrollTop >= page.scrollHeight - page.clientHeight - 1;
     const line = page.getBoundingClientRect().top + HEADING_MARGIN + 1;
-    setCurrent(bottom ? sections.length - 1 : sections.filter((h) => h.getBoundingClientRect().top <= line).length - 1);
+    const at = bottom ? sections.length - 1 : sections.filter((h) => h.getBoundingClientRect().top <= line).length - 1;
+    if (aim.current != null && at !== aim.current && !bottom) return;
+    aim.current = null;
+    setCurrent(at);
   };
+
+  const release = () => (aim.current = null);
 
   useLayoutEffect(() => {
     const page = ref.current!;
@@ -65,19 +77,31 @@ export function ExportPage({ data }: { data: BakedTour }) {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  const contents = (
+    <>
+      <Brand />
+      <Outline title={doc.title} sections={doc.sections} current={current} onTake={take} />
+    </>
+  );
   return (
     <div className="tour-export">
-      <aside className="tour-export-outline">
-        <Brand />
-        <Outline title={doc.title} sections={doc.sections} current={current} onTake={take} />
-      </aside>
-      <div ref={ref} tabIndex={-1} className="tour-export-page" onScroll={follow}>
+      <aside className="tour-export-outline">{contents}</aside>
+      <div
+        ref={ref}
+        tabIndex={-1}
+        className="tour-export-page"
+        onScroll={follow}
+        onWheel={release}
+        onPointerDown={release}
+        onKeyDown={release}
+      >
         <article className="tour-article markdown">
           <TourHostContext value={host}>
             <TourArticle of={doc.body} />
           </TourHostContext>
         </article>
       </div>
+      <StepBar title={doc.title} sections={doc.sections} current={current} onTake={take} contents={contents} />
     </div>
   );
 }

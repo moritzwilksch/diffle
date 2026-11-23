@@ -20,7 +20,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   outputDir: 'test-results',
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  // CI prints and keeps only the failures: the log and the uploaded report stay small.
+  reporter: [
+    [process.env.CI ? 'failures' : 'list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never', onlyFailures: !!process.env.CI }],
+  ],
   // One directory per spec, one file per scenario; no platform suffix, since the browser is the
   // same everywhere.
   snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}{ext}',

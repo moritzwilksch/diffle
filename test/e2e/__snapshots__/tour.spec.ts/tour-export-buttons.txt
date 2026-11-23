@@ -27,3 +27,6 @@ Next stop (l)
 Two passeschosen
 One passrejected
 A flagged refundexample
+Previous section
+Refunds count against sales
+Next section

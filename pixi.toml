@@ -3,7 +3,20 @@ name = "diffle"
 channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64", "win-arm64"]
 preview = ["pixi-build"]
-exclude-newer = "7d"
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+# The toolchain moves on its release day; `pixi workspace exclude-newer prune` drops these once past the cutoff.
+[workspace.exclude-newer.exemptions]
+rust = { version = "==1.100.0", cutoff = "2026-11-18T12:29:03Z" }
+rust-src = { version = "==1.100.0", cutoff = "2026-11-18T12:29:03Z" }
+rust-std-aarch64-apple-darwin = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+rust-std-aarch64-pc-windows-msvc = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+rust-std-aarch64-unknown-linux-gnu = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+rust-std-x86_64-apple-darwin = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+rust-std-x86_64-pc-windows-msvc = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+rust-std-x86_64-unknown-linux-gnu = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
 
 [package]
 name = "diffle"
@@ -14,7 +27,7 @@ version = "*"
 
 [dependencies]
 # The same release rust-toolchain.toml names; rustup is not involved under pixi.
-rust = "1.99.*"
+rust = "1.100.*"
 nodejs = "24.*"
 git = ">=2.40"
 gh = "*"
@@ -62,7 +75,7 @@ yaml-language-server = "*"
 [feature.lsp-rust.dependencies]
 rust-analyzer = "*"
 # The standard library's source; without it rust-analyzer resolves no method that needs core.
-rust-src = "1.99.*"
+rust-src = "1.100.*"
 
 [feature.lsp-python.dependencies]
 pyrefly = "*"

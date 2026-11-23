@@ -51,9 +51,6 @@ export function TourView() {
             >
               <ChevronLeft size="0.875rem" />
             </Button>
-            <span className="min-w-20 text-center tabular-nums">
-              {step < 0 ? `Section – of ${steps}` : `Section ${step + 1} of ${steps}`}
-            </span>
             <Button
               variant="ghost"
               icon

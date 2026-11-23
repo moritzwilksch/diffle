@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
-import { activePath } from './browser.js';
+import { activePath, gotoFile, selectLines } from './browser.js';
 import { pushTour, readPrompt, readThreads, REPO_ROOT, runCli, seedReply, seedThreads, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
@@ -260,20 +260,19 @@ test.describe('the tour', () => {
     // n takes the first section and scrolls its heading near the top; p does not go before it.
     await page.keyboard.press('n');
     await page.keyboard.press('n');
-    await expect(view.getByText('Section 2 of 4')).toBeVisible();
     await expect(contents.getByRole('button', { name: /Parsing reads/ })).toHaveAttribute('aria-current', 'step');
     await expect(page).toHaveScreenshot('tour-step.png');
     await page.keyboard.press('p');
     await page.keyboard.press('p');
-    await expect(view.getByText('Section 1 of 4')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Entries learn/ })).toHaveAttribute('aria-current', 'step');
     await contents.getByRole('button', { name: /Unmatched refunds/ }).click();
-    await expect(view.getByText('Section 3 of 4')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Unmatched refunds/ })).toHaveAttribute('aria-current', 'step');
     await expect(view.locator('aside[aria-label="danger"]')).toHaveScreenshot('tour-danger.png');
     await expect(view.locator('table')).toHaveScreenshot('tour-table.png');
     await expect(view.locator('.tour-block').filter({ hasText: 'Ledger and refunds · Python' })).toHaveScreenshot(
       'tour-tree.png',
     );
-    await expect(view.locator('figure').filter({ hasText: 'Example' })).toHaveScreenshot('tour-example.png');
+    await expect(view.getByRole('figure', { name: 'An entry, parsed' })).toHaveScreenshot('tour-example.png');
     await expect(view.locator('.tour-row').filter({ has: page.locator('.tour-diagram') })).toHaveScreenshot(
       'tour-row.png',
     );
@@ -300,7 +299,41 @@ test.describe('the tour', () => {
       (el) => new Promise<number>((done) => setTimeout(() => done(el.scrollTop), 300)),
     );
     expect([back, later]).toEqual([left, left]);
-    await expect(view.getByText('Section 3 of 4')).toBeVisible();
+    await expect(contents.getByRole('button', { name: /Unmatched refunds/ })).toHaveAttribute('aria-current', 'step');
+  });
+
+  test('a pushed tour opens its view; a tick, or a push while a comment is written, stays in the diff', async ({
+    page,
+    diffle,
+  }) => {
+    const view = page.getByRole('region', { name: 'Tour view' });
+    const panel = page.locator('aside').last();
+    await expect(view).toBeHidden();
+    await pushTour(diffle.url, TOUR);
+    await expect(view).toBeVisible();
+
+    // Each wait on a seeded thread orders the check after the tour's own refetch.
+    await page.keyboard.press('T');
+    await expect(view).toBeHidden();
+    const tick = await fetch(new URL('api/tour/ticks', diffle.url), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'Is matching by description strict enough?', ticked: true }),
+    });
+    expect(tick.ok).toBe(true);
+    await seedThreads(diffle.url, [{ path: 'tally/ledger.py', startLine: 30, body: 'After the tick.' }]);
+    await expect(panel).toContainText('After the tick.');
+    await expect(view).toBeHidden();
+
+    await gotoFile(page, 'tally/ledger.py');
+    await selectLines(page, 'tally/ledger.py', 3, 4);
+    const composer = page.getByPlaceholder('Leave a comment…');
+    await composer.fill('Half a thought');
+    await pushTour(diffle.url, '<h2>A fresh tour</h2><p>Revised.</p>');
+    await seedThreads(diffle.url, [{ path: 'tally/ledger.py', startLine: 31, body: 'After the push.' }]);
+    await expect(panel).toContainText('After the push.');
+    await expect(view).toBeHidden();
+    await expect(composer).toHaveValue('Half a thought');
   });
 
   test('an icon draws the same live and in an export, an alias as its icon; a name Lucide lacks shows a placeholder naming it', async ({
@@ -393,11 +426,9 @@ test.describe('the tour', () => {
     await pushTour(diffle.url, TOUR);
     const view = await showTour(page);
     const walk = view.locator('figure[data-walk]');
-    await page
-      .getByRole('navigation', { name: 'Contents' })
-      .getByRole('button', { name: /Finding unmatched/ })
-      .click();
-    await expect(view.getByText('Section 4 of 4')).toBeVisible();
+    const contents = page.getByRole('navigation', { name: 'Contents' });
+    await contents.getByRole('button', { name: /Finding unmatched/ }).click();
+    await expect(contents.getByRole('button', { name: /Finding unmatched/ })).toHaveAttribute('aria-current', 'step');
     const note = walk.locator('.tour-note');
     // At rest the diff shows plainly, each note's number on the gutter of its first line.
     await expect(note).toHaveCount(0);
@@ -1087,15 +1118,19 @@ test.describe('the tour', () => {
 
       // A symbol chip keeps the hover its language server gave at export. `l` revealed its note by a
       // smooth scroll, which Playwright does not freeze: placing the chip mid-glide lands it elsewhere.
+      const scroller = file.locator('.tour-export-page');
+      const settle = () =>
+        scroller.evaluate(
+          (page) =>
+            new Promise<void>((done) => {
+              let last = NaN;
+              const watch = () =>
+                page.scrollTop === last ? done() : ((last = page.scrollTop), setTimeout(watch, 100));
+              watch();
+            }),
+        );
       const chip = file.locator('.tour-chip');
-      await file.locator('.tour-export-page').evaluate(
-        (page) =>
-          new Promise<void>((done) => {
-            let last = NaN;
-            const watch = () => (page.scrollTop === last ? done() : ((last = page.scrollTop), setTimeout(watch, 100)));
-            watch();
-          }),
-      );
+      await settle();
       await chip.scrollIntoViewIfNeeded();
       await chip.hover();
       await expect(chip.getByRole('tooltip')).toContainText('def f() -> None');
@@ -1105,6 +1140,58 @@ test.describe('the tour', () => {
       const check = file.getByRole('region', { name: 'Checklist' });
       await check.scrollIntoViewIfNeeded();
       await expect(check).toHaveScreenshot('tour-export-check.png');
+
+      // On a phone the contents wait behind a bar under the article, in larger type. Its next and
+      // previous take sections; a second tap while the first still scrolls moves on from the one it took.
+      await file.setViewportSize({ width: 390, height: 844 });
+      await scroller.evaluate((page) => page.scrollTo({ top: 0 }));
+      await settle();
+      const where = file.locator('.tour-export-where');
+      await expect(where).toHaveText('Refunds count against sales');
+      await expect(file).toHaveScreenshot('tour-export-phone.png');
+      const next = file.getByRole('button', { name: 'Next section' });
+      await next.click();
+      await next.click();
+      await expect(where).toHaveText(/^2\/4\s*Parsing reads the kind column$/);
+      await settle();
+      // The section opens the contents as a sheet; taking an entry closes it.
+      await where.click();
+      const sheet = file.locator('.tour-export-sheet');
+      await expect(sheet.locator('[aria-current]')).toContainText('Parsing reads the kind column');
+      await expect(file).toHaveScreenshot('tour-export-phone-contents.png');
+      await sheet
+        .getByRole('button')
+        .filter({ hasText: /^3\s*Unmatched refunds$/ })
+        .click();
+      await expect(sheet).toBeHidden();
+      await expect(where).toHaveText(/^3\/4\s*Unmatched refunds$/);
+      await settle();
+      await file.emulateMedia({ colorScheme: 'dark' });
+      await expect(file).toHaveScreenshot('tour-export-phone-dark.png');
+      // Between a phone and the sidebar, the bar with the desktop's type.
+      await file.setViewportSize({ width: 720, height: 844 });
+      await settle();
+      await expect(file).toHaveScreenshot('tour-export-narrow.png');
+
+      // A host that wraps the file in its own page and reset, as claude.ai does (a light
+      // color-scheme, a 14px system font on body), changes none of the tour's look, here in dark.
+      const article = file.locator('.tour-article');
+      const look = () =>
+        article.evaluate((a) => {
+          const own = getComputedStyle(a);
+          return {
+            font: `${own.fontSize} ${own.fontFamily}`,
+            color: own.color,
+            background: getComputedStyle(a.closest('.tour-export')!).backgroundColor,
+            scheme: getComputedStyle(document.documentElement).colorScheme,
+          };
+        });
+      const bare = await look();
+      await file.setContent(
+        `<!doctype html><html><head><style>:root{color-scheme:light}body{margin:0;font:14px system-ui}</style></head><body>${html}</body></html>`,
+      );
+      expect(await look()).toEqual(bare);
+      expect(bare.scheme).toBe('dark');
       expect(requests).toEqual([]);
       await context.close();
     });
