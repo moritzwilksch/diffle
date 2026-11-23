@@ -67,7 +67,7 @@ requirements:
     yaml:
       - yaml-language-server
     helm:
-      - helm-ls
+      - helm-ls >=0.5.4
     toml:
       - tombi
 
