@@ -121,7 +121,13 @@ export function TourWalk({
       </figcaption>
       {shown.state === 'ready' ? (
         <div className="relative">
-          <Rows patch={shown.patch} css={css} annotations={annotations} renderAnnotation={renderAnnotation} />
+          <Rows
+            patch={shown.patch}
+            path={range.path}
+            css={css}
+            annotations={annotations}
+            renderAnnotation={renderAnnotation}
+          />
           <Marks rows={rows} side={range.side} notes={notes} steps={steps} />
         </div>
       ) : (

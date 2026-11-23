@@ -57,6 +57,11 @@ export interface RowsProps<A> {
   renderAnnotation?: (annotation: DiffLineAnnotation<A>) => ReactNode;
   /** Whether the gutter numbers the rows; true unless the numbers would not be the file's. */
   numbered?: boolean;
+  /**
+   * The review's file whose lines these rows are, numbered as in it, so their symbols answer the
+   * language servers as the diff's do. Unset for code the agent wrote.
+   */
+  path?: string;
 }
 
 export interface SymbolProps {

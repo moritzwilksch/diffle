@@ -54,7 +54,11 @@ export function TourDiff({ range, place }: { range: LineRange; place?: Place }) 
         </span>
         <TourJump path={range.path} line={range.start} side={range.side} label="Open" placed />
       </figcaption>
-      {shown.state === 'ready' ? <Rows patch={shown.patch} /> : <ExcerptNotice shown={shown} range={range} />}
+      {shown.state === 'ready' ? (
+        <Rows patch={shown.patch} path={range.path} />
+      ) : (
+        <ExcerptNotice shown={shown} range={range} />
+      )}
     </figure>
   );
 }

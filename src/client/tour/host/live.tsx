@@ -1,8 +1,9 @@
-import { type FileDiffMetadata, parsePatchFiles, type SupportedLanguages } from '@pierre/diffs';
+import { type FileDiffMetadata, parsePatchFiles, type PostRenderPhase, type SupportedLanguages } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
 import type { LucideIcon } from 'lucide-react';
 import { createElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { highlightCode } from '@/client/lsp/highlight.js';
+import { LSP_HOVER_CSS, tokenHandlers } from '@/client/lsp/tokenEvents.js';
 import { usePrimed, type WorkerPool } from '@/client/Markdown.js';
 import { useStore } from '@/client/store.js';
 import { CODE_THEMES, HIGHLIGHTER } from '@/client/theme.js';
@@ -12,6 +13,7 @@ import { jump, rangePatch } from '@/client/tour/state.js';
 import { type DrawIcon, type RowsProps, rowsKey, type Shown, type Token, type TourHost } from './host.js';
 import { LiveCheck } from './LiveCheck.js';
 import { LiveSymbol } from './LiveSymbol.js';
+import { TOUR_OCCURRENCE_CSS, trackExcerpt } from './occurrences.js';
 
 /** How the tour draws every excerpt's rows: unified, numbered in the gutter, long lines wrapped. */
 export const ROWS_OPTIONS = {
@@ -60,12 +62,23 @@ function useExcerpt(range: LineRange, context: number): Shown {
   return shown;
 }
 
-function Rows<A>({ patch, lang, css, annotations, renderAnnotation, numbered = true }: RowsProps<A>) {
+function Rows<A>({ patch, lang, css, annotations, renderAnnotation, numbered = true, path }: RowsProps<A>) {
   const theme = useStore((s) => s.theme);
   const fileDiff = useMemo(() => rowsDiff(patch, lang), [patch, lang]);
   const options = useMemo(
-    () => ({ ...ROWS_OPTIONS, unsafeCSS: css, themeType: theme, disableLineNumbers: !numbered }),
-    [theme, css, numbered],
+    () => ({
+      ...ROWS_OPTIONS,
+      ...(path == null
+        ? {}
+        : {
+            ...tokenHandlers<void>(() => path),
+            onPostRender: (node: HTMLElement, _: unknown, phase: PostRenderPhase) => trackExcerpt(path, node, phase),
+          }),
+      unsafeCSS: path == null ? css : `${LSP_HOVER_CSS}\n${TOUR_OCCURRENCE_CSS}${css ?? ''}`,
+      themeType: theme,
+      disableLineNumbers: !numbered,
+    }),
+    [theme, css, numbered, path],
   );
   const prime = useCallback(
     (pool: WorkerPool) => (fileDiff ? pool.primeDiffHighlightCache(fileDiff) : Promise.resolve()),
