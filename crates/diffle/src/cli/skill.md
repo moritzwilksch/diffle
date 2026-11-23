@@ -26,9 +26,19 @@ dashes and no emoji.
 
 ## Comments
 
-`diffle comments list [--state open|resolved|all] [--path <path>]` prints the threads the reviewer
-sees as one JSON document: `commentKey`, the set they belong to, and `threads`, each with its `id`,
-anchor and messages. Your messages carry `"author": "agent"`. An anchor is one of:
+Use this workflow for review feedback. Run the commands in the repository the user is reviewing.
+
+1. Run `diffle comments pending` to get unanswered reviewer messages and each message's `target`.
+2. Run `diffle comments context <target>` immediately before each fix, including after another fix in
+   the same file. `item.original` is evidence from the review. `current` comes with a location status.
+   A changed range is an area to inspect. Ambiguous and unlocated results need independent
+   verification before editing. Old-side and committed locations are historical.
+3. Make and verify the change, then run `diffle comments reply <target> <summary|->` with a short
+   Markdown summary. Use `-` to read from stdin. The reply appears in the same thread. Leave blocked
+   items pending and tell the user why.
+
+`diffle comments list [--state open|resolved|all] [--path <path>]` shows the threads and tour checks
+for inspection. Replies carry `"author": "agent"`. An anchor is one of:
 
 - `line`: a path and a line range on the `old` or `new` side.
 - `file`: a whole file.
@@ -39,11 +49,6 @@ anchor and messages. Your messages carry `"author": "agent"`. An anchor is one o
   card's title, a box's text). Find the passage in your document by these. The thread is `stale`
   when your last push no longer holds its passage.
 
-`diffle comments reply <thread-id> <body|->` adds your Markdown reply (stdin with `-`), shown to the
-reviewer as yours, and prints the thread as JSON. Reply to answer a question or to say what you
-changed; if the answer is a change, make it before replying. A tour's threads sit in a narrow
-margin beside the passage, so keep a reply to a sentence or two. Put a longer explanation in the
-tour, or in this chat when the reviewer asks for one.
 
 ## Tours
 
@@ -188,7 +193,7 @@ question; give it `context` for the one fact the answer rests on. Ask only real 
 at most, each once per tour, and never one the diff already answers.
 
 The reviewer ticks an item as decided or answers it. `diffle comments list` reports each item under
-`checks`, with `ticked` and the `thread` that answers it; reply there with `diffle comments reply`.
+`checks`, with `ticked` and the `thread` that answers it. Use its pending feedback target to reply.
 The prompt carries every open item and every answer. A push that keeps an item's question keeps its
 tick.
 

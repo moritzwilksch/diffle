@@ -215,11 +215,22 @@ pub enum CommentsCommand {
         #[command(flatten)]
         repo: RepoOpts,
     },
-    /// reply to a thread as the agent; prints the thread as JSON
+    /// list unanswered reviewer feedback, with reply targets and original context
+    Pending {
+        #[command(flatten)]
+        repo: RepoOpts,
+    },
+    /// refresh the location and context of one pending feedback item
+    Context {
+        /// the target from `diffle comments pending`
+        target: String,
+        #[command(flatten)]
+        repo: RepoOpts,
+    },
+    /// record a verified reply to one feedback item; prints the thread as JSON
     Reply {
-        /// the thread's id, as `diffle comments list` prints it
-        #[arg(value_name = "thread-id")]
-        thread: String,
+        /// the target from `diffle comments pending`
+        target: String,
         /// the reply, in Markdown (`-`: stdin)
         #[arg(value_name = "body|-")]
         body: String,

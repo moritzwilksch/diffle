@@ -11,7 +11,7 @@ use super::open::open_browser;
 use super::paint::{bold, cyan, dim, green, red, yellow};
 use super::repository::open_review_repository;
 use super::timing::Timing;
-use crate::comments::format::format_prompt;
+use crate::comments::format_followup;
 use crate::error::Error;
 use crate::git::GitRepo;
 use crate::github::client::token_variables;
@@ -227,7 +227,10 @@ async fn shutdown(session: &Arc<Session>, server: &Mutex<Served>, repo: &GitRepo
             // Ignored when stdout is gone too: the prompt has nowhere left to go.
             use std::io::Write as _;
             let mut out = std::io::stdout();
-            let _ = out.write_all(format_prompt(&threads, &checks).as_bytes()).and_then(|()| out.flush());
+            let pending = session.pending_feedback().await.unwrap_or_default();
+            let _ = out
+                .write_all(format_followup(&threads, &checks, &pending, false).as_bytes())
+                .and_then(|()| out.flush());
         }
     }
     dispose(session, server, repo, lsp).await;

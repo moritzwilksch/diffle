@@ -19,32 +19,6 @@ pub fn quote_lines(contents: &str, start: i64, end: i64) -> String {
     if from >= to { String::new() } else { lines[from..to].join("\n") }
 }
 
-/// Where `quoted` sits in `contents`, the match nearest `start` preferred: the moved range, or
-/// none when the text is gone. An empty quote stays where it is.
-pub fn relocate(start: i64, end: i64, quoted: &str, contents: &str) -> Option<(i64, i64)> {
-    let lines = split_lines(contents);
-    let quoted = split_lines(quoted);
-    if quoted.is_empty() {
-        return Some((start, end));
-    }
-    let span = quoted.len();
-    let mut best: Option<(i64, i64)> = None;
-    for i in 0..(lines.len() + 1).saturating_sub(span) {
-        if lines[i..i + span] != quoted[..] {
-            continue;
-        }
-        let at = i as i64 + 1;
-        let dist = (at - start).abs();
-        if best.is_none_or(|(_, d)| dist < d) {
-            best = Some((at, dist));
-            if dist == 0 {
-                break;
-            }
-        }
-    }
-    best.map(|(at, _)| (at, at + span as i64 - 1))
-}
-
 /// Text of a 1-based inclusive range, or none when the range does not fit the contents: the
 /// server refuses to quote lines that do not exist.
 pub fn quote_range(contents: &str, start: i64, end: i64) -> Option<String> {
@@ -125,20 +99,6 @@ mod tests {
         assert_eq!(quote_range("a\nb\n", 2, 2).as_deref(), Some("b"));
         assert_eq!(quote_range("a\nb\n", 2, 3), None);
         assert_eq!(quote_range("a\nb\n", 0, 1), None);
-    }
-
-    #[test]
-    fn relocates_quoted_text() {
-        // Unmoved text stays; shifted text is followed.
-        assert_eq!(relocate(2, 2, "b", "a\nb\nc\n"), Some((2, 2)));
-        assert_eq!(relocate(2, 3, "b\nc", "x\ny\na\nb\nc\n"), Some((4, 5)));
-        // The match nearest the original line wins.
-        let contents = "x\nx\nx\nx\nx\nx\nx\nx\n";
-        assert_eq!(relocate(6, 6, "x", contents), Some((6, 6)));
-        assert_eq!(relocate(20, 20, "x", contents), Some((8, 8)));
-        // Gone, or not contiguous.
-        assert_eq!(relocate(1, 1, "gone", "a\nb\n"), None);
-        assert_eq!(relocate(1, 2, "a\nc", "a\nb\nc\n"), None);
     }
 
     #[test]

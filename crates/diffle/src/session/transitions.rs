@@ -114,6 +114,7 @@ impl Session {
         let comments = Arc::new(CommentStore::open(&self.repo.git_dir, &snap.comment_key).await?);
         let next = Arc::new(Active {
             review,
+            feedback_scope: uuid::Uuid::new_v4().to_string(),
             range_key,
             follows: snap.follows,
             snapshotter,

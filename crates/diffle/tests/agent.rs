@@ -158,27 +158,28 @@ fn lists_the_shown_threads_by_state_and_path() {
 }
 
 #[test]
-fn replies_to_a_thread_as_the_agent() {
+fn replies_to_pending_feedback_as_the_agent() {
     let t = repo();
     let served = Served::start(&t.path, &["--port", "0"]);
-    let (status, body) =
-        http(&served.url, "POST", "/api/threads", r#"{"path":"app.py","startLine":2,"body":"why y?"}"#);
+    let (status, _) = http(&served.url, "POST", "/api/threads", r#"{"path":"app.py","startLine":2,"body":"why y?"}"#);
     assert!(status.contains("201"), "{status}");
-    let id = serde_json::from_str::<Value>(&body).unwrap()[0]["id"].as_str().unwrap().to_owned();
-
-    json_out(&comments(&t.path, &["reply", &id, "It counts the retries."]));
-    let replied = json_out(&comments_stdin(&t.path, &["reply", &id, "-"], "Renamed it to `retries`.\n"));
-
-    // The thread as the agent's last reply left it, as `reply` prints it.
+    let pending = json_out(&comments(&t.path, &["pending"]));
+    let target = pending[0]["target"].as_str().unwrap();
+    let context = json_out(&comments(&t.path, &["context", target]));
+    assert_eq!(context["location"], "unchanged");
+    let replied = json_out(&comments_stdin(&t.path, &["reply", target, "-"], "Renamed it to `retries`.\n"));
+    let retry = json_out(&comments(&t.path, &["reply", target, "This retry does not add a reply."]));
+    assert_eq!(replied, retry);
+    assert_eq!(json_out(&comments(&t.path, &["pending"])), json!([]));
     insta::assert_json_snapshot!("reply", masked(replied));
 }
 
 #[test]
-fn refuses_a_reply_to_a_thread_the_review_lacks() {
+fn refuses_an_unscoped_reply() {
     let t = repo();
     let _served = Served::start(&t.path, &["--port", "0"]);
 
-    assert_user_error(&comments(&t.path, &["reply", "gone", "hello"]), "no thread gone in the review");
+    assert_user_error(&comments(&t.path, &["reply", "gone", "hello"]), "feedback target is invalid");
 }
 
 /// `value` with its ids, times and comment key masked, which change from run to run.

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use diffle::protocol::{BlameMode, FollowRefs, LanguageId};
+use diffle::protocol::{BlameMode, FollowRefs, InterfaceFont, LanguageId};
 use diffle::user_config::{UserConfigPatch, UserConfigStore};
 use serde_json::{Value, json};
 
@@ -37,10 +37,33 @@ async fn serializes_overlapping_writes_and_leaves_no_temp_files() {
     assert_eq!((store.get().context_lines, store.get().lsp_commands), (9, python.clone()));
     let disk = on_disk(&store);
     assert_eq!((disk["contextLines"].clone(), disk["lspCommands"].clone()), (json!(9), json!({ "python": "x" })));
-    let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
-    assert_eq!(left, ["config.json"]);
+    let mut left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+    left.sort();
+    assert_eq!(left, ["config.json", "config.json.lock"]);
     let reopened = UserConfigStore::open(store.file().to_owned()).await.get();
     assert_eq!((reopened.context_lines, reopened.lsp_commands), (9, python));
+}
+
+#[tokio::test]
+async fn saves_typography_without_losing_settings_from_another_store() {
+    let dir = temp();
+    let first = open_with(&dir, json!({ "editorFontSize": "huge", "interfaceFont": "serif" })).await;
+    let second = UserConfigStore::open(first.file().to_owned()).await;
+    assert_eq!(first.get().interface_font, InterfaceFont::SansSerif);
+    assert_eq!((first.get().editor_font_size, first.get().text_scale), (None, 100));
+    first
+        .set(UserConfigPatch {
+            text_scale: Some(125),
+            editor_font_size: Some(Some(18)),
+            interface_font: Some(InterfaceFont::Monospace),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    second.set(UserConfigPatch { context_lines: Some(9), ..Default::default() }).await.unwrap();
+    let reopened = UserConfigStore::open(first.file().to_owned()).await.get();
+    assert_eq!(reopened.interface_font, InterfaceFont::Monospace);
+    assert_eq!((reopened.editor_font_size, reopened.context_lines, reopened.text_scale), (Some(18), 9, 125));
 }
 
 #[tokio::test]

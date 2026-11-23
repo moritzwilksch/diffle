@@ -1,19 +1,20 @@
 import type { CodeViewOptions } from '@pierre/diffs';
 
-/** Shared CSS and virtual geometry in CSS pixels at the current root font size. */
-export function reviewGeometry(rem: number) {
+/** Shared CSS and virtual geometry in CSS pixels. */
+export function reviewGeometry(rem: number, editorFontSize: number | null = null) {
   // Whole CSS pixels avoid accumulating browser-specific fractional row rounding.
   const px = (value: number) => Math.round(value * rem);
-  const lineHeight = px(1.25);
+  const defaultLineHeight = px(1.25);
+  const lineHeight = editorFontSize === null ? defaultLineHeight : Math.round(editorFontSize * 1.5);
   const spacing = px(0.5);
-  const diffHeaderHeight = lineHeight + 3 * spacing;
+  const diffHeaderHeight = defaultLineHeight + 3 * spacing;
   const hunkSeparatorHeight = px(2);
   const itemMetrics = { lineHeight, spacing, diffHeaderHeight, hunkSeparatorHeight };
   const layout = { paddingTop: 0, paddingBottom: px(12.5), gap: px(1) };
   const css = `
 :host {
   --diffle-header-height: ${diffHeaderHeight}px;
-  --diffs-font-size: ${px(0.8125)}px;
+  --diffs-font-size: ${editorFontSize ?? px(0.8125)}px;
   --diffs-line-height: ${lineHeight}px;
   --diffs-gap-block: ${spacing}px;
   --diffs-gap-inline: ${spacing}px;

@@ -83,7 +83,64 @@ test('scales the app to the chosen text size and keeps the diff in place', async
   await expect.poll(() => topLine(page, path)).toBe(line);
   await expect(page).toHaveScreenshot('text-size-125.png');
 
-  // Kept in the browser: a reload opens at the same size.
+  // Reload reads the shared configuration.
   await page.reload();
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('18px');
+});
+
+test('sets and clears a code font size independently of the interface scale', async ({ page }) => {
+  const settings = () => page.getByRole('button', { name: 'Settings' }).click();
+  const editor = page.getByRole('spinbutton', { name: 'Editor font size (px)' });
+  const row = page.locator('diffs-container [data-line]').first();
+  const codeFont = () => row.evaluate((element) => getComputedStyle(element).fontSize);
+  const interfaceFont = () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+  const defaultCodeFont = await codeFont();
+  const defaultInterfaceFont = await interfaceFont();
+
+  await settings();
+  await editor.fill('20');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(codeFont).toBe('20px');
+  expect(await interfaceFont()).toBe(defaultInterfaceFont);
+
+  await page.reload();
+  await expect.poll(codeFont).toBe('20px');
+  await settings();
+  await expect(editor).toHaveValue('20');
+  await editor.fill('');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(codeFont).toBe(defaultCodeFont);
+});
+
+test('defaults to Inter and remembers the chosen interface font', async ({ page }) => {
+  const settings = () => page.getByRole('button', { name: 'Settings' }).click();
+  const font = page.getByRole('combobox', { name: 'Interface font' });
+  const save = page.getByRole('button', { name: 'Save' });
+  const interfaceFont = () => page.locator('header').evaluate((header) => getComputedStyle(header).fontFamily);
+  const codeFont = () =>
+    page
+      .locator('diffs-container [data-line]')
+      .first()
+      .evaluate((row) => getComputedStyle(row).fontFamily);
+
+  await expect.poll(interfaceFont).toContain('Inter Variable');
+  const defaultCodeFont = await codeFont();
+  await settings();
+  await expect(font).toHaveValue('sans-serif');
+  await font.selectOption('monospace');
+  await save.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(interfaceFont).toContain('JetBrains Mono Variable');
+
+  await page.reload();
+  await expect.poll(interfaceFont).toContain('JetBrains Mono Variable');
+  expect(await codeFont()).toBe(defaultCodeFont);
+  await settings();
+  await expect(font).toHaveValue('monospace');
+  await font.selectOption('sans-serif');
+  await save.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(interfaceFont).toContain('Inter Variable');
 });

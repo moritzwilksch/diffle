@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::anchor::{anchor_path, compare_threads};
+use super::handoff::FeedbackData;
 use super::tour::StoredTour;
 use crate::error::{Error, Result};
 use crate::iterations::now_ms;
@@ -25,6 +26,8 @@ pub(super) struct SetData {
     /// The agent's tour, beside the threads on it (`comments/tour.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) tour: Option<StoredTour>,
+    #[serde(default, skip_serializing_if = "FeedbackData::is_empty")]
+    pub(super) feedback: FeedbackData,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -107,7 +110,7 @@ impl CommentStore {
             let m =
                 t.messages.iter_mut().find(|m| m.id == message_id).ok_or_else(|| Error::NotFound(message_id.into()))?;
             m.body = body;
-            m.updated_at = now_ms();
+            m.updated_at = now_ms().max(m.updated_at.saturating_add(1));
             Ok((t.clone(), true))
         })
         .await
@@ -220,6 +223,7 @@ impl CommentStore {
                 Err(e) => return Ok(Err(e)),
             };
             if changed {
+                set.feedback.retain(&set.threads);
                 all.sets.insert(self.key.clone(), set);
                 write_store_file(&self.file, &all).await?;
             }
@@ -229,7 +233,7 @@ impl CommentStore {
     }
 }
 
-fn find_thread<'a>(set: &'a mut SetData, id: &str) -> Result<&'a mut CommentThread> {
+pub(super) fn find_thread<'a>(set: &'a mut SetData, id: &str) -> Result<&'a mut CommentThread> {
     set.threads.iter_mut().find(|t| t.id == id).ok_or_else(|| Error::NotFound(id.into()))
 }
 
@@ -257,7 +261,7 @@ pub(super) async fn write_store_file(file: &Path, data: &StoreFile) -> anyhow::R
     write_file_atomic(file, &serde_json::to_string_pretty(data)?).await
 }
 
-fn new_message(body: String, author: Option<CommentAuthor>) -> CommentMessage {
+pub(super) fn new_message(body: String, author: Option<CommentAuthor>) -> CommentMessage {
     let now = now_ms();
     CommentMessage { id: uuid::Uuid::new_v4().to_string(), body, created_at: now, updated_at: now, author }
 }
