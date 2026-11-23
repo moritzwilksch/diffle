@@ -17,6 +17,7 @@ rust-std-aarch64-unknown-linux-gnu = { version = "==1.100.0", cutoff = "2026-11-
 rust-std-x86_64-apple-darwin = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
 rust-std-x86_64-pc-windows-msvc = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
 rust-std-x86_64-unknown-linux-gnu = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+helm-ls = { version = "==0.5.4", cutoff = "2026-11-23T21:59:12Z" }
 
 [package]
 name = "diffle"
@@ -90,6 +91,12 @@ clang-tools = "*"
 tombi = "*"
 bash-language-server = "*"
 dockerfile-language-server-nodejs = "*"
+
+# conda-forge builds helm-ls for every platform but win-arm64.
+[feature.lsp-more.target.unix.dependencies]
+helm-ls = ">=0.5.4"
+
+[feature.lsp-more.target.win-64.dependencies]
 helm-ls = ">=0.5.4"
 
 [environments]
