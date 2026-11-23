@@ -11,7 +11,7 @@ use indexmap::IndexMap;
 use super::documents::{Origin, ReadFn};
 use super::locator::HasFn;
 use super::merge::{merge_hovers, merge_locations, union};
-use super::pool_server::{PathsByLanguage, PoolServer, ServerOptions, paths_of};
+use super::pool_server::{PathsByLanguage, PoolServer, Routes, ServerOptions, UserSettings, paths_of};
 use super::registry::{Lookup, resolve_servers};
 use crate::error::{Error, Result};
 use crate::protocol::{
@@ -43,6 +43,8 @@ pub struct PoolOptions {
     pub on_status: Arc<dyn Fn(LspStatus) + Send + Sync>,
     /// Command per language, replacing the built-in candidates. `""` turns the language off.
     pub overrides: HashMap<LanguageId, String>,
+    /// The user's settings per language, laid over the built-in ones of the server owning it.
+    pub settings: UserSettings,
     /// Languages to start a server for at once, whatever the diff holds: the ones named on the command line.
     pub preload: Vec<LanguageId>,
     pub lookup: Lookup,
@@ -259,20 +261,12 @@ impl LspPool {
         for server in resolution.servers {
             let existing = self.entries.lock().unwrap().get(&server.command).cloned();
             // A process already up for one of its languages (clangd for c) takes the next one (cpp).
-            let entry = existing.unwrap_or_else(|| {
-                let routes =
-                    super::pool_server::Routes { languages: server.languages.clone(), joins: server.joins.clone() };
-                self.spawn(&server.command, &paths_of(&routes, by_language))
-            });
-            let mut routes = entry.routes.lock().unwrap();
-            for l in server.languages {
-                if !routes.languages.contains(&l) {
-                    routes.languages.push(l);
-                }
-            }
-            for l in server.joins {
-                if !routes.joins.contains(&l) {
-                    routes.joins.push(l);
+            match existing {
+                Some(entry) => entry.route(&server.languages, &server.joins),
+                None => {
+                    let routes = Routes { languages: server.languages, joins: server.joins };
+                    let paths = paths_of(&routes, by_language);
+                    self.spawn(&server.command, routes, &paths);
                 }
             }
         }
@@ -281,7 +275,7 @@ impl LspPool {
         }
     }
 
-    fn spawn(self: &Arc<Self>, command: &str, paths: &[String]) -> Arc<PoolServer> {
+    fn spawn(self: &Arc<Self>, command: &str, routes: Routes, paths: &[String]) {
         let weak = Arc::downgrade(self);
         let opts = ServerOptions {
             root: self.opts.root.clone(),
@@ -289,15 +283,15 @@ impl LspPool {
             has: self.opts.has.clone(),
             lookup: self.opts.lookup.clone(),
             max_open: self.opts.max_open,
+            settings: self.opts.settings.clone(),
             on_status: Arc::new(move || {
                 if let Some(pool) = weak.upgrade() {
                     pool.publish();
                 }
             }),
         };
-        let server = Arc::new(PoolServer::new(command, paths, opts));
-        self.entries.lock().unwrap().insert(command.to_owned(), server.clone());
-        server
+        let server = Arc::new(PoolServer::new(command, routes, paths, opts));
+        self.entries.lock().unwrap().insert(command.to_owned(), server);
     }
 
     fn publish(self: &Arc<Self>) {

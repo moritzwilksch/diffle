@@ -32,10 +32,15 @@ impl Default for UserConfig {
     }
 }
 
+/// Language server settings per language, as the user wrote them.
+pub type LspSettings = HashMap<LanguageId, Map<String, Value>>;
+
 /// Owns the config file. Writes are serialized, so overlapping `set`s land in call order.
 pub struct UserConfigStore {
     file: PathBuf,
     config: Mutex<UserConfig>,
+    /// Kept apart from `UserConfig`, which the client reads: settings may carry secrets.
+    lsp_settings: LspSettings,
     writing: tokio::sync::Mutex<()>,
 }
 
@@ -46,21 +51,26 @@ impl UserConfigStore {
 
     /// Reads `file`; an absent file is the defaults, and so is an unreadable one, with a warning.
     pub async fn open(file: PathBuf) -> Self {
-        let config = match tokio::fs::read_to_string(&file).await {
+        let value = match tokio::fs::read_to_string(&file).await {
             Ok(text) => match serde_json::from_str::<Value>(&text) {
-                Ok(value) => normalize(&value),
+                Ok(value) => value,
                 Err(e) => {
                     crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
-                    UserConfig::default()
+                    Value::Null
                 }
             },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => UserConfig::default(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Value::Null,
             Err(e) => {
                 crate::status!("[diffle] ignoring unreadable config {}: {e}", file.display());
-                UserConfig::default()
+                Value::Null
             }
         };
-        Self { file, config: Mutex::new(config), writing: tokio::sync::Mutex::new(()) }
+        Self {
+            file,
+            config: Mutex::new(normalize(&value)),
+            lsp_settings: lsp_settings(value.get("lspSettings")),
+            writing: tokio::sync::Mutex::new(()),
+        }
     }
 
     pub fn file(&self) -> &Path {
@@ -69,6 +79,11 @@ impl UserConfigStore {
 
     pub fn get(&self) -> UserConfig {
         self.config.lock().unwrap().clone()
+    }
+
+    /// The `lspSettings` read at open; nothing writes them but the user.
+    pub fn lsp_settings(&self) -> &LspSettings {
+        &self.lsp_settings
     }
 
     /// Merges `next` in and persists it. A failed write fails its caller only; the next `set` still writes.
@@ -87,8 +102,12 @@ impl UserConfigStore {
         put("lineWrap", next.line_wrap.map(Value::from));
         put("blame", next.blame.map(|b| Value::from(b.to_string())));
         let config = normalize(&merged);
+        let mut saved = serde_json::to_value(&config)?;
+        if !self.lsp_settings.is_empty() {
+            saved["lspSettings"] = serde_json::to_value(&self.lsp_settings)?;
+        }
         // May hold a shell command: the write is owner-only.
-        write_file_atomic(&self.file, &(serde_json::to_string_pretty(&config)? + "\n")).await?;
+        write_file_atomic(&self.file, &(serde_json::to_string_pretty(&saved)? + "\n")).await?;
         *self.config.lock().unwrap() = config.clone();
         Ok(config)
     }
@@ -125,19 +144,39 @@ fn normalize(value: &Value) -> UserConfig {
     }
 }
 
-/// Per-language commands, keeping only languages diffle knows: a typo would otherwise sit there
-/// looking effective. An empty value is kept, it turns the language off. Unknown keys are dropped
-/// on the next save.
+/// Per-language commands. An empty value is kept, it turns the language off.
 fn lsp_commands(value: Option<&Value>) -> HashMap<LanguageId, String> {
+    per_language("lspCommands", value, |_, command| command.as_str().map(|c| c.trim().to_owned()))
+}
+
+/// Per-language settings objects; anything else for a language is dropped with a warning.
+fn lsp_settings(value: Option<&Value>) -> LspSettings {
+    per_language("lspSettings", value, |language, settings| {
+        let object = settings.as_object().cloned();
+        if object.is_none() {
+            crate::status!("[diffle] ignoring config lspSettings.{language}: not an object");
+        }
+        object
+    })
+}
+
+/// The entries of `field` keyed by a language diffle knows, as `parse` reads them: a typo would
+/// otherwise sit there looking effective. Unknown keys are dropped on the next save.
+fn per_language<T>(
+    field: &str,
+    value: Option<&Value>,
+    parse: impl Fn(&str, &Value) -> Option<T>,
+) -> HashMap<LanguageId, T> {
     let known = language_ids();
     let mut out = HashMap::new();
-    for (language, command) in value.and_then(Value::as_object).into_iter().flatten() {
-        let Some(command) = command.as_str() else { continue };
+    for (language, entry) in value.and_then(Value::as_object).into_iter().flatten() {
         match serde_json::from_value::<LanguageId>(Value::from(language.as_str())) {
             Ok(id) if known.contains(&id) => {
-                out.insert(id, command.trim().to_owned());
+                if let Some(parsed) = parse(language, entry) {
+                    out.insert(id, parsed);
+                }
             }
-            _ => crate::status!("[diffle] ignoring config lspCommands.{language}: not a language diffle knows"),
+            _ => crate::status!("[diffle] ignoring config {field}.{language}: not a language diffle knows"),
         }
     }
     out

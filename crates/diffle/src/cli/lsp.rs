@@ -6,6 +6,7 @@ use futures::FutureExt;
 
 use super::paint::{dim, red, yellow};
 use crate::lsp::pool::{LspPool, PoolOptions};
+use crate::lsp::pool_server::UserSettings;
 use crate::lsp::registry::{default_lookup, resolve_servers};
 use crate::protocol::{
     LanguageId, LspState, ServerMessage, Side, Snapshot, language_ids, languages_label, readable_by_servers,
@@ -20,6 +21,7 @@ pub fn start(
     session: &Arc<Session>,
     hub: &Arc<Hub>,
     overrides: HashMap<LanguageId, String>,
+    settings: UserSettings,
     preload: Vec<LanguageId>,
 ) -> Arc<LspPool> {
     let (reader, checker) = (Arc::downgrade(session), Arc::downgrade(session));
@@ -68,6 +70,7 @@ pub fn start(
             broadcast.broadcast(ServerMessage::Lsp { payload: status });
         }),
         overrides,
+        settings,
         preload,
         lookup: default_lookup(),
         max_open: None,

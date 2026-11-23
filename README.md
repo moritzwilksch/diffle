@@ -215,6 +215,20 @@ Or persistently, in the config file (`diffle config` prints its path and content
 { "lspCommands": { "rust": "rust-analyzer", "java": "" } }
 ```
 
+Send a server your own settings with `lspSettings`, keyed by language like `lspCommands`.
+Each object is merged over diffle's built-in settings for the server of that language, so the
+built-in values stay unless you override them. The server gets the result through
+`workspace/didChangeConfiguration` and `workspace/configuration`:
+
+```json
+{ "lspSettings": { "yaml": { "yaml": { "customTags": ["!Ref"] } } } }
+```
+
+A server that owns several languages, such as clangd for `c` and `cpp`, gets their objects
+merged in the order of the language names, so `cpp` wins over `c`. A server that only joins a
+language, such as Tailwind CSS beside `css`, gets none. An entry for a language diffle doesn't
+know yet is ignored with a warning.
+
 Language servers run inside the repository and can read anything your user can.
 `--no-lsp` starts none.
 

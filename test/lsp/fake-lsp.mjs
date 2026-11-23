@@ -54,10 +54,16 @@ const offers = (process.env.FAKE_LSP_OFFERS ?? ALL_FEATURES)
 /** FAKE_LSP_REGISTERS: features registered after `initialized` instead of advertised. */
 const registers = (process.env.FAKE_LSP_REGISTERS ?? '').split(',').filter(Boolean);
 let nextId = 1000;
+/** FAKE_LSP_CONFIGURATION: sections, comma-separated, to ask `workspace/configuration` for after `initialized`; the answer is logged. */
+const sections = (process.env.FAKE_LSP_CONFIGURATION ?? '').split(',').filter(Boolean);
+const CONFIGURATION_ID = 'configuration';
 
 function handle(msg) {
-  // A response to a request of ours: nothing to do with it.
-  if (!msg.method) return;
+  if (!msg.method) {
+    if (msg.id === CONFIGURATION_ID) log('configuration ' + JSON.stringify(msg.result ?? msg.error));
+    // Any other response to a request of ours: nothing to do with it.
+    return;
+  }
   if (modified > 0 && msg.id != null && msg.method?.startsWith('textDocument/')) {
     modified--;
     log(`refused ${msg.method}`);
@@ -82,6 +88,14 @@ function handle(msg) {
         ),
       });
     case 'initialized':
+      if (sections.length) {
+        send({
+          jsonrpc: '2.0',
+          id: CONFIGURATION_ID,
+          method: 'workspace/configuration',
+          params: { items: sections.map((section) => ({ section })) },
+        });
+      }
       if (!registers.length) return;
       return send({
         jsonrpc: '2.0',

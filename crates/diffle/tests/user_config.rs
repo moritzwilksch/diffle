@@ -86,6 +86,17 @@ async fn keeps_known_languages_and_drops_the_rest_including_fields_it_does_not_r
 }
 
 #[tokio::test]
+async fn keeps_lsp_settings_objects_for_known_languages_across_a_save() {
+    let dir = temp();
+    let yaml = json!({ "yaml": { "format": { "enable": true }, "customTags": ["!Ref"] } });
+    let store = open_with(&dir, json!({ "lspSettings": { "yaml": yaml, "go": "fast", "nope": {} } })).await;
+    let settings = serde_json::to_value(store.lsp_settings()).unwrap();
+    assert_eq!(settings, json!({ "yaml": yaml }));
+    store.set(UserConfigPatch { context_lines: Some(3), ..Default::default() }).await.unwrap();
+    assert_eq!(on_disk(&store)["lspSettings"], json!({ "yaml": yaml }));
+}
+
+#[tokio::test]
 async fn lowercases_github_hosts_and_drops_an_entry_with_no_web_host() {
     let dir = temp();
     let hosts = json!({ " SSH.Work.com ": "GitHub.work.com", "a.com": " ", "b": 3 });
