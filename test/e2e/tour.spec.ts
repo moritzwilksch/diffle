@@ -591,12 +591,26 @@ test.describe('the tour', () => {
     await page.mouse.move(0, 0);
     await expect(check).toHaveScreenshot('tour-check-answered.png');
 
-    const prompt = await readPrompt(diffle.url);
+    const prompt = await readPrompt(diffle.url, { checklist: true });
     expect(prompt).toContain(
       '(check) 4. Finding unmatched refunds, open\n\n> Should a bad row fail the file, or be skipped?\n\n(no answer yet)',
     );
     expect(prompt).toContain('> Is exit code 1 right for an empty ledger?\n\nYes: scripts treat it as a failure.');
     expect(prompt).not.toContain('strict enough');
+
+    // yy copies the checklist from the tour view alone; the diff view copies the comments.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+    await page.mouse.click(1, 1);
+    await page.keyboard.press('y');
+    await page.keyboard.press('y');
+    await expect.poll(clipboard).toBe(prompt);
+    await page.keyboard.press('T');
+    await expect(view).toBeHidden();
+    await page.keyboard.press('y');
+    await page.keyboard.press('y');
+    await expect.poll(clipboard).toBe(await readPrompt(diffle.url));
+    expect(await clipboard()).not.toContain('(check)');
   });
 
   test('a versus runs the old and the new code on one input, side by side, one step lit at a time', async ({
@@ -792,7 +806,7 @@ test.describe('the tour', () => {
       await page.keyboard.press('y');
       await expect(page.getByText('Copied all comments')).toBeVisible();
       const copied = await page.evaluate(() => navigator.clipboard.readText());
-      expect(copied).toBe(await readPrompt(diffle.url));
+      expect(copied).toBe(await readPrompt(diffle.url, { checklist: true }));
       expect(copied).toContain('tally/ledger.py:30');
       expect(copied).toContain('(tour) 1. Entries learn their kind, in a <p>');
 
@@ -1255,6 +1269,63 @@ test.describe('the tour', () => {
       await expect(menu).toHaveCount(0);
       await expect(view).toBeHidden();
       await expect(page.locator('[data-line][data-selected-line]').first()).toHaveAttribute('data-line', '2');
+    });
+
+    test("an excerpt's symbols hover, tint where they recur and open the symbol menu as in the diff; code the agent wrote stays inert", async ({
+      page,
+      diffle,
+    }) => {
+      await waitForLsp(diffle.url);
+      await pushTour(
+        diffle.url,
+        `<h2>Parsing reads the kind</h2>
+        <diffle-diff path="tally/ledger.py" lines="75-76"></diffle-diff>
+        <diffle-code lang="python" example>parse_row({})</diffle-code>`,
+      );
+      const view = await showTour(page);
+      const [excerpt, code] = [view.locator('figure').nth(0), view.locator('figure').nth(1)];
+      const symbol = (block: typeof excerpt) => block.locator('span[data-char]', { hasText: /^parse_row$/ }).first();
+
+      // The excerpt's lines are the file's: hovering a symbol asks its language server.
+      const tooltip = page.locator('.hover-markdown');
+      await expect(async () => {
+        await page.mouse.move(0, 0);
+        await symbol(excerpt).hover();
+        await expect(tooltip).toContainText('def f() -> None', { timeout: 2000 });
+      }).toPass({ timeout: 10000 });
+      await expect(page).toHaveScreenshot('tour-excerpt-hover.png');
+
+      // Resting on a symbol tints where it recurs in the excerpt, as the diff does; leaving clears it.
+      const tinted = () =>
+        page.evaluate(() => {
+          const registry = (CSS as unknown as { highlights: Map<string, Iterable<AbstractRange>> }).highlights;
+          const texts = (name: string) => [...(registry.get(name) ?? [])].map((range) => range.toString());
+          return { read: texts('diffle-tour-occurrence-read'), write: texts('diffle-tour-occurrence-write') };
+        });
+      await excerpt.locator('span[data-char]', { hasText: /^row$/ }).first().hover();
+      await expect.poll(tinted).toEqual({ read: ['row', 'row'], write: [] });
+      await expect(excerpt).toHaveScreenshot('tour-excerpt-occurrences.png');
+      await page.mouse.move(0, 0);
+      await expect.poll(tinted).toEqual({ read: [], write: [] });
+
+      // A click opens the diff's symbol menu over the tour; gd goes to the definition in the diff.
+      await symbol(excerpt).click();
+      const menu = page.getByRole('menu');
+      await expect(menu).toBeVisible();
+      await expect(menu).toContainText('parse_row');
+      await page.keyboard.type('gd');
+      await expect(menu).toHaveCount(0);
+      await expect(view).toBeHidden();
+      await expect(page.locator('[data-line][data-selected-line]').first()).toHaveAttribute('data-line', '2');
+      await page.keyboard.press('Control+o');
+      await expect(view).toBeVisible();
+
+      // The agent's own code names no line of the review: no hover, no menu.
+      await symbol(code).hover();
+      await page.waitForTimeout(600);
+      await expect(tooltip).toHaveCount(0);
+      await symbol(code).click();
+      await expect(menu).toHaveCount(0);
     });
   });
 });

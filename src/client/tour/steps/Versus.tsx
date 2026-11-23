@@ -198,7 +198,11 @@ function RunLine({ range }: { range: LineRange }) {
     <div data-opaque="" className="tour-versus-line">
       <RunPlace range={range} />
       <div className="tour-versus-code">
-        {shown.state === 'ready' ? <Rows patch={patch} /> : <ExcerptNotice shown={shown} range={range} />}
+        {shown.state === 'ready' ? (
+          <Rows patch={patch} path={range.side === 'new' ? range.path : undefined} />
+        ) : (
+          <ExcerptNotice shown={shown} range={range} />
+        )}
       </div>
     </div>
   );

@@ -541,6 +541,9 @@ export const ThreadQuerySchema = z.object({
   path: z.string().optional(),
 });
 export type ThreadQuery = z.infer<typeof ThreadQuerySchema>;
+/** `GET /api/threads/export`: `checklist` adds the tour's checklist items, which only the tour view copies. */
+export const ThreadExportQuerySchema = ThreadQuerySchema.extend({ checklist: z.literal('1').optional() });
+export type ThreadExportQuery = z.infer<typeof ThreadExportQuerySchema>;
 
 /** What `GET /api/threads` answers: the threads of the set the reviewer is shown, read under one key. */
 export const ThreadListSchema = z.object({

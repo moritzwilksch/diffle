@@ -2849,6 +2849,23 @@
       ],
       "description": "Create payload. Without `startLine` the thread is on the file as a whole; then `side`,\n`endLine` and `quoted` are refused rather than ignored, so a payload that meant a line\nnever lands on the file. `quoted` is optional: the server quotes the range from the snapshot."
     },
+    "ThreadExportQuery": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/ThreadState",
+          "description": "Default 'open' for export, 'all' for list."
+        },
+        "path": {
+          "type": "string"
+        },
+        "checklist": {
+          "type": "string",
+          "const": "1"
+        }
+      },
+      "description": "`GET /api/threads/export`: `checklist` adds the tour's checklist items, which only the tour view copies."
+    },
     "ThreadList": {
       "type": "object",
       "properties": {

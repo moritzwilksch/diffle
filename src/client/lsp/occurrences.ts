@@ -68,6 +68,9 @@ let cacheVersion: number | null = null;
 
 const keyOf = (t: TokenTarget) => `${t.path}\0${t.line}\0${t.col}`;
 
+/** Whether `a` and `b` name the same token. */
+export const sameToken = (a: TokenTarget, b: TokenTarget): boolean => keyOf(a) === keyOf(b);
+
 function cacheFor(): Map<string, LspOccurrence[]> | null {
   const version = useStore.getState().snapshot?.version ?? null;
   if (version == null) return null;
@@ -124,6 +127,8 @@ export const occurrenceControl = {
     hovered = target;
     retarget(target ? POINTER_MS : KEY_MS);
   },
+  /** The symbol the pointer rests on, if any. */
+  pointed: (): TokenTarget | null => hovered,
   /** Test seam: forget both sources and any pending request. */
   reset(): void {
     focused = null;
@@ -135,7 +140,8 @@ export const occurrenceControl = {
   },
 };
 
-const supported = (): boolean => typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
+export const supported = (): boolean =>
+  typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
 
 /** Index occurrences by the lines they touch, so a pass over many rows stays linear. */
 function byLine(items: readonly LspOccurrence[]): Map<number, LspOccurrence[]> {
@@ -155,9 +161,6 @@ export function installOccurrenceHighlights(
   scroller: HTMLElement,
 ): () => void {
   if (!supported()) return () => {};
-  const clear = () => {
-    for (const name of Object.values(HIGHLIGHTS)) CSS.highlights.delete(name);
-  };
   const stop = watchRenderedRows(
     viewer,
     scroller,
@@ -166,32 +169,62 @@ export function installOccurrenceHighlights(
         if (s.occurrences !== prev.occurrences || s.loaded !== prev.loaded || s.collapsed !== prev.collapsed)
           schedule();
       }),
-    (items) => {
-      const occurrences = useStore.getState().occurrences;
-      if (!occurrences) return clear();
-      const lines = byLine(occurrences.items);
-      const ranges: Record<LspOccurrence['kind'], Range[]> = { text: [], read: [], write: [] };
-      for (const { id, root } of items) {
-        if (pathFromItemId(id) !== occurrences.target.path) continue;
-        for (const row of root.querySelectorAll<HTMLElement>('[data-line]')) {
-          // Occurrences are new-side positions; a deleted row's text is not on disk.
-          if (isDeletionRow(row)) continue;
-          const line = Number(row.dataset.line);
-          const here = lines.get(line);
-          if (!here) continue;
-          for (const { range, kind } of occurrenceRanges(row, line, here)) ranges[kind].push(range);
-        }
-      }
-      for (const kind of Object.keys(ranges) as LspOccurrence['kind'][]) {
-        const highlight = new Highlight(...ranges[kind]);
-        // Below the word focus, which underlines the one occurrence the keyboard is on.
-        highlight.priority = 1;
-        CSS.highlights.set(HIGHLIGHTS[kind], highlight);
-      }
-    },
+    (items) =>
+      paintOccurrences(
+        HIGHLIGHTS,
+        items.map(({ id, root }) => ({ path: pathFromItemId(id), root })),
+        useStore.getState().occurrences,
+      ),
   );
   return () => {
     stop();
-    clear();
+    clearOccurrences(HIGHLIGHTS);
   };
+}
+
+/** Removes the tints painted under `names`. */
+export function clearOccurrences(names: Record<LspOccurrence['kind'], string>): void {
+  for (const name of Object.values(names)) CSS.highlights.delete(name);
+}
+
+/**
+ * Tints, under `names`, where `occurrences` fall in the rows under `roots`, each root holding rows
+ * of the file `path` numbered as in it; clears the tints when there are none.
+ */
+export function paintOccurrences(
+  names: Record<LspOccurrence['kind'], string>,
+  roots: Iterable<{ path: string; root: ParentNode }>,
+  occurrences: { target: TokenTarget; items: readonly LspOccurrence[] } | null,
+): void {
+  if (!occurrences) return clearOccurrences(names);
+  const lines = byLine(occurrences.items);
+  const ranges: Record<LspOccurrence['kind'], Range[]> = { text: [], read: [], write: [] };
+  for (const { path, root } of roots) {
+    if (path !== occurrences.target.path) continue;
+    for (const row of root.querySelectorAll<HTMLElement>('[data-line]')) {
+      // Occurrences are new-side positions; a deleted row's text is not on disk.
+      if (isDeletionRow(row)) continue;
+      const line = Number(row.dataset.line);
+      const here = lines.get(line);
+      if (!here) continue;
+      for (const { range, kind } of occurrenceRanges(row, line, here)) ranges[kind].push(range);
+    }
+  }
+  for (const kind of Object.keys(ranges) as LspOccurrence['kind'][]) {
+    const highlight = new Highlight(...ranges[kind]);
+    // Below the word focus, which underlines the one occurrence the keyboard is on.
+    highlight.priority = 1;
+    CSS.highlights.set(names[kind], highlight);
+  }
+}
+
+/** The tints of `names`, for the shadow root their rows render in: reads in the focus tint, fainter; writes warmer. */
+export function occurrenceCss(names: Record<LspOccurrence['kind'], string>): string {
+  return `::highlight(${names.text}), ::highlight(${names.read}) {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+::highlight(${names.write}) {
+  background: color-mix(in srgb, var(--search-current) 50%, transparent);
+}
+`;
 }

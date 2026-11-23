@@ -4,7 +4,6 @@ import type {
   CodeViewItem,
   CodeViewLineSelection,
   DiffLineAnnotation,
-  DiffTokenEventBaseProps,
   FileDiffLoadedFiles,
   FileDiffMetadata,
   FileContents,
@@ -12,7 +11,6 @@ import type {
   OnDiffLineClickProps,
   OnLineClickProps,
   PostRenderPhase,
-  TokenEventBase,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewAnnotationArgs, type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import {
@@ -27,19 +25,16 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
-import { comparisonLabel, languageOf, type ChangedFile, type CommentThread } from '@/shared/protocol.js';
-import { type Side } from '@/shared/side.js';
-import { hoverOnly, serversFor } from '@/shared/lsp.js';
+import { comparisonLabel, type ChangedFile, type CommentThread } from '@/shared/protocol.js';
 import { useCopied } from '@/client/clipboard.js';
 import { FilePath } from '@/client/FilePath.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { lineBounds, sideOf } from '@/client/comments/anchor.js';
 import { renderedContext } from '@/client/keyboard/nav.js';
 import { SearchBar } from '@/client/keyboard/SearchBar.js';
-import { HoverTooltip, hoverControl } from '@/client/lsp/HoverTooltip.js';
+import { HoverTooltip } from '@/client/lsp/HoverTooltip.js';
 import { ReferencesList } from '@/client/lsp/ReferencesList.js';
 import { SymbolPicker } from '@/client/lsp/SymbolPicker.js';
-import { lspTarget, type TokenTarget } from '@/client/lsp/target.js';
 import {
   codeDraft,
   draftRange,
@@ -64,9 +59,10 @@ import { gridColumns, useViews } from '@/client/views/state.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
 import { overflow, reviewGeometry } from './geometry.js';
-import { installOccurrenceHighlights, occurrenceControl } from '@/client/lsp/occurrences.js';
-import { focusToken, onSelectionChanged, setViewer, wordsIn } from '@/client/lsp/wordNav.js';
-import { charAtPoint, tokenRange } from '@/client/lsp/tokenText.js';
+import { HIGHLIGHTS, installOccurrenceHighlights, occurrenceCss } from '@/client/lsp/occurrences.js';
+import { onSelectionChanged, setViewer } from '@/client/lsp/wordNav.js';
+import { tokenRange } from '@/client/lsp/tokenText.js';
+import { LSP_HOVER_CSS, tokenHandlers } from '@/client/lsp/tokenEvents.js';
 import { installSearchHighlights } from '@/client/search/highlight.js';
 import { BLAME_CSS, installBlame } from './blame.js';
 import { BLAME_GUTTER_CSS, installBlameGutter } from './blameGutter.js';
@@ -132,21 +128,14 @@ const HEADER_CSS = `
   background: light-dark(color-mix(in lab, var(--accent) 12%, var(--bg)), color-mix(in lab, var(--accent) 15%, var(--bg)));
 }
 [data-diffs-header][data-sticky] { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
-.lsp-hover { text-decoration: underline; cursor: pointer; }
+${LSP_HOVER_CSS}
 ::highlight(diffle-word-focus) {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
   text-decoration: underline;
   text-decoration-color: var(--accent);
 }
-/* Where the focused or hovered symbol recurs (see lsp/occurrences.ts): reads in the focus tint, fainter; writes warmer. */
-::highlight(diffle-occurrence), ::highlight(diffle-occurrence-read) {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
-
-}
-::highlight(diffle-occurrence-write) {
-  background: color-mix(in srgb, var(--search-current) 50%, transparent);
-}
-
+/* Where the focused or hovered symbol recurs (see lsp/occurrences.ts). */
+${occurrenceCss(HIGHLIGHTS)}
 /* Word-level changes: the library's default tint sits too close to the line tint to pick out. */
 :host {
   /* Pin the code canvas to our ground. Our palette is the same GitHub high-contrast theme, so this only
@@ -205,60 +194,6 @@ const HEADER_CSS = `
 :host([data-placeholder]) [data-content] { grid-column: 1; }
 `;
 
-/**
- * Word under the pointer → LSP target; null on punctuation or space. Diff tokens carry a side; file items
- * are new-side only. A context line is the same text on both sides, so its old-side column resolves to the
- * new-side line.
- */
-function targetOf(
-  props: TokenEventBase | DiffTokenEventBaseProps,
-  itemId: string,
-  event: MouseEvent,
-): TokenTarget | null {
-  const path = pathFromItemId(itemId);
-  // No server for this language means no hover, no menu: a target would only produce blockers.
-  if (!served(path)) return null;
-  // A highlighter token can span several names (`a.b.c`, or a whole unhighlighted line); the pointer picks one.
-  const word = wordAtPoint(
-    props.tokenElement,
-    event,
-    hoverOnly(useStore.getState().lsp, useStore.getState().snapshot?.tree ?? [], path),
-  );
-  if (!word) return null;
-  let side: Side = 'side' in props && props.side === 'deletions' ? 'old' : 'new';
-  let line = props.lineNumber;
-  if (side === 'old') {
-    const row = props.tokenElement.closest<HTMLElement>('[data-line]');
-    const alt = row?.dataset.lineType?.startsWith('context') ? Number(row.dataset.altLine) : NaN;
-    if (Number.isFinite(alt)) {
-      side = 'new';
-      line = alt;
-    }
-  }
-  return { path, side, line, col: props.lineCharStart + word.start, text: word.text };
-}
-
-/** Whether some running language server claims this file's language. */
-function served(path: string): boolean {
-  const { lsp, snapshot } = useStore.getState();
-  const language = languageOf(path, snapshot?.tree ?? []);
-  return language != null && lsp.enabled && serversFor(lsp, language).length > 0;
-}
-
-/** The identifier under the pointer inside a token span: its text and its offset within the token, or null on punctuation or space. */
-function wordAtPoint(el: HTMLElement, event: MouseEvent, config = false): { start: number; text: string } | null {
-  const text = el.textContent ?? '';
-  const at = charAtPoint(el, event.clientX, event.clientY);
-  // Schema hovers describe keys and values, including quotes, hyphens, and numeric literals.
-  if (config) return at >= 0 && /\S/.test(text[at]!) ? { start: at, text } : null;
-  return wordsIn(text).find((word) => at >= word.start && at < word.start + word.text.length) ?? null;
-}
-
-/** Underline the hovered symbol while a modifier is held, like an editor's ctrl-hover. */
-function markHover(el: HTMLElement, on: boolean): void {
-  el.classList.toggle('lsp-hover', on);
-}
-
 const codeViewOptions = {
   theme: CODE_THEMES,
   preferredHighlighter: HIGHLIGHTER,
@@ -312,8 +247,6 @@ export function ReviewPane() {
   const selection = useStore((s) => s.selection);
   const setSelection = useStore((s) => s.setSelection);
   const openDraft = useStore((s) => s.openDraft);
-  const goToDefinition = useStore((s) => s.goToDefinition);
-  const openSymbolMenu = useStore((s) => s.openSymbolMenu);
   const scrollTarget = useStore((s) => s.scrollTarget);
   const reveal = useStore((s) => s.reveal);
   const setActivePath = useStore((s) => s.setActivePath);
@@ -861,8 +794,6 @@ export function ReviewPane() {
     [setSelection, setActivePath],
   );
 
-  /** Stops following the pointer inside the hovered token; the viewer's leave for that token calls it. */
-  const untrackToken = useRef<() => void>(() => {});
   const options = useMemo(
     () => ({
       ...codeViewOptions,
@@ -888,42 +819,7 @@ export function ReviewPane() {
         const sel = viewerRef.current?.getSelectedLines();
         if (sel) void openDraft(sel);
       },
-      onTokenEnter: (
-        props: TokenEventBase | DiffTokenEventBaseProps,
-        event: PointerEvent,
-        ctx: { item: { id: string } },
-      ) => {
-        // The viewer reports one enter per token, but a token can hold several words (`a.b.c`): the pointer
-        // moving from one to another inside it targets the new word as if it had crossed tokens. The leave
-        // of the previous token already ran, so nothing is targeted when the pointer arrives.
-        let shown: TokenTarget | null = null;
-        const point = (e: PointerEvent) => {
-          const t = targetOf(props, ctx.item.id, e);
-          if (t?.col === shown?.col) return;
-          shown = t;
-          lspTarget.set(t, props.tokenElement);
-          occurrenceControl.hover(t);
-          if (t) hoverControl.enter(t, props.tokenElement);
-          else hoverControl.leave();
-          markHover(
-            props.tokenElement,
-            !!t &&
-              !hoverOnly(useStore.getState().lsp, useStore.getState().snapshot?.tree ?? [], t.path) &&
-              (e.ctrlKey || e.metaKey),
-          );
-        };
-        point(event);
-        props.tokenElement.addEventListener('pointermove', point);
-        untrackToken.current = () => props.tokenElement.removeEventListener('pointermove', point);
-      },
-      onTokenLeave: (props: TokenEventBase | DiffTokenEventBaseProps) => {
-        untrackToken.current();
-        untrackToken.current = () => {};
-        lspTarget.set(null);
-        occurrenceControl.hover(null);
-        hoverControl.leave();
-        markHover(props.tokenElement, false);
-      },
+      ...tokenHandlers((ctx: { item: { id: string } }) => pathFromItemId(ctx.item.id), true),
       // Clicking a line's content puts the cursor there (the number column starts a range selection instead).
       // Fires after onTokenClick on the same click, so it must not close the popover that click opened.
       onLineClick: (props: OnLineClickProps | OnDiffLineClickProps, ctx: { item: { id: string } }) => {
@@ -938,39 +834,8 @@ export function ReviewPane() {
         setSelection({ id: ctx.item.id, range });
         setActivePath(pathFromItemId(ctx.item.id));
       },
-      // A plain click on a symbol focuses it, as `w` would, and opens the action popover; ⌘/Ctrl+click jumps
-      // straight to the definition, or lists references from the definition itself.
-      onTokenClick: (
-        props: TokenEventBase | DiffTokenEventBaseProps,
-        event: MouseEvent,
-        ctx: { item: { id: string } },
-      ) => {
-        const target = targetOf(props, ctx.item.id, event);
-        if (!target || hoverOnly(useStore.getState().lsp, useStore.getState().snapshot?.tree ?? [], target.path))
-          return;
-        markHover(props.tokenElement, false);
-        hoverControl.cancel();
-        if (event.ctrlKey || event.metaKey) {
-          event.preventDefault();
-          void goToDefinition(target);
-          return;
-        }
-        focusToken(target, props.tokenElement);
-        void openSymbolMenu(target, event.clientX, event.clientY);
-      },
     }),
-    [
-      openDraft,
-      goToDefinition,
-      openSymbolMenu,
-      setSelection,
-      setActivePath,
-      theme,
-      diffStyle,
-      lineWrap,
-      blame,
-      geometry,
-    ],
+    [openDraft, setSelection, setActivePath, theme, diffStyle, lineWrap, blame, geometry],
   );
 
   const renderAnnotation = useCallback((...[annotation]: CodeViewAnnotationArgs<Annot>) => {

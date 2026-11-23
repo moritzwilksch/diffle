@@ -188,9 +188,9 @@ export async function waitForLsp(url: string, timeoutMs = 15000): Promise<void> 
   }
 }
 
-/** The prompt the open comments export as, the text `yy` copies. */
-export async function readPrompt(url: string): Promise<string> {
-  const response = await fetch(new URL('api/threads/export?state=open', url));
+/** The prompt the open comments export as, the text `yy` copies; `checklist` as the tour view copies it. */
+export async function readPrompt(url: string, opts: { checklist?: boolean } = {}): Promise<string> {
+  const response = await fetch(new URL(`api/threads/export?state=open${opts.checklist ? '&checklist=1' : ''}`, url));
   if (!response.ok) throw new Error(`reading the prompt failed: HTTP ${response.status} ${await response.text()}`);
   return response.text();
 }

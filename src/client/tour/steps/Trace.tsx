@@ -128,6 +128,7 @@ export function TourTrace({
       {shown.state === 'ready' ? (
         <Rows
           patch={shown.patch}
+          path={stop.path}
           css={css}
           annotations={annotations}
           renderAnnotation={({ metadata }: { metadata: number }) => (
