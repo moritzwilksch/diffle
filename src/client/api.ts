@@ -1,10 +1,21 @@
 import { z } from 'zod';
+
+import { githubCommentsChanged } from './github/commentsEvent.js';
 import { encode, json, q, text } from './http.js';
 import {
   BlameRequestSchema,
   BlameResponseSchema,
   ConfigUpdateSchema,
-  GithubExportRequestSchema,
+  HostedExportRequestSchema,
+  HostedCommentRequestSchema,
+  HostedCommentsSchema,
+  HostedPendingCommentDeleteSchema,
+  HostedPendingCommentEditSchema,
+  HostedReviewSubmitSchema,
+  HostedThreadReplySchema,
+  HostedThreadResolutionSchema,
+  type HostedReviewSubmit,
+  type HostedCommentRequest,
   LspHoverRequestSchema,
   LspPositionSchema,
   MessagePatchSchema,
@@ -17,7 +28,7 @@ import {
   ViewedBulkRequestSchema,
   CommentThreadSchema,
   FileResponseSchema,
-  GithubExportResponseSchema,
+  HostedExportResponseSchema,
   GithubMetadataSchema,
   GraphResponseSchema,
   LastCommitsPreviewSchema,
@@ -50,7 +61,7 @@ import {
 import type {
   BlameRequest,
   GraphQuery,
-  GithubExportRequest,
+  HostedExportRequest,
   LspHoverRequest,
   LspPosition,
   EnterRequest,
@@ -70,8 +81,35 @@ import type { Side } from '@/shared/side.js';
 
 // The only module that knows URLs.
 
+function hostedWrite<T>(response: z.ZodType<T>, path: string, method: string, body: string) {
+  return json(response, `api/hosted-review/${path}`, { method, body }).then(githubCommentsChanged);
+}
+
 export const api = {
-  /** The server's release; answers before the first review resolves. */
+  deleteHostedPendingComment: (id: string, prUrl: string) =>
+    hostedWrite(
+      z.undefined(),
+      'comments',
+      'DELETE',
+      encode(HostedPendingCommentDeleteSchema, { id, reviewUrl: prUrl }),
+    ),
+  editHostedPendingComment: (id: string, prUrl: string, body: string) =>
+    hostedWrite(
+      z.undefined(),
+      'comments',
+      'PATCH',
+      encode(HostedPendingCommentEditSchema, { id, reviewUrl: prUrl, body }),
+    ),
+  githubComments: (signal: AbortSignal) => json(HostedCommentsSchema, 'api/hosted-review/comments', { signal }),
+  replyGithubThread: (id: string, prUrl: string, body: string) =>
+    hostedWrite(z.undefined(), 'thread/reply', 'POST', encode(HostedThreadReplySchema, { id, reviewUrl: prUrl, body })),
+  resolveGithubThread: (id: string, prUrl: string, resolved: boolean) =>
+    hostedWrite(
+      z.undefined(),
+      'thread/resolved',
+      'PUT',
+      encode(HostedThreadResolutionSchema, { id, reviewUrl: prUrl, resolved }),
+    ),
   github: () => json(GithubMetadataSchema, 'api/github'),
   /** A link to lines on origin's forge, or why there is none; local refs only, so it answers at once. */
   permalink: (req: PermalinkRequest) =>
@@ -125,7 +163,6 @@ export const api = {
       SearchResponseSchema,
       `api/search?${q({ q: query, word: opts.word ? '1' : undefined, i: opts.ignoreCase ? '1' : undefined, re: opts.regex ? '1' : undefined, scope: opts.scope, content: opts.content, path: opts.path })}`,
     ),
-  /** The shown set's threads, and its tour's checklist items each paired with its tick and answer. */
   threads: (query: ThreadQuery = {}) =>
     json(ThreadListSchema, `api/threads?${q({ state: query.state, path: query.path })}`),
   /** Open threads as the agent prompt; with `checklist`, the tour's open or answered questions too. */
@@ -135,11 +172,12 @@ export const api = {
   exportComment: (threadId: string, messageId: string) =>
     text(`api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/export`),
   /** Posts threads to the matching PR's pending review; all unresolved ones without `threadIds`. */
-  exportToGithub: (req: GithubExportRequest) =>
-    json(GithubExportResponseSchema, 'api/github/export', {
-      method: 'POST',
-      body: encode(GithubExportRequestSchema, req),
-    }),
+  exportToGithub: (req: HostedExportRequest) =>
+    hostedWrite(HostedExportResponseSchema, 'export', 'POST', encode(HostedExportRequestSchema, req)),
+  submitGithubReview: (req: HostedReviewSubmit) =>
+    hostedWrite(z.undefined(), 'submit', 'POST', encode(HostedReviewSubmitSchema, req)),
+  addHostedComment: (req: HostedCommentRequest) =>
+    hostedWrite(HostedExportResponseSchema, 'draft', 'POST', encode(HostedCommentRequestSchema, req)),
   addThread: (t: ThreadCreate) =>
     json(CommentThreadSchema.array(), 'api/threads', { method: 'POST', body: encode(ThreadCreateSchema, t) }),
   addTourThread: (t: TourThreadCreate) =>

@@ -1,0 +1,15 @@
+/* Comment dates come from the server clock. Keep their labels stable in screenshots. */
+time.whitespace-nowrap[datetime] {
+  position: relative;
+  display: inline-block;
+  inline-size: 7em;
+  block-size: 1lh;
+  visibility: hidden;
+}
+
+time.whitespace-nowrap[datetime]::after {
+  position: absolute;
+  inset-inline-start: 0;
+  visibility: visible;
+  content: 'Jun 1, 2024';
+}

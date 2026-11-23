@@ -2,6 +2,7 @@
 mod api;
 mod comments;
 mod files;
+mod hosted_review;
 mod lsp;
 mod tour;
 
@@ -21,6 +22,7 @@ pub fn router() -> Router<Arc<ApiDeps>> {
         .merge(api::routes())
         .merge(files::routes())
         .merge(comments::routes())
+        .merge(hosted_review::routes())
         .merge(lsp::routes())
         .merge(tour::routes())
 }
@@ -51,6 +53,7 @@ impl From<Error> for ApiError {
             e @ (Error::AlreadyRunning(_) | Error::NotRunning | Error::NotAnswering(_)) => {
                 Self(StatusCode::CONFLICT, e.to_string())
             }
+            Error::ReviewConflict(m) => Self(StatusCode::CONFLICT, m),
             Error::Github(e) => Self(StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY), e.message),
             Error::Other(e) => {
                 crate::status!("[diffle] {e:#}");

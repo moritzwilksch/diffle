@@ -152,9 +152,20 @@ opens offline, to share with your team.
 
 ## Send comments to GitHub
 
+When reviewing with `diffle pr`, choose **Local** or **GitHub pending review** when writing a line
+or file comment. GitHub comments go to your pending review. Open **Review changes** to write a
+general comment and submit the review as **Comment**, **Approve**, or **Request changes**. Pending
+GitHub comments are included.
+
+The **GitHub comments** panel below Threads shows the PR discussion and inline threads, including
+resolved and outdated ones. Drag its divider to resize it.
+
+In the whole PR view, **Viewed** syncs with your GitHub account. Reopen the PR to fetch new
+commits and read its viewed marks again. GitHub clears a file's viewed mark when the file changes.
+
 The pull request icon adds one thread, or all open threads, to a pending review on the PR.
-diffle never submits it: you edit, drop, and submit the comments on GitHub yourself. Adding a
-thread again updates its comment instead of duplicating it.
+Adding a thread again updates its pending comment. You can also edit, drop, or submit pending
+comments on GitHub.
 
 Export works when the comparison matches the PR's committed diff, so unpushed commits and
 worktree changes rule it out. Stale threads are skipped.

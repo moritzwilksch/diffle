@@ -101,11 +101,21 @@ impl CommentStore {
         .await
     }
 
-    pub async fn edit_message(&self, thread_id: &str, message_id: &str, body: String) -> Result<CommentThread> {
+    pub async fn edit_message(
+        &self,
+        thread_id: &str,
+        message_id: &str,
+        body: String,
+        author: Option<CommentAuthor>,
+    ) -> Result<CommentThread> {
         self.mutate(|set| {
             let t = find_thread(set, thread_id)?;
-            let m =
-                t.messages.iter_mut().find(|m| m.id == message_id).ok_or_else(|| Error::NotFound(message_id.into()))?;
+            let index =
+                t.messages.iter().position(|m| m.id == message_id).ok_or_else(|| Error::NotFound(message_id.into()))?;
+            if index + 1 != t.messages.len() || t.messages[index].author != author {
+                return Err(Error::Invalid("Only your last message in the thread can be edited".into()));
+            }
+            let m = &mut t.messages[index];
             m.body = body;
             m.updated_at = now_ms();
             Ok((t.clone(), true))

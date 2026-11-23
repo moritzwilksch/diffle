@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use super::client::GithubClient;
 use super::pulls::repo_of_pr_url;
 use crate::error::GithubError;
-use crate::protocol::GithubPullRequest;
+use crate::hosted_review::ReviewTarget;
 
 /// One comment of a pending review: on a line range (`DraftPullRequestReviewThread`) or, with
 /// `subjectType: FILE`, on a whole file, which only an added thread can carry.
@@ -52,13 +52,14 @@ fn unreadable(message: impl Into<String>) -> GithubError {
 /// draft would put our comments in their review.
 pub async fn find_pending_review(
     github: &dyn GithubClient,
-    pr: &GithubPullRequest,
+    url: &str,
+    number: i64,
 ) -> Result<(String, Option<String>), GithubError> {
-    let (owner, repo) = repo_of_pr_url(&pr.url)?;
+    let (owner, repo) = repo_of_pr_url(url)?;
     let query = "query($owner:String!,$repo:String!,$number:Int!){viewer{login} repository(owner:$owner,name:$repo){pullRequest(number:$number){id reviews(last:20,states:[PENDING]){nodes{id author{login}}}}}}";
-    let data = github.graphql(query, json!({ "owner": owner, "repo": repo, "number": pr.number }), None).await?;
+    let data = github.graphql(query, json!({ "owner": owner, "repo": repo, "number": number }), None).await?;
     let Some(pull_request_id) = data.pointer("/repository/pullRequest/id").and_then(Value::as_str) else {
-        return Err(unreadable(format!("cannot read pull request {} from GitHub", pr.url)));
+        return Err(unreadable(format!("cannot read pull request {url} from GitHub")));
     };
     let login = data.pointer("/viewer/login").and_then(Value::as_str);
     let nodes = data.pointer("/repository/pullRequest/reviews/nodes").and_then(Value::as_array);
@@ -80,7 +81,7 @@ pub struct PendingComment {
 /// absence is safe to infer only from a complete read.
 pub async fn pending_comments(
     github: &dyn GithubClient,
-    pr: &GithubPullRequest,
+    pr: &ReviewTarget,
     review_id: &str,
 ) -> Result<HashMap<String, Vec<PendingComment>>, GithubError> {
     let (owner, repo) = repo_of_pr_url(&pr.url)?;

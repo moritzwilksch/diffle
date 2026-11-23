@@ -1,7 +1,8 @@
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import type { LineAnchor } from '@/shared/protocol.js';
 import type { ResolvedRange } from '@/client/comments/anchor.js';
-import { codeDraft, draftRange, pathFromItemId, visibleThreads } from '@/client/model.js';
+import { codeDraft, draftRange, pathFromItemId } from '@/client/model.js';
+import { localThreadKey, useInlineExpansion } from '@/client/comments/inlineExpansion.js';
 import { useStore, type ReviewState } from '@/client/store.js';
 import { isDeletionRow, watchRenderedRows } from './rows.js';
 
@@ -43,10 +44,12 @@ export function markCommentRows(root: ParentNode, ranges: readonly ResolvedRange
  * a file draft has no lines to tint.
  */
 export function tintedRanges(
-  state: Pick<ReviewState, 'threads' | 'showResolved' | 'draft' | 'loaded'>,
+  state: Pick<ReviewState, 'threads' | 'draft' | 'loaded'>,
   path: string,
+  expanded: ReadonlyMap<string, boolean> = new Map(),
 ): ResolvedRange[] {
-  const ranges: ResolvedRange[] = visibleThreads(state)
+  const ranges: ResolvedRange[] = state.threads
+    .filter((thread) => !thread.stale && (expanded.get(localThreadKey(thread.id)) ?? !thread.resolved))
     .map((t) => t.anchor)
     .filter((a): a is LineAnchor => a.kind === 'line' && a.path === path);
   const draft = codeDraft(state.draft)?.path === path ? draftRange(state) : null;
@@ -61,20 +64,26 @@ export function installCommentHighlights(
   return watchRenderedRows(
     viewer,
     scroller,
-    (schedule) =>
-      useStore.subscribe((s, prev) => {
+    (schedule) => {
+      const stopExpansion = useInlineExpansion.subscribe(schedule);
+      const stopReview = useStore.subscribe((s, prev) => {
         if (
           s.threads !== prev.threads ||
-          s.showResolved !== prev.showResolved ||
           s.draft !== prev.draft ||
           s.loaded !== prev.loaded ||
           s.collapsed !== prev.collapsed
         )
           schedule();
-      }),
+      });
+      return () => {
+        stopExpansion();
+        stopReview();
+      };
+    },
     (items) => {
       const state = useStore.getState();
-      for (const { id, root } of items) markCommentRows(root, tintedRanges(state, pathFromItemId(id)));
+      const { expanded } = useInlineExpansion.getState();
+      for (const { id, root } of items) markCommentRows(root, tintedRanges(state, pathFromItemId(id), expanded));
     },
   );
 }

@@ -1,6 +1,6 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
-import { AlertTriangle, Check, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, RotateCcw, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import type { CommentThread } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
@@ -11,6 +11,9 @@ import { anchorPath } from './threads.js';
 import { Markdown } from '@/client/Markdown.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
+import { useStore } from '@/client/store.js';
+import { localThreadKey, setInlineExpanded } from './inlineExpansion.js';
+import { CommentDate } from './CommentDate.js';
 
 /**
  * One thread. Memoized on the thread object and the store's stable actions, so
@@ -31,10 +34,15 @@ export const ThreadRow = memo(function ThreadRow({
   openTourThread: (id: string) => void;
 }) {
   const first = t.messages[0];
+  const path = anchorPath(t.anchor) ?? undefined;
+  const quoted = t.anchor.kind === 'line' ? t.anchor.quoted : undefined;
+  const setResolved = useStore((s) => s.setResolved);
   const del = useConfirm(() => void deleteThread(t.id));
+  const canOpen = t.anchor.kind === 'tour' || !t.stale;
   const open = () => {
     // A file thread's card sits above the file's first line, where opening the file lands.
     if (t.anchor.kind === 'tour') return openTourThread(t.id);
+    setInlineExpanded(localThreadKey(t.id), true, !t.resolved);
     if (t.anchor.kind === 'line') void openFile(t.anchor.path, t.anchor.endLine, t.anchor.side);
     else void openFile(t.anchor.path);
     // From the tour's panel too, a thread on code opens in the diff.
@@ -42,17 +50,27 @@ export const ThreadRow = memo(function ThreadRow({
     // Set after the jump: moving the cursor or selecting lines clears the ring again.
     focusThread(t.id);
   };
+  const replies = t.messages.slice(1).map((message) => (
+    <div key={message.id} className="mt-2 border-l border-border pl-2 text-foreground">
+      <div className="mb-1 flex items-baseline gap-1.5 text-xs text-muted">
+        {message.author === 'agent' ? <AgentMark size="0.75rem" /> : <span>You</span>}
+        <CommentDate createdAt={message.createdAt} />
+      </div>
+      <Markdown text={message.body} path={path} quoted={quoted} />
+    </div>
+  ));
   return (
     // A div, not a button: the item hosts its own delete button.
     <div
-      role="button"
-      tabIndex={0}
+      role={canOpen ? 'button' : undefined}
+      tabIndex={canOpen ? 0 : undefined}
       className={twMerge(
-        `group/thread mb-2 block w-full cursor-pointer overflow-hidden rounded-md border border-border bg-card p-0 text-left font-sans text-[0.8125rem] leading-[1.4] text-foreground shadow-card [transition:border-color_120ms_ease] hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-[1px] focus-visible:outline-accent focus-visible:outline-solid ${t.stale ? 'border-dashed' : ''} ${t.resolved ? 'opacity-65' : ''}`,
+        `group/thread mb-2 block w-full overflow-hidden rounded-md border border-border bg-card p-0 text-left font-sans text-[0.8125rem] leading-[1.4] text-foreground shadow-card [transition:border-color_120ms_ease] focus-visible:outline-2 focus-visible:outline-offset-[1px] focus-visible:outline-accent focus-visible:outline-solid ${t.stale ? 'border-dashed' : ''} ${t.resolved ? 'opacity-65' : ''}`,
+        canOpen && 'cursor-pointer hover:border-accent',
       )}
-      onClick={open}
+      onClick={canOpen ? open : undefined}
       onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return;
+        if (!canOpen || e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           open();
@@ -72,8 +90,6 @@ export const ThreadRow = memo(function ThreadRow({
             {t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}
           </span>
         )}
-        {/* The row shows the opening message, so the mark says who wrote that one. */}
-        {first?.author === 'agent' && <AgentMark size="0.6875rem" />}
         {t.stale && (
           <span className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-warn">
             <AlertTriangle size="0.6875rem" /> stale
@@ -85,12 +101,25 @@ export const ThreadRow = memo(function ThreadRow({
           </span>
         )}
         <Button
+          variant="ghost"
+          icon
+          className="ml-auto"
+          aria-label={t.resolved ? 'Reopen thread' : 'Resolve thread'}
+          title={t.resolved ? 'Reopen thread' : 'Resolve thread'}
+          onClick={(e) => {
+            e.stopPropagation();
+            void setResolved(t.id, !t.resolved);
+          }}
+        >
+          {t.resolved ? <RotateCcw size="0.75rem" /> : <Check size="0.75rem" />}
+        </Button>
+        <Button
           type="button"
           variant="ghost"
           danger
           icon={!del.armed}
           feedback={del.armed ? 'confirm' : undefined}
-          className="ml-auto px-0.75 py-[1px] opacity-0 group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
+          className="px-0.75 py-[1px] opacity-0 group-focus-within/thread:opacity-100 group-hover/thread:opacity-100 data-[feedback=confirm]:opacity-100"
           title={del.armed ? 'Click again to delete this thread' : 'Delete this thread'}
           aria-label={del.armed ? 'Delete this thread? Click again to confirm' : 'Delete this thread'}
           onClick={(e) => {
@@ -102,17 +131,27 @@ export const ThreadRow = memo(function ThreadRow({
           <ButtonLabel text={del.armed && 'Delete?'} />
         </Button>
       </div>
-      <div className="px-2.5 pt-1.5 pb-2 [&>.markdown]:font-sans [&>.markdown]:text-[0.8125rem] [&>.markdown]:leading-[1.4] [&>.markdown]:[word-break:break-word]">
+      <div className="px-2.5 pt-1.5 pb-2 [&_.markdown]:font-sans [&_.markdown]:text-[0.8125rem] [&_.markdown]:leading-[1.4] [&_.markdown]:[word-break:break-word]">
+        {first && (
+          <div className="mb-1 flex items-baseline gap-1.5 text-xs text-muted">
+            {first.author === 'agent' ? <AgentMark size="0.75rem" /> : <span>You</span>}
+            <CommentDate createdAt={first.createdAt} />
+          </div>
+        )}
         {t.anchor.kind === 'line' && (
           <div className="m-0 mb-1.5 overflow-hidden font-mono text-[0.75rem] leading-[1.4] text-ellipsis whitespace-nowrap text-muted">
             {firstLine(t.anchor.quoted)}
           </div>
         )}
-        <Markdown
-          text={first?.body ?? ''}
-          path={anchorPath(t.anchor) ?? undefined}
-          quoted={t.anchor.kind === 'line' ? t.anchor.quoted : undefined}
-        />
+        <Markdown text={first?.body ?? ''} path={path} quoted={quoted} />
+        {t.stale && replies.length > 0 ? (
+          <details className="mt-1 text-muted" onClick={(event) => event.stopPropagation()}>
+            <summary className="cursor-pointer">Show replies</summary>
+            {replies}
+          </details>
+        ) : (
+          replies
+        )}
       </div>
     </div>
   );

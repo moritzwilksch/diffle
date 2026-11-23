@@ -5,12 +5,12 @@ use std::sync::{Arc, Mutex};
 
 use common::github::{Call, FakeGithub};
 use diffle::error::{Error, GithubError};
-use diffle::github::client::GithubClient;
 use diffle::github::pulls::repo_of_pr_url;
-use diffle::github::review::{ExportInput, GithubExporter, build_review, format_body};
+use diffle::github::review::{build_review, export_to_github, format_body};
+use diffle::hosted_review::{ReviewTarget, ReviewWrites};
 use diffle::protocol::{
-    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, GithubExportResponse, GithubPullRequest,
-    GithubPullRequestState, Side, TourCommentTag, TourPart, TourTarget,
+    CommentAnchor, CommentAuthor, CommentMessage, CommentThread, HostedExportResponse, Side, TourCommentTag, TourPart,
+    TourTarget,
 };
 use serde_json::{Value, json};
 
@@ -301,39 +301,20 @@ where
     })
 }
 
-fn pull_request() -> GithubPullRequest {
-    GithubPullRequest {
-        repository: "o/r".into(),
-        number: 7,
-        url: PR_URL.into(),
-        title: "Review".into(),
-        state: GithubPullRequestState::Open,
-        is_draft: false,
-    }
-}
-
 async fn export_on(
-    exporter: &GithubExporter,
+    exporter: &ReviewWrites,
     github: &FakeGithub,
     threads: Vec<CommentThread>,
     thread_ids: Option<Vec<String>>,
     new_sha: &str,
-) -> Result<GithubExportResponse, GithubError> {
-    let input = ExportInput {
-        new_sha: new_sha.into(),
-        pull_request: pull_request(),
-        threads,
-        thread_ids,
-        github: Arc::new(github.clone()) as Arc<dyn GithubClient>,
-    };
-    exporter.export(|| async { Ok(input) }).await.map_err(|e| match e {
-        Error::Github(e) => e,
-        other => panic!("not a GitHub error: {other}"),
-    })
+) -> Result<HostedExportResponse, GithubError> {
+    let target = ReviewTarget { url: PR_URL.into(), number: 7 };
+    let _turn = exporter.turn().await;
+    export_to_github(github, new_sha, &target, &threads, thread_ids.as_deref()).await
 }
 
-async fn export(github: &FakeGithub, threads: Vec<CommentThread>) -> Result<GithubExportResponse, GithubError> {
-    export_on(&GithubExporter::default(), github, threads, None, &head()).await
+async fn export(github: &FakeGithub, threads: Vec<CommentThread>) -> Result<HostedExportResponse, GithubError> {
+    export_on(&ReviewWrites::default(), github, threads, None, &head()).await
 }
 
 fn ops(calls: &[Call]) -> Vec<&'static str> {
@@ -344,7 +325,7 @@ fn inputs(calls: &[Call]) -> Vec<Value> {
     calls.iter().map(|c| c.variables["input"].clone()).collect()
 }
 
-fn result(r: &GithubExportResponse) -> Value {
+fn result(r: &HostedExportResponse) -> Value {
     json_of(r)
 }
 
@@ -377,7 +358,7 @@ async fn sends_the_committed_graphql_review_payloads() {
 #[tokio::test]
 async fn refuses_worktree_export() {
     let github = client(None, Vec::new());
-    let err = export_on(&GithubExporter::default(), &github, vec![t("k").build()], None, "worktree").await.unwrap_err();
+    let err = export_on(&ReviewWrites::default(), &github, vec![t("k").build()], None, "worktree").await.unwrap_err();
     assert!(err.message.contains("worktree"), "{err}");
     assert!(github.calls().is_empty());
 }
@@ -525,7 +506,7 @@ async fn re_exporting_only_the_second_same_line_thread_updates_only_its_comment(
         ],
     );
     let threads = vec![t("a").body("first").build(), t("b").body("edited").build()];
-    let res = export_on(&GithubExporter::default(), &github, threads, Some(vec!["b".into()]), &head()).await.unwrap();
+    let res = export_on(&ReviewWrites::default(), &github, threads, Some(vec!["b".into()]), &head()).await.unwrap();
     assert_eq!((res.posted, res.updated), (0, 1));
     let calls = github.calls();
     assert_eq!(calls.len(), 3);
@@ -659,7 +640,7 @@ async fn overlapping_exports_add_the_same_thread_only_once() {
             Ok(base)
         }
     });
-    let exporter = Arc::new(GithubExporter::default());
+    let exporter = Arc::new(ReviewWrites::default());
     let first = tokio::spawn({
         let (exporter, github) = (exporter.clone(), github.clone());
         async move { export_on(&exporter, &github, vec![t("k").build()], None, &head()).await }
@@ -685,7 +666,7 @@ async fn overlapping_exports_add_the_same_thread_only_once() {
 #[tokio::test]
 async fn a_failed_export_does_not_block_the_next_export() {
     let github = client(None, Vec::new());
-    let exporter = GithubExporter::default();
+    let exporter = ReviewWrites::default();
     let sha = head();
     let (failed, next) = tokio::join!(
         export_on(&exporter, &github, vec![t("s").stale().build()], None, &sha),
@@ -750,4 +731,337 @@ async fn answers_400_when_every_thread_is_skipped() {
     let err = export(&client(None, Vec::new()), vec![t("s").stale().build()]).await.unwrap_err();
     assert_eq!(err.status, 400);
     assert!(err.message.contains("1 stale"), "{err}");
+}
+
+#[tokio::test]
+async fn sends_a_pr_draft_to_github_without_exporting_or_storing_local_threads() {
+    use diffle::protocol::{HostedCommentRequest, ThreadQuery};
+
+    let fixture = common::pr::Fixture::new();
+    let github = pr_review_client(&fixture, None);
+    let (session, snap) = start_pr_session(&fixture, &github).await;
+    let store = session.comments().unwrap();
+    let local = store.add_thread(CommentAnchor::File { path: "a.txt".into() }, "Local note".into()).await.unwrap();
+    github.clear();
+
+    let request = |version| -> HostedCommentRequest {
+        serde_json::from_value(json!({
+            "version": version,
+            "id": "47412657-64b1-4e44-982b-03f98da99cb1",
+            "comment": { "path": "a.txt", "startLine": 2, "body": "GitHub note" }
+        }))
+        .unwrap()
+    };
+    assert!(session.send_hosted_comment(request(snap.version - 1)).await.is_err());
+    assert!(github.calls().is_empty());
+    let response = session.send_hosted_comment(request(snap.version)).await.unwrap();
+    assert_eq!(response.posted, 1);
+    let calls = github.calls();
+    let write = calls.iter().find(|call| op(&call.query) == "createReview").unwrap();
+    let comments = write.variables["input"]["threads"].as_array().unwrap();
+    assert_eq!(comments.len(), 1);
+    assert_eq!(comments[0]["path"], "a.txt");
+    assert_eq!(comments[0]["line"], 2);
+    assert!(comments[0]["body"].as_str().unwrap().starts_with("GitHub note\n\n"));
+    let threads = store.threads(&ThreadQuery { path: None, state: None }).await.unwrap();
+    assert_eq!(threads.into_iter().map(|thread| thread.id).collect::<Vec<_>>(), [local.id]);
+    session.close().await;
+}
+
+fn pr_review_client(fixture: &common::pr::Fixture, pending: Option<&'static str>) -> FakeGithub {
+    let node = fixture.node(json!({ "headRefOid": fixture.head }));
+    FakeGithub::new(move |query, _| {
+        let result = if query.contains("headRefOid") {
+            json!({ "repository": { "pullRequest": node } })
+        } else if query.contains("submitPullRequestReview") {
+            json!({ "submitPullRequestReview": { "pullRequestReview": { "id": "PRR_SUBMITTED" } } })
+        } else {
+            answer(op(&query), pending, &[])
+        };
+        async move { Ok(result) }
+    })
+}
+
+async fn start_pr_session(
+    fixture: &common::pr::Fixture,
+    github: &FakeGithub,
+) -> (Arc<diffle::session::Session>, Arc<diffle::protocol::Snapshot>) {
+    use diffle::github::hosts::{Github, GithubInstance};
+    use diffle::protocol::{EnterRequest, FollowRefs};
+    use diffle::server::hub::Hub;
+    use diffle::session::{Session, SessionOptions};
+
+    let session = Session::new(
+        Arc::new(fixture.repo().await),
+        Hub::new(),
+        SessionOptions {
+            watch: false,
+            github: Github { instance: GithubInstance::github_com(), client: Some(Arc::new(github.clone())) },
+            context: 3,
+            follow_refs: FollowRefs::Off,
+            instance: "pr-review".into(),
+            checkout: false,
+        },
+    );
+    let review = session.resolve(EnterRequest::Pr { pr: Some(PR_URL.into()) }).await.unwrap();
+    let snap = session.start(review).await.unwrap();
+    (session, snap)
+}
+
+struct ViewerFiles {
+    pr: Value,
+    state: &'static str,
+    advanced_before_write: bool,
+    offline: bool,
+}
+
+fn viewed_client(files: Arc<Mutex<ViewerFiles>>) -> FakeGithub {
+    FakeGithub::new(move |query, variables| {
+        let files = files.clone();
+        async move {
+            let mut files = files.lock().unwrap();
+            let refs = json!({ "headRefOid": files.pr["headRefOid"], "baseRefOid": files.pr["baseRefOid"] });
+            if query.starts_with("mutation") {
+                assert_eq!(variables["input0"], json!({ "pullRequestId": "PR_7", "path": "a.txt" }));
+                files.state = if query.contains(":markFileAsViewed") { "VIEWED" } else { "UNVIEWED" };
+                return Ok(json!({ "file0": { "pullRequest": refs } }));
+            }
+            if query.contains("viewerViewedState") {
+                if files.offline {
+                    return Err(GithubError::new("GitHub unavailable", 502));
+                }
+                let second = !variables["after"].is_null();
+                if second {
+                    assert_eq!(variables["after"], "next");
+                }
+                let mut pr = files.pr.clone();
+                pr["id"] = json!("PR_7");
+                pr["files"] = json!({
+                    "nodes": [{ "path": if second { "a.txt" } else { "missing.txt" }, "viewerViewedState": files.state }],
+                    "pageInfo": { "hasNextPage": !second, "endCursor": (!second).then_some("next") },
+                });
+                return Ok(json!({ "repository": { "pullRequest": pr } }));
+            }
+            if query.contains("node(id:") {
+                let mut refs = refs;
+                if files.advanced_before_write {
+                    refs["headRefOid"] = json!("another-head");
+                }
+                return Ok(json!({ "node": refs }));
+            }
+            Ok(json!({ "repository": { "pullRequest": files.pr } }))
+        }
+    })
+}
+
+#[tokio::test]
+async fn syncs_viewed_marks_with_github_and_reads_them_again_at_the_refreshed_head() {
+    use diffle::protocol::ViewedEntry;
+
+    let fixture = common::pr::Fixture::new();
+    let remote = Arc::new(Mutex::new(ViewerFiles {
+        pr: fixture.node(json!({ "headRefOid": fixture.head })),
+        state: "VIEWED",
+        advanced_before_write: false,
+        offline: false,
+    }));
+    let github = viewed_client(remote.clone());
+    let (session, initial) = start_pr_session(&fixture, &github).await;
+    let viewed = ViewedEntry { path: "a.txt".into(), blob: initial.changed[0].blob.clone(), viewed: true };
+    assert_eq!(session.viewed_marks().await.unwrap().as_slice(), std::slice::from_ref(&viewed));
+
+    let unviewed = ViewedEntry { viewed: false, ..viewed.clone() };
+    assert_eq!(session.set_viewed_mark(unviewed.clone()).await.unwrap().as_slice(), std::slice::from_ref(&unviewed));
+    assert_eq!(remote.lock().unwrap().state, "UNVIEWED");
+    assert_eq!(session.viewed_marks().await.unwrap(), [unviewed]);
+    assert_eq!(session.set_viewed_marks(vec![viewed.clone()]).await.unwrap().as_slice(), std::slice::from_ref(&viewed));
+    assert_eq!(remote.lock().unwrap().state, "VIEWED");
+
+    // A push between the file lookup and the write's final head check cannot mark the new file.
+    github.clear();
+    remote.lock().unwrap().advanced_before_write = true;
+    assert!(matches!(session.set_viewed_mark(viewed.clone()).await, Err(Error::Github(_))));
+    assert!(github.calls().iter().all(|call| !call.query.starts_with("mutation")));
+
+    common::git_in(&fixture.origin, &["checkout", "--detach", &fixture.head]);
+    std::fs::write(fixture.origin.join("a.txt"), "one\ntwo\nnew change\n").unwrap();
+    common::git_in(&fixture.origin, &["commit", "-qam", "new PR change"]);
+    let head = common::git_in(&fixture.origin, &["rev-parse", "HEAD"]);
+    common::git_in(&fixture.origin, &["update-ref", "refs/pull/7/head", &head]);
+    remote.lock().unwrap().pr["headRefOid"] = json!(head);
+    remote.lock().unwrap().advanced_before_write = false;
+    remote.lock().unwrap().state = "DISMISSED";
+    github.clear();
+    assert!(matches!(session.set_viewed_mark(viewed.clone()).await, Err(Error::ReviewConflict(_))));
+    assert!(github.calls().iter().all(|call| !call.query.starts_with("mutation")));
+
+    let refreshed = session.enter(diffle::protocol::EnterRequest::Pr { pr: Some(PR_URL.into()) }).await.unwrap();
+    assert_eq!(refreshed.new_sha, head);
+    assert_ne!(refreshed.changed[0].blob, viewed.blob);
+    assert_eq!(session.viewed_marks().await.unwrap().as_slice(), std::slice::from_ref(&viewed));
+    remote.lock().unwrap().state = "VIEWED";
+    let fresh = ViewedEntry { blob: refreshed.changed[0].blob.clone(), ..viewed.clone() };
+    let entries = session.viewed_marks().await.unwrap();
+    assert!(entries.contains(&fresh));
+
+    remote.lock().unwrap().offline = true;
+    assert_eq!(session.viewed_marks().await.unwrap(), [viewed]);
+    session.close().await;
+}
+
+#[tokio::test]
+async fn submits_review_decisions_to_the_viewers_pending_review_or_the_reviewed_commit() {
+    use diffle::protocol::{HostedReviewDecision as Decision, HostedReviewSubmit};
+
+    for (pending, decision, summary, event) in [
+        (Some("PRR_MINE"), Decision::Comment, "", "COMMENT"),
+        (None, Decision::Comment, "General feedback", "COMMENT"),
+        (None, Decision::Approve, "", "APPROVE"),
+        (Some("PRR_MINE"), Decision::RequestChanges, "Please add a test", "REQUEST_CHANGES"),
+    ] {
+        let fixture = common::pr::Fixture::new();
+        let github = pr_review_client(&fixture, pending);
+        let (session, snap) = start_pr_session(&fixture, &github).await;
+        let request =
+            |version, decision, summary: &str| HostedReviewSubmit { version, decision, summary: summary.into() };
+        github.clear();
+        assert!(session.submit_hosted_review(request(snap.version - 1, decision, summary)).await.is_err());
+        assert!(github.calls().is_empty());
+
+        assert!(session.submit_hosted_review(request(snap.version, Decision::RequestChanges, " ")).await.is_err());
+        if pending.is_none() {
+            assert!(session.submit_hosted_review(request(snap.version, Decision::Comment, "")).await.is_err());
+        }
+        assert!(github.calls().iter().all(|call| !call.query.starts_with("mutation")));
+        github.clear();
+
+        session.submit_hosted_review(request(snap.version, decision, summary)).await.unwrap();
+        let calls = github.calls();
+        let writes: Vec<_> = calls.iter().filter(|call| call.query.starts_with("mutation")).collect();
+        assert_eq!(writes.len(), 1);
+        let input = &writes[0].variables["input"];
+        assert_eq!(input["event"], event);
+        assert_eq!(input["body"], if summary.is_empty() { Value::Null } else { json!(summary) });
+        if let Some(id) = pending {
+            assert!(writes[0].query.contains("submitPullRequestReview"));
+            assert_eq!(input["pullRequestReviewId"], id);
+        } else {
+            assert!(writes[0].query.contains("addPullRequestReview"));
+            assert_eq!(input["pullRequestId"], "PR_7");
+            assert_eq!(input["commitOID"], fixture.head);
+        }
+        session.close().await;
+    }
+}
+
+#[tokio::test]
+async fn reads_resolved_and_outdated_threads_all_replies_and_general_discussion() {
+    use diffle::github::comments::read;
+
+    fn page(nodes: Value, next: Option<&str>) -> Value {
+        json!({"nodes": nodes, "pageInfo": {"hasNextPage": next.is_some(), "endCursor": next}})
+    }
+    fn msg(id: &str, author: Value) -> Value {
+        json!({"id": id, "body": id, "createdAt": "2026-01-01T12:00:00Z", "url": PR_URL, "author": author})
+    }
+
+    let github = FakeGithub::new(move |query, vars| async move {
+        let author = json!({"login": "reviewer"});
+        if query.contains("node(id:") {
+            assert_eq!(vars, json!({"id":"thread", "after":"more-replies"}));
+            return Ok(json!({"node":{"comments":page(json!([msg("reply-2", Value::Null)]), None)}}));
+        }
+        let (field, connection) = if query.contains("reviewThreads") {
+            if vars["after"] == "more-threads" {
+                ("reviewThreads", page(json!([]), None))
+            } else {
+                (
+                    "reviewThreads",
+                    page(
+                        json!([{
+                            "id":"thread", "path":"a.txt", "line":null, "startLine":null, "originalLine":7,
+                            "originalStartLine":6, "diffSide":"LEFT", "isResolved":true, "isOutdated":true,
+                            "pullRequest":{"headRefOid":"pr-head"}, "viewerCanReply":true,
+                            "viewerCanResolve":false, "viewerCanUnresolve":true,
+                            "replies":page(json!([msg("first", author)]), Some("more-replies"))
+                        }]),
+                        Some("more-threads"),
+                    ),
+                )
+            }
+        } else if query.contains("reviews(") {
+            ("reviews", page(json!([msg("summary", author)]), None))
+        } else {
+            ("comments", page(json!([msg("general", author)]), None))
+        };
+        Ok(json!({"repository":{"pullRequest":{(field):connection}}}))
+    });
+    let pr = ReviewTarget { number: 7, url: PR_URL.into() };
+    let comments = read(&github, &pr).await.unwrap();
+    let thread = &comments.threads[0];
+    assert!(thread.is_resolved && thread.is_outdated);
+    assert!(thread.viewer_can_reply && !thread.viewer_can_resolve && thread.viewer_can_unresolve);
+    assert_eq!(thread.head_sha, "pr-head");
+    assert_eq!(thread.side, Side::Old);
+    assert_eq!(thread.original_line, Some(7));
+    assert_eq!(thread.comments.iter().map(|comment| comment.id.as_str()).collect::<Vec<_>>(), ["first", "reply-2"]);
+    assert_eq!(thread.comments[1].author, "Deleted user");
+    assert_eq!(
+        comments.conversation.iter().map(|comment| comment.id.as_str()).collect::<Vec<_>>(),
+        ["general", "summary"]
+    );
+}
+
+#[tokio::test]
+async fn pending_comment_deletion_requires_the_viewer_to_own_the_draft_on_this_pr() {
+    use diffle::github::comments::pending_comment_id;
+    for (state, author, can_delete, url, allowed) in [
+        ("PENDING", true, true, PR_URL, true),
+        ("PUBLISHED", true, true, PR_URL, false),
+        ("PENDING", false, true, PR_URL, false),
+        ("PENDING", true, false, PR_URL, false),
+        ("PENDING", true, true, "https://github.com/o/r/pull/8", false),
+    ] {
+        let github = FakeGithub::new(move |query, variables| async move {
+            assert!(query.contains("PullRequestReviewComment"));
+            assert_eq!(variables, json!({"id":"PRRC_a"}));
+            Ok(json!({"node": {
+                "databaseId":42, "state":state, "viewerDidAuthor":author, "viewerCanDelete":can_delete,
+                "pullRequest":{"url":url}
+            }}))
+        });
+        let result = pending_comment_id(&github, PR_URL, "PRRC_a").await;
+        if allowed {
+            assert_eq!(result.unwrap(), 42);
+        } else {
+            assert_eq!(result.unwrap_err().status, 409);
+        }
+    }
+}
+
+#[tokio::test]
+async fn pending_comment_edits_require_ownership_and_preserve_the_export_marker() {
+    use diffle::github::comments::pending_comment_edit;
+    for (state, author, permission, url, allowed) in [
+        ("PENDING", true, true, PR_URL, true),
+        ("SUBMITTED", true, true, PR_URL, false),
+        ("PENDING", false, true, PR_URL, false),
+        ("PENDING", true, false, PR_URL, false),
+        ("PENDING", true, true, "https://github.com/o/r/pull/8", false),
+    ] {
+        let github = FakeGithub::new(move |query, variables| async move {
+            assert!(query.contains("viewerCanUpdate"));
+            assert_eq!(variables, json!({"id":"PRRC_a"}));
+            Ok(json!({"node": {
+                "body":"Old draft\n\n<!-- diffle-thread:one%20two -->",
+                "state":state, "viewerDidAuthor":author, "viewerCanUpdate":permission, "pullRequest":{"url":url}
+            }}))
+        });
+        let result = pending_comment_edit(&github, PR_URL, "PRRC_a", "New draft").await;
+        if allowed {
+            assert_eq!(result.unwrap(), "New draft\n\n<!-- diffle-thread:one%20two -->");
+        } else {
+            assert_eq!(result.unwrap_err().status, 409);
+        }
+    }
 }

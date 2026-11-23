@@ -3,7 +3,9 @@ use std::path::Path;
 use diffle::comments::import::parse_imports;
 use diffle::comments::{AnchorSource, CommentStore, ReviewView, SideView};
 use diffle::error::{Error, Result};
-use diffle::protocol::{CommentAnchor, CommentThread, Side, ThreadCreate, ThreadQuery, ThreadState, ViewedEntry};
+use diffle::protocol::{
+    CommentAnchor, CommentAuthor, CommentThread, Side, ThreadCreate, ThreadQuery, ThreadState, ViewedEntry,
+};
 use serde_json::{Value, json};
 
 fn anchor() -> CommentAnchor {
@@ -149,8 +151,15 @@ async fn replies_edits_removes_messages_and_threads_resolves_and_clears() {
     let got = s.get(&t.id).await.unwrap().unwrap();
     assert_eq!(got.messages.iter().map(|m| m.body.as_str()).collect::<Vec<_>>(), ["hello", "fixed"]);
     let (first, second) = (got.messages[0].id.clone(), got.messages[1].id.clone());
-    s.edit_message(&t.id, &first, "hello again".into()).await.unwrap();
-    assert_eq!(first_body(&s.get(&t.id).await.unwrap().unwrap()), "hello again");
+    assert!(matches!(s.edit_message(&t.id, &first, "hello again".into(), None).await, Err(Error::Invalid(_))));
+    let edited = s.edit_message(&t.id, &second, "fixed again".into(), None).await.unwrap();
+    assert_eq!(edited.messages[1].body, "fixed again");
+    let with_agent = s.reply(&t.id, "Agent reply".into(), Some(CommentAuthor::Agent)).await.unwrap();
+    let agent = &with_agent.messages[2].id;
+    assert!(matches!(s.edit_message(&t.id, agent, "revised".into(), None).await, Err(Error::Invalid(_))));
+    assert!(matches!(s.edit_message(&t.id, &second, "revised".into(), None).await, Err(Error::Invalid(_))));
+    s.edit_message(&t.id, agent, "Agent revised its reply".into(), Some(CommentAuthor::Agent)).await.unwrap();
+    s.remove_message(&t.id, agent).await.unwrap();
     assert_eq!(s.remove_message(&t.id, &second).await.unwrap().unwrap().id, t.id);
     assert_eq!(s.get(&t.id).await.unwrap().unwrap().messages.len(), 1);
     s.set_resolved(&t.id, true).await.unwrap();
@@ -166,7 +175,7 @@ async fn replies_edits_removes_messages_and_threads_resolves_and_clears() {
     assert!(s.threads(&all()).await.unwrap().is_empty());
     assert!(matches!(s.remove_thread(&t.id).await, Err(Error::NotFound(_))));
     assert!(matches!(s.reply("nope", "x".into(), None).await, Err(Error::NotFound(_))));
-    assert!(matches!(s.edit_message("nope", "m", "x".into()).await, Err(Error::NotFound(_))));
+    assert!(matches!(s.edit_message("nope", "m", "x".into(), None).await, Err(Error::NotFound(_))));
     let t = s.add_thread(anchor(), "hello".into()).await.unwrap();
     assert_eq!(s.clear().await.unwrap(), [t.id]);
     assert!(s.threads(&all()).await.unwrap().is_empty());

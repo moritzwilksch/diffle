@@ -1,4 +1,10 @@
 import type { CodeViewLineSelection, FileContents, FileDiffMetadata } from '@pierre/diffs';
+import {
+  githubDraftId,
+  readCommentDestination,
+  rememberCommentDestination,
+  type CommentDestination,
+} from './comments/destination.js';
 import { hydratePartialDiff, parsePatchFiles } from '@pierre/diffs';
 import type { FileTree } from '@pierre/trees';
 import { create } from 'zustand';
@@ -35,7 +41,8 @@ import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api } from './api.js';
 import { isNotFound } from './http.js';
 import { anchorFromRange, sideOf } from './comments/anchor.js';
-import { anchorPath } from './comments/threads.js';
+import { anchorPath, editableThreadMessage } from './comments/threads.js';
+import { localThreadKey, setInlineExpanded } from './comments/inlineExpansion.js';
 import {
   buildNav,
   cursorFromSelection,
@@ -315,6 +322,8 @@ export interface ReviewState {
   /** Anchor row while in visual (block) mode. */
   visualAnchor: Cursor | null;
   /** Text typed into comment editors but not yet saved, by `composerKey`; closing an editor keeps it. */
+  commentDestination: CommentDestination;
+  setCommentDestination(destination: CommentDestination): void;
   unsent: Record<string, string>;
   /** Empty text forgets the entry. */
   setUnsent(key: string, text: string): void;
@@ -576,7 +585,7 @@ export interface ReviewState {
   closeDraft(): void;
   /** The text the current draft would quote; feeds the "suggest change" button. Empty for a file draft. */
   draftQuote(): Promise<string>;
-  submitDraft(body: string): Promise<void>;
+  submitDraft(body: string, destination?: CommentDestination): Promise<void>;
   submitReply(threadId: string, body: string): Promise<void>;
   editMessage(threadId: string, messageId: string, body: string): Promise<void>;
   deleteMessage(threadId: string, messageId: string): Promise<void>;
@@ -584,7 +593,7 @@ export interface ReviewState {
   deleteThread(id: string): Promise<void>;
   clearThreads(): Promise<void>;
   deleteStaleThreads(): Promise<void>;
-  /** Adds threads to the active PR's pending review; the human submits it on GitHub. A toast appears only when threads are skipped or the post fails. */
+  /** Adds threads to the active PR's pending review. A toast appears only when threads are skipped or the post fails. */
   /** Post open threads (or the given ones) to the PR; resolves to what happened, or null when the post failed. */
   exportToGithub(threadIds?: string[]): Promise<ExportOutcome | null>;
   /** Mark a file viewed (collapsing it) or not viewed (expanding it). The cursor and viewport stay put. */
@@ -1569,6 +1578,11 @@ export const useStore = create<ReviewState>((set, get) => {
       set({ theme });
     },
     visualAnchor: null,
+    commentDestination: readCommentDestination(),
+    setCommentDestination(commentDestination) {
+      rememberCommentDestination(commentDestination);
+      set({ commentDestination });
+    },
     unsent: readUnsent(),
     setUnsent(key, text) {
       const { [key]: _, ...rest } = get().unsent;
@@ -2259,8 +2273,11 @@ export const useStore = create<ReviewState>((set, get) => {
     },
     editCommentAtCursor() {
       const t = threadAtCursor();
-      const last = t?.messages[t.messages.length - 1];
-      if (last) get().setEditingId(last.id);
+      if (!t || t.stale) return;
+      const last = editableThreadMessage(t);
+      if (!last) return;
+      setInlineExpanded(localThreadKey(t.id), true, !t.resolved);
+      get().setEditingId(last.id);
     },
     async deleteCommentAtCursor() {
       const t = threadAtCursor();
@@ -2681,7 +2698,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     // The composer stays open with its text when a post fails; the toast says why.
-    async submitDraft(body) {
+    async submitDraft(body, destination = 'local') {
       const d = get().draft;
       if (!d || !body.trim()) return;
       const key = composerKey(get(), { kind: 'draft' });
@@ -2696,26 +2713,37 @@ export const useStore = create<ReviewState>((set, get) => {
         await get().refreshThreads();
         return;
       }
-      if (!d.selection) {
-        try {
-          await api.addThread({ path: d.path, body });
-        } catch (e) {
-          return report('Posting the comment', e);
+      const snap = get().snapshot;
+      try {
+        const range = d.selection && selectionRange(get(), d.path, d.selection);
+        const comment = range
+          ? anchorFromRange(d.path, range, await ensureContents(d.path, range.side))
+          : { path: d.path };
+        if (get().draft !== d) return;
+        if (destination === 'github') {
+          if (!snap || snap.review.kind !== 'range' || !snap.review.pr || get().snapshot?.version !== snap.version) {
+            get().flash('The comparison changed. Review the comment location and try again.');
+            return;
+          }
+          await api.addHostedComment({ version: snap.version, id: githubDraftId(d), comment: { ...comment, body } });
+          if (key) get().setUnsent(key, '');
+          if (get().draft === d) {
+            set({ draft: null });
+            get().flash('Added to your pending GitHub review');
+          }
+          return;
         }
-        if (key) get().setUnsent(key, '');
+        await api.addThread({ ...comment, body });
+      } catch (e) {
+        return report(destination === 'github' ? 'Adding to the GitHub review' : 'Posting the comment', e);
+      }
+      if (key) get().setUnsent(key, '');
+      if (get().draft !== d) return;
+      if (!d.selection) {
         set({ draft: null });
         await get().refreshThreads();
         return;
       }
-      try {
-        const range = selectionRange(get(), d.path, d.selection);
-        const contents = await ensureContents(d.path, range.side);
-        const { path, side, startLine, endLine, quoted } = anchorFromRange(d.path, range, contents);
-        await api.addThread({ path, side, startLine, endLine, quoted, body });
-      } catch (e) {
-        return report('Posting the comment', e);
-      }
-      if (key) get().setUnsent(key, '');
       // Keep the cursor on the commented line so `e` / `dd` apply to it.
       const s = d.selection.range;
       set({
