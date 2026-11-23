@@ -118,6 +118,11 @@ Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattr
 them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
 globs in settings or with `diffle config`.
 
+Reload or reopen the page to resume the last review position while Diffle is still running.
+Use `--keep-alive` to keep Diffle running after the last browser tab closes.
+Press `r` in a whole pull request review to fetch the latest changes. Diffle checks out
+the new head when the worktree is clean and checkout is enabled.
+
 ## Take a tour of the change
 
 Before you review your agent's change, let it walk you through it. It writes a tour: one page
@@ -194,6 +199,10 @@ diffle starts a language server for each language in the diff, if it finds one o
 
 Results outside the diff, such as the standard library, open read-only. Large repositories can
 take a while to index.
+
+After jumping to a definition or reference, use your browser's **Back** button (including a mouse
+Back button), or press `gu` or `Ctrl+o` to return to the source line. Use browser **Forward**
+(including a mouse Forward button), `gU` (g, then Shift+u), or `Ctrl+i` to revisit the destination.
 
 `diffle lsp` shows which server each language gets and what to install for the rest:
 

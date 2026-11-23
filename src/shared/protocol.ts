@@ -1257,3 +1257,14 @@ export const ActivitySchema = z.object({
 export type Activity = z.infer<typeof ActivitySchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });
+
+/** The last file or line shown in a review during this server run. */
+export const ReviewLocationSchema = z.object({
+  updatedAt: z.number().int(),
+  commentKey: z.string(),
+  path: z.string(),
+  line: z.number().int().nullable(),
+  side: SideSchema,
+  full: z.boolean(),
+});
+export type ReviewLocation = z.infer<typeof ReviewLocationSchema>;

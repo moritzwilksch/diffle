@@ -2,6 +2,7 @@
 mod api;
 mod comments;
 mod files;
+mod location;
 mod lsp;
 mod tour;
 
@@ -22,6 +23,7 @@ pub fn router() -> Router<Arc<ApiDeps>> {
         .merge(files::routes())
         .merge(comments::routes())
         .merge(lsp::routes())
+        .merge(location::routes())
         .merge(tour::routes())
 }
 

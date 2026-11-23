@@ -2429,6 +2429,49 @@
       ],
       "description": "A single reviewed commit and its neighbours along HEAD's first-parent history, for stepping through it."
     },
+    "ReviewLocation": {
+      "type": "object",
+      "properties": {
+        "updatedAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "commentKey": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "full": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "updatedAt",
+        "commentKey",
+        "path",
+        "line",
+        "side",
+        "full"
+      ],
+      "description": "The last file or line shown in a review during this server run."
+    },
     "SearchContent": {
       "type": "string",
       "enum": [

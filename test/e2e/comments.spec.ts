@@ -137,14 +137,16 @@ test('marks a thread the agent opened in its header, in the panel and inline', a
   await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'agent-threads-panel.aria.yml' });
 });
 
-test("marks only the agent's reply in a reviewer's thread", async ({ page, diffle }) => {
+test('shows agent and reviewer replies in order in the Threads panel', async ({ page, diffle }) => {
   const [thread] = await seedThreads(diffle.url, [
     { path: 'tally/currency.py', startLine: 7, body: '`KWD` gets three decimals above but no symbol here.' },
   ]);
   await seedReply(diffle.url, thread!.id, { body: 'Added `KD` to `_SYMBOLS`.', author: 'agent' });
   await seedReply(diffle.url, thread!.id, { body: 'Thanks.' });
   await gotoFile(page, 'tally/currency.py');
-  await expect(page.getByText('Thanks.').first()).toBeVisible();
+  const messages = ['KWD gets three decimals above but no symbol here.', 'Added KD to _SYMBOLS.', 'Thanks.'];
+  await expect(page.locator('.codeview').getByText('Thanks.', { exact: true })).toBeVisible();
+  await expect(page.locator('aside').last().getByRole('paragraph')).toHaveText(messages);
   await expect(page).toHaveScreenshot('agent-reply.png');
 });
 

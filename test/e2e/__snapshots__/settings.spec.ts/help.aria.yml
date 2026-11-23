@@ -19,7 +19,9 @@
   - text: "hover a symbol or gh signature and docs tooltip (gh: focused word); Esc closes click a symbol definition / type definition / references popover gd or ⌘/Ctrl+click go to the definition, or its references from there gy go to the definition of the hovered symbol’s type gA list references; j / k, Enter to jump, n / N to step gs / gS symbols in the current file / across the repository"
   - heading "Change graph (language server)" [level=4]
   - text: "M graph of changed symbols; ? there lists its keys right-click a folder Show in graph: only the changes under it"
+  - heading "Tour" [level=4]
+  - text: T the agent's tour, once pushed; ? there lists its keys
   - heading "Iterations" [level=4]
-  - text: "r reload once the compared refs moved ii latest iteration vs. the one before; again: the range ij / ik span’s lower end one iteration older / newer iJ / iK span’s higher end one iteration older / newer i, then 1–9 compare that iteration with the latest"
+  - text: "r fetch the whole PR again or reload moved refs ii latest iteration vs. the one before; again: the range ij / ik span’s lower end one iteration older / newer iJ / iK span’s higher end one iteration older / newer i, then 1–9 compare that iteration with the latest"
   - heading "General" [level=4]
   - text: "? toggle this help Esc close composer, search, or menu; clear selection"

@@ -4,6 +4,7 @@ import {
   BlameRequestSchema,
   BlameResponseSchema,
   ConfigUpdateSchema,
+  ReviewLocationSchema,
   GithubExportRequestSchema,
   LspHoverRequestSchema,
   LspPositionSchema,
@@ -225,6 +226,13 @@ export const api = {
 
   /** Document symbols for a path, or workspace symbols matching a query. */
   lspSymbols: (query: SymbolsQuery) => json(LspSymbolsResponseSchema, `api/lsp/symbols?${q(query)}`),
+  reviewLocation: () => json(ReviewLocationSchema.optional(), 'api/review-location'),
+  saveReviewLocation: (position: z.input<typeof ReviewLocationSchema>) =>
+    json(z.undefined(), 'api/review-location', {
+      method: 'PUT',
+      keepalive: true,
+      body: encode(ReviewLocationSchema, position),
+    }),
   config: () => json(UserConfigSchema, 'api/config'),
   /** lspCommands and githubHosts are CLI-only; the server ignores them. */
   saveConfig: (config: ConfigUpdate) =>
