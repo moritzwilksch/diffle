@@ -61,6 +61,7 @@ const api = {
   github: vi.fn(),
   snapshot: vi.fn(),
   threads: vi.fn(async (): Promise<ThreadList> => list()),
+  reviewLocation: vi.fn(async () => undefined),
   viewed: vi.fn(async (): Promise<ViewedEntry[]> => []),
   config: vi.fn(async (): Promise<UserConfig> => ({
     autoViewed: [],

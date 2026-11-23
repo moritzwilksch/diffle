@@ -30,6 +30,8 @@ import {
   type LspLogEntry,
 } from '@/shared/protocol.js';
 import { type Side } from '@/shared/side.js';
+import { rememberBrowserJump, stepBrowserJump } from './views/jumpHistory.js';
+import { restoreReviewLocation } from './review/location.js';
 import { type TourCheckItem, type TourTargetRequest } from '@/shared/tour.js';
 import { hoverOnly, joinedBy, lspBlocker } from '@/shared/lsp.js';
 import { api } from './api.js';
@@ -228,6 +230,7 @@ export type Match = SearchMatch &
 /** Full-screen list of a symbol's references; Enter jumps to the highlighted one. */
 export interface ReferencesState {
   open: boolean;
+  origin?: JumpPlace;
   /**
    * References of `symbol`, the lines where `symbol` uses others, or the candidate types a
    * type-definition query returned for it.
@@ -257,6 +260,7 @@ export interface JumpPosition {
   path: string;
   side: Side;
   line: number;
+  col?: number;
   /** The position sits in the file view of `path`, not in the diff list. */
   full?: boolean;
   /** That file view shows a file outside the snapshot (see FileView.external). */
@@ -411,7 +415,7 @@ export interface ReviewState {
   findReferences(target?: TokenTarget | null): Promise<void>;
   references: ReferencesState;
   /** Opens the references overlay on `list`, at `index`. */
-  showReferences(list: Pick<ReferencesState, 'kind' | 'symbol' | 'items'>, index?: number): void;
+  showReferences(list: Pick<ReferencesState, 'kind' | 'symbol' | 'items' | 'origin'>, index?: number): void;
   moveReference(delta: 1 | -1): void;
   togglePeek(): void;
   /**
@@ -564,6 +568,7 @@ export interface ReviewState {
    * deleted files. `external` opens a file the language server named outside the snapshot instead.
    */
   openFullFile(path: string, line?: number, external?: boolean): Promise<void>;
+  restorePosition(position: JumpPosition): Promise<void>;
   /** Back to the diff list, at the position the file view was entered from. */
   closeFullFile(): void;
   setSelection(sel: CodeViewLineSelection | null): void;
@@ -703,6 +708,7 @@ export const useStore = create<ReviewState>((set, get) => {
     if (viewedSeq.latest(lists.tv)) set({ viewed: lists.viewed });
     if (threadsSeq.latest(lists.tt)) acceptThreads(lists.threads);
     await applySnapshot(snap, g);
+    if (current(g)) await restoreReviewLocation(get, () => current(g));
   };
   /** A server-side change of the snapshot within the mode (reload, forgetting iterations): fetch and commit it. */
   /** Enters what `request` answers with: a new review, or a slice of the current one. */
@@ -1198,9 +1204,8 @@ export const useStore = create<ReviewState>((set, get) => {
   const currentPlace = (): JumpPlace | null => outside?.here() ?? currentPosition();
 
   /** Remember where we are before a jump (vim jumplist semantics). */
-  const recordJump = () => {
+  const recordJump = (pos = currentPlace()) => {
     if (silent) return;
-    const pos = currentPlace();
     if (!pos) return;
     const { jumps, jumpIndex } = get();
     const kept = jumps.slice(0, jumpIndex);
@@ -1215,6 +1220,52 @@ export const useStore = create<ReviewState>((set, get) => {
     if (isView(place)) return place.restore();
     outside?.leave();
     void goToPositionSilently(place);
+  };
+
+  let browserJumps: JumpPlace[] | undefined;
+
+  const positionOf = (target: { path: string; side: Side; line: number; col?: number }): JumpPosition => {
+    const view = get().fileView;
+    return view?.path === target.path ? { ...target, full: true, external: view.external } : target;
+  };
+
+  /** A mouse jump comes from the token that was clicked, even if the line cursor was elsewhere. */
+  const tokenOrigin = ({ path, side, line, col }: TokenTarget): JumpPlace =>
+    outside?.here() ?? positionOf({ path, side, line, col });
+
+  const jumpFromSymbol = async (
+    path: string,
+    line: number,
+    external: boolean | undefined,
+    col?: number,
+    from?: JumpPlace,
+  ) => {
+    const g = generation;
+    const scope = get().snapshot?.commentKey;
+    const origin = from ?? currentPlace();
+    await jumpToLine(path, line, external, col, origin);
+    if (!current(g) || get().activePath !== path) return;
+    outside?.leave();
+    const destination = positionOf({ path, side: 'new', line, col });
+    if (!origin || !scope || samePlace(origin, destination)) return;
+    const { jumps } = get();
+    if (jumps.at(-1) !== origin) return;
+    const list = [...jumps, destination];
+    const restore = (place: JumpPlace, jumpIndex: number) => {
+      if (get().snapshot?.commentKey !== scope) return;
+      get().closeSymbolMenu();
+      if (get().references.open) get().closeReferences();
+      set({ jumps: list, jumpIndex });
+      browserJumps = list;
+      goToPlace(place);
+    };
+    if (
+      rememberBrowserJump(
+        () => restore(origin, list.length - 2),
+        () => restore(destination, list.length - 1),
+      )
+    )
+      browserJumps = jumps;
   };
 
   /** Expand a collapsed file so a jump into it has something to land on. */
@@ -1268,7 +1319,7 @@ export const useStore = create<ReviewState>((set, get) => {
     const side = pos.side === 'old' ? 'deletions' : 'additions';
     const rowIndex = item.rows.findIndex((r) => r.line === pos.line && r.side === side);
     if (rowIndex !== -1) {
-      placeCursor({ itemIndex, rowIndex }, false, 'eye');
+      placeCursor({ itemIndex, rowIndex }, false, 'eye', pos.col);
       return;
     }
     set((s) => ({
@@ -1278,6 +1329,7 @@ export const useStore = create<ReviewState>((set, get) => {
         id: item.id,
         line: pos.line,
         side: pos.side,
+        col: pos.col,
         align: 'eye',
         nonce: (s.scrollTarget?.nonce ?? 0) + 1,
       },
@@ -1353,10 +1405,10 @@ export const useStore = create<ReviewState>((set, get) => {
    * Open `path` and put the cursor on its new-side `line` at eye level, expanding collapsed context if needed.
    * A `col` from a language server scrolls sideways to it.
    */
-  const jumpToLine = async (path: string, line: number, external = false, col?: number) => {
+  const jumpToLine = async (path: string, line: number, external = false, col?: number, origin?: JumpPlace | null) => {
     // One jumplist entry per jump, taken at the origin. Opening the file parks the cursor on its
     // first hunk on the way; recording that would make Ctrl+o land somewhere the reader never was.
-    recordJump();
+    recordJump(origin);
     await quietly(() => (external ? get().openFullFile(path, undefined, true) : get().openFile(path)));
     ensureExpanded(path);
     const items = nav();
@@ -1438,6 +1490,7 @@ export const useStore = create<ReviewState>((set, get) => {
     get().closeSymbolMenu();
     const pos = lspPosition(target, kind === 'definition' ? 'definition' : 'typeDefinition');
     if (!pos) return;
+    const origin = tokenOrigin(target!);
     // The answer names lines of the snapshot the question was asked about.
     const g = generation;
     try {
@@ -1452,11 +1505,9 @@ export const useStore = create<ReviewState>((set, get) => {
       // A function's "type" comes back as every class in its signature (pyrefly lists parameter
       // types before the return type). Picking the first would jump somewhere unasked; let the reader choose.
       if (kind === 'type definition' && res.locations.length > 1) {
-        return get().showReferences({ kind: 'types', symbol: target!.text, items: res.locations });
+        return get().showReferences({ kind: 'types', symbol: target!.text, items: res.locations, origin });
       }
-      await jumpToLine(loc.path, loc.line, loc.external, loc.col);
-      // A view over the diff, a tour's symbol menu, gives way once the jump list has recorded it.
-      outside?.leave();
+      await jumpFromSymbol(loc.path, loc.line, loc.external, loc.col, origin);
     } catch (e) {
       if (current(g)) report(kind === 'definition' ? 'Go to definition' : 'Go to type definition', e);
     }
@@ -2015,6 +2066,7 @@ export const useStore = create<ReviewState>((set, get) => {
       get().closeSymbolMenu();
       const pos = lspPosition(target, 'references');
       if (!pos) return;
+      const from = tokenOrigin(target!);
       const g = generation;
       try {
         const res = await api.lspReferences(pos);
@@ -2024,14 +2076,14 @@ export const useStore = create<ReviewState>((set, get) => {
         // Start on the reference after the origin, so Enter moves forward through the list.
         const origin = items.findIndex((m) => m.path === pos.path && m.line === pos.line);
         const index = origin === -1 ? 0 : (origin + 1) % items.length;
-        get().showReferences({ kind: 'references', symbol: target!.text, items }, index);
+        get().showReferences({ kind: 'references', symbol: target!.text, items, origin: from }, index);
       } catch (e) {
         if (current(g)) report('Find references', e);
       }
     },
     references: { open: false, kind: 'references', symbol: '', items: [], index: -1, peek: false },
     showReferences(list, index = 0) {
-      set((s) => ({ references: { ...s.references, ...list, open: true, index } }));
+      set((s) => ({ references: { ...s.references, ...list, origin: list.origin, open: true, index } }));
     },
     moveReference(delta) {
       const r = get().references;
@@ -2065,8 +2117,12 @@ export const useStore = create<ReviewState>((set, get) => {
       }
       // A picked line other than the reference's own has no column to aim at. A view over the diff,
       // the graph listing a symbol's links, gives way once the jump list has recorded it.
-      void jumpToLine(m.path, line ?? m.line, m.external, line == null || line === m.line ? m.col : undefined).then(
-        () => outside?.leave(),
+      void jumpFromSymbol(
+        m.path,
+        line ?? m.line,
+        m.external,
+        line == null || line === m.line ? m.col : undefined,
+        r.origin,
       );
     },
     closeReferences() {
@@ -2163,6 +2219,7 @@ export const useStore = create<ReviewState>((set, get) => {
     jumps: [],
     jumpIndex: 0,
     jumpBack() {
+      if (browserJumps === get().jumps && stepBrowserJump(-1)) return;
       if (!canJumpBack(get())) return;
       // From the file view, Ctrl+o always means back to the diff, where it was left.
       if (get().fileView) return get().closeFullFile();
@@ -2180,6 +2237,7 @@ export const useStore = create<ReviewState>((set, get) => {
       if (target) goToPlace(target);
     },
     jumpForward() {
+      if (browserJumps === get().jumps && stepBrowserJump(1)) return;
       if (!canJumpForward(get())) return;
       const { jumps, jumpIndex } = get();
       const index = jumpIndex + 1;
@@ -2532,7 +2590,8 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     reloadIfMoved() {
-      if (get().moved) void get().reload();
+      const review = get().snapshot?.review;
+      if (get().moved || (review?.kind === 'range' && review.pr && review.view.kind === 'whole')) void get().reload();
       else get().flash('Nothing moved since this snapshot');
     },
 
@@ -2551,6 +2610,7 @@ export const useStore = create<ReviewState>((set, get) => {
     },
 
     loadFile,
+    restorePosition: goToPositionSilently,
 
     async openFile(path, line, side) {
       const snap = get().snapshot;

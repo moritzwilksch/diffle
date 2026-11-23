@@ -15,7 +15,7 @@ export function HistoryNav() {
   const jumpForward = useStore((s) => s.jumpForward);
   return (
     <span className="inline-flex items-center gap-0.5">
-      <Button variant="ghost" icon disabled={!back} onClick={jumpBack} title="Back (Ctrl+o)" aria-label="Back">
+      <Button variant="ghost" icon disabled={!back} onClick={jumpBack} title="Back (gu or Ctrl+o)" aria-label="Back">
         <ArrowLeft size="1rem" />
       </Button>
       <Button
@@ -23,7 +23,7 @@ export function HistoryNav() {
         icon
         disabled={!forward}
         onClick={jumpForward}
-        title="Forward (Ctrl+i)"
+        title="Forward (gU or Ctrl+i)"
         aria-label="Forward"
       >
         <ArrowRight size="1rem" />

@@ -6,6 +6,7 @@ use futures::FutureExt;
 use super::{Active, Pending, Session};
 use crate::error::{Error, Result};
 use crate::iterations::IterationStore;
+use crate::mode::pr::resolve_pr;
 use crate::mode::resolve::resolve_range;
 use crate::protocol::{Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations, with_view};
 
@@ -69,6 +70,20 @@ impl Session {
             // Two iterations are pinned; the moved refs belong to their range, where the reviewer continues.
             if shown_iterations(&a.review).is_some() {
                 return this.leave_interdiff(&a).await;
+            }
+            if let Review::Range { pr: Some(pr), view: RangeView::Whole, .. } = &a.review {
+                // A PR's local refs are pinned to the last fetch, even when its owner has pushed.
+                let review = resolve_pr(Some(&pr.url), &this.repo, &this.github).await?;
+                // Fetching a push can update the same refs. On an explicit PR refresh,
+                // try their new head even when the previous head was already checked out at launch.
+                this.check_out(&review).await;
+                if review != a.review {
+                    let snap = this.activate(review).await?;
+                    this.hub.broadcast(ServerMessage::Snapshot { version: snap.version });
+                    return Ok(snap);
+                }
+                a.snapshotter.invalidate(this.next_version());
+                return this.publish(&a).await;
             }
             this.recompute().await
         })

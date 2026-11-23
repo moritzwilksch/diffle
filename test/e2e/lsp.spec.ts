@@ -172,6 +172,54 @@ test.describe('with a language server', () => {
     await expect(page.locator('main[tabindex]')).toBeFocused();
   });
 
+  test('browser Back and Forward traverse a clicked definition jump', async ({ page, diffle }) => {
+    const path = 'tally/ledger.py';
+    await gotoFile(page, path);
+    await waitForLsp(diffle.url);
+    await clickLine(page, path, LINE);
+    await hoverSymbol(page, 'Literal', { path });
+    const historyLength = await page.evaluate(() => history.length);
+    await page.keyboard.down('Control');
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    const cursor = newSideCursor(page);
+    await expect(cursor).toHaveAttribute('data-line', '2');
+    await expect.poll(() => page.evaluate(() => history.length)).toBe(historyLength + 1);
+
+    await page.goBack();
+    await expect(cursor).toHaveAttribute('data-line', '12');
+    await page.goForward();
+    await expect(cursor).toHaveAttribute('data-line', '2');
+  });
+
+  test('keyboard and toolbar navigation revisit a picked reference', async ({ page, diffle }) => {
+    const references = await openReferences(page, diffle.url, LINE);
+    const historyLength = await page.evaluate(() => history.length);
+    await page.keyboard.press('Enter');
+    await expect(references).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => history.length)).toBe(historyLength + 1);
+    const cursor = newSideCursor(page);
+    await expect(cursor).toHaveAttribute('data-line', '1');
+
+    await page.keyboard.type('gu');
+    await expect(cursor).toHaveAttribute('data-line', String(LINE));
+    await page.keyboard.type('gU');
+    await expect(cursor).toHaveAttribute('data-line', '1');
+
+    await page.keyboard.press('Control+o');
+    await expect(cursor).toHaveAttribute('data-line', String(LINE));
+    await page.keyboard.press('Control+i');
+    await expect(cursor).toHaveAttribute('data-line', '1');
+
+    await page.keyboard.type('gu');
+    await expect(cursor).toHaveAttribute('data-line', String(LINE));
+    const forward = page.getByRole('button', { name: 'Forward', exact: true });
+    await forward.click();
+    await expect(cursor).toHaveAttribute('data-line', '1');
+    await expect(forward).toBeDisabled();
+  });
+
   test.describe('whose definitions point into collapsed context', () => {
     // At 2 context lines, openapi.py folds lines 4–10 between its two hunks; line 20, `refunds=...`, calls in.
     test.use({ env: { PATH: '/usr/bin:/bin', FAKE_LSP_DEFINITION_LINE: '7' } });
@@ -191,7 +239,7 @@ test.describe('with a language server', () => {
       // A context change reloads every patch, so the page already open hydrates afresh through the route.
       await page.getByRole('button', { name: 'Settings' }).click();
       const settings = page.getByRole('dialog', { name: 'Settings' });
-      await settings.getByRole('spinbutton').fill('2');
+      await settings.getByRole('spinbutton', { name: '', exact: true }).fill('2');
       await settings.getByRole('button', { name: 'Save' }).click();
       await expect(settings).toHaveCount(0);
       await gotoFile(page, path);
@@ -210,6 +258,9 @@ test.describe('with a language server', () => {
         await page.keyboard.type('gd');
         await expect(line7).toBeInViewport({ timeout: 2000 });
       }).toPass({ timeout: 10000 });
+      await page.keyboard.press('Control+o');
+      await expect(newSideCursor(page)).toHaveAttribute('data-line', '20');
+      await expect(line7).toHaveCount(0);
     });
   });
 });
@@ -246,6 +297,10 @@ typescriptTest.describe('with a TypeScript server', () => {
     await expect(status).toHaveScreenshot('typescript-status.png');
   });
 });
+
+function newSideCursor(page: Page) {
+  return page.locator('[data-line][data-selected-line]:not(code[data-deletions] *)').first();
+}
 
 /** Open the references list for the symbol starting `tally/ledger.py`'s line `line`. */
 async function openReferences(page: Page, url: string, line: number) {

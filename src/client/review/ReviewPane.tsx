@@ -58,6 +58,7 @@ import { useStore, type CodeDraft, type Loaded, type ReviewState } from '@/clien
 import { gridColumns, useViews } from '@/client/views/state.js';
 import { installInlineWheel, revealInline } from './inline.js';
 import { rowOf, topRow } from './rows.js';
+import { rememberViewport } from './location.js';
 import { overflow, reviewGeometry } from './geometry.js';
 import { HIGHLIGHTS, installOccurrenceHighlights, occurrenceCss } from '@/client/lsp/occurrences.js';
 import { onSelectionChanged, setViewer } from '@/client/lsp/wordNav.js';
@@ -410,21 +411,34 @@ export function ReviewPane() {
           drainHighlightLookahead(state);
         } else state.pending = null;
       }
-      if (jumping.current || useStore.getState().selection) return;
+      if (jumping.current) return;
       const box = scroller.getBoundingClientRect();
       const header = geometry.itemMetrics.diffHeaderHeight;
       const eye = box.top + box.height * EYE_FRACTION;
+      const s = useStore.getState();
+      const rememberRow = () => {
+        const anchor = topRow(
+          rendered.map((item) => ({ id: item.id, root: item.element.shadowRoot ?? item.element })),
+          eye,
+          box.bottom,
+        );
+        if (anchor) rememberViewport(s, anchor);
+      };
+      if (s.selection) {
+        rememberRow();
+        return;
+      }
       const inView = rendered
         .map((r) => ({ id: r.id, rect: r.element.getBoundingClientRect() }))
         .filter((r) => r.rect.bottom > box.top + header + 1 && r.rect.top < box.bottom && r.rect.height > 0);
       if (inView.length === 0) return;
-      const s = useStore.getState();
       const pick =
         inView.find((r) => pathFromItemId(r.id) === s.activePath) ??
         inView.filter((r) => r.rect.top <= eye).sort((a, b) => b.rect.top - a.rect.top)[0] ??
         inView[0]!;
       const path = pathFromItemId(pick.id);
       if (path !== s.activePath) s.setActivePath(path);
+      rememberRow();
     };
     // Highlight one diff beyond the rendered window without mounting more DOM. Keep one request in flight
     // and replace the pending target on scroll so speculative work cannot flood the worker queue.
@@ -725,6 +739,11 @@ export function ReviewPane() {
       const viewer = viewerRef.current;
       const instance = viewer?.getInstance();
       if (!viewer || !instance || !viewer.getItem(scrollTarget.id)) return false;
+      if (pinned && !renderedRow(scrollTarget)) {
+        // On a cold view the file may still have an estimated height. Measure it before placing its line.
+        viewer.scrollTo({ type: 'item', id: scrollTarget.id, align: 'start', behavior: 'instant' });
+        instance.render(true);
+      }
       viewer.scrollTo(target);
       instance.render(true);
       if (!exact) {

@@ -2,12 +2,23 @@ import { expect, test } from './fixtures.js';
 import { activePath, gotoFile, viewed, collapsed } from './browser.js';
 
 test('marks a file viewed, collapses it and moves on', async ({ page }) => {
+  const header = page.locator('header');
+  await expect(header).toContainText('0/17 viewed · 0%');
   await gotoFile(page, 'scripts/build.bat');
   await page.keyboard.press('v');
   expect(await viewed(page, 'scripts/build.bat')).toBe(true);
   expect(await collapsed(page, 'scripts/build.bat')).toBe(true);
   await expect(page.locator('file-tree-container')).toContainText('✓');
+  await expect(header).toContainText('1/17 viewed · 4%');
   await expect(page).toHaveScreenshot('viewed.png');
+
+  await gotoFile(page, 'scripts/tally.sh');
+  await page.keyboard.press('v');
+  await expect(header).toContainText('2/17 viewed · 4%');
+
+  await gotoFile(page, 'scripts/build.bat');
+  await page.keyboard.press('v');
+  await expect(header).toContainText('1/17 viewed · 0%');
 });
 
 test('regression: selecting an empty file keeps that file active', async ({ page }) => {
@@ -134,4 +145,35 @@ test('the directory context menu marks the directory viewed', async ({ page }) =
   await expect(
     page.locator('file-tree-container [data-item-path="tally/"] [data-item-section="decoration"] > span'),
   ).toHaveText('✓');
+});
+
+test.describe('resuming a review', () => {
+  test.use({ args: ['--keep-alive'] });
+
+  test('restores the last file and line in a fresh browser context', async ({ page, browser, diffle }) => {
+    const path = 'tally/ledger.py';
+    await gotoFile(page, path);
+    const position = async () => {
+      const response = await page.request.get(new URL('api/review-location', diffle.url).href);
+      return response.status() === 200 ? ((await response.json()) as { path: string; line: number }) : null;
+    };
+    await expect.poll(position).toMatchObject({ path, line: expect.any(Number) });
+    const before = (await position())!.line;
+    await page.keyboard.press('j');
+    await expect.poll(async () => (await position())?.line).not.toBe(before);
+    const { line } = (await position())!;
+    const viewport = page.viewportSize();
+    await page.close();
+
+    const context = await browser.newContext({ viewport: viewport ?? undefined });
+    try {
+      const reopened = await context.newPage();
+      await reopened.goto(diffle.url);
+      await expect.poll(() => activePath(reopened)).toBe(path);
+      const file = reopened.locator('diffs-container').filter({ has: reopened.locator(`[data-path="${path}"]`) });
+      await expect(file.locator(`[data-line="${line}"]`).first()).toBeInViewport();
+    } finally {
+      await context.close();
+    }
+  });
 });
