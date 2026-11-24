@@ -30,8 +30,8 @@ pub fn readable_by_servers(snap: Option<&Snapshot>) -> bool {
 }
 
 /// Why no language server can answer the query right now, or none when one can. `checkout` is
-/// `readable_by_servers` of the current snapshot.
-pub fn lsp_blocker(lsp: &LspStatus, checkout: bool, q: &LspQuery<'_>) -> Option<String> {
+/// `readable_by_servers` of the current snapshot, and `tree` its new side's paths.
+pub fn lsp_blocker(lsp: &LspStatus, checkout: bool, tree: &[String], q: &LspQuery<'_>) -> Option<String> {
     if !lsp.enabled {
         return Some("Language servers are off for this run (--no-lsp)".into());
     }
@@ -41,7 +41,7 @@ pub fn lsp_blocker(lsp: &LspStatus, checkout: bool, q: &LspQuery<'_>) -> Option<
     let mut servers: Vec<&LspServerStatus> = lsp.servers.iter().collect();
     let mut language = None;
     if let Some(path) = q.path {
-        let Some(found) = language_of(path) else {
+        let Some(found) = language_of(path, tree) else {
             let ext = path.rfind('.').map(|i| &path[i..]).filter(|e| !e[1..].contains(['/', '\\']) && e.len() > 1);
             return Some(format!("No language server for {} files", ext.unwrap_or("these")));
         };
@@ -145,10 +145,10 @@ mod tests {
     fn names_the_run_the_snapshot_the_language_the_server_and_the_feature_in_that_order() {
         let on = status(vec![server(|_| {})]);
         let off = LspStatus { enabled: false, servers: Vec::new(), missing: Vec::new() };
-        assert!(lsp_blocker(&off, true, &LspQuery::default()).unwrap().contains("--no-lsp"));
-        assert!(lsp_blocker(&on, false, &LspQuery::default()).unwrap().contains("new side"));
-        assert_eq!(lsp_blocker(&on, true, &at("notes.txt", None)).unwrap(), "No language server for .txt files");
-        assert_eq!(lsp_blocker(&on, true, &at("main.go", None)).unwrap(), "No language server runs for go");
+        assert!(lsp_blocker(&off, true, &[], &LspQuery::default()).unwrap().contains("--no-lsp"));
+        assert!(lsp_blocker(&on, false, &[], &LspQuery::default()).unwrap().contains("new side"));
+        assert_eq!(lsp_blocker(&on, true, &[], &at("notes.txt", None)).unwrap(), "No language server for .txt files");
+        assert_eq!(lsp_blocker(&on, true, &[], &at("main.go", None)).unwrap(), "No language server runs for go");
         let mut broken = on.clone();
         broken.missing = vec![LspMissing {
             language: LanguageId::Vue,
@@ -156,18 +156,18 @@ mod tests {
             why: Some("vue-language-server is on PATH but its plugin is not".into()),
         }];
         assert_eq!(
-            lsp_blocker(&broken, true, &at("App.vue", None)).unwrap(),
+            lsp_blocker(&broken, true, &[], &at("App.vue", None)).unwrap(),
             "No language server for vue: vue-language-server is on PATH but its plugin is not"
         );
-        assert_eq!(lsp_blocker(&on, true, &at("a.py", Some(LspFeature::References))), None);
+        assert_eq!(lsp_blocker(&on, true, &[], &at("a.py", Some(LspFeature::References))), None);
         let workspace = LspQuery { feature: Some(LspFeature::WorkspaceSymbol), ..Default::default() };
-        assert_eq!(lsp_blocker(&on, true, &workspace), None);
+        assert_eq!(lsp_blocker(&on, true, &[], &workspace), None);
         let hoverish = status(vec![server(|s| s.supports = vec![LspFeature::Hover])]);
         assert_eq!(
-            lsp_blocker(&hoverish, true, &at("a.py", Some(LspFeature::Definition))).unwrap(),
+            lsp_blocker(&hoverish, true, &[], &at("a.py", Some(LspFeature::Definition))).unwrap(),
             "pyrefly offers no go to definition"
         );
-        assert_eq!(lsp_blocker(&hoverish, true, &at("a.py", Some(LspFeature::Hover))), None);
+        assert_eq!(lsp_blocker(&hoverish, true, &[], &at("a.py", Some(LspFeature::Hover))), None);
     }
 
     #[test]
@@ -177,18 +177,18 @@ mod tests {
             s.supports.clear();
         })]);
         assert_eq!(
-            lsp_blocker(&starting, true, &at("a.py", Some(LspFeature::Definition))).unwrap(),
+            lsp_blocker(&starting, true, &[], &at("a.py", Some(LspFeature::Definition))).unwrap(),
             "pyrefly is starting…"
         );
         let patient = LspQuery { patient: true, ..at("a.py", Some(LspFeature::Definition)) };
-        assert_eq!(lsp_blocker(&starting, true, &patient), None);
+        assert_eq!(lsp_blocker(&starting, true, &[], &patient), None);
         let dead = status(vec![server(|s| {
             s.state = LspState::Unavailable;
             s.message = Some("exited (1)".into());
             s.supports.clear();
         })]);
         let patient = LspQuery { patient: true, ..at("a.py", None) };
-        assert_eq!(lsp_blocker(&dead, true, &patient).unwrap(), "pyrefly is unavailable: exited (1)");
+        assert_eq!(lsp_blocker(&dead, true, &[], &patient).unwrap(), "pyrefly is unavailable: exited (1)");
     }
 
     #[test]
@@ -199,9 +199,13 @@ mod tests {
             s.joins = vec![LanguageId::Css];
             s.supports = vec![LspFeature::Hover];
         });
-        assert_eq!(lsp_blocker(&status(vec![tailwind.clone()]), true, &at("a.css", Some(LspFeature::Hover))), None);
         assert_eq!(
-            lsp_blocker(&status(vec![tailwind.clone()]), true, &at("a.css", Some(LspFeature::Definition))).unwrap(),
+            lsp_blocker(&status(vec![tailwind.clone()]), true, &[], &at("a.css", Some(LspFeature::Hover))),
+            None
+        );
+        assert_eq!(
+            lsp_blocker(&status(vec![tailwind.clone()]), true, &[], &at("a.css", Some(LspFeature::Definition)))
+                .unwrap(),
             "tailwind offers no go to definition"
         );
         let starting = server(|s| {
@@ -211,7 +215,8 @@ mod tests {
             s.supports.clear();
         });
         assert_eq!(
-            lsp_blocker(&status(vec![tailwind, starting]), true, &at("a.css", Some(LspFeature::Definition))).unwrap(),
+            lsp_blocker(&status(vec![tailwind, starting]), true, &[], &at("a.css", Some(LspFeature::Definition)))
+                .unwrap(),
             "css is starting…"
         );
     }

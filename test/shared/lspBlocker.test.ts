@@ -22,8 +22,8 @@ const server = (extra: Partial<LspServerStatus> = {}): LspServerStatus => ({
   ...extra,
 });
 const status = (...servers: LspServerStatus[]): LspStatus => ({ enabled: true, servers, missing: [] });
-const checkout = { newSha: 'worktree', headSha: '' };
-const elsewhere = { newSha: 'abc123', headSha: 'def456' };
+const checkout = { newSha: 'worktree', headSha: '', tree: [] };
+const elsewhere = { newSha: 'abc123', headSha: 'def456', tree: [] };
 
 describe('lspBlocker', () => {
   it('names the run, the snapshot, the language, the server and the feature, in that order', () => {
@@ -79,11 +79,11 @@ describe('lspBlocker', () => {
 
 describe('hoverOnly', () => {
   it('is true for a file whose ready servers navigate nowhere, such as a schema server', () => {
-    expect(hoverOnly(status(server({ languages: ['json'], supports: ['hover', 'documentSymbol'] })), 'x.json')).toBe(
-      true,
-    );
-    expect(hoverOnly(status(server()), 'a.py')).toBe(false);
-    expect(hoverOnly(status(server({ state: 'starting', supports: [] })), 'a.py')).toBe(false);
-    expect(hoverOnly(status(), 'a.py')).toBe(false);
+    expect(
+      hoverOnly(status(server({ languages: ['json'], supports: ['hover', 'documentSymbol'] })), [], 'x.json'),
+    ).toBe(true);
+    expect(hoverOnly(status(server()), [], 'a.py')).toBe(false);
+    expect(hoverOnly(status(server({ state: 'starting', supports: [] })), [], 'a.py')).toBe(false);
+    expect(hoverOnly(status(), [], 'a.py')).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ pub mod bridge;
 pub mod configuration;
 pub mod documents;
 pub mod hover;
+pub mod languages;
 pub mod locator;
 pub mod merge;
 pub mod output;

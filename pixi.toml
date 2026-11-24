@@ -17,6 +17,7 @@ rust-std-aarch64-unknown-linux-gnu = { version = "==1.100.0", cutoff = "2026-11-
 rust-std-x86_64-apple-darwin = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
 rust-std-x86_64-pc-windows-msvc = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
 rust-std-x86_64-unknown-linux-gnu = { version = "==1.100.0", cutoff = "2026-11-18T12:29:08Z" }
+helm-ls = { version = "==0.5.4", cutoff = "2026-11-24T08:56:34Z" }
 
 [package]
 name = "diffle"
@@ -90,6 +91,7 @@ clang-tools = "*"
 tombi = "*"
 bash-language-server = "*"
 dockerfile-language-server-nodejs = "*"
+helm-ls = ">=0.5.4"
 
 [environments]
 default = { features = ["lsp-web", "lsp-rust", "lsp-python", "lsp-more"], solve-group = "default" }

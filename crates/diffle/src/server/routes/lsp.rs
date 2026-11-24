@@ -58,7 +58,7 @@ async fn pool_for(d: &ApiDeps, path: Option<&str>, feature: Option<LspFeature>) 
     let snap = d.session.snapshotter()?.current().await?;
     let q = LspQuery { path, feature, patient: true };
     let refuse = |m: String| ApiError(StatusCode::CONFLICT, m);
-    if let Some(blocked) = lsp_blocker(&lsp_status(d), readable_by_servers(Some(&snap)), &q) {
+    if let Some(blocked) = lsp_blocker(&lsp_status(d), readable_by_servers(Some(&snap)), &snap.tree, &q) {
         return Err(refuse(blocked));
     }
     let Some(pool) = d.lsp.clone() else { return Err(refuse("language servers are off".into())) };

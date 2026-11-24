@@ -33,23 +33,32 @@ fn files() -> HashMap<String, String> {
     .collect()
 }
 
-/// A worktree snapshot changing `paths`; `new_sha`/`head_sha` say whether it is the checkout.
-fn diff_at(paths: &[&str], new_sha: &str, head_sha: &str) -> Snapshot {
+/// A worktree snapshot changing `paths` in a tree that also holds `unchanged`; `new_sha`/`head_sha`
+/// say whether it is the checkout.
+fn snapshot(paths: &[&str], unchanged: &[&str], new_sha: &str, head_sha: &str) -> Arc<Snapshot> {
     let changed: Vec<Value> = paths
         .iter()
         .map(|p| json!({ "path": p, "status": "M", "additions": 0, "deletions": 0, "binary": false, "blob": "", "oldBlob": "", "generated": false }))
         .collect();
-    serde_json::from_value(json!({
-        "root": "/r", "version": 1, "oldSha": "a", "newSha": new_sha, "headSha": head_sha, "context": 3,
-        "review": { "kind": "range", "old": "HEAD", "new": "worktree", "base": "direct", "view": { "kind": "whole" } },
-        "follows": "worktree", "commentKey": "working",
-        "changed": changed, "tree": paths, "commit": null,
-        "commits": { "list": [], "total": 0, "oldSha": "a", "newSha": new_sha }, "iterations": [],
-    }))
-    .unwrap()
+    let mut tree: Vec<&str> = paths.iter().chain(unchanged).copied().collect();
+    tree.sort_unstable();
+    Arc::new(
+        serde_json::from_value(json!({
+            "root": "/r", "version": 1, "oldSha": "a", "newSha": new_sha, "headSha": head_sha, "context": 3,
+            "review": { "kind": "range", "old": "HEAD", "new": "worktree", "base": "direct", "view": { "kind": "whole" } },
+            "follows": "worktree", "commentKey": "working",
+            "changed": changed, "tree": tree, "commit": null,
+            "commits": { "list": [], "total": 0, "oldSha": "a", "newSha": new_sha }, "iterations": [],
+        }))
+        .unwrap(),
+    )
 }
 
-fn diff(paths: &[&str]) -> Snapshot {
+fn diff_at(paths: &[&str], new_sha: &str, head_sha: &str) -> Arc<Snapshot> {
+    snapshot(paths, &[], new_sha, head_sha)
+}
+
+fn diff(paths: &[&str]) -> Arc<Snapshot> {
     diff_at(paths, "worktree", "")
 }
 
@@ -181,6 +190,21 @@ async fn routes_by_extension_and_refuses_a_path_it_cannot_serve() {
     assert!(matches!(s.pool.document_symbols("main.rs").await, Err(Error::LspUnavailable(_))));
     let err = s.pool.document_symbols("main.go").await.unwrap_err();
     assert!(err.to_string().contains("no language server for main.go"), "{err}");
+    s.pool.close().await;
+}
+
+#[tokio::test]
+async fn routes_a_charts_template_to_the_helm_server_and_other_yaml_to_the_yaml_one() {
+    let overrides = [(LanguageId::Helm, "helm-server"), (LanguageId::Yaml, "yaml-server")];
+    let Some(s) = start(Setup { on_disk: Some(Vec::new()), ..with(&overrides) }) else { return };
+    let paths =
+        ["chart/templates/svc.yaml", "chart/values.yaml", "chart/templates/_helpers.tpl", "ci/templates/job.yml"];
+    s.pool.track(&snapshot(&paths, &["chart/Chart.yaml"], "worktree", "")).await;
+    s.settle().await;
+    assert_eq!(s.events("helm-server").unwrap(), ["open svc.yaml v1", "open _helpers.tpl v1"]);
+    // No Chart.yaml beside `ci/templates`: plain YAML.
+    assert_eq!(s.events("yaml-server").unwrap(), ["open values.yaml v1", "open job.yml v1"]);
+    assert_eq!(s.pool.hover(&pos("chart/templates/svc.yaml", 1, 0), false).await.map(|_| ()).ok(), Some(()));
     s.pool.close().await;
 }
 

@@ -12,8 +12,17 @@ use serde_json::json;
 use diffle::lsp::process::LspProcess;
 
 /// The commands the wrappers answer to.
-const COMMANDS: [&str; 7] =
-    ["fake", "py-server", "go-server", "clangd-ish", "ts-server", "rust-analyzer", "tailwindcss-language-server"];
+const COMMANDS: [&str; 9] = [
+    "fake",
+    "py-server",
+    "go-server",
+    "clangd-ish",
+    "ts-server",
+    "rust-analyzer",
+    "tailwindcss-language-server",
+    "helm-server",
+    "yaml-server",
+];
 
 static BIN: OnceLock<Option<PathBuf>> = OnceLock::new();
 

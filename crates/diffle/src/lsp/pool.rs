@@ -9,6 +9,7 @@ use futures::future::BoxFuture;
 use indexmap::IndexMap;
 
 use super::documents::{Origin, ReadFn};
+use super::languages::Languages;
 use super::locator::HasFn;
 use super::merge::{merge_hovers, merge_locations, union};
 use super::pool_server::{PathsByLanguage, PoolServer, ServerOptions, paths_of};
@@ -66,6 +67,7 @@ pub struct LspPool {
     /// Languages already resolved, served or not, so the PATH probe runs once each.
     resolved: Mutex<HashSet<LanguageId>>,
     closing: AtomicBool,
+    languages: Languages,
     publish: Mutex<Publish>,
 }
 
@@ -78,6 +80,7 @@ impl LspPool {
             missing: Mutex::default(),
             resolved: Mutex::default(),
             closing: AtomicBool::new(false),
+            languages: Languages::default(),
             publish: Mutex::default(),
         });
         pool.ensure(&preload);
@@ -170,11 +173,12 @@ impl LspPool {
     /// newly grew start before this returns; the future syncs the documents. A server whose language
     /// left the diff stays up with nothing tracked, so its index is warm if the reader switches back.
     /// Nothing is tracked when the new side is not the checkout: a server would see text contradicting its disk.
-    pub fn track(self: &Arc<Self>, snap: &Snapshot) -> impl Future<Output = ()> + use<> {
+    pub fn track(self: &Arc<Self>, snap: &Arc<Snapshot>) -> impl Future<Output = ()> + use<> {
+        self.languages.follow(snap);
         let mut by_language = PathsByLanguage::new();
         if follows_checkout(snap) {
             for f in snap.changed.iter().filter(|f| f.status != ChangeStatus::D && !f.binary) {
-                if let Some(language) = language_of(&f.path) {
+                if let Some(language) = language_of(&f.path, &snap.tree) {
                     by_language.entry(language).or_default().push(f.path.clone());
                 }
             }
@@ -209,7 +213,7 @@ impl LspPool {
             return Err(Error::LspUnavailable("the language servers are shutting down".into()));
         }
         let all = self.servers();
-        let found: Vec<Arc<PoolServer>> = match language_of(path) {
+        let found: Vec<Arc<PoolServer>> = match self.languages.of(path) {
             Some(language) => {
                 let owners = all.iter().filter(|s| s.routes().languages.contains(&language));
                 let joiners = all.iter().filter(|s| s.routes().joins.contains(&language));
@@ -264,17 +268,7 @@ impl LspPool {
                     super::pool_server::Routes { languages: server.languages.clone(), joins: server.joins.clone() };
                 self.spawn(&server.command, &paths_of(&routes, by_language))
             });
-            let mut routes = entry.routes.lock().unwrap();
-            for l in server.languages {
-                if !routes.languages.contains(&l) {
-                    routes.languages.push(l);
-                }
-            }
-            for l in server.joins {
-                if !routes.joins.contains(&l) {
-                    routes.joins.push(l);
-                }
-            }
+            entry.routes.lock().unwrap().grow(server.languages, server.joins);
         }
         if changed {
             self.publish();
@@ -287,6 +281,7 @@ impl LspPool {
             root: self.opts.root.clone(),
             read: self.opts.read.clone(),
             has: self.opts.has.clone(),
+            languages: self.languages.clone(),
             lookup: self.opts.lookup.clone(),
             max_open: self.opts.max_open,
             on_status: Arc::new(move || {

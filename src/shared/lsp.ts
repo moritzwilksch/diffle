@@ -35,7 +35,7 @@ export interface LspQuery {
  */
 export function lspBlocker(
   lsp: LspStatus,
-  snap: Pick<Snapshot, 'newSha' | 'headSha'> | null,
+  snap: Pick<Snapshot, 'newSha' | 'headSha' | 'tree'> | null,
   { path, feature, patient = false }: LspQuery = {},
 ): string | null {
   if (!lsp.enabled) return 'Language servers are off for this run (--no-lsp)';
@@ -44,7 +44,7 @@ export function lspBlocker(
   let servers = lsp.servers;
   let language: LanguageId | undefined;
   if (path != null) {
-    language = languageOf(path) ?? undefined;
+    language = languageOf(path, snap.tree) ?? undefined;
     if (!language) return `No language server for ${/(\.[^./\\]+)$/.exec(path)?.[1] ?? 'these'} files`;
     servers = serversFor(lsp, language);
   }
@@ -65,10 +65,11 @@ export function serversFor(lsp: LspStatus, language: LanguageId): LspServerStatu
 
 /**
  * Whether the file's servers offer hover and nothing to navigate by: the schema servers for
- * configuration files. Such a file gets tooltips on any token and no symbol menu.
+ * configuration files. Such a file gets tooltips on any token and no symbol menu. `tree` is the
+ * new side's paths.
  */
-export function hoverOnly(lsp: LspStatus, path: string): boolean {
-  const language = languageOf(path);
+export function hoverOnly(lsp: LspStatus, tree: readonly string[], path: string): boolean {
+  const language = languageOf(path, tree);
   const ready = language ? serversFor(lsp, language).filter((s) => s.state === 'ready') : [];
   return ready.length > 0 && ready.every((s) => !s.supports.some((f) => f === 'definition' || f === 'references'));
 }

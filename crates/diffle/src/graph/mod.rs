@@ -51,7 +51,12 @@ pub async fn build(
     let files: Vec<String> = snap
         .changed
         .iter()
-        .filter(|f| f.status != ChangeStatus::D && !f.binary && f.submodule.is_none() && language_of(&f.path).is_some())
+        .filter(|f| {
+            f.status != ChangeStatus::D
+                && !f.binary
+                && f.submodule.is_none()
+                && language_of(&f.path, &snap.tree).is_some()
+        })
         .filter(|f| under.as_ref().is_none_or(|dir| f.path.starts_with(dir.as_str())))
         .map(|f| f.path.clone())
         .collect();
