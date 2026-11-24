@@ -666,6 +666,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/git-cliff-2.14.2-h5c03787_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/go-1.27.3-nocgo_h401b19e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/gopls-0.23.0-h4c3bf4e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-arm64/helm-ls-0.5.4-h4c3bf4e_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/icu-78.3-hf7d560f_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/krb5-1.22.2-h68e0809_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-arm64/lefthook-2.2.2-h4c3bf4e_0.conda
@@ -5314,6 +5315,13 @@ packages:
   run_exports: {}
   size: 9202245
   timestamp: 1792657913427
+- conda: https://conda.anaconda.org/conda-forge/win-arm64/helm-ls-0.5.4-h4c3bf4e_2.conda
+  sha256: 0c786c6d9db5ddad9bbd7c8497080786f25df3e561d0d8a1e4ae4a6987f595b1
+  md5: c1a4b9fc2985416506f8d5264fbddcec
+  license: MIT
+  run_exports: {}
+  size: 11488701
+  timestamp: 1795505920584
 - conda: https://conda.anaconda.org/conda-forge/win-arm64/icu-78.3-hf7d560f_2.conda
   sha256: 2fc6620cbf3dced9152581e801bd8e8a9a7633db05f072b247fe38e629771c9b
   md5: b658ef00e652109b8432df5eba3fb771
