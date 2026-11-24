@@ -191,7 +191,7 @@ test.describe('with a language server', () => {
       // A context change reloads every patch, so the page already open hydrates afresh through the route.
       await page.getByRole('button', { name: 'Settings' }).click();
       const settings = page.getByRole('dialog', { name: 'Settings' });
-      await settings.getByRole('spinbutton').fill('2');
+      await settings.getByRole('spinbutton', { name: 'Context lines' }).fill('2');
       await settings.getByRole('button', { name: 'Save' }).click();
       await expect(settings).toHaveCount(0);
       await gotoFile(page, path);

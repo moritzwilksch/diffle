@@ -8,7 +8,7 @@ use crate::comments::hunks::shown_ranges;
 use crate::comments::{AnchorSource, ReviewView, SideView};
 use crate::error::Result;
 use crate::git::WORKTREE;
-use crate::protocol::{Side, Snapshot, image_key};
+use crate::protocol::{CommentAnchor, ReviewEvidence, Side, Snapshot, image_key};
 use crate::snapshotter::Snapshotter;
 
 /// The paths a snapshot exposes, for answering reads without touching Git.
@@ -136,6 +136,10 @@ impl AnchorSource for Placer {
 
     async fn has_file(&self, path: &str) -> Result<bool> {
         Ok(self.session.has_file(&self.snapshotter.current().await?, path))
+    }
+
+    async fn evidence(&self, anchor: &CommentAnchor) -> Result<Option<ReviewEvidence>> {
+        self.session.capture_evidence(&self.snapshotter.current().await?, anchor).await
     }
 }
 

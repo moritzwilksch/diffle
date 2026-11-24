@@ -149,7 +149,12 @@ impl Session {
     /// moved), then broadcasts and announces it.
     async fn publish(self: &Arc<Self>, a: &Arc<Active>) -> Result<Arc<Snapshot>> {
         let snap = a.snapshotter.current().await?;
-        self.relocate_comments(a, &snap).await?;
+        let snap = if snap.comment_key != a.comments.key() {
+            self.activate(a.review.clone()).await?
+        } else {
+            self.relocate_comments(a, &snap).await?;
+            snap
+        };
         // The snapshot resolved the refs afresh; a signal arriving later compares against it.
         *a.moved.lock().unwrap() = None;
         self.hub.broadcast(ServerMessage::Snapshot { version: snap.version });

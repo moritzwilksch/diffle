@@ -629,6 +629,14 @@ export type FollowRefs = z.infer<typeof FollowRefsSchema>;
 export const BlameModeSchema = z.enum(['off', 'inline', 'gutter']);
 export type BlameMode = z.infer<typeof BlameModeSchema>;
 
+export const TEXT_SCALES = [80, 90, 100, 110, 125, 150] as const;
+export const FONT_SIZE_MIN = 8;
+export const FONT_SIZE_MAX = 48;
+const fontSizeUpdate = z.number().int().min(FONT_SIZE_MIN).max(FONT_SIZE_MAX).nullable().optional();
+
+export const InterfaceFontSchema = z.enum(['sans-serif', 'monospace']);
+export type InterfaceFont = z.infer<typeof InterfaceFontSchema>;
+
 export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),
@@ -640,6 +648,12 @@ export const UserConfigSchema = z.object({
   lineWrap: z.boolean(),
   /** Where git blame shows; see `BlameModeSchema`. Default inline. */
   blame: BlameModeSchema,
+  /** Overall interface scale in percent. Default 100. */
+  textScale: z.number().int(),
+  /** Interface font family. Default sans-serif. */
+  interfaceFont: InterfaceFontSchema,
+  /** Code text size in CSS pixels. Null follows the interface scale. */
+  editorFontSize: z.number().int().nullable(),
   /**
    * Language server command per language, replacing the built-in candidate for it; an empty
    * string disables the language. Read-only over HTTP; set in the config file, whose path `diffle config` prints.
@@ -660,6 +674,9 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   followRefs: 'auto',
   lineWrap: true,
   blame: 'inline',
+  textScale: 100,
+  interfaceFont: 'sans-serif',
+  editorFontSize: null,
   lspCommands: {},
   githubHosts: {},
 };
@@ -1076,6 +1093,13 @@ export const ConfigUpdateSchema = z.object({
   followRefs: FollowRefsSchema.optional(),
   lineWrap: z.boolean().optional(),
   blame: BlameModeSchema.optional(),
+  textScale: z
+    .number()
+    .int()
+    .refine((scale) => TEXT_SCALES.some((size) => size === scale))
+    .optional(),
+  interfaceFont: InterfaceFontSchema.optional(),
+  editorFontSize: fontSizeUpdate,
 });
 export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export const ResolvedRequestSchema = z.object({
@@ -1277,3 +1301,51 @@ export const ActivitySchema = z.object({
 export type Activity = z.infer<typeof ActivitySchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });
+
+export const ReviewContextLineSchema = z.object({
+  line: z.number().int(),
+  text: z.string(),
+  truncated: z.boolean(),
+});
+
+export const ReviewEvidenceSchema = z.object({
+  path: z.string(),
+  side: SideSchema,
+  startLine: z.number().int(),
+  endLine: z.number().int(),
+  excerpt: z.string(),
+  excerptTruncated: z.boolean(),
+  before: ReviewContextLineSchema.array(),
+  after: ReviewContextLineSchema.array(),
+});
+
+export const FeedbackItemSchema = z.object({
+  target: z.string(),
+  threadId: z.string(),
+  messageId: z.string(),
+  feedback: z.string(),
+  anchor: CommentAnchorSchema,
+  original: ReviewEvidenceSchema.optional(),
+});
+
+export const FeedbackLocationSchema = z.enum([
+  'unchanged',
+  'moved',
+  'changed',
+  'deleted',
+  'ambiguous',
+  'unlocated',
+  'unavailable',
+  'original-side',
+  'historical',
+  'file',
+  'tour',
+]);
+
+export const FeedbackContextSchema = z.object({
+  item: FeedbackItemSchema,
+  location: FeedbackLocationSchema,
+  current: ReviewEvidenceSchema.optional(),
+});
+
+export const FeedbackReplySchema = z.object({ summary: z.string() });

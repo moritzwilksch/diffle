@@ -1,9 +1,10 @@
+import type { FeedbackItem } from '@/shared/protocol.js';
 // The demo videos' scenes. Each gets a fresh repository and a fresh diffle, so no review state
 // carries over.
 import type { Page } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readThreads, runCli } from '../../../test/e2e/server.js';
+import { runCli } from '../../../test/e2e/server.js';
 import { OUT } from './encode.js';
 import {
   SLOW,
@@ -71,10 +72,12 @@ export const SCENES: Record<string, Scene> = {
       // answers through the real CLI, as it would beside the review; the reply arrives live.
       await glide(page, VIEWPORT.width * 0.55, VIEWPORT.height * 0.3);
       await pause(page, 1200);
-      const [thread] = await readThreads(url);
+      const [feedback] = JSON.parse(await runCli(['comments', 'pending', '-C', repo])) as FeedbackItem[];
+      if (!feedback) throw new Error('The demo review has no unanswered feedback');
       const reply =
         'Yes: at `rate=2.0` one token takes 0.5 s to refill, so this is the shortest wait that lets the next call through.';
-      await runCli(['comments', 'reply', thread!.id, reply, '-C', repo]);
+      await runCli(['comments', 'context', feedback.target, '-C', repo]);
+      await runCli(['comments', 'reply', feedback.target, reply, '-C', repo]);
       await page.getByText('the shortest wait').first().waitFor();
       await pause(page, 2800);
 

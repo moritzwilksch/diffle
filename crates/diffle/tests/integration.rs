@@ -9,6 +9,7 @@ mod checkout;
 mod cli;
 mod comments;
 mod diff_parity;
+mod feedback;
 mod git;
 mod github;
 mod github_client;

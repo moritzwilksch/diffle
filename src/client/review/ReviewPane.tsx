@@ -230,7 +230,8 @@ function drainHighlightLookahead(state: HighlightLookahead): void {
 
 export function ReviewPane() {
   const rem = useRemPx();
-  const geometry = useMemo(() => reviewGeometry(rem), [rem]);
+  const editorFontSize = useStore((s) => s.config.editorFontSize);
+  const geometry = useMemo(() => reviewGeometry(rem, editorFontSize), [rem, editorFontSize]);
   const snapshot = useStore((s) => s.snapshot);
   const error = useStore((s) => s.error);
   const loaded = useStore((s) => s.loaded);
@@ -481,6 +482,7 @@ export function ReviewPane() {
         s.theme !== prev.theme ||
         s.diffStyle !== prev.diffStyle ||
         s.config.lineWrap !== prev.config.lineWrap ||
+        s.config.editorFontSize !== prev.config.editorFontSize ||
         (s.config.blame !== prev.config.blame && [s.config.blame, prev.config.blame].includes('gutter'))
       )
         hold();

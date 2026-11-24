@@ -2,6 +2,10 @@ import { expect, test } from './fixtures.js';
 import { clickLine, gotoFile, selectLines, settle } from './browser.js';
 import { readPrompt, readThreads, seedReply, seedThreads } from './server.js';
 
+function stableTargets(prompt: string): string {
+  return prompt.replace(/^Target: `[^`]+`$/gm, 'Target: `[target]`').replace(/[ \t]+$/gm, '');
+}
+
 test('comments on a line range and lists the thread in the panel', async ({ page, diffle }) => {
   await gotoFile(page, 'tally/ledger.py');
   await selectLines(page, 'tally/ledger.py', 3, 4);
@@ -58,7 +62,7 @@ test('comments on a whole file and exports both threads as a prompt', async ({ p
   const prompt = await readPrompt(diffle.url);
   expect(prompt).toContain('KWD');
   // The prompt an agent receives for this review, quoted lines included.
-  expect(prompt).toMatchSnapshot('prompt.md');
+  expect(stableTargets(prompt)).toMatchSnapshot('prompt.md');
   await expect(page).toHaveScreenshot('two-threads.png');
 });
 
@@ -82,6 +86,19 @@ test('regression: deleting a thread needs a second click and confirmation expire
   await confirm.click();
   await expect.poll(() => readThreads(diffle.url)).toEqual([]);
   await expect(page.locator('aside').last()).toContainText('No comments yet.');
+});
+
+test('resolves and reopens local feedback', async ({ page, diffle }) => {
+  await seedThreads(diffle.url, [{ path: 'tally/ledger.py', body: 'Keep the review history.' }]);
+  const sidebar = page.locator('aside').last();
+  await sidebar.getByRole('button', { name: /Keep the review history/ }).click();
+  await page.getByTitle('Resolve (R)', { exact: true }).click();
+  await expect(sidebar).toContainText('Every thread is resolved.');
+  await expect.poll(async () => (await readThreads(diffle.url))[0]?.resolved).toBe(true);
+  await sidebar.getByRole('checkbox', { name: 'Show 1 resolved' }).check();
+  await expect(sidebar.getByText('Keep the review history.')).toBeVisible();
+  await page.getByTitle('Reopen (R)', { exact: true }).click();
+  await expect.poll(async () => (await readThreads(diffle.url))[0]?.resolved).toBe(false);
 });
 
 test('regression: closing a composer keeps its text until the comment is posted', async ({ page, diffle }) => {
@@ -137,14 +154,16 @@ test('marks a thread the agent opened in its header, in the panel and inline', a
   await expect(page.locator('aside').last()).toMatchAriaSnapshot({ name: 'agent-threads-panel.aria.yml' });
 });
 
-test("marks only the agent's reply in a reviewer's thread", async ({ page, diffle }) => {
+test('shows agent and reviewer replies in order in the Threads panel', async ({ page, diffle }) => {
   const [thread] = await seedThreads(diffle.url, [
     { path: 'tally/currency.py', startLine: 7, body: '`KWD` gets three decimals above but no symbol here.' },
   ]);
   await seedReply(diffle.url, thread!.id, { body: 'Added `KD` to `_SYMBOLS`.', author: 'agent' });
   await seedReply(diffle.url, thread!.id, { body: 'Thanks.' });
   await gotoFile(page, 'tally/currency.py');
-  await expect(page.getByText('Thanks.').first()).toBeVisible();
+  const messages = ['KWD gets three decimals above but no symbol here.', 'Added KD to _SYMBOLS.', 'Thanks.'];
+  await expect(page.locator('.codeview').getByText('Thanks.', { exact: true })).toBeVisible();
+  await expect(page.locator('aside').last().getByRole('paragraph')).toHaveText(messages);
   await expect(page).toHaveScreenshot('agent-reply.png');
 });
 
@@ -159,6 +178,5 @@ test('exports agent messages with an (agent) prefix in the prompt', async ({ dif
   ]);
   await seedReply(diffle.url, opened!.id, { body: 'Agreed, in a follow-up.' });
   await seedReply(diffle.url, reviewed!.id, { body: 'Added `KD` to `_SYMBOLS`.', author: 'agent' });
-  // The prompt `yy` copies and the shutdown hands over.
-  expect(await readPrompt(diffle.url)).toMatchSnapshot('agent-prompt.md');
+  expect(stableTargets(await readPrompt(diffle.url))).toMatchSnapshot('agent-prompt.md');
 });

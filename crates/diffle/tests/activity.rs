@@ -41,7 +41,7 @@ async fn answers_the_shown_set_and_a_fresh_cursor_without_since() {
     let s = TestServer::start().await;
     let id = open(&s, json!({ "path": "a.txt", "body": "Rename it." })).await;
     let r = s.get("/api/threads/activity").await.json();
-    assert_eq!((&r["cursor"], &r["commentKey"]), (&json!("test:1"), &json!("working")));
+    assert_eq!((&r["cursor"], &r["commentKey"]), (&json!("test:1"), &json!("working:branch:main")));
     assert_eq!(ids(&r["threads"]), [id.as_str()]);
     assert_eq!((&r["removed"], &r["resync"], &r["closed"]), (&json!([]), &json!(false), &json!(false)));
     s.close().await;
@@ -181,7 +181,7 @@ async fn wakes_when_the_reviewer_switches_the_comment_key() {
     let entered = s.json("POST", "/api/review", json!({ "kind": "revspec", "args": ["HEAD"] })).await;
     assert_eq!(entered.status, 200, "{}", entered.body);
     let r = waiting.await.unwrap();
-    assert_ne!(r["commentKey"], "working");
+    assert_ne!(r["commentKey"], "working:branch:main");
     assert_eq!((&r["cursor"], &r["threads"], &r["removed"]), (&json!("test:2"), &json!([]), &json!([])));
     s.close().await;
 }

@@ -2,9 +2,15 @@ import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { Button } from '@/client/ui/Button.js';
 import { TextArea } from '@/client/ui/TextArea.js';
 import { useEffect, useRef, useState } from 'react';
-import { applyTextSize, readTextSize, storeTextSize, TEXT_SIZES, type TextSize } from '@/client/scale.js';
 import { useStore } from '@/client/store.js';
-import type { BlameMode, FollowRefs } from '@/shared/protocol.js';
+import {
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
+  TEXT_SCALES,
+  type BlameMode,
+  type FollowRefs,
+  type InterfaceFont,
+} from '@/shared/protocol.js';
 
 const FOLLOW_REFS: [FollowRefs, string][] = [
   ['on', 'Always'],
@@ -21,31 +27,46 @@ const BLAME: [BlameMode, string][] = [
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const config = useStore((s) => s.config);
   const saveConfig = useStore((s) => s.saveConfig);
-  const [text, setText] = useState(config.autoViewed.join('\n'));
-  const [context, setContext] = useState(String(config.contextLines));
-  const [followRefs, setFollowRefs] = useState(config.followRefs);
-  const [lineWrap, setLineWrap] = useState(config.lineWrap);
-  const [blame, setBlame] = useState(config.blame);
-  const [textSize, setTextSize] = useState(readTextSize);
+  const [initial] = useState(config);
+  const [text, setText] = useState(initial.autoViewed.join('\n'));
+  const [context, setContext] = useState(String(initial.contextLines));
+  const [followRefs, setFollowRefs] = useState(initial.followRefs);
+  const [lineWrap, setLineWrap] = useState(initial.lineWrap);
+  const [blame, setBlame] = useState(initial.blame);
+  const [textScale, setTextScale] = useState(initial.textScale);
+  const [interfaceFont, setInterfaceFont] = useState(initial.interfaceFont);
+  const [editorSize, setEditorSize] = useState(initial.editorFontSize?.toString() ?? '');
+  const fontSize = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const overrides = Object.entries(config.lspCommands).sort(([a], [b]) => a.localeCompare(b));
 
   const save = async () => {
+    if (fontSize.current?.validity.valid === false) {
+      fontSize.current.reportValidity();
+      return;
+    }
+    const contextLines = Math.max(0, Number.parseInt(context, 10) || 0);
+    const editorFontSize = editorSize === '' ? null : Number(editorSize);
+    const patch = {
+      autoViewed:
+        text === initial.autoViewed.join('\n')
+          ? undefined
+          : text
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean),
+      contextLines: contextLines === initial.contextLines ? undefined : contextLines,
+      followRefs: followRefs === initial.followRefs ? undefined : followRefs,
+      lineWrap: lineWrap === initial.lineWrap ? undefined : lineWrap,
+      blame: blame === initial.blame ? undefined : blame,
+      textScale: textScale === initial.textScale ? undefined : textScale,
+      interfaceFont: interfaceFont === initial.interfaceFont ? undefined : interfaceFont,
+      editorFontSize: editorFontSize === initial.editorFontSize ? undefined : editorFontSize,
+    };
     setSaving(true);
-    storeTextSize(textSize);
-    applyTextSize(textSize);
-    await saveConfig({
-      autoViewed: text
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean),
-      contextLines: Math.max(0, Number.parseInt(context, 10) || 0),
-      followRefs,
-      lineWrap,
-      blame,
-    });
+    const saved = Object.values(patch).every((value) => value === undefined) || (await saveConfig(patch));
     setSaving(false);
-    onClose();
+    if (saved) onClose();
   };
 
   // Escape closes, Enter saves unless the cursor is in the textarea, where it
@@ -76,7 +97,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={onClose}>
       <DialogContent
         aria-label="Settings"
-        className="[&_code]:rounded-sm [&_code]:bg-hover [&_code]:px-1 [&_code]:font-mono"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto [&_code]:rounded-sm [&_code]:bg-hover [&_code]:px-1 [&_code]:font-mono"
       >
         <h3 className="m-0 mb-2">Auto-viewed patterns</h3>
         <p className="m-0 mb-2 text-muted">
@@ -90,10 +111,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           spellCheck={false}
           autoFocus
         />
-        <h3 className="m-0 mt-[14px] mb-2">Context lines</h3>
+        <h3 id="settings-context-lines" className="m-0 mt-[14px] mb-2">
+          Context lines
+        </h3>
         <p className="m-0 mb-2 text-muted">Unchanged lines around each change.</p>
         <input
           type="number"
+          aria-labelledby="settings-context-lines"
           min={0}
           max={10000}
           value={context}
@@ -127,18 +151,34 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <h3 className="m-0 mt-[14px] mb-2">Text size</h3>
-        <p className="m-0 mb-2 text-muted">Scales the whole app. Kept in this browser.</p>
-        <select
-          aria-label="Text size"
-          value={textSize}
-          onChange={(e) => setTextSize(Number(e.target.value) as TextSize)}
-        >
-          {TEXT_SIZES.map((size) => (
+        <select aria-label="Text size" value={textScale} onChange={(e) => setTextScale(Number(e.target.value))}>
+          {TEXT_SCALES.map((size) => (
             <option key={size} value={size}>
               {size === 100 ? '100% (default)' : `${size}%`}
             </option>
           ))}
         </select>
+        <label className="mt-2 flex items-center gap-2">
+          Interface font
+          <select value={interfaceFont} onChange={(e) => setInterfaceFont(e.target.value as InterfaceFont)}>
+            <option value="sans-serif">Inter (default)</option>
+            <option value="monospace">JetBrains Mono</option>
+          </select>
+        </label>
+        <label className="mt-2 flex items-center gap-2">
+          Editor font size (px)
+          <input
+            ref={fontSize}
+            type="number"
+            min={FONT_SIZE_MIN}
+            max={FONT_SIZE_MAX}
+            placeholder="Auto"
+            value={editorSize}
+            onChange={(e) => setEditorSize(e.target.value)}
+            className="w-16"
+          />
+        </label>
+        <p className="m-0 mt-1 text-muted">Leave blank to follow the app’s text size.</p>
         <h3 className="m-0 mt-[14px] mb-2">Reload behavior</h3>
         <p className="m-0 mb-2 text-muted">Reload when a compared ref moves.</p>
         <div role="radiogroup" aria-label="Reload behavior" className="flex flex-col gap-1">

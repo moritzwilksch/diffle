@@ -36,6 +36,10 @@
   --sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+:root[data-interface-font='monospace'] {
+  --sans: var(--mono);
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --bg: #0a0c10;

@@ -31,6 +31,8 @@ export const ThreadRow = memo(function ThreadRow({
   openTourThread: (id: string) => void;
 }) {
   const first = t.messages[0];
+  const path = anchorPath(t.anchor) ?? undefined;
+  const quoted = t.anchor.kind === 'line' ? t.anchor.quoted : undefined;
   const del = useConfirm(() => void deleteThread(t.id));
   const open = () => {
     // A file thread's card sits above the file's first line, where opening the file lands.
@@ -72,7 +74,7 @@ export const ThreadRow = memo(function ThreadRow({
             {t.messages.length - 1} repl{t.messages.length === 2 ? 'y' : 'ies'}
           </span>
         )}
-        {/* The row shows the opening message, so the mark says who wrote that one. */}
+        {/* The header mark identifies who opened the thread. */}
         {first?.author === 'agent' && <AgentMark size="0.6875rem" />}
         {t.stale && (
           <span className="inline-flex items-center gap-0.75 font-sans text-[0.6875rem] leading-[normal] text-warn">
@@ -102,17 +104,21 @@ export const ThreadRow = memo(function ThreadRow({
           <ButtonLabel text={del.armed && 'Delete?'} />
         </Button>
       </div>
-      <div className="px-2.5 pt-1.5 pb-2 [&>.markdown]:font-sans [&>.markdown]:text-[0.8125rem] [&>.markdown]:leading-[1.4] [&>.markdown]:[word-break:break-word]">
+      <div className="px-2.5 pt-1.5 pb-2 [&_.markdown]:font-sans [&_.markdown]:text-[0.8125rem] [&_.markdown]:leading-[1.4] [&_.markdown]:[word-break:break-word]">
         {t.anchor.kind === 'line' && (
           <div className="m-0 mb-1.5 overflow-hidden font-mono text-[0.75rem] leading-[1.4] text-ellipsis whitespace-nowrap text-muted">
             {firstLine(t.anchor.quoted)}
           </div>
         )}
-        <Markdown
-          text={first?.body ?? ''}
-          path={anchorPath(t.anchor) ?? undefined}
-          quoted={t.anchor.kind === 'line' ? t.anchor.quoted : undefined}
-        />
+        <Markdown text={first?.body ?? ''} path={path} quoted={quoted} />
+        {t.messages.slice(1).map((message) => (
+          <div key={message.id} className="mt-2 border-l border-border pl-2 text-foreground">
+            <div className="mb-1 flex items-baseline gap-1.5 text-xs text-muted">
+              {message.author === 'agent' ? <AgentMark size="0.75rem" /> : <span>You</span>}
+            </div>
+            <Markdown text={message.body} path={path} quoted={quoted} />
+          </div>
+        ))}
       </div>
     </div>
   );

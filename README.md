@@ -119,6 +119,11 @@ Generated files start collapsed, as on GitHub: `linguist-generated` in `.gitattr
 them, and `linguist-generated=false` opts a file out. To collapse other files, add auto-viewed
 globs in settings or with `diffle config`.
 
+Settings are shared across repositories. Choose Inter or JetBrains Mono for the interface.
+Set the editor font size in pixels or leave it blank to follow the app’s text size. Diffle saves
+these preferences in `~/.config/diffle/config.json` (`$XDG_CONFIG_HOME/diffle/config.json` when set).
+Run `diffle config` to see the active path and values.
+
 ## Take a tour of the change
 
 Before you review your agent's change, let it walk you through it. It writes a tour: one page
@@ -132,14 +137,8 @@ diff.
   <img alt="A tour in diffle: a diagram and a walk stepped with l, a symbol's references, a comment on the tour's words, a trace and tabs, then a checklist ticked and answered" src=".github/assets/videos/tour-light.gif">
 </picture>
 
-Install the skill once, and your agent knows how to write a tour:
-
-```bash
-mkdir -p ~/.claude/skills/diffle
-diffle skill > ~/.claude/skills/diffle/SKILL.md
-```
-
-Then ask it for one. diffle opens the tour as soon as it's pushed, and `T` toggles it:
+[Install the Diffle skill](#install-the-diffle-skill) and ask your agent to write a tour.
+diffle opens the tour as soon as it's pushed, and `T` toggles it:
 
 - `n` / `p`: next or previous section
 - `l` / `h`: step through the walk, trace, or diagram in view
@@ -249,21 +248,52 @@ uses.
 A coding agent in the same repository talks to the diffle running there:
 
 ```bash
-diffle comments list            # the threads you are shown, as JSON
-diffle comments reply <id> -    # answer a thread in Markdown; - reads stdin
+diffle comments pending            # unanswered reviewer feedback and reply targets
+diffle comments context <target>   # locate a comment before making a change
+diffle comments reply <target> -   # post one verified summary; - reads stdin
+diffle comments list               # inspect threads, including resolved ones
 diffle tour push tour.html      # show a guided tour of the change; stdin without a file
 diffle tour clear               # remove it
 diffle tour export tour.html    # save it as one HTML file that opens offline; - for stdout
 ```
 
-Ask your agent to look at your comments: it reads the threads, makes the changes, and replies in
-each one. The replies show up in your open review, marked as the agent's.
+Ask your agent to handle the pending Diffle comments. It refreshes the context before each fix
+and posts one reply per verified change. Replies appear in the same threads. Use the checkmark to
+resolve a thread and **Show resolved** to see or reopen it. Working comments persist for each branch
+in its checkout, or for each commit when HEAD is detached.
 
 See [Take a tour of the change](#take-a-tour-of-the-change) for what a tour shows.
 
-`diffle skill` prints all of this for the agent, the tour's elements included, as a skill to
-install as is: save it as `SKILL.md` in a `diffle` folder among your agent's skills, such as
-`~/.claude/skills/diffle/`. `--no-frontmatter` leaves out its name and description.
+### Install the Diffle skill
+
+`diffle skill` generates a skill for handling pending comments and writing tours. Install
+Diffle and make sure `diffle` is on your agent's `PATH`. Run the install commands as the
+user who runs the agent on the workspace host. Repeat them after upgrading Diffle to
+refresh the skill.
+
+#### Codex
+
+```bash
+mkdir -p ~/.agents/skills/diffle
+diffle skill > ~/.agents/skills/diffle/SKILL.md
+```
+
+Open Codex in the worktree you're reviewing and submit `$diffle Handle the pending review
+comments.` or `$diffle Write a tour of this change.` You can also select `diffle` from
+`/skills`. If the skill doesn't appear, reopen the session. For the CLI, use `codex resume`
+to keep the same conversation. See the [Codex skills guide](https://developers.openai.com/codex/skills).
+
+#### Claude Code
+
+```bash
+mkdir -p ~/.claude/skills/diffle
+diffle skill > ~/.claude/skills/diffle/SKILL.md
+```
+
+Open Claude Code in the worktree you're reviewing and submit `/diffle Handle the pending
+review comments.` or `/diffle Write a tour of this change.` The skill also appears in the
+`/` menu. If it doesn't appear, reopen Claude Code from the worktree with `claude --resume`
+to keep the same conversation. See the [Claude Code skills guide](https://code.claude.com/docs/en/skills).
 
 ## Open from lazygit
 

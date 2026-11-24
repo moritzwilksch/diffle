@@ -202,6 +202,11 @@ impl Snapshotter {
         let (shown, head_sha) = tokio::join!(shown, repo.resolve("HEAD"));
         let (shown, head_sha) = (shown?, head_sha.unwrap_or_default());
         let Shown { old_sha, new_sha, follows, range, interdiff, commit, comment_key } = shown;
+        let comment_key = if comment_key == crate::mode::keys::WORKING {
+            crate::mode::keys::working_key(repo).await?
+        } else {
+            comment_key
+        };
         // The tree belongs to the selected new side: a commit's own listing, or the index plus
         // untracked files (added below via `changed`) for the worktree.
         let tracked = async {

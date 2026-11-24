@@ -253,7 +253,9 @@ mod posix {
         ] {
             assert!(rest.contains(part), "{part} missing from:\n{rest}");
         }
-        assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
+        assert!(prompt.starts_with("app.py:2\n\n> y = 2\n\nrename y\n\n---\n"));
+        assert!(prompt.contains("Saved feedback context"));
+        assert!(prompt.contains("> 1: x = 1"));
         assert!(!announcement_file(&t.path).exists());
     }
 
@@ -318,7 +320,9 @@ mod posix {
         assert!(status.success(), "{rest}");
         let mut prompt = String::new();
         child.stdout.take().unwrap().read_to_string(&mut prompt).unwrap();
-        assert_eq!(prompt, "app.py:2\n\n> y = 2\n\nrename y\n\n---\n");
+        assert!(prompt.starts_with("app.py:2\n\n> y = 2\n\nrename y\n\n---\n"));
+        assert!(prompt.contains("Saved feedback context"));
+        assert!(prompt.contains("> 1: x = 1"));
         assert!(!socket.exists());
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "staging left behind");
         assert!(!announcement_file(&t.path).exists());

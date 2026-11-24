@@ -21,14 +21,7 @@ expression: masked(replied)
     },
     {
       "author": "agent",
-      "body": "It counts the retries.",
-      "createdAt": "[time]",
-      "id": "[id]",
-      "updatedAt": "[time]"
-    },
-    {
-      "author": "agent",
-      "body": "Renamed it to `retries`.\n",
+      "body": "Renamed it to `retries`.",
       "createdAt": "[time]",
       "id": "[id]",
       "updatedAt": "[time]"

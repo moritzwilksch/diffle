@@ -1,6 +1,7 @@
 //! The active review and everything derived from it, behind one serialized transition queue.
 mod blame;
 mod checkout;
+mod feedback;
 mod files;
 mod github;
 mod refresh;
@@ -52,6 +53,7 @@ pub struct SessionOptions {
 
 struct Active {
     review: Review,
+    feedback_scope: String,
     /// Where the range's comments and iterations live, whatever slice is shown; a lone commit has none.
     range_key: Option<String>,
     /// What the first snapshot followed; a slice keeps following its range.
