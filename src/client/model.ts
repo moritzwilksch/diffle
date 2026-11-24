@@ -320,9 +320,15 @@ export function itemDeps(
   mine: CommentThread[],
   collapsed: boolean,
 ): unknown[] {
-  const reply = state.replyTo != null && mine.some((t) => t.id === state.replyTo) ? state.replyTo : null;
+  const reply = state.replyTo?.threadId;
   const editing = state.editingId != null && threadOfMessage(mine, state.editingId) ? state.editingId : null;
-  return [...mine, codeDraft(state.draft)?.path === path ? state.draft : null, collapsed, reply, editing];
+  return [
+    ...mine,
+    codeDraft(state.draft)?.path === path ? state.draft : null,
+    collapsed,
+    mine.some((t) => t.id === reply) ? reply : null,
+    editing,
+  ];
 }
 
 export interface ItemVersion {

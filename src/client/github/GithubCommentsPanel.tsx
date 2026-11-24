@@ -1,12 +1,13 @@
 import { GitPullRequest, RefreshCw } from 'lucide-react';
 import { useId, useState } from 'react';
+import { ReplyButton } from '@/client/comments/reply/ReplyButton.js';
 import { githubCommentsChanged } from './commentsEvent.js';
 import { showGithubThread } from './inlineThreads.js';
 import { GithubComment } from './GithubComment.js';
 import { GithubThreadActions } from './GithubThreadActions.js';
 import { useGithubComments } from './useGithubComments.js';
 import { Button } from '@/client/ui/Button.js';
-import type { PullRef } from '@/shared/protocol.js';
+import type { GithubCommentThread, PullRef } from '@/shared/protocol.js';
 
 const MIN_SHARE = 22;
 const MAX_SHARE = 68;
@@ -112,56 +113,86 @@ export function GithubCommentsPanel({ pr }: { pr: PullRef }) {
               </div>
             </details>
           ) : null}
-          {data?.threads.map((thread) => {
-            const end = thread.line ?? thread.originalLine;
-            const start = thread.line == null ? thread.originalStartLine : thread.startLine;
-            const range = end == null ? '' : start != null && start !== end ? `:${start}–${end}` : `:${end}`;
-            return (
-              <details
-                key={thread.id}
-                open={!collapsed.has(thread.id)}
-                className="rounded-md border border-border bg-card"
-                onToggle={(event) => {
-                  const closed = !event.currentTarget.open;
-                  setCollapsed((current) => {
-                    if (closed === current.has(thread.id)) return current;
-                    const next = new Set(current);
-                    if (closed) next.add(thread.id);
-                    else next.delete(thread.id);
-                    return next;
-                  });
-                }}
-              >
-                <summary className="cursor-pointer px-2 py-1.5">
-                  <span className="font-mono break-all">
-                    {thread.path}
-                    {range}
-                  </span>
-                  {thread.diffSide === 'LEFT' && range && <span className="ml-2 text-muted">Old side</span>}
-                  {thread.isResolved && <span className="ml-2 text-add">Resolved</span>}
-                  {thread.isOutdated && <span className="ml-2 text-warn">Outdated</span>}
-                </summary>
-                <div className="divide-y divide-border border-t border-border">
-                  {thread.comments.map((message) => (
-                    <GithubComment
-                      key={message.id}
-                      message={message}
-                      prUrl={pr.url}
-                      onOpen={thread.isOutdated ? undefined : () => showGithubThread(pr.url, thread)}
-                    />
-                  ))}
-                  {thread.comments.length === 0 && (
-                    <a className="block p-2 text-accent" href={pr.url} target="_blank" rel="noreferrer">
-                      Open pull request
-                    </a>
-                  )}
-                </div>
-                <GithubThreadActions prUrl={pr.url} thread={thread} />
-              </details>
-            );
-          })}
+          {data?.threads.map((thread) => (
+            <GithubThreadRow
+              key={thread.id}
+              prUrl={pr.url}
+              thread={thread}
+              open={!collapsed.has(thread.id)}
+              onOpenChange={(open) =>
+                setCollapsed((current) => {
+                  if (open === !current.has(thread.id)) return current;
+                  const next = new Set(current);
+                  if (open) next.delete(thread.id);
+                  else next.add(thread.id);
+                  return next;
+                })
+              }
+            />
+          ))}
         </div>
       </section>
     </>
+  );
+}
+
+function GithubThreadRow({
+  prUrl,
+  thread,
+  open,
+  onOpenChange,
+}: {
+  prUrl: string;
+  thread: GithubCommentThread;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [composing, setComposing] = useState(false);
+  const end = thread.line ?? thread.originalLine;
+  const start = thread.line == null ? thread.originalStartLine : thread.startLine;
+  const range = end == null ? '' : start != null && start !== end ? `:${start}–${end}` : `:${end}`;
+  const jump = thread.isOutdated ? undefined : () => showGithubThread(prUrl, thread);
+  return (
+    <details
+      open={open}
+      className="rounded-md border border-border bg-card"
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
+      <summary className={`relative cursor-pointer px-2 py-1.5 ${thread.viewerCanReply ? 'pr-9' : ''}`}>
+        <span className="font-mono break-all">
+          {thread.path}
+          {range}
+        </span>
+        {thread.diffSide === 'LEFT' && range && <span className="ml-2 text-muted">Old side</span>}
+        {thread.isResolved && <span className="ml-2 text-add">Resolved</span>}
+        {thread.isOutdated && <span className="ml-2 text-warn">Outdated</span>}
+        {thread.viewerCanReply && (!open || !composing) && (
+          <ReplyButton
+            className="absolute top-1 right-1 hover:bg-surface"
+            onClick={() => {
+              onOpenChange(true);
+              setComposing(true);
+            }}
+          />
+        )}
+      </summary>
+      <div className="divide-y divide-border border-t border-border">
+        {thread.comments.map((message) => (
+          <GithubComment key={message.id} message={message} prUrl={prUrl} onOpen={jump} />
+        ))}
+        {thread.comments.length === 0 && (
+          <a className="block p-2 text-accent" href={prUrl} target="_blank" rel="noreferrer">
+            Open pull request
+          </a>
+        )}
+      </div>
+      <GithubThreadActions
+        prUrl={prUrl}
+        thread={thread}
+        composing={open && composing}
+        setComposing={setComposing}
+        replyInHeader
+      />
+    </details>
   );
 }

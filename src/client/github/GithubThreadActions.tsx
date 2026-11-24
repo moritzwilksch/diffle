@@ -4,8 +4,19 @@ import { Button } from '@/client/ui/Button.js';
 import { TextArea } from '@/client/ui/TextArea.js';
 import type { GithubCommentThread } from '@/shared/protocol.js';
 
-export function GithubThreadActions({ prUrl, thread }: { prUrl: string; thread: GithubCommentThread }) {
-  const [composing, setComposing] = useState(false);
+export function GithubThreadActions({
+  prUrl,
+  thread,
+  composing,
+  setComposing,
+  replyInHeader,
+}: {
+  prUrl: string;
+  thread: GithubCommentThread;
+  composing: boolean;
+  setComposing: (composing: boolean) => void;
+  replyInHeader?: boolean;
+}) {
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -72,7 +83,7 @@ export function GithubThreadActions({ prUrl, thread }: { prUrl: string; thread: 
         </form>
       )}
       <div className="flex flex-wrap gap-1.5">
-        {thread.viewerCanReply && !composing && (
+        {thread.viewerCanReply && !composing && !replyInHeader && (
           <Button disabled={busy} onClick={() => setComposing(true)}>
             Reply
           </Button>

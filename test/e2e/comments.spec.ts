@@ -139,7 +139,7 @@ test('edits only the latest reviewer message in a local thread', async ({ page, 
 test.describe('a stale local thread', () => {
   test.use({ revs: ['working'] });
 
-  test('stays in the sidebar when its code anchor becomes stale', async ({ page, diffle, repo }) => {
+  test('replies from the sidebar when its code anchor becomes stale', async ({ page, diffle, repo }) => {
     const path = 'tally/refunds.py';
     const file = join(repo, path);
     await seedThreads(diffle.url, [{ path, startLine: 18, body: 'Discuss the original refund logic.' }]);
@@ -156,7 +156,18 @@ test.describe('a stale local thread', () => {
     await expect.poll(async () => (await readThreads(diffle.url))[0]?.stale).toBe(true);
     await expect(body).toHaveCount(0);
     await expect(code.locator('[data-thread-marker]')).toHaveCount(0);
-    await expect(page.locator('aside').last().getByText('Discuss the original refund logic.')).toBeVisible();
+    const sidebar = page.locator('aside').last();
+    await expect(sidebar.getByText('Discuss the original refund logic.')).toBeVisible();
+    await sidebar.getByRole('button', { name: 'Reply', exact: true }).click();
+    const reply = sidebar.getByPlaceholder('Reply…');
+    await expect(reply).toBeFocused();
+    await expect(code.getByPlaceholder('Reply…')).toHaveCount(0);
+    await reply.fill('Please restore the original refund logic.');
+    await reply.press('Control+Enter');
+    await expect(sidebar.getByText('Please restore the original refund logic.')).toBeVisible();
+    await expect
+      .poll(async () => (await readThreads(diffle.url))[0]?.messages.at(-1)?.body)
+      .toBe('Please restore the original refund logic.');
   });
 });
 
@@ -181,15 +192,23 @@ test('regression: closing a composer keeps its text until the comment is posted'
   await composer.press('Control+Enter');
   await expect.poll(async () => (await readThreads(diffle.url)).length).toBe(1);
 
-  const reply = page.getByPlaceholder('Reply…');
-  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
+  const code = page.locator('.codeview');
+  const reply = code.getByPlaceholder('Reply…');
+  await code.getByRole('button', { name: 'Reply', exact: true }).click();
   await reply.fill('And one more thing.');
   await reply.press('Escape');
-  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
+  await code.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(reply).toHaveValue('And one more thing.');
+  await reply.press('Escape');
+
+  const sidebar = page.locator('aside').last();
+  await sidebar.getByRole('button', { name: 'Reply', exact: true }).click();
+  const sidebarReply = sidebar.getByPlaceholder('Reply…');
+  await expect(sidebarReply).toHaveValue('And one more thing.');
+  await expect(reply).toHaveCount(0);
+  await sidebarReply.press('Escape');
 
   // Posting forgets the text: the same lines open an empty composer.
-  await reply.press('Escape');
   await selectLines(page, 'tally/ledger.py', 3, 4);
   await expect(composer).toHaveValue('');
   await composer.press('Escape');

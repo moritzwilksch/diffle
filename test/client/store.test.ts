@@ -847,7 +847,7 @@ describe('client transitions', () => {
   });
 
   it('a mode switch whose push lands before the POST response fetches once and resets the composer via the push', async () => {
-    useStore.setState({ snapshot: snap(1, 'working'), replyTo: 't1', editingId: 't1' });
+    useStore.setState({ snapshot: snap(1, 'working'), replyTo: { threadId: 't1' }, editingId: 't1' });
     const post = deferred<Snapshot>();
     api.enter.mockReturnValueOnce(post.promise);
     const switching = useStore.getState().enter({ kind: 'pr' });
@@ -2049,7 +2049,7 @@ describe('threads', () => {
   });
 
   it('a file draft has no selection, posts a thread without a line, and closes on Escape', async () => {
-    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [], replyTo: 't1' });
+    useStore.setState({ snapshot: snap(1, 'working', ['a.py']), threads: [], replyTo: { threadId: 't1' } });
     const sel = {
       id: 'diff:a.py@0',
       range: { start: 2, side: 'additions' as const, end: 2, endSide: 'additions' as const },
@@ -2107,7 +2107,7 @@ describe('threads', () => {
       .openDraft({ id: 'diff:a.py@0', range: { start: 2, side: 'additions', end: 2, endSide: 'additions' } });
     expect(codeDraft(useStore.getState().draft)?.path).toBe('a.py');
     useStore.getState().openReply('t1');
-    expect(useStore.getState().replyTo).toBe('t1');
+    expect(useStore.getState().replyTo?.threadId).toBe('t1');
     expect(useStore.getState().draft).toBeNull();
     void useStore
       .getState()

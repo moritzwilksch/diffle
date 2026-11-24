@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { GithubInlineThread } from './inlineThreads.js';
 import { GithubComment } from './GithubComment.js';
 import { GithubThreadActions } from './GithubThreadActions.js';
@@ -6,6 +7,7 @@ import { collapseFromCardClick, InlineThreadCollapse } from '@/client/comments/I
 
 export function GithubThreadCard({ inline }: { inline: GithubInlineThread }) {
   const { thread, prUrl, path } = inline;
+  const [composing, setComposing] = useState(false);
   const collapse = () => setInlineExpanded(githubThreadKey(thread.id), false, !thread.isResolved);
   return (
     <article
@@ -23,7 +25,7 @@ export function GithubThreadCard({ inline }: { inline: GithubInlineThread }) {
           <GithubComment key={message.id} message={message} prUrl={prUrl} path={path} />
         ))}
       </div>
-      <GithubThreadActions key={thread.id} prUrl={prUrl} thread={thread} />
+      <GithubThreadActions prUrl={prUrl} thread={thread} composing={composing} setComposing={setComposing} />
     </article>
   );
 }

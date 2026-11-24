@@ -88,6 +88,20 @@ test('keeps a long inline GitHub comment inside its split diff column', async ({
   }
 });
 
+test('replies to a collapsed outdated GitHub thread from the sidebar', async ({ page }) => {
+  const panel = page.getByRole('region', { name: 'GitHub comments' });
+  const outdated = panel.locator('details').filter({ hasText: 'Outdated discussion' });
+  await panel.getByRole('button', { name: 'Collapse outdated' }).click();
+  await expect(outdated).toHaveJSProperty('open', false);
+  await outdated.getByRole('button', { name: 'Reply', exact: true }).click();
+  const reply = outdated.getByRole('textbox', { name: 'GitHub reply' });
+  await expect(reply).toBeFocused();
+  await reply.fill('Please revisit the original change.');
+  await reply.press('Control+Enter');
+  await expect(outdated.getByText('Please revisit the original change.')).toBeVisible();
+  await expect(page.locator('.codeview').getByText('Please revisit the original change.')).toHaveCount(0);
+});
+
 test('replies, changes resolution from both panels, collapses threads, and edits the pending review', async ({
   page,
   github,

@@ -335,8 +335,8 @@ export interface ReviewState {
   editingId: string | null;
   setEditingId(id: string | null): void;
   /** Thread whose reply composer is open. Exclusive with `draft`. */
-  replyTo: string | null;
-  openReply(threadId: string): void;
+  replyTo: { threadId: string; panelId?: string } | null;
+  openReply(threadId: string, panelId?: string): void;
   /** Thread the user jumped to from the panel; its in-diff card is outlined until the next selection or jump. */
   focusedThread: string | null;
   focusThread(threadId: string | null): void;
@@ -1651,10 +1651,14 @@ export const useStore = create<ReviewState>((set, get) => {
     focusThread(threadId) {
       set({ focusedThread: threadId });
     },
-    openReply(threadId) {
+    openReply(threadId, panelId) {
       const t = get().threads.find((x) => x.id === threadId);
       if (!t) return;
-      set({ replyTo: threadId, draft: null, activePath: anchorPath(t.anchor) ?? get().activePath });
+      set({
+        replyTo: { threadId, panelId },
+        draft: null,
+        ...(!panelId && { activePath: anchorPath(t.anchor) ?? get().activePath }),
+      });
     },
     closeReply() {
       if (get().replyTo) set({ replyTo: null });
@@ -2823,7 +2827,7 @@ export const useStore = create<ReviewState>((set, get) => {
         return report('Posting the reply', e);
       }
       if (key) get().setUnsent(key, '');
-      if (get().replyTo === threadId) set({ replyTo: null });
+      if (get().replyTo?.threadId === threadId) set({ replyTo: null });
       await get().refreshThreads();
     },
 

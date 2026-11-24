@@ -1,7 +1,7 @@
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
 import { AlertTriangle, Check, RotateCcw, Trash2 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useId, useState } from 'react';
 import type { CommentThread } from '@/shared/protocol.js';
 import type { Side } from '@/shared/side.js';
 import { AgentMark, ThreadIcon } from '@/client/comments/AgentMark.js';
@@ -14,6 +14,8 @@ import { useConfirm } from '@/client/useConfirm.js';
 import { useStore } from '@/client/store.js';
 import { localThreadKey, setInlineExpanded } from './inlineExpansion.js';
 import { CommentDate } from './CommentDate.js';
+import { ReplyButton } from './reply/ReplyButton.js';
+import { ReplyComposer } from './reply/ReplyComposer.js';
 
 /**
  * One thread. Memoized on the thread object and the store's stable actions, so
@@ -37,6 +39,11 @@ export const ThreadRow = memo(function ThreadRow({
   const path = anchorPath(t.anchor) ?? undefined;
   const quoted = t.anchor.kind === 'line' ? t.anchor.quoted : undefined;
   const setResolved = useStore((s) => s.setResolved);
+  const panelId = useId();
+  const replying = useStore((s) => s.replyTo?.panelId === panelId);
+  const openReply = useStore((s) => s.openReply);
+  const closeReply = useStore((s) => s.closeReply);
+  const [showReplies, setShowReplies] = useState(false);
   const del = useConfirm(() => void deleteThread(t.id));
   const canOpen = t.anchor.kind === 'tour' || !t.stale;
   const open = () => {
@@ -60,7 +67,7 @@ export const ThreadRow = memo(function ThreadRow({
     </div>
   ));
   return (
-    // A div, not a button: the item hosts its own delete button.
+    // The row opens the anchor and hosts its own thread controls.
     <div
       role={canOpen ? 'button' : undefined}
       tabIndex={canOpen ? 0 : undefined}
@@ -100,10 +107,18 @@ export const ThreadRow = memo(function ThreadRow({
             <Check size="0.6875rem" /> resolved
           </span>
         )}
+        <ReplyButton
+          className="ml-auto shrink-0"
+          replying={replying}
+          onClick={() => {
+            if (replying) return closeReply();
+            setShowReplies(true);
+            openReply(t.id, panelId);
+          }}
+        />
         <Button
           variant="ghost"
           icon
-          className="ml-auto"
           aria-label={t.resolved ? 'Reopen thread' : 'Resolve thread'}
           title={t.resolved ? 'Reopen thread' : 'Resolve thread'}
           onClick={(e) => {
@@ -145,7 +160,12 @@ export const ThreadRow = memo(function ThreadRow({
         )}
         <Markdown text={first?.body ?? ''} path={path} quoted={quoted} />
         {t.stale && replies.length > 0 ? (
-          <details className="mt-1 text-muted" onClick={(event) => event.stopPropagation()}>
+          <details
+            open={showReplies}
+            className="mt-1 text-muted"
+            onClick={(event) => event.stopPropagation()}
+            onToggle={(event) => setShowReplies(event.currentTarget.open)}
+          >
             <summary className="cursor-pointer">Show replies</summary>
             {replies}
           </details>
@@ -153,6 +173,7 @@ export const ThreadRow = memo(function ThreadRow({
           replies
         )}
       </div>
+      {replying && <ReplyComposer threadId={t.id} />}
     </div>
   );
 });

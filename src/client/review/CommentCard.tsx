@@ -1,14 +1,15 @@
-import { TextArea } from '@/client/ui/TextArea.js';
 import { twMerge } from 'tailwind-merge';
 import { Button } from '@/client/ui/Button.js';
-import { AlertTriangle, Check, GitPullRequestArrow, Reply, RotateCcw, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Check, GitPullRequestArrow, RotateCcw, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { CommentThread } from '@/shared/protocol.js';
 import { ThreadIcon } from '@/client/comments/AgentMark.js';
 import { ThreadMessage } from '@/client/comments/ThreadMessage.js';
 import { editableThreadMessage } from '@/client/comments/threads.js';
-import { anchorLabel, composerKey, exportLabel, type ExportOutcome } from '@/client/model.js';
+import { anchorLabel, exportLabel, type ExportOutcome } from '@/client/model.js';
 import { collapseFromCardClick, InlineThreadCollapse } from '@/client/comments/InlineThreadCollapse.js';
+import { ReplyButton } from '@/client/comments/reply/ReplyButton.js';
+import { ReplyComposer } from '@/client/comments/reply/ReplyComposer.js';
 import { useStore } from '@/client/store.js';
 import { ButtonLabel } from '@/client/ui/ButtonLabel.js';
 import { useConfirm } from '@/client/useConfirm.js';
@@ -28,7 +29,7 @@ export function CommentCard({
 }) {
   const deleteThread = useStore((s) => s.deleteThread);
   const setResolved = useStore((s) => s.setResolved);
-  const replying = useStore((s) => s.replyTo === thread.id);
+  const replying = useStore((s) => s.replyTo?.threadId === thread.id && !s.replyTo.panelId);
   const openReply = useStore((s) => s.openReply);
   const closeReply = useStore((s) => s.closeReply);
   const focused = useStore((s) => s.focusedThread === thread.id);
@@ -108,14 +109,7 @@ export function CommentCard({
             <ButtonLabel text={post.armed ? 'Add?' : posted && exportLabel(posted)} />
           </Button>
         )}
-        <Button
-          variant="ghost"
-          icon
-          onClick={() => (replying ? closeReply() : openReply(thread.id))}
-          title={replying ? 'Cancel reply' : 'Reply'}
-        >
-          {replying ? <X size="0.875rem" /> : <Reply size="0.875rem" />}
-        </Button>
+        <ReplyButton replying={replying} onClick={() => (replying ? closeReply() : openReply(thread.id))} />
         <Button
           variant="ghost"
           icon
@@ -141,52 +135,6 @@ export function CommentCard({
         <ThreadMessage key={m.id} thread={thread} message={m} first={i === 0} editable={m === editable} />
       ))}
       {replying && <ReplyComposer threadId={thread.id} />}
-    </div>
-  );
-}
-
-function ReplyComposer({ threadId }: { threadId: string }) {
-  const submitReply = useStore((s) => s.submitReply);
-  const closeReply = useStore((s) => s.closeReply);
-  const key = useStore((s) => composerKey(s, { kind: 'reply', threadId }));
-  const text = useStore((s) => (key ? (s.unsent[key] ?? '') : ''));
-  const setUnsent = useStore((s) => s.setUnsent);
-  const setText = (t: string) => key && setUnsent(key, t);
-  const [busy, setBusy] = useState(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-  const submit = async () => {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    try {
-      await submitReply(threadId, text);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="@container mx-2.5 mt-0 mb-2.5 rounded-md border border-accent bg-surface p-2">
-      <TextArea
-        className="min-h-17.5 w-full resize-y rounded-sm border border-border bg-canvas p-1.5 font-mono text-[0.75rem] leading-[1.5]"
-        ref={ref}
-        value={text}
-        placeholder="Reply…"
-        onValueChange={setText}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit();
-        }}
-      />
-      <div className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5">
-        <span className="mr-auto text-[0.75rem] whitespace-nowrap text-muted @max-[26rem]:hidden">
-          <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to cancel
-        </span>
-        <Button onClick={closeReply}>Cancel</Button>
-        <Button variant="primary" onClick={() => void submit()} disabled={!text.trim() || busy}>
-          Reply
-        </Button>
-      </div>
     </div>
   );
 }

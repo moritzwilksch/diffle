@@ -21,8 +21,9 @@
   - button "All"
   - button "Delete all threads for this mode"
   - heading "tally/ledger.py" [level=4]
-  - 'button /L3–4 Resolve thread Delete this thread agent [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… The docstring names refund but not how a refund is signed\./':
+  - 'button /L3–4 Reply Resolve thread Delete this thread agent [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… The docstring names refund but not how a refund is signed\./':
     - text: ""
+    - button "Reply"
     - button "Resolve thread"
     - button "Delete this thread"
     - text: ""

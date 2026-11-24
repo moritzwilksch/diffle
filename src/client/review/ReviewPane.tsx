@@ -259,7 +259,7 @@ export function ReviewPane() {
   const gens = useStore((s) => s.gens);
   const fileView = useStore((s) => s.fileView);
   const threads = useStore((s) => s.threads);
-  const replyTo = useStore((s) => s.replyTo);
+  const replyTo = useStore((s) => (s.replyTo?.panelId ? null : s.replyTo));
   const editingId = useStore((s) => s.editingId);
   const draft = useStore((s) => codeDraft(s.draft));
   const collapsed = useStore((s) => s.collapsed);
@@ -914,7 +914,7 @@ export function ReviewPane() {
   const renderAnnotation = useCallback((...[annotation]: CodeViewAnnotationArgs<Annot>) => {
     const meta = annotation.metadata;
     if (meta.kind === 'placeholder') return <PlaceholderBanner kind={meta.placeholder} message={meta.message} />;
-    if (meta.kind === 'github') return <GithubThreadCard inline={meta.inline} />;
+    if (meta.kind === 'github') return <GithubThreadCard key={meta.inline.thread.id} inline={meta.inline} />;
     if (meta.kind === 'threadMarker') return <FileThreadMarker marker={meta.marker} />;
     if (meta.kind === 'image') return <ImageDiff path={meta.path} sides={meta.sides} />;
     if (meta.kind === 'draft') {

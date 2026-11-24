@@ -33,7 +33,8 @@ export function useTourDraft(): TourDraft | null {
 export function useActiveCard(hovered: string | null): string | null {
   return useStore((s) => {
     if (s.draft?.kind === 'tour') return DRAFT;
-    return s.replyTo ?? s.focusedThread ?? hovered;
+    const reply = s.replyTo?.panelId ? null : s.replyTo?.threadId;
+    return reply ?? s.focusedThread ?? hovered;
   });
 }
 

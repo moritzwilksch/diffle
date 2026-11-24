@@ -21,8 +21,9 @@
   - button "All"
   - button "Delete all threads for this mode"
   - heading "tally/ledger.py" [level=4]
-  - 'button /L3–4 Resolve thread Delete this thread You [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… Say what counts as a refund here, not only in the parser\./':
+  - 'button /L3–4 Reply Resolve thread Delete this thread You [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… Say what counts as a refund here, not only in the parser\./':
     - text: ""
+    - button "Reply"
     - button "Resolve thread"
     - button "Delete this thread"
     - text: ""
