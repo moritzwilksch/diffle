@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { copyText } from '@/client/clipboard.js';
 import { api } from '@/client/api.js';
+import { commentLists, showCommentOverlay, useCommentOverlay } from '@/client/comments/overlay/state.js';
 import { clearWordFocus, focusedWord, moveWord, moveWordToEdge, scrollCursorInline } from '@/client/lsp/wordNav.js';
 import { currentPath, MODE_PANES } from '@/client/model.js';
 import { remPx } from '@/client/scale.js';
@@ -207,6 +208,31 @@ export function useKeymap(): void {
       const typed = count.current;
       count.current = '';
       const n = Number(typed);
+      const dialog = target?.closest('[role="dialog"], [role="alertdialog"]');
+      const commentOverlay = useCommentOverlay.getState().list;
+      const commentList =
+        e.key === commentLists.threads.key ? 'threads' : e.key === commentLists.github.key ? 'github' : null;
+      if (
+        commentList &&
+        !isEditable(target) &&
+        !e.isComposing &&
+        !e.metaKey &&
+        !hasModifier(e) &&
+        (!dialog || (dialog.hasAttribute('data-comment-overlay') && commentOverlay === commentList)) &&
+        !s.helpOpen &&
+        !s.modeMenuOpen &&
+        !s.references.open &&
+        useViews.getState().active === 'diff' &&
+        s.snapshot &&
+        (commentList === 'threads' || (s.snapshot.review.kind === 'range' && s.snapshot.review.pr))
+      ) {
+        e.preventDefault();
+        clearPending();
+        if (!e.repeat) showCommentOverlay(commentOverlay === commentList ? null : commentList);
+        return;
+      }
+      // The dialog owns Escape and leaves its list's scroll keys native. Its child dialogs own their keys too.
+      if (commentOverlay && dialog) return;
       // Let a ref field dismiss its suggestions before Escape closes the mode picker.
       if (
         e.key === 'Escape' &&
@@ -447,6 +473,7 @@ export function useKeymap(): void {
     // The tree closes its search on Escape key-up and re-focuses its input; take focus back after that.
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || realTarget(e)?.closest('[role="combobox"], [data-terminal-input]')) return;
+      if (useCommentOverlay.getState().list) return;
       // Escape that only closed a configuration pane leaves focus on the entry list.
       if (useStore.getState().modeMenuOpen && document.activeElement?.closest('#mode-picker')) return;
       setTimeout(focusReview, 0);

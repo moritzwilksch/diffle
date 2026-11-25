@@ -1,6 +1,13 @@
 import { chromium, type Browser, type Locator, type Page } from '@playwright/test';
 import { connectOptions, ensureBrowserServer, stopBrowserServer } from './browser-server.js';
 
+/** The server timestamps new comments with its real clock. Use a fixed date for screenshots. */
+export async function fixCommentDates(page: Page): Promise<void> {
+  await page.locator('time.whitespace-nowrap').evaluateAll((dates) => {
+    for (const date of dates) date.textContent = 'Jun 1, 2024';
+  });
+}
+
 /**
  * The same Linux Chromium the e2e suite drives (`browser-server.ts`), for the capture scripts.
  * Closing the browser stops the container when this call started it.

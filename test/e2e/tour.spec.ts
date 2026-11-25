@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures.js';
-import { activePath, gotoFile, selectLines } from './browser.js';
+import { activePath, fixCommentDates, gotoFile, selectLines } from './browser.js';
 import { pushTour, readPrompt, readThreads, REPO_ROOT, runCli, seedReply, seedThreads, waitForLsp } from './server.js';
 import type { Page } from '@playwright/test';
 
@@ -794,6 +794,7 @@ test.describe('the tour', () => {
       });
       await expect(card).toContainText('In the account total.');
       await page.mouse.click(1, 1);
+      await fixCommentDates(page);
       await expect(page).toHaveScreenshot('tour-comment.png');
       expect(await readPrompt(diffle.url)).toContain(
         '(tour) 1. Entries learn their kind, in a <p>\n\n> a refund counts negative\n\nNegative in which total?\n\n(agent) In the account total.',
@@ -814,6 +815,7 @@ test.describe('the tour', () => {
       const side = page.getByRole('complementary').filter({ hasText: 'Negative in which total?' });
       await expect(side).toContainText('Why a blank line?');
       await expect(page.getByText('Copied all comments')).toBeHidden();
+      await fixCommentDates(page);
       await expect(page).toHaveScreenshot('tour-side.png');
       await side.getByText('Negative in which total?').click();
       await expect(margin.locator('.tour-margin-card[data-active]')).toContainText('Negative in which total?');
@@ -835,6 +837,7 @@ test.describe('the tour', () => {
       });
       await expect(lost).toContainText('Negative in which total?');
       await expect(view.getByText('1 comment not in this tour')).toBeVisible();
+      await fixCommentDates(page);
       await expect(lost).toHaveScreenshot('tour-comment-lost.png');
       await expect(margin.locator('.tour-margin-card')).toHaveCount(0);
     });
@@ -897,6 +900,7 @@ test.describe('the tour', () => {
       await expect(button).toBeVisible();
       const [b, c] = [(await button.boundingBox())!, (await card.boundingBox())!];
       expect(b.y >= c.y + c.height || b.y + b.height <= c.y).toBe(true);
+      await fixCommentDates(page);
       await expect(page).toHaveScreenshot('tour-comment-button-clear.png');
     });
 
@@ -998,7 +1002,9 @@ test.describe('the tour', () => {
     await expect(threads.last()).toContainText('box "Ledger"');
     const contents = page.getByRole('navigation', { name: 'Contents' });
     await expect(contents.getByRole('button', { name: /Parsing reads/ })).toContainText('2');
-    await page.mouse.move(1, 1);
+    await page.mouse.click(1, 1);
+    await expect(page.getByRole('tooltip')).toBeHidden();
+    await fixCommentDates(page);
     await expect(page).toHaveScreenshot('tour-comment-inline.png');
     const prompt = await readPrompt(diffle.url);
     expect(prompt).toContain(

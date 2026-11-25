@@ -18,15 +18,20 @@
         - 'button "feat(ledger): support refund lines"'
         - button "Copy hash 5206db2"
   - text: Threads 1
+  - button "Scroll Threads to top"
+  - button "Scroll Threads to bottom"
+  - button "Expand Threads"
+  - button "Collapse all threads"
   - button "All"
   - button "Delete all threads for this mode"
-  - heading "tally/ledger.py" [level=4]
-  - 'button /L3–4 Reply Resolve thread Delete this thread You [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… Say what counts as a refund here, not only in the parser\./':
-    - text: ""
-    - button "Reply"
-    - button "Resolve thread"
-    - button "Delete this thread"
-    - text: ""
-    - time: /[A-Z][a-z]{2} \d{1,2}, \d{4}/
-    - text: ""
-    - paragraph: Say what counts as a refund here, not only in the parser.
+  - region "Threads list":
+    - heading "tally/ledger.py" [level=4]
+    - 'button /L3–4 Reply Resolve thread Delete this thread You [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… Say what counts as a refund here, not only in the parser\./':
+      - text: ""
+      - button "Reply"
+      - button "Resolve thread"
+      - button "Delete this thread"
+      - text: ""
+      - time: /[A-Z][a-z]{2} \d{1,2}, \d{4}/
+      - text: ""
+      - paragraph: Say what counts as a refund here, not only in the parser.

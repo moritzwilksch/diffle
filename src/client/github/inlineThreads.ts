@@ -20,22 +20,23 @@ function lineInComparison(snapshot: Snapshot, thread: GithubCommentThread): numb
   return thread.line;
 }
 
-export function showGithubThread(prUrl: string, thread: GithubCommentThread): void {
+export function showGithubThread(prUrl: string, thread: GithubCommentThread): boolean {
   const store = useStore.getState();
   const snap = store.snapshot;
-  if (!snap || snap.review.kind !== 'range' || snap.review.pr?.url !== prUrl || thread.isOutdated) return;
+  if (!snap || snap.review.kind !== 'range' || snap.review.pr?.url !== prUrl || thread.isOutdated) return false;
   const file =
     snap.changed.find((item) => item.path === thread.path) ?? snap.changed.find((item) => item.oldPath === thread.path);
   const path = file?.path ?? thread.path;
   if (!file && !snap.tree.includes(path)) {
     store.flash('This file is outside the current comparison. Open the comment on GitHub.');
-    return;
+    return false;
   }
   setInlineExpanded(githubThreadKey(thread.id), true, !thread.isResolved);
   const side = thread.diffSide === 'LEFT' ? 'old' : 'new';
   const line = !file && side === 'old' ? null : lineInComparison(snap, thread);
   showView('diff');
   void store.openFile(path, line ?? undefined, side);
+  return true;
 }
 
 export function githubThreadsByPath(

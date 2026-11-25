@@ -23,17 +23,21 @@ import { ReplyComposer } from './reply/ReplyComposer.js';
  */
 export const ThreadRow = memo(function ThreadRow({
   thread: t,
+  collapsed,
   openFile,
   focusThread,
   deleteThread,
   openTourThread,
+  onJump,
 }: {
   thread: CommentThread;
+  collapsed: boolean;
   openFile: (path: string, line?: number, side?: Side) => Promise<void>;
   focusThread: (id: string | null) => void;
   deleteThread: (id: string) => Promise<void>;
   /** Shows the tour with thread `id` on it focused; the tour, not the comments, knows how. */
   openTourThread: (id: string) => void;
+  onJump?: () => void;
 }) {
   const first = t.messages[0];
   const path = anchorPath(t.anchor) ?? undefined;
@@ -44,9 +48,11 @@ export const ThreadRow = memo(function ThreadRow({
   const openReply = useStore((s) => s.openReply);
   const closeReply = useStore((s) => s.closeReply);
   const [showReplies, setShowReplies] = useState(false);
+  const hideBody = collapsed && !replying;
   const del = useConfirm(() => void deleteThread(t.id));
   const canOpen = t.anchor.kind === 'tour' || !t.stale;
   const open = () => {
+    onJump?.();
     // A file thread's card sits above the file's first line, where opening the file lands.
     if (t.anchor.kind === 'tour') return openTourThread(t.id);
     setInlineExpanded(localThreadKey(t.id), true, !t.resolved);
@@ -84,7 +90,9 @@ export const ThreadRow = memo(function ThreadRow({
         }
       }}
     >
-      <div className="flex items-center gap-2 border-b border-b-border bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent">
+      <div
+        className={`flex items-center gap-2 bg-hover py-1 pr-1.5 pl-2.5 text-[0.75rem] text-muted [&>svg]:flex-none [&>svg]:text-accent ${hideBody ? '' : 'border-b border-b-border'}`}
+      >
         <ThreadIcon thread={t} />
         {/* Lines are code; a tour's words are prose, cut to one line. */}
         <span
@@ -146,7 +154,10 @@ export const ThreadRow = memo(function ThreadRow({
           <ButtonLabel text={del.armed && 'Delete?'} />
         </Button>
       </div>
-      <div className="px-2.5 pt-1.5 pb-2 [&_.markdown]:font-sans [&_.markdown]:text-[0.8125rem] [&_.markdown]:leading-[1.4] [&_.markdown]:[word-break:break-word]">
+      <div
+        hidden={hideBody}
+        className="px-2.5 pt-1.5 pb-2 [&_.markdown]:font-sans [&_.markdown]:text-[0.8125rem] [&_.markdown]:leading-[1.4] [&_.markdown]:[word-break:break-word]"
+      >
         {first && (
           <div className="mb-1 flex items-baseline gap-1.5 text-xs text-muted">
             {first.author === 'agent' ? <AgentMark size="0.75rem" /> : <span>You</span>}

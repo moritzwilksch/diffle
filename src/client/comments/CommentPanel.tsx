@@ -1,8 +1,16 @@
 import { Dialog, DialogContent } from '@/client/ui/dialog.js';
 import { CopyIcon } from '@/client/ui/CopyIcon.js';
 import { Button } from '@/client/ui/Button.js';
-import { AlertTriangle, Check, ClipboardCopy, GitPullRequestArrow, MessageSquare, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ClipboardCopy,
+  GitPullRequestArrow,
+  MessageSquare,
+  Trash2,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { rangeKey, type CommentThread } from '@/shared/protocol.js';
 import { api } from '@/client/api.js';
 import { copyText, useCopied } from '@/client/clipboard.js';
@@ -16,7 +24,9 @@ import { CommitNavigator } from './CommitNavigator.js';
 import { IterationList } from './IterationList.js';
 import { GithubCommentsPanel } from '@/client/github/GithubCommentsPanel.js';
 import { ThreadRow } from './ThreadRow.js';
+import { StaleThreadsBanner } from './StaleThreadsBanner.js';
 import { anchorPath, compareThreads } from './threads.js';
+import { CommentListControls } from './overlay/CommentListControls.js';
 
 /** How a comment starts in the diff, which the empty panel says. */
 const DIFF_HINT = 'Click a line number to comment, drag across line numbers for a block, or press C for a whole file.';
@@ -28,25 +38,55 @@ const DIFF_HINT = 'Click a line number to comment, drag across line numbers for 
 export function CommentPanel({
   hint = DIFF_HINT,
   openTourThread,
+  expandable,
 }: {
   hint?: string;
   openTourThread: (id: string) => void;
+  expandable?: boolean;
 }) {
+  const snapshot = useStore((s) => s.snapshot);
+  const pr = snapshot?.review.kind === 'range' ? snapshot.review.pr : undefined;
+  return (
+    <aside className="flex min-h-0 flex-col bg-surface">
+      {snapshot && (
+        // Keyed by the range, so focusing one of its commits keeps the list as it was.
+        <CommitNavigator key={rangeKey(snapshot.review)} snapshot={snapshot} />
+      )}
+      {snapshot && <IterationList snapshot={snapshot} />}
+      <ThreadsPanel hint={hint} openTourThread={openTourThread} expandable={expandable} />
+      {pr && <GithubCommentsPanel key={pr.url} pr={pr} expandable={expandable} />}
+    </aside>
+  );
+}
+
+export function ThreadsPanel({
+  hint = DIFF_HINT,
+  openTourThread,
+  expandable,
+  onJump,
+  closeButton,
+}: {
+  hint?: string;
+  openTourThread: (id: string) => void;
+  expandable?: boolean;
+  onJump?: () => void;
+  closeButton?: ReactNode;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
   const threads = useStore((s) => s.threads);
   const showResolved = useStore((s) => s.showResolved);
   const setShowResolved = useStore((s) => s.setShowResolved);
   const openFile = useStore((s) => s.openFile);
   const clearThreads = useStore((s) => s.clearThreads);
   const deleteThread = useStore((s) => s.deleteThread);
-  const deleteStaleThreads = useStore((s) => s.deleteStaleThreads);
   const focusThread = useStore((s) => s.focusThread);
   const report = useStore((s) => s.report);
   const exportToGithub = useStore((s) => s.exportToGithub);
   const canExport = useStore((s) => s.github.data?.reason === null);
   const copiedAll = useStore((s) => s.copiedAll);
   const snapshot = useStore((s) => s.snapshot);
-  const pr = snapshot?.review.kind === 'range' ? snapshot.review.pr : undefined;
   const off = snapshot ? commentsOff(snapshot.review) : null;
+  const [collapsed, setCollapsed] = useState(false);
   const [posting, setPosting] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const [posted, setPosted] = useState<ExportOutcome | null>(null);
@@ -62,9 +102,9 @@ export function CommentPanel({
       .finally(() => setPosting(false));
   });
   const clear = useConfirm(() => void clearThreads());
-  const stale = useConfirm(() => void deleteStaleThreads());
 
   const shown = useMemo(() => visibleThreads({ threads, showResolved }), [threads, showResolved]);
+  const disclosureLabel = collapsed ? 'Expand all threads' : 'Collapse all threads';
   const open = threads.filter((t) => !t.resolved);
   const resolvedCount = threads.length - open.length;
   const staleCount = threads.filter((t) => t.stale).length;
@@ -95,19 +135,26 @@ export function CommentPanel({
   };
 
   return (
-    <aside className="flex min-h-0 flex-col bg-surface">
-      {snapshot && (
-        // Keyed by the range, so focusing one of its commits keeps the list as it was.
-        <CommitNavigator key={rangeKey(snapshot.review)} snapshot={snapshot} />
-      )}
-      {snapshot && <IterationList snapshot={snapshot} />}
-      <div className="flex min-h-10 items-center gap-1.5 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:px-2 [&_button]:whitespace-nowrap">
-        <span className="mr-auto inline-flex min-w-0 items-center gap-1.5 truncate font-semibold">
+    <section className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-10 flex-wrap items-center gap-1 border-b border-b-border px-2.5 py-1.5 [&_button]:flex-none [&_button]:whitespace-nowrap">
+        <span className="inline-flex min-w-20 flex-1 items-center gap-1.5 truncate font-semibold">
           <MessageSquare size="0.9375rem" /> Threads
           {open.length > 0 && (
             <span className="rounded-[0.625rem] bg-hover px-1.75 py-0 font-medium text-muted">{open.length}</span>
           )}
         </span>
+        <CommentListControls list="threads" scroller={scroller} expandable={expandable} />
+        {shown.length > 0 && (
+          <Button
+            variant="ghost"
+            icon
+            aria-label={disclosureLabel}
+            title={disclosureLabel}
+            onClick={() => setCollapsed((current) => !current)}
+          >
+            {collapsed ? <ChevronsUpDown size="0.875rem" /> : <ChevronsDownUp size="0.875rem" />}
+          </Button>
+        )}
         <CopyButton
           label="All"
           icon={<ClipboardCopy size="0.875rem" />}
@@ -151,26 +198,9 @@ export function CommentPanel({
           <Trash2 size="0.875rem" />
           <ButtonLabel text={clear.armed && 'Delete all?'} />
         </Button>
+        {closeButton}
       </div>
-      {staleCount > 0 && (
-        <div
-          className="flex cursor-default items-center gap-1.5 border-b border-b-border px-2.5 py-1 text-[0.75rem] text-warn"
-          title="Stale threads no longer point into the diff: their text changed or left the changed lines"
-        >
-          <AlertTriangle size="0.75rem" />
-          {staleCount} stale
-          <Button
-            variant="ghost"
-            danger
-            feedback={stale.armed ? 'confirm' : undefined}
-            className="ml-auto gap-1 px-1.5 py-px text-[0.75rem] leading-[1.2]"
-            onClick={stale.fire}
-          >
-            <Trash2 size="0.75rem" />
-            <ButtonLabel text={stale.armed ? 'Delete stale?' : 'Delete'} />
-          </Button>
-        </div>
-      )}
+      {staleCount > 0 && <StaleThreadsBanner key={snapshot?.commentKey} count={staleCount} />}
       {resolvedCount > 0 && (
         <label
           className="flex cursor-pointer items-center gap-1.5 border-b border-b-border px-2.5 py-1 text-[0.75rem] text-muted"
@@ -180,7 +210,13 @@ export function CommentPanel({
           Show {resolvedCount} resolved
         </label>
       )}
-      <div className="flex flex-1 flex-col gap-3.5 overflow-auto p-2.5">
+      <div
+        ref={scroller}
+        role="region"
+        aria-label="Threads list"
+        tabIndex={0}
+        className="flex flex-1 flex-col gap-3.5 overflow-auto p-2.5"
+      >
         {groups.length === 0 && (
           <div className="px-3 py-6 text-center text-muted [&>p]:mt-0 [&>p]:mr-0 [&>p]:mb-1.5 [&>p]:ml-0">
             <p>{threads.length ? 'Every thread is resolved.' : 'No comments yet.'}</p>
@@ -199,16 +235,17 @@ export function CommentPanel({
               <ThreadRow
                 key={t.id}
                 thread={t}
+                collapsed={collapsed}
                 openFile={openFile}
                 focusThread={focusThread}
                 deleteThread={deleteThread}
                 openTourThread={openTourThread}
+                onJump={onJump}
               />
             ))}
           </section>
         ))}
       </div>
-      {pr && <GithubCommentsPanel key={pr.url} pr={pr} />}
       {manual && (
         <Dialog open onOpenChange={() => setManual(null)}>
           <DialogContent aria-label="Copy manually">
@@ -229,7 +266,7 @@ export function CommentPanel({
           </DialogContent>
         </Dialog>
       )}
-    </aside>
+    </section>
   );
 }
 

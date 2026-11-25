@@ -39,6 +39,7 @@ export const DIFF_HELP: HelpSection[][] = [
     {
       title: 'Comments',
       rows: [
+        ['L / P', 'toggle Threads / GitHub comments overlay (Esc closes)'],
         ['c', 'comment on the current line or selection'],
         ['C', 'comment on the current file as a whole'],
         ['e', 'edit the newest message of the thread under the cursor'],

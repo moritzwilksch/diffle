@@ -18,18 +18,23 @@
         - 'button "feat(ledger): support refund lines"'
         - button "Copy hash 5206db2"
   - text: Threads 1
+  - button "Scroll Threads to top"
+  - button "Scroll Threads to bottom"
+  - button "Expand Threads"
+  - button "Collapse all threads"
   - button "All"
   - button "Delete all threads for this mode"
-  - heading "tally/ledger.py" [level=4]
-  - 'button /L3–4 Reply Resolve thread Delete this thread agent [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… The docstring names refund but not how a refund is signed\./':
-    - text: ""
-    - button "Reply"
-    - button "Resolve thread"
-    - button "Delete this thread"
-    - text: ""
-    - time: /[A-Z][a-z]{2} \d{1,2}, \d{4}/
-    - text: ""
-    - paragraph:
-      - text: The docstring names
-      - code: refund
-      - text: but not how a refund is signed.
+  - region "Threads list":
+    - heading "tally/ledger.py" [level=4]
+    - 'button /L3–4 Reply Resolve thread Delete this thread agent [A-Z][a-z]{2} \d{1,2}, \d{4} A line is a sale unless its ``kind`` column says ``refund``; refunds c… The docstring names refund but not how a refund is signed\./':
+      - text: ""
+      - button "Reply"
+      - button "Resolve thread"
+      - button "Delete this thread"
+      - text: ""
+      - time: /[A-Z][a-z]{2} \d{1,2}, \d{4}/
+      - text: ""
+      - paragraph:
+        - text: The docstring names
+        - code: refund
+        - text: but not how a refund is signed.

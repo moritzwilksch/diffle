@@ -88,6 +88,42 @@ test('keeps a long inline GitHub comment inside its split diff column', async ({
   }
 });
 
+test('expanded GitHub comments remembers its list and jumps to the anchored diff line', async ({ page, github }) => {
+  for (let index = 0; index < 25; index++) github.addReply(`GitHub reply ${index}`);
+  const sidebar = page.getByRole('region', { name: 'GitHub comments', exact: true });
+  await sidebar.getByRole('button', { name: 'Refresh GitHub comments' }).click();
+  await expect(sidebar.getByText('GitHub reply 24', { exact: true })).toBeVisible();
+  const sidebarList = sidebar.getByLabel('GitHub comments list', { exact: true });
+  await sidebar.getByRole('button', { name: 'Scroll GitHub comments to bottom' }).click();
+  await expect(sidebarList.getByText('Outdated discussion')).toBeInViewport();
+  await sidebar.getByRole('button', { name: 'Scroll GitHub comments to top' }).click();
+  await expect(sidebarList).toHaveJSProperty('scrollTop', 0);
+
+  await sidebar.getByRole('button', { name: 'Expand GitHub comments' }).click();
+  const overlay = page.getByRole('dialog', { name: 'GitHub comments', exact: true });
+  const list = overlay.getByLabel('GitHub comments list', { exact: true });
+  const resolved = list.locator('details').filter({ hasText: 'Resolved discussion' });
+  await overlay.getByRole('button', { name: 'Collapse resolved' }).click();
+  await overlay.getByRole('button', { name: 'Scroll GitHub comments to bottom' }).click();
+  await expect(list.getByText('Outdated discussion')).toBeInViewport();
+  const offset = await list.evaluate((element) => element.scrollTop);
+  expect(offset).toBeGreaterThan(0);
+  await page.keyboard.press('P');
+  await expect(overlay).toBeHidden();
+  await page.keyboard.press('P');
+  await expect(list).toHaveJSProperty('scrollTop', offset);
+  await expect(resolved).toHaveJSProperty('open', false);
+  await overlay.getByRole('button', { name: 'Scroll GitHub comments to top' }).click();
+  await expect(list).toHaveJSProperty('scrollTop', 0);
+
+  await list.getByText('Why does this use three places?').click();
+  await expect(overlay).toBeHidden();
+  const code = page.locator('.codeview');
+  const file = code.locator('diffs-container').filter({ has: page.locator(`[data-path="${path}"]`) });
+  await expect(file.locator('[data-column-number="20"][data-line-type="change-addition"]')).toBeInViewport();
+  await expect(code.getByText('Why does this use three places?')).toBeInViewport();
+});
+
 test('replies to a collapsed outdated GitHub thread from the sidebar', async ({ page }) => {
   const panel = page.getByRole('region', { name: 'GitHub comments' });
   const outdated = panel.locator('details').filter({ hasText: 'Outdated discussion' });
