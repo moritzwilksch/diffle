@@ -76,6 +76,7 @@ import {
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 import type { ViewId } from './views/state.js';
+import { launchViewport, startDiffStyle, startLayout } from './viewport.js';
 
 export type Loaded =
   | { kind: 'diff'; fileDiff: FileDiffMetadata }
@@ -123,11 +124,14 @@ function readImageCompare(): ImageCompare {
   }
 }
 function readDiffStyle(): DiffStyle {
+  let saved: DiffStyle | null = null;
   try {
-    return localStorage.getItem(DIFF_STYLE_KEY) === 'unified' ? 'unified' : 'split';
+    const stored = localStorage.getItem(DIFF_STYLE_KEY);
+    saved = stored === 'unified' || stored === 'split' ? stored : null;
   } catch {
-    return 'split';
+    /* ignore */
   }
+  return startDiffStyle(launchViewport(), saved);
 }
 
 export interface SearchState {
@@ -174,13 +178,14 @@ export interface LayoutState {
 }
 const LAYOUT_KEY = 'diffle:layout';
 function readLayout(): LayoutState {
+  let saved: Partial<LayoutState> | null = null;
   try {
     const raw = localStorage.getItem(LAYOUT_KEY);
-    const saved = raw ? (JSON.parse(raw) as Partial<LayoutState>) : {};
-    return { treeWidth: saved.treeWidth ?? null, treeVisible: saved.treeVisible ?? true, panels: saved.panels ?? {} };
+    saved = raw ? (JSON.parse(raw) as Partial<LayoutState>) : null;
   } catch {
-    return { treeWidth: null, treeVisible: true, panels: {} };
+    /* ignore */
   }
+  return startLayout(launchViewport(), saved);
 }
 
 // Unsent comment text lives for the tab, so a reload or an accidental Esc does not lose it.

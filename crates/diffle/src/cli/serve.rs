@@ -17,7 +17,7 @@ use crate::git::GitRepo;
 use crate::github::client::token_variables;
 use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
-use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
+use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, Viewport, comparison_label};
 use crate::server::announce::{Announced, Lookup, announce, lookup};
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Endpoint, Server, ServerOptions};
@@ -157,9 +157,11 @@ async fn start(
     // Unannounced, a second run could start on this git dir, and agents could not find this one.
     server.lock().unwrap().announced = Some(announce(&repo.git_dir, &instance, &reachable).await?);
     if !opts.no_open && opts.socket.is_none() {
-        open_browser(&reachable);
+        open_browser(&launch_url(&reachable, opts.viewport));
     }
-    crate::status!("🚀 diffle {} running at {}", dim(concat!("v", env!("CARGO_PKG_VERSION"))), cyan(&url));
+    // A socket's URL is no address to open; its forward's is, and takes the same query.
+    let shown = if opts.socket.is_some() { url.clone() } else { launch_url(&url, opts.viewport) };
+    crate::status!("🚀 diffle {} running at {}", dim(concat!("v", env!("CARGO_PKG_VERSION"))), cyan(&shown));
     crate::status!("📂 {} {}", dim("repo"), repo.root.display());
     let host = &github.instance.host;
     let label = dim(&if host == "github.com" { "github".to_owned() } else { format!("github {host}") });
@@ -214,6 +216,14 @@ fn localhost(url: &str) -> String {
             parsed.to_string()
         }
         Err(_) => url.to_owned(),
+    }
+}
+
+/// `url` with the `viewport` query the client starts its layout from; auto, its default, leaves it bare.
+fn launch_url(url: &str, viewport: Option<Viewport>) -> String {
+    match viewport {
+        None | Some(Viewport::Auto) => url.to_owned(),
+        Some(viewport) => format!("{url}?viewport={viewport}"),
     }
 }
 
@@ -279,4 +289,17 @@ async fn signal() {
     }
     #[cfg(not(unix))]
     let _ = tokio::signal::ctrl_c().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_url_names_a_forced_viewport_alone() {
+        let url = "http://127.0.0.1:4966/";
+        assert_eq!(launch_url(url, None), url);
+        assert_eq!(launch_url(url, Some(Viewport::Auto)), url);
+        assert_eq!(launch_url(url, Some(Viewport::Narrow)), "http://127.0.0.1:4966/?viewport=narrow");
+    }
 }
