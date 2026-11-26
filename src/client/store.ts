@@ -26,6 +26,7 @@ import {
   type Snapshot,
   type ThreadList,
   type UserConfig,
+  type Viewport,
   type ViewedEntry,
   type LspLogEntry,
 } from '@/shared/protocol.js';
@@ -76,6 +77,7 @@ import {
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 import type { ViewId } from './views/state.js';
+import { startDiffStyle, startLayout } from './viewport.js';
 
 export type Loaded =
   | { kind: 'diff'; fileDiff: FileDiffMetadata }
@@ -123,11 +125,14 @@ function readImageCompare(): ImageCompare {
   }
 }
 function readDiffStyle(): DiffStyle {
+  let saved: DiffStyle | null = null;
   try {
-    return localStorage.getItem(DIFF_STYLE_KEY) === 'unified' ? 'unified' : 'split';
+    const stored = localStorage.getItem(DIFF_STYLE_KEY);
+    saved = stored === 'unified' || stored === 'split' ? stored : null;
   } catch {
-    return 'split';
+    /* ignore */
   }
+  return startDiffStyle('auto', saved);
 }
 
 export interface SearchState {
@@ -174,13 +179,14 @@ export interface LayoutState {
 }
 const LAYOUT_KEY = 'diffle:layout';
 function readLayout(): LayoutState {
+  let saved: Partial<LayoutState> | null = null;
   try {
     const raw = localStorage.getItem(LAYOUT_KEY);
-    const saved = raw ? (JSON.parse(raw) as Partial<LayoutState>) : {};
-    return { treeWidth: saved.treeWidth ?? null, treeVisible: saved.treeVisible ?? true, panels: saved.panels ?? {} };
+    saved = raw ? (JSON.parse(raw) as Partial<LayoutState>) : null;
   } catch {
-    return { treeWidth: null, treeVisible: true, panels: {} };
+    /* ignore */
   }
+  return startLayout('auto', saved);
 }
 
 // Unsent comment text lives for the tab, so a reload or an accidental Esc does not lose it.
@@ -1545,6 +1551,7 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  let viewportStarted = false;
 
   return {
     layout: readLayout(),
@@ -2401,13 +2408,23 @@ export const useStore = create<ReviewState>((set, get) => {
         // The language server is optional; its status failing must not take the review down.
         const lspStatus = api.lspStatus().catch((): LspStatus => ({ enabled: false, servers: [], missing: [] }));
         const tc = configSeq.start();
-        const [snap, lists, config, lsp, moved] = await Promise.all([
+        // `--viewport` sets the layout the tab starts with, so a resync must not undo the reader's changes.
+        const viewport: Viewport | Promise<Viewport> = viewportStarted
+          ? 'auto'
+          : api.viewport().catch((): Viewport => 'auto');
+        const [snap, lists, config, lsp, moved, start] = await Promise.all([
           api.snapshot(),
           fetchLists(),
           api.config(),
           lspStatus,
           api.moved(),
+          viewport,
         ]);
+        if (!viewportStarted) {
+          viewportStarted = true;
+          const { diffStyle, layout } = get();
+          set({ diffStyle: startDiffStyle(start, diffStyle), layout: startLayout(start, layout) });
+        }
         // Mode-independent, and nothing else fetches them: a pushed refresh that overtook this
         // boot must not leave them at their defaults for the session.
         set({ lsp });

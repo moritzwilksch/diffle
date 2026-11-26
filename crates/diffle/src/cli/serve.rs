@@ -17,7 +17,7 @@ use crate::git::GitRepo;
 use crate::github::client::token_variables;
 use crate::github::hosts::Github;
 use crate::lsp::pool::LspPool;
-use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, comparison_label};
+use crate::protocol::{EnterRequest, Live, Snapshot, ThreadQuery, ThreadState, Viewport, comparison_label};
 use crate::server::announce::{Announced, Lookup, announce, lookup};
 use crate::server::hub::Hub;
 use crate::server::{ApiDeps, DEFAULT_PORT, Endpoint, Server, ServerOptions};
@@ -138,6 +138,7 @@ async fn start(
         extra_auto_viewed: opts.auto_viewed.clone(),
         hub: hub.clone(),
         lsp: lsp.clone(),
+        viewport: opts.viewport.unwrap_or(Viewport::Auto),
     };
     // Elsewhere the command line refused --socket already.
     let endpoint = match &opts.socket {

@@ -5,6 +5,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
 
 use super::parse::{self, LspOverride};
+use crate::protocol::Viewport;
 
 const AFTER_HELP: &str = "\
 Shorthands (in place of <revs>):
@@ -98,6 +99,11 @@ pub struct GlobalOpts {
     /// do not open a browser
     #[arg(long = "no-open")]
     pub no_open: bool,
+    /// the layout the browser starts with: narrow collapses the sidebars and shows the unified diff,
+    /// wide shows both sidebars and the split diff (default: auto, the last layout, else the
+    /// window's aspect ratio)
+    #[arg(long, value_name = "viewport", value_enum)]
+    pub viewport: Option<Viewport>,
     /// keep the server running after all browser tabs close
     #[arg(long)]
     pub keep_alive: bool,
@@ -272,6 +278,7 @@ impl GlobalOpts {
             allowed_origin: later.allowed_origin.or(self.allowed_origin),
             socket: later.socket.or(self.socket),
             no_open: self.no_open || later.no_open,
+            viewport: later.viewport.or(self.viewport),
             keep_alive: self.keep_alive || later.keep_alive,
             no_watch: self.no_watch || later.no_watch,
             auto_viewed: [self.auto_viewed, later.auto_viewed].concat(),

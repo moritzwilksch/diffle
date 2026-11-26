@@ -629,6 +629,15 @@ export type FollowRefs = z.infer<typeof FollowRefsSchema>;
 export const BlameModeSchema = z.enum(['off', 'inline', 'gutter']);
 export type BlameMode = z.infer<typeof BlameModeSchema>;
 
+/**
+ * The layout a tab starts with, from `--viewport`; `GET /api/viewport` answers it. `narrow` starts
+ * with the sidebars collapsed and the unified diff, `wide` with both sidebars and the split diff,
+ * `auto` with the reader's last layout, or the window's aspect ratio before they chose one. Only
+ * the start: the reader changes either at will.
+ */
+export const ViewportSchema = z.enum(['auto', 'narrow', 'wide']);
+export type Viewport = z.infer<typeof ViewportSchema>;
+
 export const UserConfigSchema = z.object({
   /** Globs (picomatch syntax) for files that start viewed + collapsed. Empty by default. */
   autoViewed: z.string().array(),

@@ -5210,6 +5210,15 @@
         "restale"
       ],
       "description": "Derived per changed file: 'restale' means viewed at an older blob."
+    },
+    "Viewport": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "narrow",
+        "wide"
+      ],
+      "description": "The layout a tab starts with, from `--viewport`; `GET /api/viewport` answers it. `narrow` starts\nwith the sidebars collapsed and the unified diff, `wide` with both sidebars and the split diff,\n`auto` with the reader's last layout, or the window's aspect ratio before they chose one. Only\nthe start: the reader changes either at will."
     }
   }
 }

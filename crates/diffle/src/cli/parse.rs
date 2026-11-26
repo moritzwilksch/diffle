@@ -3,7 +3,10 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::protocol::{LanguageId, language_ids};
+use clap::ValueEnum;
+use clap::builder::PossibleValue;
+
+use crate::protocol::{LanguageId, Viewport, language_ids};
 
 fn int_arg(raw: &str, min: u32, max: u32) -> Result<u32, String> {
     let message = || format!("expected an integer between {min} and {max}");
@@ -48,6 +51,21 @@ pub fn language(raw: &str) -> Result<LanguageId, String> {
         let known: Vec<String> = language_ids().iter().map(ToString::to_string).collect();
         format!("unknown language \"{raw}\"; expected one of: {}", known.join(", "))
     })
+}
+
+// The contract owns the values; clap lists them in the help and the completion scripts.
+impl ValueEnum for Viewport {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[Viewport::Auto, Viewport::Narrow, Viewport::Wide]
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        Some(PossibleValue::new(match self {
+            Viewport::Auto => "auto",
+            Viewport::Narrow => "narrow",
+            Viewport::Wide => "wide",
+        }))
+    }
 }
 
 /// A `--lsp` value: which language to serve with which command.

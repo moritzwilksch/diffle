@@ -29,6 +29,10 @@ Options:
       --socket <path>            listen on a Unix socket at <path> that only you can connect to, in
                                  place of a port, e.g. to forward with ssh -L; opens no browser
       --no-open                  do not open a browser
+      --viewport <viewport>      the layout the browser starts with: narrow collapses the sidebars
+                                 and shows the unified diff, wide shows both sidebars and the split
+                                 diff (default: auto, the last layout, else the window's aspect
+                                 ratio) [possible values: auto, narrow, wide]
       --keep-alive               keep the server running after all browser tabs close
       --no-watch                 do not watch for changes
       --auto-viewed <glob>       mark matching files viewed for this session (repeatable)

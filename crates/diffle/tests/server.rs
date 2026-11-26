@@ -558,3 +558,13 @@ async fn serves_the_client_gzipped_and_cached() {
     assert_eq!(heads[2].as_deref(), Some("public, max-age=31536000, immutable"));
     s.close().await;
 }
+
+/// A tab asks how to start its layout; a run without `--viewport` leaves it to the browser.
+#[tokio::test]
+async fn answers_the_viewport_a_tab_starts_with() {
+    let s = TestServer::start().await;
+    let r = s.get("/api/viewport").await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert_eq!(r.json(), json!("auto"));
+    s.close().await;
+}

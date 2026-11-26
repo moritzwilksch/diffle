@@ -32,6 +32,7 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/refs", get(refs))
         .route("/api/last-commits-preview", get(last_commits_preview))
         .route("/api/config", get(config).put(set_config))
+        .route("/api/viewport", get(viewport))
 }
 
 /// Which run answers, for which repository: what a client checks an announcement against. Answers
@@ -105,6 +106,10 @@ async fn last_commits_preview(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQ
     };
     let (old, new) = (offset(&q.old_offset)?, offset(&q.new_offset)?);
     Ok(Json(d.session.repo.last_commits_preview(old, new).await?).into_response())
+}
+
+async fn viewport(State(d): State<Arc<ApiDeps>>) -> Response {
+    Json(d.viewport).into_response()
 }
 
 async fn config(State(d): State<Arc<ApiDeps>>) -> Response {
