@@ -33,6 +33,18 @@ impl HeadPin {
         *self.0.lock().unwrap() = None;
     }
 
+    /// What HEAD names in a review: where the reviewer left it while this run holds the checkout
+    /// elsewhere, else `HEAD`.
+    pub fn rev(&self) -> String {
+        self.0.lock().unwrap().as_ref().map_or_else(|| "HEAD".to_owned(), |held| held.at.clone())
+    }
+
+    /// `rev` named after the pin instead when it names HEAD or the worktree.
+    pub fn pin(&self, rev: &str) -> String {
+        let held = self.0.lock().unwrap().clone();
+        held.and_then(|held| pinned(rev, &held)).unwrap_or_else(|| rev.to_owned())
+    }
+
     /// `review` with every revision named after HEAD, and the worktree, named after the pin instead.
     pub fn apply(&self, review: &Review) -> Review {
         let Some(held) = self.0.lock().unwrap().clone() else { return review.clone() };

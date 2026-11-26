@@ -4,6 +4,7 @@ use crate::git::{GitRepo, WORKTREE};
 use crate::github::hosts::Github;
 use crate::protocol::{ComparisonBase, EnterRequest, Live, RangeView, Review};
 
+use super::head::HeadPin;
 use super::revspec::{ParsedRange, ParsedRevspec, parse_range_diff, parse_revspec};
 
 pub struct Endpoints {
@@ -102,8 +103,9 @@ pub fn range(old: impl Into<String>, new: impl Into<String>, base: ComparisonBas
 }
 
 /// Resolves a request that enters a review from scratch, as the CLI does. Each revision is
-/// checked now, so invalid input fails before anything is served.
-pub async fn resolve_review(req: &EnterRequest, repo: &GitRepo, github: &Github) -> Result<Review> {
+/// checked now, so invalid input fails before anything is served. A commit named after HEAD is
+/// taken where `head` says the reviewer left it, as a range's revisions are.
+pub async fn resolve_review(req: &EnterRequest, repo: &GitRepo, github: &Github, head: &HeadPin) -> Result<Review> {
     let parsed = match req {
         EnterRequest::Pr { pr } => return super::pr::resolve_pr(pr.as_deref(), repo, github).await,
         EnterRequest::RangeDiff { args } => return range_diff_review(repo, parse_range_diff(args)?).await,
@@ -112,7 +114,7 @@ pub async fn resolve_review(req: &EnterRequest, repo: &GitRepo, github: &Github)
     };
     match parsed {
         // A commit is pinned when entered: moving the ref it was named by, e.g. amending HEAD, makes a different commit.
-        ParsedRevspec::Commit(rev) => Ok(Review::Commit { sha: resolve_commit(repo, &rev).await?.new_sha }),
+        ParsedRevspec::Commit(rev) => Ok(Review::Commit { sha: resolve_commit(repo, &head.pin(&rev)).await?.new_sha }),
         ParsedRevspec::Range { old, new, base } => {
             resolve_range(repo, &old, &new, base).await?;
             Ok(range(old, new, base))

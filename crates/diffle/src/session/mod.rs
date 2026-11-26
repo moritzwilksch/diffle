@@ -22,7 +22,8 @@ use crate::git::GitRepo;
 use crate::github::hosts::Github;
 use crate::mode::head::HeadPin;
 use crate::protocol::{
-    CommentAuthor, FollowRefs, Live, Moved, RangeView, Review, ServerMessage, Snapshot, shown_iterations,
+    CommentAuthor, FollowRefs, LastCommitsPreview, Live, Moved, RangeView, RefsResponse, Review, ServerMessage,
+    Snapshot, shown_iterations,
 };
 use crate::snapshotter::Snapshotter;
 use crate::watcher::Watcher;
@@ -209,6 +210,16 @@ impl Session {
 
     pub fn comments(&self) -> Result<Arc<CommentStore>> {
         Ok(self.active()?.comments.clone())
+    }
+
+    /// Branches, tags and recent commits for the mode picker, with HEAD where a review reads it.
+    pub async fn refs(&self) -> Result<RefsResponse> {
+        self.repo.refs(&self.head.rev()).await
+    }
+
+    /// The picker's preview of `HEAD~old..HEAD~new`, with HEAD where entering it reads HEAD.
+    pub async fn last_commits_preview(&self, old: u64, new: u64) -> Result<LastCommitsPreview> {
+        self.repo.last_commits_preview(&self.head.rev(), old, new).await
     }
 
     /// The comment set `snap` shows, whichever review is active now: a request checked against

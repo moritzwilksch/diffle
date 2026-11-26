@@ -79,7 +79,7 @@ async fn finds_neighbours_on_heads_first_parent_line_only() {
     let at = |rev: &str| {
         let rev = sha(rev);
         let repo = &repo;
-        async move { repo.commit_neighbours(&rev).await.unwrap() }
+        async move { repo.commit_neighbours(&rev, "HEAD").await.unwrap() }
     };
     assert_eq!(at("HEAD~1").await, (Some(sha("HEAD~2")), Some(sha("HEAD"))));
     assert_eq!(at("HEAD").await, (Some(sha("HEAD~1")), None));
@@ -88,7 +88,7 @@ async fn finds_neighbours_on_heads_first_parent_line_only() {
     assert_eq!(at("HEAD~3").await, (None, Some(sha("HEAD~2"))));
     // A commit off HEAD's history altogether.
     let off = t.git(&["commit-tree", "HEAD~2^{tree}", "-p", "HEAD~2", "-m", "off"]);
-    assert_eq!(repo.commit_neighbours(&off).await.unwrap(), (Some(sha("HEAD~2")), None));
+    assert_eq!(repo.commit_neighbours(&off, "HEAD").await.unwrap(), (Some(sha("HEAD~2")), None));
 }
 
 #[tokio::test]
@@ -134,7 +134,7 @@ async fn lists_refs_as_for_each_ref_sorts_them() {
     t.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
     t.git(&["update-ref", "refs/remotes/origin/old", "HEAD~3"]);
     t.git(&["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
-    let refs = t.open().await.refs().await.unwrap();
+    let refs = t.open().await.refs("HEAD").await.unwrap();
     let each = |order: &str, prefix: &str| -> Vec<String> {
         t.git(&["for-each-ref", "--format=%(refname:short)", order, prefix]).lines().map(str::to_owned).collect()
     };

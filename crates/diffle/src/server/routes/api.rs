@@ -95,7 +95,7 @@ async fn permalink(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
 }
 
 async fn refs(State(d): State<Arc<ApiDeps>>) -> ApiResult {
-    Ok(Json(d.session.repo.refs().await?).into_response())
+    Ok(Json(d.session.refs().await?).into_response())
 }
 
 async fn last_commits_preview(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQuery) -> ApiResult {
@@ -105,7 +105,7 @@ async fn last_commits_preview(State(d): State<Arc<ApiDeps>>, RawQuery(raw): RawQ
         n.ok_or_else(|| ApiError::bad_request(format!("not an offset: {s}")))
     };
     let (old, new) = (offset(&q.old_offset)?, offset(&q.new_offset)?);
-    Ok(Json(d.session.repo.last_commits_preview(old, new).await?).into_response())
+    Ok(Json(d.session.last_commits_preview(old, new).await?).into_response())
 }
 
 async fn viewport(State(d): State<Arc<ApiDeps>>) -> Response {

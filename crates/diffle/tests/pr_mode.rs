@@ -198,7 +198,7 @@ async fn fetches_the_pull_request_into_fixed_refs_retaining_both_branch_names() 
     let f = Fixture::new();
     let repo = f.repo().await;
     let repo = Arc::new(repo);
-    let review = resolve_review(&pr("7"), &repo, &with(&f.github())).await.unwrap();
+    let review = resolve_review(&pr("7"), &repo, &with(&f.github()), &Default::default()).await.unwrap();
     let Review::Range { old, new, base, pr: pull, view } = &review else { panic!("a range") };
     assert_eq!(*old, format!("{}/7/base/main", repo.review_refs));
     assert_eq!(*new, format!("{}/7/head/feat", repo.review_refs));
@@ -226,7 +226,7 @@ async fn fetches_from_the_remote_that_points_at_the_base_repository_whatever_it_
     git_in(&f.root(), &["clone", "-q", "--origin", "upstream", &as_git_url(&f.origin), &as_git_url(&forked)]);
     f.point_remote_at_github(&forked, "upstream");
     let repo = GitRepo::open(&forked).await.unwrap();
-    let review = resolve_review(&pr("7"), &repo, &with(&f.github())).await.unwrap();
+    let review = resolve_review(&pr("7"), &repo, &with(&f.github()), &Default::default()).await.unwrap();
     let Review::Range { new, .. } = &review else { panic!("a range") };
     assert_eq!(repo.resolve(new).await.unwrap(), f.head);
 }
@@ -237,7 +237,7 @@ async fn refuses_foreign_prs_in_an_existing_session_without_fetching() {
     let repo = f.repo().await;
     let refs = git_in(&f.local, &["show-ref"]);
     let foreign = knows(Some(f.node(json!({ "url": "https://github.com/foreign/repo/pull/7" }))));
-    let err = resolve_review(&pr("7"), &repo, &with(&foreign)).await.unwrap_err();
+    let err = resolve_review(&pr("7"), &repo, &with(&foreign), &Default::default()).await.unwrap_err();
     assert!(err.to_string().contains("foreign repository"), "{err}");
     assert_eq!(git_in(&f.local, &["show-ref"]), refs);
 }
@@ -246,7 +246,7 @@ async fn refuses_foreign_prs_in_an_existing_session_without_fetching() {
 async fn cleans_only_this_instances_refs() {
     let f = Fixture::new();
     let (repo, other) = (f.repo().await, f.repo().await);
-    resolve_review(&pr("7"), &other, &with(&f.github())).await.unwrap();
+    resolve_review(&pr("7"), &other, &with(&f.github()), &Default::default()).await.unwrap();
     repo.clean_review_refs().await.unwrap();
     assert_eq!(git_in(&f.local, &["for-each-ref", &repo.review_refs]), "");
     assert_eq!(git_in(&f.local, &["rev-parse", &format!("{}/7/head/feat", other.review_refs)]), f.head);
@@ -257,7 +257,7 @@ async fn cleans_only_this_instances_refs() {
 async fn is_off_without_a_token() {
     let f = Fixture::new();
     let repo = f.repo().await;
-    let err = resolve_review(&pr("7"), &repo, &Github::tokenless()).await.unwrap_err();
+    let err = resolve_review(&pr("7"), &repo, &Github::tokenless(), &Default::default()).await.unwrap_err();
     assert!(err.to_string().contains("No GitHub token"), "{err}");
     let mut req = pr("7");
     let opened = open_review_repository_with(&mut req, &f.local, async |_| Ok((Github::tokenless(), None))).await;
