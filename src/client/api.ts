@@ -36,6 +36,7 @@ import {
   SnapshotSchema,
   ThreadListSchema,
   UserConfigSchema,
+  ViewportSchema,
   ViewedEntrySchema,
 } from '@/shared/protocol.js';
 import {
@@ -226,6 +227,7 @@ export const api = {
   /** Document symbols for a path, or workspace symbols matching a query. */
   lspSymbols: (query: SymbolsQuery) => json(LspSymbolsResponseSchema, `api/lsp/symbols?${q(query)}`),
   config: () => json(UserConfigSchema, 'api/config'),
+  viewport: () => json(ViewportSchema, 'api/viewport'),
   /** lspCommands and githubHosts are CLI-only; the server ignores them. */
   saveConfig: (config: ConfigUpdate) =>
     json(UserConfigSchema, 'api/config', { method: 'PUT', body: encode(ConfigUpdateSchema, config) }),

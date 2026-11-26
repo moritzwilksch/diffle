@@ -13,6 +13,7 @@ import type {
   ThreadList,
   UserConfig,
   ViewedEntry,
+  Viewport,
 } from '@/shared/protocol.js';
 
 /** One python server in `state`; LSP_OFF is a run started with --no-lsp. */
@@ -74,6 +75,7 @@ const api = {
   lspStatus: vi.fn(async (): Promise<LspStatus> => LSP_OFF),
   lspLog: vi.fn(async (): Promise<LspLogResponse> => ({ entries: [] })),
   moved: vi.fn(async (): Promise<Moved | null> => null),
+  viewport: vi.fn(async (): Promise<Viewport> => 'auto'),
   lspDefinition: vi.fn(),
   lspTypeDefinition: vi.fn(),
   lspReferences: vi.fn(),

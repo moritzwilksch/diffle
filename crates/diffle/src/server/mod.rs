@@ -59,6 +59,8 @@ pub struct ApiDeps {
     pub hub: Arc<Hub>,
     /// The language servers, unless the run disabled them with `--no-lsp`.
     pub lsp: Option<Arc<crate::lsp::pool::LspPool>>,
+    /// The layout a tab starts with, from `--viewport`.
+    pub viewport: crate::protocol::Viewport,
 }
 
 struct App {

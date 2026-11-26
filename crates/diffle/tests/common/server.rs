@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use diffle::github::hosts::Github;
 use diffle::lsp::pool::{LspPool, PoolOptions};
-use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side};
+use diffle::protocol::{EnterRequest, FollowRefs, LanguageId, Side, Viewport};
 use diffle::server::hub::Hub;
 use diffle::server::{ApiDeps, Endpoint, Server, ServerOptions};
 use diffle::session::{Session, SessionOptions};
@@ -141,6 +141,7 @@ impl TestServer {
             extra_auto_viewed: Vec::new(),
             hub: hub.clone(),
             lsp: lsp.clone(),
+            viewport: Viewport::Auto,
         };
         let opts = ServerOptions {
             endpoint: Endpoint::Tcp { host: "127.0.0.1".into(), port: 0, probe: false },

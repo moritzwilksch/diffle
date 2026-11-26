@@ -26,6 +26,7 @@ import {
   type Snapshot,
   type ThreadList,
   type UserConfig,
+  type Viewport,
   type ViewedEntry,
   type LspLogEntry,
 } from '@/shared/protocol.js';
@@ -76,7 +77,7 @@ import {
 } from './model.js';
 import { applyTheme, readTheme, storeTheme, type ThemeChoice } from './theme.js';
 import type { ViewId } from './views/state.js';
-import { launchViewport, startDiffStyle, startLayout } from './viewport.js';
+import { startDiffStyle, startLayout } from './viewport.js';
 
 export type Loaded =
   | { kind: 'diff'; fileDiff: FileDiffMetadata }
@@ -131,7 +132,7 @@ function readDiffStyle(): DiffStyle {
   } catch {
     /* ignore */
   }
-  return startDiffStyle(launchViewport(), saved);
+  return startDiffStyle('auto', saved);
 }
 
 export interface SearchState {
@@ -185,7 +186,7 @@ function readLayout(): LayoutState {
   } catch {
     /* ignore */
   }
-  return startLayout(launchViewport(), saved);
+  return startLayout('auto', saved);
 }
 
 // Unsent comment text lives for the tab, so a reload or an accidental Esc does not lose it.
@@ -1550,6 +1551,7 @@ export const useStore = create<ReviewState>((set, get) => {
   };
 
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  let viewportStarted = false;
 
   return {
     layout: readLayout(),
@@ -2406,13 +2408,23 @@ export const useStore = create<ReviewState>((set, get) => {
         // The language server is optional; its status failing must not take the review down.
         const lspStatus = api.lspStatus().catch((): LspStatus => ({ enabled: false, servers: [], missing: [] }));
         const tc = configSeq.start();
-        const [snap, lists, config, lsp, moved] = await Promise.all([
+        // `--viewport` sets the layout the tab starts with, so a resync must not undo the reader's changes.
+        const viewport: Viewport | Promise<Viewport> = viewportStarted
+          ? 'auto'
+          : api.viewport().catch((): Viewport => 'auto');
+        const [snap, lists, config, lsp, moved, start] = await Promise.all([
           api.snapshot(),
           fetchLists(),
           api.config(),
           lspStatus,
           api.moved(),
+          viewport,
         ]);
+        if (!viewportStarted) {
+          viewportStarted = true;
+          const { diffStyle, layout } = get();
+          set({ diffStyle: startDiffStyle(start, diffStyle), layout: startLayout(start, layout) });
+        }
         // Mode-independent, and nothing else fetches them: a pushed refresh that overtook this
         // boot must not leave them at their defaults for the session.
         set({ lsp });

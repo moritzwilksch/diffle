@@ -1,5 +1,5 @@
-// The layout and diff style a launch starts with, from `--viewport` or the window's shape.
-import { type Viewport, ViewportSchema } from '@/shared/protocol.js';
+// The layout and diff style a tab starts with, from `--viewport` or the window's shape.
+import type { Viewport } from '@/shared/protocol.js';
 import type { DiffStyle, LayoutState } from './store.js';
 import type { ViewId } from './views/state.js';
 
@@ -10,12 +10,6 @@ const NARROW_ASPECT = 1.2;
 
 // A record, so the compiler names a view added without one.
 const PANELS: Record<ViewId, null> = { diff: null, graph: null, tour: null };
-
-/** The URL's `viewport` parameter, which diffle sets from `--viewport`; auto when absent or unknown. */
-export function launchViewport(): Viewport {
-  if (typeof location === 'undefined') return 'auto';
-  return ViewportSchema.safeParse(new URL(location.href).searchParams.get('viewport')).data ?? 'auto';
-}
 
 /** How wide a window of `width` × `height` reads. */
 export function windowWidth(width: number, height: number): Width {
