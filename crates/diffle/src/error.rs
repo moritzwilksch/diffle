@@ -70,6 +70,9 @@ pub enum Error {
     Revspec(String),
     #[error(transparent)]
     Github(#[from] GithubError),
+    /// A hosted review precondition changed before an operation could complete.
+    #[error("{0}")]
+    ReviewConflict(String),
     /// A thread or message id that names nothing.
     #[error("not found: {0}")]
     NotFound(String),

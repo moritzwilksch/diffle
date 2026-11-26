@@ -10,6 +10,21 @@ use crate::error::{Error, Result};
 use crate::persist::with_file_lock;
 use crate::protocol::{CommentAnchor, CommentAuthor, CommentThread, Side, ThreadCreate, ThreadCreatePath};
 
+/// Prepares a reviewer comment for a hosted review without storing it locally.
+pub(crate) async fn draft_for_review(
+    comment: ThreadCreate,
+    id: uuid::Uuid,
+    source: &impl AnchorSource,
+) -> Result<CommentThread> {
+    if comment.body.trim().is_empty() {
+        return Err(Error::Invalid("body: body required".into()));
+    }
+    let anchor = place_import(&comment, source).await?;
+    let mut thread = new_thread(anchor, comment.body, None);
+    thread.id = format!("draft-{id}");
+    Ok(thread)
+}
+
 /// Everything `POST /api/threads` accepts: 1 MiB, like the HTTP body limit.
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
 /// JavaScript's largest exact integer: the protocol's bound on a line number.

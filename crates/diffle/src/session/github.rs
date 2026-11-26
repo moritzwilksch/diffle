@@ -1,4 +1,4 @@
-//! The active review's pull request: discovered for the client, and the target of exports.
+//! GitHub metadata and permalinks for the active comparison.
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -6,20 +6,12 @@ use futures::FutureExt;
 
 use super::{Session, pr_url};
 use crate::error::{GithubError, Result};
-use crate::github::client::no_token;
 use crate::github::metadata::discover_github;
 use crate::github::permalink::permalink;
-use crate::github::review::ExportInput;
-use crate::protocol::{
-    GithubExportResponse, GithubMetadata, Permalink, PermalinkRequest, Snapshot, ThreadQuery, ThreadState,
-};
+use crate::protocol::{GithubMetadata, Permalink, PermalinkRequest, Snapshot};
 
 /// How long one discovery answers for its snapshot before GitHub is asked again.
 const DISCOVERY_TTL: Duration = Duration::from_secs(30);
-
-fn changed() -> GithubError {
-    GithubError::conflict("Comparison changed; try again")
-}
 
 impl Session {
     /// The pull request `snap` belongs to, cached apart from snapshot construction, so callers never
@@ -28,7 +20,7 @@ impl Session {
         let a = self.active()?;
         // The snapshot must be one of the active review's: a discovery answers for one comparison.
         if a.review != snap.review {
-            return Err(changed().into());
+            return Err(GithubError::conflict("Comparison changed; try again").into());
         }
         let task = {
             let mut cached = self.discovered.lock().unwrap();
@@ -58,35 +50,5 @@ impl Session {
     pub async fn permalink(&self, req: &PermalinkRequest) -> Result<Permalink> {
         let snap = self.snapshotter()?.current().await?;
         permalink(&self.repo, &snap, &self.github.instance, req).await
-    }
-
-    /// Adds threads to a pending review on the matching pull request, with fresh pull request data
-    /// validated against the current comparison inside the export queue. The human submits it.
-    pub async fn export_github(self: &Arc<Self>, thread_ids: Option<Vec<String>>) -> Result<GithubExportResponse> {
-        self.exporter
-            .export(|| async {
-                let a = self.active()?;
-                let snap = a.snapshotter.current().await?;
-                if !self.is_active(&a) {
-                    return Err(changed().into());
-                }
-                let Some(client) = self.github.client.clone() else {
-                    return Err(GithubError::conflict(no_token(&self.github.instance.host)).into());
-                };
-                let metadata = discover_github(&self.repo, &snap, &self.github, pr_url(&a.review).as_deref()).await?;
-                let pull_request = match (metadata.pull_request, metadata.reason) {
-                    (Some(pr), None) => pr,
-                    (_, reason) => {
-                        let reason = reason.unwrap_or_else(|| "No matching pull request".into());
-                        return Err(GithubError::conflict(reason).into());
-                    }
-                };
-                if !self.is_active(&a) || !Arc::ptr_eq(&snap, &a.snapshotter.current().await?) {
-                    return Err(changed().into());
-                }
-                let threads = a.comments.threads(&ThreadQuery { state: Some(ThreadState::All), path: None }).await?;
-                Ok(ExportInput { new_sha: snap.new_sha.clone(), pull_request, threads, thread_ids, github: client })
-            })
-            .await
     }
 }

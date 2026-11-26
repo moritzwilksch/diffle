@@ -1,6 +1,5 @@
 //! Threads as a pending GitHub review: built once, then created or merged into the viewer's draft.
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 
 use super::client::GithubClient;
 use super::pending_review::{
@@ -8,9 +7,10 @@ use super::pending_review::{
 };
 use crate::comments::anchor::compare_threads;
 use crate::error::{GithubError, Result};
+use crate::hosted_review::ReviewTarget;
 use crate::protocol::{
-    CommentAnchor, CommentMessage, CommentThread, GithubExportResponse, GithubExportResponseReview,
-    GithubExportResponseSkippedItem, GithubPullRequest, Side,
+    CommentAnchor, CommentMessage, CommentThread, HostedExportResponse, HostedExportResponseReview,
+    HostedExportResponseSkippedItem, Side,
 };
 
 pub struct BuiltReview {
@@ -18,11 +18,11 @@ pub struct BuiltReview {
     pub comments: Vec<ReviewComment>,
     /// The thread each `comments[i]` came from, so a per-comment outcome can name its thread.
     pub ids: Vec<String>,
-    pub skipped: Vec<GithubExportResponseSkippedItem>,
+    pub skipped: Vec<HostedExportResponseSkippedItem>,
 }
 
-fn skip(id: &str, reason: &str) -> GithubExportResponseSkippedItem {
-    GithubExportResponseSkippedItem { id: id.to_owned(), reason: reason.to_owned() }
+fn skip(id: &str, reason: &str) -> HostedExportResponseSkippedItem {
+    HostedExportResponseSkippedItem { id: id.to_owned(), reason: reason.to_owned() }
 }
 
 /// Threads → the comments of one pending review, one per thread. Stale threads are skipped: their
@@ -105,7 +105,7 @@ fn thread_marker(id: &str) -> String {
     format!("<!-- diffle-thread:{encoded} -->")
 }
 
-fn describe(skipped: &[GithubExportResponseSkippedItem]) -> String {
+fn describe(skipped: &[HostedExportResponseSkippedItem]) -> String {
     let mut counts: Vec<(&str, usize)> = Vec::new();
     for s in skipped {
         match counts.iter_mut().find(|(reason, _)| *reason == s.reason) {
@@ -123,10 +123,10 @@ fn describe(skipped: &[GithubExportResponseSkippedItem]) -> String {
 pub async fn export_to_github(
     github: &dyn GithubClient,
     new_sha: &str,
-    pr: &GithubPullRequest,
+    pr: &ReviewTarget,
     threads: &[CommentThread],
     thread_ids: Option<&[String]>,
-) -> Result<GithubExportResponse, GithubError> {
+) -> Result<HostedExportResponse, GithubError> {
     if new_sha == "worktree" {
         return Err(GithubError::conflict("GitHub cannot anchor comments to the worktree"));
     }
@@ -142,7 +142,7 @@ pub async fn export_to_github(
     for (c, id) in comments.iter_mut().zip(&ids) {
         c.body += &format!("\n\n{}", thread_marker(id));
     }
-    let (pull_request_id, pending) = find_pending_review(github, pr).await?;
+    let (pull_request_id, pending) = find_pending_review(github, &pr.url, pr.number).await?;
     let Some(pending) = pending else {
         // The review is created with its line comments in one call; file comments only exist as added threads.
         let lines: Vec<&ReviewComment> = comments.iter().filter(|c| !c.is_file()).collect();
@@ -154,11 +154,11 @@ pub async fn export_to_github(
                 return Err(GithubError::new(message, 502));
             }
         }
-        let response = GithubExportResponse {
+        let response = HostedExportResponse {
             url: pr.url.clone(),
             posted: comments.len() as i64,
             updated: 0,
-            review: GithubExportResponseReview::Created,
+            review: HostedExportResponseReview::Created,
             skipped,
         };
         return Ok(response);
@@ -197,39 +197,11 @@ pub async fn export_to_github(
         add_to_pending_review(github, &pending, c).await.map_err(|e| partial(updated, posted, e))?;
         posted += 1;
     }
-    Ok(GithubExportResponse {
+    Ok(HostedExportResponse {
         url: pr.url.clone(),
         posted,
         updated,
-        review: GithubExportResponseReview::Existing,
+        review: HostedExportResponseReview::Existing,
         skipped,
     })
-}
-
-/// What one export works on, gathered fresh inside the export queue.
-pub struct ExportInput {
-    pub new_sha: String,
-    pub pull_request: GithubPullRequest,
-    pub threads: Vec<CommentThread>,
-    pub thread_ids: Option<Vec<String>>,
-    pub github: Arc<dyn GithubClient>,
-}
-
-/// Serializes validation and writes so overlapping exports cannot add the same thread twice.
-#[derive(Default)]
-pub struct GithubExporter {
-    turn: tokio::sync::Mutex<()>,
-}
-
-impl GithubExporter {
-    /// Runs `prepare`, then the export, after every earlier export settled; a failure blocks no later one.
-    pub async fn export<Fut>(&self, prepare: impl FnOnce() -> Fut) -> Result<GithubExportResponse>
-    where
-        Fut: Future<Output = Result<ExportInput>>,
-    {
-        let _turn = self.turn.lock().await;
-        let input = prepare().await?;
-        let ids = input.thread_ids.as_deref();
-        Ok(export_to_github(input.github.as_ref(), &input.new_sha, &input.pull_request, &input.threads, ids).await?)
-    }
 }

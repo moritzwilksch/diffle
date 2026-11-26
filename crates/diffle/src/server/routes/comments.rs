@@ -36,7 +36,6 @@ pub fn routes() -> Router<Arc<ApiDeps>> {
         .route("/api/threads/{id}/resolved", put(resolve))
         .route("/api/threads/{id}/messages/{mid}", patch(edit_message).delete(remove_message))
         .route("/api/threads/{id}/messages/{mid}/export", get(export_message))
-        .route("/api/github/export", post(github_export))
         .route("/api/viewed", get(viewed).put(set_viewed))
         .route("/api/viewed/bulk", put(set_viewed_bulk))
 }
@@ -113,7 +112,7 @@ async fn reply(State(d): State<Arc<ApiDeps>>, Path(id): Path<String>, raw: Bytes
 
 async fn edit_message(State(d): State<Arc<ApiDeps>>, Path((id, mid)): Path<(String, String)>, raw: Bytes) -> ApiResult {
     let req: MessagePatch = body(&raw)?;
-    let thread = d.session.comments()?.edit_message(&id, &mid, req.body).await?;
+    let thread = d.session.comments()?.edit_message(&id, &mid, req.body, req.author).await?;
     changed(&d, [(req.author, id)]);
     Ok(Json(thread).into_response())
 }
@@ -222,26 +221,13 @@ fn idle(d: &ApiDeps, cursor: String, closed: bool) -> ApiResult<Activity> {
     Ok(Activity { cursor, comment_key, threads: Vec::new(), removed: Vec::new(), resync: false, closed })
 }
 
-/// `threadIds` absent means every open thread, which the generated type cannot tell from none.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GithubExportRequest {
-    thread_ids: Option<Vec<String>>,
-}
-
-/// Adds threads to a pending review on the matching pull request; the human submits it on GitHub.
-async fn github_export(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
-    let req: GithubExportRequest = body(&raw)?;
-    Ok(Json(d.session.export_github(req.thread_ids).await?).into_response())
-}
-
 async fn viewed(State(d): State<Arc<ApiDeps>>) -> ApiResult {
-    Ok(Json(d.session.comments()?.viewed().await?).into_response())
+    Ok(Json(d.session.viewed_marks().await?).into_response())
 }
 
 async fn set_viewed(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let entry: ViewedEntry = body(&raw)?;
-    let list = d.session.comments()?.set_viewed(&entry.path, &entry.blob, entry.viewed).await?;
+    let list = d.session.set_viewed_mark(entry).await?;
     d.hub.broadcast(ServerMessage::Viewed);
     Ok(Json(list).into_response())
 }
@@ -253,7 +239,7 @@ struct ViewedBulk {
 
 async fn set_viewed_bulk(State(d): State<Arc<ApiDeps>>, raw: Bytes) -> ApiResult {
     let req: ViewedBulk = body(&raw)?;
-    let list = d.session.comments()?.set_viewed_many(req.entries).await?;
+    let list = d.session.set_viewed_marks(req.entries).await?;
     d.hub.broadcast(ServerMessage::Viewed);
     Ok(Json(list).into_response())
 }

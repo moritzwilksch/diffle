@@ -7,6 +7,7 @@ import { nextTheme, type ThemeChoice } from '@/client/theme.js';
 import { panelOf, useActiveView } from '@/client/views/state.js';
 import { ViewSwitch } from '@/client/views/ViewSwitch.js';
 import { CommitStepper } from './CommitStepper.js';
+import { GithubReviewAction } from '@/client/github/GithubReviewAction.js';
 import { GithubMenu } from './GithubMenu.js';
 import { HistoryNav } from './HistoryNav.js';
 import { LspIndicator } from './LspStatus.js';
@@ -57,6 +58,7 @@ export function Header() {
         </span>
       )}
       <GithubMenu />
+      <GithubReviewAction />
       <MovedNotice />
       <span className="shrink-0 whitespace-nowrap text-muted max-md:hidden">
         {changed} files · <span className="text-add">+{adds}</span> <span className="text-del">−{dels}</span>

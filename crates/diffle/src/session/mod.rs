@@ -3,8 +3,10 @@ mod blame;
 mod checkout;
 mod files;
 mod github;
+mod hosted_review;
 mod refresh;
 mod transitions;
+mod viewed;
 mod watch;
 
 use std::future::Future;
@@ -113,7 +115,8 @@ pub struct Session {
     /// The latest pull request discovery: its snapshot, when it goes stale, and the shared lookup.
     discovered: Mutex<Option<Discovery>>,
     /// Exports one at a time, so two overlapping ones cannot add the same thread twice.
-    exporter: crate::github::review::GithubExporter,
+    review_writes: crate::hosted_review::ReviewWrites,
+    review_provider: Arc<dyn crate::hosted_review::ReviewProvider>,
     context: Mutex<u32>,
     follow_refs: Mutex<FollowRefs>,
     version: AtomicI64,
@@ -144,9 +147,10 @@ impl Session {
             checkout: AtomicBool::new(opts.checkout),
             moved_checkout: Mutex::new(None),
             head: HeadPin::default(),
+            review_provider: Arc::new(opts.github.clone()),
             github: opts.github,
             discovered: Mutex::new(None),
-            exporter: crate::github::review::GithubExporter::default(),
+            review_writes: crate::hosted_review::ReviewWrites::default(),
             context: Mutex::new(opts.context),
             follow_refs: Mutex::new(opts.follow_refs),
             version: AtomicI64::new(0),

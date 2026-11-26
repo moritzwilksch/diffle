@@ -500,6 +500,13 @@ export const ThreadCreateSchema = z
   });
 export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
 
+export const HostedCommentRequestSchema = z.object({
+  version: z.number().int(),
+  id: z.string(),
+  comment: ThreadCreateSchema,
+});
+export type HostedCommentRequest = z.infer<typeof HostedCommentRequestSchema>;
+
 export const ReplyCreateSchema = z.object({
   body: z.string().refine((body) => body.trim().length > 0, 'body required'),
   /** Absent: the reviewer replies. */
@@ -510,14 +517,24 @@ export type ReplyCreate = z.infer<typeof ReplyCreateSchema>;
 export const ThreadStateSchema = z.enum(['open', 'resolved', 'all']);
 export type ThreadState = z.infer<typeof ThreadStateSchema>;
 
-/** Body of `POST /api/github/export`. Without `threadIds`, every unresolved thread of the mode. */
-export const GithubExportRequestSchema = z.object({
+/** Body of `POST /api/hosted-review/export`. Without `threadIds`, every unresolved thread of the mode. */
+export const HostedExportRequestSchema = z.object({
   threadIds: z.string().array().optional(),
 });
-export type GithubExportRequest = z.infer<typeof GithubExportRequestSchema>;
+export type HostedExportRequest = z.infer<typeof HostedExportRequestSchema>;
 
-export const GithubExportResponseSchema = z.object({
-  /** The pull request whose pending review the comments joined; the human submits the review there. */
+export const HostedReviewDecisionSchema = z.enum(['comment', 'approve', 'request-changes']);
+export type HostedReviewDecision = z.infer<typeof HostedReviewDecisionSchema>;
+
+export const HostedReviewSubmitSchema = z.object({
+  version: z.number().int(),
+  decision: HostedReviewDecisionSchema,
+  summary: z.string(),
+});
+export type HostedReviewSubmit = z.infer<typeof HostedReviewSubmitSchema>;
+
+export const HostedExportResponseSchema = z.object({
+  /** The pull request whose pending review the comments joined; which can be submitted from Diffle or the provider. */
   url: z.string(),
   /** Review comments added to the pending review. */
   posted: z.number().int(),
@@ -533,7 +550,7 @@ export const GithubExportResponseSchema = z.object({
     })
     .array(),
 });
-export type GithubExportResponse = z.infer<typeof GithubExportResponseSchema>;
+export type HostedExportResponse = z.infer<typeof HostedExportResponseSchema>;
 
 export const ThreadQuerySchema = z.object({
   /** Default 'open' for export, 'all' for list. */
@@ -1286,3 +1303,63 @@ export const ActivitySchema = z.object({
 export type Activity = z.infer<typeof ActivitySchema>;
 
 export const ApiErrorSchema = z.object({ error: z.string() });
+
+export const HostedCommentMessageSchema = z.object({
+  id: z.string(),
+  author: z.string(),
+  body: z.string(),
+  createdAt: z.string(),
+  url: z.string().url(),
+  status: z.string().optional(),
+  canDelete: z.boolean().optional(),
+  canEdit: z.boolean(),
+  isOwnPending: z.boolean(),
+});
+
+export const HostedPendingCommentDeleteSchema = z.object({
+  id: z.string().min(1),
+  reviewUrl: z.string(),
+});
+export type HostedPendingCommentDelete = z.infer<typeof HostedPendingCommentDeleteSchema>;
+
+export const HostedPendingCommentEditSchema = HostedPendingCommentDeleteSchema.extend({
+  body: z.string().trim().min(1),
+});
+export type HostedPendingCommentEdit = z.infer<typeof HostedPendingCommentEditSchema>;
+
+export const HostedThreadReplySchema = HostedPendingCommentDeleteSchema.extend({
+  body: z.string().trim().min(1),
+});
+export type HostedThreadReply = z.infer<typeof HostedThreadReplySchema>;
+
+export const HostedThreadResolutionSchema = HostedPendingCommentDeleteSchema.extend({
+  resolved: z.boolean(),
+});
+export type HostedThreadResolution = z.infer<typeof HostedThreadResolutionSchema>;
+
+export const HostedCommentThreadSchema = z.object({
+  id: z.string(),
+  /** The revision the current line numbers refer to. */
+  headSha: z.string(),
+  path: z.string(),
+  line: z.number().int().nullable(),
+  startLine: z.number().int().nullable(),
+  originalLine: z.number().int().nullable(),
+  originalStartLine: z.number().int().nullable(),
+  side: SideSchema,
+  isResolved: z.boolean(),
+  isOutdated: z.boolean(),
+  viewerCanReply: z.boolean(),
+  viewerCanResolve: z.boolean(),
+  viewerCanUnresolve: z.boolean(),
+  comments: HostedCommentMessageSchema.array().default([]),
+});
+
+export type HostedCommentThread = z.infer<typeof HostedCommentThreadSchema>;
+
+export const HostedCommentsSchema = z.object({
+  threads: HostedCommentThreadSchema.array(),
+  conversation: HostedCommentMessageSchema.array(),
+});
+export type HostedComments = z.infer<typeof HostedCommentsSchema>;
+export type HostedCommentMessage = z.infer<typeof HostedCommentMessageSchema>;

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { connectWs } from './api.js';
+import { resetInlineExpansion } from './comments/inlineExpansion.js';
+import { githubCommentsChanged } from './github/commentsEvent.js';
+import { useSyncHostedComments } from './github/useHostedComments.js';
 import { Header } from './header/Header.js';
 import { HelpOverlay } from './keyboard/HelpOverlay.js';
 import { useKeymap } from './keyboard/useKeymap.js';
@@ -15,6 +18,7 @@ import './views/registry.js';
 import { gridColumns, listViews, panelOf, useViews } from './views/state.js';
 
 export function App() {
+  useSyncHostedComments();
   const boot = useStore((s) => s.boot);
   const refreshSnapshot = useStore((s) => s.refreshSnapshot);
   const refreshThreads = useStore((s) => s.refreshThreads);
@@ -77,7 +81,11 @@ export function App() {
     let connected = false;
     const resync = () => {
       setLost(false);
-      void boot();
+      const reconnecting = connected;
+      if (reconnecting) resetInlineExpansion();
+      void boot().then(() => {
+        if (reconnecting) githubCommentsChanged(undefined);
+      });
       // A push missed while disconnected still shows; the first connection loads without it.
       void refreshTour({ reveal: connected });
       connected = true;

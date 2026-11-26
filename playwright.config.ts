@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import { connectOptions } from './test/e2e/browser-server.js';
 
 /**
@@ -29,7 +30,12 @@ export default defineConfig({
   // same everywhere.
   snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}{ext}',
   expect: {
-    toHaveScreenshot: { animations: 'disabled', caret: 'hide', scale: 'css' },
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+      stylePath: fileURLToPath(new URL('./test/e2e/screenshot.css', import.meta.url)),
+    },
   },
   use: {
     connectOptions: connectOptions(),

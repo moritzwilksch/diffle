@@ -676,73 +676,6 @@
       ],
       "description": "How a review between refs reacts when one of them moves. `on`: recompute at once, as a worktree\nreview follows edits. `off`: announce the move and wait for Reload. `auto`: wait for Reload when an\nendpoint names a branch, whose pushes and rebases should not swap the review out under the\nreviewer; recompute at once otherwise (a detached HEAD, a tag, an expression)."
     },
-    "GithubExportRequest": {
-      "type": "object",
-      "properties": {
-        "threadIds": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "description": "Body of `POST /api/github/export`. Without `threadIds`, every unresolved thread of the mode."
-    },
-    "GithubExportResponse": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": "The pull request whose pending review the comments joined; the human submits the review there."
-        },
-        "posted": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "description": "Review comments added to the pending review."
-        },
-        "updated": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "description": "Comments already in the pending review at the same anchor whose body this call rewrote in place."
-        },
-        "review": {
-          "type": "string",
-          "enum": [
-            "created",
-            "existing"
-          ],
-          "description": "Whether this call opened the pending review or added to one that was already waiting."
-        },
-        "skipped": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "reason": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "reason"
-            ]
-          },
-          "description": "Threads left out, with why (stale, resolved, unknown id, an identical comment already in the review)."
-        }
-      },
-      "required": [
-        "url",
-        "posted",
-        "updated",
-        "review",
-        "skipped"
-      ]
-    },
     "GithubMetadata": {
       "type": "object",
       "properties": {
@@ -1013,6 +946,367 @@
         "lines"
       ],
       "description": "`GET /api/highlight` (a `FileQuery`): one side of a file as syntax tokens, read as `/api/file` reads it.\nHighlighting the whole side keeps multi-line strings and comments right in a hunk."
+    },
+    "HostedCommentMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "status": {
+          "type": "string"
+        },
+        "canDelete": {
+          "type": "boolean"
+        },
+        "canEdit": {
+          "type": "boolean"
+        },
+        "isOwnPending": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "author",
+        "body",
+        "createdAt",
+        "url",
+        "canEdit",
+        "isOwnPending"
+      ]
+    },
+    "HostedCommentRequest": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "type": "string"
+        },
+        "comment": {
+          "$ref": "#/$defs/ThreadCreate"
+        }
+      },
+      "required": [
+        "version",
+        "id",
+        "comment"
+      ]
+    },
+    "HostedComments": {
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostedCommentThread"
+          }
+        },
+        "conversation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostedCommentMessage"
+          }
+        }
+      },
+      "required": [
+        "threads",
+        "conversation"
+      ]
+    },
+    "HostedCommentThread": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string",
+          "description": "The revision the current line numbers refer to."
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startLine": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "originalLine": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "originalStartLine": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "isResolved": {
+          "type": "boolean"
+        },
+        "isOutdated": {
+          "type": "boolean"
+        },
+        "viewerCanReply": {
+          "type": "boolean"
+        },
+        "viewerCanResolve": {
+          "type": "boolean"
+        },
+        "viewerCanUnresolve": {
+          "type": "boolean"
+        },
+        "comments": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostedCommentMessage"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "headSha",
+        "path",
+        "line",
+        "startLine",
+        "originalLine",
+        "originalStartLine",
+        "side",
+        "isResolved",
+        "isOutdated",
+        "viewerCanReply",
+        "viewerCanResolve",
+        "viewerCanUnresolve"
+      ]
+    },
+    "HostedExportRequest": {
+      "type": "object",
+      "properties": {
+        "threadIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Body of `POST /api/hosted-review/export`. Without `threadIds`, every unresolved thread of the mode."
+    },
+    "HostedExportResponse": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The pull request whose pending review the comments joined; which can be submitted from Diffle or the provider."
+        },
+        "posted": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Review comments added to the pending review."
+        },
+        "updated": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Comments already in the pending review at the same anchor whose body this call rewrote in place."
+        },
+        "review": {
+          "type": "string",
+          "enum": [
+            "created",
+            "existing"
+          ],
+          "description": "Whether this call opened the pending review or added to one that was already waiting."
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "reason"
+            ]
+          },
+          "description": "Threads left out, with why (stale, resolved, unknown id, an identical comment already in the review)."
+        }
+      },
+      "required": [
+        "url",
+        "posted",
+        "updated",
+        "review",
+        "skipped"
+      ]
+    },
+    "HostedPendingCommentDelete": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "reviewUrl"
+      ]
+    },
+    "HostedPendingCommentEdit": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewUrl": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "reviewUrl",
+        "body"
+      ]
+    },
+    "HostedReviewDecision": {
+      "type": "string",
+      "enum": [
+        "comment",
+        "approve",
+        "request-changes"
+      ]
+    },
+    "HostedReviewSubmit": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "decision": {
+          "$ref": "#/$defs/HostedReviewDecision"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "decision",
+        "summary"
+      ]
+    },
+    "HostedThreadReply": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewUrl": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "reviewUrl",
+        "body"
+      ]
+    },
+    "HostedThreadResolution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewUrl": {
+          "type": "string"
+        },
+        "resolved": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "reviewUrl",
+        "resolved"
+      ]
     },
     "ImageQuery": {
       "type": "object",

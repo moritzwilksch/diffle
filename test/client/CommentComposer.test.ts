@@ -37,7 +37,7 @@ beforeEach(async () => {
   // The viewer renders the composer only for an open draft, whose text is keyed by the review.
   useStore.setState({
     draftQuote: vi.fn(async () => 'one\ntwo\nthree\nfour\nfive\nsix'),
-    snapshot: { commentKey: 'review' } as Snapshot,
+    snapshot: { commentKey: 'review', review: { kind: 'commit', sha: 'head' } } as Snapshot,
     draft: { kind: 'code', path: 'a.txt', selection: { id: 'a.txt', range: { start: 1, end: 6, side: 'additions' } } },
   });
   host = document.createElement('div');

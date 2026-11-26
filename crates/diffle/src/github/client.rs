@@ -59,6 +59,10 @@ async fn gh_auth_token(host: &str) -> Option<String> {
 /// The transport the rest of the server knows: one GraphQL request, answered by its `data` or a
 /// `GithubError` carrying GitHub's own message. Tests answer queries by shape instead.
 pub trait GithubClient: Send + Sync {
+    fn delete_review_comment(&self, _owner: &str, _repo: &str, _id: u64) -> BoxFuture<'_, Result<(), GithubError>> {
+        Box::pin(async { Err(GithubError::new("GitHub review comment deletion is unavailable", 502)) })
+    }
+
     fn graphql(
         &self,
         query: &str,
@@ -71,6 +75,7 @@ pub trait GithubClient: Send + Sync {
 /// (either case) as git does.
 pub struct HttpClient {
     octocrab: octocrab::Octocrab,
+    rest_prefix: &'static str,
 }
 
 impl HttpClient {
@@ -91,7 +96,8 @@ impl HttpClient {
             .with_auth(octocrab::AuthState::None)
             .build()
             .map_err(|e| match e {})?;
-        Ok(Self { octocrab })
+        let rest_prefix = if base_url.trim_end_matches('/').ends_with("/api/v3") { "/v3" } else { "" };
+        Ok(Self { octocrab, rest_prefix })
     }
 }
 
@@ -103,6 +109,15 @@ fn graphql_root(base_url: &str) -> String {
 }
 
 impl GithubClient for HttpClient {
+    fn delete_review_comment(&self, owner: &str, repo: &str, id: u64) -> BoxFuture<'_, Result<(), GithubError>> {
+        let encode = |s: &str| form_urlencoded::byte_serialize(s.as_bytes()).collect::<String>();
+        let route = format!("{}/repos/{}/{}/pulls/comments/{id}", self.rest_prefix, encode(owner), encode(repo));
+        Box::pin(async move {
+            let response = self.octocrab._delete(route, None::<&()>).await.map_err(request_error)?;
+            octocrab::map_github_error(response).await.map(drop).map_err(request_error)
+        })
+    }
+
     fn graphql(
         &self,
         query: &str,
